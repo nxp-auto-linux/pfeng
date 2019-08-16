@@ -1,0 +1,1708 @@
+/* =========================================================================
+ *  Copyright 2018-2019 NXP
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER
+ * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * ========================================================================= */
+
+/**
+ * @addtogroup  dxgr_PFE_HIF_RING
+ * @{
+ *
+ * @file		pfe_hif_ring.c
+ * @brief		The HIF BD ring driver.
+ * @details		This is the HW BD ring interface providing basic manipulation
+ * 				possibilities for HIF's RX and TX buffer descriptor rings.
+ * 				Each ring is treated as a single instance therefore module can
+ * 				be used to handle HIF with multiple channels (RX/TX ring pairs).
+ *
+ * @warning		No concurrency prevention is implemented here. User shall
+ *				therefore ensure correct protection	of ring instance manipulation
+ *				at application level.
+ *
+ */
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+#include <errno.h>
+
+#include "oal.h"
+#include "hal.h"
+
+#include "pfe_cbus.h"
+#include "pfe_mmap.h"
+#include "pfe_hif_ring.h"
+
+#if !defined(TARGET_HW_LS1012A) && !defined(TARGET_HW_S32G)
+#define TARGET_HW_S32G /* TODO: DUE TO ECLIPSE ENVIRONMENT ONLY (to see active code) */
+#endif
+
+/**
+ * @brief	Number of entries of a HIF ring
+ * @note	Must be power of 2
+ */
+#define PFE_HIF_RING_CFG_LENGTH			256U
+
+#define RING_LEN						PFE_HIF_RING_CFG_LENGTH
+#define RING_LEN_MASK					(PFE_HIF_RING_CFG_LENGTH - 1U)
+
+#if defined(TARGET_HW_S32G)
+/**
+ * @brief	The BD as seen by HIF
+ * @details	Properly pack to form the structure as expected by HIF.
+ * @note	Don't use the 'aligned' attribute here since behavior
+ * 			is implementation-specific (due to the bitfields). Still
+ * 			applies that BD shall be aligned to 64-bits and in
+ * 			ideal case to cache line size.
+ * @warning	Do not touch the structure (even types) unless you know
+ * 			what you're doing.
+ */
+typedef struct __attribute__((packed)) __pfe_hif_bd_tag
+{
+	volatile uint16_t seqnum;
+	union
+	{
+		volatile uint16_t ctrl;
+		struct
+		{
+			volatile uint16_t pkt_int_en	: 1; /* LSB */
+			volatile uint16_t cbd_int_en	: 1;
+			volatile uint16_t lifm			: 1;
+			volatile uint16_t last_bd		: 1;
+			volatile uint16_t dir			: 1;
+			volatile uint16_t reserved		: 10;
+			volatile uint16_t desc_en		: 1; /* MSB */
+		};
+	};
+	volatile uint16_t buflen;
+	union
+	{
+		volatile uint16_t rsvd;
+		volatile uint16_t status;	/* Due to backwards compatibility */
+	};
+	volatile uint32_t data;
+	volatile uint32_t next;
+} pfe_hif_bd_t;
+
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+/**
+ * @brief	The BD as seen by HIF NOCPY
+ * @details	Properly pack to form the structure as expected by HIF NOCPY.
+ * @note	Don't use the 'aligned' attribute here since behavior
+ * 			is implementation-specific (due to the bitfields). Still
+ * 			applies that BD shall be aligned to 64-bits and in
+ * 			ideal case to cache line size.
+ * @warning	Do not touch the structure (even types) unless you know
+ * 			what you're doing.
+ */
+typedef struct __attribute__((packed)) __pfe_hif_nocpy_bd_tag
+{
+	union
+	{
+		volatile uint16_t rx_reserved;
+		volatile uint16_t tx_buflen;
+	};
+
+	union
+	{
+		volatile uint16_t ctrl;
+		struct
+		{
+			volatile uint16_t cbd_int_en	: 1;
+			volatile uint16_t pkt_int_en	: 1;
+			volatile uint16_t lifm			: 1;
+			volatile uint16_t last_bd		: 1;	/*	Not used */
+			volatile uint16_t dir			: 1;
+			volatile uint16_t lmem_cpy		: 1;
+			volatile uint16_t reserved1		: 2;
+			volatile uint16_t pkt_xfer		: 1;
+			volatile uint16_t reserved2		: 6;
+			volatile uint16_t desc_en		: 1;
+		};
+	};
+
+	union
+	{
+		volatile uint16_t rx_buflen;
+		volatile uint16_t tx_status;
+	};
+
+	union
+	{
+		volatile uint16_t rx_status;
+		struct
+		{
+			uint16_t tx_portno		: 3;
+			uint16_t tx_queueno		: 4;
+			uint16_t tx_reserved4	: 9;
+		};
+	};
+
+	volatile uint32_t data;
+	volatile uint32_t next;
+
+} pfe_hif_nocpy_bd_t;
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+
+/**
+ * @brief	The write-back BD as seen by HIF
+ * @note	Don't use the 'aligned' attribute here since behavior
+ * 			is implementation-specific (due to the bitfields). Still
+ * 			applies that BD shall be aligned to 64-bits and in
+ * 			ideal case to cache line size.
+ * @warning	Do not touch the structure (even types) unless you know
+ * 			what you're doing.
+ */
+typedef struct __attribute__((packed)) __pfe_hif_wb_bd_tag
+{
+	union
+	{
+		struct
+		{
+			volatile uint32_t ctrl:	11;
+			volatile uint32_t rsvd:	21;
+		};
+
+		struct
+		{
+			volatile uint32_t reserved		: 4;
+			volatile uint32_t cbd_int_en	: 1;
+			volatile uint32_t pkt_int_en	: 1;
+			volatile uint32_t lifm			: 1;
+			volatile uint32_t last_bd		: 1;
+			volatile uint32_t dir			: 1;
+			volatile uint32_t desc_en		: 1;
+			volatile uint32_t reserved1		: 1;
+			volatile uint32_t reserved2		: 21;
+		};
+	};
+
+	volatile uint16_t buflen;
+	volatile uint16_t seqnum;
+} pfe_hif_wb_bd_t;
+#endif /* TARGET_HW_S32G */
+
+/**
+ * @brief	The BD ring structure
+ * @note	The attribute 'aligned' is here just to ensure proper alignment
+ * 			when instance will be created automatically without dynamic memory
+ * 			allocation.
+ */
+struct __attribute__((aligned (HAL_CACHE_LINE_SIZE), packed)) __pfe_hif_ring_tag
+{
+	/*	Put often used data from beginning to improve cache locality */
+
+	/*	Every 'enqueue' and 'dequeue' access */
+	void *base_va;				/*	Ring base address (virtual) */
+#if (TRUE == HAL_HANDLE_CACHE)
+	void *base_pa;				/*	Ring base address (physical) */
+#endif /* HAL_HANDLE_CACHE */
+	void *wb_tbl_base_va;		/*	Write-back table base address (virtual) */
+	uint16_t seqnum;			/*	Current sequence number */
+
+	/*	Every 'enqueue' access */
+	uint32_t write_idx;			/*	BD index to be written */
+	union						/* Pointer to BD to be written */
+	{
+		pfe_hif_bd_t *wr_bd;
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+		pfe_hif_nocpy_bd_t *wr_bd_nocpy;
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	};
+
+#if (TRUE == HAL_HANDLE_CACHE)
+	union						/*	Pointer to BD to be written (PA). Only due to CACHE_* macros in QNX... */
+	{
+		pfe_hif_bd_t *wr_bd_pa;
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+		pfe_hif_nocpy_bd_t *wr_bd_nocpy_pa;
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	};
+#endif /* HAL_HANDLE_CACHE */
+	pfe_hif_wb_bd_t *wr_wb_bd;	/*	Pointer to WB BD to be written */
+	bool_t is_rx;				/*	If TRUE then ring is RX ring */
+	bool_t is_nocpy;			/*	If TRUE then ring is HIF NOCPY variant */
+
+	/*	Every 'dequeue' access */
+	uint32_t read_idx;			/*	BD index to be read */
+	union						/*	Pointer to BD to be read */
+	{
+		pfe_hif_bd_t *rd_bd;
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+		pfe_hif_nocpy_bd_t *rd_bd_nocpy;
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	};
+
+#if (TRUE == HAL_HANDLE_CACHE)
+	union						/*	Pointer to BD to be read (PA). Only due to CACHE_* macros in QNX... */
+	{
+		pfe_hif_bd_t *rd_bd_pa;
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+		pfe_hif_nocpy_bd_t *rd_bd_nocpy_pa;
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	};
+#endif /* HAL_HANDLE_CACHE */
+	pfe_hif_wb_bd_t *rd_wb_bd;	/*	Pointer to WB BD to be read */
+
+	bool_t heavy_data_mark;		/*	To enable getting size of heavily accessed data */
+
+	/*	Initialization time only */
+#if (FALSE == HAL_HANDLE_CACHE)
+	void *base_pa;				/*	Ring base address (physical) */
+#endif /* HAL_HANDLE_CACHE */
+	void *wb_tbl_base_pa;		/*	Write-back table base address (physical) */
+
+};
+
+/*	HIF hardware buffer descriptor */
+#if defined(TARGET_HW_LS1012A)
+/*Buffer descriptor control bits */
+#define BD_CTRL_BUFLEN_MASK		0x3fffU
+#define BD_BUF_LEN(x)			(x & BD_CTRL_BUFLEN_MASK)
+#define BD_CTRL_CBD_INT_EN		(1U << 0)
+#define BD_CTRL_PKT_INT_EN		(1U << 1)
+#define BD_CTRL_LIFM			(1U << 2)
+#define BD_CTRL_LAST_BD			(1U << 3)
+#define BD_CTRL_DIR				(1U << 4)
+#define BD_CTRL_LMEM_CPY		(1U << 5)
+#define BD_CTRL_PKT_XFER		(1U << 8)
+#define BD_CTRL_DESC_EN			(1U << 15)
+#define BD_CTRL_PARSE_DISABLE	(1U << 9)
+#define BD_CTRL_BRFETCH_DISABLE	(1U << 10)
+#define BD_CTRL_RTFETCH_DISABLE	(1U << 11)
+
+typedef struct __pfe_hif_bd_tag
+{
+	volatile uint16_t buflen;
+	volatile uint16_t ctrl;
+	volatile uint32_t status;
+	volatile uint32_t data;
+	volatile uint32_t next;
+} pfe_hif_bd_t;
+#endif /* TARGET_HW_LS1012A */
+
+__attribute__((hot)) static inline void inc_write_index_std(pfe_hif_ring_t *ring);
+__attribute__((hot)) static inline void dec_write_index_std(pfe_hif_ring_t *ring);
+__attribute__((hot)) static inline void inc_read_index_std(pfe_hif_ring_t *ring);
+__attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t seqnum, bool_t rx);
+__attribute__((hot)) static errno_t pfe_hif_ring_enqueue_buf_std(pfe_hif_ring_t *ring, void *buf_pa, uint32_t length, bool_t lifm);
+__attribute__((hot)) static errno_t pfe_hif_ring_dequeue_buf_std(pfe_hif_ring_t *ring, void **buf_pa, uint32_t *length, bool_t *lifm);
+__attribute__((hot)) static errno_t pfe_hif_ring_dequeue_plain_std(pfe_hif_ring_t *ring, bool_t *lifm);
+__attribute__((cold)) static void pfe_hif_ring_invalidate_std(pfe_hif_ring_t *ring);
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+__attribute__((hot)) static inline void inc_write_index_nocpy(pfe_hif_ring_t *ring);
+__attribute__((hot)) static inline void inc_read_index_nocpy(pfe_hif_ring_t *ring);
+__attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_nocpy(uint16_t seqnum, bool_t rx);
+__attribute__((hot)) static errno_t pfe_hif_ring_enqueue_buf_nocpy(pfe_hif_ring_t *ring, void *buf_pa, uint32_t length, bool_t lifm);
+__attribute__((hot)) static errno_t pfe_hif_ring_dequeue_buf_nocpy(pfe_hif_ring_t *ring, void **buf_pa, uint32_t *length, bool_t *lifm);
+__attribute__((hot)) static errno_t pfe_hif_ring_dequeue_plain_nocpy(pfe_hif_ring_t *ring, bool_t *lifm);
+__attribute__((cold)) static void pfe_hif_ring_invalidate_nocpy(pfe_hif_ring_t *ring);
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+
+__attribute__((hot)) static inline void inc_write_index_std(pfe_hif_ring_t *ring)
+{
+	ring->write_idx++;
+	ring->wr_bd = &((pfe_hif_bd_t *)ring->base_va)[ring->write_idx & RING_LEN_MASK];
+#if (TRUE == HAL_HANDLE_CACHE)
+	ring->wr_bd_pa = &((pfe_hif_bd_t *)ring->base_pa)[ring->write_idx & RING_LEN_MASK];
+	__builtin_prefetch((void *)ring->wr_bd, 0, 0); /* rw=0 (r); locality=0 (low) */
+#endif /* HAL_HANDLE_CACHE */
+
+#if defined(TARGET_HW_S32G)
+	ring->wr_wb_bd = &((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ring->write_idx & RING_LEN_MASK];
+#if (TRUE == HAL_HANDLE_CACHE)
+	__builtin_prefetch((void *)ring->wr_wb_bd, 0, 0); /* rw=1 (w); locality=0 (low) */
+#endif /* HAL_HANDLE_CACHE */
+#endif /* TARGET_HW_S32G */
+}
+
+__attribute__((hot)) static inline void dec_write_index_std(pfe_hif_ring_t *ring)
+{
+	ring->write_idx--;
+	ring->wr_bd = &((pfe_hif_bd_t *)ring->base_va)[ring->write_idx & RING_LEN_MASK];
+#if (TRUE == HAL_HANDLE_CACHE)
+	ring->wr_bd_pa = &((pfe_hif_bd_t *)ring->base_pa)[ring->write_idx & RING_LEN_MASK];
+	__builtin_prefetch((void *)ring->wr_bd, 0, 0); /* rw=0 (r); locality=0 (low) */
+#endif /* HAL_HANDLE_CACHE */
+
+#if defined(TARGET_HW_S32G)
+	ring->wr_wb_bd = &((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ring->write_idx & RING_LEN_MASK];
+#if (TRUE == HAL_HANDLE_CACHE)
+	__builtin_prefetch((void *)ring->wr_wb_bd, 0, 0); /* rw=1 (w); locality=0 (low) */
+#endif /* HAL_HANDLE_CACHE */
+#endif /* TARGET_HW_S32G */
+}
+
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+__attribute__((hot)) static inline void inc_write_index_nocpy(pfe_hif_ring_t *ring)
+{
+	ring->write_idx++;
+	ring->wr_bd_nocpy = &((pfe_hif_nocpy_bd_t *)ring->base_va)[ring->write_idx & RING_LEN_MASK];
+#if (TRUE == HAL_HANDLE_CACHE)
+	ring->wr_bd_nocpy_pa = &((pfe_hif_nocpy_bd_t *)ring->base_pa)[ring->write_idx & RING_LEN_MASK];
+	__builtin_prefetch((void *)ring->wr_bd, 0, 0); /* rw=0 (r); locality=0 (low) */
+#endif /* HAL_HANDLE_CACHE */
+}
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+
+__attribute__((hot)) static inline void inc_read_index_std(pfe_hif_ring_t *ring)
+{
+	ring->read_idx++;
+	ring->rd_bd = &((pfe_hif_bd_t *)ring->base_va)[ring->read_idx & RING_LEN_MASK];
+#if (TRUE == HAL_HANDLE_CACHE)
+	ring->rd_bd_pa = &((pfe_hif_bd_t *)ring->base_pa)[ring->read_idx & RING_LEN_MASK];
+	__builtin_prefetch((void *)ring->rd_bd, 0, 0);
+#endif /* HAL_HANDLE_CACHE */
+
+#if defined(TARGET_HW_S32G)
+	ring->rd_wb_bd = &((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ring->read_idx & RING_LEN_MASK];
+#if (TRUE == HAL_HANDLE_CACHE)
+	__builtin_prefetch((void *)ring->rd_wb_bd, 0, 0);
+#endif /* HAL_HANDLE_CACHE */
+#endif /* TARGET_HW_S32G */
+}
+
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+__attribute__((hot)) static inline void inc_read_index_nocpy(pfe_hif_ring_t *ring)
+{
+	ring->read_idx++;
+	ring->rd_bd_nocpy = &((pfe_hif_nocpy_bd_t *)ring->base_va)[ring->read_idx & RING_LEN_MASK];
+#if (TRUE == HAL_HANDLE_CACHE)
+	ring->rd_bd_nocpy_pa = &((pfe_hif_nocpy_bd_t *)ring->base_pa)[ring->read_idx & RING_LEN_MASK];
+	__builtin_prefetch((void *)ring->rd_bd, 0, 0);
+#endif /* HAL_HANDLE_CACHE */
+}
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+
+/**
+ * @brief		Check if ring contains less than watermark-specified
+ * 				number of free entries
+ * @param[in]	ring The ring instance
+ * @return		TRUE if ring contains less than watermark-specified number
+ * 				of free entries
+ * @note		Must not be preempted by: pfe_hif_ring_destroy()
+ */
+__attribute__((pure, hot)) bool_t pfe_hif_ring_is_below_wm(pfe_hif_ring_t *ring)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	/*	TODO: Make the water-mark value configurable */
+	if (pfe_hif_ring_get_fill_level(ring) >= (RING_LEN / 2))
+	{
+		return TRUE;
+	}
+	else
+	{
+		return FALSE;
+	}
+}
+
+/**
+ * @brief		Get fill level
+ * @param[in]	ring The ring instance
+ * @return		Number of occupied entries within the ring
+ * @note		Must not be preempted by: pfe_hif_ring_destroy()
+ */
+__attribute__((pure, hot)) uint32_t pfe_hif_ring_get_fill_level(pfe_hif_ring_t *ring)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return RING_LEN;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+	/*	In case of HIF NOCPY, the HW does not use external RX buffers but internal
+	 	BMU-provided buffers. Thus the RX ring fill level can't be other value
+	 	than zero. */
+
+	if ((ring->is_nocpy) && (ring->is_rx))
+	{
+		return 0U;
+	}
+	else
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	{
+		return (ring->write_idx - ring->read_idx);
+	}
+}
+
+/**
+ * @brief		Get physical address of the start of the ring
+ * @param[in]	ring The ring instance
+ * @return		Pointer to the beginning address of the ring
+ * @note		Must not be preempted by: pfe_hif_ring_destroy()
+ */
+__attribute__((pure, cold)) void *pfe_hif_ring_get_base_pa(pfe_hif_ring_t *ring)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	return ring->base_pa;
+}
+
+/**
+ * @brief		Get physical address of the write-back table
+ * @param[in]	ring The ring instance
+ * @return		Pointer to the table
+ * @note		Must not be preempted by: pfe_hif_ring_destroy()
+ */
+__attribute__((pure, cold)) void *pfe_hif_ring_get_wb_tbl_pa(pfe_hif_ring_t *ring)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+	if (ring->is_nocpy)
+	{
+		/*	NOCPY ring does not use write-back descriptors */
+		return NULL;
+	}
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+
+	return ring->wb_tbl_base_pa;
+}
+
+/**
+ * @brief		Get length of the write-back table
+ * @param[in]	ring The ring instance
+ * @return		Length of the table in number of entries. Only valid when
+ *				pfe_hif_ring_get_wb_tbl_pa() is not NULL.
+ * @note		Must not be preempted by: pfe_hif_ring_destroy()
+ */
+__attribute__((pure, cold)) uint32_t pfe_hif_ring_get_wb_tbl_len(pfe_hif_ring_t *ring)
+{
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0U;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (ring->is_nocpy)
+	{
+		/*	NOCPY ring does not use write-back descriptors */
+		return 0U;
+	}
+#else /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+    (void)ring;
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+
+	return RING_LEN;
+}
+
+/**
+ * @brief		Get length of the ring
+ * @param[in]	ring The ring instance
+ * @return		Ring length in number of entries
+ * @note		Must not be preempted by: pfe_hif_ring_destroy()
+ */
+__attribute__((pure, hot)) uint32_t pfe_hif_ring_get_len(pfe_hif_ring_t *ring)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0U;
+	}
+#else 
+    (void)ring;
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	return RING_LEN;
+}
+
+/**
+ * @brief		Add buffer to the ring
+ * @details		Add buffer at current write position within the ring and increment
+ *          	the write index. If the current position is already occupied by an
+ *          	enabled buffer the call will fail.
+ * @param[in]	ring The ring instance
+ * @param[in]	buf_pa Physical address of buffer to be enqueued
+ * @param[in]	length Length of the buffer
+ * @param[in]	lifm TRUE means that the buffer is last buffer of a frame (last-in-frame)
+ * @retval		EOK Success
+ * @retval		EIO The slot is already occupied
+ * @retval		EPERM Ring is locked and does not accept enqueue requests
+ * @note		Must not be preempted by: pfe_hif_ring_destroy()
+ */
+__attribute__((hot)) errno_t pfe_hif_ring_enqueue_buf(pfe_hif_ring_t *ring, void *buf_pa, uint32_t length, bool_t lifm)
+{
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (ring->is_nocpy)
+	{
+		return pfe_hif_ring_enqueue_buf_nocpy(ring, buf_pa, length, lifm);
+	}
+	else
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	{
+		return pfe_hif_ring_enqueue_buf_std(ring, buf_pa, length, lifm);
+	}
+}
+
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(GLOBAL_CFG_HIF_NOCPY_DIRECT)
+/**
+ * @brief		Set egress interface ID
+ * @details		This function allows to modify egress interface to be used to transmit
+ * 				frame given by subsequent pfe_hif_ring_enqueue_buf() call. Only reason
+ * 				why this exists is the HIF NOCPY 'direct' mode where the egress interface
+ * 				must be present in the TX buffer descriptor because the post classification
+ * 				header which is required to be prepend to the frame and contains the
+ * 				information is partially ignored and the egress interface identifier is
+ * 				overwritten with the one programmed within the TX descriptor. Enjoy.
+ * @param[in]	ring The ring instance
+ * @param[in]	id The physical interface ID
+ * @note		Only valid for HIF NOCPY TX ring manipulation. All other usages will be
+ * 				ignored.
+ */
+__attribute__((hot)) void pfe_hif_ring_set_egress_if(pfe_hif_ring_t *ring, pfe_ct_phy_if_id_t id)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	ring->wr_bd_nocpy->tx_portno = id;
+}
+#endif /* GLOBAL_CFG_HIF_NOCPY_DIRECT */
+
+/**
+ * @brief		The HIF NOCPY variant
+ * @param[in]	buf_pa This must be BMU2 allocated physical address
+ */
+__attribute__((hot)) static errno_t pfe_hif_ring_enqueue_buf_nocpy(pfe_hif_ring_t *ring, void *buf_pa, uint32_t length, bool_t lifm)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == ring) | (NULL == buf_pa)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (unlikely(ring->is_rx))
+	{
+		NXP_LOG_ERROR("There is nothing to enqueue into RX ring in case of HIF NOCPY\n");
+		return EPERM;
+	}
+	else
+	{
+		/*	Write the HW BD. Always write all control word bits since
+		 	the HIF NOCPY is clearing the flags once BD is processed... */
+		ring->wr_bd_nocpy->data = (uint32_t)((addr_t)buf_pa & 0xffffffffU);
+		ring->wr_bd_nocpy->tx_buflen = (uint16_t)length;
+		ring->wr_bd_nocpy->tx_status = 0xf0U; /* This is from reference code. Not documented. */
+
+#if defined(GLOBAL_CFG_HIF_NOCPY_DIRECT)
+		/*	In case the HIF NOCPY TX works in 'direct' mode (packet is not passed to classifier but
+		 	directly transmitted via physical interface. We must deliver the physical interface
+		 	identifier here (because of course the headers we're putting together within the HIF
+			channel layer and which contains the interface identifier, is being overwritten by
+			information taken from the TX BD... So we need to get the egress interface and configure
+			the TX BD here...
+
+			For this purpose the pfe_hif_ring_set_egress_if() has been implemented to not completely
+			break the HIF ring API logic. Therefore we do not touch the tx_portno here and expect
+			that caller has already called the pfe_hif_ring_set_egress_if().
+		*/
+
+		/* ring->wr_bd_nocpy->tx_portno = 0U; */
+#else
+#error LMEM copy mode not implemented yet
+#endif /* PFE_HIF_RING_CFG_NOCPY_DIRECT_MODE */
+
+
+		ring->wr_bd_nocpy->tx_queueno = 0U;
+		ring->wr_bd_nocpy->lmem_cpy = 0U;
+
+#if defined(TARGET_HW_LS1012A)
+#error Not supported
+#endif /* TARGET_HW_LS1012A */
+
+		if (lifm)
+		{
+			ring->wr_bd_nocpy->lifm = 1U;
+		}
+		else
+		{
+			ring->wr_bd_nocpy->lifm = 0U;
+		}
+
+		/*	Write the BD 'enable' bit */
+		ring->wr_bd_nocpy->desc_en = 1U;
+
+#if (TRUE == HAL_HANDLE_CACHE)
+		/*	Flush cache over the BD */
+		oal_mm_cache_flush(ring->wr_bd_nocpy, ring->wr_bd_nocpy_pa, sizeof(pfe_hif_nocpy_bd_t));
+#endif /* HAL_HANDLE_CACHE */
+
+		/*	Increment the write pointer */
+		inc_write_index_nocpy(ring);
+	}
+
+	return EOK;
+}
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+
+/**
+ * @brief		The "standard" HIF variant
+ */
+__attribute__((hot)) static errno_t pfe_hif_ring_enqueue_buf_std(pfe_hif_ring_t *ring, void *buf_pa, uint32_t length, bool_t lifm)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == ring) | (NULL == buf_pa)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (unlikely(0U != ring->wr_bd->desc_en))
+	{
+		NXP_LOG_ERROR("Can't insert buffer since the BD entry is already used\n");
+		return EIO;
+	}
+	else
+	{
+		/*	Write the HW BD */
+		ring->wr_bd->data = (uint32_t)((addr_t)PFE_MMAP_DDR_PHYS_TO_PFE(buf_pa) & 0xffffffffU);
+		ring->wr_bd->buflen = (uint16_t)length;
+		ring->wr_bd->status = 0U;
+
+#if defined(TARGET_HW_LS1012A)
+		if (ring->is_rx)
+		{
+			ring->wr_bd->ctrl = ring->wr_bd->ctrl
+					| BD_CTRL_PKT_INT_EN
+					| BD_CTRL_LIFM
+					| BD_CTRL_DIR
+					| BD_CTRL_DESC_EN;
+		}
+		else
+#endif /* TARGET_HW_LS1012A */
+		{
+			if (lifm)
+			{
+				ring->wr_bd->lifm = 1U;
+			}
+			else
+			{
+				ring->wr_bd->lifm = 0U;
+			}
+		}
+
+#if defined(TARGET_HW_S32G)
+		ring->wr_bd->seqnum = ring->seqnum;
+		ring->seqnum++;
+#endif /* TARGET_HW_S32G */
+
+		/*	Write the BD 'enable' bit */
+		ring->wr_bd->desc_en = 1U;
+
+#if (TRUE == HAL_HANDLE_CACHE)
+		/*	Flush cache over the BD */
+		oal_mm_cache_flush(ring->wr_bd, ring->wr_bd_pa, sizeof(pfe_hif_bd_t));
+#endif /* HAL_HANDLE_CACHE */
+
+		/*	Increment the write pointer */
+		inc_write_index_std(ring);
+	}
+
+	return EOK;
+}
+
+/**
+ * @brief		Dequeue buffer form the ring
+ * @details		Remove next buffer from the ring and increment the read index. If the
+ * 				buffer is empty then the call fails and no operation is performed.
+ * @param[in]	ring The ring instance
+ * @param[out]	buf_pa Pointer where pointer to the dequeued buffer shall be written
+ * @param[out]	length Pointer where length of the buffer shall be written
+ * @param[out]	lifm Pointer where last-in-frame information shall be written
+ * @retval		EOK Buffer dequeued
+ * @retval		EAGAIN Current BD is busy
+ * @note		Must not be preempted by: pfe_hif_ring_destroy()
+ */
+__attribute__((hot)) errno_t pfe_hif_ring_dequeue_buf(pfe_hif_ring_t *ring, void **buf_pa, uint32_t *length, bool_t *lifm)
+{
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (ring->is_nocpy)
+	{
+		return pfe_hif_ring_dequeue_buf_nocpy(ring, buf_pa, length, lifm);
+	}
+	else
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	{
+		return pfe_hif_ring_dequeue_buf_std(ring, buf_pa, length, lifm);
+	}
+}
+
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+/**
+ * @brief		The HIF NOCPY variant
+ */
+__attribute__((hot)) static errno_t pfe_hif_ring_dequeue_buf_nocpy(pfe_hif_ring_t *ring, void **buf_pa, uint32_t *length, bool_t *lifm)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == ring) || (NULL == buf_pa) || (NULL == length) || (NULL == lifm)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+#if defined(TARGET_HW_S32G)
+	/* if (unlikely(0U != ring->rd_bd_nocpy->desc_en)) */
+	if (1U != ring->rd_bd_nocpy->pkt_xfer)
+	{
+#if (TRUE == HAL_HANDLE_CACHE)
+		/*	Ensure that the descriptors will be updated with next call */
+		__builtin_prefetch((void *)ring->rd_bd_nocpy, 0, 0);
+#endif /* HAL_HANDLE_CACHE */
+		return EAGAIN;
+	}
+#elif defined(TARGET_HW_LS1012A)
+#error Not supported
+#endif /* TARGET_HW */
+	else
+	{
+		*buf_pa = (void *)(addr_t)PFE_MMAP_DDR_PFE_TO_PHYS(ring->rd_bd_nocpy->data);
+
+		if (ring->is_rx)
+		{
+			*length = ring->rd_bd_nocpy->rx_buflen;
+		}
+		else
+		{
+			*length = ring->rd_bd_nocpy->tx_buflen;
+		}
+
+		*lifm = (0U != ring->rd_bd_nocpy->lifm);
+
+		/*	Re-enable the descriptor so HIF can write another RX buffer there */
+		ring->rd_bd_nocpy->pkt_xfer = 0U;
+		ring->rd_bd_nocpy->desc_en = 1U;
+
+		/*	Increment the read pointer */
+		inc_read_index_nocpy(ring);
+	}
+
+	return EOK;
+}
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+
+/**
+ * @brief		The "standard" HIF variant
+ */
+__attribute__((hot)) static errno_t pfe_hif_ring_dequeue_buf_std(pfe_hif_ring_t *ring, void **buf_pa, uint32_t *length, bool_t *lifm)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == ring) || (NULL == buf_pa) || (NULL == length) || (NULL == lifm)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+#if defined(TARGET_HW_S32G)
+	if ((0U == ring->rd_bd->desc_en) || (0U != ring->rd_wb_bd->desc_en)
+#ifdef GLOBAL_CFG_HIF_SEQNUM_CHECK
+		|| (ring->rd_bd->seqnum != ring->rd_wb_bd->seqnum)
+#endif /* GLOBAL_CFG_HIF_SEQNUM_CHECK */
+		)
+	{
+#if (TRUE == HAL_HANDLE_CACHE)
+		/*	Ensure that the descriptors will be updated with next call */
+		__builtin_prefetch((void *)ring->rd_wb_bd, 0, 0);
+		__builtin_prefetch((void *)ring->rd_bd, 0, 0);
+#endif /* HAL_HANDLE_CACHE */
+		return EAGAIN;
+	}
+#elif defined(TARGET_HW_LS1012A)
+	if (unlikely((ring->rd_bd->ctrl & BD_CTRL_DESC_EN) || (0U == ring->fill_level)))
+	{
+		/*	Ensure that the descriptor will be updated with next call */
+		__builtin_prefetch((void *)ring->rd_bd, 0, 0);
+		return EAGAIN;
+	}
+#endif /* TARGET_HW */
+	else
+	{
+#if defined(TARGET_HW_S32G)
+		/*	Reset BD and WB BD enable flag. It is ensured that the current BD will not be reused
+		 	again until desc_en is reset since sequence number will become not sequential and
+		 	thus the BD is not valid. */
+		ring->rd_bd->desc_en = 0U;
+		ring->rd_wb_bd->desc_en = 1U;
+#endif /* TARGET_HW_S32G */
+
+		*buf_pa = (void *)(addr_t)PFE_MMAP_DDR_PFE_TO_PHYS(ring->rd_bd->data);
+
+#if defined(TARGET_HW_S32G)
+		*length = ring->rd_wb_bd->buflen;
+#elif defined(TARGET_HW_LS1012A)
+		*length = BD_BUF_LEN(ring->rd_bd->ctrl);
+#else
+#error No target HW defined
+#endif /* TARGET_HW */
+
+#if defined(TARGET_HW_S32G)
+		*lifm = (0U != ring->rd_wb_bd->lifm);
+#elif defined(TARGET_HW_LS1012A)
+		*lifm = (0U != (ring->rd_bd->ctrl & BD_CTRL_LIFM));
+#else
+#error No target HW defined
+#endif /* TARGET_HW */
+
+		/*	Increment the read pointer */
+		inc_read_index_std(ring);
+	}
+
+	return EOK;
+}
+
+/**
+ * @brief		Dequeue buffer from the ring without response
+ * @details		Remove next buffer from the ring and increment the read index. If the
+ * 				buffer is empty then the call fails and no operation is performed. Can
+ * 				be used to receive TX confirmations.
+ * @param[in]	ring The ring instance
+ * @param[out]	lifm Pointer where last-in-frame information shall be written
+ * @retval		EOK Buffer dequeued
+ * @retval		EAGAIN Current BD is busy
+ * @note		Must not be preempted by: pfe_hif_ring_destroy()
+ */
+__attribute__((hot)) errno_t pfe_hif_ring_dequeue_plain(pfe_hif_ring_t *ring, bool_t *lifm)
+{
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (ring->is_nocpy)
+	{
+		return pfe_hif_ring_dequeue_plain_nocpy(ring, lifm);
+	}
+	else
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	{
+		return pfe_hif_ring_dequeue_plain_std(ring, lifm);
+	}
+}
+
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+/**
+ * @brief		The HIF NOCPY variant
+ */
+__attribute__((hot)) static errno_t pfe_hif_ring_dequeue_plain_nocpy(pfe_hif_ring_t *ring, bool_t *lifm)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+#if defined(TARGET_HW_S32G)
+	/* if (unlikely((0U != ring->rd_bd_nocpy->desc_en) || (0U == pfe_hif_ring_get_fill_level(ring)))) */
+	if (0U == ring->rd_bd_nocpy->pkt_xfer) /* TODO: Is this OK also within RX ring? */
+	{
+		/*	Nothing to dequeue */
+#if (TRUE == HAL_HANDLE_CACHE)
+		/*	Ensure that the descriptors will be updated with next call */
+		__builtin_prefetch((void *)ring->rd_bd, 0, 0);
+#endif /* HAL_HANDLE_CACHE */
+		return EAGAIN;
+	}
+#elif defined(TARGET_HW_LS1012A)
+#error Not supported
+#endif /* TARGET_HW */
+	else
+	{
+		/*
+			Return the LIFM flag
+
+		 	HIF NOCPY TX BDP will always overwrite the BD so the LIFM
+			flag will be set to zero (very smart...). It must be ensured
+			that the HIF NOCPY ring will be used in the one-frame=one-BD
+			manner.
+		*/
+		*lifm = TRUE;
+
+		/*	Clear the 'TX done' flag */
+		ring->rd_bd_nocpy->pkt_xfer = 0U;
+		ring->rd_bd_nocpy->desc_en = 0U;
+
+		/*	Increment the read pointer */
+		inc_read_index_nocpy(ring);
+	}
+
+	return EOK;
+}
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+
+/**
+ * @brief		The "standard" HIF variant
+ */
+__attribute__((hot)) static errno_t pfe_hif_ring_dequeue_plain_std(pfe_hif_ring_t *ring, bool_t *lifm)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+#if defined(TARGET_HW_S32G)
+	if ((0U == ring->rd_bd->desc_en) || (0U != ring->rd_wb_bd->desc_en)
+#ifdef GLOBAL_CFG_HIF_SEQNUM_CHECK
+		|| (ring->rd_bd->seqnum != ring->rd_wb_bd->seqnum)
+#endif /* GLOBAL_CFG_HIF_SEQNUM_CHECK */
+		)
+	{
+#if (TRUE == HAL_HANDLE_CACHE)
+		/*	Ensure that the descriptors will be updated with next call */
+		__builtin_prefetch((void *)ring->rd_wb_bd, 0, 0);
+		__builtin_prefetch((void *)ring->rd_bd, 0, 0);
+#endif /* HAL_HANDLE_CACHE */
+		return EAGAIN;
+	}
+#elif defined(TARGET_HW_LS1012A)
+	if (unlikely((ring->rd_bd->ctrl & BD_CTRL_DESC_EN) || (0U == ring->fill_level)))
+	{
+		/*	Ensure that the descriptor will be updated with next call */
+		__builtin_prefetch((void *)ring->rd_bd, 0, 0);
+		return EAGAIN;
+	}
+#endif /* TARGET_HW */
+	else
+	{
+		/*	Return LIFM */
+		*lifm = (0U != ring->rd_bd->lifm);
+
+#if defined(TARGET_HW_S32G)
+		/*	Reset BD and WB BD enable flag. It is ensured that the current BD will not be reused
+			again until desc_en is reset since sequence number will become not sequential and
+			thus the BD is not valid. */
+		ring->rd_bd->desc_en = 0U;
+		ring->rd_wb_bd->desc_en = 1U;
+#endif /* TARGET_HW_S32G */
+
+		/*	Increment the read pointer */
+		inc_read_index_std(ring);
+	}
+
+	return EOK;
+}
+
+/**
+ * @brief		Drain buffer from ring
+ * @details		This call dequeues previously enqueued buffer from a ring regardless it
+ *				has been processed by the HW or not. Function is intended to properly
+ *				shut-down the ring in terms of possibility to retrieve all currently
+ *				enqueued entries.
+ * @param[in]	ring The ring instance
+ * @param[out]	buf_pa buf_pa Pointer where pointer to the dequeued buffer shall be written
+ * @retval		EOK Buffer has been dequeued
+ * @retval		ENOENT No more buffers in the ring
+ */
+__attribute__((cold)) errno_t pfe_hif_ring_drain_buf(pfe_hif_ring_t *ring, void **buf_pa)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == ring) || (NULL == buf_pa)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+	if (ring->is_nocpy && ring->is_rx)
+	{
+		bool_t lifm;
+
+		/*	In this case we will do standard dequeue until the ring is empty. This
+			will ensure that application can drain RX buffers and return all BMU
+			buffers back to the HW pool. */
+		if (EOK == pfe_hif_ring_dequeue_plain_nocpy(ring, &lifm))
+		{
+			return EOK;
+		}
+		else
+		{
+			return ENOENT;
+		}
+	}
+	else
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	if (0U != pfe_hif_ring_get_fill_level(ring))
+	{
+		/*	In case of RX ring this will return enqueued RX buffer. In
+			case of TX ring the enqueued TX buffer will be returned. */
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+		if (ring->is_nocpy)
+		{
+			*buf_pa = (void *)ring->rd_bd_nocpy->data;
+			ring->rd_bd_nocpy->desc_en = 0U;
+			inc_read_index_nocpy(ring);
+		}
+		else
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+		{
+			/*	Draining introduces sequence number corruption. Every enqueued
+				BD increments sequence number in SW and every processed BD
+				increments it in HW. In case when non-processed BDs are dequeued
+				the new ones will be enqueued with sequence number not matching
+				the current HW one. We need to adjust the SW value when draining
+				non-processed BDs. */
+			if (0U != ring->wr_wb_bd->desc_en)
+			{
+				/*	This BD has not been processed yet. Revert the enqueue. */
+				*buf_pa = (void *)ring->wr_bd->data;
+				ring->wr_bd->desc_en = 0U;
+				ring->wr_wb_bd->desc_en = 1U;
+				ring->seqnum--;
+				dec_write_index_std(ring);
+			}
+			else
+			{
+				/*	Processed BD. Do standard dequeue. */
+				*buf_pa = (void *)(addr_t)ring->rd_bd->data;
+				ring->rd_bd->desc_en = 0U;
+				ring->rd_wb_bd->desc_en = 1U;
+				inc_read_index_std(ring);
+			}
+		}
+	}
+	else
+	{
+		return ENOENT;
+	}
+
+	return EOK;
+}
+
+/**
+ * @brief		Invalidate the ring
+ * @details		Disable all buffer descriptors in the ring
+ * @param[in]	ring The ring instance
+ * @note		Must not be preempted by: pfe_hif_ring_enqueue_buf(), pfe_hif_ring_destroy()
+ */
+__attribute__((cold)) void pfe_hif_ring_invalidate(pfe_hif_ring_t *ring)
+{
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (ring->is_nocpy)
+	{
+		pfe_hif_ring_invalidate_nocpy(ring);
+	}
+	else
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	{
+		pfe_hif_ring_invalidate_std(ring);
+	}
+
+	return;
+}
+
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+/**
+ * @brief		The HIF NOCPY variant
+ */
+__attribute__((cold)) static void pfe_hif_ring_invalidate_nocpy(pfe_hif_ring_t *ring)
+{
+	uint32_t ii;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+#if (TRUE == HAL_HANDLE_CACHE)
+	oal_mm_cache_inval(ring->base_va, ring->base_pa, RING_LEN * sizeof(pfe_hif_nocpy_bd_t));
+#endif /* HAL_HANDLE_CACHE */
+
+	for (ii=0U; ii<RING_LEN; ii++)
+	{
+		/*	Zero-out the EN flag */
+		(((pfe_hif_nocpy_bd_t *)ring->base_va)[ii]).desc_en = 0U;
+
+		/*	Mark the descriptor as last BD */
+		(((pfe_hif_nocpy_bd_t *)ring->base_va)[ii]).last_bd = 1U;
+	}
+
+#if (TRUE == HAL_HANDLE_CACHE)
+	oal_mm_cache_flush(ring->base_va, ring->base_pa, RING_LEN * sizeof(pfe_hif_nocpy_bd_t));
+#endif /* HAL_HANDLE_CACHE */
+}
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+
+/**
+ * @brief		The "standard" HIF variant
+ */
+__attribute__((cold)) static void pfe_hif_ring_invalidate_std(pfe_hif_ring_t *ring)
+{
+	uint32_t ii;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+#if (TRUE == HAL_HANDLE_CACHE)
+	oal_mm_cache_inval(ring->base_va, ring->base_pa, RING_LEN * sizeof(pfe_hif_bd_t));
+#endif /* HAL_HANDLE_CACHE */
+
+	for (ii=0U; ii<RING_LEN; ii++)
+	{
+		/*	Zero-out the EN flag */
+		(((pfe_hif_bd_t *)ring->base_va)[ii]).desc_en = 0U;
+
+		/*	Mark the descriptor as last BD */
+		(((pfe_hif_bd_t *)ring->base_va)[ii]).last_bd = 1U;
+
+		/*	Reset the write-back descriptor */
+		(((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ii]).seqnum = 0xffffU;
+		(((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ii]).desc_en = 1U;
+	}
+
+#if (TRUE == HAL_HANDLE_CACHE)
+	oal_mm_cache_flush(ring->base_va, ring->base_pa, RING_LEN * sizeof(pfe_hif_bd_t));
+#endif /* HAL_HANDLE_CACHE */
+}
+
+/**
+ * @brief		Dump of HW rings
+ * @details		Dumps particular ring
+ * @param[in]	ring The ring instance
+ * @param[in]	name The ring name
+ * @note		Must not be preempted by: pfe_hif_ring_enqueue_buf(), pfe_hif_ring_destroy()
+ */
+__attribute__((cold)) void pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name)
+{
+	uint32_t ii;
+	char_t *idx_str;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == ring) || (NULL == name)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+#if (TRUE == HAL_HANDLE_CACHE)
+	oal_mm_cache_flush(ring->base_va, ring->base_pa, RING_LEN * sizeof(pfe_hif_bd_t));
+#endif /* HAL_HANDLE_CACHE */
+
+	NXP_LOG_INFO("Ring %s: len %d\n", name, RING_LEN);
+	NXP_LOG_INFO("  Type: %s\n", ring->is_rx ? "RX" : "TX");
+	NXP_LOG_INFO("  Index w/r: %d/%d (%d/%d)\n", ring->write_idx & RING_LEN_MASK, ring->read_idx & RING_LEN_MASK, ring->write_idx, ring->read_idx);
+	NXP_LOG_INFO("  Seqn: 0x%x\n", ring->seqnum);
+
+	/* BD ring */
+	for (ii=0U; ii<RING_LEN; ii++)
+	{
+
+		pfe_hif_bd_t *bd = &(((pfe_hif_bd_t *)ring->base_va)[ii]);
+		if (0 == ii)
+		{
+			NXP_LOG_INFO("  BD va/pa v0x%p/p0x%p\n", ring->base_va, ring->base_pa);
+			NXP_LOG_INFO("    pa:      idx: bufl:ctrl: status :  data  :  next :seqn\n");
+		}
+
+		if ((ring->write_idx & RING_LEN_MASK) == ii)
+		{
+			idx_str = "<-- WR";
+		}
+		else if ((ring->read_idx & RING_LEN_MASK) == ii)
+		{
+			idx_str = "<-- RD";
+		}
+		else
+		{
+			idx_str = "";
+		}
+
+		NXP_LOG_INFO("    p0x%p%5d: %04x:%04x:%08x:%08x:%08x:%04x%s\n",(void *)&((pfe_hif_bd_t *)ring->base_pa)[ii], ii, bd->buflen, bd->ctrl, bd->status, bd->data, bd->next, bd->seqnum, idx_str);
+	}
+
+	/* WB ring */
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+	if (FALSE == ring->is_nocpy)
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	{
+		for (ii=0U; ii<RING_LEN; ii++)
+		{
+			pfe_hif_wb_bd_t *wb = &(((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ii]);
+			if (0 == ii)
+			{
+				NXP_LOG_INFO("  WB va/pa v0x%p/p0x%p\n", ring->wb_tbl_base_va, ring->wb_tbl_base_pa);
+				NXP_LOG_INFO("    pa:      idx:  ctl: rsvd :bufl:seqn\n");
+			}
+
+			if ((ring->read_idx & RING_LEN_MASK) == ii)
+			{
+				idx_str = "<-- RD";
+			}
+			else
+			{
+				idx_str = "";
+			}
+
+			NXP_LOG_INFO("    p0x%p%5d: %04x:%06x:%04x:%04x%s\n", (void *)&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_pa)[ii], ii, wb->ctrl,  wb->rsvd, wb->buflen, wb->seqnum, idx_str);
+		}
+	}
+}
+
+/**
+ * @brief		Create new PFE buffer descriptor ring
+ * @param[in]	rx If TRUE the ring is RX, if FALSE the the ring is TX
+ * @param[in]	seqnum Initial sequence number
+ * @param[in]	nocpy if TRUE then ring will be treated as HIF NOCPY variant
+ * @return		The new ring instance or NULL if the call has failed
+ * @note		Must not be preempted by any of the remaining API functions
+ */
+__attribute__((cold)) pfe_hif_ring_t *pfe_hif_ring_create(bool_t rx, uint16_t seqnum, bool_t nocpy)
+{
+#if !defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+	if (TRUE == nocpy)
+	{
+		NXP_LOG_ERROR("HIF NOCPY support not enabled\n");
+		return NULL;
+	}
+#else
+	if (TRUE == nocpy)
+	{
+		return pfe_hif_ring_create_nocpy(seqnum, rx);
+	}
+	else
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	{
+		return pfe_hif_ring_create_std(seqnum, rx);
+	}
+}
+
+#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+/**
+ * @brief		The HIF NOCPY variant
+ */
+__attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_nocpy(uint16_t seqnum, bool_t rx)
+{
+	pfe_hif_ring_t *ring;
+	uint32_t ii, size;
+	pfe_hif_nocpy_bd_t *hw_desc_va, *hw_desc_pa;
+
+	(void)seqnum;
+
+	/*	Allocate the ring structure */
+	ring = oal_mm_malloc_contig_aligned_cache(sizeof(pfe_hif_ring_t), HAL_CACHE_LINE_SIZE);
+	if (NULL == ring)
+	{
+		NXP_LOG_ERROR("Can't create BD ring; oal_mm_malloc_contig_aligned_cache() failed\n");
+		return NULL;
+	}
+
+	memset(ring, 0, sizeof(pfe_hif_ring_t));
+	ring->base_va = NULL;
+	ring->wb_tbl_base_va = NULL;
+	ring->wb_tbl_base_pa = NULL;
+	ring->rd_wb_bd = NULL;
+#if 0
+	ring->wr_wb_bd = NULL;
+#endif /* 0 */
+	ring->is_nocpy = TRUE;
+
+	/*	Just a debug check */
+	if (((addr_t)&ring->heavy_data_mark - (addr_t)ring) > HAL_CACHE_LINE_SIZE)
+	{
+		NXP_LOG_DEBUG("Suboptimal: Data split between two cache lines\n");
+	}
+
+	/*	Allocate memory for buffer descriptors. Should be DMA safe, contiguous, and 64-bit aligned. */
+	if (0 != (HAL_CACHE_LINE_SIZE % 8))
+	{
+		NXP_LOG_DEBUG("Suboptimal: Cache line size is not 64-bit aligned\n");
+		ii = 8U;
+	}
+	else
+	{
+		ii = HAL_CACHE_LINE_SIZE;
+	}
+
+	size = RING_LEN * sizeof(pfe_hif_nocpy_bd_t);
+	ring->base_va = oal_mm_malloc_contig_aligned_nocache(size, ii);
+
+	if (unlikely(NULL == ring->base_va))
+	{
+		NXP_LOG_ERROR("BD memory allocation failed\n");
+		goto free_and_fail;
+	}
+
+	/*	It shall be ensured that a single BD does not split across 4k boundary */
+	if (0 != (sizeof(pfe_hif_nocpy_bd_t) % 8))
+	{
+		if ((((addr_t)ring->base_va + size) & (MAX_ADDR_T_VAL << 12)) > ((addr_t)ring->base_va & (MAX_ADDR_T_VAL << 12)))
+		{
+			NXP_LOG_ERROR("A buffer descriptor is crossing 4k boundary\n");
+			goto free_and_fail;
+		}
+	}
+
+	ring->base_pa = oal_mm_virt_to_phys_contig(ring->base_va);
+
+	/*	TODO: Verify/remove this (this will become relevant at the s32g platform) */
+	if (unlikely(((addr_t)ring->base_pa < (addr_t)0x80000000U) || ((addr_t)ring->base_pa > (addr_t)0xBFFFFFFFU)))
+	{
+		NXP_LOG_WARNING("Descriptor ring memory not in required range: starts @ p0x%p\n", ring->base_pa);
+	}
+
+	/*	Initialize state variables */
+	ring->write_idx = 0U;
+	ring->read_idx = 0U;
+	ring->is_rx = rx;
+	ring->rd_bd_nocpy = (pfe_hif_nocpy_bd_t *)ring->base_va;
+	ring->wr_bd_nocpy = (pfe_hif_nocpy_bd_t *)ring->base_va;
+
+	/*	Initialize memory */
+	memset(ring->base_va, 0, RING_LEN * sizeof(pfe_hif_nocpy_bd_t));
+
+	/*	Chain the buffer descriptors */
+	hw_desc_va = (pfe_hif_nocpy_bd_t *)ring->base_va;
+	hw_desc_pa = (pfe_hif_nocpy_bd_t *)ring->base_pa;
+
+	for (ii=0; ii<RING_LEN; ii++)
+	{
+		if (TRUE == ring->is_rx)
+		{
+			/*	Mark BD as RX */
+			hw_desc_va[ii].dir = 1U;
+			/*	Enable the descriptor */
+			hw_desc_va[ii].desc_en = 1U;
+		}
+		else
+		{
+			hw_desc_va[ii].dir = 0U;
+			hw_desc_va[ii].desc_en = 0U;
+		}
+
+		/*	Enable BD interrupt */
+		hw_desc_va[ii].cbd_int_en = 1U;
+
+		hw_desc_va[ii].next = (uint32_t)((addr_t)(&hw_desc_pa[ii + 1U]) & 0xffffffffU);
+	}
+
+	/*	Chain last one with the first one */
+	hw_desc_va[ii-1].next = (uint32_t)((addr_t)(&hw_desc_pa[0]) & 0xffffffffU);
+	hw_desc_va[ii-1].last_bd = 1U;
+
+#if (TRUE == HAL_HANDLE_CACHE)
+	/*	Flush the cache */
+	oal_mm_cache_flush(ring->base_va, ring->base_pa, RING_LEN * sizeof(pfe_hif_nocpy_bd_t));
+
+	/*	Invalidate the cache over the first descriptor so next attempt to access
+		it (enqueue/dequeue) will result in a cache miss. Further descriptors are
+		treated using the prefetch approach. */
+	oal_mm_cache_inval(ring->base_va, ring->base_pa, sizeof(pfe_hif_nocpy_bd_t));
+#endif /* HAL_HANDLE_CACHE */
+
+	return ring;
+
+free_and_fail:
+	(void)pfe_hif_ring_destroy(ring);
+	return NULL;
+}
+#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+
+/**
+ * @brief		The "standard" HIF variant
+ */
+__attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t seqnum, bool_t rx)
+{
+	pfe_hif_ring_t *ring;
+	uint32_t ii, size;
+	pfe_hif_bd_t *hw_desc_va, *hw_desc_pa;
+
+	/*	Allocate the ring structure */
+	ring = oal_mm_malloc_contig_aligned_cache(sizeof(pfe_hif_ring_t), HAL_CACHE_LINE_SIZE);
+	if (NULL == ring)
+	{
+		NXP_LOG_ERROR("Can't create BD ring; oal_mm_malloc_contig_aligned_cache() failed\n");
+		return NULL;
+	}
+
+	memset(ring, 0, sizeof(pfe_hif_ring_t));
+	ring->base_va = NULL;
+	ring->wb_tbl_base_va = NULL;
+	ring->is_nocpy = FALSE;
+
+	/*	Just a debug check */
+	if (((addr_t)&ring->heavy_data_mark - (addr_t)ring) > HAL_CACHE_LINE_SIZE)
+	{
+		NXP_LOG_DEBUG("Suboptimal: Data split between two cache lines\n");
+	}
+
+	/*	Allocate memory for buffer descriptors. Should be DMA safe, contiguous, and 64-bit aligned. */
+	if (0 != (HAL_CACHE_LINE_SIZE % 8))
+	{
+		NXP_LOG_DEBUG("Suboptimal: Cache line size is not 64-bit aligned\n");
+		ii = 8U;
+	}
+	else
+	{
+		ii = HAL_CACHE_LINE_SIZE;
+	}
+
+	size = RING_LEN * sizeof(pfe_hif_bd_t);
+	ring->base_va = oal_mm_malloc_contig_aligned_nocache(size, ii);
+
+	if (unlikely(NULL == ring->base_va))
+	{
+		NXP_LOG_ERROR("BD memory allocation failed\n");
+		goto free_and_fail;
+	}
+
+	/*	It shall be ensured that a single BD does not split across 4k boundary */
+	if (0 != (sizeof(pfe_hif_bd_t) % 8))
+	{
+		if ((((addr_t)ring->base_va + size) & (MAX_ADDR_T_VAL << 12)) > ((addr_t)ring->base_va & (MAX_ADDR_T_VAL << 12)))
+		{
+			NXP_LOG_ERROR("A buffer descriptor is crossing 4k boundary\n");
+			goto free_and_fail;
+		}
+	}
+
+	ring->base_pa = oal_mm_virt_to_phys_contig(ring->base_va);
+
+	/*	TODO: Verify/remove this (this will become relevant at the s32g platform) */
+	if (unlikely(((addr_t)ring->base_pa < (addr_t)0x80000000U) || ((addr_t)ring->base_pa > (addr_t)0xBFFFFFFFU)))
+	{
+		NXP_LOG_WARNING("Descriptor ring memory not in required range: starts @ p0x%p\n", ring->base_pa);
+	}
+
+#if defined(TARGET_HW_S32G)
+	ring->seqnum = seqnum;
+
+	/*	Allocate memory for write-back descriptors */
+	size = RING_LEN * sizeof(pfe_hif_wb_bd_t);
+	ring->wb_tbl_base_va = oal_mm_malloc_contig_aligned_nocache(size, ii);
+
+	if (unlikely(NULL == ring->wb_tbl_base_va))
+	{
+		NXP_LOG_ERROR("WB BD memory allocation failed\n");
+		goto free_and_fail;
+	}
+
+	/*	It shall be ensured that a single WB BD does not split across 4k boundary */
+	if (0 != (sizeof(pfe_hif_bd_t) % 8))
+	{
+		if ((((addr_t)ring->wb_tbl_base_va + size) & (MAX_ADDR_T_VAL << 12)) > ((addr_t)ring->wb_tbl_base_va & (MAX_ADDR_T_VAL << 12)))
+		{
+			NXP_LOG_ERROR("A write-back buffer descriptor is crossing 4k boundary\n");
+			goto free_and_fail;
+		}
+	}
+
+	ring->wb_tbl_base_pa = oal_mm_virt_to_phys_contig(ring->wb_tbl_base_va);
+#endif /* TARGET_HW_S32G */
+
+	/*	Initialize state variables */
+	ring->write_idx = 0U;
+	ring->read_idx = 0U;
+	ring->is_rx = rx;
+	ring->rd_bd = (pfe_hif_bd_t *)ring->base_va;
+	ring->wr_bd = (pfe_hif_bd_t *)ring->base_va;
+
+	/*	Initialize memory */
+	memset(ring->base_va, 0, RING_LEN * sizeof(pfe_hif_bd_t));
+
+	/*	Chain the buffer descriptors */
+	hw_desc_va = (pfe_hif_bd_t *)ring->base_va;
+	hw_desc_pa = (pfe_hif_bd_t *)ring->base_pa;
+
+	for (ii=0; ii<RING_LEN; ii++)
+	{
+		if (TRUE == ring->is_rx)
+		{
+			/*	Mark BD as RX */
+			hw_desc_va[ii].dir = 1U;
+		}
+
+		/*	Enable BD interrupt */
+		hw_desc_va[ii].cbd_int_en = 1U;
+
+		hw_desc_va[ii].next = (uint32_t)((addr_t)PFE_MMAP_DDR_PHYS_TO_PFE(&hw_desc_pa[ii + 1U]) & 0xffffffffU);
+	}
+
+	/*	Chain last one with the first one */
+	hw_desc_va[ii-1].next = (uint32_t)((addr_t)PFE_MMAP_DDR_PHYS_TO_PFE(&hw_desc_pa[0]) & 0xffffffffU);
+	hw_desc_va[ii-1].last_bd = 1U;
+
+#if (TRUE == HAL_HANDLE_CACHE)
+	/*	Flush the cache */
+	oal_mm_cache_flush(ring->base_va, ring->base_pa, RING_LEN * sizeof(pfe_hif_bd_t));
+
+	/*	Invalidate the cache over the first descriptor so next attempt to access
+		it (enqueue/dequeue) will result in a cache miss. Further descriptors are
+		treated using the prefetch approach. */
+	oal_mm_cache_inval(ring->base_va, ring->base_pa, sizeof(pfe_hif_bd_t));
+#endif /* HAL_HANDLE_CACHE */
+
+#if defined(TARGET_HW_S32G)
+	/*	Initialize write-back descriptors */
+	{
+		pfe_hif_wb_bd_t *wb_bd_va;
+
+		ring->rd_wb_bd = (pfe_hif_wb_bd_t *)ring->wb_tbl_base_va;
+#if 0
+		ring->wr_wb_bd = (pfe_hif_wb_bd_t *)ring->wb_tbl_base_va;
+#endif /* 0 */
+
+		memset(ring->wb_tbl_base_va, 0, RING_LEN * sizeof(pfe_hif_wb_bd_t));
+
+		wb_bd_va = (pfe_hif_wb_bd_t *)ring->wb_tbl_base_va;
+		for (ii=0U; ii<RING_LEN; ii++)
+		{
+			wb_bd_va->seqnum = 0xffffU;
+
+			/*	Initialize WB BD descriptor enable flag. Once descriptor is processed,
+				the PFE HW will clear it. */
+			wb_bd_va->desc_en = 1U;
+			wb_bd_va++;
+		}
+
+#if (TRUE == HAL_HANDLE_CACHE)
+		/*	Flush the cache */
+		oal_mm_cache_flush(ring->wb_tbl_base_va, ring->wb_tbl_base_pa, RING_LEN * sizeof(pfe_hif_wb_bd_t));
+
+		/*	Invalidate the cache over the first descriptor so next attempt to access
+		 	it (enqueue/dequeue) will result in a cache miss. Further descriptors are
+			treated using the prefetch approach. */
+		oal_mm_cache_inval(ring->base_va, ring->base_pa, sizeof(pfe_hif_wb_bd_t));
+#endif /* HAL_HANDLE_CACHE */
+	}
+#endif /* TARGET_HW_S32G */
+
+	return ring;
+
+free_and_fail:
+	(void)pfe_hif_ring_destroy(ring);
+	return NULL;
+}
+
+/**
+ * @brief		Destroy BD ring
+ * @param[in]	ring The ring instance
+ * @note		Must not be preempted by any of the remaining API functions
+ */
+__attribute__((cold)) errno_t pfe_hif_ring_destroy(pfe_hif_ring_t *ring)
+{
+	if (NULL != ring)
+	{
+		/*	Invalidate and release the BD ring */
+		if (NULL != ring->base_va)
+		{
+			pfe_hif_ring_invalidate(ring);
+			oal_mm_free_contig(ring->base_va);
+			ring->base_va = NULL;
+		}
+
+		/*	Release WB BD ring */
+		if (NULL != ring->wb_tbl_base_va)
+		{
+			oal_mm_free_contig(ring->wb_tbl_base_va);
+			ring->wb_tbl_base_va = NULL;
+		}
+
+		/*	Release the ring structure */
+		oal_mm_free_contig(ring);
+		ring = NULL;
+	}
+
+	return EOK;
+}
+
+/** @}*/
