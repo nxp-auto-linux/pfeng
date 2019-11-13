@@ -34,12 +34,21 @@
  * 
  * @file		pfe_global_csr.h
  * @brief		The global WSP registers definition file (s32g).
- * @details		
+ * @details		Applicable for IP versions listed below.
  *
  */
 
 #ifndef PFE_GLOBAL_WSP_CSR_H_
 #define PFE_GLOBAL_WSP_CSR_H_
+
+#ifndef PFE_CBUS_H_
+#error Missing cbus.h
+#endif /* PFE_CBUS_H_ */
+
+/*	Supported IPs. Defines are validated within pfe_cbus.h. */
+#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#error Unsupported IP version
+#endif /* GLOBAL_CFG_IP_VERSION */
 
 /*	CBUS offsets */
 #define WSP_VERSION				(0x00U)
@@ -64,6 +73,8 @@
 #define WSP_SAFETY_INT_SRC		(0x4cU)
 #define WSP_SAFETY_INT_EN		(0x50U)
 #define WDT_INT_EN				(0x54U)
+
+#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
 #define CLASS_WDT_INT_EN		(0x58U)
 #define UPE_WDT_INT_EN			(0x5cU)
 #define HGPI_WDT_INT_EN			(0x60U)
@@ -81,6 +92,82 @@
 #define WDT_TIMER_VAL_3			(0x90U)
 #define WDT_TIMER_VAL_4			(0x94U)
 #define WSP_DBUG_BUS1			(0x98U)
+#endif /* IP_VERSION_NPU_7_14 */
+
+#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4)
+/*	TODO: Taken from NPU 7.6. Remove this comment once confirmed
+ 	that FPGA is based on 7.6. Ticket no.: 123703. */
+#define WDT_INT_SRC				(0x58U)
+#define WDT_TIMER_VAL_1			(0x5cU)
+#define WDT_TIMER_VAL_2			(0x60U)
+#define WDT_TIMER_VAL_3			(0x64U)
+#define WDT_TIMER_VAL_4			(0x68U)
+#define WSP_DBUG_BUS1			(0x70U)
+#endif /* IP_VERSION_FPGA_5_0_4 */
+
+/* WSP_SAFETY_INT_SRC bits*/
+#define	SAFETY_INT				(1U << 0)
+#define	MASTER1_INT				(1U << 1)
+#define	MASTER2_INT				(1U << 2)
+#define	MASTER3_INT				(1U << 3)
+#define	MASTER4_INT				(1U << 4)
+#define	EMAC_CBUS_INT			(1U << 5)
+#define	EMAC_DBUS_INT			(1U << 6)
+#define	CLASS_CBUS_INT			(1U << 7)
+#define	CLASS_DBUS_INT			(1U << 8)
+#define	TMU_CBUS_INT			(1U << 9)
+#define	TMU_DBUS_INT			(1U << 10)
+#define	HIF_CBUS_INT			(1U << 11)
+#define	HIF_DBUS_INT			(1U << 12)
+#define	HIF_NOCPY_CBUS_INT		(1U << 13)
+#define	HIF_NOCPY_DBUS_INT		(1U << 14)
+#define	UPE_CBUS_INT			(1U << 15)
+#define	UPE_DBUS_INT			(1U << 16)
+#define	HRS_CBUS_INT			(1U << 17)
+#define	BRIDGE_CBUS_INT			(1U << 18)
+#define EMAC_SLV_INT			(1U << 19)
+#define	BMU1_SLV_INT			(1U << 20)
+#define	BMU2_SLV_INT			(1U << 21)
+#define	CLASS_SLV_INT			(1U << 22)
+#define	HIF_SLV_INT				(1U << 23)
+#define	HIF_NOCPY_SLV_INT		(1U << 24)
+#define	LMEM_SLV_INT			(1U << 25)
+#define	TMU_SLV_INT				(1U << 26)
+#define	UPE_SLV_INT				(1U << 27)
+#define	WSP_GLOBAL_SLV_INT		(1U << 28)
+
+/* WSP_SAFETY_INT_EN bits*/
+#define	SAFETY_INT_EN			(1U << 0)
+#define	MASTER1_INT_EN 			(1U << 1)
+#define	MASTER2_INT_EN			(1U << 2)
+#define	MASTER3_INT_EN			(1U << 3)
+#define	MASTER4_INT_EN			(1U << 4)
+#define	EMAC_CBUS_INT_EN 		(1U << 5)
+#define	EMAC_DBUS_INT_EN 		(1U << 6)
+#define	CLASS_CBUS_INT_EN 		(1U << 7)
+#define	CLASS_DBUS_INT_EN 		(1U << 8)
+#define	TMU_CBUS_INT_EN 		(1U << 9)
+#define	TMU_DBUS_INT_EN 		(1U << 10)
+#define	HIF_CBUS_INT_EN 		(1U << 11)
+#define	HIF_DBUS_INT_EN 		(1U << 12)
+#define	HIF_NOCPY_CBUS_INT_EN 	(1U << 13)
+#define	HIF_NOCPY_DBUS_INT_EN 	(1U << 14)
+#define	UPE_CBUS_INT_EN 		(1U << 15)
+#define	UPE_DBUS_INT_EN 		(1U << 16)
+#define	HRS_CBUS_INT_EN 		(1U << 17)
+#define	BRIDGE_CBUS_INT_EN 		(1U << 18)
+#define EMAC_SLV_INT_EN 		(1U << 19)
+#define	BMU1_SLV_INT_EN 		(1U << 20)
+#define	BMU2_SLV_INT_EN 		(1U << 21)
+#define	CLASS_SLV_INT_EN 		(1U << 22)
+#define	HIF_SLV_INT_EN 			(1U << 23)
+#define	HIF_NOCPY_SLV_INT_EN 	(1U << 24)
+#define	LMEM_SLV_INT_EN 		(1U << 25)
+#define	TMU_SLV_INT_EN 			(1U << 26)
+#define	UPE_SLV_INT_EN 			(1U << 27)
+#define	WSP_GLOBAL_SLV_INT_EN 	(1U << 28)
+
+#define	SAFETY_INT_ENABLE_ALL	0x1FFFFFFFU
 
 #endif /* PFE_GLOBAL_WSP_CSR_H_ */
 

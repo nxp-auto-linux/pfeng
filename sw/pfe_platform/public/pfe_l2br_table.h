@@ -87,7 +87,7 @@ errno_t pfe_l2br_table_entry_set_fresh(pfe_l2br_table_t *l2br, pfe_l2br_table_en
 bool_t pfe_l2br_table_entry_is_fresh(pfe_l2br_table_entry_t *entry) __attribute__((pure));
 errno_t pfe_l2br_table_entry_set_static(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry, bool_t is_static);
 bool_t pfe_l2br_table_entry_is_static(pfe_l2br_table_entry_t *entry) __attribute__((pure));
-void pfe_l2br_table_entry_to_str(pfe_l2br_table_entry_t *entry, char_t *buf, uint32_t buf_len);
+uint32_t pfe_l2br_table_entry_to_str(pfe_l2br_table_entry_t *entry, char_t *buf, uint32_t buf_len);
 
 #endif /* PUBLIC_PFE_L2BR_TABLE_H_ */
 

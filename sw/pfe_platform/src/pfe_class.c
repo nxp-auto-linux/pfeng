@@ -78,7 +78,7 @@ struct __pfe_classifier_tag
 	void *cbus_base_va;						/*	CBUS base virtual address */
 	uint32_t pe_num;						/*	Number of PEs */
 	pfe_pe_t **pe;							/*	List of particular PEs */
-	struct blalloc_context *heap_context;	/* Heap manager context */
+	blalloc_t *heap_context;				/* Heap manager context */
 	uint32_t dmem_heap_base;				/* DMEM base address of the heap */
 	oal_mutex_t mutex;
 	oal_thread_t *error_poller;
@@ -87,6 +87,7 @@ struct __pfe_classifier_tag
 
 static errno_t pfe_class_dmem_heap_init(pfe_class_t *class);
 
+#if defined(GLOBAL_CFG_GLOB_ERR_POLL_WORKER)
 /**
  * @brief Periodically checks all PEs whether they report a firmware error
  * @details Function is intended to be run in a thread
@@ -98,28 +99,34 @@ static void *class_fw_err_poller_func(void *arg)
 	pfe_class_t *class = (pfe_class_t *)arg;
 	uint32_t i;
 
-	if(NULL == class)
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (NULL == class)
 	{
 		NXP_LOG_ERROR("NULL argument\n");
 		return NULL;
 	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	NXP_LOG_DEBUG("FW errors poller started\n");
 
 	while (TRUE == class->poll_fw_errors)
 	{
 
 		/* Read the error record from each PE */
-		for(i = 0U; i < class->pe_num; i++)
-		{
-			pfe_pe_get_fw_errors(class->pe[i]);		
-		}
+		for (i = 0U; i < class->pe_num; i++)
+	{
+			pfe_pe_get_fw_errors(class->pe[i]);
+	}
 
 		/*  Wait for 1 sec and loop again */
 		oal_time_mdelay(1000);
 	}
 
-	return NULL;
+	NXP_LOG_DEBUG("FW errors poller terminated\n");
 
+	return NULL;
 }
+#endif /* GLOBAL_CFG_GLOB_ERR_POLL_WORKER */
 
 
 /**
@@ -178,25 +185,10 @@ pfe_class_t *pfe_class_create(void *cbus_base_va, uint32_t pe_num, pfe_class_cfg
 			}
 			else
 			{
+				pfe_pe_set_iaccess(pe, CLASS_MEM_ACCESS_WDATA, CLASS_MEM_ACCESS_RDATA, CLASS_MEM_ACCESS_ADDR);
 				pfe_pe_set_dmem(pe, PFE_CFG_CLASS_ELF_DMEM_BASE, PFE_CFG_CLASS_DMEM_SIZE);
 				pfe_pe_set_imem(pe, PFE_CFG_CLASS_ELF_IMEM_BASE, PFE_CFG_CLASS_IMEM_SIZE);
 				pfe_pe_set_lmem(pe, (PFE_CFG_CBUS_PHYS_BASE_ADDR + PFE_MMAP_PE_LMEM_BASE), PFE_MMAP_PE_LMEM_SIZE);
-				/* pfe_pe_set_ddr(pe, cfg->ddr_base_pa, cfg->ddr_base_va, cfg->ddr_size); */
-				pfe_pe_set_iaccess(pe, CLASS_MEM_ACCESS_WDATA, CLASS_MEM_ACCESS_RDATA, CLASS_MEM_ACCESS_ADDR);
-
-				/*	Initialize DMEM including packet buffer */
-#if !defined(GLOBAL_CFG_RUN_ON_VDK)
-				NXP_LOG_DEBUG("CLASS PE %d: Initializing DMEM (%lu bytes)+IMEM(%lu bytes)\n", ii, PFE_CFG_CLASS_DMEM_SIZE, PFE_CFG_CLASS_IMEM_SIZE);
-				pfe_pe_dmem_memset(pe, 0U, 0U, PFE_CFG_CLASS_DMEM_SIZE);
-				pfe_pe_imem_memset(pe, 0U, 0U, PFE_CFG_CLASS_IMEM_SIZE);
-#else
-				/* PFE TLM WORKAROUND:
-				 * Resetting DMEM/IMEM areas affects the TLM model simulation.
-				 * So, as workaround, skip it.
-				 */
-				NXP_LOG_INFO("[RUN_ON_VDK]: TLM WORKAROUND: SKIPPED class PE %d: Initializing DMEM (%lu bytes)+IMEM(%lu bytes)\n", ii, PFE_CFG_CLASS_DMEM_SIZE, PFE_CFG_CLASS_IMEM_SIZE);
-#endif /* !GLOBAL_CFG_RUN_ON_VDK */
-
 				class->pe[ii] = pe;
 				class->pe_num++;
 			}
@@ -215,13 +207,6 @@ pfe_class_t *pfe_class_create(void *cbus_base_va, uint32_t pe_num, pfe_class_cfg
 
 		/*	Disable the classifier */
 		pfe_class_disable(class);
-
-		class->poll_fw_errors = TRUE;
-		class->error_poller = oal_thread_create(&class_fw_err_poller_func, class, "FW errors poller", 0);
-		if (NULL == class->error_poller)
-		{
-			NXP_LOG_ERROR("Couldn't start poller thread\n");
-		}
 
 		/*	Set new configuration */
 		pfe_class_cfg_set_config(class->cbus_base_va, cfg);
@@ -302,7 +287,7 @@ void pfe_class_dmem_heap_free(pfe_class_t *class, addr_t addr)
 
 	if(addr < class->dmem_heap_base)
 	{
-		NXP_LOG_ERROR("Impossible address 0x%x (base is 0x%x)\n", addr, class->dmem_heap_base);
+		NXP_LOG_ERROR("Impossible address 0x%"PRINTADDR_T" (base is 0x%x)\n", addr, class->dmem_heap_base);
 		return;
 	}
 
@@ -436,7 +421,7 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
 		}
 	}
 
-	if(EOK == ret)
+	if (EOK == ret)
 	{
 		class->is_fw_loaded = TRUE;
 
@@ -444,14 +429,24 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
 		/* All PEs have the same map therefore it is sufficient to check one */
 		ret = pfe_pe_check_mmap(class->pe[0U]);
 
-		if(EOK == ret)
+		if (EOK == ret)
 		{
 			/* Firmware has been loaded and the DMEM heap is known - initialize the allocator */
 			ret = pfe_class_dmem_heap_init(class);
-			if(EOK != ret)
+			if (EOK != ret)
 			{
 				NXP_LOG_ERROR("Dmem heap allocator initialization failed\n");
 			}
+
+			/*	Memory maps are known too. Start the error poller thread. */
+#ifdef GLOBAL_CFG_GLOB_ERR_POLL_WORKER
+			class->poll_fw_errors = TRUE;
+			class->error_poller = oal_thread_create(&class_fw_err_poller_func, class, "FW errors poller", 0);
+			if (NULL == class->error_poller)
+			{
+				NXP_LOG_ERROR("Couldn't start poller thread\n");
+			}
+#endif /* GLOBAL_CFG_GLOB_ERR_POLL_WORKER */
 		}
 	}
 
@@ -644,38 +639,18 @@ void pfe_class_destroy(pfe_class_t *class)
 
 	if (NULL != class)
 	{
-#if (PFE_CFG_FIRMWARE_VARIANT == PFE_FW_SBL)
-		if (EOK != oal_mutex_lock(&class->mutex))
-		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
-		}
-
-		class->poll_fw_errors = FALSE;
-		
-		for (ii=0U; ii<class->pe_num; ii++)
-		{
-			/*	Inform PE to stop */
-			pfe_pe_dmem_write(class->pe[ii], cpu_to_be32(1U), PEMBOX_ADDR_CLASS, 4U);
-			oal_time_usleep(10);
-
-			/*	Read the 'stopped' status */
-			if (0x0U == pfe_pe_dmem_read(class->pe[ii], PEMBOX_ADDR_CLASS+4, 4U))
-			{
-				NXP_LOG_WARNING("Failed to stop CLASS PE %d\n", ii);
-			}
-			else
-			{
-				NXP_LOG_INFO("CLASS PE %d stopped\n", ii);
-			}
-		}
-
-		if (EOK != oal_mutex_unlock(&class->mutex))
-		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
-		}
-#endif /* PFE_FW_SBL */
-
 		pfe_class_disable(class);
+
+#ifdef GLOBAL_CFG_GLOB_ERR_POLL_WORKER
+		if (NULL != class->error_poller)
+		{
+			class->poll_fw_errors = FALSE;
+			if (EOK != oal_thread_join(class->error_poller, NULL))
+			{
+				NXP_LOG_ERROR("oal_thread_join() failed\n");
+			}
+		}
+#endif /* GLOBAL_CFG_GLOB_ERR_POLL_WORKER */
 
 		for (ii=0U; ii<class->pe_num; ii++)
 		{
@@ -684,13 +659,13 @@ void pfe_class_destroy(pfe_class_t *class)
 		}
 
 		class->pe_num = 0U;
-		if(NULL != class->heap_context)
+		if (NULL != class->heap_context)
 		{
 			blalloc_destroy(class->heap_context);
 			class->heap_context = NULL;
 		}
-		oal_mutex_destroy(&class->mutex);
 
+		oal_mutex_destroy(&class->mutex);
 		oal_mm_free(class);
 	}
 }
@@ -766,6 +741,14 @@ errno_t pfe_class_set_default_vlan(pfe_class_t *class, uint16_t vlan)
 
 uint32_t pfe_class_get_num_of_pes(pfe_class_t *class)
 {
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == class))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0U;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
 	return class->pe_num;
 }
 
@@ -781,7 +764,6 @@ uint32_t pfe_class_get_num_of_pes(pfe_class_t *class)
 uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
-	uint32_t ii;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == class))
@@ -791,7 +773,6 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
-
 	if (EOK != oal_mutex_lock(&class->mutex))
 	{
 		NXP_LOG_DEBUG("mutex lock failed\n");
@@ -799,13 +780,15 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 
 	len += pfe_class_cfg_get_text_stat(class->cbus_base_va, buf, buf_len, verb_level);
 
+#if 0 /* Disabled. See AAVB-2147 */
 	/*	Get PE info per PE */
 	for (ii=0U; ii<class->pe_num; ii++)
 	{
 		len += pfe_pe_get_text_statistics(class->pe[ii], buf + len, buf_len - len, verb_level);
 	}
+#endif
 
-	len += oal_util_snprintf(buf + len, buf_len - len, "DMEM heap\n---------\n");
+	len += oal_util_snprintf(buf + len, buf_len - len, "\nDMEM heap\n---------\n");
 	len += blalloc_get_text_statistics(class->heap_context, buf + len, buf_len - len, verb_level);
 
 	if (EOK != oal_mutex_unlock(&class->mutex))

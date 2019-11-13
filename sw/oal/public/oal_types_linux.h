@@ -33,6 +33,7 @@
 
 #include <linux/kernel.h>
 #include <linux/types.h>
+#include <stddef.h>
 
 #define __STR_HELPER(x) #x
 #define __STR(x) __STR_HELPER(x)
@@ -40,7 +41,7 @@
 #define NXP_LOG_WARNING(...) printk(KERN_WARNING "["__FILE__":"__STR(__LINE__)"] WRN: " __VA_ARGS__)
 #define NXP_LOG_ERROR(...) printk(KERN_ERR "["__FILE__":"__STR(__LINE__)"] ERR: " __VA_ARGS__)
 #define NXP_LOG_INFO(...) printk(KERN_INFO "["__FILE__":"__STR(__LINE__)"] INF: " __VA_ARGS__)
-#define NXP_LOG_DEBUG(...) printk(KERN_DEBUG "["__FILE__":"__STR(__LINE__)"] INF: " __VA_ARGS__)
+#define NXP_LOG_DEBUG(...) printk(KERN_DEBUG "["__FILE__":"__STR(__LINE__)"] DBG: " __VA_ARGS__)
 
 #if defined(TARGET_ARCH_i386)
 typedef unsigned int addr_t;

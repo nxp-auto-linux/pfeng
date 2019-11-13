@@ -116,7 +116,7 @@ static void *worker_func(void *arg)
 /**
  * @brief		IDEX RPC callback
  */
-static void idex_rpc_cbk(uint32_t id, void *buf, uint16_t buf_len, void *arg)
+static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg)
 {
 	pfe_platform_t *platform = (pfe_platform_t *)arg;
 
@@ -425,10 +425,24 @@ errno_t pfe_platform_remove(void)
 {
 	errno_t ret;
 
-	pfe_platform_destroy_hif_drv(&pfe);
+	if (NULL != mbox)
+	{
+		if (EOK != oal_mbox_detach_timer(mbox))
+		{
+			NXP_LOG_DEBUG("Could not detach timer\n");
+		}
 
-	oal_mbox_send_signal(mbox, IRQ_WORKER_QUIT);
-	oal_thread_join(worker, NULL);
+		oal_mbox_send_signal(mbox, IRQ_WORKER_QUIT);
+		ret = oal_thread_join(worker, NULL);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Can't join the worker thread: %d\n", ret);
+		}
+		oal_mbox_destroy(mbox);
+		mbox = NULL;
+	}
+
+	pfe_platform_destroy_hif_drv(&pfe);
 
 	pfe_platform_destroy_hif(&pfe);
 #if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
@@ -437,7 +451,7 @@ errno_t pfe_platform_remove(void)
 
 	if (NULL != pfe.cbus_baseaddr)
 	{
-		ret = oal_mm_dev_unmap(pfe.cbus_baseaddr, PFE_CFG_AXI_SLAVE_LEN);
+		ret = oal_mm_dev_unmap(pfe.cbus_baseaddr, PFE_CFG_CBUS_LENGTH/* <- FIXME, should use value used on init instead */);
 		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("Can't unmap PPFE CBUS: %d\n", ret);

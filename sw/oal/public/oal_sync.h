@@ -67,6 +67,14 @@
 #include "oal_mutex_linux.h"
 
 /*
+ * AUTOSAR
+ *
+ */
+#elif defined(TARGET_OS_AUTOSAR)
+#include "oal_spinlock_autosar.h"
+#include "SchM_Eth_43_PFE.h"
+
+/*
  * unknown OS
  *
  */

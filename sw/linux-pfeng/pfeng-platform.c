@@ -42,16 +42,16 @@ int pfeng_platform_init(struct pfeng_priv *priv, struct pfeng_resources *res)
 {
 	int ret = 0;
 
+#if GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4
+	priv->pfe_cfg.common_irq_mode = TRUE; /* use common irq mode (FPGA/PCI) */
+	priv->pfe_cfg.irq_vector_global = res->irq.hif[0];
+#else
+	priv->pfe_cfg.common_irq_mode = FALSE; /* don't use common irq mode */
+	priv->pfe_cfg.irq_vector_hif_chnls[0] = res->irq.hif[0];
+#endif
 	priv->pfe_cfg.cbus_base = (addr_t)priv->ioaddr;
 	priv->pfe_cfg.cbus_len = res->addr_size;
 	priv->pfe_cfg.fw = priv->fw;
-#ifdef GLOBAL_CFG_RUN_ON_VDK
-	priv->pfe_cfg.common_irq_mode = FALSE; /* don't use common irq mode */
-	priv->pfe_cfg.irq_vector_hif_chnls[0] = res->irq.hif[0];
-#else
-	priv->pfe_cfg.common_irq_mode = TRUE; /* use common irq mode (FPGA/PCI) */
-	priv->pfe_cfg.irq_vector_global = res->irq.hif[0];
-#endif
 	priv->pfe_cfg.hif_chnls_mask = HIF_CHNL_0; /* channel bitmap */
 	priv->pfe_cfg.irq_vector_hif_nocpy = 0; /* disable for now */
 	priv->pfe_cfg.irq_vector_bmu = res->irq.bmu;
@@ -66,6 +66,12 @@ int pfeng_platform_init(struct pfeng_priv *priv, struct pfeng_resources *res)
 	if (!priv->pfe) {
 		dev_err(priv->device, "Could not get PFE platform instance\n");
 		ret = -EINVAL;
+	}
+
+	/* init hif */
+	ret = pfeng_hif_init(priv);
+	if (ret) {
+		dev_err(priv->device, "Error: Cannot init HIF. Err=%d\n", ret);
 	}
 
 end:
@@ -295,6 +301,16 @@ int pfeng_phy_get_mac(struct pfeng_priv *priv, int num, void *mac_buf)
 	}
 
 	return 0;
+}
+
+char *pfeng_logif_get_name(struct pfeng_priv *priv, int idx)
+{
+	pfe_log_if_t *log_if;
+
+	/*	Get logical interface */
+	log_if = pfe_platform_get_log_if_by_id(priv->pfe, idx);
+
+	return log_if ? pfe_log_if_get_name(log_if) : NULL;
 }
 
 /* PM (hint: move to extra file) */

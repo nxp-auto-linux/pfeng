@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  *
  * SPDX-License-Identifier:     BSD OR GPL-2.0
  *
@@ -44,8 +44,8 @@ static const struct ethtool_ops pfeng_ethtool_ops = {
     //.set_coalesce = pfeng_set_coalesce,
     //.get_tunable = pfeng_get_tunable,
     //.set_tunable = pfeng_set_tunable,
-    //.get_link_ksettings = pfeng_ethtool_get_link_ksettings,
-    //.set_link_ksettings = pfeng_ethtool_set_link_ksettings,
+    .get_link_ksettings = phy_ethtool_get_link_ksettings,
+    .set_link_ksettings = phy_ethtool_set_link_ksettings,
 };
 
 void pfeng_ethtool_set_ops(struct net_device *netdev)

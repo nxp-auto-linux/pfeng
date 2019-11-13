@@ -74,13 +74,13 @@ struct __pfe_bmu_tag
  */
 __attribute__((cold)) errno_t pfe_bmu_isr(pfe_bmu_t *bmu)
 {
-	bool_t ret = FALSE;
+	errno_t ret = ENOENT;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
+		return EINVAL;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
@@ -92,11 +92,7 @@ __attribute__((cold)) errno_t pfe_bmu_isr(pfe_bmu_t *bmu)
 #endif /* GLOBAL_CFG_PARANOID_IRQ */
 
 	/*	Run the low-level ISR to identify and process the interrupt */
-	if (EOK == pfe_bmu_cfg_isr(bmu->bmu_base_va, bmu->cbus_base_va))
-	{
-		/*	IRQ handled */
-		ret = TRUE;
-	}
+	ret = pfe_bmu_cfg_isr(bmu->bmu_base_va, bmu->cbus_base_va);
 
 #ifdef GLOBAL_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_unlock(&bmu->lock))

@@ -107,6 +107,7 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, char_
 	{
 		memset(iface, 0, sizeof(pfe_phy_if_t));
 		LLIST_Init(&iface->mac_addr_list);
+		iface->id = id;
 	}
 
 	if (NULL == name)
@@ -347,6 +348,16 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 }
 
 /**
+ * @brief		Get operational mode
+ * @param[in]	iface The interface instance
+ * @retval		Current phy_if mode. See pfe_ct_if_op_mode_t.
+ */
+pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
+{
+	/* TODO implement this AAVB-2111*/
+	return IF_OP_DISABLED;
+}
+/**
  * @brief		Set operational mode
  * @param[in]	iface The interface instance
  * @param[in]	mode Mode to be set. See pfe_ct_if_op_mode_t.
@@ -444,6 +455,18 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
 }
 
 /**
+ * @brief		Check if interface is enabled
+ * @param[in]	iface The interface instance
+ * @retval		TRUE if enabled
+ * @retval		FALSE if disabled
+ */
+bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
+{
+	/* TODO implement this AAVB-2111*/
+	return FALSE;
+}
+
+/**
  * @brief		Enable interface (RX/TX)
  * @param[in]	iface The interface instance
  * @retval		EOK Success
@@ -538,6 +561,18 @@ errno_t pfe_phy_if_disable(pfe_phy_if_t *iface)
 	}
 
 	return ret;
+}
+
+/**
+ * @brief		Check if phy_if in promiscuous mode
+ * @param[in]	iface The interface instance
+ * @retval		TRUE promiscuous mode is enabled
+ * @retval		FALSE  promiscuous mode is disbaled
+ */
+bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
+{
+	/* TODO implement this AAVB-2111*/
+	return FALSE;
 }
 
 /**
@@ -797,43 +832,6 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		/*	No address assigned */
 		ret = ENOENT;
 	}
-
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-
-	return ret;
-}
-
-/**
- * @brief		Add address to hash group
- * @param[in]	iface The interface instance
- * @param[out]	addr The MAC address which has to be added
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- * @retval		ENOEXEC Execution error
- */
-errno_t pfe_phy_if_add_hash_group_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
-{
-	errno_t ret = EOK;
-
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-
-	/*	Here the master driver should be asked to add MAC address to a hash group */
-	NXP_LOG_ERROR("%s: Not supported\n", __func__);
-	ret = ENOTSUP;
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{

@@ -52,7 +52,8 @@ INCLUDES += -I$(INC_PREFIX).. \
 			-I$(INC_PREFIX)../elf/public \
 			-I$(INC_PREFIX)../fifo/public \
 			-I$(INC_PREFIX)../bpool/public \
-			-I$(INC_PREFIX)../pfe_hif_drv/public
+			-I$(INC_PREFIX)../pfe_hif_drv/public \
+			-I$(INC_PREFIX)../fci/public
 
 #Dependencies
 DEPENDENCIES = $(subst -L,,$(subst $(EMPTY) $(EMPTY)-l:,/,$(LIBS)))
@@ -71,6 +72,7 @@ CCFLAGS_pfe +=	-DGCC_TOOLCHAIN \
 				-DPFE_CFG_FIRMWARE_VARIANT=PFE_FW_FULL
 CCFLAGS_pfe += -D$(TARGET_ARCH_DEF) -D$(TARGET_OS_DEF) -D$(TARGET_ENDIAN_DEF) -D$(TARGET_HW_DEF) -D$(BUILD_PROFILE_DEF)
 
+CCFLAGS_pfe +=-DPFE_CT_H_MD5=$(word 1, $(shell md5sum $(INC_PREFIX)public/pfe_ct.h))
 #Generic compiler flags (which include build type flags)
 CCFLAGS_all += -Wall -fmessage-length=0
 CCFLAGS_all += $(CCFLAGS_$(BUILD_PROFILE))
@@ -91,10 +93,12 @@ SRCS =	src/pfe_class.c \
 		src/pfe_hif_ring.c \
 		src/pfe_hif.c \
 		src/pfe_idex.c \
-		src/pfe_log_if.c \
+		src/pfe_log_if_slave.c \
 		src/pfe_if_db.c \
 		src/pfe_pe.c \
-		src/pfe_phy_if_slave.c
+		src/pfe_phy_if_slave.c \
+		src/pfe_fp.c \
+		src/pfe_flexible_filter.c
 else
 SRCS =	src/pfe_bmu.c \
 		src/pfe_class.c \
@@ -114,7 +118,9 @@ SRCS =	src/pfe_bmu.c \
 		src/pfe_rtable.c \
 		src/pfe_safety.c \
 		src/pfe_tmu.c \
-		src/pfe_util.c
+		src/pfe_util.c \
+		src/pfe_fp.c \
+		src/pfe_flexible_filter.c		
 endif
 		
 SRCS += hw/$(TARGET_HW)/pfe_bmu_csr.c \
@@ -176,6 +182,8 @@ ccflags-y += $(GLOBAL_CCFLAGS)
 
 pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_class.o \
+	src/pfe_flexible_filter.o \
+	src/pfe_fp.o \
 	src/pfe_emac.o \
 	src/pfe_gpi.o \
 	src/pfe_hif.o \
@@ -183,14 +191,11 @@ pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_hif_nocpy.o \
 	src/pfe_hif_ring.o \
 	src/pfe_pe.o \
-	src/pfe_rtable.o \
 	src/pfe_tmu.o \
 	src/pfe_util.o \
 	src/pfe_phy_if.o \
 	src/pfe_log_if.o \
-	src/pfe_l2br_table.o \
 	src/pfe_if_db.o \
-	src/pfe_l2br.o \
 	src/pfe_safety.o \
 	hw/$(TARGET_HW)/pfe_bmu_csr.o \
 	hw/$(TARGET_HW)/pfe_emac_csr.o \
@@ -208,6 +213,14 @@ else
 pfe_platform-y +=hw/$(TARGET_HW)/pfe_platform_master.o
 endif
 
+ifeq ($(GLOBAL_CFG_RTABLE_ENABLED),1)
+    pfe_platform-y += src/pfe_rtable.o
+endif
+ifeq ($(GLOBAL_CFG_L2BRIDGE_ENABLED),1)
+    pfe_platform-y += src/pfe_l2br.o \
+        src/pfe_l2br_table.o
+endif
+     
 obj-m += pfe_platform.o
 
 linux:

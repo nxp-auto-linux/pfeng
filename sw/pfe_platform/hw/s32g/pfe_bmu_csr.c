@@ -43,6 +43,15 @@
 #include "pfe_cbus.h"
 #include "pfe_bmu_csr.h"
 
+#ifndef PFE_CBUS_H_
+#error Missing cbus.h
+#endif /* PFE_CBUS_H_ */
+
+/*	Supported IPs. Defines are validated within pfe_cbus.h. */
+#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#error Unsupported IP version
+#endif /* GLOBAL_CFG_IP_VERSION */
+
 static void pfe_bmu_cfg_clear_buf_cnt_memory(void *base_va, uint32_t cnt)
 {
 	uint32_t ii;
@@ -206,7 +215,7 @@ void pfe_bmu_cfg_init(void *base_va, pfe_bmu_cfg_t *cfg)
 	hal_write32(cfg->buf_size & 0xffffU, base_va + BMU_BUF_SIZE);
 
 	/*	Thresholds. 75% of maximum number of available buffers. */
-	hal_write32((cfg->max_buf_cnt / 100U) * 75U, base_va + BMU_THRES);
+	hal_write32((cfg->max_buf_cnt * 75U) / 100U, base_va + BMU_THRES);
 
 	/*	Clear internal memories */
 	pfe_bmu_cfg_clear_internal_memory(base_va, cfg->int_mem_loc_cnt);
@@ -241,8 +250,8 @@ errno_t pfe_bmu_cfg_reset(void *base_va)
 {
 	uint32_t ii = 0U;
 
-	hal_write32(PFE_CORE_SW_RESET, base_va + BMU_CTRL);
-	while (hal_read32(base_va + BMU_CTRL) & PFE_CORE_SW_RESET)
+	hal_write32(0x2U, base_va + BMU_CTRL);
+	while (hal_read32(base_va + BMU_CTRL) & 0x2U)
 	{
 		if (++ii > 1000U)
 		{
@@ -263,7 +272,7 @@ errno_t pfe_bmu_cfg_reset(void *base_va)
  */
 void pfe_bmu_cfg_enable(void *base_va)
 {
-	hal_write32(PFE_CORE_ENABLE, base_va + BMU_CTRL);
+	hal_write32(0x1U, base_va + BMU_CTRL);
 }
 
 /**
@@ -272,7 +281,7 @@ void pfe_bmu_cfg_enable(void *base_va)
  */
 void pfe_bmu_cfg_disable(void *base_va)
 {
-	hal_write32(PFE_CORE_DISABLE, base_va + BMU_CTRL);
+	hal_write32(0x0U, base_va + BMU_CTRL);
 }
 
 /**
@@ -335,7 +344,7 @@ uint32_t pfe_bmu_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, ui
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Low Watermark        : 0x%x\n", hal_read32(base_va + BMU_LOW_WATERMARK));
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "High Watermark       : 0x%x\n", hal_read32(base_va + BMU_HIGH_WATERMARK));
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "IRQ Threshold (uc)   : 0x%x\n", hal_read32(base_va + BMU_THRES) & 0xffffU);
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Free Error Address   : 0x%x\n", hal_read32(base_va + BMU_FREE_ERR_ADDR));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Free Error Address   : 0x%x\n", hal_read32(base_va + BMU_FREE_ERROR_ADDR));
 		reg = hal_read32(base_va + BMU_BUF_CNT);
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Free Error Count     : 0x%x\n", reg >> 16);
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Active Buffers       : 0x%x\n", reg & 0xffffU);

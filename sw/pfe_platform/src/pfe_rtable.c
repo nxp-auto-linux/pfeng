@@ -2152,20 +2152,20 @@ static void *rtable_worker_func(void *arg)
  * @brief		Create routing table instance
  * @details		Creates and initializes routing table at given memory location.
  * @param[in]	class The classifier instance implementing the routing
- * @param[in]	htable_base_va Physical address where the hash table shall be placed
+ * @param[in]	htable_base_va Virtual address where the hash table shall be placed
  * @param[in]	htable size Number of entries within the hash table
- * @param[in]	pool_base_pa Physical address where pool shall be placed
+ * @param[in]	pool_base_va Virtual address where pool shall be placed
  * @param[in]	pool_size Number of entries within the pool
  * @return		The routing table instance or NULL if failed
  */
-pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, void *htable_base_pa, uint32_t htable_size, void *pool_base_pa, uint32_t pool_size)
+pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, void *htable_base_va, uint32_t htable_size, void *pool_base_va, uint32_t pool_size)
 {
 	pfe_rtable_t *rtable;
 	pfe_ct_rtable_entry_t *table_va;
 	uint32_t ii;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == htable_base_pa) || (NULL == pool_base_pa) || (NULL == class)))
+	if (unlikely((NULL == htable_base_va) || (NULL == pool_base_va) || (NULL == class)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -2197,14 +2197,14 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, void *htable_base_pa, uint32
 		}
 
 		/*	Store properties */
-		rtable->htable_base_pa = htable_base_pa;
-		rtable->htable_base_va = oal_mm_dev_map(htable_base_pa, htable_size * sizeof(pfe_ct_rtable_entry_t));
+		rtable->htable_base_va = htable_base_va;
+		rtable->htable_base_pa = oal_mm_virt_to_phys(htable_base_va);
 		rtable->htable_size = htable_size;
 		rtable->htable_end_va = rtable->htable_base_va + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
 		rtable->htable_end_pa = rtable->htable_base_pa + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
 
-		rtable->pool_base_pa = pool_base_pa;
-		rtable->pool_base_va = oal_mm_dev_map(pool_base_pa, pool_size * sizeof(pfe_ct_rtable_entry_t));
+		rtable->pool_base_va = pool_base_va;
+		rtable->pool_base_pa = oal_mm_virt_to_phys(pool_base_va);
 		rtable->pool_size = pool_size;
 		rtable->pool_end_va = rtable->pool_base_va + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
 		rtable->pool_end_pa = rtable->pool_base_pa + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
@@ -2298,6 +2298,11 @@ void pfe_rtable_destroy(pfe_rtable_t *rtable)
 
 	if (NULL != rtable)
 	{
+		if (NULL != rtable->mbox)
+		{
+			oal_mbox_detach_timer(rtable->mbox);
+		}
+
 		if (NULL != rtable->worker)
 		{
 			NXP_LOG_INFO("Stopping rtable worker...\n");
@@ -2329,12 +2334,14 @@ void pfe_rtable_destroy(pfe_rtable_t *rtable)
 
 		if (NULL != rtable->htable_base_va)
 		{
-			oal_mm_dev_unmap(rtable->htable_base_va, rtable->htable_size * sizeof(pfe_ct_rtable_entry_t));
+			/*	Just forget the address */
+			rtable->htable_base_va = NULL;
 		}
 
 		if (NULL != rtable->pool_base_va)
 		{
-			oal_mm_dev_unmap(rtable->pool_base_va, rtable->pool_size * sizeof(pfe_ct_rtable_entry_t));
+			/*	Just forget the address */
+			rtable->pool_base_va = NULL;
 		}
 
 		if (NULL != rtable->pool_va)

@@ -64,6 +64,13 @@
 #include "oal_types_linux.h"
 
 /*
+ * AUTOSAR
+ *
+ */
+#elif defined(TARGET_OS_AUTOSAR)
+#include "oal_types_autosar.h"
+
+/*
  * unknown OS
  *
  */

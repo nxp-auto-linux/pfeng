@@ -140,7 +140,7 @@ _ct_assert(sizeof(pfe_idex_request_type_t) == sizeof(uint8_t));
 /**
  * @brief	IDEX Master Discovery Message header
  */
-typedef struct __attribute__((packed, aligned(16))) __pfe_idex_msg_master_discovery_tag
+typedef struct __attribute__((packed)) __pfe_idex_msg_master_discovery_tag
 {
 	/*	Physical interface ID where master driver is located */
 	pfe_ct_phy_if_id_t phy_if_id;
@@ -149,7 +149,7 @@ typedef struct __attribute__((packed, aligned(16))) __pfe_idex_msg_master_discov
 /**
  * @brief	IDEX RPC Message header
  */
-typedef struct __attribute__((packed, aligned(16))) __pfe_idex_rpc_tag
+typedef struct __attribute__((packed)) __pfe_idex_rpc_tag
 {
 	/*	Custom RPC ID */
 	uint32_t rpc_id;
@@ -164,7 +164,7 @@ _ct_assert(sizeof(errno_t) == sizeof(uint32_t));
 /**
  * @brief	IDEX Frame Header
  */
-typedef struct __attribute__((packed, aligned(16))) __pfe_idex_frame_header_tag
+typedef struct __attribute__((packed)) __pfe_idex_frame_header_tag
 {
 	/*	Destination physical interface ID */
 	pfe_ct_phy_if_id_t dst_phy_if;
@@ -200,7 +200,7 @@ _ct_assert(sizeof(pfe_idex_request_state_t) == sizeof(uint8_t));
  * 			|	IDEX Request message (pfe_idex_msg_*_t)		   |
  * 			+--------------------------------------------------+
  */
-typedef struct __attribute__((packed, aligned(16))) __pfe_idex_request_tag
+typedef struct __attribute__((packed)) __pfe_idex_request_tag
 {
 	/*	Unique sequence number */
 	pfe_idex_seqnum_t seqnum;
@@ -229,7 +229,7 @@ typedef struct __attribute__((packed, aligned(16))) __pfe_idex_request_tag
  * 			|	IDEX Response message (pfe_idex_msg_*_t)	   |
  * 			+--------------------------------------------------+
  */
-typedef struct __attribute__((packed, aligned(16))) __pfe_idex_response_tag
+typedef struct __attribute__((packed)) __pfe_idex_response_tag
 {
 	/*	Sequence number matching request which the response is dedicated for */
 	pfe_idex_seqnum_t seqnum;
@@ -263,7 +263,9 @@ typedef struct pfe_idex_tag
 /*	Local IDEX instance storage */
 static pfe_idex_t __idex = {0};
 /*	All HIFs storage */
+#ifdef GLOBAL_CFG_PFE_SLAVE
 static const pfe_ct_phy_if_id_t __hifs[] = IDEX_CFG_HIF_LIST;
+#endif /* GLOBAL_CFG_PFE_SLAVE */
 
 static void *idex_worker_func(void *arg);
 static pfe_idex_request_t *pfe_idex_request_get_by_id(pfe_idex_seqnum_t seqnum);
@@ -287,6 +289,7 @@ static void *idex_worker_func(void *arg)
 	pfe_idex_request_t *req;
 	errno_t ret;
 
+	(void)arg;
 #ifdef GLOBAL_CFG_PFE_MASTER
 	NXP_LOG_INFO("IDEX worker started (master)\n");
 #endif /* GLOBAL_CFG_PFE_MASTER */
@@ -412,6 +415,8 @@ static errno_t pfe_idex_ihc_handler(pfe_hif_drv_client_t *client, void *arg, uin
 	void *ref_ptr;
 	pfe_idex_frame_header_t *idex_header;
 
+	(void)arg;
+	(void)qno;
 	switch (event)
 	{
 		case EVENT_RX_PKT_IND:
@@ -519,6 +524,8 @@ static void pfe_idex_job_func(void *arg)
 	errno_t ret;
 	pfe_ct_phy_if_id_t i_phy_id;
 
+	(void)arg;
+
 	while (TRUE)
 	{
 		/*	Get received packet */
@@ -568,7 +575,9 @@ static void pfe_idex_job_func(void *arg)
 						{
 #ifdef GLOBAL_CFG_PFE_MASTER
 							/*	Master sends response */
-							pfe_idex_msg_master_discovery_t resp = {0};
+							pfe_idex_msg_master_discovery_t resp;
+
+							memset(&resp, 0, sizeof(resp));
 
 							/*	Response payload carries the master interface ID */
 							resp.phy_if_id = idex->local_phy_if;
@@ -608,7 +617,7 @@ static void pfe_idex_job_func(void *arg)
 							idex->cur_req = idex_req;
 
 							/*	Call RPC callback. Response shall be generated inside the callback using the pfe_idex_set_rpc_ret_val(). */
-							idex->rpc_cbk(oal_ntohl(rpc_req->rpc_id), rpc_msg_payload_ptr, oal_ntohs(rpc_req->plen), idex->rpc_cbk_arg);
+							idex->rpc_cbk(i_phy_id, oal_ntohl(rpc_req->rpc_id), rpc_msg_payload_ptr, oal_ntohs(rpc_req->plen), idex->rpc_cbk_arg);
 
 							/*	Invalidate the current interface ID */
 							idex->cur_req_phy_id = PFE_PHY_IF_ID_INVALID;
@@ -945,7 +954,8 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	}
 
 	/*	Assign sequence number, type, and destination PHY ID */
-	seqnum = oal_htonl(idex->req_seq_num++);
+	seqnum = oal_htonl(idex->req_seq_num);
+	idex->req_seq_num++;
 	req->seqnum = seqnum;
 	req->type = type;
 	req->dst_phy_id = dst_phy;
@@ -1073,7 +1083,7 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 		return ENOMEM;
 	}
 
-	idex_hdr_pa = oal_mm_virt_to_phys(idex_hdr);
+	idex_hdr_pa = oal_mm_virt_to_phys_contig(idex_hdr);
 	if (NULL == idex_hdr_pa)
 	{
 		NXP_LOG_ERROR("VA to PA conversion failed\n");
@@ -1169,7 +1179,7 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv)
 
 	memset(idex, 0, sizeof(pfe_idex_t));
 
-	idex->req_seq_num = random();
+	idex->req_seq_num = rand();
 
 	/*	Here we don't know even own interface ID... */
 	idex->master_phy_if = PFE_PHY_IF_ID_INVALID;
@@ -1272,9 +1282,6 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv)
 void pfe_idex_fini(void)
 {
 	pfe_idex_t *idex = &__idex;
-	uint32_t ii;
-	LLIST_t *item, *aux;
-	pfe_idex_request_t *req;
 
 	if (NULL != idex->ihc_client)
 	{
@@ -1320,22 +1327,30 @@ void pfe_idex_fini(void)
 		idex->idex_job = NULL;
 	}
 
-	/*	Remove all entries remaining in requests storage */
-	for (ii=0U; ii<(sizeof(__hifs)/sizeof(pfe_ct_phy_if_id_t)); ii++)
+#ifdef GLOBAL_CFG_PFE_SLAVE
 	{
-		if (FALSE == LLIST_IsEmpty(&idex->req_list))
+		uint32_t ii;
+		LLIST_t *item, *aux;
+		pfe_idex_request_t *req;
+	
+		/*	Remove all entries remaining in requests storage */
+		for (ii=0U; ii<(sizeof(__hifs)/sizeof(pfe_ct_phy_if_id_t)); ii++)
 		{
-			LLIST_ForEachRemovable(item, aux, &idex->req_list)
+			if (FALSE == LLIST_IsEmpty(&idex->req_list))
 			{
-				req = (pfe_idex_request_t *)LLIST_Data(item, pfe_idex_request_t, list_entry);
-				if (unlikely(NULL != req))
+				LLIST_ForEachRemovable(item, aux, &idex->req_list)
 				{
-					LLIST_Remove(item);
-					oal_mm_free_contig(req);
+					req = (pfe_idex_request_t *)LLIST_Data(item, pfe_idex_request_t, list_entry);
+					if (unlikely(NULL != req))
+					{
+						LLIST_Remove(item);
+						oal_mm_free_contig(req);
+					}
 				}
 			}
 		}
 	}
+#endif /* GLOBAL_CFG_PFE_SLAVE */
 
 	if (TRUE == idex->req_list_lock_init)
 	{

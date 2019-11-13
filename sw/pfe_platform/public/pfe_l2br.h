@@ -93,6 +93,7 @@ pfe_l2br_domain_t *pfe_l2br_get_default_domain(pfe_l2br_t *bridge) __attribute__
 pfe_l2br_domain_t *pfe_l2br_get_fallback_domain(pfe_l2br_t *bridge) __attribute__((pure));
 pfe_l2br_domain_t *pfe_l2br_get_first_domain(pfe_l2br_t *bridge, pfe_l2br_domain_get_crit_t crit, void *arg);
 pfe_l2br_domain_t *pfe_l2br_get_next_domain(pfe_l2br_t *bridge);
+uint32_t pfe_l2br_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 
 
 #endif /* PUBLIC_PFE_L2BR_H_ */

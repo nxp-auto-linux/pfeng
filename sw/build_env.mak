@@ -28,6 +28,9 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # =========================================================================
 
+#all makefiles in the environment require "all" as default target
+.DEFAULT_GOAL:= all
+
 # ***********************
 # QNX required definitions
 # ***********************
@@ -66,14 +69,24 @@ export GLOBAL_CFG_PFE_MASTER?=1
 export GLOBAL_CFG_HIF_NOCPY_SUPPORT?=0
 #HIF NOCPY direct mode. When disabled then LMEM copy mode is used.
 export GLOBAL_CFG_HIF_NOCPY_DIRECT?=0
-#Run on VDK flag
-export GLOBAL_CFG_RUN_ON_VDK?=0
-#Force TX CSUM calculation on all frames (this focibly overrwrite all IP/TCP/UDP checksums in FW)
+#Force TX CSUM calculation on all frames (this forcibly overwrite all IP/TCP/UDP checksums in FW)
 export GLOBAL_CFG_CSUM_ALL_FRAMES?=0
 #PFE Safety periodic unmasking thread. 1 - enable(IRQ unmasked in thread), 0 - disable(IRQ unmasked in ISR).
 export GLOBAL_CFG_SAFETY_WORKER?=1
 #HIF sequence number check. 1 - enable, 0 - disable
 export GLOBAL_CFG_HIF_SEQNUM_CHECK?=0
+#IP version
+export GLOBAL_CFG_IP_VERSION?=IP_VERSION_FPGA_5_0_4
+#Build of rtable feature. 1 - enable, 0 - disable
+export GLOBAL_CFG_RTABLE_ENABLED?=1
+#Build of l2bridge feature. 1 - enable, 0 - disable
+export GLOBAL_CFG_L2BRIDGE_ENABLED?=1
+#Build support for FCI. 1 - enable, 0 - disable
+export GLOBAL_CFG_FCI_ENABLED?=1
+#Build support for hif_global_err_poller_func. 1 - enable, 0 - disable
+export GLOBAL_CFG_GLOB_ERR_POLL_WORKER?=1
+#Build support flexible parser and flexible router
+export GLOBAL_CFG_PFE_FLEX_PARS_RTR_ENABLED?=1
 
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 current_dir := $(notdir $(patsubst %/,%,$(dir $(mkfile_path))))
@@ -94,9 +107,9 @@ ifneq ($(GLOBAL_CFG_MULTI_INSTANCE_SUPPORT),0)
 endif
 
 ifneq ($(GLOBAL_CFG_PFE_MASTER),0)
-	GLOBAL_CCFLAGS+=-DGLOBAL_CFG_PFE_MASTER
+    GLOBAL_CCFLAGS+=-DGLOBAL_CFG_PFE_MASTER
 else
-	GLOBAL_CCFLAGS+=-DGLOBAL_CFG_PFE_SLAVE
+    GLOBAL_CCFLAGS+=-DGLOBAL_CFG_PFE_SLAVE
 endif
 
 ifneq ($(GLOBAL_CFG_HIF_NOCPY_SUPPORT),0)
@@ -105,10 +118,6 @@ endif
 
 ifneq ($(GLOBAL_CFG_HIF_NOCPY_DIRECT),0)
     GLOBAL_CCFLAGS+=-DGLOBAL_CFG_HIF_NOCPY_DIRECT
-endif
-
-ifneq ($(GLOBAL_CFG_RUN_ON_VDK),0)
-	GLOBAL_CCFLAGS+=-DGLOBAL_CFG_RUN_ON_VDK
 endif
 
 ifneq ($(GLOBAL_CFG_CSUM_ALL_FRAMES),0)
@@ -120,7 +129,35 @@ ifneq ($(GLOBAL_CFG_SAFETY_WORKER),0)
 endif
 
 ifneq ($(GLOBAL_CFG_HIF_SEQNUM_CHECK),0)
-	GLOBAL_CCFLAGS+=-DGLOBAL_CFG_HIF_SEQNUM_CHECK
+    GLOBAL_CCFLAGS+=-DGLOBAL_CFG_HIF_SEQNUM_CHECK
+endif
+
+ifneq ($(GLOBAL_CFG_IP_VERSION),)
+GLOBAL_CCFLAGS+=-DIP_VERSION_FPGA_5_0_4=100
+GLOBAL_CCFLAGS+=-DIP_VERSION_NPU_7_14=101
+GLOBAL_CCFLAGS+=-DGLOBAL_CFG_IP_VERSION=$(GLOBAL_CFG_IP_VERSION)
+else
+$(error IP version must be set)
+endif
+
+ifneq ($(GLOBAL_CFG_RTABLE_ENABLED),0)
+    GLOBAL_CCFLAGS+= -DGLOBAL_CFG_RTABLE_ENABLED
+endif
+
+ifneq ($(GLOBAL_CFG_L2BRIDGE_ENABLED),0)
+    GLOBAL_CCFLAGS+= -DGLOBAL_CFG_L2BRIDGE_ENABLED
+endif
+
+ifneq ($(GLOBAL_CFG_FCI_ENABLED),0)
+    GLOBAL_CCFLAGS+= -DGLOBAL_CFG_FCI_ENABLED
+endif
+
+ifneq ($(GLOBAL_CFG_GLOB_ERR_POLL_WORKER),0)
+    GLOBAL_CCFLAGS+= -DGLOBAL_CFG_GLOB_ERR_POLL_WORKER
+endif
+
+ifneq ($(GLOBAL_CFG_PFE_FLEX_PARS_RTR_ENABLED),0)
+    GLOBAL_CCFLAGS+= -DGLOBAL_CFG_PFE_FLEX_PARS_RTR_ENABLED
 endif
 
 # This variable will be propagated to every Makefile in the project
@@ -190,7 +227,7 @@ ifeq ($(TARGET_OS),LINUX)
     export BUILD_PROFILE_DEF:=BUILD_PROFILE_$(shell echo $(BUILD_PROFILE) | tr [a-z] [A-Z])
     export TARGET_HW_DEF:=TARGET_HW_$(shell echo $(TARGET_HW) | tr [a-z] [A-Z])
 
-    export OUTPUT_DIR=
+    export OUTPUT_DIR=./
 
     export CC=$(PLATFORM)-gcc
     export CXX=$(PLATFORM)-g++

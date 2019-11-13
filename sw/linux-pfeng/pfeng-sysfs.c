@@ -15,7 +15,7 @@
 
 static struct pfeng_priv *__priv;
 
-static ssize_t pfe_class_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t pfe_class_dmem_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	if(!__priv)
 		return 0;
@@ -97,11 +97,6 @@ static ssize_t pfe_emac1_show(struct device *dev, struct device_attribute *attr,
 		return 0;
 	}
 
-	if(!test_bit(PFENG_STATE_NAPI_IF0_INDEX, &__priv->state)) {
-		NXP_LOG_ERROR("The interface 0 is down\n");
-		return 0;
-	}
-
 	return pfe_emac_get_text_statistics(__priv->pfe->emac[0], buf, PAGE_SIZE, 9);
 }
 
@@ -109,11 +104,6 @@ static ssize_t pfe_emac2_show(struct device *dev, struct device_attribute *attr,
 {
 	if(!__priv) {
 		NXP_LOG_ERROR("Failed to reach platform!!!\n");
-		return 0;
-	}
-
-	if(!test_bit(PFENG_STATE_NAPI_IF1_INDEX, &__priv->state)) {
-		NXP_LOG_ERROR("The interface 1 is down\n");
 		return 0;
 	}
 
@@ -125,11 +115,6 @@ static ssize_t pfe_emac3_show(struct device *dev, struct device_attribute *attr,
 {
 	if(!__priv) {
 		NXP_LOG_ERROR("Failed to reach platform!!!\n");
-		return 0;
-	}
-
-	if(!test_bit(PFENG_STATE_NAPI_IF2_INDEX, &__priv->state)) {
-		NXP_LOG_ERROR("The interface 2 is down\n");
 		return 0;
 	}
 
@@ -222,7 +207,7 @@ static ssize_t pfe_ifs_show(struct device *dev, struct device_attribute *attr, c
 	return len;
 }
 
-static DEVICE_ATTR(class, S_IRUGO, pfe_class_show, NULL);
+static DEVICE_ATTR(class_dmem, S_IRUGO, pfe_class_dmem_show, NULL);
 static DEVICE_ATTR(tmu, S_IRUGO, pfe_tmu_show, NULL);
 static DEVICE_ATTR(util, S_IRUGO, pfe_util_show, NULL);
 static DEVICE_ATTR(bmu, S_IRUGO, pfe_bmu_show, NULL);
@@ -237,7 +222,7 @@ static DEVICE_ATTR(clrings, S_IRUGO, pfe_clrings_show, NULL);
 static DEVICE_ATTR(hifring, S_IRUGO, pfe_hifring_show, NULL);
 
 static struct attribute *pfe_drv_attrs[] = {
-	&dev_attr_class.attr,
+	&dev_attr_class_dmem.attr,
 	&dev_attr_tmu.attr,
 	&dev_attr_util.attr,
 	&dev_attr_bmu.attr,

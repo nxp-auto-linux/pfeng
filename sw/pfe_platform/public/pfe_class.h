@@ -83,6 +83,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 void pfe_class_destroy(pfe_class_t *class);
 addr_t pfe_class_dmem_heap_alloc(pfe_class_t *class, uint32_t size);
 void pfe_class_dmem_heap_free(pfe_class_t *class, addr_t addr);
+errno_t pfe_class_set_flexible_filter(pfe_class_t *class, const uint32_t dmem_addr);
 
 #endif /* PFE_CLASS_H_ */
 

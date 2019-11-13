@@ -43,6 +43,14 @@
 #ifndef PFE_CBUS_H_
 #define PFE_CBUS_H_
 
+#if !defined(GLOBAL_CFG_IP_VERSION) || !defined(IP_VERSION_FPGA_5_0_4) || !defined(IP_VERSION_NPU_7_14)
+#error Missing version define(s)
+#endif /* IP version checks */
+
+#if (GLOBAL_CFG_IP_VERSION == 0) /* Checks if the GLOBAL_CFG_IP_VERSION is undefined */
+#error GLOBAL_CFG_IP_VERSION shall not be empty
+#endif /* GLOBAL_CFG_IP_VERSION */
+
 /*	Addresses (offsets) within the CBUS memory space */
 
 #define CBUS_EMAC1_BASE_ADDR		(0xA0000U)

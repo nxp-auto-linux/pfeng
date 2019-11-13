@@ -1,0 +1,431 @@
+/* =========================================================================
+ *  Copyright 2017-2019 NXP
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER
+ * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * ========================================================================= */
+
+/**
+ * @addtogroup  dxgr_FCI
+ * @{
+ *
+ * @file		fci_rt_db.c
+ * @brief		Route database
+ * @details		Route database is intended to store IP routes and provide
+ * 				functions to select or remove particular entries.
+ *
+ * @warning		All API calls related to a single DB instance must be protected
+ * 				from being preempted by another API calls related to the same
+ * 				DB instance.
+ *
+ */
+
+#include "oal.h"
+#include "linked_list.h"
+#include "fci_rt_db.h"
+
+static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, fci_rt_db_entry_t *entry);
+
+/**
+ * @brief		Match entry with latest criterion provided via fci_rt_db_get_first()
+ * @param[in]	db The route DB instance
+ * @param[in]	entry The entry to be matched
+ * @retval		True Entry matches the criterion
+ * @retval		False Entry does not match the criterion
+ */
+static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, fci_rt_db_entry_t *entry)
+{
+	bool_t match = FALSE;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == db) || (NULL == entry)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	switch (db->cur_crit)
+	{
+		case RT_DB_CRIT_ALL:
+		{
+			match = TRUE;
+			break;
+		}
+
+		case RT_DB_CRIT_BY_IF:
+		{
+			match = (entry->iface == db->cur_crit_arg.iface);
+			break;
+		}
+
+		case RT_DB_CRIT_BY_IF_NAME:
+		{
+			match = (0 == strcmp(db->cur_crit_arg.outif_name, pfe_phy_if_get_name(entry->iface)));
+			break;
+		}
+
+		case RT_DB_CRIT_BY_IP:
+		{
+			match = (0 == memcmp(&db->cur_crit_arg.dst_ip, &entry->dst_ip, sizeof(pfe_ip_addr_t)));
+			break;
+		}
+		
+		case RT_DB_CRIT_BY_MAC:
+		{
+			match = (0 == memcmp(&db->cur_crit_arg.dst_mac, &entry->dst_mac, sizeof(pfe_mac_addr_t)));
+			break;
+		}
+
+		case RT_DB_CRIT_BY_ID:
+		{
+			match = (db->cur_crit_arg.id == entry->id);
+			break;
+		}
+
+		default:
+		{
+			NXP_LOG_ERROR("Unknown criterion\n");
+			match = FALSE;
+		}
+	}
+
+	return match;
+}
+
+/**
+ * @brief		Initialize DB
+ * @param[in]	db The route DB instance
+ */
+void fci_rt_db_init(fci_rt_db_t *db)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == db))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	LLIST_Init(&db->theList);
+	db->cur_item = db->theList.prNext;
+}
+
+/**
+ * @brief		Add a route to DB
+ * @param[in]	db The route DB instance
+ * @param[in]	dst_mac Destination MAC address
+ * @param[in]	iface Name of the output interface
+ * @param[in]	id The route ID
+ * @param[in]	refptr Reference pointer to be bound with entry
+ * @param[in]	overwrite If true then if route exists, it is updated
+ * @retval		EOK Success
+ * @retval		ENOMEM Memory allocation failed
+ * @retval		EPERM Attempt to insert already existing entry without 'overwrite' set to 'true'
+ */
+errno_t fci_rt_db_add(fci_rt_db_t *db,  pfe_ip_addr_t *dst_ip, pfe_mac_addr_t *dst_mac,
+					pfe_phy_if_t *iface, uint32_t id, void *refptr, bool_t overwrite)
+{
+	fci_rt_db_entry_t *new_entry;
+	bool_t is_new = false;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == db) || (NULL == dst_ip) || (NULL == dst_mac) || (NULL == iface)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	/*	Check duplicates */
+	new_entry = fci_rt_db_get_first(db, RT_DB_CRIT_BY_IP, (void *)dst_ip);
+	if (NULL == new_entry)
+	{
+		new_entry = oal_mm_malloc(sizeof(fci_rt_db_entry_t));
+		is_new = true;
+		if (NULL == new_entry)
+		{
+			return ENOMEM;
+		}
+		else
+		{
+			memset(new_entry, 0, sizeof(fci_rt_db_entry_t));
+		}
+	}
+	else
+	{
+		is_new = false;
+
+		if (false == overwrite)
+		{
+			return EPERM;
+		}
+	}
+
+	/*	Store values */
+	memcpy(&new_entry->dst_ip, dst_ip, sizeof(pfe_ip_addr_t));
+	memcpy(&new_entry->dst_mac, dst_mac, sizeof(pfe_mac_addr_t));
+	new_entry->iface = iface;
+	new_entry->id = id;
+	new_entry->mtu = 0; /* Not supported yet */
+	new_entry->refptr = refptr;
+
+	/*	Put to DB */
+	if (true == is_new)
+	{
+		LLIST_AddAtEnd(&(new_entry->list_member), &db->theList);
+	}
+
+	return EOK;
+}
+
+/**
+ * @brief		Remove entry from DB
+ * @param[in]	db The route DB instance
+ * @param[in]	entry Entry to be removed. If the call is successful the entry
+ * 					  becomes invalid and shall not be accessed.
+ * @return		EOK if success, error code otherwise
+ */
+errno_t fci_rt_db_remove(fci_rt_db_t *db, fci_rt_db_entry_t *entry)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == db) || (NULL == entry)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (&entry->list_member == db->cur_item)
+	{
+		/*	Remember the change so we can call remove() between get_first()
+			and get_next() calls. */
+		db->cur_item = db->cur_item->prNext;
+	}
+
+	LLIST_Remove(&(entry->list_member));
+	oal_mm_free(entry);
+
+	return EOK;
+}
+
+/**
+ * @brief		Get first record from the DB matching given criterion
+ * @details		Intended to be used with fci_rt_db_get_next
+ * @param[in]	db The route DB instance
+ * @param[in]	crit Get criterion
+ * @param[in]	art Pointer to criterion argument
+ * @return		The entry or NULL if not found
+ * @warning		The returned entry must not be accessed after fci_rt_db_remove(entry)
+ *				or fci_rt_db_drop_all() has been called.
+ */
+fci_rt_db_entry_t *fci_rt_db_get_first(fci_rt_db_t *db, fci_rt_db_get_criterion_t crit, void *arg)
+{
+	fci_rt_db_entry_t *entry = NULL;
+	LLIST_t *item;
+	bool_t match = false;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == db))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+
+	if (unlikely((RT_DB_CRIT_ALL != crit) && (NULL == arg)))
+	{
+		/*	All criterions except RT_DB_CRIT_ALL require non-NULL argument */
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	/*	Remember criterion and argument for possible subsequent fci_rt_db_get_next() calls */
+	db->cur_crit = crit;
+	switch (db->cur_crit)
+	{
+		case RT_DB_CRIT_ALL:
+		{
+			break;
+		}
+
+		case RT_DB_CRIT_BY_IF:
+		{
+			db->cur_crit_arg.iface = (pfe_phy_if_t *)arg;
+			break;
+		}
+
+		case RT_DB_CRIT_BY_IF_NAME:
+		{
+			memset(db->cur_crit_arg.outif_name, 0, sizeof(db->cur_crit_arg.outif_name));
+			strncpy(db->cur_crit_arg.outif_name, arg, sizeof(db->cur_crit_arg.outif_name)-1);
+			break;
+		}
+
+		case RT_DB_CRIT_BY_IP:
+		{
+			memcpy(&db->cur_crit_arg.dst_ip, arg, sizeof(db->cur_crit_arg.dst_ip));
+			break;
+		}
+		
+		case RT_DB_CRIT_BY_MAC:
+		{
+			memcpy(&db->cur_crit_arg.dst_mac, arg, sizeof(db->cur_crit_arg.dst_mac));
+			break;
+		}
+
+		case RT_DB_CRIT_BY_ID:
+		{
+			memcpy(&db->cur_crit_arg.id, arg, sizeof(db->cur_crit_arg.id));
+			break;
+		}
+
+		default:
+		{
+			NXP_LOG_ERROR("Unknown criterion\n");
+			return NULL;
+		}
+	}
+
+	if (false == LLIST_IsEmpty(&db->theList))
+	{
+		/*	Get first matching entry */
+		LLIST_ForEach(item, &db->theList)
+		{
+			/*	Get data */
+			entry = LLIST_Data(item, fci_rt_db_entry_t, list_member);
+
+			/*	Remember current item to know where to start later */
+			db->cur_item = item->prNext;
+			if (NULL != entry)
+			{
+				if (true == fci_rt_db_match_criterion(db, entry))
+				{
+					match = true;
+					break;
+				}
+			}
+		}
+	}
+
+	if (true == match)
+	{
+		return entry;
+	}
+	else
+	{
+		return NULL;
+	}
+}
+
+/**
+ * @brief		Get next record from the DB
+ * @details		Intended to be used with fci_rt_db_get_first.
+ * @param[in]	db The route DB instance
+ * @return		The entry or NULL if not found
+ * @warning		The returned entry must not be accessed after fci_rt_db_remove(entry)
+ *				or fci_rt_db_drop_all() has been called.
+ */
+fci_rt_db_entry_t *fci_rt_db_get_next(fci_rt_db_t *db)
+{
+	fci_rt_db_entry_t *entry;
+	bool_t match = false;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == db))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (db->cur_item == &db->theList)
+	{
+		/*	No more entries */
+		entry = NULL;
+	}
+	else
+	{
+		while (db->cur_item!=&db->theList)
+		{
+			/*	Get data */
+			entry = LLIST_Data(db->cur_item, fci_rt_db_entry_t, list_member);
+
+			/*	Remember current item to know where to start later */
+			db->cur_item = db->cur_item->prNext;
+
+			if (NULL != entry)
+			{
+				if (true == fci_rt_db_match_criterion(db, entry))
+				{
+					match = true;
+					break;
+				}
+			}
+		}
+	}
+
+	if (true == match)
+	{
+		return entry;
+	}
+	else
+	{
+		return NULL;
+	}
+}
+
+/**
+ * @brief		Remove all entries
+ * @param[in]	db The route DB instance
+ * @return		EOK if success, error code otherwise
+ */
+errno_t fci_rt_db_drop_all(fci_rt_db_t *db)
+{
+	LLIST_t *item, *aux;
+	fci_rt_db_entry_t *entry;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == db))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	LLIST_ForEachRemovable(item, aux, &db->theList)
+	{
+		entry = LLIST_Data(item, fci_rt_db_entry_t, list_member);
+
+		LLIST_Remove(item);
+
+		oal_mm_free(entry);
+	}
+
+	return EOK;
+}
+
+/** @}*/

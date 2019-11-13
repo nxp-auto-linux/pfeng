@@ -149,6 +149,8 @@ void pfeng_hif_rx_free(struct pfeng_priv *priv, int idx, pfe_hif_pkt_t *bd);
 void *pfeng_hif_txack_get_ref(struct pfeng_priv *priv, int idx);
 void pfeng_hif_txack_free(struct pfeng_priv *priv, int idx, void *ref);
 
+char *pfeng_logif_get_name(struct pfeng_priv *priv, int idx);
+
 /* ethtool */
 void pfeng_ethtool_set_ops(struct net_device *netdev);
 
@@ -166,5 +168,9 @@ void pfeng_sysfs_exit(struct pfeng_priv *priv);
 /* debugfs */
 int pfeng_debugfs_init(struct pfeng_priv *priv);
 void pfeng_debugfs_exit(struct pfeng_priv *priv);
+
+/* fci */
+errno_t pfeng_fci_init(pfe_platform_t *pfe);
+void pfeng_fci_exit(void);
 
 #endif

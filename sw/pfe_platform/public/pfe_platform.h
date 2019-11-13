@@ -75,15 +75,19 @@
 #include "pfe_gpi.h"
 #include "pfe_bmu.h"
 #include "pfe_class.h"
-#include "pfe_rtable.h"
+#if defined(GLOBAL_CFG_RTABLE_ENABLED)
+	#include "pfe_rtable.h"
+#endif /* GLOBAL_CFG_RTABLE_ENABLED */
 #include "pfe_tmu.h"
 #include "pfe_util.h"
 #include "pfe_hif.h"
 #include "pfe_hif_nocpy.h"
 #include "pfe_safety.h"
 #include "pfe_emac.h"
-#include "pfe_l2br_table.h"
-#include "pfe_l2br.h"
+#if defined(GLOBAL_CFG_L2BRIDGE_ENABLED)
+	#include "pfe_l2br_table.h"
+	#include "pfe_l2br.h"
+#endif /* GLOBAL_CFG_L2BRIDGE_ENABLED */
 #include "pfe_phy_if.h"
 #include "pfe_log_if.h"
 #include "pfe_hif_drv.h"
@@ -143,7 +147,9 @@ typedef struct
 	void *ipsec_baseaddr;
 	oal_irq_t *irq_global;		/* Common PFE IRQ TODO: FPGA only, remove on S32G */
 	oal_irq_isr_handle_t irq_global_isr_handle;
+#if defined(GLOBAL_CFG_GLOB_ERR_POLL_WORKER)
 	oal_thread_t *hif_global_err_poller;	/* Thread polling for HIF global errors */
+#endif /* GLOBAL_CFG_GLOB_ERR_POLL_WORKER */
 	pfe_hif_err_poller_state_t poller_state;
 	oal_irq_t *irq_bmu;			/* BMU IRQ */
 	oal_irq_isr_handle_t irq_bmu_isr_handle;
@@ -163,10 +169,14 @@ typedef struct
 	uint32_t util_pe_count; 	/* Number of UTIL PEs */
 	uint32_t tmu_pe_count;		/* Number of TMU PEs */
 	pfe_fw_t *fw;
+#if defined(GLOBAL_CFG_RTABLE_ENABLED)
 	pfe_rtable_t *rtable;		/* The routing table */
+#endif /* GLOBAL_CFG_RTABLE_ENABLED */
+#if defined(GLOBAL_CFG_L2BRIDGE_ENABLED)
 	pfe_l2br_table_t *mactab;	/* The MAC table */
 	pfe_l2br_table_t *vlantab;	/* The VLAN table */
 	pfe_l2br_t *l2_bridge;		/* The L2 bridge */
+#endif /* GLOBAL_CFG_L2BRIDGE_ENABLED */
 	pfe_class_t *classifier;	/* The classifier block */
 	pfe_tmu_t *tmu;				/* The TMU block */
 	pfe_util_t *util;			/* The UTIL block */
@@ -179,13 +189,12 @@ typedef struct
 	pfe_emac_t **emac;			/* The EMAC blocks */
 	pfe_safety_t *safety;		/* The SAFETY block */
 	pfe_if_db_t *phy_if_db;		/* The PFE physical interfaces */
-	oal_mutex_t phy_if_db_lock; /* The physical interfaces database mutex */
 	pfe_if_db_t *log_if_db;		/* The PFE logical interfaces */
-	oal_mutex_t log_if_db_lock; /* The logical interfaces database mutex */
 	pfe_hif_drv_t *hif_drv;		/* The HIF driver instance */
 	struct dentry *dentry;
 	int32_t wake;
 	struct clk *hfe_clock;
+	bool_t fci_created;
 } pfe_platform_t;
 
 pfe_fw_t *pfe_fw_load(char_t *name);
@@ -196,6 +205,7 @@ void pfe_platform_print_versions(pfe_platform_t *platform);
 pfe_platform_t *pfe_platform_get_instance(void);
 pfe_hif_drv_t *pfe_platform_get_hif_drv(pfe_platform_t *platform, uint32_t id);
 pfe_log_if_t *pfe_platform_get_log_if_by_id(pfe_platform_t *platform, uint8_t id);
+pfe_log_if_t *pfe_platform_get_log_if_by_name(pfe_platform_t *platform, char_t *name);
 pfe_phy_if_t *pfe_platform_get_phy_if_by_id(pfe_platform_t *platform, pfe_ct_phy_if_id_t id);
 
 #endif /* SRC_PFE_PLATFORM_H_ */

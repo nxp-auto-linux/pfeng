@@ -114,6 +114,7 @@ rebuild: clean all
 
 ccflags-y += $(INCLUDES)
 ccflags-y += $(CCFLAGS_pfe)
+ccflags-y += $(GLOBAL_CCFLAGS)
 
 elf-y := src/elf.o
 #elf-y := $(OBJS)
@@ -121,7 +122,7 @@ elf-y := src/elf.o
 obj-m += elf.o
 
 linux:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` modules
+	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` GLOBAL_CCFLAGS="$(GLOBAL_CCFLAGS)" modules
 
 linux-clean:
 	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` clean

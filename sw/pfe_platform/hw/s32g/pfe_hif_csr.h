@@ -33,8 +33,9 @@
  * @{
  *
  * @file		pfe_hif_csr.h
- * @brief		The HIF module registers definition file (LS1012a).
- * @details		This is the HW-specific part of the HIF module.
+ * @brief		The HIF module registers definition file (S32G).
+ * @details		This is the HW-specific part of the HIF module. Applicable for
+ *				IP versions listed below.
  *
  */
 
@@ -42,6 +43,15 @@
 #define PFE_HIF_CSR_H_
 
 #include "pfe_hif.h"
+
+#ifndef PFE_CBUS_H_
+#error Missing cbus.h
+#endif /* PFE_CBUS_H_ */
+
+/*	Supported IPs. Defines are validated within pfe_cbus.h. */
+#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#error Unsupported IP version
+#endif /* GLOBAL_CFG_IP_VERSION */
 
 #define HIF_VERSION							(0x00U)
 #define HIF_TX_POLL_CTRL					(0x04U)

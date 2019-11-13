@@ -249,6 +249,14 @@ void pfe_safety_destroy(pfe_safety_t *safety)
 	if (NULL != safety)
 	{
 #if defined(GLOBAL_CFG_SAFETY_WORKER)
+		if (NULL != safety->mbox)
+		{
+			if (EOK != oal_mbox_detach_timer(safety->mbox))
+			{
+				NXP_LOG_DEBUG("Could not detach timer\n");
+			}
+		}
+
 		if (NULL != safety->worker)
 		{
 			NXP_LOG_INFO("Stopping safety worker...\n");

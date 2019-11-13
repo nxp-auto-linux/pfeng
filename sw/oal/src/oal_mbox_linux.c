@@ -43,8 +43,8 @@
 #include <linux/module.h>
 #include <linux/sched.h>
 #include <linux/wait.h>
-#include <linux/kthread.h>
 #include <linux/types.h>
+#include <linux/timer.h>
 
 #include "oal.h"
 #include "oal_time.h"
@@ -61,7 +61,7 @@
  * @brief	Maximum number of timers to be attached to a single mbox
  * @see		oal_mbox_attach_timer()
  */
-#define OAL_MBOX_MAX_TIMERS 2
+#define OAL_MBOX_MAX_TIMERS 1
 
 /**
  * @brief	Maximum number of waiting messages in a single mbox
@@ -72,6 +72,12 @@
  * @brief	Maximum time in msec for message acknowledge
  */
 #define OAL_MBOX_MSG_ACK_MAX_WAIT 1000
+
+/** @brief	We are reusing fifo data pointers as uint32_t values stored in.
+ *			So to be able to detect fifo_get() errors, which are signalled
+ *			as NULL, we have to move signal codes out of zero.
+ */
+#define MBOX_FIFO_TRANSITION 1
 
 /**
  * @brief	The mbox instance representation
@@ -102,14 +108,16 @@ struct __oal_mbox_tag
 		bool_t used;		/* If true then entry is used */
 		oal_irq_t *irq;			/* The IRQ instance */
 		int32_t code;			/* Message code associated with IRQ */
+		oal_irq_isr_handle_t h;	/* IRQ handle */
 	} irqs[OAL_MBOX_MAX_IRQS];
 
 	struct
 	{
 		bool_t used;		/* If true then entry is used */
 		int32_t code;		/* Message code associated with timer */
-		timer_t timerid;	/* Timer ID */
-	} timers[OAL_MBOX_MAX_TIMERS];
+		struct timer_list timer;		/* Timer instance */
+		uint32_t tmout;			/* Time timeout */
+	} timer;
 };
 
 static atomic_t mbox_cnt = ATOMIC_INIT(0);	/* to serialize workqueue globally */
@@ -203,6 +211,16 @@ errno_t oal_mbox_send_message(oal_mbox_t *mbox, int32_t code, void *data, uint32
 	return mbox_send_generic(mbox, OAL_MBOX_MSG_MESSAGE, code, data, len);
 }
 
+static inline uint32_t mbox_fifo_transcode_read(uint32_t code)
+{
+	return code - MBOX_FIFO_TRANSITION;
+}
+
+static inline uint32_t mbox_fifo_transcode_write(uint32_t code)
+{
+	return code + MBOX_FIFO_TRANSITION;
+}
+
 static void mbox_handle_signal(struct work_struct *work)
 {
 	oal_mbox_t *mbox = container_of(work, oal_mbox_t, intr.update);
@@ -222,7 +240,7 @@ static void mbox_handle_signal(struct work_struct *work)
 		return;
 	}
 
-	code = (int32_t)(uint64_t)ptr;
+	code = mbox_fifo_transcode_read((uint32_t)(addr_t)ptr);
 	mbox_send_generic(mbox, OAL_MBOX_MSG_SIGNAL, code, NULL, 0);
 }
 
@@ -232,6 +250,8 @@ static void mbox_handle_signal(struct work_struct *work)
 */
 errno_t oal_mbox_send_signal(oal_mbox_t *mbox, int32_t code)
 {
+	uint32_t transcode;
+
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mbox))
 	{
@@ -240,7 +260,15 @@ errno_t oal_mbox_send_signal(oal_mbox_t *mbox, int32_t code)
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
-	if (EOK != fifo_put(mbox->intr.fifo, (void *)(uint64_t)code))
+	if (code < 0)
+	{
+		NXP_LOG_ERROR("Invalid value for signal code: %d\n", code);
+		return EINVAL;
+	}
+
+	transcode = mbox_fifo_transcode_write(code);
+
+	if (EOK != fifo_put(mbox->intr.fifo, (void *)(addr_t)transcode))
 	{
 		NXP_LOG_ERROR("msg fifo put failed\n");
 		return EINVAL;
@@ -301,6 +329,11 @@ errno_t oal_mbox_attach_irq(oal_mbox_t *mbox, oal_irq_t *irq, int32_t code)
 		return ENODEV;
 	}
 
+	if(mutex_lock_interruptible(&mbox->lock))
+	{
+		return EAGAIN;
+	}
+
 	/*	Find free slot in IRQ storage */
 	for (ii=0; ii<OAL_MBOX_MAX_IRQS; ii++)
 	{
@@ -313,6 +346,7 @@ errno_t oal_mbox_attach_irq(oal_mbox_t *mbox, oal_irq_t *irq, int32_t code)
 	if (ii >= OAL_MBOX_MAX_IRQS)
 	{
 		NXP_LOG_ERROR("No space for new IRQ\n");
+		mutex_unlock(&mbox->lock);
 		return ENOSPC;
 	}
 
@@ -321,13 +355,16 @@ errno_t oal_mbox_attach_irq(oal_mbox_t *mbox, oal_irq_t *irq, int32_t code)
 	mbox->irqs[ii].code = code;
 	mbox->irqs[ii].irq = irq;
 
-	if(oal_irq_add_handler(irq, mbox_irq_handler, (void *)mbox, NULL))
+	if(oal_irq_add_handler(irq, mbox_irq_handler, (void *)mbox, &mbox->irqs[ii].h))
 	{
 		NXP_LOG_ERROR("Couldn't add IRQ handler\n");
 		mbox->irqs[ii].used = FALSE;
+		mutex_unlock(&mbox->lock);
 		return ENODEV;
 	}
 	NXP_LOG_INFO("Attach IRQ %d [code:%d] succeeded\n", id, code);
+
+	mutex_unlock(&mbox->lock);
 
 	return EOK;
 }
@@ -338,6 +375,7 @@ errno_t oal_mbox_attach_irq(oal_mbox_t *mbox, oal_irq_t *irq, int32_t code)
 errno_t oal_mbox_detach_irq(oal_mbox_t *mbox, oal_irq_t *irq)
 {
 	int32_t ii;
+	errno_t err;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == mbox) || (NULL == irq)))
@@ -347,7 +385,12 @@ errno_t oal_mbox_detach_irq(oal_mbox_t *mbox, oal_irq_t *irq)
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
-	/*	Find free slot in IRQ storage */
+	if(mutex_lock_interruptible(&mbox->lock))
+	{
+		return EAGAIN;
+	}
+
+	/*	Find the slot in IRQ storage */
 	for (ii=0; ii<OAL_MBOX_MAX_IRQS; ii++)
 	{
 		if ((mbox->irqs[ii].irq == irq) && (TRUE == mbox->irqs[ii].used))
@@ -359,18 +402,49 @@ errno_t oal_mbox_detach_irq(oal_mbox_t *mbox, oal_irq_t *irq)
 	if (ii >= OAL_MBOX_MAX_IRQS)
 	{
 		NXP_LOG_WARNING("IRQ not found\n");
+		mutex_unlock(&mbox->lock);
 		return ENOENT;
 	}
 
+	err = oal_irq_del_handler(irq, mbox->irqs[ii].h);
+	if (unlikely(EOK != err))
+	{
+		NXP_LOG_ERROR("Irq handler unlink failed: %d\n", err);
+		mutex_unlock(&mbox->lock);
+		return EINVAL;
+	}
+
 	mbox->irqs[ii].used = FALSE;
+	mbox->irqs[ii].irq = NULL;
+	mbox->irqs[ii].h = 0;
+
+	mutex_unlock(&mbox->lock);
 
 	return EOK;
+}
+
+static void mbox_timer_handler(struct timer_list *t)
+{
+	oal_mbox_t *mbox = from_timer(mbox, t, timer.timer);
+	errno_t err;
+
+	if (NULL == mbox || FALSE == mbox->timer.used)
+	{
+		return;
+	}
+
+	err = oal_mbox_send_signal(mbox, mbox->timer.code);
+
+	if (TRUE == mbox->timer.used)
+	{
+		mod_timer(&mbox->timer.timer, jiffies + msecs_to_jiffies(mbox->timer.tmout));
+	}
 }
 
 /*
 	Attach timer to the mbox
  */
-int oal_mbox_attach_timer(oal_mbox_t *mbox, unsigned int msec, int code)
+errno_t oal_mbox_attach_timer(oal_mbox_t *mbox, unsigned int msec, int code)
 {
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mbox))
@@ -380,14 +454,34 @@ int oal_mbox_attach_timer(oal_mbox_t *mbox, unsigned int msec, int code)
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
-	/* not implemented yet */
-	return ENOSPC;
+	if(mutex_lock_interruptible(&mbox->lock))
+	{
+		return EAGAIN;
+	}
+
+	if (TRUE == mbox->timer.used)
+	{
+		NXP_LOG_ERROR("No space for new timer\n");
+		mutex_unlock(&mbox->lock);
+		return ENOSPC;
+	}
+
+	mbox->timer.used = TRUE;
+	mbox->timer.code = code;
+	mbox->timer.tmout = msec;
+	timer_setup(&mbox->timer.timer, mbox_timer_handler, 0);
+	add_timer(&mbox->timer.timer);
+	mod_timer(&mbox->timer.timer, jiffies + msecs_to_jiffies(msec));
+
+	mutex_unlock(&mbox->lock);
+
+	return EOK;
 }
 
 /*
 	Detach timer(s) from the mbox
  */
-int oal_mbox_detach_timer(oal_mbox_t *mbox)
+errno_t oal_mbox_detach_timer(oal_mbox_t *mbox)
 {
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mbox))
@@ -397,7 +491,24 @@ int oal_mbox_detach_timer(oal_mbox_t *mbox)
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
-	return ENOEXEC;
+	if(mutex_lock_interruptible(&mbox->lock))
+	{
+		return EAGAIN;
+	}
+
+	if (FALSE == mbox->timer.used)
+	{
+		NXP_LOG_ERROR("No timer was running\n");
+		mutex_unlock(&mbox->lock);
+		return ENOSPC;
+	}
+
+	del_timer_sync(&mbox->timer.timer);
+	mbox->timer.used = FALSE;
+
+	mutex_unlock(&mbox->lock);
+
+	return EOK;
 }
 
 /*
@@ -415,12 +526,6 @@ errno_t oal_mbox_receive(oal_mbox_t *mbox, oal_mbox_msg_t *msg)
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
-	if(kthread_should_stop())
-	{
-		return EINTR;
-	}
-
-	/*  Wait for a message (blocking) */
 	ret = wait_event_interruptible(mbox->msg.wait, atomic_read(&mbox->msg.up) > 0);
 	if(0 != ret)
 	{
@@ -514,20 +619,26 @@ void oal_mbox_destroy(oal_mbox_t *mbox)
 	/* Wake up reader */
 	wake_up_interruptible(&mbox->msg.ack);
 
+	/*  Destroy timer */
+	if (TRUE == mbox->timer.used)
+	{
+		(void)oal_mbox_detach_timer(mbox);
+	}
 
-		if(mutex_lock_interruptible(&mbox->lock))
+	/*	Detach all IRQs */
+	for (ii=0; ii<OAL_MBOX_MAX_IRQS; ii++)
+	{
+		if (TRUE == mbox->irqs[ii].used)
 		{
-			return; /* probably with leak of the mbox and irq */
+			(void)oal_mbox_detach_irq(mbox, mbox->irqs[ii].irq);
 		}
+	}
 
-		/*	Detach all IRQs */
-		for (ii=0; ii<OAL_MBOX_MAX_IRQS; ii++)
-		{
-			if (TRUE == mbox->irqs[ii].used)
-			{
-				(void)oal_mbox_detach_irq(mbox, mbox->irqs[ii].irq);
-			}
-		}
+	if(mutex_lock_interruptible(&mbox->lock))
+	{
+		NXP_LOG_ERROR("mbox locking failed\n");
+		return; /* probably with leak of the mbox */
+	}
 
 	if (mbox->intr.queue)
 	{
@@ -538,6 +649,7 @@ void oal_mbox_destroy(oal_mbox_t *mbox)
 	if (mbox->intr.fifo)
 	{
 		fifo_destroy(mbox->intr.fifo);
+		mbox->intr.fifo = NULL;
 	}
 
 	mutex_unlock(&mbox->lock);

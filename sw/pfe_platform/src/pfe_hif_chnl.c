@@ -172,7 +172,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_isr(pfe_hif_chnl_t *chnl)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
+		return EINVAL;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
@@ -199,15 +199,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_isr(pfe_hif_chnl_t *chnl)
 		NXP_LOG_DEBUG("Mutex unlock failed\n");
 	}
 
-	if (EOK != ret)
-	{
-		return FALSE;
-	}
-	else
-	{
-		/*	IRQ has been handled */
-		return TRUE;
-	}
+	return ret;
 }
 
 /**
@@ -796,7 +788,7 @@ __attribute__((hot)) void pfe_hif_chnl_rx_irq_mask(pfe_hif_chnl_t *chnl)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		return;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
@@ -834,7 +826,7 @@ __attribute__((hot)) void pfe_hif_chnl_rx_irq_unmask(pfe_hif_chnl_t *chnl)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		return;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
@@ -872,7 +864,7 @@ __attribute__((hot)) void pfe_hif_chnl_tx_irq_mask(pfe_hif_chnl_t *chnl)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		return;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
@@ -910,7 +902,7 @@ __attribute__((hot)) void pfe_hif_chnl_tx_irq_unmask(pfe_hif_chnl_t *chnl)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		return;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
@@ -1905,7 +1897,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_
 		goto the_end;
 	}
 
-	tx_buf_pa = oal_mm_virt_to_phys(tx_buf_va);
+	tx_buf_pa = oal_mm_virt_to_phys_contig(tx_buf_va);
 	if (NULL == tx_buf_pa)
 	{
 		NXP_LOG_ERROR("VA to PA conversion failed");
@@ -1921,7 +1913,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_
 		goto the_end;
 	}
 
-	rx_buf_pa = oal_mm_virt_to_phys(rx_buf_va);
+	rx_buf_pa = oal_mm_virt_to_phys_contig(rx_buf_va);
 	if (NULL == rx_buf_pa)
 	{
 		NXP_LOG_ERROR("VA to PA conversion failed");

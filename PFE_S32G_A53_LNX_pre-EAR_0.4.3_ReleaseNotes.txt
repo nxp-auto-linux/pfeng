@@ -1,0 +1,191 @@
+****************************************************************************************************
+Release Notes for NXP PFE S32G A53 LNX swv: 0.4.3 PRE-EAR
+
+NXP and the NXP logo are trademarks of NXP.
+
+All product or service names are the property of their respective owners.
+Copyright (C) 2018-2019 NXP
+****************************************************************************************************
+
+========================================================
+Installation
+========================================================
+Install the package into the desired directory and follow the enclosed user manual.
+
+========================================================
+Release Location:
+========================================================
+
+This PRE-EAR 0.4.3 release sources are internally stored at location:
+https://bitbucket.sw.nxp.com/projects/AUTO_ETH/repos/pfe/browse
+GIT release tag: BLN_PFE-DRV_S32G_A53_LNX_PRE-EAR_0.4.3
+
+
+========================================================
+Release Specifics:
+========================================================
+
+- This release was developed and tested with:
+    - Geany IDE version 1.33
+    - editor VIM - Vi IMproved 7.4
+    - Linux s32g274aevb 4.19.59-rt24+g9f2bcc2
+	- gcc 6.3.1
+- This release was developed and tested using:
+    - Evaluation board: S32G-VNP-EVB
+        S32GRV-PLATEVB 700-30081
+        X-S32G-PROCEVB-S 700-32170
+
+- This release has PRE-EAR quality status in terms of testing and quality documentation
+
+========================================================
+Supported Features:
+========================================================
+
+- Integrates the S32G PFE Ethernet driver
+- Supports basic data-path functionality (interfaces can be used to ping remote IP nodes)
+
+========================================================
+Supported Derivatives:
+========================================================
+
+N/A
+
+========================================================
+Directory Structure:
+========================================================
+
+- sw/bpool library sources (dependency for linux-pfeng)
+- sw/common library sources (dependency for devnp-pfe-2)
+- sw/linux-pfeng linux kernel driver sources (the driver project)
+- sw/elf library sources (dependency for linux-pfeng)
+- sw/fifo library sources (dependency for linux-pfeng)
+- sw/hal library sources (dependency for all other modules)
+- sw/oal library sources (dependency for all other modules)
+- sw/pfe_hif_drv library sources (dependency for linux-pfeng)
+- sw/pfe_platform library sources (dependency for linux-pfeng)
+- doc/user_manual user's manual
+- PFE_S32G_A53_LNX_pre-EAR_0.4.3_ReleaseNotes.txt: this file
+
+========================================================
+Compiler Options:
+========================================================
+
+Compiler options are described within Makefile located
+in every SW module directory.
+
+========================================================
+Assumptions:
+========================================================
+
+No special assumptions or considerations required.
+
+========================================================
+3rd Party Issues
+========================================================
+
+AAVB-1529 [PFE_QNX] HIF stops operating under heavy traffic conditions
+
+========================================================
+What's modified in PRE-EAR_0.4.3
+========================================================
+# Bug
+AAVB-1983	[PFE_LINUX] get driver compilable without extra options
+AAVB-1984	[PFE_LINUX] fix BMU2 buffers error
+AAVB-1989	[PFE_FW] Missing cthdr field in the pfe_ct_version_t
+AAVB-2042	[PFE_LINUX] pfeng: unloading driver never finish
+
+# Improvement
+AAVB-1640	[PFE_LINUX] Create oal util for linux
+AAVB-1665	[PFE_LINUX] pfeng: add FCI subsystem
+AAVB-1914	[PFE_FW] Error reporting
+AAVB-1944	[PFE_LINUX] Create libfci for Linux
+AAVB-2004	Update help text for libfci_cli.
+AAVB-2051	[PFE_LINUX] pfeng: set explicit interface names
+AAVB-2052	[PFE_PLATFORM] oal:mbox: implement timers for Linux
+AAVB-2060	[PFE_LINUX] oal:thread: correctly signal thread join on linux
+AAVB-2094	[PFE_FW] Implement flexible parser
+AAVB-2119	[PFE_PLATFORM][PFE_LINUX][PFE_MCAL] remove VDK support
+AAVB-2146	[PFE_LINUX] pfeng: S32G bringup
+
+========================================================
+What's modified in PRE-EAR_0.4.2
+========================================================
+# Bug
+n/a
+
+# Improvement
+[AAVB-1387] [PFE_PLATFORM] Ensure correct HIF driver worker thread scheduling
+[AAVB-1427] [PFE_PLATFORM] Make FCI endpoint OS-independent
+[AAVB-1484] [PFE_PLATFORM] Optimize frequently used structures
+[AAVB-1521] [PFE_PLATFORM] Set default interface operational mode when interface not being used
+[AAVB-1536] [PFE_PLATFORM] oal_msg: improve msg_signal
+[AAVB-1545] [PFE_PLATFORM] Make NULL argument checks switchable
+[AAVB-1548] [PFE_PLATFORM] Rework the get_text_stat() functions
+[AAVB-1553] [PFE_PLATFORM] HIF polling configurable
+[AAVB-1559] [PFE_PLATFORM] Move HIF header types to pfe_ct.h
+[AAVB-1621] [PFE_PLATFORM] Define firmware-driver control interface
+[AAVB-1633] [PFE_PLATFORM] Sync with latest design (1.0.4)
+[AAVB-1641] [PFE_PLATFORM] Get real system clock frequency for TMU shaper configuration
+[AAVB-1648] [PFE_QNX][PFE_PLATFORM] Thread driven OAL IRQ
+[AAVB-1650] [PFE_LINUX] Sync OAL IRQ module
+[AAVB-1651] [PFE_PLATFORM] HIF Interrupt Dispatcher
+[AAVB-1652] [PFE_PLATFORM] BMU Interrupt Dispatcher
+[AAVB-1654] [PFE_PLATFORM] Remove HIF DRV worker thread
+[AAVB-1655] [PFE_PLATFORM] Init PFE memories before soft reset
+[AAVB-1658] [PFE_PLATFORM] HIF NOCPY Interrupt Dispatcher
+[AAVB-1663] [PFE_PLATFORM][PFE_QNX] Create deferred job OAL abstraction module
+[AAVB-1871] [PFE_PLATFORM] Return all HIF NOCPY BMU buffers on shutdown
+[AAVB-1882] [PFE_PLATFORM] Fix HIF and HIF NOCPY interrupts
+[AAVB-1887] [PFE_LINUX][PFE_PLATFORM] pfeng: integrate enhanced irq manager
+[AAVB-1892] [PFE_PLATFORM] Uninstall IRQ when BMU instance is being destroyed
+[AAVB-1896] [PFE_PLATFORM] Global interrupt dispatcher
+[AAVB-1903] [PFE_PLATFORM] Improve RX buffer management
+[AAVB-1906] [PFE_PLATFORM] PFE AXI address range restriction
+[AAVB-1919] [PFE_PLATFORM] Out of HIF RX buffers event detection
+[AAVB-1925] [PFE_PLATFORM] RX termination
+[AAVB-1953] [PFE_QNX][PFE_LINUX][PFE_PLAFORM] Remove compiler warnings
+[AAVB-1962] [PFE_PLATFORM] More robust HIF ring handling
+
+# New Feature
+[AAVB-1435] [PFE_FW] Prepare statistics gathering
+[AAVB-1499] [PFE_PLATFORM][PFE_QNX][PFE_LINUX] Bind PFE logical interfaces with HIF driver clients
+[AAVB-1608] [PFE_LINUX][PFE_PLATFORM][PFE_QNX] support VDK platform
+[AAVB-1629] [PFE_PLATFORM] Create the TLITE platform driver
+[AAVB-1660] [PFE_PLATFORM] Fabric parity protection
+[AAVB-1920] [PFE_PLATFORM] Ignore the ELF section MIPS.abiflags
+[AAVB-1928] [PFE_PLATFORM][PFE_FW] Add HIF channel ID to HIF TX header (pfe_ct.h)
+[AAVB-1935] [PFE_PLATFORM][PFE_FW] Define IHC flags within HIF TX and RX headers
+[AAVB-1936] [PFE_PLATFORM] Implement the IHC API
+
+
+========================================================
+What's modified in PRE-EAR_0.4.0
+========================================================
+
+# Bug
+AAVB-1422 [PFE_PLATFORM] Read beyond size of object
+
+# New Feature
+AAVB-1156 [PFE_PLATFORM][PFE_QNX] Port the PFE HW library to QNX environment
+AAVB-1157 [PFE_PLATFORM][PFE_QNX] Import the HW initialization module
+AAVB-1158 [PFE_PLATFORM][PFE_QNX] Import the HIF driver
+AAVB-1159 [PFE_PLATFORM][PFE_QNX] Import the firmware driver
+AAVB-1300 [PFE_PLATFORM][PFE_QNX] Add HIF channel abstraction class
+AAVB-1301 [PFE_PLATFORM][PFE_QNX] OS abstraction
+AAVB-1337 [PFE_PLATFORM] Update the pfe_platform to support the latest x86 FPGA HW
+AAVB-1366 [PFE_PLATFORM] Make the HIF working on x86 FPGA HW
+AAVB-1378 [PFE_LINUX] Make sources Linux compilable
+AAVB-1486 [PFE_PLATFORM][PFE_QNX] Create SW module for L2 bridge tables
+AAVB-1488 [PPFE_LINUX] Implement PFE linux driver core
+AAVB-1498 [PFE_QNX][PFE_PLATFORM] Create PFE interface representation type
+
+# Improvement
+AAVB-1388 [PFE_PLATFORM][PFE_QNX] Command-line build
+AAVB-1391 [PFE_PLATFORM] Replace native types by custom types
+AAVB-1397 [PFE_PLATFORM][PFE_QNX] Make RELEASE as default build profile
+AAVB-1398 [PFE_PLATFORM][PFE_QNX] Update headers in all deliverables
+AAVB-1444 [PFE_PLATFORM] Simplify rtable entries representation
+AAVB-1463 [PFE_PLATFORM] Improve PFE HIF ring handling
+AAVB-1466 [PFE_PLATFORM] HIF driver improvement
+AAVB-1534 [PFE_PLATFORM] Generalize the HW initialization
+

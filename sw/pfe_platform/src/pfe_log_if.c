@@ -51,6 +51,8 @@
 #include "pfe_log_if.h"
 #include "pfe_pe.h"
 #include "pfe_class.h"
+#include "blalloc.h" /* Block allocator to assign interface IDs */
+#include "pfe_platform_cfg.h"
 
 /*	External API */
 errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if);
@@ -69,6 +71,11 @@ struct __pfe_log_if_tag
 	pfe_log_if_cbk_t callback;
 	void *callback_arg;
 };
+
+/**
+ * @brief	Pool of logical interface IDs. Module-local singleton.
+ */
+static blalloc_t *pfe_log_if_id_pool = NULL;
 
 static errno_t pfe_log_if_read_from_class(pfe_log_if_t *iface, pfe_ct_log_if_t *class_if, uint32_t pe_idx);
 static errno_t pfe_log_if_write_to_class(pfe_log_if_t *iface, pfe_ct_log_if_t *class_if);
@@ -125,15 +132,12 @@ static errno_t pfe_log_if_write_to_class(pfe_log_if_t *iface, pfe_ct_log_if_t *c
  * @brief		Create new logical interface instance
  * @param[in]	parent The parent physical interface
  * @param[in]	name Name of the interface
- * @param[in]	id A number to be provided to HIF driver with every received packet
- * 				to identify logical interface the packet has matched. Proposed way
- * 				is to assign unique, sequential IDs starting with zero to support
- * 				array-based translation of IDs to logical interface instances.
  * @return		The interface instance or NULL if failed
  */
-pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, char_t *name, uint8_t id)
+pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, char_t *name)
 {
 	pfe_log_if_t *iface;
+	addr_t id;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == parent) || (NULL == name)))
@@ -142,6 +146,28 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, char_t *name, uint8_t id)
 		return NULL;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (NULL == pfe_log_if_id_pool)
+	{
+		/*	Create pool of logical interface IDs */
+		pfe_log_if_id_pool = blalloc_create(PFE_CFG_MAX_LOG_IFS, 0U);
+		if (NULL == pfe_log_if_id_pool)
+		{
+			NXP_LOG_ERROR("Unable to create pool of IDs\n");
+			return NULL;
+		}
+		else
+		{
+			NXP_LOG_DEBUG("Pool configured to support %d logical interfaces\n", PFE_CFG_MAX_LOG_IFS);
+		}
+	}
+
+	/*	Allocate interface ID */
+	if (EOK != blalloc_alloc_offs(pfe_log_if_id_pool, 1, 0, &id))
+	{
+		NXP_LOG_ERROR("Could not allocate interface ID\n");
+		return NULL;
+	}
 
 	iface = oal_mm_malloc(sizeof(pfe_log_if_t));
 	if (NULL == iface)
@@ -189,8 +215,8 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, char_t *name, uint8_t id)
 		/*	Initialize the local and CLASS logical interface structure */
 		memset(&iface->log_if_class, 0, sizeof(pfe_ct_log_if_t));
 		iface->log_if_class.next = 0;
-		iface->log_if_class.id = (uint8_t)id;
-		iface->log_if_class.m_rules = 0;
+		iface->log_if_class.id = (uint8_t)(id & 0xff);
+		iface->log_if_class.m_rules = (pfe_ct_if_m_rules_t)0;
 		if (EOK != pfe_log_if_write_to_class(iface, &iface->log_if_class))
 		{
 			NXP_LOG_ERROR("Could not update DMEM (%s)\n", iface->name);
@@ -367,6 +393,11 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 
 	if (NULL != iface)
 	{
+		if (EOK != pfe_log_if_clear_mac_addr(iface))
+		{
+			NXP_LOG_ERROR("Could not remove MAC address (%s)\n", iface->name);
+		}
+
 		if (NULL != iface->parent)
 		{
 			ret = pfe_phy_if_del_log_if(iface->parent, iface);
@@ -382,6 +413,9 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 			iface->name = NULL;
 		}
 
+		/*	Release the interface ID */
+		blalloc_free_offs(pfe_log_if_id_pool, iface->log_if_class.id);
+
 		memset(&iface->log_if_class, 0, sizeof(pfe_ct_log_if_t));
 		if (EOK != pfe_log_if_write_to_class(iface, &iface->log_if_class))
 		{
@@ -393,7 +427,7 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 			NXP_LOG_DEBUG("Could not destroy mutex\n");
 		}
 
-		if(0 != iface->dmem_base)
+		if (0 != iface->dmem_base)
 		{
 			pfe_class_dmem_heap_free(iface->class, iface->dmem_base);
 		}
@@ -401,6 +435,127 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 		oal_mm_free(iface);
 	}
 }
+
+/**
+ * @brief		Check if match is OR
+ * @details		Set new match rules. All previously configured ones will be
+ * 				overwritten.
+ * @param[in]	iface The interface instance
+ * @retval		TRUE match is OR type
+ * @retval		FALSE match is AND type
+ */
+bool_t pfe_log_if_is_match_or(pfe_log_if_t *iface)
+{
+	bool_t ret;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	ret = (IF_FL_MATCH_OR == (iface->log_if_class.flags & IF_FL_MATCH_OR));
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Set match type to OR match
+ * @details		Logical interface rules will be matched with OR logic
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_log_if_set_match_or(pfe_log_if_t *iface)
+{
+	errno_t ret;
+	pfe_ct_if_flags_t tmp;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	tmp = iface->log_if_class.flags;
+	iface->log_if_class.flags |= IF_FL_MATCH_OR;
+
+	ret = pfe_log_if_write_to_class(iface, &iface->log_if_class);
+	if (EOK != ret)
+	{
+		/*	Revert */
+		iface->log_if_class.flags = tmp;
+	}
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	return ret;
+}
+/**
+ * @brief		Set match type to AND match
+ * @details		Logical interface rules will be matched with AND logic
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_log_if_set_match_and(pfe_log_if_t *iface)
+{
+	errno_t ret;
+	pfe_ct_if_flags_t tmp;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	tmp = iface->log_if_class.flags;
+	iface->log_if_class.flags &= ~IF_FL_MATCH_OR;
+
+	ret = pfe_log_if_write_to_class(iface, &iface->log_if_class);
+	if (EOK != ret)
+	{
+		/*	Revert */
+		iface->log_if_class.flags = tmp;
+	}
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	return ret;
+}
+
 
 /**
  * @brief		Set match rules
@@ -730,10 +885,11 @@ errno_t pfe_log_if_del_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule)
  * @brief		Get match rules
  * @param[in]	iface The interface instance
  * @param[in]	rules Pointer to location where rules shall be written
+ * @param[in]	args Pointer to location where rules arguments shall be written. Can be NULL.
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  */
-errno_t pfe_log_if_get_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t *rules)
+errno_t pfe_log_if_get_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t *rules, pfe_ct_if_m_args_t *args)
 {
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == rules)))
@@ -749,6 +905,11 @@ errno_t pfe_log_if_get_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t *rul
 	}
 
 	*rules = (pfe_ct_if_m_rules_t)oal_ntohl(iface->log_if_class.m_rules);
+
+	if (NULL != args)
+	{
+		memcpy(args, &iface->log_if_class.m_args, sizeof(pfe_ct_if_m_args_t));
+	}
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -866,6 +1027,39 @@ errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
 	}
 
 	return ret;
+}
+
+/**
+ * @brief			Get mask of egress interfaces
+ * @param[in]		iface The interface instance
+ * @param[in,out]	egress mask (in host format), constructed like
+ * 					egress |= 1 << phy_if_id (for each configured phy_if)
+ * @retval			EOK Success
+ */
+
+errno_t pfe_log_if_get_egress_ifs(pfe_log_if_t *iface, uint32_t *egress)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == iface) || (NULL == egress)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	*egress = (uint32_t)oal_ntohl(iface->log_if_class.e_phy_ifs);
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	return EOK;
 }
 
 /**
@@ -1381,7 +1575,6 @@ __attribute__((pure)) bool_t pfe_log_if_is_promisc(pfe_log_if_t *iface)
 	}
 
 	return ret;
-
 }
 
 /**

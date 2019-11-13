@@ -348,7 +348,7 @@ errno_t oal_irq_unmask(oal_irq_t *irq)
 	return EOK;
 }
 
-int oal_irq_get_id(oal_irq_t *irq)
+int32_t oal_irq_get_id(oal_irq_t *irq)
 {
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == irq))

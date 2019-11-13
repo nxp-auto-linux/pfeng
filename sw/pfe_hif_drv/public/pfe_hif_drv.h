@@ -122,30 +122,6 @@ typedef struct
 	};
 } pfe_hif_drv_flags_t;
 
-#if defined(TARGET_HW_LS1012A)
-typedef enum
-{
-	PFE_CL_GEM0 = 0,
-	PFE_CL_GEM1,
-#if defined(CONFIG_PLATFORM_C2000)
-	PFE_CL_GEM2,
-#endif
-	PFE_CL_VWD0,
-	PFE_CL_PCAP0,
-	HIF_CLIENTS_MAX
-} hif_drv_client_id_t;
-#elif defined(TARGET_HW_S32G)
-typedef enum
-{
-	PFE_CL_EMAC0 = 0,
-	PFE_CL_EMAC1,
-	PFE_CL_EMAC2,
-	HIF_CLIENTS_MAX
-} hif_drv_client_id_t;
-#else
-#error No target HW defined
-#endif /* TARGET_HW */
-
 typedef struct __sg_list_tag
 {
 	uint32_t size;						/*	Number of valid 'items' entries */
@@ -216,10 +192,10 @@ void * pfe_hif_drv_client_receive_tx_conf(pfe_hif_drv_client_t *client, uint32_t
 
 /*	Packet reception */
 pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
+bool_t pfe_hif_drv_client_has_rx_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
 void pfe_hif_pkt_free(pfe_hif_pkt_t *desc);
 
 bool_t pfe_hif_pkt_is_last(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
-
 bool_t pfe_hif_pkt_ipv4_csum_valid(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
 bool_t pfe_hif_pkt_udpv4_csum_valid(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
 bool_t pfe_hif_pkt_udpv6_csum_valid(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));

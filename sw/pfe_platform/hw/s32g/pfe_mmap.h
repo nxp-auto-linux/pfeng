@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018 NXP
+ *  Copyright 2018-2019 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -88,7 +88,7 @@
 
 /* LMEM Mapping */
 #define PFE_MMAP_BMU1_LMEM_BASEADDR			0U
-#define PFE_MMAP_BMU1_LMEM_SIZE				(PFE_CFG_BMU1_BUF_SIZE * PFE_CFG_BMU1_BUF_COUNT)
+#define PFE_MMAP_BMU1_LMEM_SIZE				((1UL << PFE_CFG_BMU1_BUF_SIZE) * PFE_CFG_BMU1_BUF_COUNT)
 #define PFE_MMAP_PE_LMEM_BASE				(PFE_MMAP_BMU1_LMEM_BASEADDR + PFE_MMAP_BMU1_LMEM_SIZE) 
 #define PFE_MMAP_PE_LMEM_SIZE				(CBUS_LMEM_SIZE - PFE_MMAP_BMU1_LMEM_SIZE)
 

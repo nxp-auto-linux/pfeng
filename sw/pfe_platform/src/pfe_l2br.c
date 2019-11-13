@@ -272,6 +272,8 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 #elif defined(TARGET_OS_LINUX)
 		tmp64 = cpu_to_be64p((uint64_t *)&fb_bd);
 		memcpy(&fb_bd, &tmp64, sizeof(uint64_t));
+#elif defined(TARGET_OS_AUTOSAR)
+		*(uint64_t*)&fb_bd = cpu_to_be64(*(uint64_t*)&fb_bd);
 #else
 #error("todo")
 #endif
@@ -1457,6 +1459,14 @@ errno_t pfe_l2br_destroy(pfe_l2br_t *bridge)
 
 	if (NULL != bridge)
 	{
+		if (NULL != bridge->mbox)
+		{
+			if (EOK != oal_mbox_detach_timer(bridge->mbox))
+			{
+				NXP_LOG_DEBUG("Could not detach timer\n");
+			}
+		}
+
 		if (NULL != bridge->worker)
 		{
 			NXP_LOG_INFO("Stopping bridge worker...\n");
@@ -1756,6 +1766,40 @@ pfe_l2br_domain_t *pfe_l2br_get_next_domain(pfe_l2br_t *bridge)
 	{
 		return NULL;
 	}
+}
+
+/**
+ * @brief		Return L2 Bridge runtime statistics in text form
+ * @details		Function writes formatted text into given buffer.
+ * @param[in]	bridge		The L2 Bridge instance
+ * @param[in]	buf 		Pointer to the buffer to write to
+ * @param[in]	buf_len 	Buffer length
+ * @param[in]	verb_level 	Verbosity level
+ * @return		Number of bytes written to the buffer
+ */
+uint32_t pfe_l2br_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+{
+	uint32_t len = 0U;
+    pfe_l2br_table_entry_t *entry;
+    errno_t ret;
+    uint32_t count = 0U;
+    
+    /* Get memory */
+    entry = pfe_l2br_table_entry_create(bridge->mac_table);
+    /* Get the first entry */
+    ret = pfe_l2br_table_get_first(bridge->mac_table, L2BR_TABLE_CRIT_VALID, entry);    
+    while (EOK == ret)
+    {
+        /* Print out the entry */
+        len += pfe_l2br_table_entry_to_str(entry, buf + len, buf_len - len);
+        count++;
+        /* Get the next entry */
+        ret = pfe_l2br_table_get_next(bridge->mac_table, entry);
+    }
+    oal_util_snprintf(buf + len, buf_len - len, "\nEntries count: %u\n", count);
+    /* Free memory */
+    (void)pfe_l2br_table_entry_destroy(entry);
+    return len;
 }
 
 /** @}*/

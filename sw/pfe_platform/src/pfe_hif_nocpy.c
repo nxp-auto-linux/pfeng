@@ -67,7 +67,7 @@
 #include "oal.h"
 #include "hal.h"
 
-#include "pfe_hif_nocpy_csr.h"
+#include "pfe_cbus.h"
 #include "pfe_mmap.h"
 #include "pfe_hif_nocpy.h"
 
@@ -182,7 +182,7 @@ uint32_t pfe_hif_nocpy_get_text_statistics(pfe_hif_nocpy_t *hif, char_t *buf, ui
 	if (unlikely(NULL == hif))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
+		return 0U;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 

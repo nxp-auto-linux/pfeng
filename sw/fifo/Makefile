@@ -116,6 +116,7 @@ rebuild: clean all
 
 ccflags-y += $(INCLUDES)
 ccflags-y += $(CCFLAGS_pfe)
+ccflags-y += $(GLOBAL_CCFLAGS)
 
 fifo-y := src/fifo.o
 #fifo-y := $(OBJS)
@@ -123,7 +124,7 @@ fifo-y := src/fifo.o
 obj-m += fifo.o
 
 linux:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` modules
+	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` GLOBAL_CCFLAGS="$(GLOBAL_CCFLAGS)" modules
 
 linux-clean:
 	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` clean

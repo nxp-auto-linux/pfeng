@@ -34,7 +34,7 @@
  *
  * @file		pfe_hif_csr.c
  * @brief		The HIF module low-level API (S32G).
- * @details
+ * @details		Applicable for IP versions listed below.
  *
  */
 
@@ -44,6 +44,15 @@
 #include "pfe_cbus.h"
 #include "pfe_hif_csr.h"
 #include "pfe_platform_cfg.h"
+
+#ifndef PFE_CBUS_H_
+#error Missing cbus.h
+#endif /* PFE_CBUS_H_ */
+
+/*	Supported IPs. Defines are validated within pfe_cbus.h. */
+#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#error Unsupported IP version
+#endif /* GLOBAL_CFG_IP_VERSION */
 
 /**
  * @brief	Control the buffer descriptor fetch
@@ -355,40 +364,75 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id)
 	{
 		if (reg_src & reg_en & BDP_RD_CSR_RX_TIMEOUT_CH_INT)
 		{
+#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+			/*	AAVB-2144 */
+			NXP_LOG_INFO("BDP_RD_CSR_RX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
+#else
 			NXP_LOG_INFO("BDP_RD_CSR_RX_TIMEOUT_CH%d_INT\n", channel_id);
+#endif /* GLOBAL_CFG_IP_VERSION */
 		}
 
 		if (reg_src & reg_en & BDP_WR_CSR_RX_TIMEOUT_CH_INT)
 		{
+#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+			/*	AAVB-2144 */
+			NXP_LOG_INFO("BDP_WR_CSR_RX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
+#else
 			NXP_LOG_INFO("BDP_WR_CSR_RX_TIMEOUT_CH%d_INT\n", channel_id);
+#endif /* GLOBAL_CFG_IP_VERSION */
 		}
 
 		if (reg_src & reg_en & BDP_RD_CSR_TX_TIMEOUT_CH_INT)
 		{
+#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+			/*	AAVB-2144 */
+			NXP_LOG_INFO("BDP_RD_CSR_TX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
+#else
 			NXP_LOG_INFO("BDP_RD_CSR_TX_TIMEOUT_CH%d_INT\n", channel_id);
+#endif /* GLOBAL_CFG_IP_VERSION */
 		}
 
 		if (reg_src & reg_en & BDP_WR_CSR_TX_TIMEOUT_CH_INT)
 		{
+#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+			/*	AAVB-2144 */
+			NXP_LOG_INFO("BDP_WR_CSR_TX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
+#else
 			NXP_LOG_INFO("BDP_WR_CSR_TX_TIMEOUT_CH%d_INT\n", channel_id);
+#endif /* GLOBAL_CFG_IP_VERSION */
 		}
 
 		if (reg_src & reg_en & DXR_CSR_RX_TIMEOUT_CH_INT)
 		{
+#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+			/*	AAVB-2144 */
+			NXP_LOG_INFO("DXR_CSR_RX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
+#else
 			NXP_LOG_INFO("DXR_CSR_RX_TIMEOUT_CH%d_INT\n", channel_id);
+#endif /* GLOBAL_CFG_IP_VERSION */
 		}
 
 		if (reg_src & reg_en & DXR_CSR_TX_TIMEOUT_CH_INT)
 		{
+#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+			/*	AAVB-2144 */
+			NXP_LOG_INFO("DXR_CSR_TX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
+#else
 			NXP_LOG_INFO("DXR_CSR_TX_TIMEOUT_CH%d_INT\n", channel_id);
+#endif /* GLOBAL_CFG_IP_VERSION */
 		}
 
+#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+		/*	Don't re-enable these interrupts. They will periodically be triggered
+			without way to get rid of them. AAVB-2144 created to research this. */
+#else
 		/*	Enable timeout interrupts */
 		reg_en = hal_read32(base_va + HIF_CHn_INT_EN(channel_id));
 		reg_en |= BDP_RD_CSR_RX_TIMEOUT_CH_INT|BDP_WR_CSR_RX_TIMEOUT_CH_INT;
 		reg_en |= BDP_RD_CSR_TX_TIMEOUT_CH_INT|BDP_WR_CSR_TX_TIMEOUT_CH_INT;
 		reg_en |= DXR_CSR_RX_TIMEOUT_CH_INT|DXR_CSR_TX_TIMEOUT_CH_INT;
 		hal_write32(reg_en, base_va + HIF_CHn_INT_EN(channel_id));
+#endif /* GLOBAL_CFG_IP_VERSION */
 
 		ret = EOK;
 	}

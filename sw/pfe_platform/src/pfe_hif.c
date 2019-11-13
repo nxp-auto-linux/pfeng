@@ -96,7 +96,7 @@ errno_t pfe_hif_isr(pfe_hif_t *hif)
 	if (unlikely(NULL == hif))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
+		return EINVAL;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 

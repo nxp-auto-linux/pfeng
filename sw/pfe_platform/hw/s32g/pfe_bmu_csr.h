@@ -34,7 +34,8 @@
  * 
  * @file		pfe_bmu_csr.h
  * @brief		The BMU module registers definition file (s32g).
- * @details		
+ * @details		Applicable for IP versions listed below. Order of registers
+ * 				follows IP documentation...
  *
  */
 
@@ -43,6 +44,15 @@
 
 #include "pfe_bmu.h"
 
+#ifndef PFE_CBUS_H_
+#error Missing cbus.h
+#endif /* PFE_CBUS_H_ */
+
+/*	Supported IPs. Defines are validated within pfe_cbus.h. */
+#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#error Unsupported IP version
+#endif /* GLOBAL_CFG_IP_VERSION */
+
 #define BMU_VERSION					0x000U
 #define BMU_CTRL					0x004U
 #define BMU_UCAST_CONFIG			0x008U
@@ -50,17 +60,17 @@
 #define BMU_BUF_SIZE				0x010U
 #define BMU_BUF_CNT					0x014U
 #define BMU_THRES					0x018U
+#define BMU_LOW_WATERMARK			0x050U
+#define BMU_HIGH_WATERMARK			0x054U
+#define BMU_MCAST_CNT				0x040U
+#define BMU_REM_BUF_CNT				0x048U
 #define BMU_INT_SRC					0x020U
 #define BMU_INT_ENABLE				0x024U
 #define BMU_ALLOC_CTRL				0x030U
 #define BMU_FREE_CTRL				0x034U
-#define BMU_FREE_ERR_ADDR			0x038U
-#define BMU_CURR_BUF_CNT			0x03cU
-#define BMU_MCAST_CNT				0x040U
 #define BMU_MCAST_ALLOC_CTRL		0x044U
-#define BMU_REM_BUF_CNT				0x048U
-#define BMU_LOW_WATERMARK			0x050U
-#define BMU_HIGH_WATERMARK			0x054U
+#define BMU_FREE_ERROR_ADDR			0x038U
+#define BMU_CURR_BUF_CNT			0x03cU
 #define BMU_MAS0_BUF_CNT			0x060U
 #define BMU_MAS1_BUF_CNT			0x064U
 #define BMU_MAS2_BUF_CNT			0x068U

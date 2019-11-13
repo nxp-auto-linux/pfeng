@@ -34,7 +34,7 @@
  *
  * @file		pfe_tmu_csr.c
  * @brief		The TMU module low-level API (s32g).
- * @details
+ * @details		Applicable for IP versions listed below.
  *
  */
 
@@ -44,6 +44,15 @@
 #include "pfe_mmap.h"
 #include "pfe_cbus.h"
 #include "pfe_tmu_csr.h"
+
+#ifndef PFE_CBUS_H_
+#error Missing cbus.h
+#endif /* PFE_CBUS_H_ */
+
+/*	Supported IPs. Defines are validated within pfe_cbus.h. */
+#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#error Unsupported IP version
+#endif /* GLOBAL_CFG_IP_VERSION */
 
 static const pfe_ct_phy_if_id_t phys[] = 
 {
@@ -108,16 +117,18 @@ errno_t pfe_tmu_cfg_init(void *cbus_base_va, pfe_tmu_cfg_t *cfg)
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_HIF_NOCPY_BASE_ADDR + HIF_NOCPY_RX_INQ0_PKTPTR, cbus_base_va + TMU_PHY4_INQ_ADDR); /* HIF_NOCPY */
 #endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
 
-	hal_write32(0x1, cbus_base_va + TMU_CNTX_ACCESS_CTRL); /* Direct context memory access */
-
 	/*	Context memory initialization */
 	for (ii=0U; ii < (sizeof(phys) / sizeof(pfe_ct_phy_if_id_t)); ii++)
 	{
 		/*	Initialize queues */
 		for (queue=0U; queue<TLITE_PHY_QUEUES_CNT; queue++)
 		{
+			/*	Set direct context memory access */
+			hal_write32(0x1U, cbus_base_va + TMU_CNTX_ACCESS_CTRL);
+
 			/*	Select PHY and QUEUE */
 			hal_write32((((uint32_t)phys[ii] & 0x1fU) << 8) | (queue & 0x7U), cbus_base_va + TMU_PHY_QUEUE_SEL);
+			hal_nop();
 
 			/*	Clear direct access registers */
 			hal_write32(0U, cbus_base_va + TMU_CURQ_PTR);
@@ -145,6 +156,7 @@ errno_t pfe_tmu_cfg_init(void *cbus_base_va, pfe_tmu_cfg_t *cfg)
 		*/
 		for (queue=0U; queue<TLITE_PHY_QUEUES_CNT; queue++)
 		{
+			/*	Scheduler 0 */
 			if (EOK != pfe_tmu_sch_cfg_bind_queue(cbus_base_va + TLITE_PHYn_SCHEDm_BASE_ADDR(phys[ii], 0U), queue, queue))
 			{
 				NXP_LOG_ERROR("Can't bind queue to scheduler\n");
@@ -152,10 +164,18 @@ errno_t pfe_tmu_cfg_init(void *cbus_base_va, pfe_tmu_cfg_t *cfg)
 			}
 		}
 
+		/*	Connect Scheduler 0 output to Scheduler 1 input 0 */
 		if (EOK != pfe_tmu_sch_cfg_bind_sch_output(cbus_base_va + TLITE_PHYn_SCHEDm_BASE_ADDR(phys[ii], 1U), 0U,
 										cbus_base_va + TLITE_PHYn_SCHEDm_BASE_ADDR(phys[ii], 0U), cbus_base_va))
 		{
 			NXP_LOG_ERROR("Can't bind scheduler output to another scheduler\n");
+			return ENOEXEC;
+		}
+
+		/*	Scheduler 1. Make sure that the input 0 is not connected to any queue (because of Scheduler 0 output) */
+		if (EOK != pfe_tmu_sch_cfg_bind_queue(cbus_base_va + TLITE_PHYn_SCHEDm_BASE_ADDR(phys[ii], 1U), 0U, 0xffU))
+		{
+			NXP_LOG_ERROR("Can't bind queue to scheduler\n");
 			return ENOEXEC;
 		}
 
@@ -303,7 +323,7 @@ static errno_t pfe_tmu_cntx_mem_write(void *cbus_base_va, pfe_ct_phy_if_id_t phy
 	}
 
 	/*	Set context memory address (phy+location) */
-	hal_write32(((phy & 0xfU) << 16) | loc, cbus_base_va + TMU_CNTX_ADDR);
+	hal_write32(((phy & 0x1fU) << 16) | loc, cbus_base_va + TMU_CNTX_ADDR);
 
 	/*	Prepare the data */
 	hal_write32(data, cbus_base_va + TMU_CNTX_DATA);
@@ -373,7 +393,7 @@ static errno_t pfe_tmu_cntx_mem_read(void *cbus_base_va, pfe_ct_phy_if_id_t phy,
 	}
 
 	/*	Set context memory address (phy+location) */
-	hal_write32(((phy & 0xfU) << 16) | loc, cbus_base_va + TMU_CNTX_ADDR);
+	hal_write32(((phy & 0x1fU) << 16) | loc, cbus_base_va + TMU_CNTX_ADDR);
 
 	/*	Issue the READ command */
 	hal_write32(0x2U, cbus_base_va + TMU_CNTX_CMD);
@@ -476,7 +496,7 @@ errno_t pfe_tmu_q_mode_set_tail_drop(void *cbus_base_va, pfe_ct_phy_if_id_t phy,
 	}
 
 	/*	curQ_Qmax[8:0], curQ_Qmin[8:0], curQ_cfg[1:0] are @ position 4 per queue */
-	reg = (max << 10) | 0x1U;
+	reg = (max << 11) | (0U << 2) | (0x1U << 0);
 	return pfe_tmu_cntx_mem_write(cbus_base_va, phy, (8U * queue) + 4U, reg);
 }
 
@@ -546,7 +566,7 @@ errno_t pfe_tmu_q_mode_set_wred(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint
 	}
 
 	/*	curQ_Qmax[8:0], curQ_Qmin[8:0], curQ_cfg[1:0] are @ position 4 per queue */
-	reg = (max << 10) | (min << 2) | 0x2U;
+	reg = (max << 11) | (min << 2) | 0x2U;
 	ret = pfe_tmu_cntx_mem_write(cbus_base_va, phy, (8U * queue) + 4U, reg);
 	if (EOK != ret)
 	{

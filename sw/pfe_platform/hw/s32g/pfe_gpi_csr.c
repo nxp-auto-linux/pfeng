@@ -34,8 +34,8 @@
  *
  * @file		pfe_gpi_csr.c
  * @brief		The GPI module low-level API (s32g).
- * @details
- *
+ * @details		Applicable for IP versions listed below. Also applicable
+ * 				for ETGPI and HGPI except IGQOS registers.
  */
 
 #include "oal.h"
@@ -45,6 +45,15 @@
 #include "pfe_gpi_csr.h"
 #include "pfe_bmu_csr.h"
 #include "pfe_class_csr.h"
+
+#ifndef PFE_CBUS_H_
+#error Missing cbus.h
+#endif /* PFE_CBUS_H_ */
+
+/*	Supported IPs. Defines are validated within pfe_cbus.h. */
+#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#error Unsupported IP version
+#endif /* GLOBAL_CFG_IP_VERSION */
 
 static void pfe_gpi_cfg_init_inqos(void *base_va);
 

@@ -54,22 +54,22 @@
 oal_ct_assert(sizeof(pfe_mac_addr_t) * 8 == 48);
 
 /**
- * @brief Storage of registers associated by a table
+ * @brief HASH registers associated with a table
  */
 typedef struct __pfe_mac_table_regs_tag
 {
-	void *cmd_reg;
-	void *mac1_addr_reg;
-	void *mac2_addr_reg;
-	void *mac3_addr_reg;
-	void *mac4_addr_reg;
-	void *mac5_addr_reg;
-	void *entry_reg;
-	void *status_reg;
-	void *direct_reg;
-	void *free_entries_reg;
-	void *free_head_ptr_reg;
-	void *free_tail_ptr_reg;
+	void *cmd_reg;				/* REQ1_CMD_REG */
+	void *mac1_addr_reg;		/* REQ1_MAC1_ADDR_REG */
+	void *mac2_addr_reg;		/* REQ1_MAC2_ADDR_REG */
+	void *mac3_addr_reg;		/* REQ1_MAC3_ADDR_REG */
+	void *mac4_addr_reg;		/* REQ1_MAC4_ADDR_REG */
+	void *mac5_addr_reg;		/* REQ1_MAC5_ADDR_REG */
+	void *entry_reg;			/* REQ1_ENTRY_REG */
+	void *status_reg;			/* REQ1_STATUS_REG */
+	void *direct_reg;			/* REQ1_DIRECT_REG */
+	void *free_entries_reg;		/* FREE LIST ENTRIES */
+	void *free_head_ptr_reg;	/* FREE LIST HEAD PTR */
+	void *free_tail_ptr_reg;	/* FREE LIST TAIL PTR */
 } pfe_mac_table_regs_t;
 
 /**
@@ -78,7 +78,6 @@ typedef struct __pfe_mac_table_regs_tag
 struct __pfe_l2br_table_tag
 {
 	void *cbus_base_va;							/*!< CBUS base virtual address					*/
-	void *l2br_base_va;							/*!< L2 Bridge base address (virtual)			*/
 	pfe_l2br_table_type_t type;					/*!< Table type									*/
 	pfe_mac_table_regs_t regs;					/*!< Registers (VA)								*/
 	uint16_t hash_space_depth;					/*!< Hash space depth in number of entries		*/
@@ -1169,7 +1168,6 @@ pfe_l2br_table_t *pfe_l2br_table_create(void *cbus_base_va, pfe_l2br_table_type_
 	{
 		memset(l2br, 0, sizeof(pfe_l2br_table_t));
 		l2br->cbus_base_va = cbus_base_va;
-		l2br->l2br_base_va = (void *)((addr_t)l2br->cbus_base_va + (addr_t)CBUS_CLASS_CSR_BASE_ADDR);
 		l2br->type = type;
 	}
 
@@ -1177,18 +1175,18 @@ pfe_l2br_table_t *pfe_l2br_table_create(void *cbus_base_va, pfe_l2br_table_type_
 	{
 		case PFE_L2BR_TABLE_MAC2F:
 		{
-			l2br->regs.cmd_reg = l2br->l2br_base_va + HOST_MAC2F_CMD_REG;
-			l2br->regs.mac1_addr_reg = l2br->l2br_base_va + HOST_MAC2F_MAC1_ADDR_REG;
-			l2br->regs.mac2_addr_reg = l2br->l2br_base_va + HOST_MAC2F_MAC2_ADDR_REG;
-			l2br->regs.mac3_addr_reg = l2br->l2br_base_va + HOST_MAC2F_MAC3_ADDR_REG;
-			l2br->regs.mac4_addr_reg = l2br->l2br_base_va + HOST_MAC2F_MAC4_ADDR_REG;
-			l2br->regs.mac5_addr_reg = l2br->l2br_base_va + HOST_MAC2F_MAC5_ADDR_REG;
-			l2br->regs.entry_reg = l2br->l2br_base_va + HOST_MAC2F_ENTRY_REG;
-			l2br->regs.status_reg = l2br->l2br_base_va + HOST_MAC2F_STATUS_REG;
-			l2br->regs.direct_reg = l2br->l2br_base_va + HOST_MAC2F_DIRECT_REG;
-			l2br->regs.free_entries_reg = l2br->l2br_base_va + HOST_MAC2F_FREE_LIST_ENTRIES;
-			l2br->regs.free_head_ptr_reg = l2br->l2br_base_va + HOST_MAC2F_FREE_LIST_HEAD_PTR;
-			l2br->regs.free_tail_ptr_reg = l2br->l2br_base_va + HOST_MAC2F_FREE_LIST_TAIL_PTR;
+			l2br->regs.cmd_reg = l2br->cbus_base_va + HOST_MAC2F_CMD_REG;
+			l2br->regs.mac1_addr_reg = l2br->cbus_base_va + HOST_MAC2F_MAC1_ADDR_REG;
+			l2br->regs.mac2_addr_reg = l2br->cbus_base_va + HOST_MAC2F_MAC2_ADDR_REG;
+			l2br->regs.mac3_addr_reg = l2br->cbus_base_va + HOST_MAC2F_MAC3_ADDR_REG;
+			l2br->regs.mac4_addr_reg = l2br->cbus_base_va + HOST_MAC2F_MAC4_ADDR_REG;
+			l2br->regs.mac5_addr_reg = l2br->cbus_base_va + HOST_MAC2F_MAC5_ADDR_REG;
+			l2br->regs.entry_reg = l2br->cbus_base_va + HOST_MAC2F_ENTRY_REG;
+			l2br->regs.status_reg = l2br->cbus_base_va + HOST_MAC2F_STATUS_REG;
+			l2br->regs.direct_reg = l2br->cbus_base_va + HOST_MAC2F_DIRECT_REG;
+			l2br->regs.free_entries_reg = l2br->cbus_base_va + HOST_MAC2F_FREE_LIST_ENTRIES;
+			l2br->regs.free_head_ptr_reg = l2br->cbus_base_va + HOST_MAC2F_FREE_LIST_HEAD_PTR;
+			l2br->regs.free_tail_ptr_reg = l2br->cbus_base_va + HOST_MAC2F_FREE_LIST_TAIL_PTR;
 			l2br->hash_space_depth = _MAC2F_TABLE_HASH_ENTRIES;
 			l2br->coll_space_depth = _MAC2F_TABLE_COLL_ENTRIES;
 			break;
@@ -1196,20 +1194,20 @@ pfe_l2br_table_t *pfe_l2br_table_create(void *cbus_base_va, pfe_l2br_table_type_
 
 		case PFE_L2BR_TABLE_VLAN:
 		{
-			l2br->regs.cmd_reg = l2br->l2br_base_va + HOST_VLAN_CMD_REG;
-			l2br->regs.mac1_addr_reg = l2br->l2br_base_va + HOST_VLAN_MAC1_ADDR_REG;
-			l2br->regs.mac2_addr_reg = l2br->l2br_base_va + HOST_VLAN_MAC2_ADDR_REG;
-			l2br->regs.mac3_addr_reg = l2br->l2br_base_va + HOST_VLAN_MAC3_ADDR_REG;
-			l2br->regs.mac4_addr_reg = l2br->l2br_base_va + HOST_VLAN_MAC4_ADDR_REG;
-			l2br->regs.mac5_addr_reg = l2br->l2br_base_va + HOST_VLAN_MAC5_ADDR_REG;
-			l2br->regs.entry_reg = l2br->l2br_base_va + HOST_VLAN_ENTRY_REG;
-			l2br->regs.status_reg = l2br->l2br_base_va + HOST_VLAN_STATUS_REG;
-			l2br->regs.direct_reg = l2br->l2br_base_va + HOST_VLAN_DIRECT_REG;
-			l2br->regs.free_entries_reg = l2br->l2br_base_va + HOST_VLAN_FREE_LIST_ENTRIES;
-			l2br->regs.free_head_ptr_reg = l2br->l2br_base_va + HOST_VLAN_FREE_LIST_HEAD_PTR;
-			l2br->regs.free_head_ptr_reg = l2br->l2br_base_va + HOST_VLAN_FREE_LIST_HEAD_PTR;
-			l2br->regs.free_tail_ptr_reg = l2br->l2br_base_va + HOST_VLAN_FREE_LIST_TAIL_PTR;
-			l2br->regs.free_tail_ptr_reg = l2br->l2br_base_va + HOST_VLAN_FREE_LIST_TAIL_PTR;
+			l2br->regs.cmd_reg = l2br->cbus_base_va + HOST_VLAN_CMD_REG;
+			l2br->regs.mac1_addr_reg = l2br->cbus_base_va + HOST_VLAN_MAC1_ADDR_REG;
+			l2br->regs.mac2_addr_reg = l2br->cbus_base_va + HOST_VLAN_MAC2_ADDR_REG;
+			l2br->regs.mac3_addr_reg = l2br->cbus_base_va + HOST_VLAN_MAC3_ADDR_REG;
+			l2br->regs.mac4_addr_reg = l2br->cbus_base_va + HOST_VLAN_MAC4_ADDR_REG;
+			l2br->regs.mac5_addr_reg = l2br->cbus_base_va + HOST_VLAN_MAC5_ADDR_REG;
+			l2br->regs.entry_reg = l2br->cbus_base_va + HOST_VLAN_ENTRY_REG;
+			l2br->regs.status_reg = l2br->cbus_base_va + HOST_VLAN_STATUS_REG;
+			l2br->regs.direct_reg = l2br->cbus_base_va + HOST_VLAN_DIRECT_REG;
+			l2br->regs.free_entries_reg = l2br->cbus_base_va + HOST_VLAN_FREE_LIST_ENTRIES;
+			l2br->regs.free_head_ptr_reg = l2br->cbus_base_va + HOST_VLAN_FREE_LIST_HEAD_PTR;
+			l2br->regs.free_head_ptr_reg = l2br->cbus_base_va + HOST_VLAN_FREE_LIST_HEAD_PTR;
+			l2br->regs.free_tail_ptr_reg = l2br->cbus_base_va + HOST_VLAN_FREE_LIST_TAIL_PTR;
+			l2br->regs.free_tail_ptr_reg = l2br->cbus_base_va + HOST_VLAN_FREE_LIST_TAIL_PTR;
 			l2br->hash_space_depth = _VLAN_TABLE_HASH_ENTRIES;
 			l2br->coll_space_depth = _VLAN_TABLE_COLL_ENTRIES;
 			break;
@@ -1576,7 +1574,7 @@ __attribute__((pure)) bool_t pfe_l2br_table_entry_is_static(pfe_l2br_table_entry
  * @param[in]	buf Buffer to write the final string to
  * @param[in]	buf_len Buffer length
  */
-void pfe_l2br_table_entry_to_str(pfe_l2br_table_entry_t *entry, char_t *buf, uint32_t buf_len)
+uint32_t pfe_l2br_table_entry_to_str(pfe_l2br_table_entry_t *entry, char_t *buf, uint32_t buf_len)
 {
 	uint32_t len = 0U;
 
@@ -1584,7 +1582,7 @@ void pfe_l2br_table_entry_to_str(pfe_l2br_table_entry_t *entry, char_t *buf, uin
 	if (unlikely((NULL == entry) || (NULL == buf)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
+		return 0U;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
@@ -1617,6 +1615,7 @@ void pfe_l2br_table_entry_to_str(pfe_l2br_table_entry_t *entry, char_t *buf, uin
 	{
 		len += snprintf(buf + len, buf_len - len, "Invalid entry type\n");
 	}
+    return len;
 }
 
 /** @}*/

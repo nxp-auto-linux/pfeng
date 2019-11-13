@@ -41,7 +41,7 @@
 #ifndef HW_S32G_PFE_CT_H_
 #define HW_S32G_PFE_CT_H_
 
-#if defined(TARGET_OS_QNX) || defined(TARGET_OS_LINUX)
+#if defined(TARGET_OS_QNX) || defined(TARGET_OS_LINUX) || defined(TARGET_OS_AUTOSAR)
 	/* ALL supported drivers should go here */
 	#include "oal_types.h"
 #else
@@ -49,7 +49,7 @@
 	#include "fp_types.h"
 #endif
 
-#if defined(TARGET_OS_QNX) || defined(TARGET_OS_LINUX)
+#if defined(TARGET_OS_QNX) || defined(TARGET_OS_LINUX) || defined(TARGET_OS_AUTOSAR)
 	/* ALL supported drivers should go here */
 	#define PFE_PTR(type)	uint32_t
 #else
@@ -93,7 +93,6 @@ _ct_assert(sizeof(pfe_ct_phy_if_id_t) == sizeof(uint8_t));
  * 			packet received via physical interface is classified to get associated logical
  * 			interface. The classification can be done on single, or combination of rules.
  */
-
 typedef enum __attribute__((packed))
 {
 	/* HW Accelerated Rules */
@@ -130,9 +129,67 @@ typedef enum __attribute__((packed))
 	IF_MATCH_MAX = (1 << 30)
 } pfe_ct_if_m_rules_t;
 
-
 /*	We expect given pfe_ct_if_m_rules_t size due to byte order compatibility. */
 _ct_assert(sizeof(pfe_ct_if_m_rules_t) == sizeof(uint32_t));
+
+typedef enum __attribute__((packed))
+{
+	/* Invert match result */
+	FP_FL_INVERT = (1 << 0),
+	/* Reject packet in case of match */
+	FP_FL_REJECT = (1 << 1),
+	/* Accept packet in case of match */
+	FP_FL_ACCEPT = (1 << 2),
+	/* Data offset is relative from start of L3 header */
+	FP_FL_L3_OFFSET = (1 << 3),
+	/* Data offset is relative from start of L4 header */
+	FP_FL_L4_OFFSET = (1 << 4),
+	/* Just to ensure correct size */
+	FP_FL_MAX = (1 << 7)
+} pfe_ct_fp_flags_t;
+
+_ct_assert(sizeof(pfe_ct_fp_flags_t) == sizeof(uint8_t));
+
+/**
+ * @brief The Flexible Parser rule
+ */
+typedef struct __attribute__((packed, aligned(4))) __pfe_ct_fp_rule_tag
+{
+	/* Data to be matched with packet payload */
+	uint32_t data;
+	/* Mask to be applied to data before comparison */
+	uint32_t mask;
+	/* Offset within packet where data to be compared is
+	located . It is relative value depending on rule
+	configuration ( FP_FL_xx_OFFSET ). In case when none
+	of FP_FL_xx_OFFSET flags is set the offset is from
+	0th byte of the packet . */
+	uint16_t offset;
+	/* Index within the Flexible Parser table identifying
+	next rule to be applied in case the current rule does
+	not contain FP_FL_REJECT nor FP_FL_ACCEPT flags . */
+	uint8_t next_idx;
+	/* Control flags */
+	pfe_ct_fp_flags_t flags;
+} pfe_ct_fp_rule_t;
+
+_ct_assert(sizeof(pfe_ct_fp_rule_t) == 12U);
+
+/**
+ * @brief The Flexible Parser table
+ */
+typedef struct __attribute((packed, aligned(4))) __pfe_ct_fp_table_tag
+{
+	/* Number of rules in the table */
+	uint8_t count;
+	/* Reserved (to keep "rules" aligned ) */
+	uint8_t reserved8;
+	uint16_t reserved16;
+	/* Pointer to the array of "count" rules */
+	PFE_PTR (pfe_ct_fp_rule_t) rules;
+} pfe_ct_fp_table_t;
+
+_ct_assert(sizeof(pfe_ct_fp_table_t) == 8U);
 
 /**
  * @brief	Interface matching rules arguments
@@ -171,14 +228,15 @@ typedef struct __attribute__((packed, aligned(4))) __pfe_ct_if_m_args_t
 	/* Flexible Parser 1 table (IF_MATCH_FP1) */
 	PFE_PTR(pfe_ct_fp_table_t) fp1_table;
 #endif
+	/* Source MAC Address (IF_MATCH_SMAC) */
+	uint8_t __attribute__((aligned(4))) smac[6]; /* Must be aligned at 4 bytes */
 	/* IP protocol (IF_MATCH_PROTO) */
 	uint8_t proto;
-	/* Source MAC Address (IF_MATCH_SMAC) */
-	uint8_t smac[6];
+	/* Reserved */
+	uint8_t reserved;
 	/* Destination MAC Address (IF_MATCH_DMAC) */
-	uint8_t dmac[6];
+	uint8_t __attribute__((aligned(4))) dmac[6]; /* Must be aligned at 4 bytes */
 } pfe_ct_if_m_args_t;
-
 
 /*
 * @brief Statistics gathered during classification (per algorithm and per logical interface)
@@ -295,6 +353,8 @@ typedef struct __attribute__((packed, aligned(4))) __pfe_ct_log_if_tag
 	uint32_t e_phy_ifs;
 	/*	Gathered statistics */
 	pfe_ct_class_algo_stats_t __attribute__((aligned(4))) class_stats; /* Must be aligned at 4 bytes */
+	/*	Arguments required by matching rules */
+	pfe_ct_if_m_args_t __attribute__((aligned(4))) m_args; /* Must be aligned at 4 bytes */
 	/*	Interface identifier */
 	uint8_t id;
 	/*	Operational mode */
@@ -304,8 +364,6 @@ typedef struct __attribute__((packed, aligned(4))) __pfe_ct_log_if_tag
 	/*	Match rules. Zero means that matching is disabled and packets
 		can be accepted on interface in promiscuous mode only. */
 	pfe_ct_if_m_rules_t m_rules;
-	/*	Arguments required by matching rules */
-	pfe_ct_if_m_args_t m_args;
 } pfe_ct_log_if_t;
 
 /**
@@ -343,16 +401,29 @@ typedef enum __attribute__((packed))
 	L2BR_ACT_DISCARD = 3,   /*!< Discard */
 } pfe_ct_l2br_action_t;
 
-#if defined(__GNUC__) \
-	&& \
-	( \
-		(((__GNUC__ == 5) && (__GNUC_MINOR__ == 4) && (__GNUC_PATCHLEVEL__ == 0)) \
-		&& (defined(TARGET_ARCH_x86) || defined(TARGET_ARCH_x86_64))) \
-		|| defined(TARGET_ARCH_TESTS) \
-		|| \
-		(((__GNUC__ == 6) && (__GNUC_MINOR__ == 3) && (__GNUC_PATCHLEVEL__ == 1)) \
-		&& defined(TARGET_ARCH_aarch64)) \
+#if (   defined(__GNUC__) \
+		&& \
+		( \
+			(((__GNUC__ == 5) && (__GNUC_MINOR__ == 4) && (__GNUC_PATCHLEVEL__ == 0)) \
+			&& (defined(TARGET_ARCH_x86) || defined(TARGET_ARCH_x86_64))) \
+			|| defined(TARGET_ARCH_TESTS) \
+			|| \
+			(((__GNUC__ == 6) && (__GNUC_MINOR__ == 3) && (__GNUC_PATCHLEVEL__ == 1)) \
+			&& defined(TARGET_ARCH_aarch64)) \
+		) \
+	) \
+	|| \
+	(	defined(__ghs__) \
+		&& ((__GHS_VERSION_NUMBER == 201814) || (__GHS_VERSION_NUMBER == 201914)) \
+		&& defined(__LITTLE_ENDIAN__) \
+    ) \
+	|| \
+    (   defined(__DCC__) \
+        && (__VERSION_NUMBER__ == 7020) \
+        && defined(__ORDER_LITTLE_ENDIAN__) \
 	)
+
+
 /**
  * @brief	MAC table lookup result (31-bit)
  */
@@ -410,7 +481,6 @@ typedef struct __attribute__((packed)) __pfe_ct_vlan_table_result_tag
 } pfe_ct_vlan_table_result_t;
 #elif (defined(__GNUC__)) \
 	&& (((__GNUC__ == 6) && (__GNUC_MINOR__ == 3) && (__GNUC_PATCHLEVEL__ == 0)) && defined(TARGET_ARCH_MIPS_M14k))
-
 
 /**
  * @brief	MAC table lookup result (31-bit)
@@ -499,6 +569,11 @@ _ct_assert(sizeof(pfe_time_str_t) > sizeof(__TIME__));
 typedef uint8_t pfe_vctrl_str_t[16];
 
 /**
+ * @brief This header version MD5 checksum string type
+ */
+typedef char_t pfe_cthdr_str_t[36]; /* 32 Characters + NULL + 3 padding */
+
+/**
  * @brief Firmware version information
  */
 typedef struct __attribute__((packed)) __pfe_ct_version_tag
@@ -517,6 +592,8 @@ typedef struct __attribute__((packed)) __pfe_ct_version_tag
 	pfe_time_str_t time;
 	/*	Version control ID (e.g. GIT commit) */
 	pfe_vctrl_str_t vctrl;
+	/*  This header version */
+	pfe_cthdr_str_t cthdr;
 } pfe_ct_version_t;
 
 /**
@@ -537,7 +614,6 @@ typedef struct __attribute__ (( packed, aligned (4) )) __pfe_ct_pe_misc_control_
  * @brief Statistics gathered for each classification algorithm
  * @details NULL pointer means that given statistics are no available
  */
-
 typedef struct __attribute__((packed, aligned(4))) __pfe_ct_classify_stats_tag
 {
 	/* Statistics gathered by Flexible Router algorithm */
@@ -554,17 +630,16 @@ typedef struct __attribute__((packed, aligned(4))) __pfe_ct_classify_stats_tag
 	pfe_ct_class_algo_stats_t hif_to_hif;
 } pfe_ct_classify_stats_t;
 
-
-/** 
+/**
  * @brief Number of FW error reports which can be stored in pfe_ct_error_record_t
- * @details The value must be power of 2. 
+ * @details The value must be power of 2.
  */
 #define FP_ERROR_RECORD_SIZE 64
 
 /**
  * @brief Reported error storage
- * @note Instances of this structure are stored in an elf-file section .errors which 
- *       is not loaded into any memory and the driver accesses it only through the 
+ * @note Instances of this structure are stored in an elf-file section .errors which
+ *       is not loaded into any memory and the driver accesses it only through the
  *       elf-file.
  */
 typedef struct __attribute__((packed, aligned(4))) __pfe_ct_error_tag
@@ -586,11 +661,64 @@ typedef struct __attribute__((packed, aligned(4))) __pfe_ct_error_record_tag
 {
 	/* Next position to write: (write_index & (FP_ERROR_RECORD_SIZE - 1)) */
 	uint32_t write_index;
-	/* Stored errors - pointers point to section .errors which is not 
+	/* Stored errors - pointers point to section .errors which is not
 	    part of any memory, just the elf-file */
 	PFE_PTR(const pfe_ct_error_t) errors[FP_ERROR_RECORD_SIZE];
 } pfe_ct_error_record_t;
 
+/**
+ * @brief The firmware internal state
+ */
+typedef enum __attribute__((packed))
+{
+	PFE_FW_STATE_UNINIT = 0,        /* FW not started */
+	PFE_FW_STATE_INIT,              /* FW passed initialization */
+	PFE_FW_STATE_FRAMEWAIT,         /* FW waiting for a new frame arrival */
+	PFE_FW_STATE_FRAMEPARSE,        /* FW started parsing a new frame */
+	PFE_FW_STATE_FRAMECLASSIFY,     /* FW started classification of parsed frame */
+	PFE_FW_STATE_FRAMEDISCARD,      /* FW is discarding the frame */
+	PFE_FW_STATE_FRAMEMODIFY,       /* FW is modifying the frame */
+	PFE_FW_STATE_FRAMESEND,         /* FW is sending frame out (towards EMAC or HIF) */
+	PFE_FW_STATE_STOPPED,           /* FW was gracefully stopped by external request */
+	PFE_FW_STATE_EXCEPTION          /* FW is stopped after an exception */
+} pfe_ct_pe_sw_state_t;
+
+/**
+ * @brief Monitoring of the firmware state (watchdog)
+ * @details FW updates the variable with the current state and increments counter
+ *          with each state transition. The driver monitors the variable.
+ * @note Written only by FW and read by Driver.
+ */
+typedef struct __attribute__((packed, aligned(4))) __pfe_ct_pe_sw_state_monitor_tag
+{
+	uint32_t counter;               /* Incremented with each state change */
+	pfe_ct_pe_sw_state_t state;     /* Reflect the current FW state */
+	uint8_t reserved[3];            /* To make size multiple of 4 bytes */
+} pfe_ct_pe_sw_state_monitor_t;
+
+_ct_assert(sizeof(pfe_ct_pe_sw_state_monitor_t) == 8);
+
+
+/**
+ * @brief Storage for measured time intervals used during firmware performance monitoring
+ */
+typedef struct __attribute__((packed, aligned(4))) __pfe_ct_ct_measure_tag
+{
+	uint32_t min; /* Minimal measured value */
+	uint32_t max; /* Maximal measured value */
+	uint32_t avg; /* Average of measured values */
+	uint32_t cnt; /* Count of measurements */
+} pfe_ct_measurement_t;
+
+
+/**
+ * @brief Configuration of flexible filter
+ * @details Value 0 (NULL) means disabled filter, any other value is a pointer to the
+ *          flexible parser table to be used as filter. Frames rejected by the filter
+ *          are discarded.
+ */
+typedef PFE_PTR(pfe_ct_fp_table_t) pfe_ct_flexible_filter_t;
+_ct_assert(sizeof(pfe_ct_flexible_filter_t) == sizeof(uint32_t));
 
 /**
  * @brief PE memory map representation type shared between host and PFE
@@ -619,6 +747,15 @@ typedef struct __attribute__((packed, aligned(4))) __pfe_ct_pe_mmap_tag
 	PFE_PTR(pfe_ct_classify_stats_t) classification_stats;
 	/*	Errors reported by the FW */
 	PFE_PTR(pfe_ct_error_record_t) error_record;
+	/*	FW state */
+	PFE_PTR(pfe_ct_pe_sw_state_monitor_t) state_monitor;
+	/*	Count of the measurement storages - 0 = feature not enabled */
+	uint32_t measurement_count;
+	/*	Performance measurement storages - NULL = none (feature not enabled) */
+	PFE_PTR(pfe_ct_measurement_t) measurements;
+	/*	Flexible Filter */
+	PFE_PTR(pfe_ct_flexible_filter_t) flexible_filter;
+
 } pfe_ct_pe_mmap_t;
 
 typedef enum __attribute__((packed))
@@ -900,3 +1037,5 @@ typedef struct __attribute__((packed, aligned(4))) __pfe_ct_rtable_entry_tag
 _ct_assert(sizeof(pfe_ct_rtable_entry_t) == 128);
 
 #endif /* HW_S32G_PFE_CT_H_ */
+/** @} */
+

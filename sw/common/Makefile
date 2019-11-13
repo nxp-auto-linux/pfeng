@@ -116,6 +116,7 @@ rebuild: clean all
 
 ccflags-y += $(INCLUDES)
 ccflags-y += $(CCFLAGS_pfe)
+ccflags-y += $(GLOBAL_CCFLAGS)
 
 # note: common.o is not build
 blalloc-y := src/blalloc.o
@@ -123,7 +124,7 @@ blalloc-y := src/blalloc.o
 obj-m += blalloc.o
 
 linux:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` modules
+	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` GLOBAL_CCFLAGS="$(GLOBAL_CCFLAGS)" modules
 
 linux-clean:
 	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` clean

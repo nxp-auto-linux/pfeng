@@ -35,6 +35,7 @@
  * @file		pfe_hif_nocpy_csr.h
  * @brief		The HIF_NOCOPY module registers definition file (s32g).
  * @details		This is the HW-specific part of the HIF_NOCOPY module.
+ *				Applicable for IP versions listed below.
  *
  */
 
@@ -47,6 +48,15 @@
 #include "pfe_hif_nocpy_csr.h"
 #include "pfe_bmu_csr.h"
 #include "pfe_tmu_csr.h"
+
+#ifndef PFE_CBUS_H_
+#error Missing cbus.h
+#endif /* PFE_CBUS_H_ */
+
+/*	Supported IPs. Defines are validated within pfe_cbus.h. */
+#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#error Unsupported IP version
+#endif /* GLOBAL_CFG_IP_VERSION */
 
 /**
  * @brief	Control the buffer descriptor fetch

@@ -189,13 +189,6 @@ static int pfeng_napi_open(struct net_device *ndev)
 	priv = ndata->priv;
 	ifid = ndata->port_id;
 
-	/* init hif */
-	ret = pfeng_hif_init(priv);
-	if (ret) {
-		netdev_err(ndev, "Error: Cannot init HIF. Err=%d\n", ret);
-		goto end;
-	}
-
 	/* init hif channel (per interface) */
 	ret = pfeng_hif_client_add(priv, ifid);
 	if (ret) {
@@ -675,6 +668,9 @@ int pfeng_mod_probe(struct device *device,
 		netif_set_real_num_rx_queues(ndev, priv->plat->rx_queues_to_use);
 		netif_set_real_num_tx_queues(ndev, priv->plat->tx_queues_to_use);
 
+		/* Set up explicit device name based on platform names */
+		strlcpy(ndev->name, pfeng_logif_get_name(priv, i), IFNAMSIZ);
+
 		ndev->netdev_ops = &pfeng_netdev_ops;
 
 		/* TODO: ndev->hw_features = NETIF_F_SG | NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM | NETIF_F_RXCSUM; */
@@ -690,6 +686,7 @@ int pfeng_mod_probe(struct device *device,
 			dev_err(priv->device, "Error registering the device (err=%d)\n", ret);
 			goto err_napi_init;
 		}
+		dev_info(priv->device, "%s registered\n", ndev->name);
 
 		/* start without the RUNNING flag, phylib controls it later */
 		//netif_carrier_off(ndev);

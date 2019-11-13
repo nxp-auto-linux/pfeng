@@ -58,13 +58,14 @@ struct __oal_thread_tag
 static int thread_func(void *arg)
 {
 	oal_thread_t *thread = (oal_thread_t *)arg;
-	void *ret;
+	void *err;
+	int ret;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == thread))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
+		return EINVAL;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
@@ -72,9 +73,15 @@ static int thread_func(void *arg)
 	allow_signal(SIGKILL);
 
 	/*  Run custom thread worker */
-	ret = thread->func(thread->func_arg);
+	err = thread->func(thread->func_arg);
+	ret = (long int)err;
 
-	return 0;
+	/* Registered function already terminated. Wait for oal_thread_join() */
+	while(!kthread_should_stop()) {
+		oal_time_usleep(1000U);
+	}
+
+	return ret;
 }
 
 oal_thread_t *oal_thread_create(oal_thread_func func, void *func_arg, const char_t *name, uint32_t attrs)
@@ -136,6 +143,7 @@ errno_t oal_thread_join(oal_thread_t *thread, void **retval)
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
+	wake_up_process(thread->thread);
 	err = kthread_stop(thread->thread);
 
 	if(unlikely(err)) {

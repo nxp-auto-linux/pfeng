@@ -582,7 +582,8 @@ errno_t pfe_emac_cfg_mdio_read22(void *base_va, uint8_t pa, uint8_t ra, uint16_t
 			| CLAUSE45_ENABLE(0U)
 			| GMII_OPERATION_CMD(GMII_READ)
 			| SKIP_ADDRESS_PACKET(0U)
-			| CSR_CLOCK_RANGE(CSR_CLK_60_100_MHZ_MDC_CSR_DIV_42)	/* TODO: Select according to real CSR clock frequency */
+			/*	Select according to real CSR clock frequency. S32G: CSR_CLK = XBAR_CLK = 400MHz */
+			| CSR_CLOCK_RANGE(CSR_CLK_300_500_MHZ_MDC_CSR_DIV_204)
 			| NUM_OF_TRAILING_CLOCKS(0U)
 			| REG_DEV_ADDR(ra)
 			| PHYS_LAYER_ADDR(pa)
@@ -630,7 +631,8 @@ errno_t pfe_emac_cfg_mdio_read45(void *base_va, uint8_t pa, uint8_t dev, uint16_
 			| CLAUSE45_ENABLE(1U)
 			| GMII_OPERATION_CMD(GMII_READ)
 			| SKIP_ADDRESS_PACKET(0U)
-			| CSR_CLOCK_RANGE(CSR_CLK_60_100_MHZ_MDC_CSR_DIV_42)	/* TODO: Select according to real CSR clock frequency */
+			/*	Select according to real CSR clock frequency. S32G: CSR_CLK = XBAR_CLK = 400MHz */
+			| CSR_CLOCK_RANGE(CSR_CLK_300_500_MHZ_MDC_CSR_DIV_204)
 			| NUM_OF_TRAILING_CLOCKS(0U)
 			| REG_DEV_ADDR(dev)
 			| PHYS_LAYER_ADDR(pa)
@@ -679,7 +681,8 @@ errno_t pfe_emac_cfg_mdio_write22(void *base_va, uint8_t pa, uint8_t ra, uint16_
 				| CLAUSE45_ENABLE(0U)
 				| GMII_OPERATION_CMD(GMII_WRITE)
 				| SKIP_ADDRESS_PACKET(0U)
-				| CSR_CLOCK_RANGE(CSR_CLK_60_100_MHZ_MDC_CSR_DIV_42)	/* TODO: Select according to real CSR clock frequency */
+				/*	Select according to real CSR clock frequency. S32G: CSR_CLK = XBAR_CLK = 400MHz */
+				| CSR_CLOCK_RANGE(CSR_CLK_300_500_MHZ_MDC_CSR_DIV_204)
 				| NUM_OF_TRAILING_CLOCKS(0U)
 				| REG_DEV_ADDR(ra)
 				| PHYS_LAYER_ADDR(pa)
@@ -720,10 +723,11 @@ errno_t pfe_emac_cfg_mdio_write45(void *base_va, uint8_t pa, uint8_t dev, uint16
 	hal_write32(reg, base_va + MAC_MDIO_DATA);
 
 	reg = GMII_BUSY(1U)
-				| CLAUSE45_ENABLE(0U)
+				| CLAUSE45_ENABLE(1U)
 				| GMII_OPERATION_CMD(GMII_WRITE)
 				| SKIP_ADDRESS_PACKET(0U)
-				| CSR_CLOCK_RANGE(CSR_CLK_60_100_MHZ_MDC_CSR_DIV_42)	/* TODO: Select according to real CSR clock frequency */
+				/*	Select according to real CSR clock frequency. S32G: CSR_CLK = XBAR_CLK = 400MHz */
+				| CSR_CLOCK_RANGE(CSR_CLK_300_500_MHZ_MDC_CSR_DIV_204)
 				| NUM_OF_TRAILING_CLOCKS(0U)
 				| REG_DEV_ADDR(dev)
 				| PHYS_LAYER_ADDR(pa)

@@ -47,20 +47,16 @@
 #define TMU_TYPE_TMU		1U
 #define TMU_TYPE_TMU_LITE	2U
 
+/**
+ * @brief    Number of entries of a HIF ring
+ * @note    Must be power of 2
+ */
+#define PFE_HIF_RING_CFG_LENGTH             256U
+
 /*
  * @brief TMU variant
  */
-#define PFE_CFG_TMU_VARIANT	TMU_TYPE_TMU_LITE
-
-/*
- * @brief PPFE CBUS space seen by the host CPU
- */
-#define PFE_CFG_AXI_SLAVE_ADDR				0x04000000ULL	/* LS1012a */
-
-/*
- * @brief Length of the CBUS mapping
- */
-#define PFE_CFG_AXI_SLAVE_LEN				0x00c00000ULL	/* LS1012a: 12 MB */
+#define PFE_CFG_TMU_VARIANT	                TMU_TYPE_TMU_LITE
 
 /*
  * @brief 	Accessible memory space base (PA)
@@ -86,6 +82,11 @@
 #define HIF_CFG_MAX_CHANNELS				4U
 
 /**
+ * @brief	Maximum number of logical interfaces
+ */
+#define PFE_CFG_MAX_LOG_IFS					16U
+
+/**
  * @brief	The CLASS_PE_SYS_CLK_RATIO[csr_clmode]
  * @details	See the IMG-NPU Technical Reference Manual
  */
@@ -105,15 +106,12 @@
 /**
  * @brief	Maximum number of buffers - BMU2
  */
-
-#ifndef TARGET_OS_LINUX
-#define	PFE_CFG_BMU2_BUF_COUNT				0x800U
-#else
-/* TODO: Linux x86 has issue with big memory buffers
-         Will be fixed as part of named memory mngmt api
-		 @ AAVB-1913
+#if defined(TARGET_OS_LINUX) && defined(TARGET_ARCH_x86_64)
+/* Linux x86 has issue with big memory buffers
 */
-#define	PFE_CFG_BMU2_BUF_COUNT				0x300
+#define	PFE_CFG_BMU2_BUF_COUNT				0x200U
+#else
+#define	PFE_CFG_BMU2_BUF_COUNT				0x400U
 #endif
 
 /**
@@ -173,9 +171,19 @@
 #define PFE_CFG_UTIL_DMEM_SIZE				0x00002000UL
 
 /**
- * @brief	Physical CBUS base address as seen by host
+ * @brief	Physical CBUS base address as seen by PFE
  */
 #define PFE_CFG_CBUS_PHYS_BASE_ADDR			0xc0000000U
+
+/**
+ * @brief	Physical CBUS base address as seen by CPUs
+ */
+#define PFE_CFG_CBUS_PHYS_BASE_ADDR_CPU		0x46000000U
+
+/**
+ * @brief	CBUS length
+ */
+#define PFE_CFG_CBUS_LENGTH					0x01000000U
 
 /**
  * @brief	Local physical interface identifier

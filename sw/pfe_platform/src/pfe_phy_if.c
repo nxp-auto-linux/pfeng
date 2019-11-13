@@ -78,6 +78,7 @@ struct __pfe_phy_if_tag
 	{
 		pfe_emac_t *emac;
 		pfe_hif_chnl_t *hif_ch;
+		void *instance;
 	} port;
 };
 
@@ -94,6 +95,7 @@ static errno_t pfe_phy_if_write_to_class(pfe_phy_if_t *iface, pfe_ct_phy_if_t *c
 static bool_t pfe_phy_if_has_log_if_nolock(pfe_phy_if_t *iface, pfe_log_if_t *log_if);
 static bool_t pfe_phy_if_has_enabled_log_if_nolock(pfe_phy_if_t *iface);
 static bool_t pfe_phy_if_has_promisc_log_if_nolock(pfe_phy_if_t *iface);
+static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface);
 static uint32_t pfe_phy_if_stat_to_str(pfe_ct_phy_if_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
 
 #if 0 /* For future use */
@@ -248,7 +250,7 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, char_
 		iface->phy_if_class.block_state = IF_BS_FORWARDING;
 
 		/*	Write the configuration to classifier */
-		if (EOK !=  pfe_phy_if_write_to_class(iface, &iface->phy_if_class))
+		if (EOK != pfe_phy_if_write_to_class(iface, &iface->phy_if_class))
 		{
 			NXP_LOG_ERROR("Phy IF configuration failed\n");
 			oal_mm_free(iface);
@@ -615,6 +617,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	LLIST_t *item;
 	bool_t found = FALSE;
 	addr_t log_if_dmem_base = 0U, next_dmem_ptr = 0U;
+	errno_t ret;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
@@ -637,6 +640,10 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 			found = TRUE;
 			break;
 		}
+		else
+		{
+			prev_entry = entry;
+		}
 	}
 
 	if (FALSE == found)
@@ -651,7 +658,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	}
 
 	/*
-	 	 Bypass the entry within the linked list in DMEM
+		Bypass the entry within the linked list in DMEM
 	*/
 	next_dmem_ptr = 0U;
 	if (EOK != pfe_log_if_get_next_dmem_ptr(entry->log_if, &next_dmem_ptr))
@@ -671,7 +678,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 		if (0U == next_dmem_ptr)
 		{
 			/*	No next entry, no previous entry. Just remove. */
-			NXP_LOG_WARNING("Removing default logical interface (%s, parent: %s). Class will see NULL.\n",
+			NXP_LOG_WARNING("Removing default logical interface (%s, parent: %s)\n",
 					pfe_log_if_get_name(entry->log_if), iface->name);
 
 			/*	Invalidate head and default interface */
@@ -702,7 +709,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 		/*	If 'next' pointer of deleted entry is NULL then we're removing default interface */
 		if (0U == next_dmem_ptr)
 		{
-			NXP_LOG_WARNING("Removing default logical interface (%s, parent: %s). Will be replaced by %s.\n",
+			NXP_LOG_INFO("Removing default logical interface (%s, parent: %s). Will be replaced by %s.\n",
 					pfe_log_if_get_name(log_if), iface->name, pfe_log_if_get_name(prev_entry->log_if));
 
 			log_if_dmem_base = 0U;
@@ -749,12 +756,19 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	oal_mm_free(entry);
 	entry = NULL;
 
+	/*	Disable the interface in case that there are not enabled logical interfaces */
+	ret = pfe_phy_if_disable_nolock(iface);
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("%s can't be disabled: %d\n", iface->name, ret);
+	}
+
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
 		NXP_LOG_DEBUG("mutex unlock failed\n");
 	}
 
-	return EOK;
+	return ret;
 
 unlock_and_fail:
 	if (EOK != oal_mutex_unlock(&iface->lock))
@@ -763,6 +777,31 @@ unlock_and_fail:
 	}
 
 	return ENOEXEC;
+}
+
+/**
+ * @brief		Get operational mode
+ * @param[in]	iface The interface instance
+ * @retval		Current phy_if mode. See pfe_ct_if_op_mode_t.
+ */
+pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
+{
+	pfe_ct_if_op_mode_t ret;
+
+	/*	Update the interface structure */
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	ret = iface->phy_if_class.mode;
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	return ret;
 }
 
 /**
@@ -880,6 +919,32 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
 }
 
 /**
+ * @brief		Get associated EMAC instance
+ * @param[in]	iface The interface instance
+ * @return		Associated EMAC instance or NULL if failed
+ */
+pfe_emac_t *pfe_phy_if_get_emac(pfe_phy_if_t *iface)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (PFE_PHY_IF_EMAC == iface->type)
+	{
+		return iface->port.emac;
+	}
+	else
+	{
+		NXP_LOG_DEBUG("Invalid interface type\n");
+		return NULL;
+	}
+}
+
+/**
  * @brief		Bind interface with HIF channel
  * @param[in]	iface The interface instance
  * @param[in]	hif The HIF channel instance
@@ -924,14 +989,40 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
 }
 
 /**
- * @brief		Enable interface (RX/TX)
+ * @brief		Get associated HIF channel instance
  * @param[in]	iface The interface instance
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
+ * @return		Associated HIF channel instance or NULL if failed
  */
-errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
+pfe_hif_chnl_t *pfe_phy_if_get_hif(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (PFE_PHY_IF_HIF == iface->type)
+	{
+		return iface->port.hif_ch;
+	}
+	else
+	{
+		NXP_LOG_DEBUG("Invalid interface type\n");
+		return NULL;
+	}
+}
+
+/**
+ * @brief		Check if interface is enabled
+ * @param[in]	iface The interface instance
+ * @retval		TRUE if enabled
+ * @retval		FALSE if disabled
+ */
+bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
+{
+	bool_t ret = FALSE;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -946,19 +1037,108 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	if (PFE_PHY_IF_EMAC == iface->type)
+	ret = iface->is_enabled;
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
-		if (FALSE == iface->is_enabled)
-		{
-			NXP_LOG_DEBUG("Enabling %s\n", iface->name);
-			pfe_emac_enable(iface->port.emac);
-			iface->is_enabled = TRUE;
-		}
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+	return ret;
+}
+
+/**
+ * @brief		Enable interface (RX/TX)
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
+{
+	errno_t ret = EOK;
+	pfe_ct_if_flags_t tmp;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	NXP_LOG_DEBUG("Enabling %s\n", iface->name);
+
+	/*	Enable interface instance. Backup flags and write the changes. */
+	tmp = iface->phy_if_class.flags;
+	iface->phy_if_class.flags |= IF_FL_ENABLED;
+	ret = pfe_phy_if_write_to_class(iface, &iface->phy_if_class);
+	if (EOK != ret)
+	{
+		/*	Failed. Revert flags. */
+		NXP_LOG_ERROR("Phy IF configuration failed\n");
+		iface->phy_if_class.flags = tmp;
 	}
 	else
 	{
-		NXP_LOG_ERROR("Invalid interface type\n");
-		ret = EINVAL;
+		/*	Mark the interface as enabled */
+		iface->is_enabled = TRUE;
+
+		/*	Enable also associated HW block */
+		if (NULL == iface->port.instance)
+		{
+			/*	No HW block associated */
+			;
+		}
+		else
+		{
+			if (PFE_PHY_IF_EMAC == iface->type)
+			{
+				pfe_emac_enable(iface->port.emac);
+			}
+			else if (PFE_PHY_IF_HIF == iface->type)
+			{
+				ret = pfe_hif_chnl_rx_enable(iface->port.hif_ch);
+				if (EOK != ret)
+				{
+					NXP_LOG_DEBUG("Can't enable HIF channel RX: %d\n", ret);
+				}
+				else
+				{
+					ret = pfe_hif_chnl_tx_enable(iface->port.hif_ch);
+					if (EOK != ret)
+					{
+						NXP_LOG_DEBUG("Can't enable HIF channel TX: %d\n", ret);
+					}
+				}
+			}
+			else
+			{
+				NXP_LOG_DEBUG("Invalid interface type\n");
+				ret = EINVAL;
+			}
+		}
+
+		if (EOK != ret)
+		{
+			/*	HW configuration failure. Backup flags and disable the instance. */
+			tmp = iface->phy_if_class.flags;
+			iface->phy_if_class.flags &= ~IF_FL_ENABLED;
+			ret = pfe_phy_if_write_to_class(iface, &iface->phy_if_class);
+			if (EOK != ret)
+			{
+				/*	Failed. Revert flags. */
+				NXP_LOG_ERROR("Phy IF configuration failed\n");
+				iface->phy_if_class.flags = tmp;
+			}
+			else
+			{
+				iface->is_enabled = FALSE;
+			}
+		}
 	}
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
@@ -969,9 +1149,10 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 	return ret;
 }
 
-errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
+static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
+	pfe_ct_if_flags_t tmp;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -991,24 +1172,49 @@ errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 		return EOK;
 	}
 
-	if (PFE_PHY_IF_EMAC == iface->type)
+	NXP_LOG_DEBUG("Disabling %s\n", iface->name);
+
+	/*	Disable interface instance. Backup flags and write the changes. */
+	tmp = iface->phy_if_class.flags;
+	iface->phy_if_class.flags &= ~IF_FL_ENABLED;
+	ret = pfe_phy_if_write_to_class(iface, &iface->phy_if_class);
+	if (EOK != ret)
 	{
-		if (TRUE == iface->is_enabled)
-		{
-			NXP_LOG_DEBUG("Disabling %s\n", iface->name);
-			pfe_emac_disable(iface->port.emac);
-			iface->is_enabled = FALSE;
-		}
+		/*	Failed. Revert flags. */
+		NXP_LOG_ERROR("Phy IF configuration failed\n");
+		iface->phy_if_class.flags = tmp;
 	}
 	else
 	{
-		NXP_LOG_ERROR("Invalid interface type\n");
-		ret = EINVAL;
+		/*	Mark the interface as disabled */
+		iface->is_enabled = FALSE;
+
+		/*	Disable also associated HW block */
+		if (NULL == iface->port.instance)
+		{
+			/*	No HW block associated */
+			;
+		}
+		else
+		{
+			if (PFE_PHY_IF_EMAC == iface->type)
+			{
+				pfe_emac_disable(iface->port.emac);
+			}
+			else if (PFE_PHY_IF_HIF == iface->type)
+			{
+				pfe_hif_chnl_rx_disable(iface->port.hif_ch);
+				pfe_hif_chnl_tx_disable(iface->port.hif_ch);
+			}
+			else
+			{
+				NXP_LOG_DEBUG("Invalid interface type\n");
+				ret = EINVAL;
+			}
+		}
 	}
 
 	return ret;
-
-
 }
 
 /**
@@ -1045,14 +1251,14 @@ errno_t pfe_phy_if_disable(pfe_phy_if_t *iface)
 }
 
 /**
- * @brief		Enable promiscuous mode
+ * @brief		Check if phy_if in promiscuous mode
  * @param[in]	iface The interface instance
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
+ * @retval		TRUE promiscuous mode is enabled
+ * @retval		FALSE  promiscuous mode is disbaled
  */
-errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
+bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+	bool_t ret = FALSE;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -1067,14 +1273,74 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	if (PFE_PHY_IF_EMAC == iface->type)
+	ret = (0 != (iface->phy_if_class.flags & IF_FL_PROMISC));
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
-		pfe_emac_enable_promisc_mode(iface->port.emac);
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+	return ret;
+}
+
+/**
+ * @brief		Enable promiscuous mode
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
+{
+	errno_t ret = EOK;
+	pfe_ct_if_flags_t tmp;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	/*	Enable instance promiscuous mode. Backup flags and write the changes. */
+	tmp = iface->phy_if_class.flags;
+	iface->phy_if_class.flags |= IF_FL_PROMISC;
+	ret = pfe_phy_if_write_to_class(iface, &iface->phy_if_class);
+	if (EOK != ret)
+	{
+		/*	Failed. Revert flags. */
+		NXP_LOG_ERROR("Phy IF configuration failed\n");
+		iface->phy_if_class.flags = tmp;
 	}
 	else
 	{
-		NXP_LOG_ERROR("Invalid interface type\n");
-		ret = EINVAL;
+		/*	Set up also associated HW block */
+		if (NULL == iface->port.instance)
+		{
+			/*	No HW block associated */
+			;
+		}
+		else
+		{
+			if (PFE_PHY_IF_EMAC == iface->type)
+			{
+				pfe_emac_enable_promisc_mode(iface->port.emac);
+			}
+			else if (PFE_PHY_IF_HIF == iface->type)
+			{
+				/*	HIF does not offer filtering ability */
+				;
+			}
+			else
+			{
+				NXP_LOG_ERROR("Invalid interface type\n");
+				ret = EINVAL;
+			}
+		}
 	}
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
@@ -1094,6 +1360,7 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
+	pfe_ct_if_flags_t tmp;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -1116,6 +1383,8 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 	*/
 	if (TRUE == pfe_phy_if_has_promisc_log_if_nolock(iface))
 	{
+		NXP_LOG_INFO("%s primiscuous mode not disabled since contains promiscuous logical interface(s)\n", iface->name);
+
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
 			NXP_LOG_DEBUG("mutex unlock failed\n");
@@ -1124,14 +1393,41 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 		return EOK;
 	}
 
-	if (PFE_PHY_IF_EMAC == iface->type)
+	/*	Disable instance promiscuous mode. Backup flags and write the changes. */
+	tmp = iface->phy_if_class.flags;
+	iface->phy_if_class.flags &= ~IF_FL_PROMISC;
+	ret = pfe_phy_if_write_to_class(iface, &iface->phy_if_class);
+	if (EOK != ret)
 	{
-		pfe_emac_disable_promisc_mode(iface->port.emac);
+		/*	Failed. Revert flags. */
+		NXP_LOG_ERROR("Phy IF configuration failed\n");
+		iface->phy_if_class.flags = tmp;
 	}
 	else
 	{
-		NXP_LOG_ERROR("Invalid interface type\n");
-		ret = EINVAL;
+		/*	Set up also associated HW block */
+		if (NULL == iface->port.instance)
+		{
+			/*	No HW block associated */
+			;
+		}
+		else
+		{
+			if (PFE_PHY_IF_EMAC == iface->type)
+			{
+				pfe_emac_disable_promisc_mode(iface->port.emac);
+			}
+			else if (PFE_PHY_IF_HIF == iface->type)
+			{
+				/*	HIF does not offer filtering ability */
+				;
+			}
+			else
+			{
+				NXP_LOG_ERROR("Invalid interface type\n");
+				ret = EINVAL;
+			}
+		}
 	}
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
@@ -1167,30 +1463,51 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	if (PFE_PHY_IF_EMAC == iface->type)
+	/*	Configure also associated HW block */
+	if (NULL == iface->port.instance)
 	{
-		ret = pfe_emac_add_addr(iface->port.emac, addr);
-		if (ENOSPC == ret)
+		/*	No HW block associated */
+		;
+	}
+	else
+	{
+		if (PFE_PHY_IF_EMAC == iface->type)
 		{
-			NXP_LOG_INFO("No space left in MAC ADDR exact match table, adding to hash group\n");
+			ret = pfe_emac_add_addr(iface->port.emac, addr);
+			if (ENOSPC == ret)
+			{
+				NXP_LOG_INFO("No space left in MAC ADDR exact match table, adding to hash group\n");
+			}
+			else if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Unable to add MAC address: %d\n", ret);
+				ret = ENOEXEC;
+			}
+			else
+			{
+				;
+			}
 		}
-		else if (EOK != ret)
+		else if (PFE_PHY_IF_HIF == iface->type)
 		{
-			NXP_LOG_ERROR("Unable to add MAC address: %d\n", ret);
-			ret = ENOEXEC;
+			/*	HIF does not offer MAC filtering ability */
+			;
 		}
 		else
 		{
+			NXP_LOG_ERROR("Invalid interface type\n");
+			ret = EINVAL;
+		}
+
+		if (EOK == ret)
+		{
+			NXP_LOG_INFO("Address %02x:%02x:%02x:%02x:%02x:%02x added to %s\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], iface->name);
+
 			if (NULL != iface->callback)
 			{
 				iface->callback(iface, PHY_IF_EVT_MAC_ADDR_UPDATE, iface->callback_arg);
 			}
 		}
-	}
-	else
-	{
-		NXP_LOG_ERROR("Invalid interface type\n");
-		ret = EINVAL;
 	}
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
@@ -1226,24 +1543,41 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	if (PFE_PHY_IF_EMAC == iface->type)
+	/*	Configure also associated HW block */
+	if (NULL == iface->port.instance)
 	{
-		if (EOK != pfe_emac_del_addr(iface->port.emac, addr))
+		/*	No HW block associated */
+		;
+	}
+	else
+	{
+		if (PFE_PHY_IF_EMAC == iface->type)
 		{
-			ret = ENOENT;
+			if (EOK != pfe_emac_del_addr(iface->port.emac, addr))
+			{
+				ret = ENOENT;
+			}
+		}
+		else if (PFE_PHY_IF_HIF == iface->type)
+		{
+			/*	HIF does not offer MAC filtering ability */
+			;
 		}
 		else
 		{
+			NXP_LOG_ERROR("Invalid interface type\n");
+			ret = EINVAL;
+		}
+
+		if (EOK == ret)
+		{
+			NXP_LOG_INFO("Address %02x:%02x:%02x:%02x:%02x:%02x removed from %s\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], iface->name);
+
 			if (NULL != iface->callback)
 			{
 				iface->callback(iface, PHY_IF_EVT_MAC_ADDR_UPDATE, iface->callback_arg);
 			}
 		}
-	}
-	else
-	{
-		NXP_LOG_ERROR("Invalid interface type\n");
-		ret = EINVAL;
 	}
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
@@ -1279,73 +1613,28 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	if (PFE_PHY_IF_EMAC == iface->type)
+	/*	Get MAC address from associated HW block */
+	if (NULL == iface->port.instance)
 	{
-		if (EOK != pfe_emac_get_addr(iface->port.emac, addr))
-		{
-			ret = ENOENT;
-		}
+		/*	No HW block associated */
+		;
 	}
 	else
 	{
-		NXP_LOG_ERROR("Invalid interface type\n");
-		ret = EINVAL;
-	}
-
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-
-	return ret;
-}
-
-/**
- * @brief		Add address to hash group
- * @param[in]	iface The interface instance
- * @param[out]	addr The MAC address which has to be added
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- * @retval		ENOEXEC Execution error
- */
-errno_t pfe_phy_if_add_hash_group_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
-{
-	errno_t ret = EOK;
-
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-
-	if (PFE_PHY_IF_EMAC == iface->type)
-	{
-		ret = pfe_emac_add_addr_to_hash_group(iface->port.emac, addr);
-		if (EINVAL == ret)
+		if (PFE_PHY_IF_EMAC == iface->type)
 		{
-			NXP_LOG_INFO("Broadcast address cannot be added to hash group\n");
+			ret = pfe_emac_get_addr(iface->port.emac, addr);
 		}
-		else if (EOK != ret)
+		else if (PFE_PHY_IF_HIF == iface->type)
 		{
-			NXP_LOG_ERROR("Unable to add MAC to hash group: %d\n", ret);
-			ret = ENOEXEC;
+			/*	HIF does not have MAC address storage (yet) */
+			memset(addr, 0, sizeof(pfe_mac_addr_t));
 		}
 		else
 		{
+			/*	Unknown type, nothing to verify */
 			;
 		}
-	}
-	else
-	{
-		NXP_LOG_ERROR("Invalid interface type\n");
-		ret = EINVAL;
 	}
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
@@ -1354,7 +1643,6 @@ errno_t pfe_phy_if_add_hash_group_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 	}
 
 	return ret;
-
 }
 
 /**

@@ -34,7 +34,7 @@
  * 
  * @file		pfe_tmu_csr.h
  * @brief		The TMU LITE module registers definition file (s32g).
- * @details		
+ * @details		Applicable for IP versions listed below.
  *
  */
 
@@ -42,6 +42,15 @@
 #define _TMU_CSR_H_
 
 #include "pfe_tmu.h"
+
+#ifndef PFE_CBUS_H_
+#error Missing cbus.h
+#endif /* PFE_CBUS_H_ */
+
+/*	Supported IPs. Defines are validated within pfe_cbus.h. */
+#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#error Unsupported IP version
+#endif /* GLOBAL_CFG_IP_VERSION */
 
 #define TMU_VERSION					(CBUS_TMU_CSR_BASE_ADDR + 0x000U)
 #define TMU_INQ_WATERMARK			(CBUS_TMU_CSR_BASE_ADDR + 0x004U)
@@ -152,7 +161,6 @@
 #define TMU_METER_CFG0				(CBUS_TMU_CSR_BASE_ADDR + 0x194U)
 #define TMU_METER_CFG1				(CBUS_TMU_CSR_BASE_ADDR + 0x198U)
 #define TMU_METER_CMD				(CBUS_TMU_CSR_BASE_ADDR + 0x19cU)
-#define TMU_SCH_SHP_RANGE			(CBUS_TMU_CSR_BASE_ADDR + 0x1a0U)
 
 #define TLITE_TDQ_PHY0_CSR_BASE_ADDR		(CBUS_TMU_CSR_BASE_ADDR + 0x1000U)
 #define TLITE_TDQ_PHY1_CSR_BASE_ADDR		(CBUS_TMU_CSR_BASE_ADDR + 0x2000U)

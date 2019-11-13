@@ -57,12 +57,13 @@
  * @details		To be called when IDEX has received RPC request
  * @warning		Don't block or sleep within the body
  * @see			pfe_idex_set_rpc_cbk()
+ * @param[in]	sender RPC originator identifier
  * @param[in]	id Request identifier
  * @param[in]	buf Pointer to request argument. Can be NULL.
  * @param[in]	buf_len Lenght of request argument. Can be zero.
  * @param[in]	arg Custom argument provided via pfe_idex_set_rpc_cbk()
  */
-typedef void (*pfe_idex_rpc_cbk_t)(uint32_t id, void *buf, uint16_t buf_len, void *arg);
+typedef void (*pfe_idex_rpc_cbk_t)(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg);
 
 errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv);
 errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, void *buf, uint16_t buf_len, void *resp, uint16_t resp_len);

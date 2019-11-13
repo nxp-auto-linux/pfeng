@@ -82,6 +82,7 @@ SRCS += src/oal_mm_linux.c
 SRCS += src/oal_thread_linux.c
 SRCS += src/oal_time_linux.c
 SRCS += src/oal_util_linux.c
+SRCS += src/oal_util_net_linux.c
 SRCS += src/oal_job_linux.c
 endif
 
@@ -92,6 +93,7 @@ SRCS += src/oal_mm_qnx.c
 SRCS += src/oal_thread_qnx.c
 SRCS += src/oal_time_qnx.c
 SRCS += src/oal_util_qnx.c
+SRCS += src/oal_util_net_qnx.c
 SRCS += src/oal_job_qnx.c
 endif
 
@@ -134,13 +136,14 @@ rebuild: clean all
 
 ccflags-y += $(INCLUDES)
 ccflags-y += $(CCFLAGS_pfe)
+ccflags-y += $(GLOBAL_CCFLAGS)
 
 oal-y := $(OBJS)
 
 obj-m += oal.o
 
 linux:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` modules
+	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` GLOBAL_CCFLAGS="$(GLOBAL_CCFLAGS)" modules
 
 linux-clean:
 	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` clean

@@ -53,6 +53,7 @@
 #include "oal.h"
 #include "hal.h"
 
+#include "pfe_platform_cfg.h"
 #include "pfe_cbus.h"
 #include "pfe_mmap.h"
 #include "pfe_hif_ring.h"
@@ -60,12 +61,6 @@
 #if !defined(TARGET_HW_LS1012A) && !defined(TARGET_HW_S32G)
 #define TARGET_HW_S32G /* TODO: DUE TO ECLIPSE ENVIRONMENT ONLY (to see active code) */
 #endif
-
-/**
- * @brief	Number of entries of a HIF ring
- * @note	Must be power of 2
- */
-#define PFE_HIF_RING_CFG_LENGTH			256U
 
 #define RING_LEN						PFE_HIF_RING_CFG_LENGTH
 #define RING_LEN_MASK					(PFE_HIF_RING_CFG_LENGTH - 1U)

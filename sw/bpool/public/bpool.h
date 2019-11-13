@@ -117,7 +117,7 @@ typedef struct
 	addr_t ustorage1;
 } bpool_complex_storage_t;
 
-typedef struct
+typedef struct __attribute__((aligned(HAL_CACHE_LINE_SIZE))) 
 {
 	void *vaddr;									/*	Buffer address (virtual) */
 	void *paddr; 									/*	Buffer address (physical) */
@@ -129,6 +129,23 @@ typedef struct
 	uint32_t magicword;
 #endif /* BPOOL_CFG_MEM_BUF_WATCH */
 } bpool_rx_buf_t;
+
+/**
+ * @brief		Returns buffer size of any buffer in the bpool
+ * @param[in]	pool The bpool instance
+ * @retval		On success buffer size, on error (NULL pointer) -1 is returned
+ */
+__attribute__((pure, hot)) static inline int32_t bpool_get_buf_len(const bpool_t *const pool)
+{
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pool))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return -1;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+	return pool->buffer_raw_size;
+}
 
 /**
  * @brief		Calculates pointer of bd belonging to va in pool

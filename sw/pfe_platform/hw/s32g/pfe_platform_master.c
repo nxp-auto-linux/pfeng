@@ -60,7 +60,15 @@
 #include "pfe_platform.h"
 #include "pfe_ct.h"
 #include "pfe_idex.h"
+
+#ifdef GLOBAL_CFG_MULTI_INSTANCE_SUPPORT
 #include "pfe_platform_rpc.h" /* RPC codes and arguments */
+#endif /* GLOBAL_CFG_MULTI_INSTANCE_SUPPORT */
+#include "pfe_fp.h"
+#include "pfe_flexible_filter.h"
+#ifdef GLOBAL_CFG_FCI_ENABLED
+#include "fci.h"
+#endif /* GLOBAL_CFG_FCI_ENABLED */
 
 /**
  * This is a platform specific file. All routines shall be implemented
@@ -71,6 +79,10 @@
  * @brief The main PFE structure
  */
 static pfe_platform_t pfe = {.probed = FALSE};
+
+#ifdef GLOBAL_CFG_MULTI_INSTANCE_SUPPORT
+static errno_t pfe_platform_unregister_log_if(pfe_platform_t *platform, uint32_t session_id, pfe_log_if_t *log_if);
+#endif /* GLOBAL_CFG_MULTI_INSTANCE_SUPPORT */
 
 /**
  * @brief		BMU interrupt service routine
@@ -122,6 +134,7 @@ static bool_t pfe_platform_hif_chnl_isr(void *arg)
 	return handled;
 }
 
+#if defined(GLOBAL_CFG_GLOB_ERR_POLL_WORKER)
 /**
  * @brief		HIF global error polling service routine
  * @details		Manage HIF global errors
@@ -182,6 +195,7 @@ static void *hif_global_err_poller_func(void *arg)
 
 	return NULL;
 }
+#endif /* GLOBAL_CFG_GLOB_ERR_POLL_WORKER */
 
 /**
  * @brief		Global interrupt service routine
@@ -332,23 +346,30 @@ static bool_t pfe_platform_global_isr(void *arg)
 	return handled;
 }
 
+#ifdef GLOBAL_CFG_MULTI_INSTANCE_SUPPORT
 /**
  * @brief		IDEX RPC callback
  * @details		All requests from slave drivers are coming and being processed
  *				within this callback. Any request policing should be implemented
  *				here.
  * @warning		Don't block or sleep within the body
+ * @param[in]	sender RPC originator identifier. The physical interface ID
+ * 					   where the request is coming from.
  * @param[in]	id Request identifier
  * @param[in]	buf Pointer to request argument. Can be NULL.
  * @param[in]	buf_len Length of request argument. Can be zero.
  * @param[in]	arg Custom argument provided via pfe_idex_set_rpc_cbk()
  * @note		This callback runs in dedicated context/thread.
  */
-static void idex_rpc_cbk(uint32_t id, void *buf, uint16_t buf_len, void *arg)
+static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg)
 {
 	pfe_platform_t *platform = (pfe_platform_t *)arg;
-	errno_t ret;
+	pfe_phy_if_t *phy_if_arg = NULL;
+	pfe_log_if_t *log_if_arg = NULL;
+	pfe_if_db_entry_t *entry = NULL;
+	errno_t ret = EOK;
 
+	(void)buf_len;
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == platform))
 	{
@@ -356,21 +377,435 @@ static void idex_rpc_cbk(uint32_t id, void *buf, uint16_t buf_len, void *arg)
 		return;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	/* Check if phy_if should be extracted from argument */
+	if(id == PFE_PLATFORM_RPC_PFE_LOG_IF_CREATE ||
+	   (id >= PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE &&
+	   id <= PFE_PLATFORM_RPC_PFE_PHY_IF_HAS_LOG_IF))
+	{
+		ret = pfe_if_db_get_first(	platform->phy_if_db, sender, IF_DB_CRIT_BY_ID,
+									(void *)(addr_t)((pfe_platform_rpc_pfe_phy_if_generic_t*)arg)->phy_if_id, &entry);
+		if((EOK == ret) && (NULL != entry))
+		{
+			phy_if_arg = pfe_if_db_entry_get_phy_if(entry);
+		}
+		else
+		{
+			/* Entry doesn't exist */
+			ret = ENOENT;
+		}
+	}
+
+	/* Check if log_if should be extracted from argument */
+	if(id >= PFE_PLATFORM_RPC_PFE_LOG_IF_DESTROY &&
+	   id <= PFE_PLATFORM_RPC_PFE_LOG_IF_IS_PROMISC)
+	{
+		ret = pfe_if_db_get_first(	platform->log_if_db, sender, IF_DB_CRIT_BY_ID,
+									(void *)(addr_t)((pfe_platform_rpc_pfe_log_if_generic_t*)arg)->log_if_id, &entry);
+		if((EOK == ret) && (NULL != entry))
+		{
+			log_if_arg = pfe_if_db_entry_get_log_if(entry);
+		}
+		else
+		{
+			/* Entry doesn't exist */
+			ret = ENOENT;
+		}
+	}
+
 	switch (id)
 	{
+		case PFE_PLATFORM_RPC_PFE_IF_LOCK:
+		{
+			ret = pfe_if_db_lock_owned((uint32_t)sender);
+
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+			/* start timeout*/
+			break;
+		}
+		case PFE_PLATFORM_RPC_PFE_IF_UNLOCK:
+		{
+			ret = pfe_if_db_unlock((uint32_t)sender);
+
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+			break;
+		}
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_CREATE:
+		{
+			pfe_platform_rpc_pfe_log_if_create_ret_t rpc_ret = {0};
+			pfe_log_if_t *log_if = NULL;
+			static char_t namebuf[16];
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_CREATE\n");
+
+			if (EOK == ret)
+			{
+				/*	Generate some name to easily identify non-local interfaces */
+				(void)oal_util_snprintf(namebuf, sizeof(namebuf), "[cl%d]", sender);
+				log_if = pfe_log_if_create(phy_if_arg, namebuf);
+				if (NULL == log_if)
+				{
+					NXP_LOG_ERROR("Could not create logical interface\n");
+					ret = ENODEV;
+				}
+				else
+				{
+					rpc_ret.log_if_id = pfe_log_if_get_id(log_if);
+					ret = pfe_if_db_add(platform->log_if_db, sender, log_if, sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_DEBUG("Unable to register logical interface: %d\n", ret);
+						pfe_log_if_destroy(log_if);
+						log_if = NULL;
+					}
+				}
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, &rpc_ret, sizeof(rpc_ret)))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+				if (NULL != log_if)
+				{
+					ret = pfe_platform_unregister_log_if(platform, sender, log_if);
+					if (EOK != ret)
+					{
+						/*	This failure is normal in case the logical interface has not been registered */
+						NXP_LOG_DEBUG("Can't unregister %s: %d\n", pfe_log_if_get_name(log_if), ret);
+					}
+
+					pfe_log_if_destroy(log_if);
+					log_if = NULL;
+				}
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_DESTROY:
+		{
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_DESTROY\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_platform_unregister_log_if(platform, sender, log_if_arg);
+				if (EOK != ret)
+				{
+					NXP_LOG_DEBUG("Unable to unregister %s with ID: %d\n", pfe_log_if_get_name(log_if_arg), pfe_log_if_get_id(log_if_arg));
+				}
+				else
+				{
+					pfe_log_if_destroy(log_if_arg);
+					log_if_arg = NULL;
+				}
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_SET_MATCH_RULES:
+		{
+			pfe_platform_rpc_pfe_log_if_set_match_rules_arg_t *arg = (pfe_platform_rpc_pfe_log_if_set_match_rules_arg_t *)buf;
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_SET_MATCH_RULES\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_log_if_set_match_rules(log_if_arg, oal_ntohl(arg->rules), &arg->args);
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_GET_MATCH_RULES:
+		{
+			pfe_platform_rpc_pfe_log_if_get_match_rules_ret_t rpc_ret = {0};
+			pfe_ct_if_m_rules_t rules;
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_GET_MATCH_RULES\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_log_if_get_match_rules(log_if_arg, &rules, &rpc_ret.args);
+				rpc_ret.rules = oal_htonl(rules);
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, &rpc_ret, sizeof(rpc_ret)))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_ADD_MATCH_RULE:
+		{
+			pfe_platform_rpc_pfe_log_if_add_match_rule_arg_t *arg = (pfe_platform_rpc_pfe_log_if_add_match_rule_arg_t *)buf;
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_ADD_MATCH_RULE\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_log_if_add_match_rule(log_if_arg, oal_ntohl(arg->rule), arg->arg, oal_ntohl(arg->arg_len));
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_DEL_MATCH_RULE:
+		{
+			pfe_platform_rpc_pfe_log_if_del_match_rule_arg_t *arg = (pfe_platform_rpc_pfe_log_if_del_match_rule_arg_t *)buf;
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_DEL_MATCH_RULE\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_log_if_del_match_rule(log_if_arg, oal_ntohl(arg->rule));
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_SET_MAC_ADDR:
+		{
+			pfe_platform_rpc_pfe_log_if_set_mac_addr_arg_t *arg = (pfe_platform_rpc_pfe_log_if_set_mac_addr_arg_t *)buf;
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_SET_MAC_ADDR\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_log_if_set_mac_addr(log_if_arg, arg->addr);
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_GET_MAC_ADDR:
+		{
+			pfe_platform_rpc_pfe_log_if_get_mac_addr_arg_t *arg = (pfe_platform_rpc_pfe_log_if_get_mac_addr_arg_t *)buf;
+			pfe_platform_rpc_pfe_log_if_get_mac_addr_ret_t rpc_ret = {0};
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_GET_MAC_ADDR\n");
+
+			if (EOK == ret)
+			{
+				rpc_ret.log_if_id = arg->log_if_id;
+				ret = pfe_log_if_get_mac_addr(log_if_arg, rpc_ret.addr);
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, &rpc_ret, sizeof(rpc_ret)))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_CLEAR_MAC_ADDR:
+		{
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_CLEAR_MAC_ADDR\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_log_if_clear_mac_addr(log_if_arg);
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_ENABLE:
+		{
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_ENABLE\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_log_if_enable(log_if_arg);
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_DISABLE:
+		{
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_DISABLE\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_log_if_disable(log_if_arg);
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_IS_ENABLED:
+		{
+			pfe_platform_rpc_pfe_log_if_is_enabled_ret_t rpc_ret = {0};
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_IS_ENABLED\n");
+
+			if (EOK == ret)
+			{
+				rpc_ret.status = pfe_log_if_is_enabled(log_if_arg);
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, &rpc_ret, sizeof(rpc_ret)))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_PROMISC_ENABLE:
+		{
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_PROMISC_ENABLE\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_log_if_promisc_enable(log_if_arg);
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_PROMISC_DISABLE:
+		{
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_PROMISC_DISABLE\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_log_if_promisc_disable(log_if_arg);
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_IS_PROMISC:
+		{
+			pfe_platform_rpc_pfe_log_if_is_promisc_ret_t rpc_ret = {0};
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_IS_PROMISC\n");
+
+			if (EOK == ret)
+			{
+				rpc_ret.status = pfe_log_if_is_promisc(log_if_arg);
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, &rpc_ret, sizeof(rpc_ret)))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_ADD_EGRESS_IF:
+		{
+			pfe_platform_rpc_pfe_log_if_add_egress_if_arg_t *arg = (pfe_platform_rpc_pfe_log_if_add_egress_if_arg_t *)buf;
+
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_ADD_EGRESS_IF\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_if_db_get_first(platform->phy_if_db, sender, IF_DB_CRIT_BY_ID, (void *)(addr_t)arg->phy_if_id, &entry);
+				phy_if_arg = pfe_if_db_entry_get_phy_if(entry);
+
+				if ((NULL == phy_if_arg) || (EOK != ret))
+				{
+					ret = ENOENT;
+				}
+				else
+				{
+					ret = pfe_log_if_add_egress_if(log_if_arg, phy_if_arg);
+				}
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
 		case PFE_PLATFORM_RPC_PFE_PHY_IF_CREATE:
 		{
-			pfe_platform_rpc_pfe_phy_if_create_arg_t *req = (pfe_platform_rpc_pfe_phy_if_create_arg_t *)buf;
-
 			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_CREATE\n");
 
 			/*	Right now the clients are only allowed to work with interfaces created by the master driver */
-			if (NULL == pfe_platform_get_phy_if_by_id(platform, req->phy_if_id))
-			{
-				/*	Instance does not exist */
-				ret = ENOENT;
-			}
-			else
+			if (EOK == ret)
 			{
 				ret = EOK;
 			}
@@ -386,19 +821,11 @@ static void idex_rpc_cbk(uint32_t id, void *buf, uint16_t buf_len, void *arg)
 
 		case PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE:
 		{
-			pfe_platform_rpc_pfe_phy_if_enable_arg_t *arg = (pfe_platform_rpc_pfe_phy_if_enable_arg_t *)buf;
-			pfe_phy_if_t *phy_if = pfe_platform_get_phy_if_by_id(platform, arg->phy_if_id);
-
 			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE\n");
 
-			if (NULL == phy_if)
+			if (EOK == ret)
 			{
-				/*	Instance does not exist */
-				ret = ENOENT;
-			}
-			else
-			{
-				ret = pfe_phy_if_enable(phy_if);
+				ret = pfe_phy_if_enable(phy_if_arg);
 			}
 
 			/*	Report execution status to caller */
@@ -412,19 +839,11 @@ static void idex_rpc_cbk(uint32_t id, void *buf, uint16_t buf_len, void *arg)
 
 		case PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE:
 		{
-			pfe_platform_rpc_pfe_phy_if_disable_arg_t *arg = (pfe_platform_rpc_pfe_phy_if_disable_arg_t *)buf;
-			pfe_phy_if_t *phy_if = pfe_platform_get_phy_if_by_id(platform, arg->phy_if_id);
-
 			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE\n");
 
-			if (NULL == phy_if)
+			if (EOK == ret)
 			{
-				/*	Instance does not exist */
-				ret = ENOENT;
-			}
-			else
-			{
-				ret = pfe_phy_if_disable(phy_if);
+				ret = pfe_phy_if_disable(phy_if_arg);
 			}
 
 			/*	Report execution status to caller */
@@ -438,19 +857,11 @@ static void idex_rpc_cbk(uint32_t id, void *buf, uint16_t buf_len, void *arg)
 
 		case PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_ENABLE:
 		{
-			pfe_platform_rpc_pfe_phy_if_promisc_enable_arg_t *arg = (pfe_platform_rpc_pfe_phy_if_promisc_enable_arg_t *)buf;
-			pfe_phy_if_t *phy_if = pfe_platform_get_phy_if_by_id(platform, arg->phy_if_id);
-
 			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_ENABLE\n");
 
-			if (NULL == phy_if)
+			if (EOK == ret)
 			{
-				/*	Instance does not exist */
-				ret = ENOENT;
-			}
-			else
-			{
-				ret = pfe_phy_if_promisc_enable(phy_if);
+				ret = pfe_phy_if_promisc_enable(phy_if_arg);
 			}
 
 			/*	Report execution status to caller */
@@ -464,19 +875,11 @@ static void idex_rpc_cbk(uint32_t id, void *buf, uint16_t buf_len, void *arg)
 
 		case PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_DISABLE:
 		{
-			pfe_platform_rpc_pfe_phy_if_promisc_disable_arg_t *arg = (pfe_platform_rpc_pfe_phy_if_promisc_disable_arg_t *)buf;
-			pfe_phy_if_t *phy_if = pfe_platform_get_phy_if_by_id(platform, arg->phy_if_id);
-
 			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_DISABLE\n");
 
-			if (NULL == phy_if)
+			if (EOK == ret)
 			{
-				/*	Instance does not exist */
-				ret = ENOENT;
-			}
-			else
-			{
-				ret = pfe_phy_if_promisc_disable(phy_if);
+				ret = pfe_phy_if_promisc_disable(phy_if_arg);
 			}
 
 			/*	Report execution status to caller */
@@ -490,22 +893,16 @@ static void idex_rpc_cbk(uint32_t id, void *buf, uint16_t buf_len, void *arg)
 
 		case PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR:
 		{
-			pfe_platform_rpc_pfe_phy_if_add_mac_addr_arg_t *arg = (pfe_platform_rpc_pfe_phy_if_add_mac_addr_arg_t *)buf;
-			pfe_phy_if_t *phy_if = pfe_platform_get_phy_if_by_id(platform, arg->phy_if_id);
+			pfe_platform_rpc_pfe_phy_if_add_mac_addr_arg_t *rpc_arg = (pfe_platform_rpc_pfe_phy_if_add_mac_addr_arg_t *)buf;
 			pfe_mac_addr_t mac_addr;
 
 			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR\n");
 
-			if (NULL == phy_if)
+			if (EOK == ret)
 			{
-				/*	Instance does not exist */
-				ret = ENOENT;
-			}
-			else
-			{
-				_ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg->mac_addr));
-				memcpy(&mac_addr, arg->mac_addr, sizeof(pfe_mac_addr_t));
-				ret = pfe_phy_if_add_mac_addr(phy_if, mac_addr);
+				_ct_assert(sizeof(pfe_mac_addr_t) == sizeof(rpc_arg->mac_addr));
+				memcpy(&mac_addr, rpc_arg->mac_addr, sizeof(pfe_mac_addr_t));
+				ret = pfe_phy_if_add_mac_addr(phy_if_arg, mac_addr);
 			}
 
 			/*	Report execution status to caller */
@@ -519,22 +916,16 @@ static void idex_rpc_cbk(uint32_t id, void *buf, uint16_t buf_len, void *arg)
 
 		case PFE_PLATFORM_RPC_PFE_PHY_IF_DEL_MAC_ADDR:
 		{
-			pfe_platform_rpc_pfe_phy_if_del_mac_addr_arg_t *arg = (pfe_platform_rpc_pfe_phy_if_del_mac_addr_arg_t *)buf;
-			pfe_phy_if_t *phy_if = pfe_platform_get_phy_if_by_id(platform, arg->phy_if_id);
+			pfe_platform_rpc_pfe_phy_if_del_mac_addr_arg_t *rpc_arg = (pfe_platform_rpc_pfe_phy_if_del_mac_addr_arg_t *)buf;
 			pfe_mac_addr_t mac_addr;
 
 			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_DEL_MAC_ADDR\n");
 
-			if (NULL == phy_if)
+			if (EOK == ret)
 			{
-				/*	Instance does not exist */
-				ret = ENOENT;
-			}
-			else
-			{
-				_ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg->mac_addr));
-				memcpy(&mac_addr, arg->mac_addr, sizeof(pfe_mac_addr_t));
-				ret = pfe_phy_if_del_mac_addr(phy_if, mac_addr);
+				_ct_assert(sizeof(pfe_mac_addr_t) == sizeof(rpc_arg->mac_addr));
+				memcpy(&mac_addr, rpc_arg->mac_addr, sizeof(pfe_mac_addr_t));
+				ret = pfe_phy_if_del_mac_addr(phy_if_arg, mac_addr);
 			}
 
 			/*	Report execution status to caller */
@@ -548,19 +939,13 @@ static void idex_rpc_cbk(uint32_t id, void *buf, uint16_t buf_len, void *arg)
 
 		case PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE:
 		{
-			pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t *arg = (pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t *)buf;
-			pfe_phy_if_t *phy_if = pfe_platform_get_phy_if_by_id(platform, arg->phy_if_id);
+			pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t *rpc_arg = (pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t *)buf;
 
 			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE\n");
 
-			if (NULL == phy_if)
+			if (EOK == ret)
 			{
-				/*	Instance does not exist */
-				ret = ENOENT;
-			}
-			else
-			{
-				ret = pfe_phy_if_set_op_mode(phy_if, arg->op_mode);
+				ret = pfe_phy_if_set_op_mode(phy_if_arg, rpc_arg->op_mode);
 			}
 
 			/*	Report execution status to caller */
@@ -574,25 +959,22 @@ static void idex_rpc_cbk(uint32_t id, void *buf, uint16_t buf_len, void *arg)
 
 		case PFE_PLATFORM_RPC_PFE_PHY_IF_HAS_LOG_IF:
 		{
-			pfe_platform_rpc_pfe_phy_if_has_log_if_arg_t *arg = (pfe_platform_rpc_pfe_phy_if_has_log_if_arg_t *)buf;
-			pfe_phy_if_t *phy_if = pfe_platform_get_phy_if_by_id(platform, arg->phy_if_id);
-			pfe_log_if_t *log_if = pfe_platform_get_log_if_by_id(platform, arg->log_if_id);
+			pfe_platform_rpc_pfe_phy_if_has_log_if_arg_t *rpc_arg = (pfe_platform_rpc_pfe_phy_if_has_log_if_arg_t *)buf;
 
 			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_HAS_LOG_IF\n");
 
-			if (NULL == phy_if)
-			{
-				/*	Instance does not exist */
-				ret = ENOENT;
-			}
-			else if (NULL == log_if)
+			ret = pfe_if_db_get_first(platform->log_if_db, sender, IF_DB_CRIT_BY_ID, (void *)(addr_t)rpc_arg->log_if_id, &entry);
+			log_if_arg = pfe_if_db_entry_get_log_if(entry);
+
+			/* Check local log_if as well as globally extracted phy_if*/
+			if ((NULL == log_if_arg) || (EOK != ret) || (EOK != ret))
 			{
 				/*	Instance does not exist */
 				ret = ENOENT;
 			}
 			else
 			{
-				if (pfe_phy_if_has_log_if(phy_if, log_if))
+				if (pfe_phy_if_has_log_if(phy_if_arg, log_if_arg))
 				{
 					ret = EOK;
 				}
@@ -627,6 +1009,7 @@ static void idex_rpc_cbk(uint32_t id, void *buf, uint16_t buf_len, void *arg)
 
 	return;
 }
+#endif /* GLOBAL_CFG_MULTI_INSTANCE_SUPPORT */
 
 /**
  * @brief		Assign HIF to the platform
@@ -646,7 +1029,7 @@ static errno_t pfe_platform_create_hif(pfe_platform_t *platform, pfe_platform_co
 
 	if (FALSE == config->common_irq_mode)
 	{
-		/*	IRQ mode: per channel isr (S32G/VDK) */
+		/*	IRQ mode: per channel isr (S32G) */
 
 		platform->irq_hif_chnls = oal_mm_malloc(sizeof(oal_irq_t *) * HIF_CFG_MAX_CHANNELS);
 		if (NULL == platform->irq_hif_chnls)
@@ -699,6 +1082,7 @@ static errno_t pfe_platform_create_hif(pfe_platform_t *platform, pfe_platform_co
 			pfe_hif_chnl_irq_unmask(chnl);
 		}
 
+#if defined(GLOBAL_CFG_GLOB_ERR_POLL_WORKER)
 		/*	Create poller thread for HIF global (not per-channel) errors */
 		platform->hif_global_err_poller = oal_thread_create(&hif_global_err_poller_func, platform->hif, "hif err poller", 0);
 		if (NULL == platform->hif_global_err_poller)
@@ -709,6 +1093,9 @@ static errno_t pfe_platform_create_hif(pfe_platform_t *platform, pfe_platform_co
 
 		/*   Enable poller */
 		platform->poller_state = HIF_ERR_POLLER_STATE_ENABLED;
+#else  /* GLOBAL_CFG_GLOB_ERR_POLL_WORKER */
+		platform->poller_state = HIF_ERR_POLLER_STATE_DISABLED;
+#endif /* GLOBAL_CFG_GLOB_ERR_POLL_WORKER */
 	}
 	else /* config->common_irq_mode */
 	{
@@ -779,6 +1166,7 @@ static void pfe_platform_destroy_hif(pfe_platform_t *platform)
 			platform->irq_hif_chnls = NULL;
 		}
 
+#if defined(GLOBAL_CFG_GLOB_ERR_POLL_WORKER)
 		if (NULL != platform->hif_global_err_poller)
 		{
 			platform->poller_state = HIF_ERR_POLLER_STATE_STOPPED;
@@ -786,6 +1174,7 @@ static void pfe_platform_destroy_hif(pfe_platform_t *platform)
 			oal_thread_join(platform->hif_global_err_poller, NULL);
 			platform->hif_global_err_poller = NULL;
 		}
+#endif /* GLOBAL_CFG_GLOB_ERR_POLL_WORKER */
 
 		pfe_hif_destroy(platform->hif);
 		platform->hif = NULL;
@@ -809,7 +1198,7 @@ static errno_t pfe_platform_create_hif_nocpy(pfe_platform_t *platform, pfe_platf
 
 	if (FALSE == config->common_irq_mode)
 	{
-		/*	IRQ mode: per channel isr (S32G/VDK) */
+		/*	IRQ mode: per channel isr (S32G) */
 
 		if (0U != config->irq_vector_hif_nocpy)
 		{
@@ -881,22 +1270,37 @@ static errno_t pfe_platform_create_hif_drv(pfe_platform_t *platform)
 	channel = pfe_hif_nocpy_get_channel(platform->hif_nocpy, PFE_HIF_CHNL_NOCPY_ID);
 #else
 	/*	Create HIF driver instance according to configuration */
-#if (PFE_CFG_LOCAL_PHY_IF_ID == PFE_PHY_IF_ID_HIF0)
-	channel = pfe_hif_get_channel(platform->hif, HIF_CHNL_0);
-#elif (PFE_CFG_LOCAL_PHY_IF_ID == PFE_PHY_IF_ID_HIF1)
-	channel = pfe_hif_get_channel(platform->hif, HIF_CHNL_1);
-#elif (PFE_CFG_LOCAL_PHY_IF_ID == PFE_PHY_IF_ID_HIF2)
-	channel = pfe_hif_get_channel(platform->hif, HIF_CHNL_2);
-#elif (PFE_CFG_LOCAL_PHY_IF_ID == PFE_PHY_IF_ID_HIF3)
-	channel = pfe_hif_get_channel(platform->hif, HIF_CHNL_3);
-#else
-	#error Wrong channel configuration
-#endif /* PFE_CFG_LOCAL_PHY_IF_ID */
+	if (PFE_CFG_LOCAL_PHY_IF_ID == PFE_PHY_IF_ID_HIF0)
+	{
+		channel = pfe_hif_get_channel(platform->hif, HIF_CHNL_0);
+	}
+	else if (PFE_CFG_LOCAL_PHY_IF_ID == PFE_PHY_IF_ID_HIF1)
+	{
+		channel = pfe_hif_get_channel(platform->hif, HIF_CHNL_1);
+	}
+	else if (PFE_CFG_LOCAL_PHY_IF_ID == PFE_PHY_IF_ID_HIF2)
+	{
+		channel = pfe_hif_get_channel(platform->hif, HIF_CHNL_2);
+	}
+	else if (PFE_CFG_LOCAL_PHY_IF_ID == PFE_PHY_IF_ID_HIF3)
+	{
+		channel = pfe_hif_get_channel(platform->hif, HIF_CHNL_3);
+	}
+	else
+	{
+		NXP_LOG_ERROR("Wrong channel configuration\n");
+		return ENODEV;
+	}
 #endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
 
 	if (NULL != channel)
 	{
 		platform->hif_drv = pfe_hif_drv_create(channel);
+		if (NULL == platform->hif_drv)
+		{
+			NXP_LOG_ERROR("Can't create HIF driver instance\n");
+			return ENODEV;
+		}
 	}
 	else
 	{
@@ -994,7 +1398,7 @@ static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, pfe_platform_co
 	/*	BMU interrupt handling */
 	if (FALSE == config->common_irq_mode)
 	{
-		/*	IRQ mode: per channel isr (S32G/VDK) */
+		/*	IRQ mode: per channel isr (S32G) */
 
 		platform->irq_bmu = oal_irq_create(config->irq_vector_bmu, (oal_irq_flags_t)0, "PFE BMU IRQ");
 		if (NULL == platform->irq_bmu)
@@ -1030,7 +1434,7 @@ static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, pfe_platform_co
 	{
 		/*
 			Due to RTL bug the BMU2 base address must be 2k aligned.
- 	 		TRM also says that the base shall be aligned to BUF_COUNT * BUF_SIZE.
+			TRM also says that the base shall be aligned to BUF_COUNT * BUF_SIZE.
 
 			UPDATE: When not aligned to BUF_COUNT * BUF_SIZE the BMU is reporting buffer free errors.
 		*/
@@ -1043,7 +1447,7 @@ static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, pfe_platform_co
 		}
 
 		bmu_cfg.pool_va = platform->bmu_buffers_va;
-		bmu_cfg.pool_pa = oal_mm_virt_to_phys(platform->bmu_buffers_va);
+		bmu_cfg.pool_pa = oal_mm_virt_to_phys_contig(platform->bmu_buffers_va);
 		NXP_LOG_INFO("BMU2 buffer base: p0x%p (%"PRINTADDR_T" bytes)\n", bmu_cfg.pool_pa, platform->bmu_buffers_size);
 	}
 
@@ -1064,7 +1468,7 @@ static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, pfe_platform_co
 
 	if (FALSE == config->common_irq_mode)
 	{
-		/*	IRQ mode: per channel isr (S32G/VDK) */
+		/*	IRQ mode: per channel isr (S32G) */
 
 		if (EOK != oal_irq_add_handler(platform->irq_bmu, &pfe_platform_bmu_isr, platform->bmu[1], &pfe.irq_bmu_isr_handle))
 		{
@@ -1407,11 +1811,11 @@ static errno_t pfe_platform_create_class(pfe_platform_t *platform)
 		else
 		{
 			NXP_LOG_ERROR("Only ELF format is supported\n");
-            return ENODEV;
+			return ENODEV;
 		}
 	}
 
- 	return EOK;
+	return EOK;
 }
 
 /**
@@ -1426,6 +1830,7 @@ static void pfe_platform_destroy_class(pfe_platform_t *platform)
 	}
 }
 
+#if defined(GLOBAL_CFG_L2BRIDGE_ENABLED)
 /**
  * @brief		Assign L2 Bridge to the platform
  */
@@ -1478,7 +1883,9 @@ static void pfe_platform_destroy_l2_bridge(pfe_platform_t *platform)
 		platform->vlantab = NULL;
 	}
 }
+#endif /* GLOBAL_CFG_L2BRIDGE_ENABLED */
 
+#if defined(GLOBAL_CFG_RTABLE_ENABLED)
 /**
  * @brief		Assign Routing Table to the platform
  */
@@ -1486,6 +1893,7 @@ static errno_t pfe_platform_create_rtable(pfe_platform_t *platform)
 {
 	void *htable_mem;
 	void *pool_mem;
+	uint32_t pool_offs = 256U * pfe_rtable_get_entry_size();
 
 	platform->rtable_size = 2U * 256U * pfe_rtable_get_entry_size();
 	platform->rtable_va = oal_mm_malloc_contig_named_aligned_nocache("pfe_ddr", platform->rtable_size, 2048U);
@@ -1496,7 +1904,7 @@ static errno_t pfe_platform_create_rtable(pfe_platform_t *platform)
 	}
 
 	htable_mem = platform->rtable_va;
-	pool_mem = (void *)((addr_t)platform->rtable_va + (256U * pfe_rtable_get_entry_size()));
+	pool_mem = (void *)((addr_t)platform->rtable_va + pool_offs);
 
 	if (NULL == platform->classifier)
 	{
@@ -1504,7 +1912,7 @@ static errno_t pfe_platform_create_rtable(pfe_platform_t *platform)
 		return ENODEV;
 	}
 
-	platform->rtable = pfe_rtable_create(platform->classifier, oal_mm_virt_to_phys(htable_mem), 256U, oal_mm_virt_to_phys(pool_mem), 256U);
+	platform->rtable = pfe_rtable_create(platform->classifier, htable_mem, 256U, pool_mem, 256U);
 
 	if (NULL == platform->rtable)
 	{
@@ -1513,7 +1921,7 @@ static errno_t pfe_platform_create_rtable(pfe_platform_t *platform)
 	}
 	else
 	{
-		NXP_LOG_INFO("Routing table created, Hash Table @ p0x%p, Pool @ p0x%p (%d bytes)\n", oal_mm_virt_to_phys(htable_mem), oal_mm_virt_to_phys(pool_mem), (uint32_t)platform->rtable_size);
+		NXP_LOG_INFO("Routing table created, Hash Table @ p0x%llx, Pool @ p0x%p (%d bytes)\n", oal_mm_virt_to_phys_contig(htable_mem), oal_mm_virt_to_phys_contig(htable_mem) + pool_offs, (uint32_t)platform->rtable_size);
 	}
 
 	return EOK;
@@ -1536,6 +1944,7 @@ static void pfe_platform_destroy_rtable(pfe_platform_t *platform)
 		platform->rtable_va = NULL;
 	}
 }
+#endif /* GLOBAL_CFG_RTABLE_ENABLED */
 
 /**
  * @brief		Assign TMU to the platform
@@ -1649,7 +2058,11 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 	}
 
 	/*	EMAC1 */
+#if GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14
+	platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, (void *)CBUS_EMAC1_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
+#else /* FPGA */
 	platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, (void *)CBUS_EMAC1_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_100_MBPS, EMAC_DUPLEX_FULL);
+#endif
 	if (NULL == platform->emac[0])
 	{
 		NXP_LOG_ERROR("Couldn't create EMAC1 instance\n");
@@ -1665,7 +2078,11 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 	}
 
 	/*	EMAC2 */
+#if GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14
+	platform->emac[1] = pfe_emac_create(platform->cbus_baseaddr, (void *)CBUS_EMAC2_BASE_ADDR, EMAC_MODE_RGMII, EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
+#else /* FPGA */
 	platform->emac[1] = pfe_emac_create(platform->cbus_baseaddr, (void *)CBUS_EMAC2_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_100_MBPS, EMAC_DUPLEX_FULL);
+#endif
 	if (NULL == platform->emac[1])
 	{
 		NXP_LOG_ERROR("Couldn't create EMAC2 instance\n");
@@ -1681,7 +2098,11 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 	}
 
 	/*	EMAC3 */
+#if GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14
+	platform->emac[2] = pfe_emac_create(platform->cbus_baseaddr, (void *)CBUS_EMAC3_BASE_ADDR, EMAC_MODE_RGMII, EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
+#else /* FPGA */
 	platform->emac[2] = pfe_emac_create(platform->cbus_baseaddr, (void *)CBUS_EMAC3_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_100_MBPS, EMAC_DUPLEX_FULL);
+#endif
 	if (NULL == platform->emac[2])
 	{
 		NXP_LOG_ERROR("Couldn't create EMAC3 instance\n");
@@ -1753,16 +2174,52 @@ static void pfe_platform_destroy_safety(pfe_platform_t *platform)
 		platform->safety = NULL;
 	}
 }
+#ifdef GLOBAL_CFG_FCI_ENABLED
+/**
+ * @brief		Start the FCI endpoint
+ *
+ */
+static errno_t pfe_platform_create_fci(pfe_platform_t *platform)
+{
+	fci_init_info_t fci_init_info;
+	errno_t ret = EOK;
+
+	fci_init_info.rtable = platform->rtable;
+	fci_init_info.l2_bridge = platform->l2_bridge;
+    fci_init_info.class = platform->classifier;
+	fci_init_info.phy_if_db = platform->phy_if_db;
+	fci_init_info.log_if_db = platform->log_if_db;
+	ret = fci_init(&fci_init_info, "pfe_fci");
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Could not create the FCI endpoint\n");
+		return ret;
+	}
+
+	platform->fci_created = TRUE;
+	return EOK;
+}
 
 /**
- * @brief		Register logical interface
- * @details		Function will crate mapping table between logical interface IDs and
- * 				instances and add the logical interface instance with various validity
- * 				checks.
+ * @brief		Release SAFETY-related resources
  */
-static errno_t pfe_platform_register_log_if(pfe_platform_t *platform, pfe_log_if_t *log_if)
+static void pfe_platform_destroy_fci(pfe_platform_t *platform)
+{
+	fci_fini();
+	platform->fci_created = FALSE;
+}
+#endif /* GLOBAL_CFG_FCI_ENABLED */
+
+#ifdef GLOBAL_CFG_MULTI_INSTANCE_SUPPORT
+/**
+ * @brief		Unregister logical interface
+ * @details		Logical interface will be removed from internal database
+ * @warning		Should be called only with locked DB
+ */
+static errno_t pfe_platform_unregister_log_if(pfe_platform_t *platform, uint32_t session_id, pfe_log_if_t *log_if)
 {
 	errno_t ret = EOK;
+	pfe_if_db_entry_t *entry = NULL;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == platform) || (NULL == log_if)))
@@ -1772,29 +2229,27 @@ static errno_t pfe_platform_register_log_if(pfe_platform_t *platform, pfe_log_if
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
-	if (EOK != oal_mutex_lock(&platform->log_if_db_lock))
+	ret = pfe_if_db_get_first(platform->log_if_db, session_id, IF_DB_CRIT_BY_INSTANCE, (void *)log_if, &entry);
+	if (NULL == entry)
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		ret = ENOENT;
 	}
-
-	/*	Owner of the interface is local driver instance */
-	ret = pfe_if_db_add(platform->log_if_db, log_if, PFE_CFG_LOCAL_PHY_IF_ID);
-
-	if (EOK != oal_mutex_unlock(&platform->log_if_db_lock))
+	else if(EOK == ret)
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		ret = pfe_if_db_remove(platform->log_if_db, session_id, entry);
 	}
 
 	return ret;
 }
+#endif /* GLOBAL_CFG_MULTI_INSTANCE_SUPPORT */
 
 /**
  * @brief		Register physical interface
  * @details		Function will crate mapping table between physical interface IDs and
- * 				instances and add the physical interface instance with various validity
- * 				checks.
+ *				instances and add the physical interface instance with various validity
+ *				checks.
  */
-static errno_t pfe_platform_register_phy_if(pfe_platform_t *platform, pfe_phy_if_t *phy_if)
+static errno_t pfe_platform_register_phy_if(pfe_platform_t *platform, uint32_t session_id, pfe_phy_if_t *phy_if)
 {
 	errno_t ret;
 
@@ -1806,18 +2261,8 @@ static errno_t pfe_platform_register_phy_if(pfe_platform_t *platform, pfe_phy_if
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
-	if (EOK != oal_mutex_lock(&platform->phy_if_db_lock))
-	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-
 	/*	Owner of the interface is local driver instance */
-	ret = pfe_if_db_add(platform->phy_if_db, phy_if, PFE_CFG_LOCAL_PHY_IF_ID);
-
-	if (EOK != oal_mutex_unlock(&platform->phy_if_db_lock))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
-	}
+	ret = pfe_if_db_add(platform->phy_if_db, session_id, phy_if, PFE_CFG_LOCAL_PHY_IF_ID);
 
 	return ret;
 }
@@ -1831,6 +2276,7 @@ static errno_t pfe_platform_register_phy_if(pfe_platform_t *platform, pfe_phy_if
 pfe_log_if_t *pfe_platform_get_log_if_by_id(pfe_platform_t *platform, uint8_t id)
 {
 	pfe_if_db_entry_t *entry = NULL;
+	uint32_t session_id;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == platform))
@@ -1846,16 +2292,56 @@ pfe_log_if_t *pfe_platform_get_log_if_by_id(pfe_platform_t *platform, uint8_t id
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
-	if (EOK != oal_mutex_lock(&platform->log_if_db_lock))
+	if (EOK != pfe_if_db_lock(&session_id))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_DEBUG("DB lock failed\n");
 	}
 
-	entry = pfe_if_db_get_first(platform->log_if_db, IF_DB_CRIT_BY_ID, (void *)(addr_t)id);
+	pfe_if_db_get_first(platform->log_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)id, &entry);
 
-	if (EOK != oal_mutex_unlock(&platform->log_if_db_lock))
+	if (EOK != pfe_if_db_unlock(session_id))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_DEBUG("DB unlock failed\n");
+	}
+
+	return pfe_if_db_entry_get_log_if(entry);
+}
+
+/**
+ * @brief		Get logical interface by name
+ * @param[in]	platform Platform instance
+ * @param[in]	name Logical interface name
+ * @return		Logical interface instance or NULL if failed.
+ */
+pfe_log_if_t *pfe_platform_get_log_if_by_name(pfe_platform_t *platform, char_t *name)
+{
+	pfe_if_db_entry_t *entry = NULL;
+	uint32_t session_id;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == platform))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+
+	if (unlikely(NULL == platform->log_if_db))
+	{
+		NXP_LOG_ERROR("Logical interface DB not found\n");
+		return NULL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (EOK != pfe_if_db_lock(&session_id))
+	{
+		NXP_LOG_DEBUG("DB lock failed\n");
+	}
+
+	pfe_if_db_get_first(platform->log_if_db, session_id, IF_DB_CRIT_BY_NAME, (void *)name, &entry);
+
+	if (EOK != pfe_if_db_unlock(session_id))
+	{
+		NXP_LOG_DEBUG("DB unlock failed\n");
 	}
 
 	return pfe_if_db_entry_get_log_if(entry);
@@ -1870,6 +2356,7 @@ pfe_log_if_t *pfe_platform_get_log_if_by_id(pfe_platform_t *platform, uint8_t id
 pfe_phy_if_t *pfe_platform_get_phy_if_by_id(pfe_platform_t *platform, pfe_ct_phy_if_id_t id)
 {
 	pfe_if_db_entry_t *entry = NULL;
+	uint32_t session_id;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == platform))
@@ -1885,16 +2372,16 @@ pfe_phy_if_t *pfe_platform_get_phy_if_by_id(pfe_platform_t *platform, pfe_ct_phy
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
-	if (EOK != oal_mutex_lock(&platform->phy_if_db_lock))
+	if (EOK != pfe_if_db_lock(&session_id))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_DEBUG("DB lock failed\n");
 	}
 
-	entry = pfe_if_db_get_first(platform->phy_if_db, IF_DB_CRIT_BY_ID, (void *)(addr_t)id);
+	pfe_if_db_get_first(platform->phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)id, &entry);
 
-	if (EOK != oal_mutex_unlock(&platform->phy_if_db_lock))
+	if (EOK != pfe_if_db_unlock(session_id))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_DEBUG("DB unlock failed\n");
 	}
 
 	return pfe_if_db_entry_get_phy_if(entry);
@@ -1905,13 +2392,13 @@ pfe_phy_if_t *pfe_platform_get_phy_if_by_id(pfe_platform_t *platform, pfe_ct_phy
  */
 static errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 {
-	int ii;
-	uint32_t log_if_id = 0U;
+	int32_t ii;
 	pfe_phy_if_t *phy_if = NULL;
 	pfe_log_if_t *log_if = NULL;
 	char_t if_name[16] = {0};
 	errno_t ret = EOK;
-	pfe_if_db_entry_t *entry;
+	pfe_if_db_entry_t *entry = NULL;
+	uint32_t session_id;
 
 	struct
 	{
@@ -1925,29 +2412,25 @@ static errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 		};
 	} phy_ifs[] =
 	{
-			{"emac0", PFE_PHY_IF_ID_EMAC0, GEMAC0_MAC, {platform->emac[0]}},
-			{"emac1", PFE_PHY_IF_ID_EMAC1, GEMAC1_MAC, {platform->emac[1]}},
-			{"emac2", PFE_PHY_IF_ID_EMAC2, GEMAC2_MAC, {platform->emac[2]}},
-			{"_hif", PFE_PHY_IF_ID_HIF, {0, 0, 0, 0, 0, 0}, {NULL}},
-			{"hncpy", PFE_PHY_IF_ID_HIF_NOCPY, {0, 0, 0, 0, 0, 0}, {NULL}},
-			{"hif0", PFE_PHY_IF_ID_HIF0, {0, 0, 0, 0, 0, 0}, {NULL}},
-			{"hif1", PFE_PHY_IF_ID_HIF1, {0, 0, 0, 0, 0, 0}, {NULL}},
-			{"hif2", PFE_PHY_IF_ID_HIF2, {0, 0, 0, 0, 0, 0}, {NULL}},
-			{"hif3", PFE_PHY_IF_ID_HIF3, {0, 0, 0, 0, 0, 0}, {NULL}},
-			{NULL, PFE_PHY_IF_ID_INVALID, {0, 0, 0, 0, 0, 0}, {NULL}}
-	};
-	phy_ifs[0].emac = platform->emac[0];
-	phy_ifs[1].emac = platform->emac[1];
-	phy_ifs[2].emac = platform->emac[2];
-	phy_ifs[3].chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_0);
-	phy_ifs[4].chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_1);
-	phy_ifs[5].chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_2);
-	phy_ifs[6].chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_3);
+			{.name = "emac0", .id = PFE_PHY_IF_ID_EMAC0, .mac = GEMAC0_MAC, .emac = platform->emac[0]},
+			{.name = "emac1", .id = PFE_PHY_IF_ID_EMAC1, .mac = GEMAC1_MAC, .emac = platform->emac[1]},
+			{.name = "emac2", .id = PFE_PHY_IF_ID_EMAC2, .mac = GEMAC2_MAC, .emac = platform->emac[2]},
+			{.name = "hif0", .id = PFE_PHY_IF_ID_HIF0, .mac = {0}, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_0)},
+			{.name = "hif1", .id = PFE_PHY_IF_ID_HIF1, .mac = {0}, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_1)},
+			{.name = "hif2", .id = PFE_PHY_IF_ID_HIF2, .mac = {0}, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_2)},
+			{.name = "hif3", .id = PFE_PHY_IF_ID_HIF3, .mac = {0}, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_3)},
 #if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
-	phy_ifs[7].chnl = pfe_hif_nocpy_get_channel(platform->hif_nocpy, PFE_HIF_CHNL_NOCPY_ID);
+			{.name = "hifncpy", .id = PFE_PHY_IF_ID_HIF_NOCPY, .mac = {0}, .chnl = pfe_hif_nocpy_get_channel(platform->hif_nocpy, PFE_HIF_CHNL_NOCPY_ID)},
 #endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+			{.name = NULL, .id = PFE_PHY_IF_ID_INVALID, .mac = {0}, {NULL}}
+	};
 
-	/*	Create interfaces */
+	if (EOK != pfe_if_db_lock(&session_id))
+	{
+		NXP_LOG_DEBUG("DB lock failed\n");
+	}
+
+	/*	Create interfaces. This also configures in interfaces in firmware. */
 	for (ii=0; phy_ifs[ii].id!=PFE_PHY_IF_ID_INVALID; ii++)
 	{
 		/*	Create physical IF */
@@ -1959,7 +2442,7 @@ static errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 		}
 		else
 		{
-			/*	Set default operational mode */
+			/*	Set default operation mode */
 			if (EOK != pfe_phy_if_set_op_mode(phy_if, IF_OP_DEFAULT))
 			{
 				NXP_LOG_ERROR("Could not set default operational mode (%s)\n", phy_ifs[ii].name);
@@ -1980,15 +2463,22 @@ static errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 			else
 			{
 				/*	Bind HIF channel instance with the physical IF */
-				if (EOK != pfe_phy_if_bind_hif(phy_if, phy_ifs[ii].chnl))
+				if (NULL != phy_ifs[ii].chnl)
 				{
-					NXP_LOG_ERROR("Can't bind interface with HIF (%s)\n", phy_ifs[ii].name);
-					return ENODEV;
+					if (EOK != pfe_phy_if_bind_hif(phy_if, phy_ifs[ii].chnl))
+					{
+						NXP_LOG_ERROR("Can't bind interface with HIF (%s)\n", phy_ifs[ii].name);
+						return ENODEV;
+					}
+				}
+				else
+				{
+					/*	This driver instance is not managing given channel */
 				}
 			}
 
 			/*	Register in platform */
-			if (EOK != pfe_platform_register_phy_if(platform, phy_if))
+			if (EOK != pfe_platform_register_phy_if(platform, session_id, phy_if))
 			{
 				NXP_LOG_ERROR("Could not register %s\n", pfe_phy_if_get_name(phy_if));
 				if (EOK != pfe_phy_if_destroy(phy_if))
@@ -2001,9 +2491,8 @@ static errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 			}
 
 			/*	Create default logical IF */
-			snprintf(if_name, 16, "pfe%d", log_if_id);
-			log_if = pfe_log_if_create(phy_if, if_name, log_if_id);
-			log_if_id++;
+			snprintf(if_name, 16, "pfe%d", ii);
+			log_if = pfe_log_if_create(phy_if, if_name);
 			if (NULL == log_if)
 			{
 				NXP_LOG_ERROR("Could not create %s\n", if_name);
@@ -2012,20 +2501,15 @@ static errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 			else
 			{
 				/*	Configure the logical interface here: */
-				if ((pfe_phy_if_get_id(phy_if) == PFE_PHY_IF_ID_EMAC0)
-						|| (pfe_phy_if_get_id(phy_if)== PFE_PHY_IF_ID_EMAC1)
-						|| (pfe_phy_if_get_id(phy_if) == PFE_PHY_IF_ID_EMAC2))
+
+				/*	Set MAC address */
+				if (EOK != pfe_log_if_set_mac_addr(log_if, phy_ifs[ii].mac))
 				{
-					/*	Set MAC address */
-					(void)pfe_log_if_set_mac_addr(log_if, phy_ifs[ii].mac);
-				}
-				else
-				{
-					/*	TODO: Currently not supported for HIF interfaces */
+					NXP_LOG_ERROR("Unable to set MAC address (%s)\n", pfe_log_if_get_name(log_if));
 				}
 
-				/*	Register in platform */
-				if (EOK != pfe_platform_register_log_if(platform, log_if))
+				/*	Register in platform to db */
+				if (EOK != pfe_if_db_add(platform->log_if_db, session_id, log_if, PFE_CFG_LOCAL_PHY_IF_ID))
 				{
 					NXP_LOG_ERROR("Could not register %s\n", pfe_log_if_get_name(log_if));
 					pfe_log_if_destroy(log_if);
@@ -2039,18 +2523,21 @@ static errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 	/*	Set up default routing for every logical interface */
 #if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
 	/*	Send matching packets to HIF NOCPY */
-	phy_if = pfe_platform_get_phy_if_by_id(platform, PFE_PHY_IF_ID_HIF_NOCPY);
+	ret = pfe_if_db_get_first(platform->phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)PFE_PHY_IF_ID_HIF_NOCPY, &entry);
+	phy_if = pfe_if_db_entry_get_phy_if(entry);
 #else
 	/*	Send matching packets to HIF ch.0 */
-	phy_if = pfe_platform_get_phy_if_by_id(platform, PFE_PHY_IF_ID_HIF0);
+	ret = pfe_if_db_get_first(platform->phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)PFE_PHY_IF_ID_HIF0, &entry);
+	phy_if = pfe_if_db_entry_get_phy_if(entry);
 #endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
 
-	if (EOK != oal_mutex_lock(&platform->log_if_db_lock))
+	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_DEBUG("DB was locked by different session id, no entry was retrieved\n");
+		return ENODEV;
 	}
 
-	entry = pfe_if_db_get_first(platform->log_if_db, IF_DB_CRIT_ALL, NULL);
+	ret = pfe_if_db_get_first(platform->log_if_db, session_id, IF_DB_CRIT_ALL, NULL, &entry);
 	while (NULL != entry)
 	{
 		log_if = pfe_if_db_entry_get_log_if(entry);
@@ -2060,13 +2547,17 @@ static errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 			ret = ENODEV;
 			break;
 		}
-
-		entry = pfe_if_db_get_next(platform->log_if_db);
+		ret = pfe_if_db_get_next(platform->log_if_db, session_id, &entry);
 	}
 
-	if (EOK != oal_mutex_unlock(&platform->log_if_db_lock))
+	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_DEBUG("DB was locked by different session id, no entry was retrieved\n");
+	}
+
+	if (EOK != pfe_if_db_unlock(session_id))
+	{
+		NXP_LOG_DEBUG("DB unlock failed\n");
 	}
 
 	return ret;
@@ -2077,51 +2568,58 @@ static errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
  */
 static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 {
-	pfe_if_db_entry_t *entry;
+	pfe_if_db_entry_t *entry = NULL;
 	pfe_log_if_t *log_if;
 	pfe_phy_if_t *phy_if;
+	uint32_t session_id;
+	errno_t ret;
 
 	if (NULL != platform->log_if_db)
 	{
-		if (EOK != oal_mutex_lock(&platform->log_if_db_lock))
+		if(EOK != pfe_if_db_lock(&session_id))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_DEBUG("DB lock failed\n");
 		}
 
-		entry = pfe_if_db_get_first(platform->log_if_db, IF_DB_CRIT_ALL, NULL);
+		ret = pfe_if_db_get_first(platform->log_if_db, session_id, IF_DB_CRIT_ALL, NULL, &entry);
 		while (NULL != entry)
 		{
 			log_if = pfe_if_db_entry_get_log_if(entry);
 
-			if (EOK != pfe_if_db_remove(platform->log_if_db, entry))
+			if (EOK != pfe_if_db_remove(platform->log_if_db, session_id, entry))
 			{
 				NXP_LOG_DEBUG("Could not remove log_if DB entry\n");
 			}
 			
 			pfe_log_if_destroy(log_if);
 
-			entry = pfe_if_db_get_next(platform->log_if_db);
+			ret = pfe_if_db_get_next(platform->log_if_db, session_id, &entry);
 		}
 
-		if (EOK != oal_mutex_unlock(&platform->log_if_db_lock))
+		if(EOK != ret)
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_DEBUG("Could not remove log_if DB entry, DB was locked\n");
+		}
+
+		if(EOK != pfe_if_db_unlock(session_id))
+		{
+			NXP_LOG_DEBUG("DB unlock failed\n");
 		}
 	}
 
 	if (NULL != platform->phy_if_db)
 	{
-		if (EOK != oal_mutex_lock(&platform->phy_if_db_lock))
+		if(EOK != pfe_if_db_lock(&session_id))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_DEBUG("DB lock failed\n");
 		}
 
-		entry = pfe_if_db_get_first(platform->phy_if_db, IF_DB_CRIT_ALL, NULL);
+		ret = pfe_if_db_get_first(platform->phy_if_db, session_id, IF_DB_CRIT_ALL, NULL, &entry);
 		while (NULL != entry)
 		{
 			phy_if = pfe_if_db_entry_get_phy_if(entry);
 
-			if (EOK != pfe_if_db_remove(platform->phy_if_db, entry))
+			if (EOK != pfe_if_db_remove(platform->phy_if_db, session_id, entry))
 			{
 				NXP_LOG_DEBUG("Could not remove phy_if DB entry\n");
 			}
@@ -2131,12 +2629,17 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 				NXP_LOG_DEBUG("Can't destroy %s\n", pfe_phy_if_get_name(phy_if));
 			}
 
-			entry = pfe_if_db_get_next(platform->phy_if_db);
+			ret = pfe_if_db_get_next(platform->phy_if_db, session_id, &entry);
 		}
 
-		if (EOK != oal_mutex_unlock(&platform->phy_if_db_lock))
+		if(EOK != ret)
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_DEBUG("Could not remove log_if DB entry, DB was locked\n");
+		}
+
+		if(EOK != pfe_if_db_unlock(session_id))
+		{
+			NXP_LOG_DEBUG("DB unlock failed\n");
 		}
 	}
 }
@@ -2170,9 +2673,11 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 {
 	errno_t ret = EOK;
 	volatile void *addr;
-	uint32_t val, ii;
+	uint32_t val;
+	uint32_t ii;
 
 	memset(&pfe, 0U, sizeof(pfe_platform_t));
+	pfe.fci_created = FALSE;
 
 	/*	Create interface databases */
 	pfe.phy_if_db = pfe_if_db_create(PFE_IF_DB_PHY);
@@ -2181,28 +2686,12 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 		NXP_LOG_DEBUG("Can't create physical interface DB\n");
 		goto exit;
 	}
-	else
-	{
-		if (EOK != oal_mutex_init(&pfe.phy_if_db_lock))
-		{
-			NXP_LOG_DEBUG("Mutex initialization failed\n");
-			goto exit;
-		}
-	}
 
 	pfe.log_if_db = pfe_if_db_create(PFE_IF_DB_LOG);
 	if (NULL == pfe.log_if_db)
 	{
 		NXP_LOG_DEBUG("Can't create logical interface DB\n");
 		goto exit;
-	}
-	else
-	{
-		if (EOK != oal_mutex_init(&pfe.log_if_db_lock))
-		{
-			NXP_LOG_DEBUG("Mutex initialization failed\n");
-			goto exit;
-		}
 	}
 
 	pfe.fw = config->fw;
@@ -2219,7 +2708,6 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 		NXP_LOG_INFO("PFE CBUS p0x%p mapped @ v0x%p\n", (void *)config->cbus_base, pfe.cbus_baseaddr);
 	}
 
-#if !defined(GLOBAL_CFG_RUN_ON_VDK)
 	/*	Initialize LMEM TODO: Get LMEM size from global WSP_LMEM_SIZE register */
 	NXP_LOG_DEBUG("Initializing LMEM (%d bytes)\n", CBUS_LMEM_SIZE);
 	for (ii=0U; ii<CBUS_LMEM_SIZE; ii+=4U)
@@ -2227,9 +2715,6 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 		addr = (void *)((addr_t)pfe.cbus_baseaddr + CBUS_LMEM_BASE_ADDR + ii);
 		*(uint32_t *)addr = 0U;
 	}
-#else
-	NXP_LOG_INFO("[RUN_ON_VDK]: SKIPPED initializing LMEM (%d bytes)\n", CBUS_LMEM_SIZE);
-#endif /* !GLOBAL_CFG_RUN_ON_VDK */
 
 	/*	Create HW components */
 	pfe.emac_count = 3U;
@@ -2237,7 +2722,11 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 	pfe.etgpi_count = 3U;
 	pfe.hgpi_count = 1U;
 	pfe.bmu_count = 2U;
-	pfe.class_pe_count = 1U;	/* TODO: Current IMG FPGA bitfile implements only 1 CLASS PE */
+#if GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14
+	pfe.class_pe_count = 8U;
+#else /* FPGA */
+	pfe.class_pe_count = 1U;
+#endif
 	pfe.tmu_pe_count = 0U;
 	pfe.util_pe_count = 0U;	/* TODO: Current IMG FPGA bitfile does not implement UTIL PE */
 
@@ -2264,9 +2753,9 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 	}
 	else /* config->common_irq_mode */
 	{
-		/*	IRQ mode: per block isr (S32G/VDK) */
+		/*	IRQ mode: per block isr (S32G) */
 
-		NXP_LOG_INFO("Detected per block IRQ mode (S32G/VDK)\n");
+		NXP_LOG_INFO("Detected per block IRQ mode (S32G)\n");
 
 		/* Note:
 		 *
@@ -2324,7 +2813,6 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 		goto exit;
 	}
 
-#ifndef TARGET_OS_LINUX /* temp solution, disabled for Linux now */
 	/*	SAFETY */
 	ret = pfe_platform_create_safety(&pfe);
 	if (EOK != ret)
@@ -2332,20 +2820,25 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 		goto exit;
 	}
 
+#ifdef GLOBAL_CFG_FCI_ENABLED
 	/*	Routing Table */
+#if defined(GLOBAL_CFG_RTABLE_ENABLED)
 	ret = pfe_platform_create_rtable(&pfe);
 	if (EOK != ret)
 	{
 		goto exit;
 	}
+#endif /* GLOBAL_CFG_RTABLE_ENABLED */
 
 	/*	L2 Bridge */
+#if defined(GLOBAL_CFG_L2BRIDGE_ENABLED)
 	ret = pfe_platform_create_l2_bridge(&pfe);
 	if (EOK != ret)
 	{
 		goto exit;
 	}
-#endif
+#endif /* GLOBAL_CFG_L2BRIDGE_ENABLED */
+#endif /* GLOBAL_CFG_FCI_ENABLED */
 
 #if 0
 	/*	UTIL */
@@ -2402,6 +2895,18 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 		goto exit;
 	}
 
+#ifdef GLOBAL_CFG_FCI_ENABLED
+	ret = pfe_platform_create_fci(&pfe);
+	if (EOK != ret)
+	{
+		goto exit;
+	}
+#endif /* GLOBAL_CFG_FCI_ENABLED */
+#ifdef GLOBAL_CFG_PFE_FLEX_PARS_RTR_ENABLED
+    pfe_fp_init();
+    pfe_flexible_filter_init();
+#endif /* GLOBAL_CFG_PFE_FLEX_PARS_RTR_ENABLED */
+    
 	/*	Activate PFE blocks */
 	pfe_bmu_enable(pfe.bmu[0]);
 	pfe_bmu_enable(pfe.bmu[1]);
@@ -2445,7 +2950,6 @@ exit:
 errno_t pfe_platform_remove(void)
 {
 	errno_t ret;
-
 	/*	Remove and disable IRQ just before platform modules are destroyed. */
 	if (NULL != pfe.irq_global)
 	{
@@ -2459,6 +2963,8 @@ errno_t pfe_platform_remove(void)
 		hal_write32(0U, (void *)(CBUS_GLOBAL_CSR_BASE_ADDR + 0x20U + (addr_t)(pfe.cbus_baseaddr)));
 	}
 
+
+	pfe_platform_destroy_ifaces(&pfe); /* Need classifier instance to be available */
 	pfe_platform_destroy_hif_drv(&pfe);
 	pfe_platform_destroy_hif(&pfe);
 #if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
@@ -2468,9 +2974,15 @@ errno_t pfe_platform_remove(void)
 	pfe_platform_destroy_etgpi(&pfe);
 	pfe_platform_destroy_hgpi(&pfe);
 	pfe_platform_destroy_bmu(&pfe);
+#if defined(GLOBAL_CFG_RTABLE_ENABLED)
 	pfe_platform_destroy_rtable(&pfe);
+#endif /* GLOBAL_CFG_RTABLE_ENABLED */
+#if defined(GLOBAL_CFG_L2BRIDGE_ENABLED)
 	pfe_platform_destroy_l2_bridge(&pfe);
-	pfe_platform_destroy_ifaces(&pfe); /* Need classifier instance to be available */
+#endif /* GLOBAL_CFG_L2BRIDGE_ENABLED */
+#ifdef GLOBAL_CFG_FCI_ENABLED /* temp solution, disabled for Linux and MCAL now */
+	pfe_platform_destroy_fci(&pfe);
+#endif /* GLOBAL_CFG_FCI_ENABLED */
 	pfe_platform_destroy_class(&pfe);
 	pfe_platform_destroy_tmu(&pfe);
 	pfe_platform_destroy_util(&pfe);
@@ -2479,7 +2991,7 @@ errno_t pfe_platform_remove(void)
 
 	if (NULL != pfe.cbus_baseaddr)
 	{
-		ret = oal_mm_dev_unmap(pfe.cbus_baseaddr, PFE_CFG_AXI_SLAVE_LEN);
+		ret = oal_mm_dev_unmap(pfe.cbus_baseaddr, PFE_CFG_CBUS_LENGTH/* <- FIXME, should use value used on init instead */);
 		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("Can't unmap PPFE CBUS: %d\n", ret);
@@ -2491,14 +3003,12 @@ errno_t pfe_platform_remove(void)
 	{
 		pfe_if_db_destroy(pfe.phy_if_db);
 		pfe.phy_if_db = NULL;
-		oal_mutex_destroy(&pfe.phy_if_db_lock);
 	}
 
 	if (NULL != pfe.log_if_db)
 	{
 		pfe_if_db_destroy(pfe.log_if_db);
 		pfe.log_if_db = NULL;
-		oal_mutex_destroy(&pfe.log_if_db_lock);
 	}
 
 	pfe.cbus_baseaddr = 0x0ULL;

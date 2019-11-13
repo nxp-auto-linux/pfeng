@@ -46,9 +46,13 @@
 #ifndef _HAL_H_
 #define _HAL_H_
 
-#define hal_nop()			asm volatile("nop" ::: "memory")
+#if defined(__ghs__)
+	#define hal_nop()       __asm(" nop")
+#else
+	#define hal_nop()       asm volatile("nop" ::: "memory")
+#endif
 
-#if defined(TARGET_ARCH_aarch64)
+#if defined(TARGET_OS_LINUX)
 #include <linux/slab.h>
 #include <linux/io.h>
 #define _hal_write_w(width, val, addr)	\
@@ -64,7 +68,7 @@
 #define hal_read32(addr)	_hal_read_w(32, addr)
 #define hal_read16(addr)	_hal_read_w(16, addr)
 #define hal_read8(addr)		_hal_read_w(8, addr)
-#else /* TARGET_ARCH_aarch64 */
+#else /* TARGET_OS_LINUX */
 /*	AXI writes immediately followed by an AXI read, cause writes to be lost,
 	as a workaround, add a hal_nop after each write */
 #define hal_write32(val, addr) \
@@ -88,24 +92,41 @@
 #define hal_read32(addr)	(*(volatile uint32_t *)(addr))
 #define hal_read16(addr)	(*(volatile uint16_t *)(addr))
 #define hal_read8(addr)		(*(volatile uint8_t *)(addr))
-#endif /* TARGET_ARCH_aarch64 */
+#endif /* TARGET_OS_LINUX */
 
 #ifndef likely
-#define likely(x)			__builtin_expect(!!(x),1)
+	#if defined(__ghs__) || defined(__DCC__)
+		#define likely(x)   (x)
+	#else
+		#define likely(x)   __builtin_expect(!!(x),1)
+	#endif
+
 #endif
 
 #ifndef unlikely
-#define unlikely(x)			__builtin_expect(!!(x),0)
+	#if defined(__ghs__) || defined(__DCC__)
+		#define unlikely(x) (x)
+	#else
+		#define unlikely(x) __builtin_expect(!!(x),0)
+	#endif
 #endif
 
-#if defined(TARGET_ARCH_aarch64le)
-#define hal_wmb()			__asm__ __volatile__(" dmb oshst" : : : "memory")
-#elif defined(TARGET_ARCH_x86) || defined(TARGET_ARCH_x86_64)
-#define hal_wmb()			asm volatile("sfence" ::: "memory")
-#elif defined(TARGET_ARCH_aarch64)
-#define hal_wmb()			smp_wmb()
+#if defined(__ghs__) || defined(__DCC__)
+	#if defined(TARGET_ARCH_aarch64le) || defined(TARGET_ARCH_armv7le)
+		#define hal_wmb()   __asm(" dmb oshst")
+	#else
+		#error Unsupported or no platform defined
+	#endif
 #else
-#error Unsupported or no platform defined
+	#if defined(TARGET_ARCH_aarch64le)
+		#define hal_wmb()   __asm__ __volatile__(" dmb oshst" : : : "memory")
+	#elif defined(TARGET_ARCH_x86) || defined(TARGET_ARCH_x86_64)
+		#define hal_wmb()   asm volatile("sfence" ::: "memory")
+	#elif defined(TARGET_ARCH_aarch64)
+		#define hal_wmb()			smp_wmb()
+	#else
+		#error Unsupported or no platform defined
+	#endif
 #endif
 
 /**

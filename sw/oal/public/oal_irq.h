@@ -69,6 +69,10 @@
 #ifndef OAL_IRQ_H_
 #define OAL_IRQ_H_
 
+#ifdef TARGET_OS_AUTOSAR
+#include "oal_irq_autosar.h"
+#endif
+
 typedef struct __oal_irq_tag oal_irq_t;
 
 /**
@@ -90,9 +94,9 @@ typedef uint32_t oal_irq_isr_handle_t;
  */
 typedef enum
 {
-    OAL_IRQ_FLAG_PRIVATE = (1 << 0),	/* Interrupt is owned exclusively by the irq instance */
-    OAL_IRQ_FLAG_SHARED = (1 << 1),	/* Interrupt is shared by other OS components */
-	OAL_IRQ_FLAG_DISABLED = (1 << 2)	/* Don't automatically enable interrupt when created */
+	OAL_IRQ_FLAG_PRIVATE = (1 << 0),    /* Interrupt is owned exclusively by the irq instance */
+	OAL_IRQ_FLAG_SHARED = (1 << 1),     /* Interrupt is shared by other OS components */
+	OAL_IRQ_FLAG_DISABLED = (1 << 2)    /* Don't automatically enable interrupt when created */
 } oal_irq_flags_t;
 
 /**
@@ -152,12 +156,12 @@ errno_t oal_irq_unmask(oal_irq_t *irq);
  * @param[in]	irq The IRQ instance
  * @return		The IRQ ID associated with the instance or -1 if failed
  */
-errno_t oal_irq_get_id(oal_irq_t *irq);
+int32_t oal_irq_get_id(oal_irq_t *irq);
 
 /**
  * @brief		Get IRQ flags
  * @param[in]	irq The IRQ instance
- * @param[out]	flags Interrupt type flags
+ * @param[out]	flags Pointer to write interrupt type flags to
  * @return		EOK if success, error code otherwise
  */
 errno_t oal_irq_get_flags(oal_irq_t *irq, oal_irq_flags_t *flags);

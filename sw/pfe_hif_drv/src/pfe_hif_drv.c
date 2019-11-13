@@ -101,6 +101,7 @@
 #include "fifo.h"
 #include "pfe_hif.h"
 #include "pfe_hif_drv.h"
+#include "pfe_platform_cfg.h"
 
 #if !defined(TARGET_HW_LS1012A) && !defined(TARGET_HW_S32G)
 #define TARGET_HW_S32G /* TODO: DUE TO ECLIPSE ENVIRONMENT ONLY (to see active code) */
@@ -123,17 +124,34 @@
 #endif /* GLOBAL_CFG_CSUM_ALL_FRAMES */
 
 /**
+ * @def	    HIF_CFG_DETACH_TX_CONFIRMATION_JOB
  * @brief	If TRUE the TX confirmation procedure will be executed within deferred job.
  * 			If FALSE the TX confirmation will be executed with every pfe_hif_drv_client_xmit call.
  */
-#define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		FALSE
+#ifdef TARGET_OS_AUTOSAR
+    #define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		TRUE
+#else
+    #define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		FALSE
+#endif    
+
 
 /**
+ * @def	    HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION
  * @brief	If TRUE then TX confirmation job will be triggered as response to
  * 			TX interrupt/event. If FALSE the TX confirmation job will be triggered
  * 			from within the pfe_hif_drv_client_xmit call.
  */
-#define	HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION	FALSE
+#ifdef TARGET_OS_AUTOSAR
+    #define	HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION	TRUE
+#else
+    #define	HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION	FALSE
+#endif
+
+/**
+ * @brief	Maximum number of HIF clients. Right now it is set to cover all possible
+ * 			logical interfaces.
+ */
+#define HIF_CLIENTS_MAX							PFE_CFG_MAX_LOG_IFS
 
 #if ((FALSE == HIF_CFG_DETACH_TX_CONFIRMATION_JOB) && (TRUE == HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION))
 #error Impossible configuration
@@ -148,7 +166,7 @@
 #define PFE_MIN_PKT_SIZE	64U
 #define PFE_PKT_SIZE		(PFE_BUF_SIZE - PFE_PKT_HEADROOM) /* maximum ethernet packet */
 
-struct __pfe_hif_pkt_tag
+struct __attribute__((packed)) __pfe_hif_pkt_tag
 {
 	/*	When every transmitted frame needs to contain customized HIF TX header then
 	 	multiple HIF TX header instances are needed. For this purpose the TX metadata
@@ -158,7 +176,6 @@ struct __pfe_hif_pkt_tag
 	void *hif_tx_header_pa;
 #endif /* HIF_CFG_USE_DYNAMIC_TX_HEADERS */
 	pfe_hif_drv_client_t **client;
-	pfe_hif_drv_t *hif_drv;
 	addr_t data;
 	uint16_t len;
 	uint8_t q_no;
@@ -169,35 +186,6 @@ struct __pfe_hif_pkt_tag
 
 typedef struct __pfe_hif_pkt_tag pfe_hif_tx_meta_t;
 typedef struct __pfe_hif_pkt_tag pfe_hif_rx_meta_t;
-
-#if defined(TARGET_HW_S32G)
-/*	TODO: Remove macros but update pfe_ct_hif_rx_hdr_t and implement bitfields  there */
-#define HIF_HDR_CTRL_INJECT_FLAG		(1U << 0)
-#define HIF_HDR_CTRL_PTP_FLAG			(1U << 2)
-#define HIF_HDR_CTRL_PUNT_FLAG			(1U << 5)
-#define HIF_HDR_CTRL_RX_TIMESTAMP_FLAG	(1U << 6)
-
-#elif defined(TARGET_HW_LS1012A)
-typedef struct __hif_rx_hdr_tag
-{
-	uint8_t client_id;
-	uint8_t qNo;
-	uint16_t client_ctrl;
-	uint16_t client_ctrl1;
-} pfe_ct_hif_rx_hdr_t;
-
-typedef struct __hif_tx_hdr_tag
-{
-	uint8_t tx_port;
-	uint8_t rsvd1;
-	uint8_t rsvd2;
-	uint8_t rsvd3;
-	uint8_t rsvd4;
-	uint8_t rsvd5;
-} pfe_ct_hif_tx_hdr_t;
-#else
-#error Not target HW defined
-#endif /* TARGET_HW */
 
 struct client_rx_queue
 {
@@ -373,10 +361,7 @@ static void pfe_hif_drv_tx_job(void *arg)
 
 #if (TRUE == HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION)
 		/*	Enable TX interrupt */
-		if (unlikely(EOK != pfe_hif_chnl_tx_irq_unmask(hif_drv->channel)))
-		{
-			NXP_LOG_ERROR("IRQ unmasking failed\n");
-		}
+		pfe_hif_chnl_tx_irq_unmask(hif_drv->channel);
 #endif /* HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION */
 
 		/*	Trigger the TX DMA */
@@ -712,7 +697,6 @@ static uint32_t pfe_hif_drv_process_rx(pfe_hif_drv_t *hif_drv, uint32_t budget)
 		/*	Fill the RX metadata */
 		rx_metadata = (pfe_hif_rx_meta_t *)meta_va;
 		rx_metadata->client = hif_drv->cur_client;
-		rx_metadata->hif_drv = hif_drv;
 		rx_metadata->data = (addr_t)current_buffer_va;
 		rx_metadata->len = rx_len;
 		rx_metadata->flags.common = (pfe_hif_drv_common_flags_t)flags;
@@ -1137,12 +1121,9 @@ pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif_drv, pfe_l
 	/*
 		The HIF driver is using logical interface ID to match ingress packets with clients.
 		For this purpose an array is used where particular client instances are stored
-		and the HIF driver is addressing them via logical interface IDs received from PFE.
+		and the HIF driver is addressing them via logical interface IDs received from classifier.
 		Size of this array is limited so we only support limited number of clients and limited
 		range of logical interface IDs (0 - HIF_CLIENTS_MAX).
-
-		TODO: Make the lookup table big enough to include all possible logical interface IDs
-			  (the IDs are uint8_t so we need max 2k table...).
 	 */
 	if (pfe_log_if_get_id(log_if) >= HIF_CLIENTS_MAX)
 	{
@@ -1387,6 +1368,39 @@ pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uin
 }
 
 /**
+ * @brief		Check if there is another Rx packet in queue
+ * @param[in]	client Client instance
+ * @param[in]	queue RX queue number
+ * @retval		TRUE There is at least one Rx packet in Rx queue
+ * @retval		FALSE There is no Rx packet in Rx queue
+ *
+ * @warning		Intended to be called from a single client context only, i.e.
+ * 				from a single thread per client.
+ */
+bool_t pfe_hif_drv_client_has_rx_pkt(pfe_hif_drv_client_t *client, uint32_t queue)
+{
+	uint32_t fill_level;
+	errno_t err;
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == client))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	/*	No resource protection here */
+	err = fifo_get_fill_level(client->rx_q[queue].rx_fifo, &fill_level);
+	if (unlikely(EOK != err))
+	{
+		NXP_LOG_ERROR("Unable to get fifo fill level: %d\n", err);
+		fill_level = 0U;
+	}
+	return !!fill_level;
+}
+
+/**
  * @brief		Release packet
  * @param[in]	pkt The packet instance
  */
@@ -1398,10 +1412,16 @@ void pfe_hif_pkt_free(pfe_hif_pkt_t *pkt)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
+	
+	if (unlikely(NULL == pkt->client))
+	{
+		NXP_LOG_ERROR("Client is NULL\n");
+		return;
+	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
 	/*	Return buffer to the pool. Resource protection is embedded. */
-	pfe_hif_chnl_release_buf(pkt->hif_drv->channel, (void *)pkt->data);
+	pfe_hif_chnl_release_buf(pkt->client[0]->hif_drv->channel, (void *)pkt->data);
 }
 
 /**
@@ -1819,7 +1839,7 @@ errno_t pfe_hif_drv_client_xmit_ihc_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy
 
 	sg_list.size = 1;
 	sg_list.dst_phy = dst;
-	sg_list.flags.common = HIF_TX_IHC;
+	sg_list.flags.tx_flags = HIF_TX_IHC;
 	sg_list.items[0].data_pa = data_pa;
 	sg_list.items[0].data_va = data_va;
 	sg_list.items[0].len = len;
@@ -2071,10 +2091,7 @@ errno_t pfe_hif_drv_start(pfe_hif_drv_t *hif_drv)
 
 #if (TRUE == HIF_CFG_DETACH_TX_CONFIRMATION_JOB)
 #if (TRUE == HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION)
-	if (unlikely(EOK != pfe_hif_chnl_tx_irq_unmask(hif_drv->channel)))
-	{
-		NXP_LOG_ERROR("oal_irq_unmask() failed\n");
-	}
+	pfe_hif_chnl_tx_irq_unmask(hif_drv->channel);
 #endif /* HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION */
 #endif /* HIF_CFG_DETACH_TX_CONFIRMATION_JOB */
 
@@ -2251,10 +2268,7 @@ void pfe_hif_drv_stop(pfe_hif_drv_t *hif_drv)
 #if (TRUE == HIF_CFG_DETACH_TX_CONFIRMATION_JOB)
 #if (TRUE == HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION)
 		NXP_LOG_INFO("Disabling channel TX IRQ\n");
-		if (EOK != pfe_hif_chnl_tx_irq_mask(hif_drv->channel))
-		{
-			NXP_LOG_ERROR("oal_irq_mask() failed\n");
-		}
+		pfe_hif_chnl_tx_irq_mask(hif_drv->channel);
 #endif /* HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION */
 #endif /* HIF_CFG_DETACH_TX_CONFIRMATION_JOB */
 
@@ -2385,7 +2399,7 @@ bpool_t *pfe_hif_drv_get_rx_pool(pfe_hif_drv_t *hif_drv)
 		return NULL;
 	}
 #else
-    (void)hif_drv;
+	(void)hif_drv;
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
 	return NULL;

@@ -34,14 +34,23 @@
  * 
  * @file		pfe_gpi_csr.h
  * @brief		The GPI module registers definition file (s32g).
- * @details		
- *
+ * @details		Applicable for IP versions listed below. Also applicable
+ * 				for ETGPI and HGPI except IGQOS registers.
  */
 
 #ifndef PFE_GPI_CSR_H_
 #define PFE_GPI_CSR_H_
 
 #include "pfe_gpi.h"
+
+#ifndef PFE_CBUS_H_
+#error Missing cbus.h
+#endif /* PFE_CBUS_H_ */
+
+/*	Supported IPs. Defines are validated within pfe_cbus.h. */
+#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#error Unsupported IP version
+#endif /* GLOBAL_CFG_IP_VERSION */
 
 #define GPI_VERSION							0x000U
 #define GPI_CTRL							0x004U
@@ -67,8 +76,6 @@
 #define GPI_DDR_SEC_BUF_DATA_OFFSET			0x064U
 #define GPI_CSR_TOE_CHKSUM_EN				0x068U
 #define GPI_OVERRUN_DROPCNT					0x06cU
-/* #define GPI_CSR_RX_CNT					0x07cU */
-/* #define GPI_CSR_TX_CNT					0x080U */
 #define GPI_TX_DBUG_REG1					0x070U
 #define GPI_TX_DBUG_REG2					0x074U
 #define GPI_TX_DBUG_REG3					0x078U
@@ -133,6 +140,7 @@
 #define CSR_IGQOS_STAT_LMEM_QUEUE_DROP_CNT	0x1b0U
 #define CSR_IGQOS_STAT_DMEM_QUEUE_DROP_CNT	0x1b4U
 #define CSR_IGQOS_STAT_RXF_QUEUE_DROP_CNT	0x1b8U
+#define CSR_IGQOS_STAT_SHAPER0_DROP_CNT		0x1bcU
 #define CSR_IGQOS_STAT_SHAPER1_DROP_CNT		0x1c0U
 #define CSR_IGQOS_STAT_MANAGED_PACKET_CNT	0x1c4U
 #define CSR_IGQOS_STAT_UNMANAGED_PACKET_CNT	0x1c8U
