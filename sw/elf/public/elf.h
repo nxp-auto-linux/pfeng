@@ -67,9 +67,6 @@
  2) needed interfaces from external units
  3) internal and external interfaces from this unit
 ==================================================================================================*/  
-#include <stdint.h>
-#include <stdbool.h>
-
 #include "oal.h"
 
 /*==================================================================================================
@@ -244,7 +241,7 @@ typedef struct
     uint64_t   sh_entsize;
 } Elf64_Shdr;
 
-typedef struct
+typedef struct __attribute__((packed))
 {
     union
     {

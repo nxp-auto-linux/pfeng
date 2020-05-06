@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2019 NXP
+ *  Copyright 2017-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -43,6 +43,7 @@
  *
  */
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "linked_list.h"
 #include "fci_rt_db.h"
@@ -60,13 +61,13 @@ static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, fci_rt_db_entry_t *entr
 {
 	bool_t match = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == db) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	switch (db->cur_crit)
 	{
@@ -122,13 +123,13 @@ static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, fci_rt_db_entry_t *entr
  */
 void fci_rt_db_init(fci_rt_db_t *db)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == db))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	LLIST_Init(&db->theList);
 	db->cur_item = db->theList.prNext;
@@ -152,16 +153,16 @@ errno_t fci_rt_db_add(fci_rt_db_t *db,  pfe_ip_addr_t *dst_ip, pfe_mac_addr_t *d
 	fci_rt_db_entry_t *new_entry;
 	bool_t is_new = false;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == db) || (NULL == dst_ip) || (NULL == dst_mac) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	/*	Check duplicates */
-	new_entry = fci_rt_db_get_first(db, RT_DB_CRIT_BY_IP, (void *)dst_ip);
+	/*	Check duplicates by route ID */
+	new_entry = fci_rt_db_get_first(db, RT_DB_CRIT_BY_ID, (void *)&id);
 	if (NULL == new_entry)
 	{
 		new_entry = oal_mm_malloc(sizeof(fci_rt_db_entry_t));
@@ -211,13 +212,13 @@ errno_t fci_rt_db_add(fci_rt_db_t *db,  pfe_ip_addr_t *dst_ip, pfe_mac_addr_t *d
  */
 errno_t fci_rt_db_remove(fci_rt_db_t *db, fci_rt_db_entry_t *entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == db) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (&entry->list_member == db->cur_item)
 	{
@@ -248,7 +249,7 @@ fci_rt_db_entry_t *fci_rt_db_get_first(fci_rt_db_t *db, fci_rt_db_get_criterion_
 	LLIST_t *item;
 	bool_t match = false;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == db))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -261,7 +262,7 @@ fci_rt_db_entry_t *fci_rt_db_get_first(fci_rt_db_t *db, fci_rt_db_get_criterion_
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Remember criterion and argument for possible subsequent fci_rt_db_get_next() calls */
 	db->cur_crit = crit;
@@ -354,13 +355,13 @@ fci_rt_db_entry_t *fci_rt_db_get_next(fci_rt_db_t *db)
 	fci_rt_db_entry_t *entry;
 	bool_t match = false;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == db))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (db->cur_item == &db->theList)
 	{
@@ -408,13 +409,13 @@ errno_t fci_rt_db_drop_all(fci_rt_db_t *db)
 	LLIST_t *item, *aux;
 	fci_rt_db_entry_t *entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == db))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	LLIST_ForEachRemovable(item, aux, &db->theList)
 	{

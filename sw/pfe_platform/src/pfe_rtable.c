@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -85,10 +85,7 @@
  * @endinternal
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 #include "linked_list.h"
@@ -96,7 +93,6 @@
 #include "fifo.h"
 #include "pfe_platform_cfg.h"
 #include "pfe_cbus.h"
-#include "pfe_mmap.h"
 #include "pfe_rtable.h"
 #include "pfe_class.h"
 
@@ -268,13 +264,13 @@ static void pfe_rtable_invalidate(pfe_rtable_t *rtable)
 	uint32_t ii;
 	pfe_ct_rtable_entry_t *table;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == rtable))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	table = (pfe_ct_rtable_entry_t *)rtable->htable_base_va;
 
@@ -311,13 +307,13 @@ static uint32_t pfe_rtable_entry_get_hash(pfe_rtable_entry_t *entry, pfe_rtable_
 	uint32_t sport = 0U;
 	uint32_t ip_addr;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (htype & IPV4_5T)
 	{
@@ -454,13 +450,13 @@ static uint32_t pfe_rtable_entry_get_hash(pfe_rtable_entry_t *entry, pfe_rtable_
  */
 static bool_t pfe_rtable_phys_entry_is_htable(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == phys_entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (((void *)phys_entry >= rtable->htable_base_va) && ((void *)phys_entry < rtable->htable_end_va))
 	{
@@ -488,13 +484,13 @@ static bool_t pfe_rtable_phys_entry_is_htable(pfe_rtable_t *rtable, pfe_ct_rtabl
  */
 static bool_t pfe_rtable_phys_entry_is_pool(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == phys_entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (((void *)phys_entry >= rtable->pool_base_va) && ((void *)phys_entry < rtable->pool_end_va))
 	{
@@ -523,13 +519,13 @@ static pfe_ct_rtable_entry_t *pfe_rtable_phys_entry_get_pa(pfe_rtable_t *rtable,
 {
 	pfe_ct_rtable_entry_t *pa = NULL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == phys_entry_va)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (TRUE == pfe_rtable_phys_entry_is_htable(rtable, phys_entry_va))
 	{
@@ -557,13 +553,13 @@ static pfe_ct_rtable_entry_t *pfe_rtable_phys_entry_get_va(pfe_rtable_t *rtable,
 {
 	pfe_ct_rtable_entry_t *va = NULL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == phys_entry_pa)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (TRUE == pfe_rtable_phys_entry_is_htable(rtable, phys_entry_pa))
 	{
@@ -663,13 +659,13 @@ errno_t pfe_rtable_entry_set_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
 {
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == tuple)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	ret = pfe_rtable_entry_set_sip(entry, &tuple->src_ip);
 	if (EOK != ret)
@@ -699,13 +695,13 @@ errno_t pfe_rtable_entry_set_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
  */
 errno_t pfe_rtable_entry_set_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == ip_addr)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (pfe_ip_addr_is_ipv4(ip_addr))
 	{
@@ -747,13 +743,13 @@ void pfe_rtable_entry_get_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr)
 {
 	pfe_5_tuple_t tuple;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == ip_addr)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != pfe_rtable_entry_to_5t(entry, &tuple))
 	{
@@ -772,13 +768,13 @@ void pfe_rtable_entry_get_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr)
  */
 errno_t pfe_rtable_entry_set_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == ip_addr)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (pfe_ip_addr_is_ipv4(ip_addr))
 	{
@@ -820,13 +816,13 @@ void pfe_rtable_entry_get_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr)
 {
 	pfe_5_tuple_t tuple;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == ip_addr)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != pfe_rtable_entry_to_5t(entry, &tuple))
 	{
@@ -843,13 +839,13 @@ void pfe_rtable_entry_get_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr)
  */
 void pfe_rtable_entry_set_sport(pfe_rtable_entry_t *entry, uint16_t sport)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->sport = oal_htons(sport);
 }
@@ -861,13 +857,13 @@ void pfe_rtable_entry_set_sport(pfe_rtable_entry_t *entry, uint16_t sport)
  */
 uint16_t pfe_rtable_entry_get_sport(pfe_rtable_entry_t *entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return oal_ntohs(entry->phys_entry->sport);
 }
@@ -879,13 +875,13 @@ uint16_t pfe_rtable_entry_get_sport(pfe_rtable_entry_t *entry)
  */
 void pfe_rtable_entry_set_dport(pfe_rtable_entry_t *entry, uint16_t dport)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->dport = oal_htons(dport);
 }
@@ -897,13 +893,13 @@ void pfe_rtable_entry_set_dport(pfe_rtable_entry_t *entry, uint16_t dport)
  */
 uint16_t pfe_rtable_entry_get_dport(pfe_rtable_entry_t *entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return oal_ntohs(entry->phys_entry->dport);
 }
@@ -915,13 +911,13 @@ uint16_t pfe_rtable_entry_get_dport(pfe_rtable_entry_t *entry)
  */
 void pfe_rtable_entry_set_proto(pfe_rtable_entry_t *entry, uint8_t proto)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->proto = proto;
 }
@@ -933,13 +929,13 @@ void pfe_rtable_entry_set_proto(pfe_rtable_entry_t *entry, uint8_t proto)
  */
 uint8_t pfe_rtable_entry_get_proto(pfe_rtable_entry_t *entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return entry->phys_entry->proto;
 }
@@ -956,13 +952,13 @@ errno_t pfe_rtable_entry_set_dstif(pfe_rtable_entry_t *entry, pfe_phy_if_t *ifac
 {
 	pfe_ct_phy_if_id_t if_id = PFE_PHY_IF_ID_INVALID;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if_id = pfe_phy_if_get_id(iface);
 
@@ -988,13 +984,13 @@ errno_t pfe_rtable_entry_set_dstif(pfe_rtable_entry_t *entry, pfe_phy_if_t *ifac
  */
 errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *output_sip)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == output_sip)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if ((IPV4 == entry->phys_entry->flag_ipv6) && (!pfe_ip_addr_is_ipv4(output_sip)))
 	{
@@ -1026,13 +1022,13 @@ errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
  */
 errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *output_dip)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == output_dip)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if ((IPV4 == entry->phys_entry->flag_ipv6) && (!pfe_ip_addr_is_ipv4(output_dip)))
 	{
@@ -1064,13 +1060,13 @@ errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
  */
 void pfe_rtable_entry_set_out_sport(pfe_rtable_entry_t *entry, uint16_t output_sport)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->args.sport = oal_htons(output_sport);
 }
@@ -1086,13 +1082,13 @@ void pfe_rtable_entry_set_out_sport(pfe_rtable_entry_t *entry, uint16_t output_s
  */
 void pfe_rtable_entry_set_out_dport(pfe_rtable_entry_t *entry, uint16_t output_dport)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->args.dport = oal_htons(output_dport);
 }
@@ -1106,13 +1102,13 @@ void pfe_rtable_entry_set_out_dport(pfe_rtable_entry_t *entry, uint16_t output_d
  */
 void pfe_rtable_entry_set_out_smac(pfe_rtable_entry_t *entry, pfe_mac_addr_t mac)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	memcpy(entry->phys_entry->args.smac, mac, sizeof(pfe_mac_addr_t));
 }
@@ -1126,13 +1122,13 @@ void pfe_rtable_entry_set_out_smac(pfe_rtable_entry_t *entry, pfe_mac_addr_t mac
  */
 void pfe_rtable_entry_set_out_dmac(pfe_rtable_entry_t *entry, pfe_mac_addr_t mac)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	memcpy(entry->phys_entry->args.dmac, mac, sizeof(pfe_mac_addr_t));
 }
@@ -1146,13 +1142,13 @@ void pfe_rtable_entry_set_out_dmac(pfe_rtable_entry_t *entry, pfe_mac_addr_t mac
  */
 void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->args.vlan = oal_htons(vlan);
 }
@@ -1166,13 +1162,13 @@ void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan)
  */
 void pfe_rtable_entry_set_out_inner_vlan(pfe_rtable_entry_t *entry, uint16_t vlan)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->args.vlan1 = oal_htons(vlan);
 }
@@ -1186,13 +1182,13 @@ void pfe_rtable_entry_set_out_inner_vlan(pfe_rtable_entry_t *entry, uint16_t vla
  */
 void pfe_rtable_entry_set_out_pppoe_sid(pfe_rtable_entry_t *entry, uint16_t sid)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->args.pppoe_sid = oal_htons(sid);
 }
@@ -1209,13 +1205,13 @@ errno_t pfe_rtable_entry_set_action_flags(pfe_rtable_entry_t *entry, pfe_ct_rout
 {
 	static const uint8_t zero_mac[6] = {0};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (0 != (flags & RT_ACT_ADD_ETH_HDR))
 	{
@@ -1355,13 +1351,13 @@ errno_t pfe_rtable_entry_set_action_flags(pfe_rtable_entry_t *entry, pfe_ct_rout
  */
 pfe_ct_route_actions_t pfe_rtable_entry_get_action_flags(pfe_rtable_entry_t *entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return RT_ACT_INVALID;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return (pfe_ct_route_actions_t)oal_ntohl((uint32_t)(entry->phys_entry->actions));
 }
@@ -1375,13 +1371,13 @@ void pfe_rtable_entry_set_timeout(pfe_rtable_entry_t *entry, uint32_t timeout)
 {
 	uint32_t elapsed;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (NULL != entry->rtable)
 	{
@@ -1423,13 +1419,13 @@ void pfe_rtable_entry_set_timeout(pfe_rtable_entry_t *entry, uint32_t timeout)
  */
 void pfe_rtable_entry_set_route_id(pfe_rtable_entry_t *entry, uint32_t route_id)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->route_id = route_id;
 	entry->route_id_valid = TRUE;
@@ -1444,13 +1440,13 @@ void pfe_rtable_entry_set_route_id(pfe_rtable_entry_t *entry, uint32_t route_id)
  */
 errno_t pfe_rtable_entry_get_route_id(pfe_rtable_entry_t *entry, uint32_t *route_id)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == route_id)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (TRUE == entry->route_id_valid)
 	{
@@ -1474,13 +1470,13 @@ errno_t pfe_rtable_entry_get_route_id(pfe_rtable_entry_t *entry, uint32_t *route
  */
 void pfe_rtable_entry_set_callback(pfe_rtable_entry_t *entry, pfe_rtable_callback_t cbk, void *arg)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->callback = cbk;
 	entry->callback_arg = arg;
@@ -1493,13 +1489,13 @@ void pfe_rtable_entry_set_callback(pfe_rtable_entry_t *entry, pfe_rtable_callbac
  */
 void pfe_rtable_entry_set_refptr(pfe_rtable_entry_t *entry, void *refptr)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->refptr = refptr;
 }
@@ -1511,13 +1507,13 @@ void pfe_rtable_entry_set_refptr(pfe_rtable_entry_t *entry, void *refptr)
  */
 void *pfe_rtable_entry_get_refptr(pfe_rtable_entry_t *entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return entry->refptr;
 }
@@ -1532,13 +1528,13 @@ void *pfe_rtable_entry_get_refptr(pfe_rtable_entry_t *entry)
  */
 void pfe_rtable_entry_set_child(pfe_rtable_entry_t *entry, pfe_rtable_entry_t *child)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->child = child;
 }
@@ -1550,13 +1546,13 @@ void pfe_rtable_entry_set_child(pfe_rtable_entry_t *entry, pfe_rtable_entry_t *c
  */
 pfe_rtable_entry_t *pfe_rtable_entry_get_child(pfe_rtable_entry_t *entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return entry->child;
 }
@@ -1569,13 +1565,13 @@ pfe_rtable_entry_t *pfe_rtable_entry_get_child(pfe_rtable_entry_t *entry)
  */
 static bool_t pfe_rtable_entry_is_in_table(pfe_rtable_entry_t *entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (NULL != entry->rtable)
 	{
@@ -1604,13 +1600,13 @@ static bool_t pfe_rtable_entry_is_duplicate(pfe_rtable_t *rtable, pfe_rtable_ent
 	bool_t match = FALSE;
 	LLIST_t *item;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Check for duplicates */
 	if (EOK != pfe_rtable_entry_to_5t(entry, &arg.five_tuple))
@@ -1663,13 +1659,13 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 	uint32_t valid_tmp;
 #endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Protect table accesses */
 	oal_mutex_lock(rtable->lock);
@@ -1816,13 +1812,13 @@ errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 {
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Protect table accesses */
 	oal_mutex_lock(rtable->lock);
@@ -1846,13 +1842,13 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 {
 	uint32_t valid_tmp;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (FALSE == pfe_rtable_entry_is_in_table(entry))
 	{
@@ -2025,13 +2021,13 @@ static void rtable_do_timeouts(pfe_rtable_t *rtable)
 	uint8_t flags;
 	errno_t err;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == rtable))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	oal_mutex_lock(rtable->lock);
 
@@ -2108,13 +2104,13 @@ static void *rtable_worker_func(void *arg)
 	errno_t err;
 	oal_mbox_msg_t msg;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == rtable))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	while (2)
 	{
@@ -2164,13 +2160,13 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, void *htable_base_va, uint32
 	pfe_ct_rtable_entry_t *table_va;
 	uint32_t ii;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == htable_base_va) || (NULL == pool_base_va) || (NULL == class)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	rtable = oal_mm_malloc(sizeof(pfe_rtable_t));
 
@@ -2198,13 +2194,13 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, void *htable_base_va, uint32
 
 		/*	Store properties */
 		rtable->htable_base_va = htable_base_va;
-		rtable->htable_base_pa = oal_mm_virt_to_phys(htable_base_va);
+		rtable->htable_base_pa = oal_mm_virt_to_phys_contig(htable_base_va);
 		rtable->htable_size = htable_size;
 		rtable->htable_end_va = rtable->htable_base_va + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
 		rtable->htable_end_pa = rtable->htable_base_pa + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
 
 		rtable->pool_base_va = pool_base_va;
-		rtable->pool_base_pa = oal_mm_virt_to_phys(pool_base_va);
+		rtable->pool_base_pa = rtable->htable_base_pa + (pool_base_va - htable_base_va);
 		rtable->pool_size = pool_size;
 		rtable->pool_end_va = rtable->pool_base_va + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
 		rtable->pool_end_pa = rtable->pool_base_pa + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
@@ -2378,13 +2374,13 @@ uint32_t pfe_rtable_get_entry_size(void)
  */
 errno_t pfe_rtable_entry_to_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == tuple)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Clean the destination */
 	memset(tuple, 0, sizeof(pfe_5_tuple_t));
@@ -2424,13 +2420,13 @@ errno_t pfe_rtable_entry_to_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
  */
 errno_t pfe_rtable_entry_to_5t_out(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == tuple)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Clean the destination */
 	memset(tuple, 0, sizeof(pfe_5_tuple_t));
@@ -2467,13 +2463,13 @@ static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, pfe_rt
 	bool_t match = FALSE;
 	pfe_5_tuple_t five_tuple;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == arg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	switch (crit)
 	{
@@ -2548,13 +2544,13 @@ pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_cr
 	pfe_rtable_entry_t *entry;
 	bool_t match = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == arg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Remember criterion and argument for possible subsequent pfe_rtable_get_next() calls */
 	rtable->cur_crit = crit;
@@ -2642,13 +2638,13 @@ pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 	pfe_rtable_entry_t *entry;
 	bool_t match = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == rtable))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (rtable->cur_item == &rtable->active_entries)
 	{

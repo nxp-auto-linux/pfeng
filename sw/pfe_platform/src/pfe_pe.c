@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -40,11 +40,7 @@
  *
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-#include <errno.h>
-
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 
@@ -53,7 +49,6 @@
 #include "elf.h"
 #include "pfe_cbus.h"
 #include "pfe_pe.h"
-#include "pfe_mmap.h"
 
 #define BYTES_TO_4B_ALIGNMENT(x)	(4U - ((x) & 0x3U))
 
@@ -104,6 +99,8 @@ struct __pfe_pe_tag
 
 	/*	MMap */
 	pfe_ct_pe_mmap_t *mmap_data;		/* Buffer containing the memory map data */
+	/* Mutex */
+	oal_mutex_t lock_mutex;				/* Locking PE  API mutex */
 };
 
 typedef enum
@@ -112,14 +109,13 @@ typedef enum
 	PFE_PE_IMEM
 } pfe_pe_mem_t;
 
-static errno_t pfe_pe_mem_lock(pfe_pe_t *pe);
-static errno_t pfe_pe_mem_unlock(pfe_pe_t *pe);
 static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len);
 static void pfe_pe_memcpy_from_host_to_imem_32_nolock(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len);
 static void pfe_pe_memcpy_from_dmem_to_host_32_nolock(pfe_pe_t *pe, void *dst, addr_t src, uint32_t len);
 static bool_t pfe_pe_is_active(pfe_pe_t *pe);
 static void pfe_pe_memcpy_from_imem_to_host_32_nolock(pfe_pe_t *pe, void *dst, addr_t src, uint32_t len);
 static void pfe_pe_mem_memset_nolock(pfe_pe_t *pe, pfe_pe_mem_t mem, uint8_t val, addr_t addr, uint32_t len);
+static errno_t pfe_pe_set_number(pfe_pe_t *pe);
 
 /**
  * @brief		Query if PE is active
@@ -161,7 +157,7 @@ static bool_t pfe_pe_is_active(pfe_pe_t *pe)
  * @param[in]	pe The PE instance
  * @return		EOK if success, error code otherwise
  */
-static errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
+errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 {
 	PFE_PTR(pfe_ct_pe_misc_control_t) misc_dmem;
 	pfe_ct_pe_misc_control_t misc_ctrl = {0};
@@ -177,6 +173,12 @@ static errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 	{
 		return EINVAL;
 	}
+	
+	if (EOK != oal_mutex_lock(&pe->lock_mutex))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+		return EPERM;
+	}
 
 	/*	Read the misc control structure from DMEM */
 	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
@@ -191,7 +193,10 @@ static errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 		{
 			NXP_LOG_ERROR("Duplicate stop request\n");
 		}
-
+		if (EOK != oal_mutex_unlock(&pe->lock_mutex))
+		{
+			NXP_LOG_ERROR("mutex unlock failed\n");
+		}
 		return EPERM;
 	}
 	else
@@ -208,6 +213,10 @@ static errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 	if (FALSE == pfe_pe_is_active(pe))
 	{
 		/*	Access to PE memories is considered to be safe */
+		if (EOK != oal_mutex_unlock(&pe->lock_mutex))
+		{
+			NXP_LOG_ERROR("mutex unlock failed\n");
+		}
 		return EOK;
 	}
 
@@ -223,6 +232,10 @@ static errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 
 			/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
 			pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
+			if (EOK != oal_mutex_unlock(&pe->lock_mutex))
+			{
+				NXP_LOG_ERROR("mutex unlock failed\n");
+			}
 			return ETIME;
 		}
 
@@ -231,7 +244,10 @@ static errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 		pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
 
 	} while(0U == misc_ctrl.graceful_stop_confirmation);
-
+	if (EOK != oal_mutex_unlock(&pe->lock_mutex))
+	{
+		NXP_LOG_ERROR("mutex unlock failed\n");
+	}
 	return EOK;
 }
 
@@ -242,7 +258,7 @@ static errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
  * @param[in]	pe The PE instance
  * @return		EOK if success, error code otherwise
  */
-static errno_t pfe_pe_mem_unlock(pfe_pe_t *pe)
+errno_t pfe_pe_mem_unlock(pfe_pe_t *pe)
 {
 	PFE_PTR(pfe_ct_pe_misc_control_t) misc_dmem;
 	pfe_ct_pe_misc_control_t misc_ctrl = {0};
@@ -257,13 +273,20 @@ static errno_t pfe_pe_mem_unlock(pfe_pe_t *pe)
 	{
 		return EINVAL;
 	}
-
+	if (EOK != oal_mutex_lock(&pe->lock_mutex))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+		return EPERM;
+	}
 	/*	Cancel the stop request */
 	misc_ctrl.graceful_stop_request = 0U;
 
 	/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
 	pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
-
+	if (EOK != oal_mutex_unlock(&pe->lock_mutex))
+	{
+		NXP_LOG_ERROR("mutex unlock failed\n");
+	}
 	return EOK;
 }
 
@@ -283,13 +306,13 @@ static uint32_t pfe_pe_mem_read(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t addr, uin
 	uint32_t memsel;
 	uint8_t offset;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (unlikely(addr & 0x3U))
 	{
@@ -391,13 +414,13 @@ static void pfe_pe_mem_write(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_
 	uint32_t memsel;
 	uint32_t offset;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (unlikely(addr & 0x3U))
 	{
@@ -561,13 +584,13 @@ static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(pfe_pe_t *pe, addr_t dst, 
 	/* Avoid void pointer arithmetics */
 	const uint8_t *src_byteptr = src;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (dst & 0x3U)
 	{
@@ -639,13 +662,13 @@ static void pfe_pe_memcpy_from_dmem_to_host_32_nolock(pfe_pe_t *pe, void *dst, a
 	/* Avoid void pointer arithmetics */
 	uint8_t *dst_byteptr = dst;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (src & 0x3U)
 	{
@@ -717,13 +740,13 @@ static void pfe_pe_memcpy_from_host_to_imem_32_nolock(pfe_pe_t *pe, addr_t dst, 
 	/* Avoid void pointer arithmetics */
 	const uint8_t *src_byteptr = src;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (dst & 0x3U)
 	{
@@ -795,13 +818,13 @@ static void pfe_pe_memcpy_from_imem_to_host_32_nolock(pfe_pe_t *pe, void *dst, a
 	/* Avoid void pointer arithmetics */
 	uint8_t *dst_byteptr = dst;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (src & 0x3U)
 	{
@@ -870,13 +893,13 @@ void pfe_pe_memcpy_from_imem_to_host_32(pfe_pe_t *pe, void *dst, addr_t src, uin
 static errno_t pfe_pe_load_dmem_section(pfe_pe_t *pe, void *sdata, addr_t addr, addr_t size, uint32_t type)
 {
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == sdata)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (((addr_t)(sdata) & 0x3U) != (addr & 0x3U))
 	{
@@ -953,13 +976,13 @@ static errno_t pfe_pe_load_dmem_section(pfe_pe_t *pe, void *sdata, addr_t addr, 
 static errno_t pfe_pe_load_imem_section(pfe_pe_t *pe, const void *data, addr_t addr, addr_t size, uint32_t type)
 {
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == data)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Check alignment first */
 	if (((addr_t)(data) & 0x3U) != (addr & 0x1U))
@@ -1034,13 +1057,13 @@ static bool_t pfe_pe_is_dmem(pfe_pe_t *pe, addr_t addr, uint32_t size)
 {
 	addr_t reg_end;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	reg_end = pe->dmem_elf_base_va + pe->dmem_size;
 
@@ -1065,13 +1088,13 @@ static bool_t pfe_pe_is_imem(pfe_pe_t *pe, addr_t addr, uint32_t size)
 {
 	addr_t reg_end;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	reg_end = pe->imem_elf_base_va + pe->imem_size;
 
@@ -1096,13 +1119,13 @@ static bool_t pfe_pe_is_lmem(pfe_pe_t *pe, addr_t addr, uint32_t size)
 {
 	addr_t reg_end;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	reg_end = pe->lmem_base_addr_pa + pe->lmem_size;
 
@@ -1128,14 +1151,14 @@ static bool_t pfe_pe_is_lmem(pfe_pe_t *pe, addr_t addr, uint32_t size)
 static errno_t pfe_pe_load_elf_section(pfe_pe_t *pe, void *sdata, addr_t load_addr, addr_t size, uint32_t type)
 {
 	errno_t ret_val;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == sdata)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		ret_val = EINVAL;
 	}
 	else
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (pfe_pe_is_dmem(pe, load_addr, size))
 	{
@@ -1155,7 +1178,7 @@ static errno_t pfe_pe_load_elf_section(pfe_pe_t *pe, void *sdata, addr_t load_ad
 	}
 	else
 	{
-		NXP_LOG_ERROR("Unsupported memory range 0x%08x\n", load_addr);
+		NXP_LOG_ERROR("Unsupported memory range %p\n", (void *)load_addr);
 		ret_val = EINVAL;
 	}
 
@@ -1211,13 +1234,13 @@ pfe_pe_t * pfe_pe_create(void *cbus_base_va, pfe_pe_type_t type, uint8_t id)
 {
 	pfe_pe_t *pe = NULL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == cbus_base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (type != PE_TYPE_INVALID && type < PE_TYPE_MAX)
 	{
@@ -1231,6 +1254,12 @@ pfe_pe_t * pfe_pe_create(void *cbus_base_va, pfe_pe_type_t type, uint8_t id)
 			pe->id = id;
 			pe->fw_err_section = NULL;
 			pe->mmap_data = NULL;
+			if(EOK != oal_mutex_init(&pe->lock_mutex))
+			{
+				NXP_LOG_DEBUG("Mutex init failed\n");
+				oal_mm_free(pe);
+				pe = NULL; 
+			}
 
 			if (FALSE == mem_access_lock_init)
 			{
@@ -1241,6 +1270,7 @@ pfe_pe_t * pfe_pe_create(void *cbus_base_va, pfe_pe_type_t type, uint8_t id)
 				else
 				{
 					NXP_LOG_DEBUG("Mutex (mem_access_lock) init failed\n");
+					oal_mutex_destroy(&pe->lock_mutex);
 					oal_mm_free(pe);
 					pe = NULL;
 				}
@@ -1262,18 +1292,19 @@ pfe_pe_t * pfe_pe_create(void *cbus_base_va, pfe_pe_type_t type, uint8_t id)
  */
 void pfe_pe_set_dmem(pfe_pe_t *pe, addr_t elf_base, addr_t len)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pe->dmem_elf_base_va = elf_base;
 	pe->dmem_size = len;
 
 	/*	Initialize DMEM including packet buffer */
+	NXP_LOG_DEBUG("PE %d: Initializing DMEM (%"PRINTADDR_T" bytes)\n", pe->id, len);
 	NXP_LOG_DEBUG("CLASS PE %d: Initializing DMEM (%"PRINTADDR_T" bytes)\n", pe->id, len);
 	pfe_pe_mem_memset_nolock(pe, PFE_PE_DMEM, 0U, 0U, len);
 }
@@ -1289,13 +1320,13 @@ void pfe_pe_set_dmem(pfe_pe_t *pe, addr_t elf_base, addr_t len)
  */
 void pfe_pe_set_imem(pfe_pe_t *pe, addr_t elf_base, addr_t len)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pe->imem_elf_base_va = elf_base;
 	pe->imem_size = len;
@@ -1315,13 +1346,13 @@ void pfe_pe_set_imem(pfe_pe_t *pe, addr_t elf_base, addr_t len)
  */
 void pfe_pe_set_lmem(pfe_pe_t *pe, addr_t elf_base, addr_t len)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pe->lmem_base_addr_pa = elf_base;
 	pe->lmem_size = len;
@@ -1336,13 +1367,13 @@ void pfe_pe_set_lmem(pfe_pe_t *pe, addr_t elf_base, addr_t len)
  */
 void pfe_pe_set_ddr(pfe_pe_t *pe, void *base_pa, void *base_va, addr_t len)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pe->ddr_base_addr_pa = base_pa;
 	pe->ddr_base_addr_va = base_va;
@@ -1361,19 +1392,43 @@ void pfe_pe_set_ddr(pfe_pe_t *pe, void *base_pa, void *base_va, addr_t len)
  */
 void pfe_pe_set_iaccess(pfe_pe_t *pe, uint32_t wdata_reg, uint32_t rdata_reg, uint32_t addr_reg)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pe->mem_access_addr = (void *)((addr_t)pe->cbus_base_va + addr_reg);
 	pe->mem_access_rdata = (void *)((addr_t)pe->cbus_base_va + rdata_reg);
 	pe->mem_access_wdata = (void *)((addr_t)pe->cbus_base_va + wdata_reg);
 }
 
+/**
+ * @brief Sets the PE ID in the FW
+ * @param[in] pe The PE which ID shall be set in the FW
+ * @return EOK if success, error code otherwise
+ */
+errno_t pfe_pe_set_number(pfe_pe_t *pe)
+{
+	if(NULL == pe->mmap_data)
+	{
+		NXP_LOG_ERROR("Memory map is not known\n");
+		return ENOENT;
+	}
+
+	pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, oal_ntohl(pe->mmap_data->pe_id), &pe->id, sizeof(uint8_t));
+
+	return EOK;
+}
+
+static void print_fw_issue(pfe_ct_pe_mmap_t *fw_mmap)
+{
+	NXP_LOG_ERROR("Unsupported CLASS firmware detected: Found revision %d.%d.%d (fwAPI:%s), required fwAPI %s\n",
+			fw_mmap->version.major, fw_mmap->version.minor, fw_mmap->version.patch, fw_mmap->version.cthdr,
+			TOSTRING(PFE_CFG_PFE_CT_H_MD5));
+}
 
 /**
  * @brief		Upload firmware into PEs memory
@@ -1392,13 +1447,13 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 	Elf32_Shdr *shdr = NULL;
 	pfe_ct_pe_mmap_t *tmp_mmap = NULL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == elf)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Attempt to get section containing firmware memory map data */
 	if (TRUE == ELF_SectFindName(elf_file, ".pfe_pe_mmap", &section_idx, NULL, NULL))
@@ -1414,12 +1469,12 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 		else
 		{
             /*  Firmware version check */
-			static const char_t mmap_version_str[] = TOSTRING(PFE_CT_H_MD5);
+			static const char_t mmap_version_str[] = TOSTRING(PFE_CFG_PFE_CT_H_MD5);
 			memcpy(tmp_mmap, elf_file->pvData + shdr->sh_offset, sizeof(pfe_ct_pe_mmap_t));
 			if(0 != strcmp(mmap_version_str, tmp_mmap->version.cthdr))
 			{
 				ret = EINVAL;
-				NXP_LOG_ERROR("Wrong pfe_ct.h file used\ngot      \"%s\"\nexpected \"%s\"\n", tmp_mmap->version.cthdr, mmap_version_str);
+				print_fw_issue(tmp_mmap);
 				goto free_and_fail;
 			}
 			NXP_LOG_INFO("pfe_ct.h file version\"%s\"\n",mmap_version_str);
@@ -1497,7 +1552,8 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 	   FW will also start from 0 */
 	pe->last_error_write_index = 0U;
 	pe->error_record_addr = 0U;
-
+	/* Set the PE number in the FW */
+	pfe_pe_set_number(pe);
 	return EOK;
 
 free_and_fail:
@@ -1527,13 +1583,13 @@ free_and_fail:
  */
 errno_t pfe_pe_get_mmap(pfe_pe_t *pe, pfe_ct_pe_mmap_t *mmap)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == mmap)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (NULL != pe->mmap_data)
 	{
@@ -1566,7 +1622,7 @@ void pfe_pe_destroy(pfe_pe_t *pe)
 			pe->fw_err_section = NULL;
 			pe->fw_err_section_size = 0U;
 		}
-
+		oal_mutex_destroy(&pe->lock_mutex);
 		oal_mm_free(pe);
 	}
 }
@@ -1627,8 +1683,10 @@ errno_t pfe_pe_get_fw_errors(pfe_pe_t *pe)
 			pfe_ct_error_t *error_ptr;
 			char_t *error_str;
 			char_t *error_file;
+            uint32_t error_val;
 
 			error_addr = oal_ntohl(error_record.errors[(read_start + i) & (FP_ERROR_RECORD_SIZE - 1U)]);
+            error_val = oal_ntohl(error_record.values[(read_start + i) & (FP_ERROR_RECORD_SIZE - 1U)]);
 			if(error_addr > pe->fw_err_section_size)
 			{
 				NXP_LOG_ERROR("Invalid error address from FW 0x%x\n", error_addr);
@@ -1649,7 +1707,7 @@ errno_t pfe_pe_get_fw_errors(pfe_pe_t *pe)
 			}
 			error_file =  pe->fw_err_section + oal_ntohl(error_ptr->file);
 			error_line = oal_ntohl(error_ptr->line);
-			NXP_LOG_ERROR("PE%d: %s line %u: %s\n", pe->id, error_file, error_line, error_str);
+			NXP_LOG_ERROR("PE%d: %s line %u: %s (0x%x)\n", pe->id, error_file, error_line, error_str, error_val);
 		}
 	}
 
@@ -1708,7 +1766,7 @@ errno_t pfe_pe_check_mmap(pfe_pe_t *pe)
  */
 errno_t pfe_pe_get_pe_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_pe_stats_t *stats)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == stats)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -1719,7 +1777,7 @@ errno_t pfe_pe_get_pe_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_pe_stats_t *stat
 		NXP_LOG_ERROR("NULL argument for DMEM received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, stats, addr, sizeof(pfe_ct_pe_stats_t));
 	return EOK;
 }
@@ -1734,7 +1792,7 @@ errno_t pfe_pe_get_pe_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_pe_stats_t *stat
  */
 errno_t pfe_pe_get_classify_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_classify_stats_t *stats)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == stats)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -1745,7 +1803,7 @@ errno_t pfe_pe_get_classify_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_classify_s
 		NXP_LOG_ERROR("NULL argument for DMEM received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, stats, addr, sizeof(pfe_ct_classify_stats_t));
 	return EOK;
 }
@@ -1760,7 +1818,7 @@ errno_t pfe_pe_get_classify_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_classify_s
  */
 errno_t pfe_pe_get_class_algo_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_class_algo_stats_t *stats)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == stats)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -1771,7 +1829,7 @@ errno_t pfe_pe_get_class_algo_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_class_al
 		NXP_LOG_ERROR("NULL argument for DMEM received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, stats, addr, sizeof(pfe_ct_class_algo_stats_t));
 	return EOK;
 }
@@ -1789,7 +1847,7 @@ uint32_t pfe_pe_stat_to_str(pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t
 	uint32_t len = 0U;
 
 	(void)verb_level;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == stat) || (NULL == buf)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -1876,10 +1934,7 @@ static uint32_t pfe_pe_get_measurements(pfe_pe_t *pe, uint32_t count, uint32_t p
 uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
-	pfe_ct_pe_stats_t pfe_ct_pe_stats;
-	pfe_ct_classify_stats_t pfe_classification_stats;
 	pfe_ct_pe_sw_state_monitor_t state_monitor;
-	uint32_t i;
 
 	/* Get the pfe_ct_pe_mmap_t structure from PE */
 	if (NULL == pe->mmap_data)
@@ -1892,52 +1947,6 @@ uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len,
 	len += oal_util_snprintf(buf + len, buf_len - len, "FW State: %u (%s), counter %u\n",state_monitor.state,
 	                         pfe_pe_get_fw_state_str(state_monitor.state), oal_ntohl(state_monitor.counter));
 
-	if(0U != oal_ntohl(pe->mmap_data->pe_stats))
-	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "- PE statistics -\n");
-		/* Get the pfe_ct_pe_stats_t structure (pe_stats) */
-		if(EOK != pfe_pe_get_pe_stats(pe, oal_ntohl(pe->mmap_data->pe_stats), &pfe_ct_pe_stats))
-		{
-			return 0U;
-		}
-		/* Print the PE stats */
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames processed: %u\n", oal_ntohl(pfe_ct_pe_stats.processed));
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames discarded: %u\n", oal_ntohl(pfe_ct_pe_stats.discarded));
-		for(i = 0U; i < PFE_PHY_IF_ID_MAX + 1U; i++)
-		{
-			len += oal_util_snprintf(buf + len, buf_len - len, "Frames with %u replicas: %u\n", i + 1U, oal_ntohl(pfe_ct_pe_stats.replicas[i]));
-		}
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames with HIF_TX_INJECT: %u\n", oal_ntohl(pfe_ct_pe_stats.injected));
-	}
-	else
-	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "PE statistics not available\n");
-	}
-	if(0U != oal_ntohl(pe->mmap_data->classification_stats))
-	{
-		/* Get the pfe_classify_stats_t structure (classification_stats) */
-		if(EOK != pfe_pe_get_classify_stats(pe, oal_ntohl(pe->mmap_data->classification_stats), &pfe_classification_stats))
-		{
-			return 0U;
-		}
-		/* Print statistics for each classification algorithm */
-		len += oal_util_snprintf(buf + len, buf_len - len, "- Flexible router -\n");
-		len += pfe_pe_stat_to_str(&pfe_classification_stats.flexible_router, buf + len, len, verb_level);
-		len += oal_util_snprintf(buf + len, buf_len - len, "- IP Router -\n");
-		len += pfe_pe_stat_to_str(&pfe_classification_stats.ip_router, buf + len, len, verb_level);
-		len += oal_util_snprintf(buf + len, buf_len - len, "- L2 Bridge -\n");
-		len += pfe_pe_stat_to_str(&pfe_classification_stats.l2_bridge, buf + len, len, verb_level);
-		len += oal_util_snprintf(buf + len, buf_len - len, "- VLAN Bridge -\n");
-		len += pfe_pe_stat_to_str(&pfe_classification_stats.vlan_bridge, buf + len, len, verb_level);
-		len += oal_util_snprintf(buf + len, buf_len - len, "- Logical Interfaces -\n");
-		len += pfe_pe_stat_to_str(&pfe_classification_stats.log_if, buf + len, len, verb_level);
-		len += oal_util_snprintf(buf + len, buf_len - len, "- InterHIF -\n");
-		len += pfe_pe_stat_to_str(&pfe_classification_stats.hif_to_hif, buf + len, len, verb_level);
-	}
-	else
-	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "Classification algorithms statistics not available\n");
-	}
 	if(0U != oal_ntohl(pe->mmap_data->measurement_count))
 	{   /* The FW provides processing time measurements */
 		len += oal_util_snprintf(buf + len, buf_len - len, "- Measurements -\n");

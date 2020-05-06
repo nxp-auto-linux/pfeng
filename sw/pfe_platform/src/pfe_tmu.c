@@ -38,33 +38,14 @@
  *
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-#include <errno.h>
-
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 
 #include "pfe_platform_cfg.h"
 #include "pfe_cbus.h"
-#include "pfe_mmap.h"
 #include "pfe_pe.h"
 #include "pfe_tmu.h"
-
-#if (PFE_CFG_TMU_VARIANT == TMU_TYPE_TMU)
-#if !defined (PFE_CFG_FIRMWARE_VARIANT)
-#error Please specify firmware variant: PFE_FW_SBL or PFE_FW_FULL
-#endif /* PFE_CFG_FIRMWARE_VARIANT */
-
-#if (PFE_CFG_FIRMWARE_VARIANT != PFE_FW_SBL) && (PFE_CFG_FIRMWARE_VARIANT != PFE_FW_FULL)
-#error Unsupported firmware variant selected
-#endif /* PFE_CFG_FIRMWARE_VARIANT */
-
-#if PFE_CFG_FIRMWARE_VARIANT == PFE_FW_SBL
-	#define PEMBOX_ADDR_TMU			0x290U
-#endif /* PFE_CFG_FIRMWARE_VARIANT */
-#endif /* PFE_CFG_TMU_VARIANT */
 
 struct __pfe_tmu_tag
 {
@@ -112,13 +93,13 @@ struct __pfe_tmu_shp_tag
  */
 static void pfe_tmu_init(pfe_tmu_t *tmu, pfe_tmu_cfg_t *cfg)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == tmu) || (NULL == cfg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pfe_tmu_disable(tmu);
 	oal_time_mdelay(10);
@@ -147,13 +128,13 @@ pfe_tmu_t *pfe_tmu_create(void *cbus_base_va, uint32_t pe_num, pfe_tmu_cfg_t *cf
 	uint32_t ii;
 #endif /* PFE_CFG_TMU_VARIANT */
 	
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == cbus_base_va) || (NULL == cfg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	tmu = oal_mm_malloc(sizeof(pfe_tmu_t));
 	
@@ -235,13 +216,13 @@ free_and_fail:
  */
 void pfe_tmu_reset(pfe_tmu_t *tmu)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pfe_tmu_cfg_reset(tmu->cbus_base_va);
 }
@@ -253,13 +234,13 @@ void pfe_tmu_reset(pfe_tmu_t *tmu)
  */
 void pfe_tmu_enable(pfe_tmu_t *tmu)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #if (PFE_CFG_TMU_VARIANT == TMU_TYPE_TMU)
 	if (unlikely(FALSE == tmu->is_fw_loaded))
@@ -278,13 +259,13 @@ void pfe_tmu_enable(pfe_tmu_t *tmu)
  */
 void pfe_tmu_disable(pfe_tmu_t *tmu)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pfe_tmu_cfg_disable(tmu->cbus_base_va);
 }
@@ -302,22 +283,22 @@ errno_t pfe_tmu_load_firmware(pfe_tmu_t *tmu, const void *elf)
 	errno_t ret;
 #endif /* PFE_CFG_TMU_VARIANT */
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #if (PFE_CFG_TMU_VARIANT == TMU_TYPE_TMU)
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == elf))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	
 	for (ii=0U; ii<tmu->pe_num; ii++)
 	{
@@ -357,13 +338,13 @@ errno_t pfe_tmu_load_firmware(pfe_tmu_t *tmu, const void *elf)
  */
 void pfe_tmu_send(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, void *buf_pa, uint16_t len)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == tmu) || (NULL == buf_pa)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pfe_tmu_cfg_send_pkt(tmu->cbus_base_va, phy, queue, buf_pa, len);
 }
@@ -377,35 +358,6 @@ void pfe_tmu_destroy(pfe_tmu_t *tmu)
 	uint32_t ii;
 	if (NULL != tmu)
 	{
-#if (PFE_CFG_TMU_VARIANT == TMU_TYPE_TMU)
-#if (PFE_CFG_FIRMWARE_VARIANT == PFE_FW_SBL)
-		for (ii=0U; ii<tmu->pe_num; ii++)
-		{
-			/*	On LS1012 skip the TMU2 (not present) */
-			if (ii == 2U)
-			{
-				continue;
-			}
-			else
-			{
-				/*	Inform PE to stop */
-				pfe_pe_dmem_write(tmu->pe[ii], 1, PEMBOX_ADDR_TMU, 4U);
-				oal_time_usleep(10);
-		
-				/*	Read the 'stopped' status */
-				if (0x0 == pfe_pe_dmem_read(tmu->pe[ii], PEMBOX_ADDR_TMU+4, 4U))
-				{
-					NXP_LOG_WARNING("Failed to stop TMU PE %d\n", ii);
-				}
-				else
-				{
-					NXP_LOG_INFO("TMU PE %d stopped\n", ii);
-				}
-			}
-		}
-#endif /* PFE_CFG_FIRMWARE_VARIANT */
-#endif /* PFE_CFG_TMU_VARIANT */
-		
 		pfe_tmu_disable(tmu);
 		
 		for (ii=0; ii<tmu->pe_num; ii++)
@@ -428,13 +380,13 @@ void pfe_tmu_destroy(pfe_tmu_t *tmu)
  */
 errno_t pfe_tmu_queue_get_fill_level(pfe_tmu_queue_t *queue, uint32_t *level)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == queue) || (NULL == level)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_tmu_q_cfg_get_fill_level(queue->cbus_base_va, queue->phy, queue->qid, level);
 }
@@ -447,13 +399,13 @@ errno_t pfe_tmu_queue_get_fill_level(pfe_tmu_queue_t *queue, uint32_t *level)
  */
 errno_t pfe_tmu_queue_get_drop_count(pfe_tmu_queue_t *queue, uint32_t *cnt)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == queue) || (NULL == cnt)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_tmu_q_cfg_get_drop_count(queue->cbus_base_va, queue->phy, queue->qid, cnt);
 }
@@ -466,13 +418,13 @@ errno_t pfe_tmu_queue_get_drop_count(pfe_tmu_queue_t *queue, uint32_t *cnt)
  */
 errno_t pfe_tmu_queue_get_tx_count(pfe_tmu_queue_t *queue, uint32_t *cnt)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == queue) || (NULL == cnt)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_tmu_q_cfg_get_tx_count(queue->cbus_base_va, queue->phy, queue->qid, cnt);
 }
@@ -488,13 +440,13 @@ errno_t pfe_tmu_queue_get_tx_count(pfe_tmu_queue_t *queue, uint32_t *cnt)
 errno_t pfe_tmu_queue_set_mode(pfe_tmu_queue_t *queue, pfe_tmu_queue_mode_t mode, uint32_t min, uint32_t max)
 {
     errno_t ret_val;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == queue))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	switch (mode)
 	{
@@ -536,13 +488,13 @@ errno_t pfe_tmu_queue_set_mode(pfe_tmu_queue_t *queue, pfe_tmu_queue_mode_t mode
  */
 errno_t pfe_tmu_queue_set_wred_prob(pfe_tmu_queue_t *queue, uint8_t zone, uint8_t prob)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == queue))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (zone >= pfe_tmu_queue_get_wred_zones(queue))
 	{
@@ -566,13 +518,13 @@ errno_t pfe_tmu_queue_set_wred_prob(pfe_tmu_queue_t *queue, uint8_t zone, uint8_
  */
 uint8_t pfe_tmu_queue_get_wred_zones(pfe_tmu_queue_t *queue)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == queue))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_tmu_q_get_wred_zones(queue->cbus_base_va, queue->phy, queue->qid);
 }
@@ -585,13 +537,13 @@ uint8_t pfe_tmu_queue_get_wred_zones(pfe_tmu_queue_t *queue)
  */
 pfe_tmu_queue_t *pfe_tmu_qset_get_queue(pfe_tmu_qset_t *qset, uint8_t queue)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == qset))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (queue < qset->count)
 	{
@@ -680,13 +632,13 @@ void pfe_tmu_qset_destroy(pfe_tmu_qset_t *qset)
  */
 errno_t pfe_tmu_shp_set_limits(pfe_tmu_shp_t *shp, int32_t max_credit, int32_t min_credit)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == shp))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_tmu_shp_cfg_set_limits(shp->shp_base_va, max_credit, min_credit);
 }
@@ -700,13 +652,13 @@ errno_t pfe_tmu_shp_set_limits(pfe_tmu_shp_t *shp, int32_t max_credit, int32_t m
  */
 errno_t pfe_tmu_shp_enable(pfe_tmu_shp_t *shp, pfe_tmu_rate_mode_t mode, uint32_t isl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == shp))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_tmu_shp_cfg_enable(shp->cbus_base_va, shp->shp_base_va, mode, isl);
 }
@@ -717,13 +669,13 @@ errno_t pfe_tmu_shp_enable(pfe_tmu_shp_t *shp, pfe_tmu_rate_mode_t mode, uint32_
  */
 errno_t pfe_tmu_shp_disable(pfe_tmu_shp_t *shp)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == shp))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pfe_tmu_shp_cfg_disable(shp->shp_base_va);
 
@@ -780,13 +732,13 @@ void pfe_tmu_shp_destroy(pfe_tmu_shp_t *shp)
  */
 errno_t pfe_tmu_sch_set_rate_mode(pfe_tmu_sch_t *sch, pfe_tmu_rate_mode_t mode)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == sch))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_tmu_sch_cfg_set_rate_mode(sch->sch_base_va, mode);
 }
@@ -799,13 +751,13 @@ errno_t pfe_tmu_sch_set_rate_mode(pfe_tmu_sch_t *sch, pfe_tmu_rate_mode_t mode)
  */
 errno_t pfe_tmu_sch_set_algo(pfe_tmu_sch_t *sch, pfe_tmu_sched_algo_t algo)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == sch))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_tmu_sch_cfg_set_algo(sch->sch_base_va, algo);
 }
@@ -819,13 +771,13 @@ errno_t pfe_tmu_sch_set_algo(pfe_tmu_sch_t *sch, pfe_tmu_sched_algo_t algo)
  */
 errno_t pfe_tmu_sch_set_input_weight(pfe_tmu_sch_t *sch, uint8_t input, uint32_t weight)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == sch))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_tmu_sch_cfg_set_input_weight(sch->sch_base_va, input, weight);
 }
@@ -839,13 +791,13 @@ errno_t pfe_tmu_sch_set_input_weight(pfe_tmu_sch_t *sch, uint8_t input, uint32_t
  */
 errno_t pfe_tmu_sch_bind_sch_output(pfe_tmu_sch_t *sch, uint8_t input, pfe_tmu_sch_t *sch_out)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == sch) || (NULL == sch_out)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_tmu_sch_cfg_bind_sch_output(sch->sch_base_va, input, sch_out->sch_base_va, sch->cbus_base_va);
 }
@@ -859,13 +811,13 @@ errno_t pfe_tmu_sch_bind_sch_output(pfe_tmu_sch_t *sch, uint8_t input, pfe_tmu_s
  */
 errno_t pfe_tmu_sch_bind_queue(pfe_tmu_sch_t *sch, uint8_t input, uint8_t queue)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == sch))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_tmu_sch_cfg_bind_queue(sch->sch_base_va, input, queue);
 }
@@ -925,13 +877,13 @@ uint32_t pfe_tmu_get_text_statistics(pfe_tmu_t *tmu, char_t *buf, uint32_t buf_l
 	uint32_t ii;
 #endif /* PFE_CFG_TMU_VARIANT */
 	
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	
 	len += pfe_tmu_cfg_get_text_stat(tmu->cbus_base_va, buf, buf_len, verb_level);
 	

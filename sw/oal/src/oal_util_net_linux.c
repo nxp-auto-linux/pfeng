@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -40,15 +40,16 @@
 
 #include <linux/errno.h>
 
+#include "pfe_cfg.h"
 #include "oal_types.h"
 #include "oal_util.h"
 #include "oal_util_net.h"
 
 #define NIP4(addr) \
-		((unsigned char *)&addr)[0], \
-		((unsigned char *)&addr)[1], \
-		((unsigned char *)&addr)[2], \
-		((unsigned char *)&addr)[3]
+		((unsigned char *)addr)[0], \
+		((unsigned char *)addr)[1], \
+		((unsigned char *)addr)[2], \
+		((unsigned char *)addr)[3]
 
 #define NIP6(addr) \
 		ntohs(((struct in6_addr *)addr)->s6_addr16[0]), \

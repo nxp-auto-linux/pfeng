@@ -45,7 +45,7 @@
  * @brief	Maximum size of FCI IPC message payload
  * @see		fci_msg_t
  */
-#define FCI_CFG_MAX_CMD_PAYLOAD_LEN		128
+#define FCI_CFG_MAX_CMD_PAYLOAD_LEN		256
 
 /**
  * @brief	FCI message types
@@ -66,14 +66,14 @@ typedef enum
  * QNX
  *
  */
-#if defined(TARGET_OS_QNX)
+#if defined(PFE_CFG_TARGET_OS_QNX)
 #include "fci_msg_qnx.h"
 
 /*
  * LINUX
  *
  */
-#elif defined(TARGET_OS_LINUX)
+#elif defined(PFE_CFG_TARGET_OS_LINUX)
 #include "fci_msg_linux.h"
 
 /*
@@ -81,8 +81,8 @@ typedef enum
  *
  */
 #else
-#error "TARGET_OS_xx was not set!"
-#endif /* TARGET_OS */
+#error "PFE_CFG_TARGET_OS_xx was not set!"
+#endif /* PFE_CFG_TARGET_OS_xx */
 
 #endif /* SRC_FCI_MSG_H_ */
 

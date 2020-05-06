@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2020 NXP
  *
  * SPDX-License-Identifier:     BSD OR GPL-2.0
  *
@@ -15,7 +15,9 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 
+#include "pfe_cfg.h"
 #include "oal.h"
+#include "bpool.h"
 #include "pfe_platform.h"
 #include "pfe_hif_drv.h"
 
@@ -25,152 +27,161 @@
 #define PFENG_MAX_RX_QUEUES	1
 #define PFENG_MAX_TX_QUEUES	1
 
-/* no jumbo for now */
-#define JUMBO_LEN 1522
+#define PFENG_FW_NAME "pfe-s32g-class.fw"
 
-/* fpga implements only two for now */
-#define PFENG_PHY_PORT_NUM	3
+#define PFENG_LOGIF_OPTS_PHY_CONNECTED		(1 << 1)
 
-enum pfeng_irq_mode {
-	PFENG_IRQ_MODE_UNDEFINED = 0,
-	PFENG_IRQ_MODE_SHARED,
-	PFENG_IRQ_MODE_PRIVATE,
+static const pfe_hif_chnl_id_t pfeng_chnl_ids[] = {
+	HIF_CHNL_0,
+	HIF_CHNL_1,
+	HIF_CHNL_2,
+	HIF_CHNL_3
 };
 
-#define PFENG_STATE_NAPI_IF0_INDEX		0
-#define PFENG_STATE_NAPI_IF0_BIT		(1 << PFENG_STATE_NAPI_IF0_INDEX)
-#define PFENG_STATE_NAPI_IF1_INDEX		1
-#define PFENG_STATE_NAPI_IF1_BIT		(1 << PFENG_STATE_NAPI_IF1_INDEX)
-#define PFENG_STATE_NAPI_IF2_INDEX		2
-#define PFENG_STATE_NAPI_IF2_BIT		(1 << PFENG_STATE_NAPI_IF2_INDEX)
-#define PFENG_STATE_NAPI_IF_MASK		(PFENG_STATE_NAPI_IF0_BIT | PFENG_STATE_NAPI_IF1_BIT | PFENG_STATE_NAPI_IF2_BIT)
-#define PFENG_STATE_ON_INIT				(1 << 3)
-#define PFENG_STATE_ON_ERROR			(1 << 4)
-
-#define PFENG_STATE_MAX_BITS			5
-
-struct pfeng_resources {
-	u64 addr;
-	u32 addr_size;
-	char mac[ETH_ALEN];
-	struct {
-		u32 hif[HIF_CFG_MAX_CHANNELS];
-		u32 bmu;
-	} irq;
-	enum pfeng_irq_mode irq_mode;
+static const pfe_ct_phy_if_id_t pfeng_hif_ids[] = {
+	PFE_PHY_IF_ID_HIF0,
+	PFE_PHY_IF_ID_HIF1,
+	PFE_PHY_IF_ID_HIF2
 };
 
-struct pfeng_mac {
-	//struct mii_regs mii;    /* MII register Addresses */
-	unsigned int pcs;
-	char eth_addr[ETH_ALEN];
+/* HIF channel mode variants */
+enum {
+	PFENG_HIF_MODE_SC,
+	/* PFENG_HIF_MODE_MC, FIXME: unsupported now */
+};
+
+/* represents DT ethernet@ node */
+#define PFENG_DT_NODENAME_ETHERNET		"fsl,pfeng-logif"
+/* represents DT mdio@ node */
+#define PFENG_DT_NODENAME_MDIO			"fsl,pfeng-mdio"
+
+/* config option for ethernet@ node */
+struct pfeng_eth {
+	struct list_head		lnode;
+	const char				*name;
+	u32						hif_chnl_sc;
+	u8						*addr;
+	u8						fixed_link;
+	int						intf_mode;
+	u32						emac_id;
+	struct device_node		*dn;
+	struct clk				*tx_clk;
+	struct clk				*rx_clk;
+};
+
+/* here comes rest of DT config which not fits to pfe_platform_config_t */
+struct pfeng_plat_cfg {
+	u32						hif_mode;
+	struct resource			syscon;
+	u32						hif_chnl_mc;
+	struct list_head		eth_list;
+	// more come
 };
 
 struct pfeng_priv;
-struct pfeng_ndev {
-	struct napi_struct napi ____cacheline_aligned_in_smp;
-	struct net_device *netdev;
-	struct pfeng_priv *priv;
-	uint8_t port_id;
-};
 
-struct pfeng_priv {
-	/* state bitmap */
-	volatile long unsigned int state;
-
-	/* devices */
-	struct device *device;
-	struct mutex lock;
-	struct pfeng_ndev *ndev[PFENG_PHY_PORT_NUM];
-
-	/* hw related stuff */
-	void __iomem *ioaddr;
-	uint32_t irq_hif_num[HIF_CFG_MAX_CHANNELS];
-	uint32_t irq_bmu_num;
-	enum pfeng_irq_mode irq_mode;
-	struct pfeng_plat_data *plat;
-	struct pfeng_mac *hw;
-
-	/* pfe platform members */
-	pfe_platform_config_t pfe_cfg;
-	pfe_fw_t *fw;
-	pfe_platform_t *pfe;
-	pfe_log_if_t *iface[PFENG_PHY_PORT_NUM];
-	pfe_hif_drv_t *hif;
-	pfe_hif_chnl_t *channel;
-	pfe_hif_drv_client_t *client[PFENG_PHY_PORT_NUM];
-
-#ifdef CONFIG_DEBUG_FS
-	struct dentry *dbgfs_dir;
+/* HIF channel */
+struct pfeng_hif_chnl {
+	pfe_hif_chnl_t			*priv;
+#ifdef OAL_IRQ_MODE
+	oal_irq_t				*irq;
+#else
+	u32						irqnum;
 #endif
+	pfe_hif_drv_t			*drv;
+	struct dentry			*dentry;
+};
+
+/* net interface private data */
+struct pfeng_ndev {
+	struct list_head		lnode;
+	struct napi_struct		napi ____cacheline_aligned_in_smp;
+	struct device			*dev;
+	struct net_device		*netdev;
+	struct phylink			*phylink;
+	struct mii_bus			*mii_bus;
+	void					*emac_regs;
+	u32						emac_speed;
+
+	struct pfeng_priv		*priv;
+	struct pfeng_eth		*eth;
+	pfe_hif_drv_client_t	*client;
+	pfe_phy_if_t			*phyif;
+	pfe_log_if_t			*logif;
+	struct pfeng_hif_chnl	chnl_sc;
+	struct {
+		void				*rx_pool;
+	} bman;
+
+	u32						opts;
+
+	struct {
+		u64			napi_poll;
+		u64			napi_poll_onrun;
+		u64			napi_poll_completed;
+		u64			napi_poll_resched;
+		u64			napi_poll_rx;
+		u64			txconf_loop;
+		u64			tx_busy;
+		u64			txconf;
+	} xstats;
+};
+
+/* driver private data */
+struct pfeng_priv {
+	struct platform_device	*pdev;
+	struct dentry			*dbgfs;
+	struct list_head		ndev_list;
+	struct clk				*sys_clk;
+	struct pfeng_plat_cfg	plat;
+	u32						msg_enable;
+	u32						msg_verbosity;
+
+	pfe_platform_config_t	*cfg;
+	const char				*fw_name;
+	pfe_platform_t			*pfe;
 
 };
 
-struct pfeng_plat_data {
-	u8 ifaces;
-	u8 rx_queues_to_use;
-	u8 tx_queues_to_use;
-	u16 max_mtu;
-};
-
-/* module */
-struct pfeng_priv *pfeng_mod_init(struct device *device);
-void pfeng_mod_exit(struct device *device);
-int pfeng_mod_get_setup(struct device *device,
-			struct pfeng_plat_data *plat);
-int pfeng_mod_probe(struct device *device,
-			struct pfeng_priv *priv,
-			struct pfeng_plat_data *plat_dat,
-			struct pfeng_resources *res);
+/* drv */
+struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev);
+int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 hif_chnl, bool hif_chnl_sc,
+		struct pfeng_hif_chnl *chnl);
+void pfeng_hif_chnl_drv_remove(struct pfeng_hif_chnl *chnl);
+int pfeng_drv_remove(struct pfeng_priv *priv);
+int pfeng_drv_probe(struct pfeng_priv *priv);
+int pfeng_drv_cfg_get_emac_intf_mode(struct pfeng_priv *priv, u8 id);
 
 /* fw */
-int pfeng_fw_load(struct pfeng_priv *priv, char *fw_name);
+int pfeng_fw_load(struct pfeng_priv *priv, const char *fw_name);
 void pfeng_fw_free(struct pfeng_priv *priv);
 
-/* platform */
-int pfeng_platform_init(struct pfeng_priv *priv, struct pfeng_resources *res);
-void pfeng_platform_exit(struct pfeng_priv *priv);
-void pfeng_platform_stop(struct pfeng_priv *priv);
-int pfeng_platform_suspend(struct device *dev);
-int pfeng_platform_resume(struct device *dev);
+/* debugfs */
+int pfeng_debugfs_create(struct pfeng_priv *priv);
+void pfeng_debugfs_remove(struct pfeng_priv *priv);
+int pfeng_debugfs_add_hif_chnl(struct pfeng_priv *priv, struct pfeng_ndev *ndev);
 
-/* napi [hif client callback handler] */
-int pfeng_napi_rx(struct pfeng_priv *priv, int limit, int clid);
+/* NAPI */
+struct pfeng_ndev *pfeng_napi_if_create(struct pfeng_priv *priv, struct pfeng_eth *eth);
+void pfeng_napi_if_release(struct pfeng_ndev *ndev);
+
+void pfeng_ethtool_init(struct net_device *netdev);
 
 /* hif */
-int pfeng_hif_init(struct pfeng_priv *priv);
-void pfeng_hif_exit(struct pfeng_priv *priv);
-int pfeng_hif_client_add(struct pfeng_priv *priv, const unsigned int index);
-void pfeng_hif_client_exit(struct pfeng_priv *priv, const unsigned int index);
-void pfeng_hif_irq_enable(struct pfeng_priv *priv);
-void pfeng_hif_irq_disable(struct pfeng_priv *priv);
-pfe_hif_pkt_t *pfeng_hif_rx_get(struct pfeng_priv *priv, int idx);
-void pfeng_hif_rx_free(struct pfeng_priv *priv, int idx, pfe_hif_pkt_t *bd);
-void *pfeng_hif_txack_get_ref(struct pfeng_priv *priv, int idx);
-void pfeng_hif_txack_free(struct pfeng_priv *priv, int idx, void *ref);
+void pfeng_bman_pool_destroy(void *pool);
+void *pfeng_bman_pool_create(pfe_hif_chnl_t *chnl, void *ref);
+struct sk_buff *pfeng_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
+int pfeng_hif_chnl_refill_rx_buffer(pfe_hif_chnl_t *chnl, struct pfeng_ndev *ndev);
+int pfeng_hif_chnl_fill_rx_buffers(pfe_hif_chnl_t *chnl, struct pfeng_ndev *ndev);
 
-char *pfeng_logif_get_name(struct pfeng_priv *priv, int idx);
-
-/* ethtool */
-void pfeng_ethtool_set_ops(struct net_device *netdev);
-
-/* phy/mac */
-int pfeng_phy_init(struct pfeng_priv *priv, int num);
-int pfeng_phy_enable(struct pfeng_priv *priv, int num);
-void pfeng_phy_disable(struct pfeng_priv *priv, int num);
-int pfeng_phy_get_mac(struct pfeng_priv *priv, int num, void *mac_buf);
-int pfeng_phy_mac_add(struct pfeng_priv *priv, int num, void *mac);
-
-/* sysfs */
-int pfeng_sysfs_init(struct pfeng_priv *priv);
-void pfeng_sysfs_exit(struct pfeng_priv *priv);
-
-/* debugfs */
-int pfeng_debugfs_init(struct pfeng_priv *priv);
-void pfeng_debugfs_exit(struct pfeng_priv *priv);
-
-/* fci */
-errno_t pfeng_fci_init(pfe_platform_t *pfe);
-void pfeng_fci_exit(void);
+/* MDIO */
+int pfeng_mdio_register(struct pfeng_ndev *ndev);
+int pfeng_mdio_unregister(struct pfeng_ndev *ndev);
+int pfeng_phylink_create(struct pfeng_ndev *ndev);
+int pfeng_phylink_start(struct pfeng_ndev *ndev);
+int pfeng_phylink_connect_phy(struct pfeng_ndev *ndev);
+int pfeng_phylink_disconnect_phy(struct pfeng_ndev *ndev);
+int pfeng_phylink_stop(struct pfeng_ndev *ndev);
+int pfeng_phylink_destroy(struct pfeng_ndev *ndev);
 
 #endif

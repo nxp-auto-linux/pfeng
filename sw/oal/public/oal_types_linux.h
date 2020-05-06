@@ -43,11 +43,11 @@
 #define NXP_LOG_INFO(...) printk(KERN_INFO "["__FILE__":"__STR(__LINE__)"] INF: " __VA_ARGS__)
 #define NXP_LOG_DEBUG(...) printk(KERN_DEBUG "["__FILE__":"__STR(__LINE__)"] DBG: " __VA_ARGS__)
 
-#if defined(TARGET_ARCH_i386)
+#if defined(PFE_CFG_TARGET_ARCH_i386)
 typedef unsigned int addr_t;
 #define PRINT64 "l"
 #define PRINTADDR_T "u"
-#elif defined(TARGET_ARCH_x86_64) || defined(TARGET_ARCH_aarch64)
+#elif defined(PFE_CFG_TARGET_ARCH_x86_64) || defined(PFE_CFG_TARGET_ARCH_aarch64)
 
 #define MAX_ADDR_T_VAL UINT_MAX
 

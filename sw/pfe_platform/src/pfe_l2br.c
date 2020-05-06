@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -59,11 +59,7 @@
  *
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-#include <errno.h>
-
+#include "pfe_cfg.h"
 #include "linked_list.h"
 
 #include "oal.h"
@@ -174,13 +170,13 @@ static bool_t pfe_l2br_domain_match_criterion(pfe_l2br_t *bridge, pfe_l2br_domai
  */
 static errno_t pfe_def_bd_read_from_class(pfe_l2br_t *bridge, pfe_ct_bd_entry_t *class_entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(((NULL == class_entry) || (NULL == bridge) || (0U == bridge->dmem_fb_bd_base)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*
 		Read current interface configuration from classifier. Since all class PEs are running the
@@ -200,13 +196,13 @@ static errno_t pfe_def_bd_read_from_class(pfe_l2br_t *bridge, pfe_ct_bd_entry_t 
  */
 static errno_t pfe_fb_bd_write_to_class(pfe_l2br_t *bridge, pfe_ct_bd_entry_t *class_entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class_entry) || (NULL == bridge) || (0U == bridge->dmem_fb_bd_base)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Write to DMEM of ALL PEs */
 
@@ -227,19 +223,19 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 	pfe_ct_bd_entry_t fb_bd;
 	bool_t need_shift = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == domain))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	In case of fall-back domain the classifier memory must be updated too */
 	if (TRUE == domain->is_fallback)
 	{
 		/*	Sanity check */
-		_ct_assert(sizeof(pfe_ct_bd_entry_t) <= sizeof(uint64_t));
+		ct_assert(sizeof(pfe_ct_bd_entry_t) <= sizeof(uint64_t));
 
 		/*	Check if bitfields within structure are aligned as expected */
 		memset(&fb_bd, 0, sizeof(pfe_ct_bd_entry_t));
@@ -267,12 +263,12 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 
 		/*	Convert to network endian */
 		/* TODO: oal_swap64 or so */
-#if defined(TARGET_OS_QNX)
+#if defined(PFE_CFG_TARGET_OS_QNX)
 		ENDIAN_SWAP64(&fb_bd.val);
-#elif defined(TARGET_OS_LINUX)
+#elif defined(PFE_CFG_TARGET_OS_LINUX)
 		tmp64 = cpu_to_be64p((uint64_t *)&fb_bd);
 		memcpy(&fb_bd, &tmp64, sizeof(uint64_t));
-#elif defined(TARGET_OS_AUTOSAR)
+#elif defined(PFE_CFG_TARGET_OS_AUTOSAR)
 		*(uint64_t*)&fb_bd = cpu_to_be64(*(uint64_t*)&fb_bd);
 #else
 #error("todo")
@@ -325,13 +321,13 @@ errno_t pfe_l2br_domain_create(pfe_l2br_t *bridge, uint16_t vlan)
 	pfe_l2br_domain_t *domain;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	domain = oal_mm_malloc(sizeof(pfe_l2br_domain_t));
 
@@ -455,13 +451,13 @@ errno_t pfe_l2br_domain_destroy(pfe_l2br_domain_t *domain)
 	LLIST_t *aux, *item;
 	pfe_l2br_list_entry_t *entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == domain))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Remove all associated interfaces */
 	if (FALSE == LLIST_IsEmpty(&domain->ifaces))
@@ -546,13 +542,13 @@ static pfe_l2br_domain_t *pfe_l2br_create_default_domain(pfe_l2br_t *bridge, uin
 	errno_t ret;
 	pfe_l2br_domain_t *domain = NULL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	ret = pfe_l2br_domain_create(bridge, vlan);
 
@@ -595,13 +591,13 @@ static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
 	pfe_l2br_domain_t *domain;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	domain = oal_mm_malloc(sizeof(pfe_l2br_domain_t));
 	if (NULL == domain)
@@ -688,13 +684,13 @@ static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
  */
 errno_t pfe_l2br_domain_set_ucast_action(pfe_l2br_domain_t *domain, pfe_ct_l2br_action_t hit, pfe_ct_l2br_action_t miss)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == domain))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	domain->action_data.ucast_hit_action = hit;
 	domain->action_data.ucast_miss_action = miss;
@@ -711,13 +707,13 @@ errno_t pfe_l2br_domain_set_ucast_action(pfe_l2br_domain_t *domain, pfe_ct_l2br_
  */
 errno_t pfe_l2br_domain_get_ucast_action(pfe_l2br_domain_t *domain, pfe_ct_l2br_action_t *hit, pfe_ct_l2br_action_t *miss)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == domain) || (NULL == hit) || (NULL == miss)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	*hit = domain->action_data.ucast_hit_action;
 	*miss = domain->action_data.ucast_miss_action;
@@ -736,13 +732,13 @@ errno_t pfe_l2br_domain_get_ucast_action(pfe_l2br_domain_t *domain, pfe_ct_l2br_
  */
 errno_t pfe_l2br_domain_set_mcast_action(pfe_l2br_domain_t *domain, pfe_ct_l2br_action_t hit, pfe_ct_l2br_action_t miss)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == domain))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	domain->action_data.mcast_hit_action = hit;
 	domain->action_data.mcast_miss_action = miss;
@@ -759,13 +755,13 @@ errno_t pfe_l2br_domain_set_mcast_action(pfe_l2br_domain_t *domain, pfe_ct_l2br_
  */
 errno_t pfe_l2br_domain_get_mcast_action(pfe_l2br_domain_t *domain, pfe_ct_l2br_action_t *hit, pfe_ct_l2br_action_t *miss)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == domain) || (NULL == hit) || (NULL == miss)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	*hit = domain->action_data.mcast_hit_action;
 	*miss = domain->action_data.mcast_miss_action;
@@ -790,13 +786,13 @@ errno_t pfe_l2br_domain_add_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *iface, b
 	pfe_l2br_list_entry_t *entry;
 	LLIST_t *item;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == domain) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Check duplicates */
 	id = pfe_phy_if_get_id(iface);
@@ -869,13 +865,13 @@ errno_t pfe_l2br_domain_del_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *iface)
 	bool_t match = FALSE;
 	pfe_ct_phy_if_id_t id;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == domain) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Remove the interface instance from global list if it has been added there */
 	if (EOK != oal_mutex_lock(domain->mutex))
@@ -941,13 +937,13 @@ errno_t pfe_l2br_domain_del_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *iface)
  */
 __attribute__((pure)) uint32_t pfe_l2br_domain_get_if_list(pfe_l2br_domain_t *domain)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == domain))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return domain->action_data.forward_list;
 }
@@ -961,13 +957,13 @@ __attribute__((pure)) uint32_t pfe_l2br_domain_get_if_list(pfe_l2br_domain_t *do
  */
 __attribute__((pure)) uint32_t pfe_l2br_domain_get_untag_if_list(pfe_l2br_domain_t *domain)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == domain))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return domain->action_data.untag_list;
 }
@@ -983,13 +979,13 @@ static bool_t pfe_l2br_domain_match_if_criterion(pfe_l2br_domain_t *domain, pfe_
 {
 	bool_t match = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == domain) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	switch (domain->cur_crit)
 	{
@@ -1041,13 +1037,13 @@ pfe_phy_if_t *pfe_l2br_domain_get_first_if(pfe_l2br_domain_t *domain, pfe_l2br_d
 	bool_t match = FALSE;
 	pfe_l2br_list_entry_t *entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == domain))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Remember criterion and argument for possible subsequent pfe_l2br_get_next_domain() calls */
 	domain->cur_crit = crit;
@@ -1066,13 +1062,13 @@ pfe_phy_if_t *pfe_l2br_domain_get_first_if(pfe_l2br_domain_t *domain, pfe_l2br_d
 
 		case L2BD_IF_BY_PHY_IF:
 		{
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 			if (unlikely(NULL == arg))
 			{
 				NXP_LOG_ERROR("NULL argument received\n");
 				return NULL;
 			}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 			domain->cur_crit_arg.phy_if = (pfe_phy_if_t *)arg;
 			break;
 		}
@@ -1125,13 +1121,13 @@ pfe_phy_if_t *pfe_l2br_domain_get_next_if(pfe_l2br_domain_t *domain)
 	bool_t match = FALSE;
 	pfe_l2br_list_entry_t *entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == domain))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (domain->cur_item == &domain->ifaces)
 	{
@@ -1179,13 +1175,13 @@ pfe_phy_if_t *pfe_l2br_domain_get_next_if(pfe_l2br_domain_t *domain)
  */
 errno_t pfe_l2br_domain_get_vlan(pfe_l2br_domain_t *domain, uint16_t *vlan)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == domain) || (NULL == vlan)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	*vlan = domain->vlan;
 
@@ -1200,13 +1196,13 @@ errno_t pfe_l2br_domain_get_vlan(pfe_l2br_domain_t *domain, uint16_t *vlan)
  */
 __attribute__((pure)) bool_t pfe_l2br_domain_is_default(pfe_l2br_domain_t *domain)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == domain))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return domain->is_default;
 }
@@ -1219,13 +1215,13 @@ __attribute__((pure)) bool_t pfe_l2br_domain_is_default(pfe_l2br_domain_t *domai
  */
 __attribute__((pure)) bool_t pfe_l2br_domain_is_fallback(pfe_l2br_domain_t *domain)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == domain))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return domain->is_fallback;
 }
@@ -1239,13 +1235,13 @@ static void *pfe_l2br_worker_func(void *arg)
 	errno_t err;
 	oal_mbox_msg_t msg;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	while (3)
 	{
@@ -1289,13 +1285,13 @@ static void pfe_l2br_do_timeouts(pfe_l2br_t *bridge)
 	pfe_l2br_table_entry_t *entry;
 	char_t text_buf[256];
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Create entry storage */
 	entry = pfe_l2br_table_entry_create(bridge->mac_table);
@@ -1357,13 +1353,13 @@ pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, pfe_l2br_tabl
 {
 	pfe_l2br_t *bridge;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class) || (NULL == mac_table) || (NULL == vlan_table)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	bridge = oal_mm_malloc(sizeof(pfe_l2br_t));
 
@@ -1542,13 +1538,13 @@ errno_t pfe_l2br_destroy(pfe_l2br_t *bridge)
  */
 __attribute__((pure)) pfe_l2br_domain_t *pfe_l2br_get_default_domain(pfe_l2br_t *bridge)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return bridge->default_domain;
 }
@@ -1560,13 +1556,13 @@ __attribute__((pure)) pfe_l2br_domain_t *pfe_l2br_get_default_domain(pfe_l2br_t 
  */
 __attribute__((pure)) pfe_l2br_domain_t *pfe_l2br_get_fallback_domain(pfe_l2br_t *bridge)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return bridge->fallback_domain;
 }
@@ -1584,13 +1580,13 @@ static bool_t pfe_l2br_domain_match_criterion(pfe_l2br_t *bridge, pfe_l2br_domai
 	LLIST_t *item;
 	pfe_l2br_list_entry_t *entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == bridge) || (NULL == domain)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	switch (bridge->cur_crit)
 	{
@@ -1648,13 +1644,13 @@ pfe_l2br_domain_t *pfe_l2br_get_first_domain(pfe_l2br_t *bridge, pfe_l2br_domain
 	pfe_l2br_domain_t *domain;
 	bool_t match = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Remember criterion and argument for possible subsequent pfe_l2br_get_next_domain() calls */
 	bridge->cur_crit = crit;
@@ -1724,13 +1720,13 @@ pfe_l2br_domain_t *pfe_l2br_get_next_domain(pfe_l2br_t *bridge)
 	pfe_l2br_domain_t *domain;
 	bool_t match = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (bridge->cur_item == &bridge->domains)
 	{
@@ -1796,7 +1792,7 @@ uint32_t pfe_l2br_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t 
         /* Get the next entry */
         ret = pfe_l2br_table_get_next(bridge->mac_table, entry);
     }
-    oal_util_snprintf(buf + len, buf_len - len, "\nEntries count: %u\n", count);
+    len += oal_util_snprintf(buf + len, buf_len - len, "\nEntries count: %u\n", count);
     /* Free memory */
     (void)pfe_l2br_table_entry_destroy(entry);
     return len;

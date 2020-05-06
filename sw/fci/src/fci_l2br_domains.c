@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -40,6 +40,7 @@
  *
  */
 
+#include "pfe_cfg.h"
 #include "libfci.h"
 #include "fpp.h"
 #include "fpp_ext.h"
@@ -51,19 +52,19 @@ static errno_t fci_l2br_domain_remove(pfe_l2br_domain_t *domain);
 static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *phy_if);
 
 /**
- * @brief			Process FPP_CMD_L2BRIDGE_DOMAIN commands
- * @param[in]		msg FCI message containing the FPP_CMD_L2BRIDGE_DOMAIN command
+ * @brief			Process FPP_CMD_L2_BD commands
+ * @param[in]		msg FCI message containing the FPP_CMD_L2_BD command
  * @param[out]		fci_ret FCI command return value
- * @param[out]		reply_buf Pointer to a buffer where function will construct command reply (fpp_l2_bridge_domain_control_cmd_t)
+ * @param[out]		reply_buf Pointer to a buffer where function will construct command reply (fpp_l2_bd_cmd_t)
  * @param[in,out]	reply_len Maximum reply buffer size on input, real reply size on output (in bytes)
  * @return			EOK if success, error code otherwise
  * @note			Function is only called within the FCI worker thread context.
  * @note			Must run with domain DB protected against concurrent accesses.
  */
-errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bridge_domain_control_cmd_t *reply_buf, uint32_t *reply_len)
+errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *reply_buf, uint32_t *reply_len)
 {
 	fci_t *context = (fci_t *)&__context;
-	fpp_l2_bridge_domain_control_cmd_t *bd_cmd;
+	fpp_l2_bd_cmd_t *bd_cmd;
 	errno_t ret = EOK;
 	pfe_l2br_domain_t *domain = NULL;
 	static const pfe_ct_l2br_action_t fci_to_l2br_action[4] = {L2BR_ACT_FORWARD, L2BR_ACT_FLOOD, L2BR_ACT_PUNT, L2BR_ACT_DISCARD};
@@ -73,7 +74,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bridge_dom
 	pfe_phy_if_t *phy_if;
 	uint32_t session_id;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -85,11 +86,11 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bridge_dom
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (*reply_len < sizeof(fpp_l2_bridge_domain_control_cmd_t))
+	if (*reply_len < sizeof(fpp_l2_bd_cmd_t))
 	{
-		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_l2_bridge_domain_control_cmd_t)\n");
+		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_l2_bd_cmd_t)\n");
 		return EINVAL;
 	}
 	else
@@ -98,10 +99,10 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bridge_dom
 		*reply_len = 0U;
 	}
 
-	bd_cmd = (fpp_l2_bridge_domain_control_cmd_t *)(msg->msg_cmd.payload);
+	bd_cmd = (fpp_l2_bd_cmd_t *)(msg->msg_cmd.payload);
 
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(fpp_l2_bridge_domain_control_cmd_t));
+	memset(reply_buf, 0, sizeof(fpp_l2_bd_cmd_t));
 
 	ret = pfe_if_db_lock(&session_id);
 
@@ -426,7 +427,7 @@ finalize_domain_registration:
 
 			/*	Write the reply buffer */
 			bd_cmd = reply_buf;
-			*reply_len = sizeof(fpp_l2_bridge_domain_control_cmd_t);
+			*reply_len = sizeof(fpp_l2_bd_cmd_t);
 
 			/*	Build reply structure */
 			if (EOK != pfe_l2br_domain_get_vlan(domain, &bd_cmd->vlan))
@@ -473,7 +474,7 @@ finalize_domain_registration:
 
 		default:
 		{
-			NXP_LOG_ERROR("FPP_CMD_L2BRIDGE_DOMAIN: Unknown action received: 0x%x\n", bd_cmd->action);
+			NXP_LOG_ERROR("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", bd_cmd->action);
 			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 			break;
 		}
@@ -501,7 +502,7 @@ static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, pfe_phy_if_t
 	errno_t ret = EOK;
 	pfe_ct_phy_if_id_t id = PFE_PHY_IF_ID_INVALID;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == domain)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -513,7 +514,7 @@ static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, pfe_phy_if_t
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (NULL != phy_if)
 	{

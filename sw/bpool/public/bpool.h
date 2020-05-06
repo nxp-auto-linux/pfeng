@@ -137,13 +137,13 @@ typedef struct __attribute__((aligned(HAL_CACHE_LINE_SIZE)))
  */
 __attribute__((pure, hot)) static inline int32_t bpool_get_buf_len(const bpool_t *const pool)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return -1;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	return pool->buffer_raw_size;
 }
 
@@ -155,13 +155,13 @@ __attribute__((pure, hot)) static inline int32_t bpool_get_buf_len(const bpool_t
  */
 __attribute__((pure, hot)) static inline bpool_rx_buf_t *bpool_get_bd(const bpool_t *const pool, void *const va)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #ifdef BPOOL_CFG_MEM_REGION_WATCH
 	if (((addr_t)va >= pool->buffer_va_start) && ((addr_t)va <= pool->buffer_va_end))
@@ -200,23 +200,23 @@ __attribute__((pure, hot)) static inline uint32_t * bpool_get_unsigned_storage(c
 {
 	bpool_rx_buf_t *bd;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	bd = bpool_get_bd(pool, va);
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bd))
 	{
 		NXP_LOG_ERROR("Can't get BD\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return &(bd->storage);
 }
@@ -235,23 +235,23 @@ __attribute__((pure, hot)) static inline bpool_complex_storage_t * bpool_get_com
 {
 	bpool_rx_buf_t *bd;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	bd = bpool_get_bd(pool, va);
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bd))
 	{
 		NXP_LOG_ERROR("Can't get BD\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return &(bd->cstorage);
 }
@@ -270,23 +270,23 @@ __attribute__((pure, hot)) static inline void * bpool_get_meta_storage(const bpo
 {
 	bpool_rx_buf_t *bd;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	bd = bpool_get_bd(pool, va);
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bd))
 	{
 		NXP_LOG_ERROR("Can't get BD\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return (void *)(bd->metadata);
 }
@@ -308,13 +308,13 @@ __attribute__((pure, cold)) static inline addr_t bpool_get_meta_storage_size(voi
  */
 __attribute__((pure, hot)) static inline void * bpool_get_va(const bpool_t *const pool, void *pa)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #ifdef BPOOL_CFG_MEM_REGION_WATCH
 	/*	Check if address belongs to THIS block memory range */
@@ -339,13 +339,13 @@ __attribute__((pure, hot)) static inline void * bpool_get_va(const bpool_t *cons
  */
 __attribute__((pure, hot)) static inline void * bpool_get_pa(const bpool_t *const pool, void *va)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #ifdef BPOOL_CFG_MEM_REGION_WATCH
 	/*	Check if address belongs to THIS block memory range */
@@ -362,7 +362,7 @@ __attribute__((pure, hot)) static inline void * bpool_get_pa(const bpool_t *cons
 #endif /* BPOOL_CFG_MEM_REGION_WATCH */
 }
 
-bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, uint32_t align) __attribute__((cold));
+bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, uint32_t align, bool_t cached) __attribute__((cold));
 void * bpool_get(bpool_t *pool) __attribute__((hot));
 void bpool_put(bpool_t *pool, void *va) __attribute__((hot));
 errno_t bpool_get_fill_level(bpool_t *pool, uint32_t *fill_level) __attribute__((hot));

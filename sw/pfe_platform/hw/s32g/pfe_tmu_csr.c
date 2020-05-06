@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -38,10 +38,10 @@
  *
  */
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 #include "pfe_platform_cfg.h"
-#include "pfe_mmap.h"
 #include "pfe_cbus.h"
 #include "pfe_tmu_csr.h"
 
@@ -50,9 +50,9 @@
 #endif /* PFE_CBUS_H_ */
 
 /*	Supported IPs. Defines are validated within pfe_cbus.h. */
-#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 
 static const pfe_ct_phy_if_id_t phys[] = 
 {
@@ -101,9 +101,9 @@ errno_t pfe_tmu_cfg_init(void *cbus_base_va, pfe_tmu_cfg_t *cfg)
 	hal_write32(0x0U, cbus_base_va + TMU_PHY1_TDQ_CTRL);	/* EMAC1 */
 	hal_write32(0x0U, cbus_base_va + TMU_PHY2_TDQ_CTRL);	/* EMAC2 */
 	hal_write32(0x0U, cbus_base_va + TMU_PHY3_TDQ_CTRL);	/* HIF */
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	hal_write32(0x0U, cbus_base_va + TMU_PHY4_TDQ_CTRL);	/* HIF NOCPY */
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 	/*	Reset */
 	pfe_tmu_cfg_reset(cbus_base_va);
@@ -113,9 +113,9 @@ errno_t pfe_tmu_cfg_init(void *cbus_base_va, pfe_tmu_cfg_t *cfg)
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_EGPI2_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY1_INQ_ADDR); /* EGPI2 */
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_EGPI3_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY2_INQ_ADDR); /* EGPI3 */
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_HGPI_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY3_INQ_ADDR); /* HGPI */
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_HIF_NOCPY_BASE_ADDR + HIF_NOCPY_RX_INQ0_PKTPTR, cbus_base_va + TMU_PHY4_INQ_ADDR); /* HIF_NOCPY */
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 	/*	Context memory initialization */
 	for (ii=0U; ii < (sizeof(phys) / sizeof(pfe_ct_phy_if_id_t)); ii++)
@@ -183,7 +183,7 @@ errno_t pfe_tmu_cfg_init(void *cbus_base_va, pfe_tmu_cfg_t *cfg)
 		for (queue=0U; queue<TLITE_PHY_QUEUES_CNT; queue++)
 		{
 			/* ret = pfe_tmu_q_mode_set_default(cbus_base_va, phys[ii], queue); */
-			ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phys[ii], queue, 0x1ffU);
+			ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phys[ii], queue, 255U);
 			if (EOK != ret)
 			{
 				NXP_LOG_ERROR("Can't set default queue mode\n");
@@ -207,9 +207,9 @@ errno_t pfe_tmu_cfg_init(void *cbus_base_va, pfe_tmu_cfg_t *cfg)
 	hal_write32(0xfU, cbus_base_va + TMU_PHY1_TDQ_CTRL);	/* EMAC1 */
 	hal_write32(0xfU, cbus_base_va + TMU_PHY2_TDQ_CTRL);	/* EMAC2 */
 	hal_write32(0xfU, cbus_base_va + TMU_PHY3_TDQ_CTRL);	/* HIF */
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	hal_write32(0xfU, cbus_base_va + TMU_PHY4_TDQ_CTRL);	/* HIF NOCPY */
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 	return EOK;
 }
@@ -271,7 +271,7 @@ void pfe_tmu_cfg_send_pkt(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t qu
 	/*	TODO: Seems that these two registers are swapped - we're writing packet pointer to PKTINFO and info into PKTPTR */
 
 	/*	Write buffer address */
-	hal_write32((uint32_t)((addr_t)PFE_MMAP_DDR_PHYS_TO_PFE(buf_pa) & 0xffffffffU), cbus_base_va + TMU_PHY_INQ_PKTPTR);
+	hal_write32((uint32_t)((addr_t)PFE_CFG_MEMORY_PHYS_TO_PFE(buf_pa) & 0xffffffffU), cbus_base_va + TMU_PHY_INQ_PKTPTR);
 
 	/*	Write packet info */
 	hal_write32(((uint32_t)phy << 24) | (queue << 16) | len, cbus_base_va + TMU_PHY_INQ_PKTINFO);
@@ -490,7 +490,9 @@ errno_t pfe_tmu_q_mode_set_tail_drop(void *cbus_base_va, pfe_ct_phy_if_id_t phy,
 {
 	uint32_t reg;
 
-	if (max > 0x1ffU)
+	/*	TODO: 	PFE documentation says that it should be 0x1ff but it does not work. Experiments
+				show that maximum queue fill level (curQ_pkt_cnt) for HIF is 256. */
+	if (max > 0xffU /*0x1ff*/)
 	{
 		return EINVAL;
 	}
@@ -1020,6 +1022,21 @@ uint32_t pfe_tmu_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, ui
 	uint32_t reg, ii, queue, zone;
 	uint8_t prob;
 	uint32_t level, drops, tx;
+
+	/* Debug registers */
+	if(verb_level >= 10U)
+	{
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_PHY_INQ_PKTPTR  : 0x%x\n", hal_read32(base_va + TMU_PHY_INQ_PKTPTR));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_PHY_INQ_PKTINFO : 0x%x\n", hal_read32(base_va + TMU_PHY_INQ_PKTINFO));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_PHY_INQ_STAT    : 0x%x\n", hal_read32(base_va + TMU_PHY_INQ_STAT));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_TOP     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_TOP));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_PP0     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP0));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_PP1     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP1));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_PP2     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP2));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_PP3     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP3));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_PP4     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP4));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_PP5     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP5));
+	}
 
 	if(verb_level >= 9U)
 	{

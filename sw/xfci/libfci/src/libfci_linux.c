@@ -1,6 +1,6 @@
 /* =========================================================================
  *  Copyright (C) 2007 Mindspeed Technologies, Inc.
- *  Copyright 2017-2019 NXP
+ *  Copyright 2017-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -40,6 +40,7 @@
 #include <sys/socket.h>
 #include <linux/netlink.h>
 
+#include "pfe_cfg.h"
 #include "fpp.h"
 #include "fci_msg.h"
 #include "libfci.h"
@@ -51,7 +52,6 @@
 #ifndef NETLINK_FF
 #define NETLINK_FF 30
 #endif
-#define MAX_PAYLOAD 256  /* maximum payload size*/
 #define NETLINK_TEST 31
 #ifndef NETLINK_KEY
 #define NETLINK_KEY 32
@@ -108,13 +108,6 @@ FCI_CLIENT *fci_open(fci_client_type_t client_type, fci_mcast_groups_t group)
 {
 	FCI_CLIENT *new_client = NULL;
 
-	/*	Check the netlink configuration */
-	if (MAX_PAYLOAD < sizeof(fci_msg_t))
-	{
-		FCILIB_PRINTF(FCILIB_ERR, "LIBFCI: netlink buffer size is too small for fci message\n");
-		return NULL;
-	}
-
 	/* Create client according to the requested socket type */
 	switch(client_type)
 	{
@@ -158,7 +151,7 @@ int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned sho
 
 		if (NULL != event_cb)
 		{
-			nlh=(struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
+			nlh=(struct nlmsghdr *)malloc(NLMSG_SPACE(sizeof(fci_msg_t)));
 			if (NULL == nlh)
 			{
 				FCILIB_PRINTF(FCILIB_ERR, "LIBFCI: nlh not allocated\n");
@@ -202,7 +195,7 @@ int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned sho
 			dest_addr.nl_groups = client->group;
 
 			/* Fill the netlink message header */
-			nlh->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
+			nlh->nlmsg_len = NLMSG_SPACE(sizeof(fci_msg_t));
 			nlh->nlmsg_pid = client->cmd_port_id;  /* self port id */
 			nlh->nlmsg_flags = 0;
 			memcpy(NLMSG_DATA(nlh), &msg,sizeof(fci_msg_t));
@@ -224,7 +217,7 @@ int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned sho
 			else
 			{
 				/* Read the response */
-				memset(nlh,0,NLMSG_SPACE(MAX_PAYLOAD));
+				memset(nlh,0,NLMSG_SPACE(sizeof(fci_msg_t)));
 
 				if(-1 == recvmsg(client->cmd_sock_fd, &msg_hdr, 0))
 				{
@@ -270,7 +263,7 @@ int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned sho
 		else if(-1 !=client->back_sock_fd)
 		{
 			/* Unregister the client from server and close the socket */
-			nlh=(struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
+			nlh=(struct nlmsghdr *)malloc(NLMSG_SPACE(sizeof(fci_msg_t)));
 			if (NULL == nlh)
 			{
 				FCILIB_PRINTF(FCILIB_ERR, "LIBFCI: nlh not allocated\n");
@@ -291,7 +284,7 @@ int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned sho
 			dest_addr.nl_groups = client->group;
 
 			/* Fill the netlink message header */
-			nlh->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
+			nlh->nlmsg_len = NLMSG_SPACE(sizeof(fci_msg_t));
 			nlh->nlmsg_pid = client->cmd_port_id;  /* command port_id */
 			nlh->nlmsg_flags = 0;
 			memcpy(NLMSG_DATA(nlh), &msg, sizeof(fci_msg_t));
@@ -311,7 +304,7 @@ int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned sho
 			else
 			{
 				/* Read the response */
-				memset(nlh,0,NLMSG_SPACE(MAX_PAYLOAD));
+				memset(nlh,0,NLMSG_SPACE(sizeof(fci_msg_t)));
 				if(-1 == recvmsg(client->cmd_sock_fd, &msg_hdr, 0))
 				{
 					switch(errno)
@@ -410,63 +403,16 @@ int fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *cmd_buf, u
 
 int fci_write(FCI_CLIENT *client, unsigned short fcode, unsigned short cmd_len, unsigned short *cmd_buf)
 {
-	unsigned short rep_buf[FCI_CFG_MAX_CMD_PAYLOAD_LEN / sizeof(uint16_t)] __attribute__ ((aligned (4)));
-	unsigned short rep_len = sizeof(rep_buf);
-	int rc;
-
 	FCILIB_PRINTF(FCILIB_WRITE, "fci_write: send fcode %#x length %d\n", fcode, cmd_len);
 
-	rc = __fci_cmd(client, fcode, cmd_buf, cmd_len, rep_buf, &rep_len);
-
-	if (rc < 0)
-	{
-		return rc;
-	}
-	else
-	{
-		return rep_buf[0];
-	}
+	return __fci_cmd(client, fcode, cmd_buf, cmd_len, NULL, NULL);
 }
 
 int fci_query(FCI_CLIENT *client, unsigned short fcode, unsigned short cmd_len, unsigned short *cmd_buf, unsigned short *rep_len, unsigned short *rep_buf)
 {
-	unsigned short lrep_buf[FCI_CFG_MAX_CMD_PAYLOAD_LEN / sizeof(unsigned short)] __attribute__ ((aligned (4)));
-	unsigned short lrep_len = sizeof(lrep_buf);
-	int rc;
-
 	FCILIB_PRINTF(FCILIB_WRITE, "fci_query: send fcode %#x length %d\n", fcode, cmd_len);
 
-	if (rep_len)
-	{
-		*rep_len = 0;
-	}
-
-	rc = __fci_cmd(client, fcode, cmd_buf, cmd_len, lrep_buf, &lrep_len);
-	if (rc < 0)
-	{
-		/*	Transport protocol failure (OS-specific) */
-		return rc;
-	}
-
-#if (FALSE == FCI_CFG_FORCE_LEGACY_API)
-	/*	Let's check if we've received at least two bytes */
-	if ((lrep_len > 2) && rep_len && rep_buf)
-	{
-		memcpy(rep_buf, lrep_buf + 1, lrep_len - 2);
-		/*	Adjust the reply length (remove the return value placeholder) */
-		*rep_len = lrep_len - 2;
-	}
-#else
-	/*	Let's check if we've received at least four bytes */
-	if ((lrep_len > 4) && rep_len && rep_buf)
-	{
-		memcpy(rep_buf, lrep_buf + 1, lrep_len - 2 - 2); /* Because 2 bytes added by FCI endpoint and 2 bytes are skipped.. */
-		/*	Adjust the reply length (remove the return value placeholder) */
-		*rep_len = lrep_len - 2;
-	}
-#endif /* FCI_CFG_FORCE_LEGACY_API */
-
-	return lrep_buf[0];
+	return __fci_cmd(client, fcode, cmd_buf, cmd_len, rep_buf, rep_len);
 }
 
 int fci_catch(FCI_CLIENT *client)
@@ -493,7 +439,7 @@ int fci_catch(FCI_CLIENT *client)
 	dest_addr.nl_pid = 0;   /* For Linux Kernel */
 	dest_addr.nl_groups = client->group;
 
-	nlh=(struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
+	nlh=(struct nlmsghdr *)malloc(NLMSG_SPACE(sizeof(fci_msg_t)));
 	if (NULL == nlh)
 	{
 		FCILIB_PRINTF(FCILIB_ERR, "LIBFCI: nlh not allocated\n");
@@ -501,7 +447,7 @@ int fci_catch(FCI_CLIENT *client)
 	}
 
 	/* Fill the netlink message header */
-	nlh->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
+	nlh->nlmsg_len = NLMSG_SPACE(sizeof(fci_msg_t));
 	nlh->nlmsg_pid = client->back_port_id;  /* self port id */
 	nlh->nlmsg_flags = 0;
 
@@ -515,7 +461,7 @@ int fci_catch(FCI_CLIENT *client)
 	while (false == shall_quit)
 	{
 		/* Read message from kernel */
-		memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
+		memset(nlh, 0, NLMSG_SPACE(sizeof(fci_msg_t)));
 		if (-1 == recvmsg(client->back_sock_fd, &msg_hdr, 0))
 		{
 			FCILIB_PRINTF(FCILIB_ERR, "recvmsg() failed: %d\n", errno);
@@ -580,7 +526,7 @@ static int __fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *c
 {
 	fci_msg_t msg;
 	fci_msg_t *reply_msg;
-	int ret = 0;
+	unsigned short cmd_ret = EOK;
 	struct sockaddr_nl dest_addr;
 	struct nlmsghdr *nlh = NULL;
 	struct msghdr msg_hdr = {0};
@@ -600,7 +546,7 @@ static int __fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *c
 	dest_addr.nl_pid = 0;   /* For Linux Kernel */
 	dest_addr.nl_groups = client->group;
 
-	nlh=(struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
+	nlh=(struct nlmsghdr *)malloc(NLMSG_SPACE(sizeof(fci_msg_t)));
 	if (NULL == nlh)
 	{
 		FCILIB_PRINTF(FCILIB_ERR, "LIBFCI: nlh not allocated\n");
@@ -608,7 +554,7 @@ static int __fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *c
 	}
 
 	/* Fill the netlink message header */
-	nlh->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
+	nlh->nlmsg_len = NLMSG_SPACE(sizeof(fci_msg_t));
 	nlh->nlmsg_pid = client->cmd_port_id;  /* self port id */
 	nlh->nlmsg_flags = 0;
 	/* Fill in the netlink message payload */
@@ -630,8 +576,8 @@ static int __fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *c
 	}
 	else
 	{
-		memset(nlh,0,NLMSG_SPACE(MAX_PAYLOAD));
-		if(-1 == (ret = recvmsg(client->cmd_sock_fd, &msg_hdr, 0)))
+		memset(nlh,0,NLMSG_SPACE(sizeof(fci_msg_t)));
+		if(-1 == recvmsg(client->cmd_sock_fd, &msg_hdr, 0))
 		{
 			switch(errno)
 			{
@@ -646,11 +592,6 @@ static int __fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *c
 			return -errno;
 		}
 		reply_msg = NLMSG_DATA(nlh);
-		/*	Success, pass reply data (if any) and its length to user */
-		if (0 != NLMSG_LENGTH(nlh)){
-			*rep_len = reply_msg->msg_cmd.length;
-			memcpy(rep_buf, reply_msg->msg_cmd.payload, reply_msg->msg_cmd.length);
-		}
 
 		if(reply_msg->ret_code != EOK)
 		{
@@ -662,8 +603,23 @@ static int __fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *c
 		}
 		else
 		{
+			/*	Success, pass reply data (if any) and its length to user */
+			if ((NULL != rep_buf) && (NULL != rep_len) &&
+				(2U <= reply_msg->msg_cmd.length) &&
+				(0U != NLMSG_LENGTH(nlh)))
+			{
+#if (TRUE == FCI_CFG_FORCE_LEGACY_API)
+				memcpy(rep_buf, reply_msg->msg_cmd.payload, reply_msg->msg_cmd.length);
+				*rep_len = reply_msg->msg_cmd.length;
+#else
+				memcpy(rep_buf, ((void *)reply_msg->msg_cmd.payload + 2U), reply_msg->msg_cmd.length - 2U);
+				*rep_len = reply_msg->msg_cmd.length - 2U;
+#endif /* FCI_CFG_FORCE_LEGACY_API */
+			}
+			memcpy(&cmd_ret, reply_msg->msg_cmd.payload, sizeof(unsigned short));
+
 			free(nlh);
-			return FPP_ERR_OK;
+			return cmd_ret;
 		}
 	}
 }

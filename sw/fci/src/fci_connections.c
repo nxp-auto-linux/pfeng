@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -50,6 +50,7 @@
  *				  request (fpp_ct_cmd_t/fpp_ct6_cmd_t).
  *
  */
+#include "pfe_cfg.h"
 #include "libfci.h"
 #include "fpp.h"
 #include "fpp_ext.h"
@@ -88,13 +89,13 @@ static pfe_phy_if_t *fci_connections_rentry_to_if(pfe_rtable_entry_t *entry);
  */
 static char_t * fci_connections_ipv4_cmd_to_str(fpp_ct_cmd_t *ct_cmd)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == ct_cmd))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return fci_connections_build_str(FALSE,
 										(uint8_t *)&ct_cmd->saddr,
@@ -115,13 +116,13 @@ static char_t * fci_connections_ipv4_cmd_to_str(fpp_ct_cmd_t *ct_cmd)
  */
 static char_t * fci_connections_ipv6_cmd_to_str(fpp_ct6_cmd_t *ct6_cmd)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == ct6_cmd))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return fci_connections_build_str(TRUE,
 											(uint8_t *)&ct6_cmd->saddr,
@@ -147,7 +148,6 @@ static char_t * fci_connections_ipv6_cmd_to_str(fpp_ct6_cmd_t *ct6_cmd)
  * @param[in]	sport_out Output SPORT
  * @param[in]	dport_out Output DPORT
  * @param[in]	proto Protocol
- * @param[in]	route_id Route ID
  * @return		Pointer to buffer with the output string
  */
 static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *dip, uint16_t *sport, uint16_t *dport,
@@ -162,7 +162,7 @@ static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *di
 	char_t dip_str[32+7+1]; /* 1111:1111:1111:1111:1111:1111:1111:1111 */
 	char_t dip_out_str[32+7+1]; /* 1111:1111:1111:1111:1111:1111:1111:1111 */
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == sip) || (NULL == dip) || (NULL == sport) || (NULL == dport)
 			|| (NULL == sip_out) || (NULL == dip_out) || (NULL == sport_out) || (NULL == dport_out)
 				|| (NULL == proto)))
@@ -170,7 +170,7 @@ static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *di
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	oal_util_net_inet_ntop(ipv_flag, sip, sip_str, sizeof(sip_str));
 	oal_util_net_inet_ntop(ipv_flag, dip, dip_str, sizeof(dip_str));
@@ -242,13 +242,13 @@ static char_t * fci_connections_entry_to_str(pfe_rtable_entry_t *entry)
 	pfe_5_tuple_t tuple;
 	pfe_5_tuple_t tuple_out;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != pfe_rtable_entry_to_5t(entry, &tuple))
 	{
@@ -300,13 +300,13 @@ static char_t * fci_connections_entry_to_str(pfe_rtable_entry_t *entry)
  */
 static void fci_connections_ipv4_cmd_to_5t(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *tuple)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ct_cmd) || (NULL == tuple)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	memset(tuple, 0, sizeof(pfe_5_tuple_t));
 
@@ -324,13 +324,13 @@ static void fci_connections_ipv4_cmd_to_5t(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *
  */
 static void fci_connections_ipv4_cmd_to_5t_rep(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *tuple)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ct_cmd) || (NULL == tuple)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	memset(tuple, 0, sizeof(pfe_5_tuple_t));
 
@@ -348,13 +348,13 @@ static void fci_connections_ipv4_cmd_to_5t_rep(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple
  */
 static void fci_connections_ipv6_cmd_to_5t(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t *tuple)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ct6_cmd) || (NULL == tuple)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	memset(tuple, 0, sizeof(pfe_5_tuple_t));
 
@@ -372,13 +372,13 @@ static void fci_connections_ipv6_cmd_to_5t(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t
  */
 static void fci_connections_ipv6_cmd_to_5t_rep(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t *tuple)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ct6_cmd) || (NULL == tuple)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	memset(tuple, 0, sizeof(pfe_5_tuple_t));
 
@@ -408,13 +408,13 @@ static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route
 	pfe_ct_route_actions_t actions;
 	pfe_mac_addr_t mac_addr;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == route) || (NULL == tuple)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Create new entry */
 	new_entry = pfe_rtable_entry_create();
@@ -435,6 +435,7 @@ static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route
 	/*	Set properties */
 	pfe_rtable_entry_set_dstif(new_entry, route->iface);
 	pfe_rtable_entry_set_timeout(new_entry, fci_connections_get_default_timeout(tuple->proto));
+	/*	Set route ID (network endian) */
 	pfe_rtable_entry_set_route_id(new_entry, route->id);
 
 	/*	Change MAC addresses */
@@ -519,7 +520,7 @@ static errno_t fci_connections_ipv4_cmd_to_entry(fpp_ct_cmd_t *ct_cmd, pfe_rtabl
 	pfe_5_tuple_t tuple_buf, tuple_rep_buf;
 	pfe_5_tuple_t *tuple = &tuple_buf, *tuple_rep = &tuple_rep_buf;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ct_cmd) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -531,10 +532,10 @@ static errno_t fci_connections_ipv4_cmd_to_entry(fpp_ct_cmd_t *ct_cmd, pfe_rtabl
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Check if original direction is enabled */
-	if (0 != (ct_cmd->flags & CTCMD_FLAGS_ORIG_DISABLED))
+	if (0 != (oal_ntohs(ct_cmd->flags) & CTCMD_FLAGS_ORIG_DISABLED))
 	{
 		/*	Original direction is disabled */
 		*entry = NULL;
@@ -584,7 +585,7 @@ static errno_t fci_connections_ipv4_cmd_to_rep_entry(fpp_ct_cmd_t *ct_cmd, pfe_r
 	pfe_5_tuple_t tuple_buf, tuple_rep_buf;
 	pfe_5_tuple_t *tuple = &tuple_buf, *tuple_rep = &tuple_rep_buf;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ct_cmd) || (NULL == entry) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -596,10 +597,10 @@ static errno_t fci_connections_ipv4_cmd_to_rep_entry(fpp_ct_cmd_t *ct_cmd, pfe_r
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Check if reply direction is enabled */
-	if (0 != (ct_cmd->flags & CTCMD_FLAGS_REP_DISABLED))
+	if (0 != (oal_ntohs(ct_cmd->flags) & CTCMD_FLAGS_REP_DISABLED))
 	{
 		/*	Reply direction is disabled */
 		*entry = NULL;
@@ -611,7 +612,7 @@ static errno_t fci_connections_ipv4_cmd_to_rep_entry(fpp_ct_cmd_t *ct_cmd, pfe_r
 	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (void *)&ct_cmd->route_id_reply);
 	if (NULL == route)
 	{
-		NXP_LOG_ERROR("No such route (0x%x)\n", ct_cmd->route_id_reply);
+		NXP_LOG_ERROR("No such route (0x%x)\n", oal_ntohl(ct_cmd->route_id_reply));
 		return EINVAL;
 	}
 
@@ -647,7 +648,7 @@ static errno_t fci_connections_ipv6_cmd_to_entry(fpp_ct6_cmd_t *ct6_cmd, pfe_rta
 	pfe_5_tuple_t tuple_buf, tuple_rep_buf;
 	pfe_5_tuple_t *tuple = &tuple_buf, *tuple_rep = &tuple_rep_buf;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ct6_cmd) || (NULL == entry) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -659,10 +660,10 @@ static errno_t fci_connections_ipv6_cmd_to_entry(fpp_ct6_cmd_t *ct6_cmd, pfe_rta
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Check if original direction is enabled */
-	if (0 != (ct6_cmd->flags & CTCMD_FLAGS_ORIG_DISABLED))
+	if (0 != (oal_ntohs(ct6_cmd->flags) & CTCMD_FLAGS_ORIG_DISABLED))
 	{
 		/*	Original direction is disabled */
 		*entry = NULL;
@@ -724,7 +725,7 @@ static errno_t fci_connections_ipv6_cmd_to_rep_entry(fpp_ct6_cmd_t *ct6_cmd, pfe
 	pfe_5_tuple_t tuple_buf, tuple_rep_buf;
 	pfe_5_tuple_t *tuple = &tuple_buf, *tuple_rep = &tuple_rep_buf;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ct6_cmd) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -736,10 +737,10 @@ static errno_t fci_connections_ipv6_cmd_to_rep_entry(fpp_ct6_cmd_t *ct6_cmd, pfe
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Check if reply direction is enabled */
-	if (0 != (ct6_cmd->flags & CTCMD_FLAGS_REP_DISABLED))
+	if (0 != (oal_ntohs(ct6_cmd->flags) & CTCMD_FLAGS_REP_DISABLED))
 	{
 		/*	Reply direction is disabled */
 		*entry = NULL;
@@ -751,7 +752,7 @@ static errno_t fci_connections_ipv6_cmd_to_rep_entry(fpp_ct6_cmd_t *ct6_cmd, pfe
 	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (void *)&ct6_cmd->route_id_reply);
 	if (NULL == route)
 	{
-		NXP_LOG_ERROR("No such route (0x%x)\n", ct6_cmd->route_id_reply);
+		NXP_LOG_ERROR("No such route (0x%x)\n", oal_ntohl(ct6_cmd->route_id_reply));
 		return EINVAL;
 	}
 
@@ -785,7 +786,7 @@ static pfe_phy_if_t *fci_connections_rentry_to_if(pfe_rtable_entry_t *entry)
 	errno_t ret;
 	fci_rt_db_entry_t *route;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -797,7 +798,7 @@ static pfe_phy_if_t *fci_connections_rentry_to_if(pfe_rtable_entry_t *entry)
     	NXP_LOG_ERROR("Context not initialized\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Get route ID */
 	ret = pfe_rtable_entry_get_route_id(entry, &route_id);
@@ -811,7 +812,7 @@ static pfe_phy_if_t *fci_connections_rentry_to_if(pfe_rtable_entry_t *entry)
 	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (void *)&route_id);
 	if (NULL == route)
 	{
-		NXP_LOG_ERROR("No such route: %d\n", route_id);
+		NXP_LOG_ERROR("No such route: %d\n", oal_ntohl(route_id));
 		return NULL;
 	}
 
@@ -836,12 +837,13 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, fci_msg_t *msg, uint16_t
 	fpp_ct6_cmd_t *ct6_cmd, *ct6_reply;
 	errno_t ret = EOK;
 	pfe_ip_addr_t sip, dip;
+	uint32_t route_id;
 	pfe_rtable_entry_t *entry = NULL, *rep_entry = NULL;
 	pfe_5_tuple_t tuple;
 	pfe_ct_route_actions_t actions;
 	pfe_phy_if_t *phy_if = NULL, *phy_if_reply = NULL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -853,7 +855,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, fci_msg_t *msg, uint16_t
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if ((*reply_len < sizeof(fpp_ct_cmd_t)) || (*reply_len < sizeof(fpp_ct6_cmd_t)))
 	{
@@ -1220,6 +1222,7 @@ free_and_fail:
 			/*	Build reply structure */
 			pfe_rtable_entry_get_sip(entry, &sip);
 			pfe_rtable_entry_get_dip(entry, &dip);
+			pfe_rtable_entry_get_route_id(entry, &route_id);
 
 			if (TRUE == ipv6)
 			{
@@ -1233,6 +1236,7 @@ free_and_fail:
 				ct6_reply->dport_reply = ct6_reply->sport;
 				ct6_reply->protocol = pfe_rtable_entry_get_proto(entry);
 				ct6_reply->flags = 0U;
+				ct6_reply->route_id = route_id;
 			}
 			else
 			{
@@ -1246,6 +1250,7 @@ free_and_fail:
 				ct_reply->dport_reply = ct_reply->sport;
 				ct_reply->protocol = pfe_rtable_entry_get_proto(entry);
 				ct_reply->flags = 0U;
+				ct_reply->route_id = route_id;
 			}
 
 			/*	Check if reply direction does exist */
@@ -1255,11 +1260,11 @@ free_and_fail:
 				 	so the appropriate flag shall be set to indicate that. */
 				if (TRUE == ipv6)
 				{
-					ct6_reply->flags |= CTCMD_FLAGS_REP_DISABLED;
+					ct6_reply->flags |= oal_htons(CTCMD_FLAGS_REP_DISABLED);
 				}
 				else
 				{
-					ct_reply->flags |= CTCMD_FLAGS_REP_DISABLED;
+					ct_reply->flags |= oal_htons(CTCMD_FLAGS_REP_DISABLED);
 				}
 			}
 
@@ -1353,13 +1358,13 @@ free_and_fail:
  */
 errno_t fci_connections_ipv4_ct_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_ct_cmd_t *reply_buf, uint32_t *reply_len)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return fci_connections_ipvx_ct_cmd(FALSE, msg, fci_ret, (void *)reply_buf, reply_len);
 }
@@ -1377,13 +1382,13 @@ errno_t fci_connections_ipv4_ct_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_ct_cm
  */
 errno_t fci_connections_ipv6_ct_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_ct6_cmd_t *reply_buf, uint32_t *reply_len)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return fci_connections_ipvx_ct_cmd(TRUE, msg, fci_ret, (void *)reply_buf, reply_len);
 }
@@ -1409,7 +1414,7 @@ errno_t fci_connections_ipv4_timeout_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_
 	uint8_t proto;
 	uint32_t timeout;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -1421,7 +1426,7 @@ errno_t fci_connections_ipv4_timeout_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (*reply_len < sizeof(fpp_timeout_cmd_t))
 	{
@@ -1446,7 +1451,7 @@ errno_t fci_connections_ipv4_timeout_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_
 	}
 	else
 	{
-		NXP_LOG_DEBUG("Default timeout for protocol %d set to %d seconds\n", timeout_cmd->protocol, timeout_cmd->timeout_value1);
+		NXP_LOG_DEBUG("Default timeout for protocol %u set to %u seconds\n", timeout_cmd->protocol, timeout_cmd->timeout_value1);
 	}
 
 	/*	Update existing connections */
@@ -1480,7 +1485,7 @@ errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry)
 	pfe_5_tuple_t tuple;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -1492,7 +1497,7 @@ errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry)
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	ret = pfe_rtable_entry_to_5t(entry, &tuple);
 	if (EOK != ret)
@@ -1591,13 +1596,13 @@ void fci_connections_drop_all(void)
 	pfe_rtable_entry_t *entry = NULL;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(FALSE == context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	NXP_LOG_DEBUG("Removing all connections\n");
 
@@ -1624,13 +1629,13 @@ errno_t fci_connections_set_default_timeout(uint8_t ip_proto, uint32_t timeout)
 {
 	fci_t *context = (fci_t *)&__context;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(FALSE == context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	switch (ip_proto)
 	{
@@ -1665,13 +1670,13 @@ uint32_t fci_connections_get_default_timeout(uint8_t ip_proto)
 {
 	fci_t *context = (fci_t *)&__context;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(FALSE == context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	switch (ip_proto)
 	{

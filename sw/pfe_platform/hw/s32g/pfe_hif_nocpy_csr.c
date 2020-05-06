@@ -39,9 +39,9 @@
  *
  */
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
-#include "pfe_mmap.h"
 #include "pfe_cbus.h"
 #include "pfe_platform_cfg.h"
 #include "pfe_hif_csr.h" /* Common bit-field definitions */
@@ -54,9 +54,9 @@
 #endif /* PFE_CBUS_H_ */
 
 /*	Supported IPs. Defines are validated within pfe_cbus.h. */
-#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 
 /**
  * @brief	Control the buffer descriptor fetch
@@ -455,7 +455,7 @@ void pfe_hif_nocpy_cfg_tx_irq_unmask(void *base_va)
  */
 void pfe_hif_nocpy_cfg_set_rx_bd_ring_addr(void *base_va, void *rx_ring_pa)
 {
-	hal_write32((uint32_t)PFE_MMAP_DDR_PHYS_TO_PFE((addr_t)rx_ring_pa & 0xffffffffU), base_va + HIF_NOCPY_RX_BDP_ADDR);
+	hal_write32((uint32_t)PFE_CFG_MEMORY_PHYS_TO_PFE((addr_t)rx_ring_pa & 0xffffffffU), base_va + HIF_NOCPY_RX_BDP_ADDR);
 }
 
 /**
@@ -468,7 +468,7 @@ void pfe_hif_nocpy_cfg_set_rx_bd_ring_addr(void *base_va, void *rx_ring_pa)
  */
 void pfe_hif_nocpy_cfg_set_tx_bd_ring_addr(void *base_va, void *tx_ring_pa)
 {
-	hal_write32((uint32_t)PFE_MMAP_DDR_PHYS_TO_PFE((addr_t)tx_ring_pa), base_va + HIF_NOCPY_TX_BDP_ADDR);
+	hal_write32((uint32_t)PFE_CFG_MEMORY_PHYS_TO_PFE((addr_t)tx_ring_pa), base_va + HIF_NOCPY_TX_BDP_ADDR);
 }
 
 /**
@@ -550,13 +550,13 @@ uint32_t pfe_hif_nocpy_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t si
 	uint32_t len = 0U;
 	uint32_t reg;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Get version */
 	if(verb_level >= 9U)

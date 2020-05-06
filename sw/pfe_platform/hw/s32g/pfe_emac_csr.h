@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -596,7 +596,9 @@
 #define	JUMBO_PACKET_ENABLE(x)			((!!x) ? (1U << 16) : 0U)	/* JE     */
 #define PORT_SELECT(x)					((!!x) ? (1U << 15) : 0U)	/* PS     */
 #define SPEED(x)						((!!x) ? (1U << 14) : 0U)	/* FES    */
+#define GET_LINE_SPEED(x)				(((x) >> 14) & 3U)			/* FES+PS */
 #define DUPLEX_MODE(x)					((!!x) ? (1U << 13) : 0U)	/* DM     */
+#define GET_DUPLEX_MODE(x)				(((x) >> 13) & 1U)			/* DM     */
 #define LOOPBACK_MODE(x)				((!!x) ? (1U << 12) : 0U)	/* LM     */
 #define CARRIER_SENSE_BEFORE_TX(x)		((!!x) ? (1U << 11) : 0U)	/* ECRSFD */
 #define DISABLE_RECEIVE_OWN(x)			((!!x) ? (1U << 10) : 0U)	/* DO     */
@@ -670,6 +672,11 @@
 #define ENABLE_PTP_PROCESSING(x)		((!!x) ? (1U << 11) : 0U)	/* TSIPENA    */
 #define SELECT_PTP_PACKETS(x)			(((x) & 0x3U) << 16)			/* SNAPTYPSEL */
 
+/* MAC_PHYIF_Control_Status Bits */
+#define LNKSTS(x)						(((x) >> 19) & 0x1U)
+#define LNKSPEED(x)						(((x) >> 17) & 0x3U)
+#define LNKMOD(x)						(((x) >> 16) & 0x1U)
+
 /**
  * @brief	Number of HW slots able to hold individual MAC addresses
  * @details	The HW can have multiple individual MAC addresses assigned at
@@ -683,6 +690,8 @@ errno_t pfe_emac_cfg_set_duplex(void *base_va, pfe_emac_duplex_t duplex);
 errno_t pfe_emac_cfg_set_mii_mode(void *base_va, pfe_emac_mii_mode_t mode);
 errno_t pfe_emac_cfg_set_speed(void *base_va, pfe_emac_speed_t speed);
 errno_t pfe_emac_cfg_set_max_frame_length(void *base_va, uint32_t len);
+errno_t pfe_emac_cfg_get_link_config(void *base_va, pfe_emac_speed_t *speed, pfe_emac_duplex_t *duplex);
+errno_t pfe_emac_cfg_get_link_status(void *base_va, pfe_emac_link_speed_t *link_speed, pfe_emac_duplex_t *duplex, bool_t *link);
 void pfe_emac_cfg_write_addr_slot(void *base_va, pfe_mac_addr_t addr, uint8_t slot);
 uint32_t pfe_emac_cfg_get_hash(void *base_va, pfe_mac_addr_t addr);
 void pfe_emac_cfg_set_uni_group(void *base_va, int32_t hash, bool_t en);

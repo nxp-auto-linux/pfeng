@@ -53,6 +53,7 @@
  2) needed interfaces from external units
  3) internal and external interfaces from this unit
 ==================================================================================================*/
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "blalloc.h"
 /*==================================================================================================

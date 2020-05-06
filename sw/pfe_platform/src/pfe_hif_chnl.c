@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -101,16 +101,11 @@
  *
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-#include <errno.h>
-
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 
 #include "pfe_cbus.h"
-#include "pfe_mmap.h"
 #include "pfe_hif_chnl.h"
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
@@ -123,6 +118,18 @@
 
 #define DUMMY_TX_BUF_LEN		64U
 #define DUMMY_RX_BUF_LEN		2048U
+
+#if defined(PFE_CFG_TARGET_OS_AUTOSAR)
+	#define BUFFERS_CACHED FALSE
+#else
+	#define BUFFERS_CACHED TRUE
+#endif
+
+typedef struct
+{
+	pfe_hif_chnl_cbk_t cbk;
+	void *arg;
+} pfe_hif_chnl_cbk_storage_t;
 
 /**
  * @brief	The HIF channel representation type
@@ -138,16 +145,19 @@ struct __attribute__((aligned(HAL_CACHE_LINE_SIZE))) __pfe_hif_chnl_tag
 	pfe_hif_ring_t *tx_ring;		/*	The TX ring instance */
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
 	bpool_t *rx_pool;				/*	Pool of available RX buffers */
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	pfe_bmu_t *bmu;					/*	Associated BMU instance */
 	void *tx_ibuf_va;				/*	Intermediate TX buffer VA */
 	uint16_t tx_ibuf_len;			/*	Number of bytes in the ibuf */
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 	oal_spinlock_t lock __attribute__((aligned(HAL_CACHE_LINE_SIZE)));				/*	Channel HW resources protection */
 	oal_spinlock_t rx_lock __attribute__((aligned(HAL_CACHE_LINE_SIZE)));			/*	RX resource protection */
-	pfe_hif_chnl_cbk_t rx_oob_cbk;	/*	RX out-of-buffers event callback */
-	void *rx_oob_cbk_arg;			/*	RX OOB event argument */
+	pfe_hif_chnl_cbk_storage_t rx_cbk;		/*	RX callback */
+	pfe_hif_chnl_cbk_storage_t tx_cbk;		/*	TX callback */
+#if (TRUE == PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED)
+	pfe_hif_chnl_cbk_storage_t rx_oob_cbk;	/*	RX Out-Of-Buffers callback */
+#endif
 };
 
 static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *chnl, pfe_hif_ring_t *ring) __attribute__((cold));
@@ -159,6 +169,22 @@ static errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_t *chnl) __attribute__
 static void pfe_hif_chnl_refill_rx_buffers(pfe_hif_chnl_t *chnl) __attribute__((hot));
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
+#ifdef PFE_CFG_HIF_TX_FIFO_FIX
+/**
+ * @brief	Commited byte count (TX)
+ * @details	Number of bytes commited for transmission. Sum of bytes enqueued to TX rings
+ *			and waiting for transmission over all buffer descriptors.
+ */
+static uint32_t pfe_hif_tx_cbc = 0U;
+static oal_spinlock_t cbc_lock;
+static uint32_t cbc_lock_initialized = 0U;
+#if PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14
+	#define PFE_HIF_TX_FIFO_SIZE	(1024U * 6U * 8U)
+#else
+	#error Please define HIF TX FIFO size
+#endif /* PFE_CFG_IP_VERSION */
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
+
 /**
  * @brief		Channel master ISR
  * @param[in]	chnl The channel instance
@@ -167,14 +193,15 @@ static void pfe_hif_chnl_refill_rx_buffers(pfe_hif_chnl_t *chnl) __attribute__((
 __attribute__((hot)) errno_t pfe_hif_chnl_isr(pfe_hif_chnl_t *chnl)
 {
 	errno_t ret;
+	pfe_hif_chnl_event_t events;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
@@ -182,21 +209,46 @@ __attribute__((hot)) errno_t pfe_hif_chnl_isr(pfe_hif_chnl_t *chnl)
 	}
 
 	/*	Run the low-level ISR to identify and process the interrupt */
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		ret = pfe_hif_nocpy_cfg_isr(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
-		ret = pfe_hif_chnl_cfg_isr(chnl->cbus_base_va, chnl->id);
+		ret = pfe_hif_chnl_cfg_isr(chnl->cbus_base_va, chnl->id, &events);
 	}
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
 		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+	/*	Run callbacks for identified interrupts here */
+	if (HIF_CHNL_EVT_RX_IRQ == (events & HIF_CHNL_EVT_RX_IRQ))
+	{
+		if (NULL != chnl->rx_cbk.cbk)
+		{
+			chnl->rx_cbk.cbk(chnl->rx_cbk.arg);
+		}
+		else
+		{
+			NXP_LOG_DEBUG("Unhandled HIF_CHNL_EVT_RX_IRQ detected\n");
+		}
+	}
+
+	if (HIF_CHNL_EVT_TX_IRQ == (events & HIF_CHNL_EVT_TX_IRQ))
+	{
+		if (NULL != chnl->tx_cbk.cbk)
+		{
+			chnl->tx_cbk.cbk(chnl->tx_cbk.arg);
+		}
+		else
+		{
+			NXP_LOG_DEBUG("Unhandled HIF_CHNL_EVT_TX_IRQ detected\n");
+		}
 	}
 
 	return ret;
@@ -213,14 +265,14 @@ void pfe_hif_chnl_irq_mask(pfe_hif_chnl_t *chnl)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_irq_mask(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		pfe_hif_chnl_cfg_irq_mask(chnl->cbus_base_va, chnl->id);
 	}
@@ -242,14 +294,14 @@ void pfe_hif_chnl_irq_unmask(pfe_hif_chnl_t *chnl)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_irq_unmask(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		pfe_hif_chnl_cfg_irq_unmask(chnl->cbus_base_va, chnl->id);
 	}
@@ -271,13 +323,13 @@ __attribute__((hot)) static void pfe_hif_chnl_refill_rx_buffers(pfe_hif_chnl_t *
 	void *new_buffer_pa;
 	errno_t err;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	while (TRUE == pfe_hif_chnl_can_accept_rx_buf(chnl))
 	{
@@ -331,21 +383,21 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(void *cbus_base_va, ui
 	pfe_hif_chnl_t *chnl;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == cbus_base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if !defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if !defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		NXP_LOG_ERROR("HIF NOCPY support is not enabled\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 	chnl = oal_mm_malloc_contig_aligned_cache(sizeof(pfe_hif_chnl_t), HAL_CACHE_LINE_SIZE);
 
@@ -362,10 +414,10 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(void *cbus_base_va, ui
 		chnl->rx_ring = NULL;
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
 		chnl->rx_pool = NULL;
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 		chnl->bmu = bmu;
 		chnl->tx_ibuf_va = NULL;
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
 		if (EOK != oal_spinlock_init(&chnl->lock))
@@ -386,7 +438,23 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(void *cbus_base_va, ui
 			return NULL;
 		}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_TX_FIFO_FIX)
+		if (0U == cbc_lock_initialized)
+		{
+			if (EOK != oal_spinlock_init(&cbc_lock))
+			{
+				NXP_LOG_ERROR("CBC lock initialization failed\n");
+				(void)oal_spinlock_destroy(&chnl->lock);
+				(void)oal_spinlock_destroy(&chnl->rx_lock);
+				oal_mm_free_contig(chnl);
+				return NULL;
+			}
+		}
+
+		cbc_lock_initialized++;
+#endif /* */
+
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 		if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 		{
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
@@ -400,7 +468,7 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(void *cbus_base_va, ui
 			;
 		}
 		else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 		{
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
 			if (NULL != bmu)
@@ -435,10 +503,15 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(void *cbus_base_va, ui
 	return chnl;
 
 free_and_fail:
-	if (EOK != oal_spinlock_destroy(&chnl->lock))
+	(void)oal_spinlock_destroy(&chnl->lock);
+	(void)oal_spinlock_destroy(&chnl->rx_lock);
+#if defined(PFE_CFG_HIF_TX_FIFO_FIX)
+	cbc_lock_initialized--;
+	if (0U == cbc_lock_initialized)
 	{
-		NXP_LOG_WARNING("Could not properly destroy channel mutex\n");
+		(void)oal_spinlock_destroy(&cbc_lock);
 	}
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 
 	oal_mm_free_contig(chnl);
 	return NULL;
@@ -451,13 +524,13 @@ free_and_fail:
  */
 __attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_id(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return UINT_MAX; /* Available via oal_types.h */
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return chnl->id;
 }
@@ -471,13 +544,13 @@ __attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_id(pfe_hif_chnl_t *chnl)
  */
 __attribute__((cold)) errno_t pfe_hif_chnl_tx_enable(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (NULL == chnl->tx_ring)
 	{
@@ -490,14 +563,14 @@ __attribute__((cold)) errno_t pfe_hif_chnl_tx_enable(pfe_hif_chnl_t *chnl)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_tx_enable(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		/*	HIF */
 		pfe_hif_chnl_cfg_tx_enable(chnl->cbus_base_va, chnl->id);
@@ -521,13 +594,13 @@ __attribute__((cold)) errno_t pfe_hif_chnl_tx_enable(pfe_hif_chnl_t *chnl)
  */
 __attribute__((cold)) void pfe_hif_chnl_tx_disable(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
@@ -535,14 +608,14 @@ __attribute__((cold)) void pfe_hif_chnl_tx_disable(pfe_hif_chnl_t *chnl)
 	}
 
 	/*	Stop data transmission */
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_tx_disable(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		/*	HIF */
 		pfe_hif_chnl_cfg_tx_disable(chnl->cbus_base_va, chnl->id);
@@ -569,13 +642,13 @@ __attribute__((cold)) void pfe_hif_chnl_tx_disable(pfe_hif_chnl_t *chnl)
  */
 __attribute__((cold)) errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (NULL == chnl->rx_ring)
 	{
@@ -588,14 +661,14 @@ __attribute__((cold)) errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_rx_enable(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		/*	HIF */
 		pfe_hif_chnl_cfg_rx_enable(chnl->cbus_base_va, chnl->id);
@@ -617,13 +690,13 @@ __attribute__((cold)) errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl)
  */
 __attribute__((cold)) void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
@@ -631,14 +704,14 @@ __attribute__((cold)) void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl)
 	}
 
 	/*	Stop data reception */
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_rx_disable(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		/*	HIF */
 		pfe_hif_chnl_cfg_rx_disable(chnl->cbus_base_va, chnl->id);
@@ -659,24 +732,24 @@ __attribute__((cold)) void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl)
  */
 __attribute__((hot)) void pfe_hif_chnl_rx_dma_start(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	No resource protection here, DMA trigger is atomic. */
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_rx_dma_start(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		/*	HIF */
 		pfe_hif_chnl_cfg_rx_dma_start(chnl->cbus_base_va, chnl->id);
@@ -691,24 +764,24 @@ __attribute__((hot)) void pfe_hif_chnl_rx_dma_start(pfe_hif_chnl_t *chnl)
  */
 __attribute__((hot)) void pfe_hif_chnl_tx_dma_start(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	No resource protection here. DMA trigger is atomic. */
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_tx_dma_start(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		/*	HIF */
 		pfe_hif_chnl_cfg_tx_dma_start(chnl->cbus_base_va, chnl->id);
@@ -725,44 +798,41 @@ __attribute__((hot)) void pfe_hif_chnl_tx_dma_start(pfe_hif_chnl_t *chnl)
  */
 errno_t pfe_hif_chnl_set_event_cbk(pfe_hif_chnl_t *chnl, pfe_hif_chnl_event_t event, pfe_hif_chnl_cbk_t cbk, void *arg)
 {
-	errno_t ret = EINVAL;
+	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-	if ((HIF_CHNL_EVT_RX_IRQ == event) || (HIF_CHNL_EVT_TX_IRQ == event))
+	if (HIF_CHNL_EVT_TX_IRQ == event)
 	{
-		/*	Interrupt-related events are handled by the low-level dispatcher */
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
-		if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-		{
-			/*	HIF_NOCPY */
-			ret = pfe_hif_nocpy_cfg_set_cbk(event, cbk, arg);
-		}
-		else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
-		{
-			/*	HIF */
-			ret = pfe_hif_chnl_cfg_set_cbk(chnl->id, event, cbk, arg);
-		}
+		/*	TX callback */
+		chnl->tx_cbk.arg = arg;
+		chnl->tx_cbk.cbk = cbk;
 	}
+	else if (HIF_CHNL_EVT_RX_IRQ == event)
+	{
+		/*	RX callback */
+		chnl->rx_cbk.arg = arg;
+		chnl->rx_cbk.cbk = cbk;
+	}
+#if (TRUE == PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED)
 	else if (HIF_CHNL_EVT_RX_OOB == event)
 	{
 		/*	Out of RX buffers event handler */
-		chnl->rx_oob_cbk_arg = arg;
-		chnl->rx_oob_cbk = cbk;
-		ret = EOK;
+		chnl->rx_oob_cbk.arg = arg;
+		chnl->rx_oob_cbk.cbk = cbk;
 	}
+#endif
 	else
 	{
 		/*	More events need to be supported here */
@@ -784,27 +854,27 @@ errno_t pfe_hif_chnl_set_event_cbk(pfe_hif_chnl_t *chnl, pfe_hif_chnl_event_t ev
  */
 __attribute__((hot)) void pfe_hif_chnl_rx_irq_mask(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_rx_irq_mask(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		pfe_hif_chnl_cfg_rx_irq_mask(chnl->cbus_base_va, chnl->id);
 	}
@@ -822,27 +892,27 @@ __attribute__((hot)) void pfe_hif_chnl_rx_irq_mask(pfe_hif_chnl_t *chnl)
  */
 __attribute__((hot)) void pfe_hif_chnl_rx_irq_unmask(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_rx_irq_unmask(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		pfe_hif_chnl_cfg_rx_irq_unmask(chnl->cbus_base_va, chnl->id);
 	}
@@ -860,27 +930,27 @@ __attribute__((hot)) void pfe_hif_chnl_rx_irq_unmask(pfe_hif_chnl_t *chnl)
  */
 __attribute__((hot)) void pfe_hif_chnl_tx_irq_mask(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_tx_irq_mask(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		pfe_hif_chnl_cfg_tx_irq_mask(chnl->cbus_base_va, chnl->id);
 	}
@@ -898,27 +968,27 @@ __attribute__((hot)) void pfe_hif_chnl_tx_irq_mask(pfe_hif_chnl_t *chnl)
  */
 __attribute__((hot)) void pfe_hif_chnl_tx_irq_unmask(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_tx_irq_unmask(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		pfe_hif_chnl_cfg_tx_irq_unmask(chnl->cbus_base_va, chnl->id);
 	}
@@ -941,24 +1011,15 @@ __attribute__((hot)) void pfe_hif_chnl_tx_irq_unmask(pfe_hif_chnl_t *chnl)
  */
 __attribute__((pure, hot)) bool_t pfe_hif_chnl_has_tx_conf(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	/*
-	 	 TODO:
-	 	 This is temporary solution only. The caller should be informed
-	 	 about a buffer has been transmitted from the TX ring. If so
-	 	 the _has_tx_conf() shall be TRUE.
-
-	 	 Now the call returns 'TRUE' only when the TX ring is populated
-	 	 by more buffers that a watermark level.
-	 */
-	return pfe_hif_ring_is_below_wm(chnl->tx_ring);
+	return 0 != pfe_hif_ring_get_fill_level(chnl->tx_ring);
 }
 
 /**
@@ -968,21 +1029,17 @@ __attribute__((pure, hot)) bool_t pfe_hif_chnl_has_tx_conf(pfe_hif_chnl_t *chnl)
  */
 __attribute__((pure, hot)) bool_t pfe_hif_chnl_can_accept_rx_buf(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if defined(TARGET_HW_S32G)
 	/*	A single entry must remain unused within the ring
 	 	because HIF expects that. */
 	return (pfe_hif_ring_get_fill_level(chnl->rx_ring) < (pfe_hif_ring_get_len(chnl->rx_ring) - 1U));
-#else
-	return (pfe_hif_ring_get_fill_level(chnl->rx_ring) < pfe_hif_ring_get_len(chnl->rx_ring));
-#endif /* TARGET_HW_S32G */
 }
 
 /**
@@ -994,21 +1051,70 @@ __attribute__((pure, hot)) bool_t pfe_hif_chnl_can_accept_rx_buf(pfe_hif_chnl_t 
  */
 __attribute__((pure, hot)) bool_t pfe_hif_chnl_can_accept_tx_num(pfe_hif_chnl_t *chnl, uint16_t num)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if defined(TARGET_HW_S32G)
 	/*	A single entry must remain unused within the ring because HIF expects that. */
 	return ((pfe_hif_ring_get_len(chnl->tx_ring) - 1U - pfe_hif_ring_get_fill_level(chnl->tx_ring)) >= num);
-#else
-	return ((pfe_hif_ring_get_len(chnl->tx_ring) - pfe_hif_ring_get_fill_level(chnl->tx_ring)) >= num);
-#endif /* TARGET_HW_S32G */
 }
+
+#ifdef PFE_CFG_HIF_TX_FIFO_FIX
+/**
+ * @brief		Check if channel can accept number of TX bytes
+ * @param[in]	chnl The channel instance
+ * @param[in]	num Number of bytes to be checked
+ * @retval		TRUE HIF channel is able to transmit 'num' number of bytes
+ * @retval		FALSE HIF currently can't transmit given number of bytes
+ */
+__attribute__((hot)) bool_t pfe_hif_chnl_can_accept_tx_data(pfe_hif_chnl_t *chnl, uint32_t num)
+{
+	uint32_t cur_fill_level;
+	bool_t result;
+
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
+	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
+	{
+		/*	There is no data amount limitation */
+		return TRUE;
+	}
+	else
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
+	{
+		/*	Ensure that CBC counter and hw FIFO fill level are consistent */
+		if (EOK != oal_spinlock_lock(&cbc_lock))
+		{
+			NXP_LOG_DEBUG("Spinlock lock failed\n");
+		}
+
+		/*	Get current FIFO fill level */
+		cur_fill_level  = pfe_hif_cfg_get_tx_fifo_fill_level(chnl->cbus_base_va);
+
+		/*	Check if commited and requested number of bytes fits portion of the HIF FIFO corresponding
+			to single channel (total_available_space/number_of_channels). */
+		if ((pfe_hif_tx_cbc + num) >= (PFE_HIF_TX_FIFO_SIZE - cur_fill_level))
+		{
+			/*	Transmission is not allowed */
+			result = FALSE;
+		}
+		else
+		{
+			result = TRUE;
+		}
+
+		if (EOK != oal_spinlock_unlock(&cbc_lock))
+		{
+			NXP_LOG_DEBUG("Spinlock unlock failed\n");
+		}
+	}
+
+	return result;
+}
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 
 /**
  * @brief		Check if the TX FIFO is empty
@@ -1018,13 +1124,13 @@ __attribute__((pure, hot)) bool_t pfe_hif_chnl_can_accept_tx_num(pfe_hif_chnl_t 
  */
 __attribute__((pure, hot)) bool_t pfe_hif_chnl_tx_fifo_empty(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return TRUE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return (0U == pfe_hif_ring_get_fill_level(chnl->tx_ring));
 }
@@ -1036,13 +1142,13 @@ __attribute__((pure, hot)) bool_t pfe_hif_chnl_tx_fifo_empty(pfe_hif_chnl_t *chn
  */
 __attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_rx_fifo_depth(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_hif_ring_get_len(chnl->rx_ring);
 }
@@ -1054,13 +1160,13 @@ __attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_rx_fifo_depth(pfe_hif_chnl
  */
 __attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_tx_fifo_depth(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_hif_ring_get_len(chnl->tx_ring);
 }
@@ -1084,23 +1190,28 @@ __attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_tx_fifo_depth(pfe_hif_chnl
 __attribute__((hot)) errno_t pfe_hif_chnl_tx(pfe_hif_chnl_t *chnl, void *buf_pa, void *buf_va, uint32_t len, bool_t lifm)
 {
 	errno_t err = EOK;
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	uint32_t u32tmp;
 	void *tx_ibuf_pa;
-#if defined(GLOBAL_CFG_HIF_NOCPY_DIRECT)
+#if defined(PFE_CFG_HIF_NOCPY_DIRECT)
 	pfe_ct_hif_tx_hdr_t *hif_tx_hdr;
-#endif /* GLOBAL_CFG_HIF_NOCPY_DIRECT */
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_DIRECT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == chnl) || (NULL == buf_pa)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if (TRUE == HAL_HANDLE_CACHE)
+	/*	Flush cache over the buffer */
+	oal_mm_cache_flush(buf_va, buf_pa, len);
+#endif /* HAL_HANDLE_CACHE */
+
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	TODO: What in case when caller is trying to re-transmit a buffer
@@ -1160,7 +1271,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_tx(pfe_hif_chnl_t *chnl, void *buf_pa,
 			memcpy((chnl->tx_ibuf_va), &u32tmp, sizeof(u32tmp));
 
 			/*	Enqueue the intermediate buffer */
-#if defined(GLOBAL_CFG_HIF_NOCPY_DIRECT)
+#if defined(PFE_CFG_HIF_NOCPY_DIRECT)
 			/*	In this case we must specify egress interface (because it is not enough to have
 				the information within TX header and the post-cls header...*/
 			hif_tx_hdr = (pfe_ct_hif_tx_hdr_t *)((addr_t)chnl->tx_ibuf_va + sizeof(pfe_ct_post_cls_hdr_t));
@@ -1176,7 +1287,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_tx(pfe_hif_chnl_t *chnl, void *buf_pa,
 					break;
 				}
 			}
-#endif /* GLOBAL_CFG_HIF_NOCPY_DIRECT */
+#endif /* PFE_CFG_HIF_NOCPY_DIRECT */
 
 			tx_ibuf_pa = pfe_bmu_get_pa(chnl->bmu, chnl->tx_ibuf_va);
 			err = pfe_hif_ring_enqueue_buf(chnl->tx_ring, tx_ibuf_pa, chnl->tx_ibuf_len, TRUE);
@@ -1195,10 +1306,30 @@ __attribute__((hot)) errno_t pfe_hif_chnl_tx(pfe_hif_chnl_t *chnl, void *buf_pa,
 	}
 	else
 #else
-    (void)buf_va;
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+	(void)buf_va;
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
+#ifdef PFE_CFG_HIF_TX_FIFO_FIX
+		/*	Protect the CBC counter */
+		if (EOK != oal_spinlock_lock(&cbc_lock))
+		{
+			NXP_LOG_DEBUG("Spinlock lock failed\n");
+		}
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
+
 		err = pfe_hif_ring_enqueue_buf(chnl->tx_ring, buf_pa, len, lifm);
+
+#ifdef PFE_CFG_HIF_TX_FIFO_FIX
+		if (EOK == err)
+		{
+			pfe_hif_tx_cbc += len;
+		}
+
+		if (EOK != oal_spinlock_unlock(&cbc_lock))
+		{
+			NXP_LOG_DEBUG("Spinlock unlock failed\n");
+		}
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 	}
 
 	if (TRUE == lifm)
@@ -1221,24 +1352,53 @@ __attribute__((hot)) errno_t pfe_hif_chnl_tx(pfe_hif_chnl_t *chnl, void *buf_pa,
 __attribute__((hot)) errno_t pfe_hif_chnl_get_tx_conf(pfe_hif_chnl_t *chnl)
 {
 	bool_t lifm;
+#ifdef PFE_CFG_HIF_TX_FIFO_FIX
+	uint32_t len;
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Get all transmitted chunks but only the last-in-frame
 		will be reported as TX confirmation. */
+#ifdef PFE_CFG_HIF_TX_FIFO_FIX
+	/*	Protect the CBC counter */
+	if (EOK != oal_spinlock_lock(&cbc_lock))
+	{
+		NXP_LOG_DEBUG("Spinlock lock failed\n");
+	}
+
+	while (EOK == pfe_hif_ring_dequeue_plain(chnl->tx_ring, &lifm, &len))
+	{
+		pfe_hif_tx_cbc -= len;
+#else
 	while (EOK == pfe_hif_ring_dequeue_plain(chnl->tx_ring, &lifm))
 	{
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
+		
 		if (TRUE == lifm)
 		{
+#ifdef PFE_CFG_HIF_TX_FIFO_FIX
+		if (EOK != oal_spinlock_unlock(&cbc_lock))
+		{
+			NXP_LOG_DEBUG("Spinlock unlock failed\n");
+		}
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 			return EOK;
 		}
 	}
+
+#ifdef PFE_CFG_HIF_TX_FIFO_FIX
+	if (EOK != oal_spinlock_unlock(&cbc_lock))
+	{
+		NXP_LOG_DEBUG("Spinlock unlock failed\n");
+	}
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 
 	return EAGAIN;
 }
@@ -1264,25 +1424,27 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx(pfe_hif_chnl_t *chnl, void **buf_pa
 {
 	errno_t err;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == chnl) || (NULL == buf_pa) || (NULL == len) || (NULL == lifm) || (NULL == chnl->rx_ring)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	err = pfe_hif_ring_dequeue_buf(chnl->rx_ring, buf_pa, len, lifm);
 
+#if (TRUE == PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED)
 	/*	Check if ring has enough RX buffers */
-	if (0U == pfe_hif_ring_get_fill_level(chnl->rx_ring))
+	if (unlikely(0U == pfe_hif_ring_get_fill_level(chnl->rx_ring)))
 	{
 		/*	Out of RX buffers */
-		if (NULL != chnl->rx_oob_cbk)
+		if (likely(NULL != chnl->rx_oob_cbk.cbk))
 		{
-			chnl->rx_oob_cbk(chnl->rx_oob_cbk_arg);
+			chnl->rx_oob_cbk.cbk(chnl->rx_oob_cbk.arg);
 		}
 	}
+#endif
 
 	return err;
 }
@@ -1297,7 +1459,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx(pfe_hif_chnl_t *chnl, void **buf_pa
  * 				is called using the pfe_hif_chnl_can_accept_rx_buf() call.
  * @param[in]	chnl The channel instance
  * @param[out]	buf_va Pointer to memory where pointer to the received data shall
- * 				       be written (physical address, as seen by host)
+ * 				       be written (virtual address, as seen by host)
  * @param[out]	len Pointer to memory where length in bytes of the received
  *				    data shall be written
  * @param[out]	lifm Pointer to memory where the last-in-frame flag shall be
@@ -1314,18 +1476,18 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf
 	errno_t err;
 	void *buf_pa;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == chnl) || (NULL == buf_va) || (NULL == len) || (NULL == lifm) || (NULL == meta)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	err = pfe_hif_ring_dequeue_buf(chnl->rx_ring, &buf_pa, len, lifm);
 	if (EOK == err)
 	{
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 		if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 		{
 			/*	HIF NOCPY */
@@ -1336,13 +1498,13 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf
 				strip-off the post-classification header here since upper layers do not know about such
 				thing. The space can be (and will be) used as the buffer-specific metadata storage. */
 			*buf_va = pfe_bmu_get_va(chnl->bmu, buf_pa);
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 			if (unlikely(NULL == *buf_va))
 			{
 				NXP_LOG_DEBUG("Fatal: BMU converted p0x%p to v0x0\n", (uint32_t)(addr_t)buf_pa);
 			}
 			else
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 			/*	Get metadata storage (misuse the buffer headers) */
 			*meta = *buf_va;
@@ -1356,18 +1518,18 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf
 
 #if (TRUE == HAL_HANDLE_CACHE)
 			/*	Invalidate cache over the buffer */
-			oal_mm_cache_inval(*buf_va, buf_pa, rx_len);
+			oal_mm_cache_inval(*buf_va, buf_pa, *len);
 #endif /* HAL_HANDLE_CACHE */
 		}
 		else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 		{
 			/*	Return virtual address */
 			*buf_va = bpool_get_va(chnl->rx_pool, buf_pa);
 
 #if (TRUE == HAL_HANDLE_CACHE)
-			/*	Invalidate cache over the buffer */
-			oal_mm_cache_inval(*buf_va, buf_pa, rx_len);
+			/*	Invalidate cache over the received data area */
+			oal_mm_cache_inval(*buf_va, buf_pa, *len);
 #endif /* HAL_HANDLE_CACHE */
 
 			/*	Return pointer to the pre-allocated memory location where
@@ -1376,15 +1538,17 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf
 		}
 	}
 
+#if (TRUE == PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED)
 	/*	Check if ring has enough RX buffers */
 	if (0U == pfe_hif_ring_get_fill_level(chnl->rx_ring))
 	{
 		/*	Out of RX buffers */
-		if (NULL != chnl->rx_oob_cbk)
+		if (NULL != chnl->rx_oob_cbk.cbk)
 		{
-			chnl->rx_oob_cbk(chnl->rx_oob_cbk_arg);
+			chnl->rx_oob_cbk.cbk(chnl->rx_oob_cbk.arg);
 		}
 	}
+#endif
 
 	return err;
 }
@@ -1402,15 +1566,15 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf
  */
 __attribute__((cold)) uint32_t pfe_hif_chnl_get_meta_size(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF NOCPY */
@@ -1422,9 +1586,9 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_get_meta_size(pfe_hif_chnl_t *chnl)
 		return sizeof(pfe_ct_post_cls_hdr_t) + sizeof(pfe_ct_hif_rx_hdr_t);
 	}
 	else
-#elif !defined(GLOBAL_CFG_NULL_ARG_CHECK)
-    (void)chnl;
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#elif !defined(PFE_CFG_NULL_ARG_CHECK)
+	(void)chnl;
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		return bpool_get_meta_storage_size();
 	}
@@ -1441,15 +1605,15 @@ __attribute__((hot)) errno_t pfe_hif_chnl_release_buf(pfe_hif_chnl_t *chnl, void
 	addr_t buf_pa;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF NOCPY */
@@ -1467,7 +1631,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_release_buf(pfe_hif_chnl_t *chnl, void
 		ret = EOK;
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		buf_pa = (addr_t)bpool_get_pa(chnl->rx_pool, buf_va);
 
@@ -1476,13 +1640,19 @@ __attribute__((hot)) errno_t pfe_hif_chnl_release_buf(pfe_hif_chnl_t *chnl, void
 			NXP_LOG_ERROR("VA->PA conversion failed, origin buffer VA: v0x%p\n", buf_va);
 		}
 
+#if (TRUE == HAL_HANDLE_CACHE)
+		/*	Without this flush the invalidation does not properly work. Recycled buffers
+			are not properly invalidated when this line is missing. */
+		oal_mm_cache_flush(buf_va, (void *)buf_pa, PFE_BUF_SIZE);
+#endif /* HAL_HANDLE_CACHE */
+
 		if (unlikely(EOK != oal_spinlock_lock(&chnl->rx_lock)))
 		{
 			NXP_LOG_DEBUG("Mutex lock failed\n");
 		}
 
 		/*	Release the buffer to ring */
-		ret = pfe_hif_chnl_supply_rx_buf(chnl, (void *)buf_pa, PFE_BUF_SIZE);
+		ret = pfe_hif_ring_enqueue_buf(chnl->rx_ring, (void *)buf_pa, PFE_BUF_SIZE, TRUE);
 
 		if (unlikely(EOK != oal_spinlock_unlock(&chnl->rx_lock)))
 		{
@@ -1507,22 +1677,22 @@ __attribute__((hot)) errno_t pfe_hif_chnl_supply_rx_buf(pfe_hif_chnl_t *chnl, vo
 {
 	errno_t err = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == chnl) || (NULL == buf_pa)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	There is noting to supply to HIF NOCPY */
 		err = EINVAL;
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		err = pfe_hif_ring_enqueue_buf(chnl->rx_ring, buf_pa, size, TRUE);
 		if (unlikely(EOK != err))
@@ -1548,13 +1718,13 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *ch
 	void *rx_ring_pa, *wb_tbl_pa;
 	uint32_t wb_tbl_len;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == chnl) || (NULL == ring)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	rx_ring_pa = pfe_hif_ring_get_base_pa(ring);
 	wb_tbl_pa = pfe_hif_ring_get_wb_tbl_pa(ring);
@@ -1570,14 +1740,14 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *ch
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_set_rx_bd_ring_addr(chnl->cbus_base_va, rx_ring_pa);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		/*	HIF */
 		pfe_hif_chnl_cfg_set_rx_bd_ring_addr(chnl->cbus_base_va, chnl->id, rx_ring_pa);
@@ -1613,13 +1783,13 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *ch
 	void *tx_ring_pa, *wb_tbl_pa;
 	uint32_t wb_tbl_len;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == chnl) || (NULL == ring)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	tx_ring_pa = pfe_hif_ring_get_base_pa(ring);
 	wb_tbl_pa = pfe_hif_ring_get_wb_tbl_pa(ring);
@@ -1635,14 +1805,14 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *ch
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		pfe_hif_nocpy_cfg_set_tx_bd_ring_addr(chnl->cbus_base_va, tx_ring_pa);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		/*	HIF */
 		pfe_hif_chnl_cfg_set_tx_bd_ring_addr(chnl->cbus_base_va, chnl->id, tx_ring_pa);
@@ -1677,22 +1847,22 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 	pfe_hif_ring_t *tx_ring, *rx_ring;
 	uint16_t seqnum;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if ((chnl->id >= PFE_HIF_CHNL_NOCPY_ID) && (NULL == chnl->bmu))
 	{
 		NXP_LOG_ERROR("Channel requires BMU instance\n");
 		goto free_and_fail;
 	}
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
 	if (NULL != chnl->rx_ring)
@@ -1703,12 +1873,12 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 	}
 
 	/*	Get current valid RX ring sequence number */
-#ifdef GLOBAL_CFG_HIF_SEQNUM_CHECK
+#ifdef PFE_CFG_HIF_SEQNUM_CHECK
 	seqnum = pfe_hif_chnl_cfg_get_rx_seqnum(chnl->cbus_base_va, chnl->id);
 	NXP_LOG_DEBUG("Using initial RX ring seqnum 0x%x\n", seqnum);
 #else
 	seqnum = 0U;
-#endif /* GLOBAL_CFG_HIF_SEQNUM_CHECK */
+#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 	rx_ring = pfe_hif_ring_create(TRUE, seqnum, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
 	if (NULL == rx_ring)
 	{
@@ -1732,12 +1902,12 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 	}
 
 	/*	Get current valid TX ring sequence number */
-#ifdef GLOBAL_CFG_HIF_SEQNUM_CHECK
+#ifdef PFE_CFG_HIF_SEQNUM_CHECK
 	seqnum = pfe_hif_chnl_cfg_get_tx_seqnum(chnl->cbus_base_va, chnl->id);
 	NXP_LOG_DEBUG("Using initial TX ring seqnum 0x%x\n", seqnum);
 #else
 	seqnum = 0U;
-#endif /* GLOBAL_CFG_HIF_SEQNUM_CHECK */
+#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 	tx_ring = pfe_hif_ring_create(FALSE, seqnum, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
 	if (NULL == tx_ring)
 	{
@@ -1754,20 +1924,20 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 	}
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF NOCPY does not need external RX buffers */
 		chnl->rx_pool = NULL;
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		/*	Initialize RX buffer pool. Resource protection is embedded. */
 		NXP_LOG_INFO("Initializing RX buffer pool. Depth: %d; Buffer Size: %d; Cache Line Size: %d\n",
 				pfe_hif_chnl_get_rx_fifo_depth(chnl), PFE_BUF_SIZE, HAL_CACHE_LINE_SIZE);
 
-		chnl->rx_pool = bpool_create(pfe_hif_chnl_get_rx_fifo_depth(chnl), PFE_BUF_SIZE, HAL_CACHE_LINE_SIZE);
+		chnl->rx_pool = bpool_create(pfe_hif_chnl_get_rx_fifo_depth(chnl), PFE_BUF_SIZE, HAL_CACHE_LINE_SIZE, BUFFERS_CACHED);
 		if (unlikely(NULL == chnl->rx_pool))
 		{
 			NXP_LOG_ERROR("Could not allocate RX buffer pool\n");
@@ -1812,24 +1982,24 @@ free_and_fail:
  */
 __attribute__((hot)) bool_t pfe_hif_chnl_is_rx_dma_active(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	No protection here. Getting DMA status is atomic. */
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		return pfe_hif_nocpy_cfg_is_rx_dma_active(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		/*	HIF */
 		return pfe_hif_chnl_cfg_is_rx_dma_active(chnl->cbus_base_va, chnl->id);
@@ -1843,24 +2013,24 @@ __attribute__((hot)) bool_t pfe_hif_chnl_is_rx_dma_active(pfe_hif_chnl_t *chnl)
  */
 __attribute__((hot)) bool_t pfe_hif_chnl_is_tx_dma_active(pfe_hif_chnl_t *chnl)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	No protection here. Getting DMA status is atomic. */
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		return pfe_hif_nocpy_cfg_is_tx_dma_active(chnl->cbus_base_va);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		/*	HIF */
 		return pfe_hif_chnl_cfg_is_tx_dma_active(chnl->cbus_base_va, chnl->id);
@@ -1923,13 +2093,13 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_
 
 	tx_hdr = (pfe_ct_hif_tx_hdr_t *)tx_buf_va;
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		tx_hdr->e_phy_ifs = oal_htonl(1U << PFE_PHY_IF_ID_HIF_NOCPY);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		tx_hdr->e_phy_ifs = oal_htonl(1U << (PFE_PHY_IF_ID_HIF0 + chnl->id));
 	}
@@ -2020,15 +2190,27 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 	uint32_t level;
 	uint32_t total, available, used;
 	errno_t err;
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	void *tx_ibuf_pa;
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
 	if (NULL != chnl)
 	{
+		/*	Disable channel interrupts */
+		pfe_hif_chnl_rx_irq_mask(chnl);
+		pfe_hif_chnl_tx_irq_mask(chnl);
+
+		/*	Disable RX/TX DMA */
 		pfe_hif_chnl_rx_disable(chnl);
 		pfe_hif_chnl_tx_disable(chnl);
+
+		/*	Uninstall callbacks */
+		chnl->rx_cbk.cbk = NULL;
+		chnl->tx_cbk.cbk = NULL;
+#if (TRUE == PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED)
+		chnl->rx_oob_cbk.cbk = NULL;
+#endif
 
 		if (NULL != chnl->rx_ring)
 		{
@@ -2036,14 +2218,14 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 			/*	Drain RX buffers (the ones enqueued in RX ring) */
 			while (EOK == pfe_hif_ring_drain_buf(chnl->rx_ring, &buf_pa))
 			{
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 				if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 				{
 					/*	HIF NOCPY buffers are provided by BMU so return them to BMU */
 					buf_va = pfe_bmu_get_va(chnl->bmu, buf_pa);
 				}
 				else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 				{
 					/*	HIF buffers are provided by SW pool so return them to SW pool */
 					buf_va = bpool_get_va(chnl->rx_pool, buf_pa);
@@ -2060,14 +2242,14 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 				}
 			}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 			if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 			{
 				/*	Nothing to do */
 				;
 			}
 			else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 			{
 				/*	Sanity check */
 				if (EOK != bpool_get_fill_level(chnl->rx_pool, &level))
@@ -2156,7 +2338,7 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 			chnl->rx_pool = NULL;
 		}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 		/*	Release the intermediate TX buffer */
 		if (NULL != chnl->tx_ibuf_va)
 		{
@@ -2164,7 +2346,7 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 			pfe_bmu_free_buf(chnl->bmu, tx_ibuf_pa);
 			chnl->tx_ibuf_va = NULL;
 		}
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
 		if (EOK != oal_spinlock_lock(&chnl->lock))
@@ -2173,13 +2355,13 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 		}
 
 		/*	Disable and finalize the channel */
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 		if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 		{
 			; /*	HIF NOCPY will do the finalization */
 		}
 		else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 		{
 			pfe_hif_chnl_cfg_fini(chnl->cbus_base_va, chnl->id);
 		}
@@ -2199,6 +2381,14 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 			NXP_LOG_WARNING("Could not properly destroy channel RX mutex\n");
 		}
 
+#if defined(PFE_CFG_HIF_TX_FIFO_FIX)
+		cbc_lock_initialized--;
+		if (0U == cbc_lock_initialized)
+		{
+			(void)oal_spinlock_destroy(&cbc_lock);
+		}
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
+
 		oal_mm_free_contig(chnl);
 	}
 }
@@ -2209,26 +2399,33 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
  * @param[in]	chnl The client channel instance
  * @param[in]	dump_rx True if RX ring has to be dumped
  * @param[in]	dump_tx True if TX ring has to be dumped
+ * @param[in]	buf 		Pointer to the buffer to write to
+ * @param[in]	size 		Buffer length
+ * @param[in]	verb_level 	Verbosity level, number of data written to the buffer
  */
-__attribute__((cold)) void pfe_hif_chnl_dump_ring(pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx)
+__attribute__((cold)) uint32_t pfe_hif_chnl_dump_ring(pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, char_t *buf, uint32_t size, uint8_t verb_level)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	uint32_t len = 0;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if(dump_rx)
 	{
-		pfe_hif_ring_dump(chnl->rx_ring, "RX");
+		len += pfe_hif_ring_dump(chnl->rx_ring, "RX", buf + len, size - len, verb_level);
 	}
 
 	if(dump_tx)
 	{
-		pfe_hif_ring_dump(chnl->tx_ring, "TX");
+		len += pfe_hif_ring_dump(chnl->tx_ring, "TX", buf + len, size - len, verb_level);
 	}
+
+	return len;
 }
 
 /**
@@ -2236,7 +2433,7 @@ __attribute__((cold)) void pfe_hif_chnl_dump_ring(pfe_hif_chnl_t *chnl, bool_t d
  * @details		Function writes formatted text into given buffer.
  * @param[in]	chnl 		The channel instance
  * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	size 		Buffer length
+ * @param[in]	buf_len 	Buffer length
  * @param[in]	verb_level 	Verbosity level, number of data written to the buffer
  * @return		Number of bytes written to the buffe
  */
@@ -2244,25 +2441,27 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_get_text_statistics(pfe_hif_chnl_t *
 {
 	uint32_t len = 0U;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
 		/*	HIF_NOCPY */
 		len += pfe_hif_nocpy_chnl_cfg_get_text_stat(chnl->cbus_base_va, buf, buf_len, verb_level);
 	}
 	else
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
 		/*	HIF */
 		len += pfe_hif_chnl_cfg_get_text_stat(chnl->cbus_base_va, chnl->id, buf, buf_len, verb_level);
+
+		len += pfe_hif_chnl_dump_ring(chnl, TRUE, TRUE, buf, buf_len, verb_level);
 	}
 
 	return len;

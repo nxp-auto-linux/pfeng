@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -38,6 +38,7 @@
  * 				for ETGPI and HGPI except IGQOS registers.
  */
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 #include "pfe_platform_cfg.h"
@@ -51,9 +52,9 @@
 #endif /* PFE_CBUS_H_ */
 
 /*	Supported IPs. Defines are validated within pfe_cbus.h. */
-#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 
 static void pfe_gpi_cfg_init_inqos(void *base_va);
 
@@ -267,13 +268,32 @@ uint32_t pfe_gpi_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, ui
 	uint32_t len = 0U;
 	uint32_t reg;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/* Debug registers */
+	if(verb_level >= 10U)
+	{
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_TX_DBUG_REG1 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG1));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_TX_DBUG_REG2 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG2));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_TX_DBUG_REG3 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG3));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_TX_DBUG_REG4 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG4));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_TX_DBUG_REG5 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG5));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_TX_DBUG_REG6 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG6));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_RX_DBUG_REG1 : 0x%x\n", hal_read32(base_va + GPI_RX_DBUG_REG1));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_RX_DBUG_REG2 : 0x%x\n", hal_read32(base_va + GPI_RX_DBUG_REG2));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_FIFO_STATUS  : 0x%x\n", hal_read32(base_va + GPI_FIFO_STATUS));
+	}
 
 	/*	Get version */
 	if(verb_level >= 9U)

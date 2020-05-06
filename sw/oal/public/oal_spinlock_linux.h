@@ -63,13 +63,13 @@ typedef struct {
 
 static inline errno_t oal_spinlock_init(oal_spinlock_t *spinlock)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == spinlock))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #ifdef DEBUG_OAL_LOCK_LINUX
 	if(spinlock->inited)
@@ -88,13 +88,13 @@ static inline errno_t oal_spinlock_init(oal_spinlock_t *spinlock)
 
 static inline errno_t oal_spinlock_destroy(oal_spinlock_t *spinlock)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == spinlock))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #ifdef DEBUG_OAL_LOCK_LINUX
 	if(!spinlock->inited)
@@ -111,13 +111,13 @@ static inline errno_t oal_spinlock_destroy(oal_spinlock_t *spinlock)
 
 static inline errno_t oal_spinlock_lock(oal_spinlock_t *spinlock)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == spinlock))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #ifdef DEBUG_OAL_LOCK_LINUX
 	if(!spinlock->inited)
@@ -134,13 +134,13 @@ static inline errno_t oal_spinlock_lock(oal_spinlock_t *spinlock)
 
 static inline errno_t oal_spinlock_unlock(oal_spinlock_t *spinlock)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == spinlock))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #ifdef DEBUG_OAL_LOCK_LINUX
 	if(!spinlock->inited)

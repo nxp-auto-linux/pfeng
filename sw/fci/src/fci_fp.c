@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,6 +27,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
+#include "pfe_cfg.h"
 #include "libfci.h"
 #include "fpp.h"
 #include "fpp_ext.h"
@@ -48,7 +49,7 @@
 * @param[in] offset Value of the offset parameter of the replied rule
 * @param[in] flags Flags being applied to the replied rule
 */
-static void fci_fp_construct_rule_reply(fpp_flexible_parser_rule_props *r, char *rule_name, char *next_rule,
+static void fci_fp_construct_rule_reply(fpp_fp_rule_props_t *r, char *rule_name, char *next_rule,
                                    uint32_t data, uint32_t mask, uint16_t offset, pfe_ct_fp_flags_t flags)
 {
     strncpy((char_t *)r->rule_name, rule_name, 15);
@@ -61,6 +62,7 @@ static void fci_fp_construct_rule_reply(fpp_flexible_parser_rule_props *r, char 
     }
     if(flags & FP_FL_ACCEPT)
     {
+        /*  Ensure correct endianess */
         r->match_action = FP_ACCEPT;
     }
     else if(flags & FP_FL_REJECT)
@@ -98,21 +100,21 @@ static void fci_fp_construct_rule_reply(fpp_flexible_parser_rule_props *r, char 
  * @brief			Processes FPP_CMD_FP_TABLE commands
  * @param[in]		msg FCI message containing the FPP_CMD_FP_TABLE command
  * @param[out]		fci_ret FCI command return value
- * @param[out]		reply_buf Pointer to a buffer where function will construct command reply (fpp_flexible_parser_table_cmd)
+ * @param[out]		reply_buf Pointer to a buffer where function will construct command reply (fpp_fp_table_cmd_t)
  * @param[in,out]	reply_len Maximum reply buffer size on input, real reply size on output (in bytes)
  * @return			EOK if success, error code otherwise
  * @note			Function is only called within the FCI worker thread context.
  * @note			Must run with domain DB protected against concurrent accesses.
  */
-errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_table_cmd *reply_buf, uint32_t *reply_len)
+errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *reply_buf, uint32_t *reply_len)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     fci_t *context = (fci_t *)&__context;
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
-    fpp_flexible_parser_table_cmd *fp_cmd;
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+    fpp_fp_table_cmd_t *fp_cmd;
     errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -124,11 +126,11 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (*reply_len < sizeof(fpp_flexible_parser_table_cmd))
+	if (*reply_len < sizeof(fpp_fp_table_cmd_t))
 	{
-		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_flexible_parser_table_cmd_t)\n");
+		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fp_table_cmd_t)\n");
 		return EINVAL;
 	}
 	else
@@ -136,7 +138,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_
 		/*	No data written to reply buffer (yet) */
 		*reply_len = 0U;
 	}
-    fp_cmd = (fpp_flexible_parser_table_cmd *)(msg->msg_cmd.payload);
+    fp_cmd = (fpp_fp_table_cmd_t *)(msg->msg_cmd.payload);
     switch (fp_cmd->action)
 	{
 		case FPP_ACTION_REGISTER:
@@ -167,7 +169,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_
         }
         case FPP_ACTION_USE_RULE:
         {
-            ret = fci_fp_db_add_rule_to_table((char_t *)fp_cmd->t.table_name, (char_t *)fp_cmd->t.rule_name, fp_cmd->t.position);
+            ret = fci_fp_db_add_rule_to_table((char_t *)fp_cmd->t.table_name, (char_t *)fp_cmd->t.rule_name, oal_ntohs(fp_cmd->t.position));
             if(EOK == ret)
             {
                 *fci_ret = FPP_ERR_OK;
@@ -204,7 +206,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_
             {
             	fci_fp_construct_rule_reply(&reply_buf->r, rule_name, next_rule, data, mask, offset, flags);
                 *fci_ret = FPP_ERR_OK;
-                *reply_len = sizeof(fpp_flexible_parser_table_cmd);
+                *reply_len = sizeof(fpp_fp_table_cmd_t);
             }
             else
             {
@@ -225,7 +227,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_
             {
             	fci_fp_construct_rule_reply(&reply_buf->r, rule_name, next_rule, data, mask, offset, flags);
                 *fci_ret = FPP_ERR_OK;
-                *reply_len = sizeof(fpp_flexible_parser_table_cmd);
+                *reply_len = sizeof(fpp_fp_table_cmd_t);
             }
             else
             {
@@ -235,7 +237,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_
         }
 		default:
 		{
-			NXP_LOG_ERROR("FPP_CMD_L2BRIDGE_DOMAIN: Unknown action received: 0x%x\n", fp_cmd->action);
+			NXP_LOG_ERROR("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", fp_cmd->action);
 			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 			break;
 		}
@@ -247,21 +249,21 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_
  * @brief			Processes FPP_CMD_FP_RULE commands
  * @param[in]		msg FCI message containing the FPP_CMD_FP_RULE command
  * @param[out]		fci_ret FCI command return value
- * @param[out]		reply_buf Pointer to a buffer where function will construct command reply (fpp_flexible_parser_rule_cmd)
+ * @param[out]		reply_buf Pointer to a buffer where function will construct command reply (fpp_fp_rule_cmd_t)
  * @param[in,out]	reply_len Maximum reply buffer size on input, real reply size on output (in bytes)
  * @return			EOK if success, error code otherwise
  * @note			Function is only called within the FCI worker thread context.
  * @note			Must run with domain DB protected against concurrent accesses.
  */
-errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_rule_cmd *reply_buf, uint32_t *reply_len)
+errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *reply_buf, uint32_t *reply_len)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     fci_t *context = (fci_t *)&__context;
 #endif
-    fpp_flexible_parser_rule_cmd *fp_cmd;
+    fpp_fp_rule_cmd_t *fp_cmd;
     errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -273,11 +275,11 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_r
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-    if (*reply_len < sizeof(fpp_flexible_parser_rule_cmd))
+    if (*reply_len < sizeof(fpp_fp_rule_cmd_t))
 	{
-		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_flexible_parser_rule_cmd_t)\n");
+		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fp_rule_cmd_t)\n");
 		return EINVAL;
 	}
 	else
@@ -286,7 +288,7 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_r
 		*reply_len = 0U;
 	}
 
-    fp_cmd = (fpp_flexible_parser_rule_cmd *)(msg->msg_cmd.payload);
+    fp_cmd = (fpp_fp_rule_cmd_t *)(msg->msg_cmd.payload);
     switch (fp_cmd->action)
 	{
 		case FPP_ACTION_REGISTER:
@@ -369,7 +371,7 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_r
             {
                 fci_fp_construct_rule_reply(&reply_buf->r, rule_name, next_rule, data, mask, offset, flags);
                 *fci_ret = FPP_ERR_OK;
-                *reply_len = sizeof(fpp_flexible_parser_rule_cmd);
+                *reply_len = sizeof(fpp_fp_rule_cmd_t);
             }
             else
             {
@@ -390,7 +392,7 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_r
             {
                 fci_fp_construct_rule_reply(&reply_buf->r, rule_name, next_rule, data, mask, offset, flags);
                 *fci_ret = FPP_ERR_OK;
-                *reply_len = sizeof(fpp_flexible_parser_rule_cmd);
+                *reply_len = sizeof(fpp_fp_rule_cmd_t);
             }
             else
             {
@@ -401,7 +403,7 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_r
 
 		default:
 		{
-			NXP_LOG_ERROR("FPP_CMD_L2BRIDGE_DOMAIN: Unknown action received: 0x%x\n", fp_cmd->action);
+			NXP_LOG_ERROR("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", fp_cmd->action);
 			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 			break;
 		}

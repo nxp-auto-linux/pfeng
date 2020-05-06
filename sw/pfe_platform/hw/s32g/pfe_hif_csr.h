@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -49,9 +49,9 @@
 #endif /* PFE_CBUS_H_ */
 
 /*	Supported IPs. Defines are validated within pfe_cbus.h. */
-#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 
 #define HIF_VERSION							(0x00U)
 #define HIF_TX_POLL_CTRL					(0x04U)
@@ -317,8 +317,7 @@
 errno_t pfe_hif_cfg_isr(void *base_va);
 void pfe_hif_cfg_irq_mask(void *base_va);
 void pfe_hif_cfg_irq_unmask(void *base_va);
-errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id);
-errno_t pfe_hif_chnl_cfg_set_cbk(uint32_t channel_id, pfe_hif_chnl_event_t event, pfe_hif_chnl_cbk_t cbk, void *arg);
+errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_event_t *events);
 errno_t pfe_hif_chnl_cfg_init(void *base_va, uint32_t channel_id);
 void pfe_hif_chnl_cfg_fini(void *base_va, uint32_t channel_id);
 void pfe_hif_chnl_cfg_irq_mask(void *base_va, uint32_t channel_id);
@@ -329,6 +328,7 @@ void pfe_hif_chnl_cfg_rx_irq_unmask(void *base_va, uint32_t channel_id);
 void pfe_hif_chnl_cfg_tx_irq_unmask(void *base_va, uint32_t channel_id);
 errno_t pfe_hif_cfg_init(void *base_va);
 void pfe_hif_cfg_fini(void *base_va);
+uint32_t pfe_hif_cfg_get_tx_fifo_fill_level(void *base_va);
 void pfe_hif_chnl_cfg_tx_enable(void *base_va, uint32_t channel_id);
 void pfe_hif_chnl_cfg_tx_disable(void *base_va, uint32_t channel_id);
 void pfe_hif_chnl_cfg_rx_enable(void *base_va, uint32_t channel_id);

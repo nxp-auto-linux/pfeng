@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -95,6 +95,7 @@ errno_t pfe_log_if_del_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule)
 errno_t pfe_log_if_set_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr);
 errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr);
 errno_t pfe_log_if_get_egress_ifs(pfe_log_if_t *iface, uint32_t *egress);
+errno_t pfe_log_if_set_egress_ifs(pfe_log_if_t *iface, uint32_t egress);
 errno_t pfe_log_if_add_egress_if(pfe_log_if_t *iface, pfe_phy_if_t *phy_if);
 errno_t pfe_log_if_del_egress_if(pfe_log_if_t *iface, pfe_phy_if_t *phy_if);
 errno_t pfe_log_if_clear_mac_addr(pfe_log_if_t *iface);
@@ -105,11 +106,13 @@ errno_t pfe_log_if_promisc_enable(pfe_log_if_t *iface);
 errno_t pfe_log_if_promisc_disable(pfe_log_if_t *iface);
 bool_t pfe_log_if_is_promisc(pfe_log_if_t *iface) __attribute__((pure));
 char_t *pfe_log_if_get_name(pfe_log_if_t *iface) __attribute__((pure));
-errno_t pfe_log_if_set_callback(pfe_log_if_t *iface, pfe_log_if_cbk_t callback, void *arg);
-errno_t pfe_log_if_del_callback(pfe_log_if_t *iface, pfe_log_if_cbk_t callback);
+errno_t pfe_log_if_discard_enable(pfe_log_if_t *iface);
+errno_t pfe_log_if_discard_disable(pfe_log_if_t *iface);
+bool_t pfe_log_if_is_discard(pfe_log_if_t *iface);
 uint32_t pfe_log_if_get_text_statistics(pfe_log_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 
 #endif /* PUBLIC_PFE_LOG_IF_H_ */
 
 /** @}*/
 /** @}*/
+

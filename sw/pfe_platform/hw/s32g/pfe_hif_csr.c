@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -38,9 +38,9 @@
  *
  */
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
-#include "pfe_mmap.h"
 #include "pfe_cbus.h"
 #include "pfe_hif_csr.h"
 #include "pfe_platform_cfg.h"
@@ -50,9 +50,9 @@
 #endif /* PFE_CBUS_H_ */
 
 /*	Supported IPs. Defines are validated within pfe_cbus.h. */
-#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 
 /**
  * @brief	Control the buffer descriptor fetch
@@ -61,17 +61,6 @@
  * 			pfe_hif_rx_dma_start() and pfe_hif_tx_dma_start().
  */
 #define	PFE_HIF_CFG_USE_BD_POLLING		TRUE
-
-typedef struct
-{
-	pfe_hif_chnl_cbk_t cbk;
-	void *arg;
-} pfe_hif_chnl_cfg_cbk_t;
-
-/*	Storage for RX callbacks per channel */
-static pfe_hif_chnl_cfg_cbk_t chnl_rx_cbk[HIF_CFG_MAX_CHANNELS] = {{NULL, NULL}};
-/*	Storage for TX callbacks per channel */
-static pfe_hif_chnl_cfg_cbk_t chnl_tx_cbk[HIF_CFG_MAX_CHANNELS] = {{NULL, NULL}};
 
 static inline void dump_hif_channel(void *base_va, uint32_t channel_id)
 {
@@ -300,13 +289,16 @@ void pfe_hif_cfg_irq_unmask(void *base_va)
  * @details		Handles all HIF channel interrupts. MASK, ACK, and process triggered interrupts.
  * @param[in]	base_va Base address of HIF register space (virtual)
  * @param[in]	channel_id Channel identifier
+ * @param[in]	events Bitmask representing indicated events
  * @return		EOK if interrupt has been handled, error code otherwise
  * @note		Make sure the call is protected by some per-channel mutex
  */
-errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id)
+errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_event_t *events)
 {
 	uint32_t reg_src, reg_en;
 	errno_t ret = ENOENT;
+	
+	*events = (pfe_hif_chnl_event_t)0;
 
 	if (unlikely(channel_id >= HIF_CFG_MAX_CHANNELS))
 	{
@@ -328,32 +320,14 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id)
 	/*	Process interrupts which are triggered AND enabled */
 	if (reg_src & reg_en & (BDP_CSR_RX_PKT_CH_INT|BDP_CSR_RX_CBD_CH_INT))
 	{
-		if (likely(NULL != chnl_rx_cbk[channel_id].cbk))
-		{
-			/*	Call user's callback */
-			chnl_rx_cbk[channel_id].cbk(chnl_rx_cbk[channel_id].arg);
-		}
-		else
-		{
-			NXP_LOG_INFO("BDP_CSR_RX_PKT_CH%d_INT or BDP_CSR_RX_CBD_CH%d_INT\n", channel_id, channel_id);
-		}
-
+		*events |= HIF_CHNL_EVT_RX_IRQ;
 		ret = EOK;
 	}
 
 	/*	Process interrupts which are triggered AND enabled */
 	if (reg_src & reg_en & (BDP_CSR_TX_PKT_CH_INT|BDP_CSR_TX_CBD_CH_INT))
 	{
-		if (likely(NULL != chnl_tx_cbk[channel_id].cbk))
-		{
-			/*	Call user's callback */
-			chnl_tx_cbk[channel_id].cbk(chnl_tx_cbk[channel_id].arg);
-		}
-		else
-		{
-			NXP_LOG_INFO("BDP_CSR_TX_PKT_CH%d_INT or BDP_CSR_TX_CBD_CH%d_INT\n", channel_id, channel_id);
-		}
-
+		*events |= HIF_CHNL_EVT_TX_IRQ;
 		ret = EOK;
 	}
 
@@ -364,65 +338,65 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id)
 	{
 		if (reg_src & reg_en & BDP_RD_CSR_RX_TIMEOUT_CH_INT)
 		{
-#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("BDP_RD_CSR_RX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
 #else
 			NXP_LOG_INFO("BDP_RD_CSR_RX_TIMEOUT_CH%d_INT\n", channel_id);
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 		}
 
 		if (reg_src & reg_en & BDP_WR_CSR_RX_TIMEOUT_CH_INT)
 		{
-#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("BDP_WR_CSR_RX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
 #else
 			NXP_LOG_INFO("BDP_WR_CSR_RX_TIMEOUT_CH%d_INT\n", channel_id);
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 		}
 
 		if (reg_src & reg_en & BDP_RD_CSR_TX_TIMEOUT_CH_INT)
 		{
-#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("BDP_RD_CSR_TX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
 #else
 			NXP_LOG_INFO("BDP_RD_CSR_TX_TIMEOUT_CH%d_INT\n", channel_id);
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 		}
 
 		if (reg_src & reg_en & BDP_WR_CSR_TX_TIMEOUT_CH_INT)
 		{
-#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("BDP_WR_CSR_TX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
 #else
 			NXP_LOG_INFO("BDP_WR_CSR_TX_TIMEOUT_CH%d_INT\n", channel_id);
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 		}
 
 		if (reg_src & reg_en & DXR_CSR_RX_TIMEOUT_CH_INT)
 		{
-#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("DXR_CSR_RX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
 #else
 			NXP_LOG_INFO("DXR_CSR_RX_TIMEOUT_CH%d_INT\n", channel_id);
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 		}
 
 		if (reg_src & reg_en & DXR_CSR_TX_TIMEOUT_CH_INT)
 		{
-#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("DXR_CSR_TX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
 #else
 			NXP_LOG_INFO("DXR_CSR_TX_TIMEOUT_CH%d_INT\n", channel_id);
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 		}
 
-#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4) || (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
 		/*	Don't re-enable these interrupts. They will periodically be triggered
 			without way to get rid of them. AAVB-2144 created to research this. */
 #else
@@ -432,50 +406,12 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id)
 		reg_en |= BDP_RD_CSR_TX_TIMEOUT_CH_INT|BDP_WR_CSR_TX_TIMEOUT_CH_INT;
 		reg_en |= DXR_CSR_RX_TIMEOUT_CH_INT|DXR_CSR_TX_TIMEOUT_CH_INT;
 		hal_write32(reg_en, base_va + HIF_CHn_INT_EN(channel_id));
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 
 		ret = EOK;
 	}
 
 	return ret;
-}
-
-/**
- * @brief		Register custom event callback
- * @param[in]	channel_id Channel identifier
- * @param[in]	event Event to trigger the callback
- * @param[in]	cbk The callback
- * @param[in]	arg Argument of the callback
- * @return		EOK if success, error code otherwise
- */
-errno_t pfe_hif_chnl_cfg_set_cbk(uint32_t channel_id, pfe_hif_chnl_event_t event, pfe_hif_chnl_cbk_t cbk, void *arg)
-{
-	switch (event)
-	{
-		case HIF_CHNL_EVT_RX_IRQ:
-		{
-			chnl_rx_cbk[channel_id].arg = arg;
-			hal_wmb();
-			chnl_rx_cbk[channel_id].cbk = cbk;
-			break;
-		}
-
-		case HIF_CHNL_EVT_TX_IRQ:
-		{
-			chnl_tx_cbk[channel_id].arg = arg;
-			hal_wmb();
-			chnl_tx_cbk[channel_id].cbk = cbk;
-			break;
-		}
-
-		default:
-		{
-			NXP_LOG_ERROR("Given event not supported: 0x%x\n", event);
-			return EINVAL;
-		}
-	}
-
-	return EOK;
 }
 
 /**
@@ -494,10 +430,19 @@ errno_t pfe_hif_chnl_cfg_init(void *base_va, uint32_t channel_id)
 	pfe_hif_chnl_cfg_rx_disable(base_va, channel_id);
 	pfe_hif_chnl_cfg_tx_disable(base_va, channel_id);
 
+#if 0 /* TODO: Only timer-based coalescing works, waiting for clarification. */
+	/*	Coalescence timer value in number of sys ticks. PFE_SYS_CLK = 300MHz so for 1ms use value 300k. */
+	hal_write32(2U * 30000U, base_va + HIF_ABS_INT_TIMER_CHn(channel_id)); /* 200us */
+	/*	Number of packets to generate interrupt */
+	hal_write32(32U, base_va + HIF_ABS_FRAME_COUNT_CHn(channel_id));
+	/*	Enable interrupt coalescing (timer+frame count) */
+	hal_write32(0x1U, base_va + HIF_INT_COAL_EN_CHn(channel_id));
+#else
 	/*	Disable interrupt coalescing */
 	hal_write32(0x0U, base_va + HIF_INT_COAL_EN_CHn(channel_id));
 	hal_write32(0x0U, base_va + HIF_ABS_INT_TIMER_CHn(channel_id));
 	hal_write32(0x0U, base_va + HIF_ABS_FRAME_COUNT_CHn(channel_id));
+#endif /* 0 */
 
 	/*	LTC reset (should not be used, but for sure...) */
 	hal_write32(0x0U, base_va + HIF_LTC_MAX_PKT_CHn_ADDR(channel_id));
@@ -580,12 +525,12 @@ errno_t pfe_hif_cfg_init(void *base_va)
 
 	/*	MICS */
 	hal_write32(0U
-#ifdef GLOBAL_CFG_HIF_SEQNUM_CHECK
+#ifdef PFE_CFG_HIF_SEQNUM_CHECK
 				| SEQ_NUM_CHECK_EN /* WARNING:	If this is enabled, SW __must__ ensure
 												that first BD will contain seqnum
 												equal to BD_START_SEQ_NUM value programmed
 												below */
-#endif /* GLOBAL_CFG_HIF_SEQNUM_CHECK */
+#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 				/* | BDPRD_AXI_WRITE_DONE */
 				/* | DBPWR_AXI_WRITE_DONE */
 				/* | RXDXR_AXI_WRITE_DONE */
@@ -628,6 +573,16 @@ void pfe_hif_cfg_fini(void *base_va)
 	hal_write32(0U, base_va + HIF_ERR_INT_EN);
 	hal_write32(0U, base_va + HIF_TX_FIFO_ERR_INT_EN);
 	hal_write32(0U, base_va + HIF_RX_FIFO_ERR_INT_EN);
+}
+
+/**
+ * @brief		Get TX FIFO fill level
+ * @param[in]	base_va Base address of HIF register space (virtual)
+ * @return		Number of bytes in HIF FX FIFO
+ */
+uint32_t pfe_hif_cfg_get_tx_fifo_fill_level(void *base_va)
+{
+	return (8U * hal_read32(base_va + HIF_DXR_TX_FIFO_CNT));
 }
 
 /**
@@ -1125,13 +1080,47 @@ uint32_t pfe_hif_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, ui
 	uint32_t len = 0U;
 	uint32_t reg;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	/* Debug registers */
+	if(verb_level >= 10U)
+	{
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_STATE               : 0x%x\n", hal_read32(base_va + HIF_TX_STATE));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_ACTV                : 0x%x\n", hal_read32(base_va + HIF_TX_ACTV));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_CURR_CH_NO          : 0x%x\n", hal_read32(base_va + HIF_TX_CURR_CH_NO));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_DXR_TX_FIFO_CNT        : 0x%x\n", hal_read32(base_va + HIF_DXR_TX_FIFO_CNT));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_CTRL_WORD_FIFO_CNT1 : 0x%x\n", hal_read32(base_va + HIF_TX_CTRL_WORD_FIFO_CNT1));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_CTRL_WORD_FIFO_CNT2 : 0x%x\n", hal_read32(base_va + HIF_TX_CTRL_WORD_FIFO_CNT2));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_BVALID_FIFO_CNT     : 0x%x\n", hal_read32(base_va + HIF_TX_BVALID_FIFO_CNT));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_PKT_CNT1            : 0x%x\n", hal_read32(base_va + HIF_TX_PKT_CNT1));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_PKT_CNT2            : 0x%x\n", hal_read32(base_va + HIF_TX_PKT_CNT2));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_RX_STATE               : 0x%x\n", hal_read32(base_va + HIF_RX_STATE));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_RX_ACTV                : 0x%x\n", hal_read32(base_va + HIF_RX_ACTV));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_RX_CURR_CH_NO          : 0x%x\n", hal_read32(base_va + HIF_RX_CURR_CH_NO));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_DXR_RX_FIFO_CNT        : 0x%x\n", hal_read32(base_va + HIF_DXR_RX_FIFO_CNT));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_RX_CTRL_WORD_FIFO_CNT  : 0x%x\n", hal_read32(base_va + HIF_RX_CTRL_WORD_FIFO_CNT));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_RX_BVALID_FIFO_CNT     : 0x%x\n", hal_read32(base_va + HIF_RX_BVALID_FIFO_CNT));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_RX_PKT_CNT1            : 0x%x\n", hal_read32(base_va + HIF_RX_PKT_CNT1));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_RX_PKT_CNT2            : 0x%x\n", hal_read32(base_va + HIF_RX_PKT_CNT2));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_CH0_INT_SRC:        : 0x%x\n", hal_read32(base_va + HIF_CH0_INT_SRC));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_BDP_CH0_TX_FIFO_CNT : 0x%x\n", hal_read32(base_va + HIF_BDP_CH0_TX_FIFO_CNT));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_DMA_STATUS_0_CH0 : 0x%x\n", hal_read32(base_va + HIF_TX_DMA_STATUS_0_CH0));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_STATUS_0_CH0     : 0x%x\n", hal_read32(base_va + HIF_TX_STATUS_0_CH0));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_STATUS_1_CH0     : 0x%x\n", hal_read32(base_va + HIF_TX_STATUS_1_CH0));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_PKT_CNT0_CH0     : 0x%x\n", hal_read32(base_va + HIF_TX_PKT_CNT0_CH0));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_PKT_CNT1_CH0     : 0x%x\n", hal_read32(base_va + HIF_TX_PKT_CNT1_CH0));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_TX_PKT_CNT2_CH0     : 0x%x\n", hal_read32(base_va + HIF_TX_PKT_CNT2_CH0));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_BDP_CH0_RX_FIFO_CNT : 0x%x\n", hal_read32(base_va + HIF_BDP_CH0_RX_FIFO_CNT));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_RX_DMA_STATUS_0_CH0 : 0x%x\n", hal_read32(base_va + HIF_RX_DMA_STATUS_0_CH0));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_RX_STATUS_0_CH0     : 0x%x\n", hal_read32(base_va + HIF_RX_STATUS_0_CH0));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_RX_PKT_CNT0_CH0     : 0x%x\n", hal_read32(base_va + HIF_RX_PKT_CNT0_CH0));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_RX_PKT_CNT1_CH0     : 0x%x\n", hal_read32(base_va + HIF_RX_PKT_CNT1_CH0));
+	}
 
 	if(verb_level>=9U)
 	{

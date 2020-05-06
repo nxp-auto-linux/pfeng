@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -95,6 +95,8 @@ pfe_ct_phy_if_id_t pfe_phy_if_get_id(pfe_phy_if_t *iface) __attribute__((pure));
 char_t *pfe_phy_if_get_name(pfe_phy_if_t *iface) __attribute__((pure));
 errno_t pfe_phy_if_destroy(pfe_phy_if_t *iface);
 pfe_class_t *pfe_phy_if_get_class(pfe_phy_if_t *iface) __attribute__((pure));
+errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t block_state);
+errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *block_state);
 pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface);
 errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode);
 bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface);
@@ -106,10 +108,9 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface);
 errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr);
 errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr);
 errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr);
-errno_t pfe_phy_if_set_callback(pfe_phy_if_t *iface, pfe_phy_if_cbk_t callback, void *arg);
-errno_t pfe_phy_if_del_callback(pfe_phy_if_t *iface, pfe_phy_if_cbk_t callback);
 uint32_t pfe_phy_if_get_text_statistics(pfe_phy_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-
+errno_t pfe_phy_if_set_mirroring(pfe_phy_if_t *iface, pfe_ct_phy_if_id_t mirror);
+pfe_ct_phy_if_id_t pfe_phy_if_get_mirroring(pfe_phy_if_t *iface);
 
 #endif /* PUBLIC_PFE_PHY_IF_H_ */
 

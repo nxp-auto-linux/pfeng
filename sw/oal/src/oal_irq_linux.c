@@ -48,6 +48,7 @@
 #include <linux/interrupt.h>
 #include <asm/io.h>
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "oal_irq.h"
 #include "linked_list.h"
@@ -86,13 +87,13 @@ static irqreturn_t linux_irq_handler(int32_t id, void *ctx)
 	LLIST_t *item, *aux;
 	unsigned long flags;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == irq))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return IRQ_HANDLED;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	read_lock_irqsave(&irq->lock, flags);
 
@@ -115,13 +116,13 @@ oal_irq_t * oal_irq_create(int32_t id, oal_irq_flags_t flags, char_t *name)
 	oal_irq_t *irq;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == name))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	irq = oal_mm_malloc(sizeof(oal_irq_t));
 	if (NULL == irq)
@@ -180,13 +181,13 @@ errno_t oal_irq_add_handler(oal_irq_t *irq, oal_irq_handler_t handler, void *dat
 	oal_irq_list_entry_t *entry;
 	unsigned long flags;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == irq))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry = oal_mm_malloc(sizeof(oal_irq_list_entry_t));
 	if (NULL == entry)
@@ -236,13 +237,13 @@ err_workqueue:
 
 errno_t oal_irq_mask(oal_irq_t *irq)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == irq))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	disable_irq_nosync(irq->id);
 
@@ -255,13 +256,13 @@ errno_t oal_irq_del_handler(oal_irq_t *irq, oal_irq_isr_handle_t handle)
 	oal_irq_list_entry_t *entry = NULL;
 	LLIST_t *item, *aux;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == irq))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Search the handle */
 	ret = ENOENT;
@@ -299,13 +300,13 @@ void oal_irq_destroy(oal_irq_t *irq)
 	LLIST_t *item, *aux;
 	oal_irq_list_entry_t *entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == irq))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Destroy list of handlers */
 	LLIST_ForEachRemovable(item, aux, &irq->handlers)
@@ -335,13 +336,13 @@ void oal_irq_destroy(oal_irq_t *irq)
 
 errno_t oal_irq_unmask(oal_irq_t *irq)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == irq))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	enable_irq(irq->id);
 
@@ -350,26 +351,26 @@ errno_t oal_irq_unmask(oal_irq_t *irq)
 
 int32_t oal_irq_get_id(oal_irq_t *irq)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == irq))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return -1;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return irq->id;
 }
 
 errno_t oal_irq_get_flags(oal_irq_t *irq, oal_irq_flags_t *flags)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == irq) || (NULL == flags)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	*flags = irq->flags;
 

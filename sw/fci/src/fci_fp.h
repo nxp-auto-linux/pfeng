@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,8 +30,8 @@
 #ifndef FCI_FP_H
 #define FCI_FP_H
 
-extern errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_table_cmd *reply_buf, uint32_t *reply_len);
-extern errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_parser_rule_cmd *reply_buf, uint32_t *reply_len);
-extern errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_filter_cmd *reply_buf, uint32_t *reply_len);
+extern errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *reply_buf, uint32_t *reply_len);
+extern errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *reply_buf, uint32_t *reply_len);
+extern errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_filter_cmd_t *reply_buf, uint32_t *reply_len);
 #endif
 

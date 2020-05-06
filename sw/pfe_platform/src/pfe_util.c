@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -38,19 +38,19 @@
  *
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-#include <errno.h>
-
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 
 #include "pfe_platform_cfg.h"
 #include "pfe_cbus.h"
-#include "pfe_mmap.h"
 #include "pfe_pe.h"
 #include "pfe_util.h"
+
+/* Configuration check */
+#if ((PFE_CFG_PE_LMEM_BASE + PFE_CFG_PE_LMEM_SIZE) > CBUS_LMEM_SIZE)
+	#error PE memory area exceeds LMEM capacity
+#endif
 
 struct __pfe_util_tag
 {
@@ -61,19 +61,19 @@ struct __pfe_util_tag
 };
 
 /**
- * @brief		Set the configuration of the classifier block.
+ * @brief		Set the configuration of the util PE block.
  * @param[in]	util The UTIL instance
  * @param[in]	cfg Pointer to the configuration structure
  */
 static void pfe_util_set_config(pfe_util_t *util, pfe_util_cfg_t *cfg)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == util) || (NULL == cfg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	hal_write32(cfg->pe_sys_clk_ratio, util->cbus_base_va + UTIL_PE_SYS_CLK_RATIO);
 }
@@ -93,13 +93,13 @@ pfe_util_t *pfe_util_create(void *cbus_base_va, uint32_t pe_num, pfe_util_cfg_t 
 	pfe_pe_t *pe;
 	uint32_t ii;
 	
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == cbus_base_va) || (NULL == cfg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	util = oal_mm_malloc(sizeof(pfe_util_t));
 	
@@ -134,10 +134,9 @@ pfe_util_t *pfe_util_create(void *cbus_base_va, uint32_t pe_num, pfe_util_cfg_t 
 			}
 			else
 			{
-				pfe_pe_set_dmem(pe, PFE_CFG_UTIL_ELF_DMEM_BASE, PFE_CFG_UTIL_DMEM_SIZE);
-				/*	The UTIL block runs code from DDR so PMEM is not used here */
-				pfe_pe_set_imem(pe, 0U, 0U);
 				pfe_pe_set_iaccess(pe, UTIL_MEM_ACCESS_WDATA, UTIL_MEM_ACCESS_RDATA, UTIL_MEM_ACCESS_ADDR);
+				pfe_pe_set_dmem(pe, PFE_CFG_UTIL_ELF_DMEM_BASE, PFE_CFG_UTIL_DMEM_SIZE);
+				pfe_pe_set_imem(pe, PFE_CFG_UTIL_ELF_IMEM_BASE, PFE_CFG_UTIL_IMEM_SIZE);
 				
 				util->pe[ii] = pe;
 				util->pe_num++;
@@ -169,13 +168,13 @@ free_and_fail:
  */
 void pfe_util_reset(pfe_util_t *util)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == util))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	hal_write32(PFE_CORE_SW_RESET, util->cbus_base_va + UTIL_TX_CTRL);
 }
@@ -187,17 +186,17 @@ void pfe_util_reset(pfe_util_t *util)
  */
 void pfe_util_enable(pfe_util_t *util)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == util))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (unlikely(FALSE == util->is_fw_loaded))
 	{
-		NXP_LOG_WARNING("Attempt to enable classifier without previous firmware upload\n");
+		NXP_LOG_WARNING("Attempt to enable UTIL PE(s) without previous firmware upload\n");
 	}
 	
 	hal_write32(PFE_CORE_ENABLE, util->cbus_base_va + UTIL_TX_CTRL);
@@ -210,13 +209,13 @@ void pfe_util_enable(pfe_util_t *util)
  */
 void pfe_util_disable(pfe_util_t *util)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == util))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	hal_write32(PFE_CORE_DISABLE, util->cbus_base_va + UTIL_TX_CTRL);
 }
@@ -232,13 +231,13 @@ errno_t pfe_util_load_firmware(pfe_util_t *util, const void *elf)
 	uint32_t ii;
 	errno_t ret;
 	
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == util) || (NULL == elf)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	for (ii=0U; ii<util->pe_num; ii++)
 	{
@@ -257,8 +256,8 @@ errno_t pfe_util_load_firmware(pfe_util_t *util, const void *elf)
 }
 
 /**
- * @brief		Destroy classifier instance
- * @param[in]	util The classifier instance
+ * @brief		Destroy util block instance
+ * @param[in]	util The util block instance
  */
 void pfe_util_destroy(pfe_util_t *util)
 {
@@ -293,13 +292,13 @@ uint32_t pfe_util_get_text_statistics(pfe_util_t *util, char_t *buf, uint32_t bu
 {
 	uint32_t len = 0U, ii;
 	
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == util))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	
 	len += pfe_util_cfg_get_text_stat(util->cbus_base_va, buf + len, buf_len - len, verb_level);
 

@@ -38,6 +38,7 @@
  *
  */
 
+#include "pfe_cfg.h"
 #include "oal_types.h"
 #include "oal_util.h"
 
@@ -46,13 +47,13 @@ uint32_t oal_util_snprintf(char_t *buffer, size_t buf_len, const char_t *format,
 	uint32_t len = 0;
 	va_list ap;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == buffer))
 	{
 		NXP_LOG_ERROR(" NULL argument received (oal_util_snprintf)\n");
 		return 0;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if(buf_len == 0)
 	{

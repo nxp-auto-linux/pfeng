@@ -39,6 +39,7 @@
  */
 
 #include <linux/delay.h>
+#include "pfe_cfg.h"
 
 /*
    See in kernel documentation "Documentation/timers/timers-howto.txt"

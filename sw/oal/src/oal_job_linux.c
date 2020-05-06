@@ -46,6 +46,7 @@
 #include <linux/kthread.h>
 #include <linux/types.h>
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "oal_mm.h"
 #include "oal_job.h"
@@ -63,13 +64,13 @@ errno_t oal_job_run(oal_job_t *job)
 {
 	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == job))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	queue_work(job->queue, &job->work);
 
@@ -78,7 +79,7 @@ errno_t oal_job_run(oal_job_t *job)
 
 errno_t oal_job_drain(oal_job_t *job)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == job))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -89,7 +90,7 @@ errno_t oal_job_drain(oal_job_t *job)
 	{
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	drain_workqueue(job->queue);
 
@@ -110,13 +111,13 @@ oal_job_t *oal_job_create(oal_job_func func, void *arg, const char_t *name, oal_
 {
 	oal_job_t *job;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == name))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (NULL == func)
 	{

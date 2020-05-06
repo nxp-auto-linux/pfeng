@@ -1,7 +1,7 @@
 /*
- * Copyright 2019 NXP
+ * Copyright 2019-2020 NXP
  *
- * SPDX-License-Identifier:     BSD OR GPL-2.0
+ * SPDX-License-Identifier: BSD OR GPL-2.0
  *
  */
 
@@ -9,17 +9,21 @@
 #include <linux/module.h>
 #include <linux/io.h>
 #include <linux/phy.h>
+#include <linux/clk.h>
 #include <linux/of.h>
 #include <linux/of_net.h>
 #include <linux/of_device.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/of_address.h>
+#include <linux/of_mdio.h>
+
+#include "pfe_cfg.h"
 
 /*
  * S32G soc specific addresses
  */
-#define S32G_MAIN_GPR_BASE_ADDR				0x4007CA00
 #define S32G_MAIN_GPR_PFE_COH_EN			0x0
+#define S32G_MAIN_GPR_PFE_PWR_CTRL			0x20
 #define GPR_PFE_COH_EN_UTIL					(1 << 5)
 #define GPR_PFE_COH_EN_HIF3					(1 << 4)
 #define GPR_PFE_COH_EN_HIF2					(1 << 3)
@@ -27,60 +31,29 @@
 #define GPR_PFE_COH_EN_HIF0					(1 << 1)
 #define GPR_PFE_COH_EN_DDR					(1 << 0)
 #define S32G_MAIN_GPR_PFE_EMACX_INTF_SEL	0x4
+#define GPR_PFE_EMACn_PWR_ACK(n)			(1 << (9 + n)) /* RD Only */
+#define GPR_PFE_EMACn_PWR_ISO(n)			(1 << (6 + n))
+#define GPR_PFE_EMACn_PWR_DWN(n)			(1 << (3 + n))
+#define GPR_PFE_EMACn_PWR_CLAMP(n)			(1 << (0 + n))
 #define GPR_PFE_EMAC_IF_MII					(1)
 #define GPR_PFE_EMAC_IF_RMII				(9)
 #define GPR_PFE_EMAC_IF_RGMII				(2)
 #define GPR_PFE_EMAC_IF_SGMII				(0)
 #define GPR_PFE_EMACn_IF(n,i)				(i << (n * 4))
-#define S32G_MAIN_GPR_PFE_SYS_GEN0			0x8
-#define S32G_MAIN_GPR_PFE_SYS_GEN1			0xC
-#define S32G_MAIN_GPR_PFE_SYS_GEN2			0x10
-#define S32G_MAIN_GPR_PFE_SYS_GEN3			0x14
-#define S32G_MAIN_GPR_PFE_PWR_CTRL			0x20
-#define GPR_PFE_EMACn_PWR_ACK(n)			(1 << (9 + n)) /* RD Only */
-#define GPR_PFE_EMACn_PWR_ISO(n)			(1 << (6 + n))
-#define GPR_PFE_EMACn_PWR_DWN(n)			(1 << (3 + n))
-#define GPR_PFE_EMACn_PWR_CLAMP(n)			(1 << (0 + n))
 
 #include "pfeng.h"
 
 static const struct of_device_id pfeng_id_table[] = {
-	{ .compatible = "fsl,s32g275-pfe" },
+	{ .compatible = "fsl,s32g274a-pfeng" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, pfeng_id_table);
 
-/**
- * The device tree blocks:
- *
- *  reserved-memory {
- *      #address-cells = <2>;
- *      #size-cells = <2>;
- *      ranges;
- *
- *      pfe_reserved: pfebufs@83400000 {
- *              compatible = "fsl,s32g-pfe-ddr";
- *              reg = <0 0x83400000 0 0xc00000>;
- *              no-map;
- *              status = "okay";
- *      };
- *  };
- *
- *  pfe: ethernet@46080000 {
- *      compatible = "fsl,s32g275-pfe";
- *      reg = <0x0 0x46000000 0x0 0x1000000>;
- *      interrupt-parent = <&gic>;
- *      interrupts =    <0 190 1>, / * hif0 * /
- *              <0 191 1>, / * hif1 * /
- *              <0 192 1>, / * hif2 * /
- *              <0 193 1>, / * hif3 * /
- *              <0 194 1>; / * bmu * /
- *      interrupt-names = "hif0", "hif1", "hif2", "hif3", "bmu";
- *  };
+/*
+ * Search for memory-region in DT and declare it DMA coherent
  *
  */
-
-static int pfeng_create_reserved_memory(struct device *dev)
+static int init_reserved_memory(struct device *dev)
 {
 	struct resource res;
 	struct device_node *np;
@@ -97,10 +70,10 @@ static int pfeng_create_reserved_memory(struct device *dev)
 		dev_err(dev, "Reserved memory is invalid\n");
 		return -ENOMEM;
 	}
-	dev_info(dev, "Found reserved memory at p0x%llx size 0x%llx\n", res.start, res.end - res.start);
+	dev_info(dev, "Found reserved memory at p0x%llx size 0x%llx\n", res.start, res.end - res.start + 1);
 
-	ret = dma_declare_coherent_memory(dev, res.start, res.start,
-                           res.end - res.start, DMA_MEMORY_EXCLUSIVE);
+	ret = dmam_declare_coherent_memory(dev, res.start, res.start,
+		res.end - res.start + 1, DMA_MEMORY_EXCLUSIVE);
 
 	return ret;
 
@@ -124,27 +97,22 @@ static unsigned int xlate_to_s32g_intf(unsigned int n, phy_interface_t intf)
 	}
 }
 
-/**
- * pfeng_s32g_set_emac_interfaces
- *
- * @pdev: platform device pointer
- *
- * Description: Set up the correct PHY interface type for all EMAcs
- */
-static int pfeng_s32g_set_emac_interfaces(struct device *dev, phy_interface_t emac0_intf, phy_interface_t emac1_intf, phy_interface_t emac2_intf)
+static int pfeng_s32g_set_emac_interfaces(struct pfeng_priv *priv, phy_interface_t emac0_intf, phy_interface_t emac1_intf, phy_interface_t emac2_intf)
 {
 	void *syscon;
-	unsigned int val;
+	u32 val;
 
-	syscon = ioremap_nocache(S32G_MAIN_GPR_BASE_ADDR, S32G_MAIN_GPR_PFE_PWR_CTRL + 4);
+	syscon = ioremap_nocache(priv->plat.syscon.start, priv->plat.syscon.end - priv->plat.syscon.start);
 	if(!syscon) {
-		dev_err(dev, "cannot map GPR, aborting (INTF_SEL)\n");
+		dev_err(&priv->pdev->dev, "cannot map GPR, aborting (INTF_SEL)\n");
 		return -EIO;
 	}
 
 	/* set up interfaces */
 	val = xlate_to_s32g_intf(0, emac0_intf) | xlate_to_s32g_intf(1, emac1_intf) | xlate_to_s32g_intf(2, emac2_intf);
 	hal_write32(val, syscon + S32G_MAIN_GPR_PFE_EMACX_INTF_SEL);
+
+	dev_info(&priv->pdev->dev, "Interface selected: EMAC0: 0x%x EMAC1: 0x%x EMAC2: 0x%x\n", emac0_intf, emac1_intf, emac2_intf);
 
 	/* power down and up EMACs */
 	hal_write32(GPR_PFE_EMACn_PWR_DWN(0) | GPR_PFE_EMACn_PWR_DWN(1) | GPR_PFE_EMACn_PWR_DWN(2), syscon + S32G_MAIN_GPR_PFE_PWR_CTRL);
@@ -154,6 +122,275 @@ static int pfeng_s32g_set_emac_interfaces(struct device *dev, phy_interface_t em
 	iounmap(syscon);
 
 	return 0;
+}
+
+static int release_config(struct pfeng_priv *priv)
+{
+	struct pfeng_eth *eth;
+
+	list_for_each_entry(eth, &priv->plat.eth_list, lnode) {
+		if(!eth)
+			continue;
+
+		if (eth->dn)
+			of_node_put(eth->dn);
+
+		kfree(eth);
+	}
+
+	return 0;
+}
+
+static int create_config_from_dt(struct pfeng_priv *priv)
+{
+	struct platform_device *pdev = priv->pdev;
+	struct device_node *np = pdev->dev.of_node;
+	pfe_platform_config_t *pfe_cfg = priv->cfg;
+	struct pfeng_eth *eth;
+	struct resource *res;
+	struct device_node *child = NULL;
+	int i, irq, ret = 0;
+	u32 propval;
+
+	/* Get the base address of device */
+	res = platform_get_resource(priv->pdev, IORESOURCE_MEM, 0);
+	if(unlikely(!res)) {
+		dev_err(&pdev->dev, "Cannot find mem resource, aborting\n");
+		return -EIO;
+	}
+	pfe_cfg->cbus_base = res->start;
+	pfe_cfg->cbus_len = res->end - res->start + 1;
+	dev_info(&pdev->dev, "Cbus addr 0x%llx size 0x%llx\n", pfe_cfg->cbus_base, pfe_cfg->cbus_len);
+
+	/* S32G Main GPRs */
+	res = platform_get_resource(priv->pdev, IORESOURCE_MEM, 1);
+	if(unlikely(!res)) {
+		dev_err(&pdev->dev, "Cannot find syscon resource, aborting\n");
+		return -EIO;
+	}
+	priv->plat.syscon.start = res->start;
+	priv->plat.syscon.end = res->end;
+	dev_dbg(&pdev->dev, "Syscon addr 0x%llx size 0x%llx\n", priv->plat.syscon.start, priv->plat.syscon.end - priv->plat.syscon.start);
+
+	/* Firmware name */
+	if (of_find_property(np, "firmware-name", NULL))
+		if (!of_property_read_string(np, "firmware-name", &priv->fw_name)) {
+			dev_info(&pdev->dev, "firmware-name: %s", priv->fw_name);
+		}
+
+	/* IRQ hif0 - hif3 */
+	for (i = 0; i < HIF_CFG_MAX_CHANNELS; i++) {
+		char irqname[8];
+
+		scnprintf(irqname, sizeof(irqname), "hif%i", i);
+		irq = platform_get_irq_byname(pdev, irqname);
+		if (irq < 0) {
+			dev_err(&pdev->dev, "Cannot find irq resource 'hif%i', aborting\n", i);
+			return -EIO;
+		}
+		pfe_cfg->irq_vector_hif_chnls[i] = irq;
+		dev_dbg(&pdev->dev, "irq 'hif%i': %u\n", i, irq);
+	}
+
+	/* IRQ nocpy */
+	irq = platform_get_irq_byname(pdev, "nocpy");
+	if (irq < 0) {
+		dev_err(&pdev->dev, "Cannot find irq resource 'nocpy', aborting\n");
+		return -EIO;
+	}
+	pfe_cfg->irq_vector_hif_nocpy = irq;
+	dev_dbg(&pdev->dev, "irq 'nocpy' : %u\n", irq);
+
+	/* IRQ bmu */
+	irq = platform_get_irq_byname(pdev, "bmu");
+	if (irq < 0) {
+		dev_err(&pdev->dev, "Cannot find irq resource 'bmu', aborting\n");
+		return -EIO;
+	}
+	pfe_cfg->irq_vector_bmu = irq;
+	dev_dbg(&pdev->dev, "irq 'bmu' : %u\n", irq);
+
+	/* IRQ upe/gpt */
+	irq = platform_get_irq_byname(pdev, "upegpt");
+	if (irq < 0) {
+		dev_err(&pdev->dev, "Cannot find irq resource 'upegpt', aborting\n");
+		return -EIO;
+	}
+	pfe_cfg->irq_vector_upe_gpt = irq;
+	dev_dbg(&pdev->dev, "irq 'upegpt' : %u\n", irq);
+
+	/* IRQ safety */
+	irq = platform_get_irq_byname(pdev, "safety");
+	if (irq < 0) {
+		dev_err(&pdev->dev, "Cannot find irq resource 'safety', aborting\n");
+		return -EIO;
+	}
+	pfe_cfg->irq_vector_safety = irq;
+	dev_dbg(&pdev->dev, "irq 'safety' : %u\n", irq);
+
+#if 0 /* MC HIF mode unsupported yet */
+	priv->plat.hif_chnl_mc = HIF_CFG_MAX_CHANNELS;
+	if (priv->plat.hif_mode == PFENG_HIF_MODE_MC) {
+		/* HIF channel for MC mode */
+		propval = HIF_CFG_MAX_CHANNELS;
+		if (of_find_property(np, "fsl,pfeng-hif-channel", NULL)) {
+			if (of_property_read_u32(np, "fsl,pfeng-hif-channel", &propval)) {
+				dev_err(&pdev->dev, "Invalid MC hif-channel");
+				return -EINVAL;
+			}
+			if (of_property_count_elems_of_size(np, "fsl,pfeng-hif-channel", sizeof(u32)) > 1)
+				dev_warn(&pdev->dev, "Only one HIF channel is supported. HIF%u is used.\n", propval);
+		}
+		if (propval >= HIF_CFG_MAX_CHANNELS) {
+			dev_err(&pdev->dev, "Unsupported HIF channel number %u, aborting\n", propval);
+			return -EINVAL;
+		}
+		priv->plat.hif_chnl_mc = propval;
+		dev_info(&pdev->dev, "HIF channel %u in MC mode", propval);
+		/* signal to platform to create channel */
+		pfe_cfg->hif_chnls_mask = 1 << propval;
+	} else {
+		if (of_find_property(np, "fsl,pfeng-hif-channel", NULL)) {
+			dev_warn(&pdev->dev, "Global HIF channel unsupported in HIF SC mode.");
+		}
+		/* Signal 'no MC channel configured' */
+		pfe_cfg->hif_chnls_mask = 0;
+	}
+#endif
+
+	/* Interfaces */
+	for_each_available_child_of_node(np, child) {
+		if (!of_device_is_available(child))
+			continue;
+		if (!of_device_is_compatible(child, PFENG_DT_NODENAME_ETHERNET))
+			continue;
+
+		eth = kzalloc(sizeof(*eth), GFP_KERNEL);
+		if (!eth) {
+			dev_err(&pdev->dev, "No memory for DT config\n");
+			ret = -ENOMEM;
+			goto err;
+		}
+
+		/* HIF channel for SC mode */
+		propval = HIF_CFG_MAX_CHANNELS;
+		if (of_find_property(child, "fsl,pfeng-hif-channel", NULL)) {
+			if (of_property_read_u32(child, "fsl,pfeng-hif-channel", &propval)) {
+				dev_err(&pdev->dev, "Invalid hif-channel value");
+				ret = -EINVAL;
+				goto err;
+			}
+			if (of_property_count_elems_of_size(child, "fsl,pfeng-hif-channel", sizeof(u32)) > 1)
+				dev_warn(&pdev->dev, "Only one HIF channel is supported. HIF%u is used.\n", propval);
+
+			if (propval >= HIF_CFG_MAX_CHANNELS) {
+				dev_err(&pdev->dev, "Unsupported HIF channel number %u, aborting\n", propval);
+				ret = -EINVAL;
+				goto err;
+			}
+			/* check if the channel was not already used */
+			if (pfe_cfg->hif_chnls_mask & (1 << propval)) {
+				dev_err(&pdev->dev, "HIF channel number %u already used, aborting\n", propval);
+				ret = -EINVAL;
+				goto err;
+			}
+			dev_info(&pdev->dev, "HIF channel %u in SC mode", propval);
+			/* signal to platform to create channel */
+			pfe_cfg->hif_chnls_mask |= 1 << propval;
+		}
+		eth->hif_chnl_sc = propval;
+
+		if (!of_find_property(child, "fsl,pfeng-if-name", NULL) ||
+			of_property_read_string(child, "fsl,pfeng-if-name", &eth->name)) {
+			dev_warn(&pdev->dev, "Valid ethernet name is missing (property 'fsl,pfeng-if-name')\n");
+
+			kfree(eth);
+			continue;
+		}
+
+		/* MAC eth address */
+		eth->addr = (u8 *)of_get_mac_address(child);
+		if (eth->addr)
+			dev_dbg(&pdev->dev, "DT mac addr: %pM", eth->addr);
+
+		/* fixed-link check */
+		eth->fixed_link = of_phy_is_fixed_link(child);
+
+		/* Interface mode */
+		eth->intf_mode = of_get_phy_mode(child);
+		if (eth->intf_mode < 0)
+			/* for non managable interface */
+			eth->intf_mode = PHY_INTERFACE_MODE_INTERNAL;
+		dev_dbg(&pdev->dev, "interface mode: %d", eth->intf_mode);
+		if ((eth->intf_mode != PHY_INTERFACE_MODE_INTERNAL) &&
+			(eth->intf_mode != PHY_INTERFACE_MODE_SGMII) &&
+			(eth->intf_mode != PHY_INTERFACE_MODE_RGMII) &&
+			(eth->intf_mode != PHY_INTERFACE_MODE_RMII) &&
+			(eth->intf_mode != PHY_INTERFACE_MODE_MII)) {
+			dev_err(&pdev->dev, "Not supported phy interface mode: %s\n", phy_modes(eth->intf_mode));
+			ret = -EINVAL;
+			goto err;
+		}
+
+		/* EMAC link */
+		if (!of_find_property(child, "fsl,pfeng-emac-id", NULL)) {
+			dev_err(&pdev->dev, "The required EMAC id is missing\n");
+			ret = -EINVAL;
+			goto err;
+		}
+		if (of_property_read_u32(child, "fsl,pfeng-emac-id", &eth->emac_id) ||
+			eth->emac_id > 2) {
+			dev_err(&pdev->dev, "The EMAC id is invalid: %d\n", eth->emac_id);
+			ret = -EINVAL;
+			goto err;
+		}
+		dev_info(&pdev->dev, "%s linked to EMAC %d", eth->name, eth->emac_id);
+
+		/* optional: tx,rx clocks */
+		eth->tx_clk = devm_get_clk_from_child(&pdev->dev, child, "tx");
+		if (IS_ERR(eth->tx_clk)) {
+			eth->tx_clk = NULL;
+			dev_dbg(&pdev->dev, "No TX clocks declared for interface %s\n", eth->name);
+		} else {
+			ret = clk_prepare_enable(eth->tx_clk);
+			if (ret) {
+				dev_err(&pdev->dev, "TX clocks for interface %s failed: %d\n", eth->name, ret);
+				ret = 0;
+				devm_clk_put(&pdev->dev, eth->tx_clk);
+				eth->tx_clk = NULL;
+			} else
+				dev_info(&pdev->dev, "TX clocks for interface %s installed\n", eth->name);
+		}
+		eth->rx_clk = devm_get_clk_from_child(&pdev->dev, child, "rx");
+		if (IS_ERR(eth->rx_clk)) {
+			eth->rx_clk = NULL;
+			dev_dbg(&pdev->dev, "No RX clocks declared for interface %s\n", eth->name);
+		} else {
+			ret = clk_prepare_enable(eth->rx_clk);
+			if (ret) {
+				dev_err(&pdev->dev, "RX clocks for interface %s failed: %d\n", eth->name, ret);
+				ret = 0;
+				devm_clk_put(&pdev->dev, eth->rx_clk);
+				eth->rx_clk = NULL;
+			} else
+				dev_info(&pdev->dev, "RX clocks for interface %s installed\n", eth->name);
+		}
+
+		eth->dn = of_node_get(child);
+
+		list_add_tail(&eth->lnode, &priv->plat.eth_list);
+	} /* for_each_available_child_of_node(np, child) */
+
+	dev_info(&pdev->dev, "HIF channels mask: 0x%04x", pfe_cfg->hif_chnls_mask);
+
+	return 0;
+
+err:
+	if (child)
+		of_node_put(child);
+	release_config(priv);
+
+	return ret;
 }
 
 /**
@@ -170,92 +407,50 @@ static int pfeng_s32g_set_emac_interfaces(struct device *dev, phy_interface_t em
 static int pfeng_s32g_probe(struct platform_device *pdev)
 {
 	struct pfeng_priv *priv;
-	struct pfeng_plat_data *plat;
-	struct pfeng_resources res;
 	int ret;
-	struct device_node *np = pdev->dev.of_node;
-	const struct of_device_id *device;
-	struct resource *plat_res;
-	int i, irq;
 
-	if (!np)
+	if (!pdev->dev.of_node)
 		return -ENODEV;
+
+	if (!of_match_device(pfeng_id_table, &pdev->dev))
+		return -ENODEV;
+
+	dev_info(&pdev->dev, "%s, ethernet driver loading ...\n", PFENG_DRIVER_NAME);
+
+	if (init_reserved_memory(&pdev->dev))
+		return -ENOMEM;
 
 	if (dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32)) != 0) {
 		dev_err(&pdev->dev, "System does not support DMA, aborting\n");
 		return -EINVAL;
 	 }
 
-	device = of_match_device(pfeng_id_table, &pdev->dev);
-	if (!device)
-		return -ENODEV;
-
-	if (pfeng_create_reserved_memory(&pdev->dev))
+	/* allocate driver context */
+	priv = pfeng_drv_alloc(pdev);
+	if(!priv)
 		return -ENOMEM;
 
-	priv = pfeng_mod_init(&pdev->dev);
-	if (!priv)
-		return -ENOMEM;
+	/* overwrite by DT values */
+	ret = create_config_from_dt(priv);
+	if (ret)
+		return ret;
 
-	plat = devm_kzalloc(&pdev->dev, sizeof(*plat), GFP_KERNEL);
-	if (!plat)
-		return -ENOMEM;
+	if(pfeng_s32g_set_emac_interfaces(priv,
+		pfeng_drv_cfg_get_emac_intf_mode(priv, 0),
+		pfeng_drv_cfg_get_emac_intf_mode(priv, 1),
+		pfeng_drv_cfg_get_emac_intf_mode(priv, 2)))
+		dev_err(&pdev->dev, "WARNING: cannot enable power for EMACs\n");
 
-	pfeng_mod_get_setup(&pdev->dev, plat);
-
-	/* Get the base address of device */
-	memset(&res, 0, sizeof(res));
-
-	plat_res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if(unlikely(!plat_res)) {
-		printk(KERN_ALERT "%s: cannot find mem resource, aborting\n", PFENG_DRIVER_NAME);
-		ret = -EIO;
-		goto err_out_map_failed;
-	}
-	res.addr = plat_res->start;
-	res.addr_size = plat_res->end - plat_res->start + 1;
-	printk(KERN_ALERT "%s: res.addr 0x%llx size 0x%x\n", PFENG_DRIVER_NAME, res.addr, res.addr_size);
-
-	/* IRQ */
-	for (i = 0; i < ARRAY_SIZE(res.irq.hif); i++) {
-		char *irqnames[] = { "hif0", "hif1", "hif2", "hif3" , "hifncpy"};
-		irq = platform_get_irq_byname(pdev, irqnames[i]);
-		if (irq < 0) {
-			printk(KERN_ALERT "%s: cannot find irq resource '%s', aborting\n", PFENG_DRIVER_NAME, irqnames[i]);
-			ret = -EIO;
-			goto err_out_map_failed;
-		}
-		res.irq.hif[i] = irq;
-		printk(KERN_ALERT "%s: irq '%s': %u\n", PFENG_DRIVER_NAME, irqnames[i], irq);
-	}
-
-	irq = platform_get_irq_byname(pdev, "bmu");
-	if (irq < 0) {
-		printk(KERN_ALERT "%s: cannot find irq resource 'bmu', aborting\n", PFENG_DRIVER_NAME);
-		ret = -EIO;
-		goto err_out_map_failed;
-	}
-	res.irq.bmu = irq;
-	printk(KERN_ALERT "%s: irq 'bmu' : %u\n", PFENG_DRIVER_NAME, irq);
-
-	if(pfeng_s32g_set_emac_interfaces(&pdev->dev, PHY_INTERFACE_MODE_SGMII, PHY_INTERFACE_MODE_RGMII, PHY_INTERFACE_MODE_RGMII)) {
-		printk(KERN_ALERT "%s: cannot enable power for EMACs, aborting\n", PFENG_DRIVER_NAME);
-		ret = -EIO;
-		goto err_out_map_failed;
-	}
-
-	ret = pfeng_mod_probe(&pdev->dev, priv, plat, &res);
+	ret = pfeng_drv_probe(priv);
 	if(ret)
 		goto err_mod_probe;
 
-end:
-	return ret;
+	return 0;
 
 err_mod_probe:
-err_out_map_failed:
-	pfeng_mod_exit(&pdev->dev);
+	pfeng_drv_remove(priv);
 
-	goto end;
+	return ret;
 }
 
 /**
@@ -267,10 +462,16 @@ err_out_map_failed:
  */
 static int pfeng_s32g_remove(struct platform_device *pdev)
 {
+	struct pfeng_priv *priv = dev_get_drvdata(&pdev->dev);
 
-	pfeng_mod_exit(&pdev->dev);
+	if (!priv) {
+		dev_err(&pdev->dev, "Removal failed. No priv data.\n");
+		return -ENOMEM;
+	}
 
-	platform_set_drvdata(pdev, NULL);
+	list_del(&priv->plat.eth_list);
+
+	pfeng_drv_remove(priv);
 
 	return 0;
 }
@@ -287,9 +488,7 @@ static int pfeng_s32g_remove(struct platform_device *pdev)
  */
 static int pfeng_pm_suspend(struct device *dev)
 {
-	/* TODO */
-
-	printk(KERN_ALERT "%s\n", __func__);
+	dev_info(dev, "%s\n", __func__);
 
 	return 0;
 }
@@ -303,9 +502,7 @@ static int pfeng_pm_suspend(struct device *dev)
  */
 static int pfeng_pm_resume(struct device *dev)
 {
-	/* TODO */
-
-	printk(KERN_ALERT "%s\n", __func__);
+	dev_info(dev, "%s\n", __func__);
 
 	return 0;
 }

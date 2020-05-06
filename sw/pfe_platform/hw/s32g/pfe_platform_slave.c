@@ -43,18 +43,10 @@
  *
  */
 
-#include <stdint.h>
-#include <string.h>
-#include <unistd.h>
-#include <stdlib.h>
-
-#include "elf_cfg.h"
-#include "elf.h"
-
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 
-#include "pfe_mmap.h"
 #include "pfe_cbus.h"
 #include "pfe_platform_cfg.h"
 #include "pfe_platform.h"
@@ -120,13 +112,13 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 {
 	pfe_platform_t *platform = (pfe_platform_t *)arg;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == platform))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	(void)platform;
 
@@ -217,13 +209,13 @@ static errno_t pfe_platform_create_hif_drv(pfe_platform_t *platform)
 	pfe_hif_chnl_t *channel;
 
 	/*	Create HIF driver */
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	/*	Create HIF driver instance (HIF NOCPY) */
 	channel = pfe_hif_nocpy_get_channel(platform->hif_nocpy, PFE_HIF_CHNL_NOCPY_ID);
 #else
 	/*	Create HIF driver instance (HIF channel 1) */
 	channel = pfe_hif_get_channel(platform->hif, HIF_CHNL_1);
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 	if (NULL != channel)
 	{
@@ -285,7 +277,7 @@ pfe_hif_drv_t *pfe_platform_get_hif_drv(pfe_platform_t *platform, uint32_t id)
 	return platform->hif_drv;
 }
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 /**
  * @brief		Assign HIF NOCPY to the platform
  */
@@ -317,7 +309,7 @@ static void pfe_platform_destroy_hif_nocpy(pfe_platform_t *platform)
 		platform->hif_nocpy = NULL;
 	}
 }
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 /**
  * @brief		Get logical interface by its ID
@@ -386,14 +378,14 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 		goto exit;
 	}
 
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	/*	HIF NOCPY */
 	ret = pfe_platform_create_hif_nocpy(&pfe);
 	if (EOK != ret)
 	{
 		goto exit;
 	}
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 	/*	Interfaces */
 	ret = pfe_platform_create_ifaces(&pfe);
@@ -445,9 +437,9 @@ errno_t pfe_platform_remove(void)
 	pfe_platform_destroy_hif_drv(&pfe);
 
 	pfe_platform_destroy_hif(&pfe);
-#if defined(GLOBAL_CFG_HIF_NOCPY_SUPPORT)
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	pfe_platform_destroy_hif_nocpy(&pfe);
-#endif /* GLOBAL_CFG_HIF_NOCPY_SUPPORT */
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 	if (NULL != pfe.cbus_baseaddr)
 	{

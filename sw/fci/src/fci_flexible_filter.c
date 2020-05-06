@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,6 +27,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
+#include "pfe_cfg.h"
 #include "libfci.h"
 #include "fpp.h"
 #include "fpp_ext.h"
@@ -38,23 +39,23 @@
 #include "pfe_flexible_filter.h"
 
 /**
- * @brief			Processes FPP_FP_CMD_FLEXIBLE_FILTER commands
- * @param[in]		msg FCI message containing the FPP_FP_CMD_FLEXIBLE_FILTER command
+ * @brief			Processes FPP_CMD_FP_FLEXIBLE_FILTER commands
+ * @param[in]		msg FCI message containing the FPP_CMD_FP_FLEXIBLE_FILTER command
  * @param[out]		fci_ret FCI command return value
- * @param[out]		reply_buf Pointer to a buffer where function will construct command reply (fpp_flexible_filter_cmd)
+ * @param[out]		reply_buf Pointer to a buffer where function will construct command reply (fpp_flexible_filter_cmd_t)
  * @param[in,out]	reply_len Maximum reply buffer size on input, real reply size on output (in bytes)
  * @return			EOK if success, error code otherwise
  * @note			Function is only called within the FCI worker thread context.
  * @note			Must run with domain DB protected against concurrent accesses.
  */
-errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_filter_cmd *reply_buf, uint32_t *reply_len)
+errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_filter_cmd_t *reply_buf, uint32_t *reply_len)
 {
     fci_t *context = (fci_t *)&__context;
 
-    fpp_flexible_filter_cmd *fp_cmd;
+    fpp_flexible_filter_cmd_t *fp_cmd;
     errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -66,8 +67,8 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
-    fp_cmd = (fpp_flexible_filter_cmd *)(msg->msg_cmd.payload);
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+    fp_cmd = (fpp_flexible_filter_cmd_t *)(msg->msg_cmd.payload);
     switch (fp_cmd->action)
 	{
 		case FPP_ACTION_REGISTER:
@@ -82,7 +83,7 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
                 if(0 != addr)
                 {
                     /* Let the classifier use the address of the table as flexible filter */
-                    ret = pfe_flexible_filter_set(context->class, addr);
+                    ret = pfe_flexible_filter_set(context->class, oal_htonl(addr));
                 }
                 else
                 {
@@ -119,7 +120,7 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
 
 		default:
 		{
-			NXP_LOG_ERROR("FPP_CMD_L2BRIDGE_DOMAIN: Unknown action received: 0x%x\n", fp_cmd->action);
+			NXP_LOG_ERROR("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", fp_cmd->action);
 			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 			break;
 		}

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -38,36 +38,92 @@
  *
  */
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 #include "pfe_cbus.h"
 #include "pfe_emac_csr.h"
 
+/* Mode conversion table */
+static const char_t * phy_mode[] =
+{
+		"GMII_MII",
+		"RGMII",
+		"SGMII",
+		"TBI",
+		"RMII",
+		"RTBI",
+		"SMII",
+		"RevMII",
+		"INVALID",
+};
+
 static inline uint32_t crc32_reversed(const uint8_t *const data, const uint32_t len)
 {
-    const uint32_t poly = 0xEDB88320U;
-    uint32_t res = 0xffffffffU;
-    uint32_t ii, jj;
+	const uint32_t poly = 0xEDB88320U;
+	uint32_t res = 0xffffffffU;
+	uint32_t ii, jj;
 
-    for (ii=0U; ii<len; ii++)
-    {
-        res ^= (uint32_t)data[ii];
+	for (ii=0U; ii<len; ii++)
+	{
+		res ^= (uint32_t)data[ii];
 
-        for (jj=0; jj<8; jj++)
-        {
-            if ((res & 0x1U) != 0U)
-            {
-            	res = res >> 1;
-                res = (uint32_t)(res ^ poly);
-            }
-            else
-            {
-            	res = res >> 1;
-            }
-        }
-    }
+		for (jj=0; jj<8; jj++)
+		{
+			if ((res & 0x1U) != 0U)
+			{
+				res = res >> 1;
+				res = (uint32_t)(res ^ poly);
+			}
+			else
+			{
+				res = res >> 1;
+			}
+		}
+	}
 
-    return res;
+	return res;
+}
+
+/**
+ * @brief		Convert EMAC mode to string
+ * @details		Helper function for statistics to convert phy mode to string.
+ * @param[in]	mode 	phy mode
+ * @return		pointer to string
+ */
+static inline const char_t* phy_mode_to_str(uint32_t mode)
+{
+	/* Initialize to invalid */
+	uint8_t index  = (sizeof(phy_mode)/sizeof(phy_mode[0])) - 1;
+
+	if((sizeof(phy_mode)/sizeof(phy_mode[0])) > mode)
+	{
+		index = mode;
+	}
+
+	return phy_mode[index];
+}
+
+/**
+ * @brief		Convert EMAC speed to string
+ * @details		Helper function for statistics to convert emac speed to string.
+ * @param[in]	speed 	emac speed
+ * @return		pointer to string
+ */
+static const char *emac_speed_to_str(pfe_emac_speed_t speed)
+{
+	switch (speed)
+	{
+		default:
+		case EMAC_SPEED_10_MBPS:
+			return "10 Mbps";
+		case EMAC_SPEED_100_MBPS:
+			return "100 Mbps";
+		case EMAC_SPEED_1000_MBPS:
+			return "1 Gbps";
+		case EMAC_SPEED_2500_MBPS:
+			return "2.5 Gbps";
+	}
 }
 
 /**
@@ -250,8 +306,8 @@ errno_t pfe_emac_cfg_set_mii_mode(void *base_va, pfe_emac_mii_mode_t mode)
 	 	 The PHY mode selection is done using a HW interface. See the "phy_intf_sel" signal.
 	*/
 	NXP_LOG_INFO("The PHY mode selection is done using a HW interface. See the 'phy_intf_sel' signal.\n");
-    (void)base_va;
-    (void)mode;
+	(void)base_va;
+	(void)mode;
 
 	return EOK;
 }
@@ -301,6 +357,73 @@ errno_t pfe_emac_cfg_set_speed(void *base_va, pfe_emac_speed_t speed)
 	}
 
 	hal_write32(reg, (addr_t)base_va + MAC_CONFIGURATION);
+
+	return EOK;
+}
+
+errno_t pfe_emac_cfg_get_link_config(void *base_va, pfe_emac_speed_t *speed, pfe_emac_duplex_t *duplex)
+{
+	uint32_t reg = hal_read32((addr_t)base_va + MAC_CONFIGURATION);
+
+	/* speed */
+	switch (GET_LINE_SPEED(reg))
+	{
+		default:
+		case 0x0U:
+			*speed = EMAC_SPEED_1000_MBPS;
+			break;
+		case 0x01U:
+			*speed = EMAC_SPEED_2500_MBPS;
+			break;
+		case 0x02U:
+			*speed = EMAC_SPEED_10_MBPS;
+			break;
+		case 0x03U:
+			*speed = EMAC_SPEED_100_MBPS;
+			break;
+	}
+
+	/* duplex */
+	*duplex = (1U == GET_DUPLEX_MODE(reg)) ? EMAC_DUPLEX_FULL : EMAC_DUPLEX_HALF;
+
+	return EOK;
+}
+
+/**
+ * @brief		Get MAC configured link parameters
+ * @param[in]	base_va Base address of MAC register space (virtual)
+ * @param[out]	clock_speed Currently configured link speed
+ * @param[out]	duplex Currently configured Duplex type @see pfe_emac_duplex_t
+ * @param[out]	link Current link state
+ * @return		EOK if success
+ */
+errno_t pfe_emac_cfg_get_link_status(void *base_va, pfe_emac_link_speed_t *link_speed, pfe_emac_duplex_t *duplex, bool_t *link)
+{
+	uint32_t reg = hal_read32((addr_t)base_va + MAC_PHYIF_CONTROL_STATUS);
+
+	/* speed */
+	switch (LNKSPEED(reg))
+	{
+		default:
+		case 0x0U:
+			*link_speed = EMAC_LINK_SPEED_2_5_MHZ;
+			break;
+		case 0x01U:
+			*link_speed = EMAC_LINK_SPEED_25_MHZ;
+			break;
+		case 0x02U:
+			*link_speed = EMAC_LINK_SPEED_125_MHZ;
+			break;
+		case 0x03U:
+			*link_speed = EMAC_LINK_SPEED_INVALID;
+			break;
+	}
+
+	/* duplex */
+	*duplex = (1U == LNKMOD(reg)) ? EMAC_DUPLEX_FULL : EMAC_DUPLEX_HALF;
+
+	/* link */
+	*link = LNKSTS(reg) == 1U;
 
 	return EOK;
 }
@@ -431,8 +554,8 @@ uint32_t pfe_emac_cfg_get_hash(void *base_va, pfe_mac_addr_t addr)
 	  	 	 - Most significant bits (1) are addressing hash table register
 	  	 	 - Remaining (5) bits are addressing position within the (32-bit long) register
 	*/
-    (void)base_va;
-    (void)addr;
+	(void)base_va;
+	(void)addr;
 
 	return crc32_reversed((uint8_t *)&addr, 6U);
 }
@@ -597,7 +720,7 @@ errno_t pfe_emac_cfg_mdio_read22(void *base_va, uint8_t pa, uint8_t ra, uint16_t
 	{
 		if (timeout-- == 0U)
 		{
-            return ETIME;
+			return ETIME;
 		}
 		oal_time_usleep(10);
 	}
@@ -764,30 +887,36 @@ uint32_t pfe_emac_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, u
 {
 	uint32_t len = 0U;
 	uint32_t reg;
+	pfe_emac_speed_t speed;
+	pfe_emac_duplex_t duplex;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if(verb_level >= 9U)
-	{
-		/*	Get version */
-		reg = hal_read32((addr_t)base_va + MAC_VERSION);
-		len += oal_util_snprintf(buf + len, size - len, "SNPVER                    : 0x%x\n", reg & 0xffU);
-		len += oal_util_snprintf(buf + len, size - len, "USERVER                   : 0x%x\n", (reg >> 8) & 0xffU);
 
-		reg = hal_read32((addr_t)base_va + RX_PACKETS_COUNT_GOOD_BAD);
-		len += oal_util_snprintf(buf + len, size - len, "RX_PACKETS_COUNT_GOOD_BAD : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_PACKET_COUNT_GOOD_BAD);
-		len += oal_util_snprintf(buf + len, size - len, "TX_PACKET_COUNT_GOOD_BAD  : 0x%x\n", reg);
+	/*	Get version */
+	reg = hal_read32((addr_t)base_va + MAC_VERSION);
+	len += oal_util_snprintf(buf + len, size - len, "SNPVER                    : 0x%x\n", reg & 0xffU);
+	len += oal_util_snprintf(buf + len, size - len, "USERVER                   : 0x%x\n", (reg >> 8) & 0xffU);
 
-		reg = hal_read32((addr_t)base_va + MAC_CONFIGURATION);
-		len += oal_util_snprintf(buf + len, size - len, "MAC_CONFIGURATION         : 0x%x\n", reg);
-	}
+	reg = hal_read32((addr_t)base_va + RX_PACKETS_COUNT_GOOD_BAD);
+	len += oal_util_snprintf(buf + len, size - len, "RX_PACKETS_COUNT_GOOD_BAD : 0x%x\n", reg);
+	reg = hal_read32((addr_t)base_va + TX_PACKET_COUNT_GOOD_BAD);
+	len += oal_util_snprintf(buf + len, size - len, "TX_PACKET_COUNT_GOOD_BAD  : 0x%x\n", reg);
+
+	pfe_emac_cfg_get_link_config(base_va, &speed, &duplex);
+	reg = hal_read32((addr_t)base_va + MAC_CONFIGURATION);
+	len += oal_util_snprintf(buf + len, size - len, "MAC_CONFIGURATION         : 0x%x [speed: %s]\n", reg, emac_speed_to_str(speed));
+
+	reg = (hal_read32((addr_t)base_va + MAC_HW_FEATURE0) >> 28U) & 0x07U;
+	len += oal_util_snprintf(buf + len, size - len, "ACTPHYSEL(MAC_HW_FEATURE0): %s\n", phy_mode_to_str(reg));
+
+	/* Error debugging */
 	if(verb_level >= 8)
 	{
 		reg = hal_read32((addr_t)base_va + TX_UNDERFLOW_ERROR_PACKETS);
@@ -806,26 +935,118 @@ uint32_t pfe_emac_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, u
 		len += oal_util_snprintf(buf + len, size - len, "TX_CARRIER_ERROR_PACKETS          : 0x%x\n", reg);
 		reg = hal_read32((addr_t)base_va + TX_EXCESSIVE_DEFERRAL_ERROR);
 		len += oal_util_snprintf(buf + len, size - len, "TX_EXCESSIVE_DEFERRAL_ERROR       : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_PAUSE_PACKETS);
-		len += oal_util_snprintf(buf + len, size - len, "TX_PAUSE_PACKETS                  : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_VLAN_PACKETS_GOOD);
-		len += oal_util_snprintf(buf + len, size - len, "TX_VLAN_PACKETS_GOOD              : 0x%x\n", reg);
+
 		reg = hal_read32((addr_t)base_va + TX_OSIZE_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_OSIZE_PACKETS_GOOD             : 0x%x\n", reg);
-	}
-	reg = hal_read32((addr_t)base_va + TX_64OCTETS_PACKETS_GOOD_BAD);
-	len += oal_util_snprintf(buf + len, size - len, "TX_64OCTETS_PACKETS_GOOD_BAD       : 0x%x\n", reg);
-	reg = hal_read32((addr_t)base_va + TX_65TO127OCTETS_PACKETS_GOOD_BAD);
-	len += oal_util_snprintf(buf + len, size - len, "TX_65TO127OCTETS_PACKETS_GOOD_BAD  : 0x%x\n", reg);
-	reg = hal_read32((addr_t)base_va + TX_128TO255OCTETS_PACKETS_GOOD_BAD);
-	len += oal_util_snprintf(buf + len, size - len, "TX_128TO255OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
-	reg = hal_read32((addr_t)base_va + TX_256TO511OCTETS_PACKETS_GOOD_BAD);
-	len += oal_util_snprintf(buf + len, size - len, "TX_256TO511OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
-	reg = hal_read32((addr_t)base_va + TX_512TO1023OCTETS_PACKETS_GOOD_BAD);
-	len += oal_util_snprintf(buf + len, size - len, "TX_512TO1023OCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
-	reg = hal_read32((addr_t)base_va + TX_1024TOMAXOCTETS_PACKETS_GOOD_BAD);
-	len += oal_util_snprintf(buf + len, size - len, "TX_1024TOMAXOCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
 
+		reg = hal_read32((addr_t)base_va + RX_CRC_ERROR_PACKETS);
+		len += oal_util_snprintf(buf + len, size - len, "RX_CRC_ERROR_PACKETS              : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_ALIGNMENT_ERROR_PACKETS);
+		len += oal_util_snprintf(buf + len, size - len, "RX_ALIGNMENT_ERROR_PACKETS        : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_RUNT_ERROR_PACKETS);
+		len += oal_util_snprintf(buf + len, size - len, "RX_RUNT_ERROR_PACKETS             : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_JABBER_ERROR_PACKETS);
+		len += oal_util_snprintf(buf + len, size - len, "RX_JABBER_ERROR_PACKETS           : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_LENGTH_ERROR_PACKETS);
+		len += oal_util_snprintf(buf + len, size - len, "RX_LENGTH_ERROR_PACKETS           : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_OUT_OF_RANGE_TYPE_PACKETS);
+		len += oal_util_snprintf(buf + len, size - len, "RX_OUT_OF_RANGE_TYPE_PACKETS      : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_FIFO_OVERFLOW_PACKETS);
+		len += oal_util_snprintf(buf + len, size - len, "RX_FIFO_OVERFLOW_PACKETS          : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_RECEIVE_ERROR_PACKETS);
+		len += oal_util_snprintf(buf + len, size - len, "RX_RECEIVE_ERROR_PACKETS          : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_RECEIVE_ERROR_PACKETS);
+		len += oal_util_snprintf(buf + len, size - len, "RX_RECEIVE_ERROR_PACKETS          : 0x%x\n", reg);
+	}
+
+	/* Cast/vlan/flow control */
+	if(verb_level >= 3)
+	{
+		reg = hal_read32((addr_t)base_va + TX_UNICAST_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_UNICAST_PACKETS_GOOD_BAD       : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_BROADCAST_PACKETS_GOOD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_BROADCAST_PACKETS_GOOD         : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_BROADCAST_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_BROADCAST_PACKETS_GOOD_BAD     : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_MULTICAST_PACKETS_GOOD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_MULTICAST_PACKETS_GOOD         : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_MULTICAST_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_MULTICAST_PACKETS_GOOD_BAD     : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_VLAN_PACKETS_GOOD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_VLAN_PACKETS_GOOD              : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_PAUSE_PACKETS);
+		len += oal_util_snprintf(buf + len, size - len, "TX_PAUSE_PACKETS                  : 0x%x\n", reg);
+	}
+
+	if(verb_level >= 4)
+	{
+		reg = hal_read32((addr_t)base_va + RX_UNICAST_PACKETS_GOOD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_UNICAST_PACKETS_GOOD           : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_BROADCAST_PACKETS_GOOD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_BROADCAST_PACKETS_GOOD         : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_MULTICAST_PACKETS_GOOD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_MULTICAST_PACKETS_GOOD         : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_VLAN_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_VLAN_PACKETS_GOOD_BAD          : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_PAUSE_PACKETS);
+		len += oal_util_snprintf(buf + len, size - len, "RX_PAUSE_PACKETS                  : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_CONTROL_PACKETS_GOOD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_CONTROL_PACKETS_GOOD           : 0x%x\n", reg);
+	}
+
+	if(verb_level >= 1)
+	{
+		reg = hal_read32((addr_t)base_va + TX_OCTET_COUNT_GOOD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_OCTET_COUNT_GOOD                : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_OCTET_COUNT_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_OCTET_COUNT_GOOD_BAD            : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_64OCTETS_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_64OCTETS_PACKETS_GOOD_BAD       : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_65TO127OCTETS_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_65TO127OCTETS_PACKETS_GOOD_BAD  : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_128TO255OCTETS_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_128TO255OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_256TO511OCTETS_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_256TO511OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_512TO1023OCTETS_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_512TO1023OCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + TX_1024TOMAXOCTETS_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_1024TOMAXOCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
+	}
+
+	if(verb_level >= 5)
+	{
+		reg = hal_read32((addr_t)base_va + TX_OSIZE_PACKETS_GOOD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_OSIZE_PACKETS_GOOD              : 0x%x\n", reg);
+	}
+
+	if(verb_level >= 2)
+	{
+		reg = hal_read32((addr_t)base_va + RX_OCTET_COUNT_GOOD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_OCTET_COUNT_GOOD                : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_OCTET_COUNT_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_OCTET_COUNT_GOOD_BAD            : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_64OCTETS_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_64OCTETS_PACKETS_GOOD_BAD       : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_65TO127OCTETS_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_65TO127OCTETS_PACKETS_GOOD_BAD  : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_128TO255OCTETS_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_128TO255OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_256TO511OCTETS_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_256TO511OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_512TO1023OCTETS_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_512TO1023OCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_1024TOMAXOCTETS_PACKETS_GOOD_BAD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_1024TOMAXOCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
+	}
+
+	if(verb_level >= 5)
+	{
+		reg = hal_read32((addr_t)base_va + RX_OVERSIZE_PACKETS_GOOD);
+		len += oal_util_snprintf(buf + len, size - len, "TX_OSIZE_PACKETS_GOOD              : 0x%x\n", reg);
+		reg = hal_read32((addr_t)base_va + RX_UNDERSIZE_PACKETS_GOOD);
+		len += oal_util_snprintf(buf + len, size - len, "RX_UNDERSIZE_PACKETS_GOOD          : 0x%x\n", reg);
+	}
 
 	return len;
 }

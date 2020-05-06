@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -46,9 +46,9 @@
 #endif /* PFE_CBUS_H_ */
 
 /*	Supported IPs. Defines are validated within pfe_cbus.h. */
-#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 
 /*	CBUS offsets */
 #define WSP_VERSION				(0x00U)
@@ -74,7 +74,7 @@
 #define WSP_SAFETY_INT_EN		(0x50U)
 #define WDT_INT_EN				(0x54U)
 
-#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
 #define CLASS_WDT_INT_EN		(0x58U)
 #define UPE_WDT_INT_EN			(0x5cU)
 #define HGPI_WDT_INT_EN			(0x60U)
@@ -92,9 +92,9 @@
 #define WDT_TIMER_VAL_3			(0x90U)
 #define WDT_TIMER_VAL_4			(0x94U)
 #define WSP_DBUG_BUS1			(0x98U)
-#endif /* IP_VERSION_NPU_7_14 */
+#endif /* PFE_CFG_IP_VERSION_NPU_7_14 */
 
-#if (GLOBAL_CFG_IP_VERSION == IP_VERSION_FPGA_5_0_4)
+#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4)
 /*	TODO: Taken from NPU 7.6. Remove this comment once confirmed
  	that FPGA is based on 7.6. Ticket no.: 123703. */
 #define WDT_INT_SRC				(0x58U)
@@ -103,7 +103,36 @@
 #define WDT_TIMER_VAL_3			(0x64U)
 #define WDT_TIMER_VAL_4			(0x68U)
 #define WSP_DBUG_BUS1			(0x70U)
-#endif /* IP_VERSION_FPGA_5_0_4 */
+#endif /* PFE_CFG_IP_VERSION_FPGA_5_0_4 */
+
+/*	WDT_IN_EN bits */
+/*	Due to same name of bits and registers the bits are renamed using _BIT postfix */
+#define WDT_INT_EN_BIT					(1U << 0)
+#define WDT_CLASS_WDT_INT_EN_BIT		(1U << 1)
+#define WDT_UTIL_PE_WDT_INT_EN_BIT		(1U << 2)
+#define WDT_HIF_GPI_WDT_INT_EN_BIT		(1U << 3)
+#define WDT_HIF_WDT_INT_EN_BIT			(1U << 4)
+#define WDT_TLITE_WDT_INT_EN_BIT		(1U << 5)
+#define WDT_HIF_NOCPY_WDT_INT_EN_BIT	(1U << 6)
+#define WDT_BMU1_WDT_INT_EN_BIT			(1U << 7)
+#define WDT_BMU2_WDT_INT_EN_BIT			(1U << 8)
+#define WDT_EMAC0_GPI_WDT_INT_EN_BIT	(1U << 9)
+#define WDT_EMAC1_GPI_WDT_INT_EN_BIT	(1U << 10)
+#define WDT_EMAC2_GPI_WDT_INT_EN_BIT	(1U << 11)
+
+/*	WDT_INT_SRC bits*/
+#define WDT_INT					(1U << 0)
+#define WDT_BMU1_WDT_INT		(1U << 1)
+#define WDT_BMU2_WDT_INT		(1U << 2)
+#define WDT_CLASS_WDT_INT		(1U << 3)
+#define WDT_EMAC0_GPI_WDT_INT	(1U << 4)
+#define WDT_EMAC1_GPI_WDT_INT	(1U << 5)
+#define WDT_EMAC2_GPI_WDT_INT	(1U << 6)
+#define WDT_HIF_GPI_WDT_INT		(1U << 7)
+#define WDT_HIF_NOCPY_WDT_INT	(1U << 8)
+#define WDT_HIF_WDT_INT			(1U << 9)
+#define WDT_TLITE_WDT_INT		(1U << 10)
+#define WDT_UTIL_WDT_INT		(1U << 11)
 
 /* WSP_SAFETY_INT_SRC bits*/
 #define	SAFETY_INT				(1U << 0)

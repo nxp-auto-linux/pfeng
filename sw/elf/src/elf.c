@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -60,9 +60,8 @@
  2) needed interfaces from external units
  3) internal and external interfaces from this unit
 ==================================================================================================*/
-#include <stdlib.h>
-#include <string.h>
 
+#include "pfe_cfg.h"
 #include "oal.h"
 
 #include "elf_cfg.h"
@@ -282,13 +281,13 @@ static bool_t LoadFileData(ELF_File_t *pElfFile, uint32_t u32Offset, uint32_t u3
 {
     bool_t bSuccess = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pElfFile) || (NULL == pvDestMem)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     /* Does it fit to file? */
     if ((u32Offset + u32Size) > pElfFile->u32FileSize)
@@ -338,13 +337,13 @@ static bool_t ELF32_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
     bool_t bProgStatus = TRUE;
     bool_t bSectStatus = FALSE;
     
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pElfFile))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
   #if TRUE == ELF_CFG_PROGRAM_TABLE_USED
     bProgStatus = FALSE;
@@ -413,13 +412,13 @@ static bool_t ELF32_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
 /*================================================================================================*/
 static void ELF32_HeaderSwitchEndianness(Elf32_Ehdr *prElf32Header)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == prElf32Header))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     prElf32Header->e_type       = ENDIAN_SW_2B(prElf32Header->e_type);
     prElf32Header->e_machine    = ENDIAN_SW_2B(prElf32Header->e_machine);
@@ -441,13 +440,13 @@ static void ELF32_ProgTabSwitchEndianness(Elf32_Phdr *arProgHead32, uint32_t u32
 {
     uint32_t u32Idx;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == arProgHead32))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     for(u32Idx=0U; u32Idx<u32NumItems; u32Idx++)
     {
@@ -467,13 +466,13 @@ static void ELF32_SectTabSwitchEndianness(Elf32_Shdr *arSectHead32, uint32_t u32
 {
     uint32_t u32Idx;
     
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == arSectHead32))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     for(u32Idx=0U; u32Idx<u32NumItems; u32Idx++)
     {
@@ -498,14 +497,14 @@ static bool_t ELF32_ProgSectFindNext( ELF_File_t *pElfFile, uint32_t *pu32ProgId
 {
     bool_t bRetVal = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     /* Check prerequisities */
     if (unlikely((NULL == pElfFile) || (NULL == pElfFile->arProgHead32)))
     {
         NXP_LOG_ERROR("ELF32_ProgSectFindNext: Failed - elf not opened!\n");
     }
     else
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     {
         /* Find a record having RAM area */
         while (pElfFile->u32ProgScanIdx < pElfFile->Header.r32.e_phnum)
@@ -552,14 +551,14 @@ static bool_t ELF32_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx,
 {
     bool_t bSuccess = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     /* CHECK */
     if (unlikely((NULL == pElfFile) || (NULL == pElfFile->arProgHead32)))
     {
         NXP_LOG_ERROR("ELF32_ProgSectLoad: Failed - elf not loaded!\n");
     }
     else
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     if (u32ProgIdx >= pElfFile->Header.r32.e_phnum)
     {
         NXP_LOG_ERROR("ELF32_ProgSectLoad: Invalid program index: %u\n", u32ProgIdx);
@@ -629,14 +628,14 @@ static bool_t ELF32_SectFindName( const ELF_File_t *pElfFile, const char_t *szSe
     bool_t bFound = FALSE;
     int32_t SectIdx;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     /* Check prerequisites */
     if (unlikely((NULL == pElfFile) || (NULL == pElfFile->arSectHead32) || (NULL == pElfFile->acSectNames)))
     {
         NXP_LOG_ERROR("ELF32_SectFindName: Failed - elf not opened!\n");
     }
     else
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     {
         /* Search section table */
         for (SectIdx = 0; SectIdx < pElfFile->Header.r32.e_shnum; SectIdx++)
@@ -674,14 +673,14 @@ static bool_t ELF32_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t A
 {
     bool_t bSuccess = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     /* CHECK */
     if (unlikely((NULL == pElfFile) || (NULL == pElfFile->arSectHead32)))
     {
         NXP_LOG_ERROR("ELF32_SectLoad: Failed - elf not loaded!\n");
     }
     else
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     if (u32SectIdx >= pElfFile->Header.r32.e_shnum)
     {
         NXP_LOG_ERROR("ELF32_SectLoad: Invalid section index: %u\n", u32SectIdx);
@@ -726,7 +725,7 @@ static void ELF32_PrintSections(ELF_File_t *pElfFile)
     int32_t SectIdx;
     int32_t ProgIdx;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     /* Check prerequisities */
     if (unlikely ((NULL == pElfFile)
   #if TRUE == ELF_CFG_SECTION_TABLE_USED
@@ -741,7 +740,7 @@ static void ELF32_PrintSections(ELF_File_t *pElfFile)
         NXP_LOG_ERROR("NXP_LOG_INFOSections: Failed - elf not opened!\n");
     }
     else
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     {
 #if TRUE == ELF_CFG_SECTION_TABLE_USED
         /* Search section table */
@@ -818,13 +817,13 @@ static bool_t ELF64_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
     bool_t bProgStatus = TRUE;
     bool_t bSectStatus = FALSE;
     
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pElfFile))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
   #if TRUE == ELF_CFG_PROGRAM_TABLE_USED
     bProgStatus = FALSE;
@@ -885,13 +884,13 @@ static bool_t ELF64_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
 /*================================================================================================*/
 static void ELF64_HeaderSwitchEndianness(Elf64_Ehdr *prElf64Header)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == prElf64Header))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     prElf64Header->e_type       = ENDIAN_SW_2B(prElf64Header->e_type);
     prElf64Header->e_machine    = ENDIAN_SW_2B(prElf64Header->e_machine);
@@ -913,13 +912,13 @@ static void ELF64_ProgTabSwitchEndianness(Elf64_Phdr *arProgHead64, uint32_t u32
 {
     uint32_t u32Idx;
     
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == arProgHead64))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     for(u32Idx=0U; u32Idx<u32NumItems; u32Idx++)
     {
@@ -939,13 +938,13 @@ static void ELF64_SectTabSwitchEndianness(Elf64_Shdr *arSectHead64, uint32_t u32
 {
     uint32_t u32Idx;
     
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == arSectHead64))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     for(u32Idx=0U; u32Idx<u32NumItems; u32Idx++)
     {
@@ -970,14 +969,14 @@ static bool_t ELF64_ProgSectFindNext( ELF_File_t *pElfFile, uint32_t *pu32ProgId
 {
     bool_t bRetVal = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     /* Check prerequisities */
     if (unlikely((NULL == pElfFile) || (NULL == pElfFile->arProgHead64)))
     {
         NXP_LOG_ERROR("ELF64_ProgSectFindNext: Failed - elf not opened!\n");
     }
     else
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     {
         /* Find a record having RAM area */
         while (pElfFile->u32ProgScanIdx < pElfFile->Header.r64.e_phnum)
@@ -1024,14 +1023,14 @@ static bool_t ELF64_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx,
 {
     bool_t bSuccess = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     /* CHECK */
     if (unlikely((NULL == pElfFile) || (NULL == pElfFile->arProgHead64)))
     {
         NXP_LOG_ERROR("ELF64_ProgSectLoad: Failed - elf not loaded!\n");
     }
     else
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     if (u32ProgIdx >= pElfFile->Header.r64.e_phnum)
     {
         NXP_LOG_ERROR("ELF64_ProgSectLoad: Invalid program index: %u\n", u32ProgIdx);
@@ -1105,14 +1104,14 @@ static bool_t ELF64_SectFindName(const ELF_File_t *pElfFile, const char_t *szSec
     bool_t bFound = FALSE;
     int32_t SectIdx;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     /* Check prerequisites */
     if (unlikely((NULL == pElfFile) || (NULL == pElfFile->arSectHead64) || (NULL == pElfFile->acSectNames)))
     {
         NXP_LOG_ERROR("ELF64_SectFindName: Failed - elf not opened!\n");
     }
     else
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     {
         /* Search section table */
         for (SectIdx = 0; SectIdx < pElfFile->Header.r64.e_shnum; SectIdx++)
@@ -1150,14 +1149,14 @@ static bool_t ELF64_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t A
 {
     bool_t bSuccess = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     /* CHECK */
     if (unlikely((NULL == pElfFile) || (NULL == pElfFile->arSectHead64)))
     {
         NXP_LOG_ERROR("ELF64_SectLoad: Failed - elf not loaded!\n");
     }
     else
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     if (u32SectIdx >= pElfFile->Header.r64.e_shnum)
     {
         NXP_LOG_ERROR("ELF64_SectLoad: Invalid section index: %u\n", u32SectIdx);
@@ -1202,7 +1201,7 @@ static void ELF64_PrintSections(ELF_File_t *pElfFile)
     int32_t SectIdx;
     int32_t ProgIdx;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     /* Check prerequisites */
     if (unlikely((NULL == pElfFile)
 #if TRUE == ELF_CFG_SECTION_TABLE_USED
@@ -1217,7 +1216,7 @@ static void ELF64_PrintSections(ELF_File_t *pElfFile)
         NXP_LOG_ERROR("NXP_LOG_INFOSections: Failed - elf not opened!\n");
     }
     else
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     {
 #if TRUE == ELF_CFG_SECTION_TABLE_USED
         /* Search section table */
@@ -1294,13 +1293,13 @@ static uint32_t buf_read(void *src_buf, uint32_t u32FileSize, uint32_t u32Offset
     uint8_t *pu8src = (uint8_t *)((addr_t)src_buf + u32Offset);
     uint8_t *pu8dst = (uint8_t *)dst_buf;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == src_buf) || (NULL == dst_buf)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     for (u32i = 0U; u32i < nbytes; u32i++)
     {
@@ -1338,13 +1337,13 @@ bool_t ELF_Open(ELF_File_t *pElfFile, void *pvFile, uint32_t u32FileSize)
     uint32_t     u32NamesSectionOffset = 0U;
     uint32_t     u32NamesSectionSize = 0U;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pElfFile) || (NULL == pvFile)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     /* Init File info */
     pElfFile->arProgHead64 = NULL;
@@ -1526,13 +1525,13 @@ bool_t ELF_Open(ELF_File_t *pElfFile, void *pvFile, uint32_t u32FileSize)
 */
 void ELF_Close(ELF_File_t *pElfFile)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pElfFile))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     if (NULL != pElfFile->arProgHead64)
     {
@@ -1582,13 +1581,13 @@ bool_t ELF_ProgSectFindNext(ELF_File_t *pElfFile, uint32_t *pu32ProgIdx,
 {
     bool_t bRetVal = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pElfFile) || (NULL == pu32ProgIdx) || (NULL == pu64LoadVAddr) || (NULL == pu64LoadPAddr) || (NULL == pu64Length)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     if (TRUE == pElfFile->bIs64Bit)
     {
@@ -1619,13 +1618,13 @@ bool_t ELF_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx, addr_t Access
 {
     bool_t bRetVal = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pElfFile))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     if (0U != (ELF_NAMED_SECT_IDX_FLAG & u32ProgIdx))
     {
@@ -1669,13 +1668,13 @@ bool_t ELF_SectFindName(const ELF_File_t *pElfFile, const char_t *szSectionName,
 {
     bool_t bRetVal = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pElfFile) || (NULL == szSectionName) || (NULL == pu32SectIdx)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     if (TRUE == pElfFile->bIs64Bit)
     {
@@ -1715,13 +1714,13 @@ bool_t ELF_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t AccessAddr
 {
     bool_t bRetVal = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pElfFile))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     if (0U == (ELF_NAMED_SECT_IDX_FLAG & u32SectIdx))
     {
@@ -1754,13 +1753,13 @@ bool_t ELF_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t AccessAddr
 */
 void ELF_PrintSections(ELF_File_t *pElfFile)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pElfFile))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     if (TRUE == pElfFile->bIs64Bit)
     {

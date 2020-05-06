@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2019 NXP
+#  Copyright 2018-2020 NXP
 # 
 # Redistribution and use in source and binary forms, with or without 
 # modification, are permitted provided that the following conditions are met:
@@ -59,20 +59,17 @@ INCLUDES += -I$(INC_PREFIX).. \
 DEPENDENCIES = $(subst -L,,$(subst $(EMPTY) $(EMPTY)-l:,/,$(LIBS)))
 
 #Compiler flags for build profiles
-CCFLAGS_release += -O2
+CCFLAGS_release += -O3
 CCFLAGS_debug += -g -O0 -fno-builtin
 CCFLAGS_coverage += -g -O0 -ftest-coverage -fprofile-arcs -nopipe -Wc,-auxbase-strip,$@
 LDFLAGS_coverage += -ftest-coverage -fprofile-arcs
 CCFLAGS_profile += -g -O0 -finstrument-functions
 LIBS_profile += -lprofilingS
 
-CCFLAGS_pfe +=	-DGCC_TOOLCHAIN \
-				-DPFE_FW_SBL=1 \
-				-DPFE_FW_FULL=2\
-				-DPFE_CFG_FIRMWARE_VARIANT=PFE_FW_FULL
-CCFLAGS_pfe += -D$(TARGET_ARCH_DEF) -D$(TARGET_OS_DEF) -D$(TARGET_ENDIAN_DEF) -D$(TARGET_HW_DEF) -D$(BUILD_PROFILE_DEF)
+CCFLAGS_pfe += -DGCC_TOOLCHAIN
+CCFLAGS_pfe += -D$(PFE_CFG_TARGET_ARCH_DEF) -D$(PFE_CFG_TARGET_OS_DEF) -D$(PFE_CFG_BUILD_PROFILE_DEF)
 
-CCFLAGS_pfe +=-DPFE_CT_H_MD5=$(word 1, $(shell md5sum $(INC_PREFIX)public/pfe_ct.h))
+CCFLAGS_pfe +=-DPFE_CFG_PFE_CT_H_MD5=$(word 1, $(shell md5sum $(INC_PREFIX)public/pfe_ct.h))
 #Generic compiler flags (which include build type flags)
 CCFLAGS_all += -Wall -fmessage-length=0
 CCFLAGS_all += $(CCFLAGS_$(BUILD_PROFILE))
@@ -87,7 +84,7 @@ DEPS = -Wp,-MMD,$(@:%.o=%.d),-MT,$@
 rwildcard = $(wildcard $(addprefix $1/*.,$2)) $(foreach d,$(wildcard $1/*),$(call rwildcard,$d,$2))
 
 #Source list
-ifeq ($(GLOBAL_CFG_PFE_MASTER),0)
+ifeq ($(PFE_CFG_PFE_MASTER),0)
 SRCS =	src/pfe_class.c \
 		src/pfe_hif_chnl.c \
 		src/pfe_hif_ring.c \
@@ -108,7 +105,6 @@ SRCS =	src/pfe_bmu.c \
 		src/pfe_hif_nocpy.c \
 		src/pfe_hif_ring.c \
 		src/pfe_hif.c \
-		src/pfe_idex.c \
 		src/pfe_l2br.c \
 		src/pfe_l2br_table.c \
 		src/pfe_log_if.c \
@@ -117,10 +113,14 @@ SRCS =	src/pfe_bmu.c \
 		src/pfe_phy_if.c \
 		src/pfe_rtable.c \
 		src/pfe_safety.c \
+		src/pfe_wdt.c \
 		src/pfe_tmu.c \
 		src/pfe_util.c \
 		src/pfe_fp.c \
-		src/pfe_flexible_filter.c		
+		src/pfe_flexible_filter.c
+ifeq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),1)
+SRCS += src/pfe_idex.c
+endif
 endif
 		
 SRCS += hw/$(TARGET_HW)/pfe_bmu_csr.c \
@@ -131,8 +131,9 @@ SRCS += hw/$(TARGET_HW)/pfe_bmu_csr.c \
 		hw/$(TARGET_HW)/pfe_gpi_csr.c \
 		hw/$(TARGET_HW)/pfe_hif_nocpy_csr.c \
 		hw/$(TARGET_HW)/pfe_tmu_csr.c \
-		hw/$(TARGET_HW)/pfe_safety_csr.c
-ifeq ($(GLOBAL_CFG_PFE_MASTER),0)
+		hw/$(TARGET_HW)/pfe_safety_csr.c \
+		hw/$(TARGET_HW)/pfe_wdt_csr.c
+ifeq ($(PFE_CFG_PFE_MASTER),0)
   SRCS += hw/$(TARGET_HW)/pfe_platform_slave.c
 else
   SRCS += hw/$(TARGET_HW)/pfe_platform_master.c
@@ -188,7 +189,6 @@ pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_gpi.o \
 	src/pfe_hif.o \
 	src/pfe_hif_chnl.o \
-	src/pfe_hif_nocpy.o \
 	src/pfe_hif_ring.o \
 	src/pfe_pe.o \
 	src/pfe_tmu.o \
@@ -203,20 +203,24 @@ pfe_platform-y := src/pfe_bmu.o \
 	hw/$(TARGET_HW)/pfe_util_csr.o \
 	hw/$(TARGET_HW)/pfe_class_csr.o \
 	hw/$(TARGET_HW)/pfe_gpi_csr.o \
-	hw/$(TARGET_HW)/pfe_hif_nocpy_csr.o \
 	hw/$(TARGET_HW)/pfe_tmu_csr.o \
 	hw/$(TARGET_HW)/pfe_safety_csr.o
+
+ifneq ($(PFE_CFG_IP_VERSION),PFE_CFG_IP_VERSION_FPGA_5_0_4)
+pfe_platform-y += hw/$(TARGET_HW)/pfe_wdt_csr.o
+pfe_platform-y += src/pfe_wdt.o
+endif
 	
-ifeq ($(GLOBAL_CFG_PFE_MASTER),0)
+ifeq ($(PFE_CFG_PFE_MASTER),0)
 pfe_platform-y += hw/$(TARGET_HW)/pfe_platform_slave.o
 else
 pfe_platform-y +=hw/$(TARGET_HW)/pfe_platform_master.o
 endif
 
-ifeq ($(GLOBAL_CFG_RTABLE_ENABLED),1)
+ifeq ($(PFE_CFG_RTABLE_ENABLE),1)
     pfe_platform-y += src/pfe_rtable.o
 endif
-ifeq ($(GLOBAL_CFG_L2BRIDGE_ENABLED),1)
+ifeq ($(PFE_CFG_L2BRIDGE_ENABLE),1)
     pfe_platform-y += src/pfe_l2br.o \
         src/pfe_l2br_table.o
 endif

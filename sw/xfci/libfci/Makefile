@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2019 NXP
+#  Copyright 2018-2020 NXP
 # 
 # Redistribution and use in source and binary forms, with or without 
 # modification, are permitted provided that the following conditions are met:
@@ -46,10 +46,9 @@ else
   #Build architecture/variant string, possible values: x86, armv7le, etc...
   PLATFORM ?= aarch64le
   CONFIG_NAME ?= $(PLATFORM)-$(BUILD_PROFILE)
-  TARGET_ARCH_DEF = TARGET_ARCH_$(PLATFORM)
-  TARGET_OS_DEF = TARGET_OS_$(TARGET_OS)
-  TARGET_ENDIAN_DEF = ENDIAN_LITTLE
-  BUILD_PROFILE_DEF := BUILD_PROFILE_$(shell echo $(BUILD_PROFILE) | tr [a-z] [A-Z])
+  PFE_CFG_TARGET_ARCH_DEF = PFE_CFG_TARGET_ARCH_$(PLATFORM)
+  PFE_CFG_TARGET_OS_DEF = PFE_CFG_TARGET_OS_$(TARGET_OS)
+  PFE_CFG_BUILD_PROFILE_DEF := PFE_CFG_BUILD_PROFILE_$(shell echo $(BUILD_PROFILE) | tr [a-z] [A-Z])
 
   OUTPUT_DIR = build/$(CONFIG_NAME)
   CC = qcc -Vgcc_nto$(PLATFORM)
@@ -75,7 +74,7 @@ INCLUDES += -I$(INC_PREFIX)src \
 DEPENDENCIES = $(subst -L,,$(subst $(EMPTY) $(EMPTY)-l:,/,$(LIBS)))
 
 #Compiler flags for build profiles
-CCFLAGS_release += -O2
+CCFLAGS_release += -O3
 CCFLAGS_debug += -g -O0 -fno-builtin
 CCFLAGS_coverage += -g -O0 -ftest-coverage -fprofile-arcs -nopipe -Wc,-auxbase-strip,$@
 LDFLAGS_coverage += -ftest-coverage -fprofile-arcs
@@ -86,7 +85,7 @@ LIBS_profile += -lprofilingS
 CCFLAGS_all += -Wall -fmessage-length=0
 CCFLAGS_all += $(CCFLAGS_$(BUILD_PROFILE))
 CCFLAGS_all += $(CCFLAGS_pfe)
-CCFLAGS_all += -D$(TARGET_ARCH_DEF) -D$(TARGET_OS_DEF) -D$(TARGET_ENDIAN_DEF) -D$(BUILD_PROFILE_DEF)
+CCFLAGS_all += -D$(PFE_CFG_TARGET_ARCH_DEF) -D$(PFE_CFG_TARGET_OS_DEF) -D$(PFE_CFG_BUILD_PROFILE_DEF)
 #Shared library has to be compiled with -fPIC
 #CCFLAGS_all += -fPIC
 LDFLAGS_all += $(LDFLAGS_$(BUILD_PROFILE))
@@ -145,20 +144,8 @@ rebuild: clean all
 
 ccflags-y += $(INCLUDES)
 ccflags-y += $(CCFLAGS_pfe)
-ccflags-y += -DTARGET_OS_LINUX
-
-bpool-y := src/common.o
-#bpool-y := $(OBJS)
-
-obj-m += libcommon.o
-
-ARCH := arm64
-KERNELDIR := /home/hop/workplace/ASK/CR_RSR/CR/src-openwrt-ls1012a_7.0.0/mykern-4.1.35
 
 linux:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` modules
-	#make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` O=`pwd`"/build/"$(PLATFORM) $@
+	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) M=`pwd`
 
-linux-clean:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` clean
-
+linux-clean: clean

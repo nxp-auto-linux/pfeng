@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -38,10 +38,7 @@
  *
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 
@@ -51,7 +48,7 @@
 #include "pfe_l2br_table_csr.h"
 
 /*	MAC address type must be 48-bits long */
-oal_ct_assert(sizeof(pfe_mac_addr_t) * 8 == 48);
+ct_assert(sizeof(pfe_mac_addr_t) * 8 == 48);
 
 /**
  * @brief HASH registers associated with a table
@@ -99,6 +96,7 @@ typedef struct __attribute__((packed)) __pfe_mac2f_table_entry_tag
 	uint32_t port								: 4;		/*!< [103:100]											*/
 	uint32_t col_ptr							: 16;		/*!< [119:104]											*/
 	uint32_t flags								: 4;		/*!< [123:120], see pfe_mac2f_table_entry_flags_t		*/
+	uint32_t padding							: 4;		/*!< [127:124], Round up to integer number of bytes		*/
 } pfe_mac2f_table_entry_t;
 
 /**
@@ -138,6 +136,7 @@ typedef struct __attribute__((packed)) __pfe_vlan_table_entry_tag
 	uint32_t port								: 4;	/*!< [79:76]										*/
 	uint32_t col_ptr							: 16;	/*!< [95:80]										*/
 	uint32_t flags								: 4;	/*!< [99:96], see pfe_vlan_table_entry_flags_t		*/
+	uint32_t padding							: 28;	/*!< [127:100], Round up to integer number of bytes	*/
 } pfe_vlan_table_entry_t;
 
 /**
@@ -202,13 +201,13 @@ static bool_t pfe_l2br_table_entry_match_criterion(pfe_l2br_table_t *l2br, pfe_l
 {
 	bool_t match = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	switch (l2br->cur_crit)
 	{
@@ -261,13 +260,13 @@ static bool_t pfe_l2br_table_entry_match_criterion(pfe_l2br_table_t *l2br, pfe_l
  */
 static uint32_t pfe_l2br_table_get_col_ptr(pfe_l2br_table_entry_t *entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	switch (entry->type)
 	{
@@ -314,13 +313,13 @@ static uint32_t pfe_l2br_table_entry_get_hash(pfe_l2br_table_t *l2br, pfe_l2br_t
 	uint32_t hash = 0U;
 	bool_t match = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (PFE_L2BR_TABLE_MAC2F == l2br->type)
 	{
@@ -373,13 +372,13 @@ static errno_t pfe_l2br_entry_to_cmd_args(pfe_l2br_table_t *l2br, pfe_l2br_table
 	uint32_t *entry32 = (uint32_t *)entry;
 	uint64_t action_data = 0ULL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Prepare command arguments */
 	if (PFE_L2BR_TABLE_MAC2F == l2br->type)
@@ -432,13 +431,13 @@ errno_t pfe_l2br_table_update_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry
 	uint32_t status, cmd;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Prepare command arguments */
 	ret = pfe_l2br_entry_to_cmd_args(l2br, entry);
@@ -514,13 +513,13 @@ errno_t pfe_l2br_table_del_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t 
 	uint32_t status, cmd;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Prepare command arguments */
 	ret = pfe_l2br_entry_to_cmd_args(l2br, entry);
@@ -588,13 +587,13 @@ errno_t pfe_l2br_table_add_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t 
 	uint32_t status, cmd;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Prepare command arguments */
 	ret = pfe_l2br_entry_to_cmd_args(l2br, entry);
@@ -666,13 +665,13 @@ errno_t pfe_l2br_table_search_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry
 	errno_t ret;
 	uint64_t action_data = 0ULL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Prepare command arguments */
 	ret = pfe_l2br_entry_to_cmd_args(l2br, entry);
@@ -780,13 +779,13 @@ errno_t pfe_l2br_table_get_first(pfe_l2br_table_t *l2br, pfe_l2br_table_get_crit
 {
 	errno_t ret = ENOENT;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Remember criterion and argument for possible subsequent pfe_l2br_table_get_next() calls */
 	l2br->cur_crit = crit;
@@ -829,13 +828,13 @@ errno_t pfe_l2br_table_get_next(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *
 {
 	uint32_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Get entries from last address */
 	while (l2br->cur_hash_addr < l2br->hash_space_depth)
@@ -886,13 +885,13 @@ static errno_t pfe_l2br_wait_for_cmd_done(pfe_l2br_table_t *l2br, uint32_t *stat
 {
 	uint32_t ii = 100U;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == l2br))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Wait for command completion */
 	while (0U == (hal_read32(l2br->regs.status_reg) & STATUS_REG_CMD_DONE))
@@ -938,15 +937,14 @@ static errno_t pfe_l2br_table_write_cmd(pfe_l2br_table_t *l2br, uint16_t addr, p
 {
 	uint32_t *wdata = (uint32_t *)entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	/*	Issue the WRITE command */
 	if (addr >= (l2br->hash_space_depth + l2br->coll_space_depth))
 	{
 		NXP_LOG_ERROR("Hash table address 0x%x is out of range\n", addr);
@@ -955,28 +953,25 @@ static errno_t pfe_l2br_table_write_cmd(pfe_l2br_table_t *l2br, uint16_t addr, p
 
 	if (PFE_L2BR_TABLE_MAC2F == l2br->type)
 	{
+		ct_assert(sizeof(pfe_mac2f_table_entry_t) == 16);
 		wdata = (uint32_t *)&entry->mac2f_entry;
 	}
 	else if (PFE_L2BR_TABLE_VLAN == l2br->type)
 	{
+		ct_assert(sizeof(pfe_vlan_table_entry_t) == 16);
 		wdata = (uint32_t *)&entry->vlan_entry;
 	}
 	else
 	{
 		NXP_LOG_ERROR("Invalid table type\n");
+		return EINVAL;
 	}
 
+	/*	Issue the WRITE command */
 	hal_write32(wdata[0], l2br->regs.mac1_addr_reg);	/* wdata[31:0]    */
 	hal_write32(wdata[1], l2br->regs.mac2_addr_reg);	/* wdata[63:32]   */
 	hal_write32(wdata[2], l2br->regs.mac3_addr_reg);	/* wdata[95:64]   */
 	hal_write32(wdata[3], l2br->regs.mac4_addr_reg);	/* wdata[127:96]  */
-
-	if (PFE_L2BR_TABLE_MAC2F == l2br->type)
-	{
-		/*	The 2-field MAC table is longer */
-		hal_write32(wdata[4], l2br->regs.mac5_addr_reg);	/* wdata[159:128]  */
-		hal_write32(wdata[5], l2br->regs.entry_reg);		/* wdata[191:160]  */
-	}
 
 	hal_write32(L2BR_CMD_MEM_WRITE | (addr << 16), l2br->regs.cmd_reg);
 
@@ -996,23 +991,39 @@ static errno_t pfe_l2br_table_write_cmd(pfe_l2br_table_t *l2br, uint16_t addr, p
 static errno_t pfe_l2br_table_read_cmd(pfe_l2br_table_t *l2br, uint16_t addr, pfe_l2br_table_entry_t *entry)
 {
 	errno_t ret;
-	uint32_t *rdata = (uint32_t *)entry;
+	uint32_t *rdata;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	/*	Issue the READ command */
 	if (addr >= (l2br->hash_space_depth + l2br->coll_space_depth))
 	{
 		NXP_LOG_ERROR("Hash table address 0x%x is out of range\n", addr);
 		return EINVAL;
 	}
 
+	if (PFE_L2BR_TABLE_MAC2F == l2br->type)
+	{
+		ct_assert(sizeof(pfe_mac2f_table_entry_t) == 16);
+		rdata = (uint32_t *)&entry->mac2f_entry;
+	}
+	else if (PFE_L2BR_TABLE_VLAN == l2br->type)
+	{
+		ct_assert(sizeof(pfe_vlan_table_entry_t) == 16);
+		rdata = (uint32_t *)&entry->vlan_entry;
+	}
+	else
+	{
+		NXP_LOG_ERROR("Invalid table type\n");
+		return EINVAL;
+	}
+
+	/*	Issue the READ command */
 	hal_write32(L2BR_CMD_MEM_READ | (addr << 16), l2br->regs.cmd_reg);
 
 	ret = pfe_l2br_wait_for_cmd_done(l2br, NULL);
@@ -1064,19 +1075,15 @@ static errno_t pfe_l2br_table_init_cmd(pfe_l2br_table_t *l2br)
 {
 	errno_t ret;
 	uint32_t ii, status;
-	union
-	{
-		pfe_mac2f_table_entry_t mac2f_entry;
-		pfe_vlan_table_entry_t vlan_entry;
-	} entry = {0U};
+	pfe_l2br_table_entry_t entry = {0U};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == l2br))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Issue the INIT command */
 	hal_write32(L2BR_CMD_INIT, l2br->regs.cmd_reg);
@@ -1105,12 +1112,12 @@ static errno_t pfe_l2br_table_init_cmd(pfe_l2br_table_t *l2br)
 		if (PFE_L2BR_TABLE_MAC2F == l2br->type)
 		{
 			entry.mac2f_entry.col_ptr = l2br->hash_space_depth + ii + 1U;
-			entry.mac2f_entry.field_valids = MAC2F_ENTRY_COL_PTR_VALID_FLAG;
+			entry.mac2f_entry.flags = MAC2F_ENTRY_COL_PTR_VALID_FLAG;
 		}
 		else if (PFE_L2BR_TABLE_VLAN == l2br->type)
 		{
 			entry.vlan_entry.col_ptr = l2br->hash_space_depth + ii + 1U;
-			entry.vlan_entry.field_valids = VLAN_ENTRY_COL_PTR_VALID_FLAG;
+			entry.vlan_entry.flags = VLAN_ENTRY_COL_PTR_VALID_FLAG;
 		}
 		else
 		{
@@ -1150,13 +1157,13 @@ pfe_l2br_table_t *pfe_l2br_table_create(void *cbus_base_va, pfe_l2br_table_type_
 	pfe_l2br_table_t *l2br;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == cbus_base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	l2br = oal_mm_malloc(sizeof(pfe_l2br_table_t));
 
@@ -1205,8 +1212,6 @@ pfe_l2br_table_t *pfe_l2br_table_create(void *cbus_base_va, pfe_l2br_table_type_
 			l2br->regs.direct_reg = l2br->cbus_base_va + HOST_VLAN_DIRECT_REG;
 			l2br->regs.free_entries_reg = l2br->cbus_base_va + HOST_VLAN_FREE_LIST_ENTRIES;
 			l2br->regs.free_head_ptr_reg = l2br->cbus_base_va + HOST_VLAN_FREE_LIST_HEAD_PTR;
-			l2br->regs.free_head_ptr_reg = l2br->cbus_base_va + HOST_VLAN_FREE_LIST_HEAD_PTR;
-			l2br->regs.free_tail_ptr_reg = l2br->cbus_base_va + HOST_VLAN_FREE_LIST_TAIL_PTR;
 			l2br->regs.free_tail_ptr_reg = l2br->cbus_base_va + HOST_VLAN_FREE_LIST_TAIL_PTR;
 			l2br->hash_space_depth = _VLAN_TABLE_HASH_ENTRIES;
 			l2br->coll_space_depth = _VLAN_TABLE_COLL_ENTRIES;
@@ -1255,13 +1260,13 @@ pfe_l2br_table_entry_t *pfe_l2br_table_entry_create(pfe_l2br_table_t *l2br)
 {
 	pfe_l2br_table_entry_t *entry = NULL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == l2br))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry = oal_mm_malloc(sizeof(pfe_l2br_table_entry_t));
 	if (NULL == entry)
@@ -1290,13 +1295,13 @@ pfe_l2br_table_entry_t *pfe_l2br_table_entry_create(pfe_l2br_table_t *l2br)
  */
 errno_t pfe_l2br_table_entry_destroy(pfe_l2br_table_entry_t *entry)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	oal_mm_free(entry);
 
@@ -1313,13 +1318,13 @@ errno_t pfe_l2br_table_entry_destroy(pfe_l2br_table_entry_t *entry)
  */
 errno_t pfe_l2br_table_entry_set_mac_addr(pfe_l2br_table_entry_t *entry, pfe_mac_addr_t mac_addr)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (PFE_L2BR_TABLE_MAC2F == entry->type)
 	{
@@ -1351,13 +1356,13 @@ errno_t pfe_l2br_table_entry_set_mac_addr(pfe_l2br_table_entry_t *entry, pfe_mac
  */
 errno_t pfe_l2br_table_entry_set_vlan(pfe_l2br_table_entry_t *entry, uint16_t vlan)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (PFE_L2BR_TABLE_MAC2F == entry->type)
 	{
@@ -1390,13 +1395,13 @@ errno_t pfe_l2br_table_entry_set_vlan(pfe_l2br_table_entry_t *entry, uint16_t vl
  */
 errno_t pfe_l2br_table_entry_set_action_data(pfe_l2br_table_entry_t *entry, uint64_t action_data)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (PFE_L2BR_TABLE_MAC2F == entry->type)
 	{
@@ -1442,13 +1447,13 @@ errno_t pfe_l2br_table_entry_set_fresh(pfe_l2br_table_t *l2br, pfe_l2br_table_en
 	uint32_t action_data;
 	pfe_ct_mac_table_result_t *mac_entry = (pfe_ct_mac_table_result_t *)&action_data;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if ((l2br->type != PFE_L2BR_TABLE_MAC2F) || (entry->type != PFE_L2BR_TABLE_MAC2F))
 	{
@@ -1477,13 +1482,13 @@ __attribute__((pure)) bool_t pfe_l2br_table_entry_is_fresh(pfe_l2br_table_entry_
 	uint32_t action_data;
 	pfe_ct_mac_table_result_t *mac_entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	action_data = entry->mac2f_entry.action_data;
 	mac_entry = (pfe_ct_mac_table_result_t *)&action_data;
@@ -1516,13 +1521,13 @@ errno_t pfe_l2br_table_entry_set_static(pfe_l2br_table_t *l2br, pfe_l2br_table_e
 	uint32_t action_data;
 	pfe_ct_mac_table_result_t *mac_entry = (pfe_ct_mac_table_result_t *)&action_data;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == l2br) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if ((l2br->type != PFE_L2BR_TABLE_MAC2F) || (entry->type != PFE_L2BR_TABLE_MAC2F))
 	{
@@ -1549,13 +1554,13 @@ __attribute__((pure)) bool_t pfe_l2br_table_entry_is_static(pfe_l2br_table_entry
 	uint32_t action_data = entry->mac2f_entry.action_data;
 	pfe_ct_mac_table_result_t *mac_entry = (pfe_ct_mac_table_result_t *)&action_data;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (PFE_L2BR_TABLE_MAC2F == entry->type)
 	{
@@ -1578,13 +1583,13 @@ uint32_t pfe_l2br_table_entry_to_str(pfe_l2br_table_entry_t *entry, char_t *buf,
 {
 	uint32_t len = 0U;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == buf)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (PFE_L2BR_TABLE_MAC2F == entry->type)
 	{
@@ -1598,7 +1603,10 @@ uint32_t pfe_l2br_table_entry_to_str(pfe_l2br_table_entry_t *entry, char_t *buf,
 				entry->mac2f_entry.mac[5]);
 		len += snprintf(buf + len, buf_len - len, "VLAN       : 0x%x\n", entry->mac2f_entry.vlan);
 		len += snprintf(buf + len, buf_len - len, "Action Data: 0x%x\n", entry->mac2f_entry.action_data);
+#if 0
+		/* Currently not used - action data stores the port information, FW does not have access to port field */
 		len += snprintf(buf + len, buf_len - len, "Port       : 0x%x\n", entry->mac2f_entry.port);
+#endif
 		len += snprintf(buf + len, buf_len - len, "Col Ptr    : 0x%x\n", entry->mac2f_entry.col_ptr);
 		len += snprintf(buf + len, buf_len - len, "Flags      : 0x%x\n", entry->mac2f_entry.flags);
 	}
@@ -1606,8 +1614,12 @@ uint32_t pfe_l2br_table_entry_to_str(pfe_l2br_table_entry_t *entry, char_t *buf,
 	{
 		len += snprintf(buf + len, buf_len - len, "[VLAN Table Entry]\n");
 		len += snprintf(buf + len, buf_len - len, "VLAN       : 0x%x\n", entry->vlan_entry.vlan);
-		len += snprintf(buf + len, buf_len - len, "Action Data: 0x%llx\n", (uint64_t)entry->vlan_entry.action_data);
+		/*	Native type used to fix compiler warning */
+		len += snprintf(buf + len, buf_len - len, "Action Data: 0x%llx\n", (unsigned long long)entry->vlan_entry.action_data);
+#if 0
+		/* Currently not used - action data stores the port information, FW does not have access to port field */
 		len += snprintf(buf + len, buf_len - len, "Port       : 0x%x\n", entry->vlan_entry.port);
+#endif
 		len += snprintf(buf + len, buf_len - len, "Col Ptr    : 0x%x\n", entry->vlan_entry.col_ptr);
 		len += snprintf(buf + len, buf_len - len, "Flags      : 0x%x\n", entry->vlan_entry.flags);
 	}

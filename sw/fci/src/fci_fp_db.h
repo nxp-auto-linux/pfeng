@@ -55,7 +55,6 @@ errno_t fci_fp_db_push_table_to_hw(pfe_class_t *class, char_t *table_name);
 /* Get the DMEM address to allow table usage */
 uint32_t fci_fp_db_get_table_dmem_addr(char_t *table_name);
 
-
 /* Remove table from DMEM */
 errno_t fci_fp_db_pop_table_from_hw(char_t *table_name);
 /* Remove a single rule from the table */
@@ -65,6 +64,8 @@ errno_t fci_fp_db_destroy_table(char_t *name, bool_t force);
 /* Destroy the rule */
 errno_t fci_fp_db_destroy_rule(char_t *name);
 
+/* Get the table from address */
+errno_t fci_fp_db_get_table_from_addr(uint32_t addr, char_t **table_name);
 
 /* Printing the information */
 uint32_t fci_fp_print_tables(char_t *buf, uint32_t buf_len, uint8_t verb_level);

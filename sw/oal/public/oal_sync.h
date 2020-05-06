@@ -54,7 +54,7 @@
  * QNX
  *
  */
-#ifdef TARGET_OS_QNX
+#ifdef PFE_CFG_TARGET_OS_QNX
 #include "oal_spinlock_qnx.h"
 #include "oal_mutex_qnx.h"
 
@@ -62,7 +62,7 @@
  * LINUX
  *
  */
-#elif defined(TARGET_OS_LINUX)
+#elif defined(PFE_CFG_TARGET_OS_LINUX)
 #include "oal_spinlock_linux.h"
 #include "oal_mutex_linux.h"
 
@@ -70,7 +70,7 @@
  * AUTOSAR
  *
  */
-#elif defined(TARGET_OS_AUTOSAR)
+#elif defined(PFE_CFG_TARGET_OS_AUTOSAR)
 #include "oal_spinlock_autosar.h"
 #include "SchM_Eth_43_PFE.h"
 
@@ -79,8 +79,8 @@
  *
  */
 #else
-#error "TARGET_OS_xx was not set!"
-#endif /* TARGET_OS */
+#error "PFE_CFG_TARGET_OS_xx was not set!"
+#endif /* PFE_CFG_TARGET_OS_xx */
 
 #endif /* PUBLIC_OAL_SYNC_H_ */
 

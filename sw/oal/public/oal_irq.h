@@ -69,7 +69,7 @@
 #ifndef OAL_IRQ_H_
 #define OAL_IRQ_H_
 
-#ifdef TARGET_OS_AUTOSAR
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #include "oal_irq_autosar.h"
 #endif
 

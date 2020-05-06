@@ -43,6 +43,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/types.h>
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "oal_mm.h"
 
@@ -190,13 +191,13 @@ void *oal_mm_malloc(const addr_t size)
  */
 void oal_mm_free(const void *vaddr)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == vaddr))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	kfree((void *)vaddr);
 }

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -84,6 +84,8 @@ uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len,
 void pfe_pe_destroy(pfe_pe_t *pe);
 errno_t pfe_pe_check_mmap(pfe_pe_t *pe);
 errno_t pfe_pe_get_fw_errors(pfe_pe_t *pe);
+errno_t pfe_pe_mem_lock(pfe_pe_t *pe);
+errno_t pfe_pe_mem_unlock(pfe_pe_t *pe);
 #endif /* PFE_PE_H_ */
 
 /** @}*/

@@ -54,13 +54,13 @@ typedef struct mutex oal_mutex_t;
 
 static inline errno_t oal_mutex_init(oal_mutex_t *mutex)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mutex))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	mutex_init(mutex);
 
@@ -69,13 +69,13 @@ static inline errno_t oal_mutex_init(oal_mutex_t *mutex)
 
 static inline errno_t oal_mutex_destroy(oal_mutex_t *mutex)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mutex))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	mutex_destroy(mutex);
 
@@ -86,13 +86,13 @@ static inline errno_t oal_mutex_lock(oal_mutex_t *mutex)
 {
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mutex))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 again:
 	ret = mutex_trylock(mutex);
@@ -105,13 +105,13 @@ again:
 
 static inline errno_t oal_mutex_unlock(oal_mutex_t *mutex)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mutex))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	mutex_unlock(mutex);
 

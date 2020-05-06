@@ -1,32 +1,32 @@
 /* =========================================================================
  *  Copyright (C) 2007 Mindspeed Technologies, Inc.
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2018 NXP
- * 
- * Redistribution and use in source and binary forms, with or without 
+ *  Copyright 2017-2020 NXP
+ *
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation 
+ *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR 
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER
- * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, 
+ * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
  * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
@@ -34,18 +34,17 @@
  * @defgroup    dxgrLibFCI LibFCI
  * @brief       This is the Fast Control Interface available to host applications to
  *              communicate with the networking engine.
- * @details
- *              The FCI is intended to provide a generic configuration and monitoring interface
+ * @details     The FCI is intended to provide a generic configuration and monitoring interface
  *              to networking acceleration HW. Provided API shall remain the same within all
  *              HW/OS-specific implementations to keep dependent applications portable across
  *              various systems.
- *              
+ *
  *              The LibFCI is not directly touching the HW. Instead, it only passes commands to
  *              dedicated software component (OS/HW-specific endpoint) and receives return values.
  *              The endpoint is then responsible for HW configuration. This approach supports
  *              kernel-user space deployment where user space contains only API and the logic is
  *              implemented in kernel.
- *              
+ *
  *              Implementation uses appropriate transport mechanism to pass data between
  *              LibFCI user and the endpoint. For reference, in Linux netlink socket will be used,
  *              in QNX it will be a message.
@@ -53,47 +52,471 @@
  *              Usage scenario example - FCI command execution:
  *              -# User calls @ref fci_open() to get the @ref FCI_CLIENT instance, use FCI_GROUP_NONE
  *                 as multicast group mask.
- *              -# User calls @ref fci_cmd() to send a command with arguments to the endpoint
- *              -# Endpoint receives the command and performs requested actions
- *              -# Endpoint generates response and sends it back to the client
- *              -# Client receives the response and informs the caller
- *              -# User calls @ref fci_close() to finalize the @ref FCI_CLIENT instance
- *              
- *              Usage scenario example - asynchronous message processing:
- *              -# User calls @ref fci_open() to get the @ref FCI_CLIENT instance. It is 
- *                 important to set @ref FCI_GROUP_CATCH bit in multicast group mask.
- *              -# User calls @ref fci_register_cb() to register custom function for handling 
- *                 asynchronous messages from firmware
- *              -# User calls @ref fci_catch() function
- *              -# For each received message, the @ref fci_catch() calls previously registered
- *                 callback
- *              -# When the callback returns @ref FCI_CB_CONTINUE, the @ref fci_catch() function
- *                 waits for another message
- *              -# When the callback returns @ref FCI_CB_STOP or when error ocured,
- *                 function @ref fci_catch() returns.
- *              -# User calls fci_close() to finalize the @ref FCI_CLIENT instance
+ *              -# User calls @ref fci_cmd() to send a command with arguments to the endpoint.
+ *              -# Endpoint receives the command and performs requested actions.
+ *              -# Endpoint generates response and sends it back to the client.
+ *              -# Client receives the response and informs the caller.
+ *              -# User calls @ref fci_close() to finalize the @ref FCI_CLIENT instance.
  *
- *              Acronyms and Definitions
- *              ========================
- *              - route: Data structure which specifies where outgoing traffic will be sent.
- *                It contains following information: egress interface, destination MAC address
- *                and destination IP address.
- *              - conntrack: "tracked connection", a data structure containing information
+ * @if INCLUDE_ASYNC_DESC
+ *              Usage scenario example - asynchronous message processing:
+ *              -# User calls @ref fci_open() to get the @ref FCI_CLIENT instance. It is
+ *                 important to set @ref FCI_GROUP_CATCH bit in multicast group mask.
+ *              -# User calls @ref fci_register_cb() to register custom function for handling
+ *                 asynchronous messages from PFE.
+ *              -# User calls @ref fci_catch() function.
+ *              -# For each received message, the @ref fci_catch() calls previously registered
+ *                 callback.
+ *              -# When the callback returns @ref FCI_CB_CONTINUE, the @ref fci_catch() function
+ *                 waits for another message.
+ *              -# When the callback returns @ref FCI_CB_STOP or when error occurred,
+ *                 function @ref fci_catch() returns.
+ *              -# User calls fci_close() to finalize the @ref FCI_CLIENT instance.
+ * @endif
+ * 
+ * @section a_and_d Acronyms and Definitions
+ *              - <b>Physical Interface:</b> Interface physically able to send and receive data
+ *                (EMAC, HIF). Physical interfaces are pre-defined and can't be added or removed in
+ *                runtime. Every physical interface has associated a @b default logical interface and
+ *                set of properties like classification algorithm.
+ *              - <b>Logical Interface:</b> Extension of physical interface defined by set of rules
+ *                which describes Ethernet traffic. Intended to be used to dispatch traffic being
+ *                received via particular physical interfaces using 1:N association i.e. traffic
+ *                received by a physical interface can be classified and distributed to N logical
+ *                interfaces. These can be either connected to SW stack running in host system or
+ *                just used to distribute traffic to an arbitrary physical interface(s). Logical
+ *                interfaces are dynamic objects and can be created and destroyed in runtime.
+ *              - <b>Classification Algorithm:</b> Way how ingress traffic is being processed by
+ *                the PFE firmware.
+ *              - <b>Route:</b> Routes are representing direction where matching traffic shall be
+ *                forwarded to. Every route specifies egress physical interface and MAC address
+ *                of next network node.
+ *              - <b>Conntrack:</b> "Tracked connection", a data structure containing information
  *                about a connection. In context of this document it always refers
- *                to an IP connection (TCP, UDP, other).
+ *                to an IP connection (TCP, UDP, other). Term is equal to 'routing table entry'.
+ *                Conntracks contain reference to routes which shall be used in case when a packet
+ *                is matching the conntrack properties.
+ * 
+ * @section lfs Functions Summary
+ *              - @ref fci_open() <br>
+ *                <i>Connect to endpoint and create client instance.</i>
+ *              - @ref fci_close() <br>
+ *                <i>Close connection and destroy the client instance.</i>
+ *              - @ref fci_write() <br>
+ *                <i>Execute FCI command without data response.</i>
+ *              - @ref fci_cmd() <br>
+ *                <i>Execute FCI command with data response.</i>
+ *              - @ref fci_query() <br>
+ *                <i>Alternative to @ref fci_cmd().</i>
+ *              - @ref fci_catch() <br>
+ *                <i>Poll for and process received asynchronous messages.</i>
+ *              - @ref fci_register_cb() <br>
+ *                <i>Register callback to be called in case of received message.</i>
+ * 
+ * @section fci_cs Commands Summary
+ *              - @ref FPP_CMD_PHY_IF <br>
+ *                <i>Management of physical interfaces.</i>
+ *              - @ref FPP_CMD_LOG_IF <br>
+ *                <i>Management of logical interfaces.</i>
+ *              - @ref FPP_CMD_IF_LOCK_SESSION <br>
+ *                <i>Get exclusive access to interfaces.</i>
+ *              - @ref FPP_CMD_IF_UNLOCK_SESSION <br>
+ *                <i>Cancel exclusive access to interfaces.</i>
+ *              - @ref FPP_CMD_L2_BD <br>
+ *                <i>L2 bridge domains management.</i>
+ *              - @ref FPP_CMD_FP_TABLE <br>
+ *                <i>Administration of @ref flex_parser tables.</i>
+ *              - @ref FPP_CMD_FP_RULE <br>
+ *                <i>Administration of @ref flex_parser rules.</i>
+ *              - @ref FPP_CMD_FP_FLEXIBLE_FILTER <br>
+ *                <i>Utilization of @ref flex_parser to filter out (drop) frames.</i>
+ *              - @ref FPP_CMD_IPV4_RESET <br>
+ *                <i>Reset IPv4 (routes, conntracks, ...).</i>
+ *              - @ref FPP_CMD_IPV6_RESET <br>
+ *                <i>Reset IPv6 (routes, conntracks, ...).</i>
+ *              - @ref FPP_CMD_IP_ROUTE <br>
+ *                <i>Management of IP routes.</i>
+ *              - @ref FPP_CMD_IPV4_CONNTRACK <br>
+ *                <i>Management of IPv4 connections.</i>
+ *              - @ref FPP_CMD_IPV6_CONNTRACK <br>
+ *                <i>Management of IPv6 connections.</i>
+ *              - @ref FPP_CMD_IPV4_SET_TIMEOUT <br>
+ *                <i>Configuration of connection timeouts.</i>
+ * 
+ * @if FCI_EVENTS_IMPLEMENTED
+ * @section cbks Events summary
+ *              - @ref FPP_CMD_IPV4_CONNTRACK_CHANGE <br>
+ *                <i>Endpoint reports event related to IPv4 connection.</i>
+ *              - @ref FPP_CMD_IPV6_CONNTRACK_CHANGE <br>
+ *                <i>Endpoint reports event related to IPv6 connection.</i>
+ * @endif
+ * 
+ * @section if_mgmt Interface Management
+ *              Physical Interface
+ *              ------------------
+ *              Physical interfaces are static objects and are defined at startup.
+ *              LibFCI client can get a list of currently available physical interfaces using query
+ *              option of the @ref FPP_CMD_PHY_IF command. Every physical interface contains
+ *              a list of logical interfaces. Without any configuration all physical interfaces are
+ *              in default operation mode. It means that all ingress traffic is processed using only
+ *              associated @b default logical interface. Default logical interface is always the tail
+ *              of the list of associated logical interfaces. When new logical interface is associated,
+ *              it is placed at head position of the list so the default one remains on tail. User
+ *              can change the used classification algorithm via update option of the
+ *              @ref FPP_CMD_PHY_IF command.
+ * 
+ *              Here are supported operations related to physical interfaces:
+ * 
+ *              To @b list available physical interfaces:
+ *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
+ *              -# Read first interface via @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_QUERY.
+ *              -# Read next interface(s) via @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_QUERY_CONT.
+ *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ * 
+ *              To @b modify a physical interface (read-modify-write):
+ *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
+ *              -# Read interface properties via @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_QUERY +
+ *                 @ref FPP_ACTION_QUERY_CONT.
+ *              -# Modify desired properties.
+ *              -# Write modifications using @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
+ *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ * 
+ *              Logical Interface
+ *              -----------------
+ *              Logical interfaces specify traffic endpoints. They are connected to respective
+ *              physical interfaces and contain information about which traffic can they accept
+ *              and how the accepted traffic shall be processed (where, resp. to which @b physical
+ *              interface(s) the matching traffic shall be forwarded). For example, there can be two
+ *              logical interfaces associated with an EMAC1, one accepting traffic with VLAN ID = 10
+ *              and the second one accepting all remaining traffic. First one can be configured to
+ *              forward the matching traffic to EMAC1 and the second one to drop the rest.
+ * 
+ *              Logical interfaces can be created and destroyed in runtime using actions related
+ *              to the @ref FPP_CMD_LOG_IF command. Note that first created logical interface
+ *              on a physical interface becomes the default one (tail). All subsequent logical
+ *              interfaces are added at head position of list of interfaces.
+ * 
+ *              \image latex flexible_router.eps "Configuration Example" width=7cm
+ *              The example shows scenario when physical interface EMAC1 is configured in
+ *              @ref FPP_IF_OP_FLEXIBLE_ROUTER operation mode:
+ *              -# Packet is received via EMAC1 port of the PFE.
+ *              -# Classifier walks through list of Logical Interfaces associated with the ingress
+ *                 Physical Interface. Every Logical Interface contains a set of classification rules
+ *                 (see @ref fpp_if_m_rules_t) the classification process is using to match the ingress
+ *                 packet. Note that the list is searched from head to tail, where tail is the default
+ *                 logical interface.
+ *              -# Information about matching Logical Interface and Physical Interface is passed to
+ *                 the Routing and Forwarding Algorithm. The algorithm reads the Logical Interface
+ *                 and retrieves forwarding properties.
+ *              -# The matching Logical Interface is configured to forward the packet to EMAC2 and
+ *                 HIF so the forwarding algorithm ensures that. Optionally, here the packet can be
+ *                 modified according to interface setup (VLAN insertion, source MAC address
+ *                 replacement, ...).
+ *              -# Packet is physically transmitted via dedicated interfaces. Packet replica sent
+ *                 to HIF carries metadata describing the matching Logical and Physical interface
+ *                 so the host driver can easily dispatch the traffic.
+ * 
+ *              Here are supported operations related to logical interfaces:
+ * 
+ *              To @b create new logical interface:
+ *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
+ *              -# Create logical interface via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_REGISTER.
+ *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ * 
+ *              To @b list available logical interfaces:
+ *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
+ *              -# Read first interface via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_QUERY.
+ *              -# Read next interface(s) via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_QUERY_CONT.
+ *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ * 
+ *              To @b modify an interface (read-modify-write):
+ *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
+ *              -# Read interface properties via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_QUERY +
+ *                 @ref FPP_ACTION_QUERY_CONT.
+ *              -# Modify desired properties.
+ *              -# Write modifications using @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_UPDATE.
+ *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ * 
+ *              To @b remove logical interface:
+ *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
+ *              -# Remove logical interface via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_DEREGISTER.
+ *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ * 
+ * @section feature Features
+ * @subsection l3_router IPv4/IPv6 Router (TCP/UDP)
+ *              Introduction
+ *              ------------
+ *              The IPv4/IPv6 Forwarder is a dedicated feature to offload the host CPU from tasks
+ *              related to forwarding of specific IP traffic between physical interfaces. Normally,
+ *              the ingress IP traffic is passed to the host CPU running TCP/IP stack which is responsible
+ *              for routing of the packets. Once the stack identifies that a packet does not belong to any
+ *              of local IP endpoints it performs lookup in routing table to determine how to process such
+ *              traffic. If the routing table contains entry associated with the packet (5-tuple search)
+ *              the stack modifies and forwards the packet to another interface to reach its intended
+ *              destination node. The PFE can be configured to identify flows which do not need to enter
+ *              the host CPU using its internal routing table, and to ensure that the right packets are
+ *              forwarded to the right destination interfaces.
+ * 
+ *              Configuration
+ *              -------------
+ *              The FCI contains mechanisms to setup particular Physical Interfaces to start classifying
+ *              packets using Router classification algorithm as well as to manage PFE routing tables.
+ *              The router configuration then consists of following steps:
+ *              -# Optionally use @ref FPP_CMD_IPV4_RESET or @ref FPP_CMD_IPV6_RESET to initialize the
+ *                 router. All previous configuration changes will be discarded.
+ *              -# Create one or more routes (@ref FPP_CMD_IP_ROUTE + @ref FPP_ACTION_REGISTER). Once
+ *                 created, every route has an unique identifier. Creating route on an physical
+ *                 interface causes switch of operation mode of that interface to @ref FPP_IF_OP_ROUTER.
+ *              -# Create one or more IPv4 routing table entries (@ref FPP_CMD_IPV4_CONNTRACK +
+ *                 @ref FPP_ACTION_REGISTER).
+ *              -# Create one or more IPv6 routing table entries (@ref FPP_CMD_IPV6_CONNTRACK +
+ *                 @ref FPP_ACTION_REGISTER).
+ *              -# Set desired physical interface(s) to router mode @ref FPP_IF_OP_ROUTER using
+ *                 @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE. This selects interfaces which
+ *                 will use routing algorithm to classify ingress traffic.
+ *              -# Enable physical interface(s) by setting the @ref FPP_IF_ENABLED flag via the
+ *                 @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
+ *              -# Optionally change MAC address(es) via @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
+ * 
+ *              From this point the traffic matching created conntracks is processed according to
+ *              conntrack properties (e.g. NAT) and fast-forwarded to configured physical interfaces.
+ *              Conntracks are subject of aging. When no traffic has been seen for specified time
+ *              period (see @ref FPP_CMD_IPV4_SET_TIMEOUT) the conntracks are removed.
+ * 
+ *              Routes and conntracks can be listed using query commands:
+ *              - @ref FPP_CMD_IP_ROUTE + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
+ *              - @ref FPP_CMD_IPV4_CONNTRACK + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
+ *              - @ref FPP_CMD_IPV6_CONNTRACK + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
+ * 
+ *              When conntrack or route are no more required, they can be deleted via corresponding
+ *              command:
+ *              - @ref FPP_CMD_IP_ROUTE + @ref FPP_ACTION_DEREGISTER,
+ *              - @ref FPP_CMD_IPV4_CONNTRACK + @ref FPP_ACTION_DEREGISTER, and
+ *              - @ref FPP_CMD_IPV6_CONNTRACK + @ref FPP_ACTION_DEREGISTER.
+ * 
+ *              Deleting route causes deleting all associated conntracks. When the latest route on
+ *              an interface is deleted, the interface is put to default operation mode
+ *              @ref FPP_IF_OP_DEFAULT.
+ * 
+ * @subsection l2_bridge L2 Bridge (Switch)
+ *              Introduction
+ *              ------------
+ *              The L2 Bridge functionality covers forwarding of packets based on MAC addresses. It
+ *              provides possibility to move bridging-related tasks from host CPU to the PFE and thus
+ *              offloads the host-based networking stack. The L2 Bridge feature represents a network
+ *              switch device implementing following functionality:
+ *              - <b>MAC table and address learning:</b>
+ *                The L2 bridging functionality is based on determining to which interface an ingress
+ *                packet shall be forwarded. For this purpose a network switch device implements so
+ *                called bridging table (MAC table) which is searched to get target interface for each
+ *                packet entering the switch. If received source MAC address does not match any MAC
+ *                table entry then a new entry, containing the Physical Interface which the packet has
+ *                been received on, is added - learned. Destination MAC address of an ingress packet
+ *                is then used to search the table to determine the target interface.
+ *              - <b>Aging:</b>
+ *                Each MAC table entry gets default timeout value once learned. In time this timeout is
+ *                being decreased until zero is reached. Entries with zero timeout value are automatically
+ *                removed from the table. The timeout value is re-set each time the corresponding table
+ *                entry is used to process a packet.
+ *              - <b>Port migration:</b>
+ *                When a MAC address is seen on one interface of the switch and an entry has been created,
+ *                it is automatically updated when the MAC address is seen on another interface.
+ *              - <b>VLAN Awareness:</b>
+ *                The bridge implements VLAN table. This table is used to implement VLAN-based policies
+ *                like Ingress and Egress port membership. Feature includes configurable VLAN tagging
+ *                and un-tagging functionality per bridge interface (Physical Interface). The bridge
+ *                utilizes PFE HW accelerators to perform MAC and VLAN table lookup thus this operation
+ *                is highly optimized. Host CPU SW is only responsible for correct bridge configuration
+ *                using the dedicated API.
+ * 
+ *              L2 Bridge VLAN Awareness and Domains
+ *              --------------------------
+ *              The VLAN awareness is based on entities called Bridge Domains (BD) which are visible to
+ *              both classifier firmware, and the driver, and are used to abstract particular VLANs.
+ *              Every BD contains configurable set of properties:
+ *              - Associated VLAN ID.
+ *              - Set of Physical Interfaces which are members of the domain.
+ *              - Information about which of the member interfaces are ’tagged’ or ’untagged’.
+ *              - Instruction how to process matching uni-cast packets (forward, flood, discard, ...).
+ *              - Instruction how to process matching multi-cast packets.
+ * 
+ *              The L2 Bridge then consists of multiple BD types:
+ *              - <b>The Default BD:</b>
+ *                Default domain is used by the classification process when a packet has been received
+ *                with default VLAN ID. This can happen either if the packet does not contain VLAN tag
+ *                or the VLAN tag is equal to the default VLAN configured within the bridge.
+ *              - <b>The Fall-back BD:</b>
+ *                This domain is used when packet with an unknown VLAN ID (does not match any standard
+ *                or default domain) is received in @ref FPP_IF_OP_VLAN_BRIDGE mode. It is also used
+ *                as representation of simple L2 bridge when VLAN awareness is disabled (in case of
+ *                the @ref FPP_IF_OP_BRIDGE mode).
+ *              - <b>Set of particular Standard BDs:</b>
+ *                Standard domain. Specifies what to do when packet with VLAN ID matching the Standard
+ *                BD is received.
+ * 
+ *              Configuration
+ *              -------------
+ *              Here are steps needed to configure VLAN-aware switch:
+ *              -# Optionally get list of available physical interfaces and their IDs. See the
+ *                 @ref if_mgmt.
+  *             -# Create a bridge domain (VLAN domain) (@ref FPP_CMD_L2_BD +
+ *                 @ref FPP_ACTION_REGISTER).
+  *             -# Configure domain hit/miss actions (@ref FPP_CMD_L2_BD + @ref FPP_ACTION_UPDATE)
+ *                 to let the bridge know how to process matching traffic.
+ *              -# Add physical interfaces as members of that domain (@ref FPP_CMD_L2_BD +
+ *                 @ref FPP_ACTION_UPDATE). Adding interface to a bridge domain causes switch of its
+ *                 operation mode to @ref FPP_IF_OP_VLAN_BRIDGE and enabling promiscuous mode on MAC
+ *                 level.
+ *              -# Set physical interface(s) to VLAN bridge mode @ref FPP_IF_OP_VLAN_BRIDGE using
+ *                 @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
+ *              -# Set promiscuous mode and enable physical interface(s) by setting the
+ *                 @ref FPP_IF_ENABLED and @ref FPP_IF_PROMISC flags via the @ref FPP_CMD_PHY_IF +
+ *                 @ref FPP_ACTION_UPDATE.
+ * 
+ *              For simple, non-VLAN aware switch do:
+ *              -# Optionally get list of available physical interfaces and their IDs. See the
+ *                 @ref if_mgmt.
+  *             -# Add physical interfaces as members of fall-back BD (@ref FPP_CMD_L2_BD +
+ *                 @ref FPP_ACTION_UPDATE). The fall-back BD is identified by VLAN 0 and exists
+ *                 automatically.
+ *              -# Configure domain hit/miss actions (@ref FPP_CMD_L2_BD + @ref FPP_ACTION_UPDATE)
+ *                 to let the bridge know how to process matching traffic.
+ *              -# Set physical interface(s) to simple bridge mode @ref FPP_IF_OP_BRIDGE using
+ *                 @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
+ *              -# Set promiscuous mode and enable physical interface(s) by setting the
+ *                 @ref FPP_IF_ENABLED and @ref FPP_IF_PROMISC flags via the @ref FPP_CMD_PHY_IF +
+ *                 @ref FPP_ACTION_UPDATE.
+ * 
+ *              Once interfaces are in bridge domain, all ingress traffic is processed according
+ *              to bridge domain setup. Unknown source MAC addresses are being learned and after
+ *              specified time period without traffic are being aged.
+ * 
+ *              An interface can be added to or removed from BD at any time via
+ *              @ref FPP_CMD_L2_BD + @ref FPP_ACTION_UPDATE. When interface is removed
+ *              from all bridge domains (is not associated with any BD), its operation mode is
+ *              automatically switched to @ref FPP_IF_OP_DEFAULT and MAC promiscuous mode is disabled.
+ * 
+ *              List of available bridge domains with their properties can be retrieved using
+ *              @ref FPP_CMD_L2_BD + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
+ * 
+ * @subsection flex_parser Flexible Parser
+ *             Introduction
+ *             ------------
+ *             The Flexible Parser is PFE firmware-based feature allowing user to extend standard
+ *             ingress packet classification process by set of customizable classification rules.
+ *             According to the rules the Flexible Parser can mark frames as ACCEPTED or REJECTED.
+ *             The rules are configurable by user and exist in form of tables. Every classification
+ *             table entry consist of following fields:
+ *             - 32-bit Data field to be compared with value from the ingress frame.
+ *             - 32-bit Mask field (active bits are ’1’) specifying which bits of the data field will
+ *                be used to perform the comparison.
+ *             - 16-bit Configuration field specifying rule properties including the offset to the frame
+ *               data which shall be compared.
+ * 
+ *             The number of entries within the table is configurable by user. The table is processed
+ *             sequentially starting from entry index 0 until the last one is reached or classification
+ *             is terminated by a rule configuration. When none of rules has decided that the packet
+ *             shall be accepted or rejected the default result is REJECT.
+ * 
+ *             Example
+ *             -------
+ *             This is example of how Flexible Parser table can be configured. Every row contains single
+ *             rule and processing starts with rule 0. ACCEPT/REJECT means that the classification is
+ *             terminated with given result, CONTINUE means that next rule (sequentially) will be
+ *             evaluated. CONTINUE with N says that next rule to be evaluated is N. Evaluation of the
+ *             latest rule not resulting in ACCEPT or REJECT results in REJECT.
+ * 
+ *             Rule|Flags                         |Mask |Next|Condition
+ *             ----|------------------------------|-----|----|-----------------------------------------
+ *             0   |FP_FL_INVERT<br>FP_FL_REJECT  |!= 0 |n/a |if ((PacketData&Mask) != (RuleData&Mask))<br> then REJECT<br> else CONTINUE
+ *             1   |FP_FL_ACCEPT                  |!= 0 |n/a |if ((PacketData&Mask) == (RuleData&Mask))<br> then ACCEPT<br> else CONTINUE
+ *             2   | -                            |!= 0 |4   |if ((PacketData&Mask) == (RuleData&Mask))<br> then CONTINUE with 4<br> else CONTINUE
+ *             3   |FP_FL_REJECT                  |= 0  |n/a |REJECT
+ *             4   |FP_FL_INVERT                  |!= 0 |6   |if ((PacketData&Mask) != (RuleData&Mask))<br> then CONTINUE with 6<br> else CONTINUE
+ *             5   |FP_FL_ACCEPT                  |= 0  |n/a |ACCEPT
+ *             6   |FP_FL_INVERT<br>FP_FL_ACCEPT  |!= 0 |n/a |if ((PacketData&Mask) != (RuleData&Mask))<br> then ACCEPT<br> else CONTINUE
+ *             7   |FP_FL_REJECT                  |= 0  |n/a |REJECT
+ * 
+ *             Configuration
+ *             -------------
+ *             -# Create a Flexible Parser table using @ref FPP_CMD_FP_TABLE + @ref FPP_ACTION_REGISTER.
+ *             -# Create one or multiple rules with @ref FPP_CMD_FP_RULE + @ref FPP_ACTION_REGISTER.
+ *             -# Assing rules to tables via @ref FPP_CMD_FP_TABLE + @ref FPP_ACTION_USE_RULE.
+ *                Rules can be removed from table with @ref FPP_ACTION_UNUSE_RULE.
+ * 
+ *             Created table can be used for instance as argument of @ref flex_router. When not needed
+ *             the table can be deleted with @ref FPP_CMD_FP_TABLE + @ref FPP_ACTION_DEREGISTER
+ *             and particular rules with @ref FPP_CMD_FP_RULE + @ref FPP_ACTION_DEREGISTER. This
+ *             cleanup should be always considered since tables and rules are stored in limited PFE
+ *             internal memory.
+ * 
+ *             Flexible parser classification introduces performance penalty which is proportional
+ *             to number of rules and complexity of the table.
+ * 
+ * @subsection flex_router Flexible Router
+ *             Introduction
+ *             ------------
+ *             Flexible router specifies behavior when ingress packets are classified and routed
+ *             according to custom rules different from standard L2 Bridge (Switch) or IPv4/IPv6
+ *             Router processing. Feature allows definition of packet distribution rules using physical
+ *             and logical interfaces. The classification hierarchy is given by ingress physical
+ *             interface containing a configurable set of logical interfaces. Every time a packet is
+ *             received via the respective physical interface, which is configured to use the Flexible
+ *             Router classification, a walk through the list of associated logical interfaces is
+ *             performed. Every logical interface is used to match the packet using interface-specific
+ *             rules (@ref fpp_if_m_rules_t). In case of match the matching packet is processed
+ *             according to the interface configuration (e.g. forwarded via specific physical
+ *             interface(s), dropped, sent to host, ...). In case when more rules are specified, the
+ *             logical interface can be configured to apply logical AND or OR to get the match result.
+ *             Please see the example within @ref if_mgmt.
+ * 
+ *             Configuration
+ *             -------------
+ *             -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
+ *             -# Use @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE to set a physical interface(s)
+ *                to @ref FPP_IF_OP_FLEXIBLE_ROUTER operation mode.
+ *             -# Use @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_REGISTER to create new logical
+ *                interface(s) if needed.
+ *             -# Optionally, if @ref flex_parser is desired to be used as a classification rule,
+ *                create table(s) according to @ref flex_parser description.
+ *             -# Configure existing logical interface(s) (set match rules and arguments) via
+ *                @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_UPDATE.
+ *             -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ * 
+ *             Note that Flexible Router can be used to implement certain form of @ref l3_router as
+ *             well as @ref l2_bridge. Such usage is of course not recommended since both mentioned
+ *             features exist as fully optimized implementation and usage of Flexible Router this way
+ *             would pointlessly affect forwarding performance.
  */
+
+/**
+ * @example fpp_cmd_phy_if.c
+ * @example fpp_cmd_log_if.c
+ * @example fpp_cmd_ip_route.c
+ * @example fpp_cmd_ipv4_conntrack.c
+ * @example fpp_cmd_ipv6_conntrack.c
+ */
+
 /**
  * @addtogroup  dxgrLibFCI
  * @{
- * 
+ *
  * @file        libfci.h
  * @brief       Generic LibFCI header file
  * @details     This file contains generic API and API description
- *
  */
 
 #ifndef _LIBFCI_H
 #define _LIBFCI_H
+
+#ifndef TRUE
+#define TRUE 1
+#endif /* TRUE */
+
+#ifndef FALSE
+#define FALSE 0
+#endif /* FALSE */
+
 
 /* TODO put to config file: */
 /**
@@ -110,6 +533,8 @@
  *                 Where @c reply_struct_t is the structure type depending on command being called.
  *              -# In legacy API, macros @ref FPP_CMD_IPV4_CONNTRACK_CHANGE and @ref FPP_CMD_IPV6_CONNTRACK_CHANGE are
  *                 defined in application files. In current API they are defined here in @ref libfci.h.
+ * 
+ * @warning     It is not recommended to enable this feature.
  *
  * @hideinitializer
  */
@@ -117,6 +542,7 @@
 
 #if FALSE == FCI_CFG_FORCE_LEGACY_API
     /**
+	 * @if FCI_EVENTS_IMPLEMENTED
      * @def         FPP_CMD_IPV4_CONNTRACK_CHANGE
      * @brief       Callback event value for IPv4 conntracks
      * @details     One of the values the callback registered by @ref fci_register_cb can get in @c fcode
@@ -129,9 +555,11 @@
      *              - @ref FPP_ACTION_REMOVED: conntrack entry was removed
      *              - @ref FPP_ACTION_TCP_FIN: TCP FIN or TCP RST packet was received, conntrack was removed
      * @hideinitializer
+	 * @endif
      */
     #define FPP_CMD_IPV4_CONNTRACK_CHANGE   0x0315u
     /**
+	 * @if FCI_EVENTS_IMPLEMENTED
      * @def         FPP_CMD_IPV6_CONNTRACK_CHANGE
      * @brief       Callback event value for IPv6 conntracks
      * @details     One of the values the callback registered by @ref fci_register_cb can get in @c fcode
@@ -141,6 +569,7 @@
      *              @ref fpp_ct6_ex_cmd type. Otherwise the event is same as
      *              @ref FPP_CMD_IPV4_CONNTRACK_CHANGE.
      * @hideinitializer
+	 * @endif
      */
     #define FPP_CMD_IPV6_CONNTRACK_CHANGE   0x0415u
 #endif /* FCI_CFG_FORCE_LEGACY_API */
@@ -148,6 +577,7 @@
 /**
  * @def CTCMD_FLAGS_ORIG_DISABLED
  * @brief Disable connection originator
+ * @hideinitializer
  */
 #define CTCMD_FLAGS_ORIG_DISABLED           (1U << 0)
 
@@ -156,6 +586,7 @@
  * @brief       Disable connection replier
  * @details     Used to create uni-directional connections (see @ref FPP_CMD_IPV4_CONNTRACK,
  *              @ref FPP_CMD_IPV4_CONNTRACK)
+ * @hideinitializer
  */
 #define CTCMD_FLAGS_REP_DISABLED            (1U << 1)
 
@@ -166,7 +597,7 @@
  *              communicate with associated endpoint. The endpoint can be a standalone
  *              application/driver taking care of HW configuration tasks and shall be able to
  *              interpret commands sent via the LibFCI API.
- * 
+ *
  * @internal
  * @note        The __fci_client_tag structure has to be provided by the OS/HW specific
  *              implementation.
@@ -185,7 +616,7 @@ typedef struct __fci_client_tag FCI_CLIENT;
  *              possible to have max 32 multicast groups). Then, groups can be combined using
  *              bitwise OR operation.
  */
-typedef enum fci_mcast_groups
+typedef enum
 {
     FCI_GROUP_NONE  = 0x00000000, /**< Default MCAST group value, no group, for sending FCI commands */
     FCI_GROUP_CATCH = 0x00000001  /**< MCAST group for catching events */
@@ -194,9 +625,9 @@ typedef enum fci_mcast_groups
 /**
  * @typedef     fci_client_type_t
  * @brief       List of supported FCI client types
- * @details     FCI client can specify using this types to which FCI endpoint shall be connected.
+ * @details     FCI client can specify using this type to which FCI endpoint shall be connected.
  */
-typedef enum fci_client_type
+typedef enum
 {
     FCI_CLIENT_DEFAULT = 0, /**< Default type (equivalent of legacy FCILIB_FF_TYPE macro) */
 	FCILIB_FF_TYPE = 0 /* Due to compatibility purposes */
@@ -205,10 +636,10 @@ typedef enum fci_client_type
 /**
  * @typedef     fci_cb_retval_t
  * @brief       The FCI callback return values
- * @details     This return values shall be used in FCI callback (see @ref fci_register_cb).
+ * @details     These return values shall be used in FCI callback (see @ref fci_register_cb).
  *              It tells @ref fci_catch function whether it should return or continue.
  */
-typedef enum fci_cb_retval
+typedef enum
 {
     FCI_CB_STOP = 0, /**< Stop waiting for events and exit @ref fci_catch function */
     FCI_CB_CONTINUE  /**< Continue waiting for next events */
@@ -254,7 +685,7 @@ int fci_close(FCI_CLIENT *client);
  *              the messages internally. The callback would then be executed in this thread's
  *              context.
  * @endinternal
- *              
+ *
  * @see         fci_register_cb()
  * @param[in]   client The FCI client instance
  * @retval      0 Success
@@ -265,43 +696,24 @@ int fci_catch(FCI_CLIENT *client);
 /**
  * @brief       Run an FCI command with optional data response
  * @details     This routine can be used when one need to perform any command either with or
- *              without data response. Anyway, the routine always returns data into response
- *              buffer because the return value of the command executed on the endpoint is
- *              always written in first two bytes of the response buffer.
- *
- *              There are two possible situations:
- *              - The command responded with some data structure: the structure is written into
- *                the rep_buf and first two bytes are overwritten by the return value. The
- *                length of the data structure is written into rep_len.
- *              - The command did not respond with data structure: only the two bytes containing the
- *                return value are written into the rep_buf. Value 2 is written into the rep_len.
+ *              without data response. If the command responded with some data structure the
+ *              structure is written into the rep_buf. The length of the returned data structure
+ *              (number of bytes) is written into rep_len.
  *
  * @internal
  * @note        This shall be a blocking call.
  * @endinternal
  *
- * @note        The rep_buf buffer must be aligned to 4 and the length of the rep_buf must be FCI_MAX_PAYLOAD.
- *
- * @note        The differences among @ref fci_query, @ref fci_write and @ref fci_cmd functions are:
- *                - fci_cmd: return value says only whether command was executed. The return value
- *                  of the command (provided at first two bytes of rep_buf) shall be checked by user.
- *                  There are restrictions for alignment and length of rep_buf.
- *                - fci_query: return value reflects both successfull execution and called command's status.
- *                  Return value is present in rsp_data anyway, but there is no need to check it there.
- *                - fci_write: return value reflects both successfull execution and called command's status.
- *                  Reply buffer is not provided.
+ * @note        The @c rep_buf buffer must be aligned to 4.
  *
  * @param[in]   client The FCI client instance
- * @param[in]   fcode Command to be executed. The command codes are defined in 'fpp.h' as FPP_CMD_*
- *              macros.
- * @param[in]   cmd_buf Pointer to structure holding command arguments. The structures used for command
- *              arguments are defined in 'fpp.h'.
- * @param[in]   cmd_len Length of the command arguments structure in bytes
- * @param[out]  rep_buf Pointer to memory where the data response shall be written
- * @param[in,out]   rep_len Pointer to variable which defines length of the buffer when the
- *                  function is called and length of the response when the function returns. In bytes.
- * @retval      <0 Failed to execute the command.
- * @retval      0 Command was executed. The rep_buf (first 2 bytes) need to be checked. 
+ * @param[in]   fcode Command to be executed. Available commands are listed in @ref fci_cs.
+ * @param[in]   cmd_buf Pointer to structure holding command arguments.
+ * @param[in]   cmd_len Length of the command arguments structure in bytes.
+ * @param[out]  rep_buf Pointer to memory where the data response shall be written. Can be NULL.
+ * @param[in,out]   rep_len Pointer to variable where number of response bytes shall be written.
+ * @retval      <0 Failed to execute the command. Can be NULL.
+ * @retval      >=0 Command was executed with given return value (@c FPP_ERR_OK for success).
  */
 int fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *cmd_buf, unsigned short cmd_len, unsigned short *rep_buf, unsigned short *rep_len);
 
@@ -315,18 +727,16 @@ int fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *cmd_buf, u
  * @note        This shall be a blocking call.
  * @endinternal
  *
- * @note        If either rsp_data or rsplen is NULL pointer, the response data is discarded.
+ * @note        If either @c rsp_data or @c rsplen is NULL pointer, the response data is discarded.
  *
  * @param[in]   this_client The FCI client instance
- * @param[in]   fcode Command to be executed. The command codes are defined in 'fpp.h' as FPP_CMD_*
- *              macros.
+ * @param[in]   fcode Command to be executed. Available commands are listed in @ref fci_cs.
  * @param[in]   cmd_len Length of the command arguments structure in bytes
- * @param[in]   pcmd Pointer to structure holding command arguments. The structures used for command
- *              arguments are defined in 'fpp.h'.
+ * @param[in]   pcmd Pointer to structure holding command arguments.
  * @param[out]  rsplen Pointer to memory where length of the data response will be provided
  * @param[out]  rsp_data Pointer to memory where the data response shall be written.
  * @retval      <0 Failed to execute the command.
- * @retval      >=0 Return code of the command.
+ * @retval      >=0 Command was executed with given return value (@c FPP_ERR_OK for success).
  */
 int fci_query(FCI_CLIENT *this_client, unsigned short fcode, unsigned short cmd_len, unsigned short *pcmd, unsigned short *rsplen, unsigned short *rsp_data);
 
@@ -334,21 +744,18 @@ int fci_query(FCI_CLIENT *this_client, unsigned short fcode, unsigned short cmd_
  * @brief       Run an FCI command
  * @details     Similar as the fci_query() but without data response. The endpoint receiving the
  *              command is still responsible for generating response but the response is not
- *              delivered to the caller. Only the initial 2 bytes are
- *              propagated via return value of this function.
+ *              delivered to the caller.
  *
  * @internal
  * @note        This shall be a blocking call.
  * @endinternal
  *
  * @param[in]   client The FCI client instance
- * @param[in]   fcode Command to be executed. The command codes are defined in 'fpp.h' as FPP_CMD_*
- *              macros.
+ * @param[in]   fcode Command to be executed. Available commands are listed in @ref fci_cs.
  * @param[in]   cmd_len Length of the command arguments structure in bytes
- * @param[in]   cmd_buf Pointer to structure holding command arguments. The structures used for command
- *              arguments are defined in 'fpp.h'.
+ * @param[in]   cmd_buf Pointer to structure holding command arguments
  * @retval      <0 Failed to execute the command.
- * @retval      >=0 Return code of the command.
+ * @retval      >=0 Command was executed with given return value (@c FPP_ERR_OK for success).
  */
 int fci_write(FCI_CLIENT *client, unsigned short fcode, unsigned short cmd_len, unsigned short *cmd_buf);
 
@@ -376,577 +783,6 @@ int fci_fd(FCI_CLIENT *this_client);
 /** @} */
 #endif /* _LIBFCI_H */
 
-/* Documentation of the FPP.h file: */
-/**
- * @addtogroup  dxgrLibFCI
- * @{
- * 
- * @file        fpp.h
- * @brief       FCI API
- * @details     This file defines Fast Control Interface (FCI) API
- *
-*/
-
-/**
- * @def FPP_CMD_IPV4_RESET
- * @brief Specifies FCI command that clears all IPv4 routes (see @ref FPP_CMD_IP_ROUTE)
- *        and conntracks (see @ref FPP_CMD_IPV4_CONNTRACK)
- * @details This command uses no arguments.
- *
- * Command Argument Type: none (cmd_buf = NULL; cmd_len = 0;)
- * 
- * @hideinitializer
- */
-
-/**
- * @def FPP_CMD_IPV6_RESET
- * @brief Specifies FCI command that clears all IPv6 routes (see @ref FPP_CMD_IP_ROUTE)
- *        and conntracks (see @ref FPP_CMD_IPV6_CONNTRACK)
- * @details This command uses no arguments.
- *
- * Command Argument Type: none (cmd_buf = NULL; cmd_len = 0;)
- *
- * @hideinitializer
- */
-
-/**
- * @def FPP_CMD_IP_ROUTE
- * @brief Specifies FCI command for working with routes
- * @details Binds an IP address and a physical address to an interface.
- *          This command can be used with various values of `.action`:
- *          - @c FPP_ACTION_REGISTER: Defines a new route.
- *          - @c FPP_ACTION_DEREGISTER: Deletes previously defined route.
- *          - @c FPP_ACTION_QUERY: Gets parameters of existing routes. It creates a snapshot of all active
- *            route entries and replies with first of them.
- *          - @c FPP_ACTION_QUERY_CONT: Shall be called periodically after @c FPP_ACTION_QUERY was called. On each
- *            call it replies with parameters of next route. It returns @c FPP_ERR_RT_ENTRY_NOT_FOUND when no more
- *            entries exist.
- * 
- * Command Argument Type: struct @ref fpp_rt_cmd (@c fpp_rt_cmd_t)
- * 
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_rt_cmd_t cmd_data = 
- *   {
- *     .action = FPP_ACTION_REGISTER, // Register new route
- *     .mtu = ...,                    // MTU must be specified
- *     .dst_mac = ...,                // Destination MAC address (network endian)
- *     .output_device = ...,          // Name of egress interface (the name from operating system, e.g. eth0)
- *     .id = ...                      // Chosen number will be used as unique route identifier
- *     .flags = ...,                  // 1 for IPv4 addressing, 2 for IPv6
- *     .dst_addr = ...,               // Destination IPv4 or IPv6 address (network endian)
- *   };
- * @endcode
- *
- * Action FPP_ACTION_DEREGISTER
- * ----------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_rt_cmd_t cmd_data = 
- *   {
- *     .action = FPP_ACTION_DEREGISTER, // Deregister a route
- *     .id = ...                        // Unique route identifier
- *   };
- * @endcode
- * 
- * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
- * -------------------------------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_rt_cmd_t cmd_data = 
- *   {
- *     .action = ...     // Either FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT
- *   };
- * @endcode
- * 
- * Response data type for queries: struct @ref fpp_rt_cmd (@c fpp_rt_cmd_t)
- *
- * Response data provided:
- * @code{.c}
- *     rsp_data.mtu;            // MTU
- *     rsp_data.dst_mac;        // Destination MAC address
- *     rsp_data.output_device;  // Output device name
- *     rsp_data.id;             // Route ID
- *     rsp_data.dst_addr;       // Destination IP address
- * @endcode
- * 
- * @hideinitializer
- */
-
-/**
- * @struct      fpp_rt_cmd
- * @brief       Data structure to be used for command buffer for route commands
- * @details     It can be used:
- *              - for command buffer in functions @ref fci_write, @ref fci_query or
- *                @ref fci_cmd, with @ref FPP_CMD_IP_ROUTE command.
- *              - for reply buffer in functions @ref fci_query or @ref fci_cmd,
- *                with @ref FPP_CMD_IP_ROUTE command.
- */
-
-/**
- * @def		FPP_CMD_IF_LOCK_SESSION
- * @brief	FCI command to perform lock on interface database.
- * @details	The reason for it is guaranteed atomic operation between fci/rpc/platform.
- *
- * @note	Command is defined as extension of the legacy fpp.h.
- *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Lock successful
- *     - @c FPP_ERR_IF_RESOURCE_ALREADY_LOCKED: Database was already locked by someone else
- */
-
-/**
- * @def		FPP_CMD_IF_UNLOCK_SESSION
- * @brief	FCI command to perform unlock on interface database.
- * @details	The reason for it is guaranteed atomic operation between fci/rpc/platform.
- *
- * @note	Command is defined as extension of the legacy fpp.h.
- *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Lock successful
- *     - @c FPP_ERR_IF_WRONG_SESSION_ID: The lock wasn't locked or was locked in different
- *     									 session and will nor be unlocked.
- */
-
-/**
- * @def		FPP_CMD_PHY_INTERFACE
- * @brief	FCI command for working with physical interfaces
- * @details	Interfaces are needed to be known to FCI to support insertion of routes and conntracks
- * 			insertion. Command can be used to get operation mode, mac address
- * 			and operation flags (enabled, promisc).
- *
- * @note	Command is defined as extension of the legacy fpp.h.
- *
- * 			Following values of `.action` are supported:
- * 			- @c FPP_ACTION_QUERY: Get first interface from list of registered interfaces.
- * 			- @c FPP_ACTION_QUERY_CONT: Get next interface from list of registered interfaces.
- * 				Intended to be called after @c FPP_ACTION_QUERY until @ FPP_ERR_IF_ENTRY_NOT_FOUND
- * 				is returned meaning there is no more interfaces in the list.
- *
- * Precondition to use the query is to atomicly lock the access with FPP_CMD_IF_LOCK_SESSION.
- *
- * Command Argument Type: struct fpp_phy_if_cmd (@c fpp_phy_if_cmd)
- *
- * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
- * -------------------------------------------------
- * Items to be set in command argument structure:
- *	@code{.c}
- * 		fpp_phy_if_cmd cmd_data =
- * 		{
- * 			.action = ...	// Either FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT
- * 		};
- *	@endcode
- *
- * Response data type for queries: struct @ref fpp_phy_if_cmd (@c fpp_phy_if_cmd)
- *
- * Response data provided:
- *	@code{.c}
- * 		rsp_data.name;		// Name of the interface
- * 		rsp_data.mac_addr;	// MAC address
- * 		rsp_data.id         // Interface ID
- * 		rsp_data.mode       // Operation mode
- * 		rsp_data.flags      // Operation flags
- *	@endcode
- *
- *	For operation modes see (@c fpp_phy_if_op_mode_t)
- *	For operation flags see (@c fpp_if_flags_t)
- *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Update successful
- *     - @c FPP_ERR_IF_ENTRY_NOT_FOUND: Last entry in the query session
- *     - @c FPP_ERR_IF_WRONG_SESSION_ID: Someone else is already working with the interfaces
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure
- *
- * @hideinitializer
- */
-
-/**
- * @def		FPP_CMD_LOG_INTERFACE
- * @brief	FCI command for working with logical interfaces
- * @details	Command can be used to update match rules of logical interface or for adding egress interfaces.
- * 			It can also update operational flags (enabled, promisc, match). Query with this command
- * 			will list matchrules+arguments, operational flags, egress interfaces.
- *
- * @note	Command is defined as extension of the legacy fpp.h.
- *
- * 			Following values of `.action` are supported:
- * 			- @c FPP_ACTION_UPDATE: Will update the logical interfaces with all provided information.
- * 			- @c FPP_ACTION_QUERY: Get first interface from list of registered interfaces.
- * 			- @c FPP_ACTION_QUERY_CONT: Get next interface from list of registered interfaces.
- * 				Intended to be called after @c FPP_ACTION_QUERY until @ FPP_ERR_IF_ENTRY_NOT_FOUND
- * 				is returned meaning there is no more interfaces in the list.
- *
- * Precondition to use the query is to atomicly lock the access with FPP_CMD_IF_LOCK_SESSION.
- *
- * Command Argument Type: struct fpp_log_if_cmd (@c fpp_log_if_cmd)
- *
- * FPP_ACTION_UPDATE
- * ----------------
- * * Items to be set in command argument structure:
- *	@code{.c}
- * 		fpp_log_if_cmd cmd_data =
- * 		{
- * 			.action = ...		// FPP_ACTION_UPDATE
- * 			.name = ...			// Required: Name of the interface
- * 			.egress = ...		// Optional: New egress interface mask (to add id to egress: egress = old_egress | (1U << id))
- *			.flags = ...		// Optional: New flags
- *			.match = ...		// Optional: Match rules
-  *			.arguments = ...	// Optional: Arguments corresponding to required match rules
- * 		};
- *	@endcode
- *
- *	For operation flags see (@c fpp_if_m_rules_t).
- *	For match arguments see (@c fpp_if_m_args_t).
- *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Update successful
- *     - @c FPP_ERR_IF_ENTRY_NOT_FOUND: If corresponding logical interface doesn't exit
- *     - @c FPP_ERR_IF_RESOURCE_ALREADY_LOCKED: Someone else is already configuring the interfaces
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure
- *
- * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
- * -------------------------------------------------
- * Items to be set in command argument structure:
- *	@code{.c}
- * 		fpp_log_if_cmd cmd_data =
- * 		{
- * 			.action = ...	// Either FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT
- * 		};
- *	@endcode
- *
- * Response data type for queries: struct @ref fpp_log_if_cmd (@c fpp_log_if_cmd)
- *
- * Response data provided:
- *	@code{.c}
- * 		rsp_data.name;			// Name of the interface
- * 		rsp_data.id				// Interface ID
- * 		rsp_data.parrent_name;	// Name of the parent interface
- * 		rsp_data.parrent_id		// Interface ID of parent physical interface
- * 		rsp_data.egress			// Egress interfaces in a mask form (to extract id: id == egress & (1 < id))
- * 		rsp_data.flags			// Operation flags
- * 		rsp_data.match			// Mach flags (if match flag is set than corresponding argument can be extracted from .arguments)
- * 		rsp_data.arguments		// Mach arguments
- *	@endcode
- *
- *	For operation flags see (@c fpp_if_m_rules_t).
- *	For match args see (@c fpp_if_m_args_t).
- *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Update successful
- *     - @c FPP_ERR_IF_ENTRY_NOT_FOUND: Last entry in the query session
- *     - @c FPP_ERR_IF_WRONG_SESSION_ID: Someone else is already working with the interfaces
- *     - @c FPP_ERR_IF_MATCH_UPDATE_FAILED: Update of match flags has failed
- *     - @c FPP_ERR_IF_EGRESS_UPDATE_FAILED: Update of egress interfaces has failed
- *     - @c FPP_ERR_IF_EGRESS_DOESNT_EXIST: Egress interface provided in command doesn't exist
- *     - @c FPP_ERR_IF_OP_FLAGS_UPDATE_FAILED: Operation flags update has failed (PROMISC/ENABLE/MATCH)
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure
- *
- * @hideinitializer
- */
-
-/**
- * @struct		fpp_if_cmd
- * @brief		Data structure to be used for interface commands
- * @details		Usage:
- * 				- As command buffer in functions @ref fci_write, @ref fci_query or
- * 				  @ref fci_cmd, with @ref FPP_CMD_INTERFACE command.
- * 				- As reply buffer in functions @ref fci_query or @ref fci_cmd,
- * 				  with @ref FPP_CMD_INTERFACE command.
- */
-
-/**
- * @def FPP_CMD_IPV4_CONNTRACK
- * @brief Specifies FCI command for working with tracked connections
- * @details This command can be used with various values of `.action`:
- *          - @c FPP_ACTION_REGISTER: Defines a connection and binds it to previously created route(s).
- *          - @c FPP_ACTION_DEREGISTER: Deletes previously defined connection.
- *          - @c FPP_ACTION_QUERY: Gets parameters of existing connection. It creates a snapshot of all active
- *            conntrack entries and replies with first of them.
- *          - @c FPP_ACTION_QUERY_CONT: Shall be called periodically after @c FPP_ACTION_QUERY was called. On each
- *            call it replies with parameters of next connection. It returns @c FPP_ERR_CT_ENTRY_NOT_FOUND when no more
- *            entries exist.
- * 
- * Command Argument Type: struct @ref fpp_ct_cmd (@c fpp_ct_cmd_t)
- * 
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_ct_cmd_t cmd_data =  
- *   {
- *     .action = FPP_ACTION_REGISTER, // Register new conntrack
- *     .saddr = ...,                  // Source IPv4 address (network endian)
- *     .daddr = ...,                  // Destination IPv4 address (network endian)
- *     .sport = ...,                  // Source port (network endian)
- *     .dport = ...,                  // Destination port (network endian)
- *     .saddr_reply = ...,            // Reply source IPv4 address (network endian). Used for NAT, otherwise equals .daddr
- *     .daddr_reply = ...,            // Reply destination IPv4 address (network endian). Used for NAT, otherwise equals .saddr
- *     .sport_reply = ...,            // Reply source port (network endian). Used for NAT, otherwise equals .dport
- *     .dport_reply = ...,            // Reply destination port (network endian). Used for NAT, otherwise equals .sport
- *     .protocol = ...,               // IP protocol ID (17=UDP, 6=TCP, ...)
- *     .flags = ...,                  // Bidirectional/Single direction
- *     .route_id = ...,               // ID of route previously created with .FPP_CMD_IP_ROUTE command
- *     .route_id_reply = ...          // ID of reply route previously created with .FPP_CMD_IP_ROUTE command
- *   };
- * @endcode
- * Original direction is towards interface defined through @c route_id.
- * Reply direction is towards interface defined through @c route_id_reply.
- * 
- * By default the connection is bidirectional. To create single directional connection, either:
- * - set `.flags |= CTCMD_FLAGS_REP_DISABLED` and don't set @c route_id_reply, or
- * - set `.flags |= CTCMD_FLAGS_ORIG_DISABLED` and don't set @c route_id.
- *
- * To configure NATed connection, set reply addresses and/or ports different than original 
- * addresses and ports. To achieve NAPT (also called PAT), use @c daddr_reply and @c dport_reply.
- * -# `daddr_reply != saddr`: Source address of packets in original direction will be changed
- *    from @c saddr to @c daddr_reply. Destination address of packets in reply direction will be
- *    changed from @c daddr_reply to @c saddr. 
- * -# `dport_reply != sport`: Source port of packets in original direction will be changed
- *    from @c sport to @c dport_reply. Destination port of packets in reply direction will be
- *    changed from @c dport_reply to @c sport. 
- * 
- * To achieve port forwarding or DMZ, use  @c saddr_reply and @c sport_reply:
- * -# `saddr_reply != daddr`: Destination address of packets in original direction will
- *    be changed from @c daddr to @c saddr_reply. Source address of packets in reply direction will be
- *    changed from @c saddr_reply to @c daddr. 
- * -# `sport_reply != dport`: Destination port of packets in original direction will be changed
- *    from @c dport to @c sport_reply. Source port of packets in reply direction will be
- *    changed from @c sport_reply to @c dport. 
- * 
- * Action FPP_ACTION_DEREGISTER
- * ----------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_ct_cmd_t cmd_data =  
- *   {
- *     .action = FPP_ACTION_DEREGISTER, // Deregister previously created conntrack
- *     .saddr = ...,                    // Source IPv4 address (network endian)
- *     .daddr = ...,                    // Destination IPv4 address (network endian)
- *     .sport = ...,                    // Source port (network endian)
- *     .dport = ...,                    // Destination port (network endian)
- *     .saddr_reply = ...,              // Reply source IPv4 address (network endian)
- *     .daddr_reply = ...,              // Reply destination IPv4 address (network endian)
- *     .sport_reply = ...,              // Reply source port (network endian)
- *     .dport_reply = ...,              // Reply destination port (network endian)
- *     .protocol = ...,                 // IP protocol ID
- *   };
- * @endcode
- *
- * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
- * -------------------------------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_ct_cmd_t cmd_data =  
- *   {
- *     .action = ...     // Either FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT
- *   };
- * @endcode
- *
- * Response data type for queries: struct @ref fpp_ct_ex_cmd (@c fpp_ct_ex_cmd_t)
- *
- * Response data provided:
- * @code{.c}
- *     rsp_data.saddr;         // Source IPv4 address (network endian)
- *     rsp_data.daddr;         // Destination IPv4 address (network endian)
- *     rsp_data.sport;         // Source port (network endian)
- *     rsp_data.dport;         // Destination port (network endian)
- *     rsp_data.saddr_reply;   // Reply source IPv4 address (network endian), matches daddr
- *     rsp_data.daddr_reply;   // Reply destination IPv4 address (network endian), matches saddr
- *     rsp_data.sport_reply;   // Reply source port (network endian), matches dport
- *     rsp_data.dport_reply;   // Reply destination port (network endian), matches sport
- *     rsp_data.protocol;      // IP protocol ID (17=UDP, 6=TCP, ...)
- * @endcode
- *
- * @hideinitializer
- */
-
-/**
- * @struct      fpp_ct_cmd
- * @brief       Data structure used in various functions for conntrack management
- * @details     It can be used:
- *              - for command buffer in functions @ref fci_write, @ref fci_query or
- *                @ref fci_cmd, with @ref FPP_CMD_IPV4_CONNTRACK command. Alternatively
- *                structure @ref fpp_ct_ex_cmd can be used here.
- */
-/**
- * @struct      fpp_ct_ex_cmd
- * @brief       Data structure used in various functions for conntrack management
- * @details     It can be used:
- *              - for command buffer in functions @ref fci_write, @ref fci_query or
- *                @ref fci_cmd, with @ref FPP_CMD_IPV4_CONNTRACK command. Alternatively
- *                structure @ref fpp_ct_cmd can be used here.
- *              - for reply buffer in functions @ref fci_query or @ref fci_cmd,
- *                with @ref FPP_CMD_IPV4_CONNTRACK command.
- *              - for payload buffer in FCI callback (see @ref fci_register_cb),
- *                with @ref FPP_CMD_IPV4_CONNTRACK_CHANGE event.
- */
-
-/**
- * @def FPP_CMD_IPV4_SET_TIMEOUT
- * @brief Specifies FCI command for setting timeouts of conntracks
- * @details This command sets timeout for conntracks based on protocol. Three kinds
- * of protocols are distinguished: TCP, UDP and others. For each of them timeout can
- * be set independently. For UDP it is possible to set different value for bidirectional
- * and single-directional connection. Default timeout value is 5 days for TCP, 30 s for
- * UDP and 240 s for others.
- *
- * Newly created connections are being created with new timeout values already set. 
- * Previously created connections have their timeout updated with first received packet.
- * 
- * Command Argument Type: struct @ref fpp_timeout_cmd (@c fpp_timeout_cmd_t)
- * 
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_timeout_cmd_t cmd_data =  
- *   {
- *     .protocol;        // IP protocol to be affected. Either 17 for UDP, 6 for TCP or 0 for others.
- *     .sam_4o6_timeout; // Use 0 for normal connections, 1 for 4over6 PI tunnel connections.
- *     .timeout_value1;  // Timeout value in seconds.
- *     .timeout_value2;  // Optional timeout value which is valid only for UDP connections.
- *                       // If the value is set (non zero), then it affects unidirectional UDP
- *                       // connections only.
- *   };
- * @endcode
- * @hideinitializer
- */
-
-/**
- * @struct      fpp_timeout_cmd
- * @brief       Data structure to be used for command buffer for timeout settings
- * @details     It can be used:
- *              - for command buffer in functions @ref fci_write, @ref fci_query or
- *                @ref fci_cmd, with @ref FPP_CMD_IPV4_SET_TIMEOUT command.
- */
-
-/**
- * @def FPP_CMD_IPV6_CONNTRACK
- * @brief Specifies FCI command for working with tracked connections
- * @details This command can be used with various values of `.action`:
- *          - @c FPP_ACTION_REGISTER: Defines a connection and binds it to previously created route(s).
- *          - @c FPP_ACTION_DEREGISTER: Deletes previously defined connection.
- *          - @c FPP_ACTION_QUERY: Gets parameters of existing connection. It creates a snapshot of all active
- *            conntrack entries and replies with first of them.
- *          - @c FPP_ACTION_QUERY_CONT: Shall be called periodically after @c FPP_ACTION_QUERY was called. On each
- *            call it replies with parameters of next connection. It returns @c FPP_ERR_CT_ENTRY_NOT_FOUND when no more
- *            entries exist.
- *
- * Command Argument Type: struct @ref fpp_ct6_cmd (@c fpp_ct6_cmd_t)
- *
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_ct6_cmd_t cmd_data =
- *   {
- *     .action = FPP_ACTION_REGISTER, // Register new conntrack
- *     .saddr[0..3] = ...,            // Source IPv6 address, (network endian)
- *     .daddr[0..3] = ...,            // Destination IPv6 address, (network endian)
- *     .sport = ...,                  // Source port (network endian)
- *     .dport = ...,                  // Destination port (network endian)
- *     .saddr_reply[0..3] = ...,      // Reply source IPv6 address (network endian). Used for NAT, otherwise equals .daddr[0..3]
- *     .daddr_reply[0..3] = ...,      // Reply destination IPv6 address (network endian). Used for NAT, otherwise equals .saddr[0..3]
- *     .sport_reply = ...,            // Reply source port (network endian). Used for NAT, otherwise equals .dport
- *     .dport_reply = ...,            // Reply destination port (network endian). Used for NAT, otherwise equals .sport
- *     .protocol = ...,               // IP protocol ID (17=UDP, 6=TCP, ...)
- *     .flags = ...,                  // Bidirectional/Single direction
- *     .route_id = ...,               // ID of route previously created with .FPP_CMD_IP_ROUTE command
- *     .route_id_reply = ...          // ID of reply route previously created with .FPP_CMD_IP_ROUTE command
- *   };
- * @endcode
- * Original direction is towards interface defined through @c route_id.
- * Reply direction is towards interface defined through @c route_id_reply.
- *
- * By default the connection is bidirectional. To create single directional connection, either:
- * - set `.flags |= CTCMD_FLAGS_REP_DISABLED` and don't set @c route_id_reply, or
- * - set `.flags |= CTCMD_FLAGS_ORIG_DISABLED` and don't set @c route_id.
- *
- * To configure NATed connection, set reply addresses and/or ports different than original
- * addresses and ports. To achieve NAPT (also called PAT), use @c daddr_reply and @c dport_reply.
- * -# `daddr_reply != saddr`: Source address of packets in original direction will be changed
- *    from @c saddr to @c daddr_reply. Destination address of packets in reply direction will be
- *    changed from @c daddr_reply to @c saddr.
- * -# `dport_reply != sport`: Source port of packets in original direction will be changed
- *    from @c sport to @c dport_reply. Destination port of packets in reply direction will be
- *    changed from @c dport_reply to @c sport.
- *
- * To achieve port forwarding or DMZ, use  @c saddr_reply and @c sport_reply:
- * -# `saddr_reply != daddr`: Destination address of packets in original direction will
- *    be changed from @c daddr to @c saddr_reply. Source address of packets in reply direction will be
- *    changed from @c saddr_reply to @c daddr.
- * -# `sport_reply != dport`: Destination port of packets in original direction will be changed
- *    from @c dport to @c sport_reply. Source port of packets in reply direction will be
- *    changed from @c sport_reply to @c dport.
- *
- * Action FPP_ACTION_DEREGISTER
- * ----------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_ct6_cmd_t cmd_data =
- *   {
- *     .action = FPP_ACTION_DEREGISTER, // Deregister previously created conntrack
- *     .saddr[0..3] = ...,              // Source IPv6 address, (network endian)
- *     .daddr[0..3] = ...,              // Destination IPv6 address, (network endian)
- *     .sport = ...,                    // Source port (network endian)
- *     .dport = ...,                    // Destination port (network endian)
- *     .saddr_reply[0..3] = ...,        // Reply source IPv6 address (network endian)
- *     .daddr_reply[0..3] = ...,        // Reply destination IPv6 address (network endian)
- *     .sport_reply = ...,              // Reply source port (network endian)
- *     .dport_reply = ...,              // Reply destination port (network endian)
- *     .protocol = ...,                 // IP protocol ID
- *   };
- * @endcode
- *
- * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
- * -------------------------------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_ct6_cmd_t cmd_data =
- *   {
- *     .action = ...     // Either FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT
- *   };
- * @endcode
- *
- * Response data type for queries: struct @ref fpp_ct6_ex_cmd (@c fpp_ct6_ex_cmd_t)
- *
- * Response data provided (all values in network byte order):
- * @code{.c}
- *     rsp_data.saddr;         // Source IPv6 address (network endian)
- *     rsp_data.daddr;         // Destination IPv6 address (network endian)
- *     rsp_data.sport;         // Source port (network endian)
- *     rsp_data.dport;         // Destination port (network endian)
- *     rsp_data.saddr_reply;   // Reply source IPv6 address (network endian), matches daddr
- *     rsp_data.daddr_reply;   // Reply destination IPv6 address (network endian), matches saddr
- *     rsp_data.sport_reply;   // Reply source port (network endian), matches dport
- *     rsp_data.dport_reply;   // Reply destination port (network endian), matches sport
- *     rsp_data.protocol;      // IP protocol ID (17=UDP, 6=TCP, ...)
- * @endcode
- *
- * @hideinitializer
- */
-
-/**
- * @struct      fpp_ct6_cmd
- * @brief       Data structure used in various functions for conntrack management
- * @details     It can be used:
- *              - for command buffer in functions @ref fci_write, @ref fci_query or
- *                @ref fci_cmd, with @ref FPP_CMD_IPV6_CONNTRACK command. Alternatively
- *                structure @ref fpp_ct6_ex_cmd can be used here.
- */
-/**
- * @struct      fpp_ct6_ex_cmd
- * @brief       Data structure used in various functions for conntrack management
- * @details     It can be used:
- *              - for command buffer in functions @ref fci_write, @ref fci_query or
- *                @ref fci_cmd, with @ref FPP_CMD_IPV6_CONNTRACK command. Alternatively
- *                structure @ref fpp_ct6_cmd can be used here.
- *              - for reply buffer in functions @ref fci_query or @ref fci_cmd,
- *                with @ref FPP_CMD_IPV6_CONNTRACK command.
- *              - for payload buffer in FCI callback (see @ref fci_register_cb),
- *                with @ref FPP_CMD_IPV6_CONNTRACK_CHANGE event.
- */
-
 /*
  * @def FPP_CMD_L2BRIDGE_MODE
  * @brief Specifies FCI command that enables or disables automatic L2 bridge learning
@@ -956,22 +792,23 @@ int fci_fd(FCI_CLIENT *this_client);
  *          to ports automatically (learned). This way dynamic entries are created. Their lifetime can be specified
  *          by @ref FPP_CMD_L2BRIDGE_LRN_TIMEOUT command. All dynamic entries can be deleted at once with
  *          @ref FPP_CMD_L2BRIDGE_LRN_RESET command.
- *          
+ *
  *          The disable command causes that no new entries are learned after this command
  *          and that the learned entries do not expire (the aging timer stops ticking).
- *          The enable command resumes the learning and aging again. The L2 bridge is 
- *          configured to start with learning and aging process enabled. 
- *          
+ *          The enable command resumes the learning and aging again. The L2 bridge is
+ *          configured to start with learning and aging process enabled.
+ *
  *          This command may be used to learn entries during certain period and to prevent
  *          further learning for security reasons.
- * 
- * Command Argument Type: struct @ref fpp_l2_bridge_control_cmd (@c fpp_l2_bridge_control_cmd_t)
- * 
+ *
+ * Command Argument Type: @ref fpp_l2_bridge_control_cmd_t
+ *
  * Items to be set in command argument structure:
  * @code{.c}
- *   fpp_l2_bridge_control_cmd_t cmd_data =  
+ *   fpp_l2_bridge_control_cmd_t cmd_data =
  *   {
- *     .mode_timeout = ...   // Either FPP_L2_BRIDGE_MODE_LEARNING or FPP_L2_BRIDGE_MODE_NO_LEARNING
+ *     // Timeout: Either FPP_L2_BRIDGE_MODE_LEARNING or FPP_L2_BRIDGE_MODE_NO_LEARNING
+ *     .mode_timeout = ...
  *   };
  * @endcode
  *
@@ -979,7 +816,7 @@ int fci_fd(FCI_CLIENT *this_client);
  */
 
 /*
- * @struct  fpp_l2_bridge_control_cmd
+ * @struct  fpp_l2_bridge_control_cmd_t
  * @brief   Data structure to be used for command buffer for L2 bridge control commands
  * @details It can be used:
  *          - for command buffer in functions @ref fci_write or @ref fci_cmd,
@@ -1001,12 +838,12 @@ int fci_fd(FCI_CLIENT *this_client);
  *          to return to the normal operation.
  *
  *          The interface is selected by setting the @c input_name to the name of the interface.
- * 
- * Command Argument Type: struct @ref fpp_l2_bridge_enable_cmd (@c fpp_l2_bridge_enable_cmd_t)
- * 
+ *
+ * Command Argument Type: @ref fpp_l2_bridge_enable_cmd_t
+ *
  * Items to be set in command argument structure:
  * @code{.c}
- *   fpp_l2_bridge_enable_cmd_t cmd_data =  
+ *   fpp_l2_bridge_enable_cmd_t cmd_data =
  *   {
  *       .input_name = ...,   // Interface to add/remove
  *       .enable_flag = ...   // Enable flag, either 1 or 0
@@ -1017,7 +854,7 @@ int fci_fd(FCI_CLIENT *this_client);
  */
 
 /*
- * @struct  fpp_l2_bridge_enable_cmd
+ * @struct  fpp_l2_bridge_enable_cmd_t
  * @brief   Data structure to be used for command buffer for L2 bridge port disabling/enabling commands
  * @details It can be used:
  *          - for command buffer in functions @ref fci_write or @ref fci_cmd,
@@ -1030,18 +867,20 @@ int fci_fd(FCI_CLIENT *this_client);
  * @details Allows adding a fast forwarding rule into L2 bridge without involving Learning process.
  *          Such rule is also not affected by aging. The matching destination address @c destaddr
  *          and the outbound interface name @c output_name must be provided in the command data.
- *          
+ *
  *          The command data carry the MAC address to be matched and name of the interface which physical
  *          interface shall be used to send out the frames. It is not possible to send frames to internal port.
- * 
- * Command Argument Type: struct @ref fpp_l2_bridge_add_entry_cmd (@c fpp_l2_bridge_add_entry_cmd_t)
- * 
+ *
+ * Command Argument Type: @ref fpp_l2_bridge_add_entry_cmd_t
+ *
  * Items to be set in command argument structure:
  * @code{.c}
- *   fpp_l2_bridge_add_entry_cmd_t cmd_data =  
+ *   fpp_l2_bridge_add_entry_cmd_t cmd_data =
  *   {
- *     .destaddr = {..., ..., ..., ..., ..., ...}, // Destination MAC address to match
- *     .output_name = ...                          // Interface (external port) to send out matching frames
+ *     // Destination MAC address to match
+ *     .destaddr = {..., ..., ..., ..., ..., ...},
+ *     // Interface (external port) to send out matching frames
+ *     .output_name = ...
  *   };
  * @endcode
  *
@@ -1049,7 +888,7 @@ int fci_fd(FCI_CLIENT *this_client);
  */
 
 /*
- * @struct  fpp_l2_bridge_add_entry_cmd
+ * @struct  fpp_l2_bridge_add_entry_cmd_t
  * @brief   Data structure to be used for command buffer for L2 bridge control commands
  * @details It can be used:
  *          - for command buffer in functions @ref fci_write or @ref fci_cmd,
@@ -1061,14 +900,15 @@ int fci_fd(FCI_CLIENT *this_client);
  * @brief Specifies FCI command that removes static entry from the L2 bridge
  * @details This is a reverse operation to the FPP_CMD_L2BRIDGE_ADD_ENTRY which removes the previously
  *          added static entry. Just the MAC address is needed to identify the entry.
- * 
- * Command Argument Type: struct @ref fpp_l2_bridge_remove_entry_cmd (@c fpp_l2_bridge_remove_entry_cmd_t)
- * 
+ *
+ * Command Argument Type: @ref fpp_l2_bridge_remove_entry_cmd_t
+ *
  * Items to be set in command argument structure:
  * @code{.c}
- *   fpp_l2_bridge_remove_entry_cmd_t cmd_data =  
+ *   fpp_l2_bridge_remove_entry_cmd_t cmd_data =
  *   {
- *     .destaddr = {..., ..., ..., ..., ..., ...}, // Destination MAC address to match - identifies the entry
+ *     // Destination MAC address to match - identifies the entry
+ *     .destaddr = {..., ..., ..., ..., ..., ...},
  *   };
  * @endcode
  *
@@ -1076,7 +916,7 @@ int fci_fd(FCI_CLIENT *this_client);
  */
 
 /*
- * @struct  fpp_l2_bridge_remove_entry_cmd
+ * @struct  fpp_l2_bridge_remove_entry_cmd_t
  * @brief   Data structure to be used for command buffer for L2 bridge control commands
  * @details It can be used:
  *          - for command buffer in functions @ref fci_write or @ref fci_cmd,
@@ -1090,17 +930,17 @@ int fci_fd(FCI_CLIENT *this_client);
  *          each second unless the entry is used to fast forward frame. The entry is deleted
  *          when the life time reaches value 0. The initial value of the life time is configured
  *          by this command. The value is expressed in seconds and the allowed range is 1 to 65535.
- *          The default value is 300 seconds (5 minutes). 
+ *          The default value is 300 seconds (5 minutes).
  * @note The entries learned before the timeout change are not updated unless they are used for
  *       fast forward - in each seconds the following two options can happen to the existing entry
  *       - entry life time is decremented
  *       - entry life time is set to the configured value (the latest value applies)
- * 
- * Command Argument Type: struct @ref fpp_l2_bridge_control_cmd (@c fpp_l2_bridge_control_cmd_t)
- * 
+ *
+ * Command Argument Type: @ref fpp_l2_bridge_control_cmd_t
+ *
  * Items to be set in command argument structure:
  * @code{.c}
- *   fpp_l2_bridge_control_cmd_t cmd_data =  
+ *   fpp_l2_bridge_control_cmd_t cmd_data =
  *   {
  *     .mode_timeout = ...,   // Timeout in seconds
  *   };
@@ -1112,10 +952,10 @@ int fci_fd(FCI_CLIENT *this_client);
 /*
  * @def FPP_CMD_L2BRIDGE_LRN_RESET
  * @brief Specifies an FCI command that removes all learned entries from the L2 bridge
- * @details All learned entries are removed from the bridge immediately. Static entries added by the 
+ * @details All learned entries are removed from the bridge immediately. Static entries added by the
  *          FPP_CMD_L2BRIDGE_ADD_ENTRY are not affected and their removal is possible only by command
- *          FPP_CMD_L2BRIDGE_REMOVE_ENTRY. The command does not use any data. 
- * 
+ *          FPP_CMD_L2BRIDGE_REMOVE_ENTRY. The command does not use any data.
+ *
  * Command Argument Type: none (cmd_buf = NULL; cmd_len = 0;)
  *
  * @hideinitializer
@@ -1124,7 +964,7 @@ int fci_fd(FCI_CLIENT *this_client);
 /*
  * @def FPP_CMD_L2BRIDGE_QUERY_ENTRY
  * To Be Documented, not implemented yet
- * 
+ *
  * @hideinitializer
  */
 

@@ -57,6 +57,10 @@
 #ifndef __OAL__
 #define __OAL__
 
+#ifndef PFE_CFG_H
+	#error Please include the pfe_cfg.h first.
+#endif
+
 #include "oal_types.h"
 #include "oal_mbox.h"
 #include "oal_irq.h"
@@ -66,13 +70,6 @@
 #include "oal_time.h"
 #include "oal_util.h"
 #include "oal_job.h"
-
-/*
- * Compile-time assert
- */
-#define OAL_ASSERT_CONCAT_(a, b) a##b
-#define OAL_ASSERT_CONCAT(a, b) OAL_ASSERT_CONCAT_(a, b)
-#define oal_ct_assert(e) enum { OAL_ASSERT_CONCAT(precompile_assert_, __LINE__) = 1/(!!(e)) }
 
 #endif /* __OAL__ */
 

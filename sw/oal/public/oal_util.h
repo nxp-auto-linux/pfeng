@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -48,6 +48,11 @@
 
 #ifndef OAL_UTIL_H_
 #define OAL_UTIL_H_
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+    #include "oal_util_autosar.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief		Modified snprintf function
  * @details		Function return real number of written data into buffer
@@ -59,9 +64,7 @@
  *
  * @return		Number of bytes written to the buffer
  */
-uint32_t oal_util_snprintf(char_t *buffer, size_t buf_len, const char_t *format, ...);
-
-
+extern uint32_t oal_util_snprintf(char_t *buffer, size_t buf_len, const char_t *format, ...);
 
 #endif /* OAL_UTIL_H_ */
 

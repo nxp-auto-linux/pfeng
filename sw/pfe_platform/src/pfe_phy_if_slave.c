@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -41,11 +41,7 @@
  *				requested operations.
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-#include <errno.h>
-
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 
@@ -60,8 +56,6 @@ struct __pfe_phy_if_tag
 	pfe_ct_phy_if_id_t id;
 	char_t *name;
 	LLIST_t mac_addr_list;
-	pfe_phy_if_cbk_t callback;
-	void *callback_arg;
 	oal_mutex_t lock;
 	bool_t is_enabled;
 };
@@ -163,7 +157,7 @@ errno_t pfe_phy_if_destroy(pfe_phy_if_t *iface)
 			entry = LLIST_Data(item, pfe_mac_addr_list_entry_t, iterator);
 			if (NULL != entry)
 			{
-				_ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg.mac_addr));
+				ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg.mac_addr));
 
 				/*	Ask the master driver to delete the MAC address */
 				memcpy(&arg.mac_addr[0], entry->addr, sizeof(arg.mac_addr));
@@ -211,13 +205,13 @@ errno_t pfe_phy_if_destroy(pfe_phy_if_t *iface)
  */
 __attribute__((pure)) pfe_class_t *pfe_phy_if_get_class(pfe_phy_if_t *iface)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return NULL;
 }
@@ -237,13 +231,13 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 {
 	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	NXP_LOG_DEBUG("%s: Not supported in slave variant\n", __func__);
 	ret = ENOTSUP;
@@ -256,18 +250,18 @@ static bool_t pfe_phy_if_has_log_if_nolock(pfe_phy_if_t *iface, pfe_log_if_t *lo
 	pfe_platform_rpc_pfe_phy_if_has_log_if_arg_t arg = {0};
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Ask master driver if such logical interface is associated with the physical one */
 	arg.phy_if_id = iface->id;
 
-	_ct_assert(sizeof(arg.log_if_id) == sizeof(uint8_t));
+	ct_assert(sizeof(arg.log_if_id) == sizeof(uint8_t));
 	arg.log_if_id = pfe_log_if_get_id(log_if);
 
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_HAS_LOG_IF, &arg, sizeof(arg), NULL, 0U);
@@ -297,13 +291,13 @@ bool_t pfe_phy_if_has_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 {
 	bool_t match = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -333,13 +327,13 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 {
 	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	NXP_LOG_DEBUG("%s: Not supported in slave variant\n", __func__);
 	ret = ENOTSUP;
@@ -354,8 +348,44 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
  */
 pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 {
-	/* TODO implement this AAVB-2111*/
-	return IF_OP_DISABLED;
+	errno_t ret;
+	pfe_ct_if_op_mode_t mode = IF_OP_DISABLED;
+	pfe_platform_rpc_pfe_phy_if_get_op_mode_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_get_op_mode_ret_t rpc_ret = {0};
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return IF_OP_DISABLED;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	/*	Update the interface structure */
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	/*	Ask the master driver to change the operation mode */
+	arg.phy_if_id = iface->id;
+
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE failed: %d\n", ret);
+	}
+	else
+	{
+		mode = rpc_ret.mode;
+	}
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	return mode;
 }
 /**
  * @brief		Set operational mode
@@ -369,13 +399,13 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t arg = {0};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Update the interface structure */
 	if (EOK != oal_mutex_lock(&iface->lock))
@@ -412,13 +442,13 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
 {
 	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == emac) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	We're not going to allow slave driver to do this */
 	NXP_LOG_ERROR("%s: Not supported\n", __func__);
@@ -439,13 +469,13 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
 {
 	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == hif) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	We're not going to allow slave driver to do this */
 	NXP_LOG_ERROR("%s: Not supported\n", __func__);
@@ -462,8 +492,42 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
  */
 bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 {
-	/* TODO implement this AAVB-2111*/
-	return FALSE;
+	errno_t ret;
+	bool_t status = FALSE;
+	pfe_platform_rpc_pfe_phy_if_is_enabled_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_is_enabled_ret_t rpc_ret = {0};
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	/*	Ask the master driver to enable the interface */
+	arg.phy_if_id = iface->id;
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
+	}
+	else
+	{
+		status = rpc_ret.status;
+	}
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	return status;
 }
 
 /**
@@ -477,13 +541,13 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 	errno_t ret = EOK;
 	pfe_platform_rpc_pfe_phy_if_enable_arg_t arg = {0};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -511,13 +575,13 @@ errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 	errno_t ret = EOK;
 	pfe_platform_rpc_pfe_phy_if_disable_arg_t arg = {0};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Ask the master driver to disable the interface */
 	arg.phy_if_id = iface->id;
@@ -540,13 +604,13 @@ errno_t pfe_phy_if_disable(pfe_phy_if_t *iface)
 {
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -571,8 +635,42 @@ errno_t pfe_phy_if_disable(pfe_phy_if_t *iface)
  */
 bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 {
-	/* TODO implement this AAVB-2111*/
-	return FALSE;
+	errno_t ret;
+	bool_t status = FALSE;
+	pfe_platform_rpc_pfe_phy_if_is_promisc_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_is_promisc_ret_t rpc_ret = {0};
+
+#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	/*	Ask the master driver to enable the interface */
+	arg.phy_if_id = iface->id;
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
+	}
+	else
+	{
+		status = rpc_ret.status;
+	}
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	return status;
 }
 
 /**
@@ -586,13 +684,13 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 	errno_t ret = EOK;
 	pfe_platform_rpc_pfe_phy_if_promisc_enable_arg_t arg = {0};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -626,13 +724,13 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 	errno_t ret = EOK;
 	pfe_platform_rpc_pfe_phy_if_promisc_enable_arg_t arg = {0};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -669,13 +767,13 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 	pfe_platform_rpc_pfe_phy_if_add_mac_addr_arg_t arg = {0};
 	pfe_mac_addr_list_entry_t *entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -694,7 +792,7 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		memcpy(entry->addr, addr, sizeof(pfe_mac_addr_t));
 		LLIST_AddAtEnd(&entry->iterator, &iface->mac_addr_list);
 
-		_ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg.mac_addr));
+		ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg.mac_addr));
 
 		/*	Ask the master driver to add the MAC address */
 		memcpy(&arg.mac_addr[0], addr, sizeof(arg.mac_addr));
@@ -735,20 +833,20 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 	LLIST_t *item;
 	bool_t found = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	_ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg.mac_addr));
+	ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg.mac_addr));
 
 	/*	Ask the master driver to delete the MAC address */
 	memcpy(&arg.mac_addr[0], addr, sizeof(arg.mac_addr));
@@ -805,13 +903,13 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 	errno_t ret = EOK;
 	pfe_mac_addr_list_entry_t *entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -848,13 +946,13 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
  */
 __attribute__((pure)) pfe_ct_phy_if_id_t pfe_phy_if_get_id(pfe_phy_if_t *iface)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return PFE_PHY_IF_ID_INVALID;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return iface->id;
 }
@@ -868,13 +966,13 @@ __attribute__((pure)) char_t *pfe_phy_if_get_name(pfe_phy_if_t *iface)
 {
 	static char_t *unknown = "(unknown)";
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (NULL == iface)
 	{
@@ -886,84 +984,6 @@ __attribute__((pure)) char_t *pfe_phy_if_get_name(pfe_phy_if_t *iface)
 	}
 
 	return iface->name;
-}
-
-/**
- * @brief		Set event callback
- * @details		Routine will bind a callback with interface instance which will
- * 				be called on various interface-related events. See pfe_phy_if_event_t.
- * @param[in]	iface The interface instance
- * @param[in]	callback Routine to be called
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- */
-errno_t pfe_phy_if_set_callback(pfe_phy_if_t *iface, pfe_phy_if_cbk_t callback, void *arg)
-{
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-
-	iface->callback = callback;
-	iface->callback_arg = arg;
-
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-
-	return EOK;
-}
-
-/**
- * @brief		Delete event callback
- * @param[in]	iface The interface instance
- * @param[in]	callback Routine to be removed
- * @retval		EOK Success
- * @retval		ENOENT Callback not found
- * @retval		EINVAL Invalid or missing argument
- */
-errno_t pfe_phy_if_del_callback(pfe_phy_if_t *iface, pfe_phy_if_cbk_t callback)
-{
-	errno_t ret = EOK;
-
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-
-	if (iface->callback == callback)
-	{
-		iface->callback = NULL;
-		iface->callback_arg = NULL;
-	}
-	else
-	{
-		ret = ENOENT;
-	}
-
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-
-	return ret;
 }
 
 /**
@@ -979,13 +999,13 @@ uint32_t pfe_phy_if_get_text_statistics(pfe_phy_if_t *iface, char_t *buf, uint32
 {
 	uint32_t len = 0U;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	len += oal_util_snprintf(buf + len, buf_len - len, "[PhyIF 0x%x]: Unable to read DMEM (not implemented)\n", iface->id);
 	

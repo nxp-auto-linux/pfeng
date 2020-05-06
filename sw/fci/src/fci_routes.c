@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -40,6 +40,7 @@
  *
  */
 
+#include "pfe_cfg.h"
 #include "libfci.h"
 #include "fpp.h"
 #include "fpp_ext.h"
@@ -62,7 +63,7 @@ static void fci_routes_remove_related_connections(fci_rt_db_entry_t *route)
 	pfe_rtable_entry_t *entry;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == route)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -74,7 +75,7 @@ static void fci_routes_remove_related_connections(fci_rt_db_entry_t *route)
     	NXP_LOG_ERROR("Context not initialized\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry = pfe_rtable_get_first(context->rtable, RTABLE_CRIT_BY_ROUTE_ID, &route->id);
 	while (NULL != entry)
@@ -112,7 +113,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 	pfe_phy_if_t *phy_if = NULL;
 	uint32_t session_id;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -124,7 +125,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (*reply_len < sizeof(fpp_rt_cmd_t))
 	{
@@ -141,7 +142,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 	memset(reply_buf, 0, sizeof(fpp_rt_cmd_t));
 
 	rt_cmd = (fpp_rt_cmd_t *)(msg->msg_cmd.payload);
-	is_ipv6 = (rt_cmd->flags == 2U) ? TRUE : FALSE;
+	is_ipv6 = (oal_ntohl(rt_cmd->flags) == 2U) ? TRUE : FALSE;
 
 	/*	Prepare MAC and IP address */
 	memcpy(mac, rt_cmd->dst_mac, sizeof(pfe_mac_addr_t));
@@ -187,7 +188,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 
 			phy_if = pfe_if_db_entry_get_phy_if(if_entry);
 
-			/*	Add entry to database */
+			/*	Add entry to database (values in network endian) */
 			ret = fci_rt_db_add(&context->route_db,	&ip, &mac,
 								phy_if,
 								rt_cmd->id,
@@ -208,34 +209,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			}
 			else
 			{
-				if (EOK != pfe_phy_if_set_op_mode(phy_if, IF_OP_ROUTER))
-				{
-					NXP_LOG_DEBUG("Could not set interface operational mode\n");
-
-					/*	Revert */
-					rt_entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (void *)&rt_cmd->id);
-					if (NULL == rt_entry)
-					{
-						NXP_LOG_ERROR("Fatal: Recently added route not found\n");
-					}
-					else
-					{
-						if (EOK != fci_rt_db_remove(&context->route_db, rt_entry))
-						{
-							NXP_LOG_ERROR("Fatal: Could not remove recently added route\n");
-						}
-					}
-
-					if (EOK != fci_disable_if(phy_if))
-					{
-						NXP_LOG_DEBUG("Fatal: Unable to disable interface (%s)\n", pfe_phy_if_get_name(phy_if));
-					}
-
-					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
-					break;
-				}
-
-				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Route (ID: %d, IF: %s) added\n", rt_cmd->id, rt_cmd->output_device);
+				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Route (ID: %d, IF: %s) added\n", oal_ntohl(rt_cmd->id), rt_cmd->output_device);
 				*fci_ret = FPP_ERR_OK;
 			}
 
@@ -248,7 +222,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			rt_entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (void *)&rt_cmd->id);
 			if (NULL == rt_entry)
 			{
-				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Requested route %d not found\n", rt_cmd->id);
+				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Requested route %d not found\n", oal_ntohl(rt_cmd->id));
 				*fci_ret = FPP_ERR_RT_ENTRY_NOT_FOUND;
 				break;
 			}
@@ -263,7 +237,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			}
 			else
 			{
-				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Route %d removed\n", rt_cmd->id);
+				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Route %d removed\n", oal_ntohl(rt_cmd->id));
 			}
 
 			break;
@@ -303,28 +277,27 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			}
 
 			/*	Write the reply buffer */
-			rt_cmd = (fpp_rt_cmd_t *)reply_buf;
 			*reply_len = sizeof(fpp_rt_cmd_t);
 
 			/*	Build reply structure */
-			rt_cmd->mtu = rt_entry->mtu;
-			memcpy(rt_cmd->dst_mac, rt_entry->dst_mac, sizeof(pfe_mac_addr_t));
+			reply_buf->mtu = rt_entry->mtu;
+			memcpy(reply_buf->dst_mac, rt_entry->dst_mac, sizeof(pfe_mac_addr_t));
 
 			if (pfe_ip_addr_is_ipv4(&rt_entry->dst_ip))
 			{
 				/*	IPv4 */
-				memcpy(&rt_cmd->dst_addr[0], &rt_entry->dst_ip.v4, 4);
-				rt_cmd->flags = 1U; /* TODO: This is weird (see FCI doc). Some macro should be used instead. */
+				memcpy(&reply_buf->dst_addr[0], &rt_entry->dst_ip.v4, 4);
+				reply_buf->flags = oal_htonl(1U); /* TODO: This is weird (see FCI doc). Some macro should be used instead. */
 			}
 			else
 			{
 				/*	IPv6 */
-				memcpy(&rt_cmd->dst_addr[0], &rt_entry->dst_ip.v6, 16);
-				rt_cmd->flags = 2U; /* TODO: This is weird (see FCI doc). Some macro should be used instead. */
+				memcpy(&reply_buf->dst_addr[0], &rt_entry->dst_ip.v6, 16);
+				reply_buf->flags = oal_htonl(2U); /* TODO: This is weird (see FCI doc). Some macro should be used instead. */
 			}
 
-			rt_cmd->id = rt_entry->id;
-			strncpy(rt_cmd->output_device, pfe_phy_if_get_name(rt_entry->iface), IFNAMSIZ-1);
+			reply_buf->id = rt_entry->id;
+			strncpy(reply_buf->output_device, pfe_phy_if_get_name(rt_entry->iface), IFNAMSIZ-1);
 
 			fci_ret = FPP_ERR_OK;
 			ret = EOK;
@@ -334,14 +307,15 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 
 		default:
 		{
-			NXP_LOG_ERROR("FPP_CMD_IP_ROUTE: Unknown action received: 0x%x\n", rt_cmd->action);
+			NXP_LOG_ERROR("FPP_CMD_IP_ROUTE: Unknown action received: 0x%x\n", reply_buf->action);
 			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 			break;
 		}
 	}
 
 	/* Unlock interfaces for required actions */
-	if(FPP_ACTION_REGISTER == rt_cmd->action){
+	if(FPP_ACTION_REGISTER == rt_cmd->action)
+	{
 		ret = pfe_if_db_unlock(session_id);
 		if(EOK != ret)
 		{
@@ -364,21 +338,20 @@ errno_t fci_routes_drop_one(fci_rt_db_entry_t *route)
 	fci_msg_t msg;
 	fpp_rt_cmd_t *rt_cmd = NULL;
 	errno_t ret;
-	pfe_phy_if_t *phy_if;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == route)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 
-    if (unlikely(FALSE == context->fci_initialized))
+	if (unlikely(FALSE == context->fci_initialized))
 	{
-    	NXP_LOG_ERROR("Context not initialized\n");
+		NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	memset(&msg, 0, sizeof(fci_msg_t));
 	msg.type = FCI_MSG_CMD;
@@ -398,39 +371,16 @@ errno_t fci_routes_drop_one(fci_rt_db_entry_t *route)
 		}
 	}
 
-	NXP_LOG_DEBUG("Removing route with ID %d\n", route->id);
+	NXP_LOG_DEBUG("Removing route with ID %d\n", oal_ntohl(route->id));
 
 	/*	Remove all associated connections */
 	fci_routes_remove_related_connections(route);
-
-	/*	Remember interface */
-	phy_if = route->iface;
 
 	/*	Remove the route */
 	ret = fci_rt_db_remove(&context->route_db, route);
 	if (EOK != ret)
 	{
 		NXP_LOG_ERROR("Can't remove route: %d\n", ret);
-	}
-
-	/*	Check if there is another route using the interface */
-	if (NULL == fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_IF, phy_if))
-	{
-		/*	Interface not being used by any route. Set default operational mode. */
-		NXP_LOG_INFO("Interface %s not used by any route. Setting default operational mode.\n", pfe_phy_if_get_name(phy_if));
-
-		ret = pfe_phy_if_set_op_mode(phy_if, IF_OP_DEFAULT);
-		if (EOK != ret)
-		{
-			NXP_LOG_DEBUG("Could not set interface operational mode\n");
-		}
-	}
-
-	/*	Disable the interface */
-	ret = fci_disable_if(phy_if);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("Fatal: Unable to disable interface (%s)\n", pfe_phy_if_get_name(phy_if));
 	}
 
 	return ret;
@@ -447,13 +397,13 @@ void fci_routes_drop_all(void)
 	fci_rt_db_entry_t *entry = NULL;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(FALSE == context->fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	NXP_LOG_DEBUG("Removing all routes\n");
 
@@ -481,13 +431,13 @@ void fci_routes_drop_all_ipv4(void)
 	fci_rt_db_entry_t *entry = NULL;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(FALSE == context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	NXP_LOG_DEBUG("Removing all IPv4 routes\n");
 
@@ -518,13 +468,13 @@ void fci_routes_drop_all_ipv6(void)
 	fci_rt_db_entry_t *entry = NULL;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(FALSE == context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	NXP_LOG_DEBUG("Removing all IPv6 routes\n");
 

@@ -38,6 +38,7 @@
  *
  */
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "linked_list.h"
 #include "pfe_hif_drv.h"
@@ -101,7 +102,7 @@ typedef enum
  */
 typedef uint32_t pfe_idex_seqnum_t;
 
-_ct_assert(sizeof(pfe_idex_seqnum_t) == sizeof(uint32_t));
+ct_assert(sizeof(pfe_idex_seqnum_t) == sizeof(uint32_t));
 
 /**
  * @brief	IDEX Frame types
@@ -117,7 +118,7 @@ typedef enum __attribute__((packed))
 	IDEX_FRAME_CTRL_RESPONSE = 1
 } pfe_idex_frame_type_t;
 
-_ct_assert(sizeof(pfe_idex_frame_type_t) == sizeof(uint8_t));
+ct_assert(sizeof(pfe_idex_frame_type_t) == sizeof(uint8_t));
 
 /**
  * @brief	IDEX Request types
@@ -135,7 +136,7 @@ typedef enum __attribute__((packed))
  */
 typedef pfe_idex_request_type_t pfe_idex_response_type_t;
 
-_ct_assert(sizeof(pfe_idex_request_type_t) == sizeof(uint8_t));
+ct_assert(sizeof(pfe_idex_request_type_t) == sizeof(uint8_t));
 
 /**
  * @brief	IDEX Master Discovery Message header
@@ -159,7 +160,7 @@ typedef struct __attribute__((packed)) __pfe_idex_rpc_tag
 	uint16_t plen;
 } pfe_idex_msg_rpc_t;
 
-_ct_assert(sizeof(errno_t) == sizeof(uint32_t));
+ct_assert(sizeof(errno_t) == sizeof(uint32_t));
 
 /**
  * @brief	IDEX Frame Header
@@ -187,7 +188,7 @@ typedef enum __attribute__((packed))
 	IDEX_REQ_STATE_INVALID = 0xff,
 } pfe_idex_request_state_t;
 
-_ct_assert(sizeof(pfe_idex_request_state_t) == sizeof(uint8_t));
+ct_assert(sizeof(pfe_idex_request_state_t) == sizeof(uint8_t));
 
 /**
  * @brief	IDEX Request Header. Also used as request instance.
@@ -263,9 +264,9 @@ typedef struct pfe_idex_tag
 /*	Local IDEX instance storage */
 static pfe_idex_t __idex = {0};
 /*	All HIFs storage */
-#ifdef GLOBAL_CFG_PFE_SLAVE
+#ifdef PFE_CFG_PFE_SLAVE
 static const pfe_ct_phy_if_id_t __hifs[] = IDEX_CFG_HIF_LIST;
-#endif /* GLOBAL_CFG_PFE_SLAVE */
+#endif /* PFE_CFG_PFE_SLAVE */
 
 static void *idex_worker_func(void *arg);
 static pfe_idex_request_t *pfe_idex_request_get_by_id(pfe_idex_seqnum_t seqnum);
@@ -273,10 +274,10 @@ static errno_t pfe_idex_request_set_state(pfe_idex_seqnum_t seqnum, pfe_idex_req
 static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, pfe_idex_request_result_t res, void *resp_buf, uint16_t resp_len);
 static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_response_type_t type, pfe_idex_seqnum_t seqnum, void *data, uint16_t data_len);
 static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_type_t type, void *data, uint16_t data_len);
-#ifdef GLOBAL_CFG_PFE_SLAVE
+#ifdef PFE_CFG_PFE_SLAVE
 static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_request_type_t type, void *data, uint16_t data_len, void *resp, uint16_t resp_len);
 static void pfe_idex_do_master_discovery(void);
-#endif /* GLOBAL_CFG_PFE_SLAVE */
+#endif /* PFE_CFG_PFE_SLAVE */
 
 /**
  * @brief		Worker thread body
@@ -290,13 +291,13 @@ static void *idex_worker_func(void *arg)
 	errno_t ret;
 
 	(void)arg;
-#ifdef GLOBAL_CFG_PFE_MASTER
+#ifdef PFE_CFG_PFE_MASTER
 	NXP_LOG_INFO("IDEX worker started (master)\n");
-#endif /* GLOBAL_CFG_PFE_MASTER */
+#endif /* PFE_CFG_PFE_MASTER */
 
-#ifdef GLOBAL_CFG_PFE_SLAVE
+#ifdef PFE_CFG_PFE_SLAVE
 	NXP_LOG_INFO("IDEX worker started (slave)\n");
-#endif /* GLOBAL_CFG_PFE_SLAVE */
+#endif /* PFE_CFG_PFE_SLAVE */
 
 	while (TRUE)
 	{
@@ -573,7 +574,7 @@ static void pfe_idex_job_func(void *arg)
 						}
 						else
 						{
-#ifdef GLOBAL_CFG_PFE_MASTER
+#ifdef PFE_CFG_PFE_MASTER
 							/*	Master sends response */
 							pfe_idex_msg_master_discovery_t resp;
 
@@ -594,12 +595,12 @@ static void pfe_idex_job_func(void *arg)
 							{
 								NXP_LOG_ERROR("IDEX_MASTER_DISCOVERY response failed\n");
 							}
-#endif /* GLOBAL_CFG_PFE_MASTER */
+#endif /* PFE_CFG_PFE_MASTER */
 
-#ifdef GLOBAL_CFG_PFE_SLAVE
+#ifdef PFE_CFG_PFE_SLAVE
 							/*	Slave does nothing. */
 							;
-#endif /* GLOBAL_CFG_PFE_SLAVE */
+#endif /* PFE_CFG_PFE_SLAVE */
 						}
 
 						break;
@@ -1124,7 +1125,7 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 	return ret;
 }
 
-#ifdef GLOBAL_CFG_PFE_SLAVE
+#ifdef PFE_CFG_PFE_SLAVE
 /**
  * @brief		Run the master discovery task
  * @details		Routine will try to find master driver by broadcasting
@@ -1159,7 +1160,7 @@ static void pfe_idex_do_master_discovery(void)
 		}
 	}
 }
-#endif /* GLOBAL_CFG_PFE_SLAVE */
+#endif /* PFE_CFG_PFE_SLAVE */
 
 /**
  * @brief		IDEX initialization routine
@@ -1256,7 +1257,7 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv)
 		return ret;
 	}
 
-#ifdef GLOBAL_CFG_PFE_SLAVE
+#ifdef PFE_CFG_PFE_SLAVE
 	/*	Get master driver coordinates. Result will be stored into the idex instance. */
 	pfe_idex_do_master_discovery();
 
@@ -1271,7 +1272,7 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv)
 	{
 		NXP_LOG_INFO("Master driver is at physical interface ID %d\n", idex->master_phy_if);
 	}
-#endif /* GLOBAL_CFG_PFE_SLAVE */
+#endif /* PFE_CFG_PFE_SLAVE */
 
 	return EOK;
 }
@@ -1327,7 +1328,7 @@ void pfe_idex_fini(void)
 		idex->idex_job = NULL;
 	}
 
-#ifdef GLOBAL_CFG_PFE_SLAVE
+#ifdef PFE_CFG_PFE_SLAVE
 	{
 		uint32_t ii;
 		LLIST_t *item, *aux;
@@ -1350,7 +1351,7 @@ void pfe_idex_fini(void)
 			}
 		}
 	}
-#endif /* GLOBAL_CFG_PFE_SLAVE */
+#endif /* PFE_CFG_PFE_SLAVE */
 
 	if (TRUE == idex->req_list_lock_init)
 	{

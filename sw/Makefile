@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018 NXP
+#  Copyright 2018-2019 NXP
 # 
 # Redistribution and use in source and binary forms, with or without 
 # modification, are permitted provided that the following conditions are met:
@@ -34,20 +34,20 @@ include build_env.mak
 # Rules
 # ***********************
 
-DPAA_DRIVER:=devnp-pfe-2
-DPAA_RELATIVES:=
+PFE_DRIVER:=devnp-pfe-2
+PFE_RELATIVES:=
 
 # If profiling is required then a special NXP-internal-only library should be built
 ifeq ($(BUILD_PROFILE),profile)
-	DPAA_RELATIVES+=profiling
+	PFE_RELATIVES+=profiling
 endif
 
 .PHONY all:
-all: $(DPAA_DRIVER).qp
-$(DPAA_DRIVER).qp: $(addsuffix .qp,$(DPAA_RELATIVES))
+all: $(PFE_DRIVER).qp
+$(PFE_DRIVER).qp: $(addsuffix .qp,$(PFE_RELATIVES))
 
 .PHONY clean:
-clean: $(DPAA_DRIVER).qp_clean $(addsuffix .qp_clean,$(DPAA_RELATIVES))
+clean: $(PFE_DRIVER).qp_clean $(addsuffix .qp_clean,$(PFE_RELATIVES))
 
 .ONESHELL:
 %.qp: $(basename %.qp)

@@ -34,7 +34,7 @@
  * 
  * @defgroup    dxgr_OAL_TYPES TYPES
  * @brief		Standard types
- * @details		TODO     
+ * @details		
  * 	
  * 	
  * @addtogroup	dxgr_OAL_TYPES
@@ -53,21 +53,21 @@
  * QNX
  *
  */
-#ifdef TARGET_OS_QNX
+#ifdef PFE_CFG_TARGET_OS_QNX
 #include "oal_types_qnx.h"
 
 /*
  * LINUX
  *
  */
-#elif defined(TARGET_OS_LINUX)
+#elif defined(PFE_CFG_TARGET_OS_LINUX)
 #include "oal_types_linux.h"
 
 /*
  * AUTOSAR
  *
  */
-#elif defined(TARGET_OS_AUTOSAR)
+#elif defined(PFE_CFG_TARGET_OS_AUTOSAR)
 #include "oal_types_autosar.h"
 
 /*
@@ -75,14 +75,15 @@
  *
  */
 #else
-#error "TARGET_OS_xx was not set!"
-#endif /* TARGET_OS */
+#error "PFE_CFG_TARGET_OS_xx was not set!"
+#endif /* PFE_CFG_TARGET_OS_xx */
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
 #define _ASSERT_CONCAT_(a, b) a##b
 #define _ASSERT_CONCAT(a, b) _ASSERT_CONCAT_(a, b)
+#define ct_assert(e) enum { _ASSERT_CONCAT(precompile_assert_, __COUNTER__) = 1/(!!(e)) }
 #define _ct_assert(e) enum { _ASSERT_CONCAT(precompile_assert_, __COUNTER__) = 1/(!!(e)) }
 
 /**

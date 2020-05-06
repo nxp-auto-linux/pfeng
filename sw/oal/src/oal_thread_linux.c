@@ -43,6 +43,7 @@
 #include <linux/slab.h>
 #include <linux/signal.h>
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "oal_mm.h"
 #include "oal_thread.h"
@@ -61,13 +62,13 @@ static int thread_func(void *arg)
 	void *err;
 	int ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == thread))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*  Set thread killable */
 	allow_signal(SIGKILL);
@@ -90,13 +91,13 @@ oal_thread_t *oal_thread_create(oal_thread_func func, void *func_arg, const char
 	
 	(void)attrs;
 	
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == name))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	thread = oal_mm_malloc(sizeof(oal_thread_t));
 	if (NULL == thread)
@@ -135,13 +136,13 @@ errno_t oal_thread_join(oal_thread_t *thread, void **retval)
 {
 	errno_t err;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == thread))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	wake_up_process(thread->thread);
 	err = kthread_stop(thread->thread);

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,6 +27,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "pfe_ct.h"
 #include "pfe_class.h"
@@ -52,14 +53,14 @@ errno_t pfe_flexible_filter_set(pfe_class_t *class, const uint32_t dmem_addr)
 	pfe_ct_pe_mmap_t mmap;
 	errno_t ret = EOK;
     uint32_t ff_addr;
-    uint32_t ff = oal_htonl(dmem_addr);
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+    uint32_t ff = dmem_addr;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == class))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
     /* Get the memory map */
 	/* All PEs share the same memory map therefore we can read
@@ -70,7 +71,7 @@ errno_t pfe_flexible_filter_set(pfe_class_t *class, const uint32_t dmem_addr)
         /* Get the flexible filter address */
         ff_addr = oal_ntohl(mmap.flexible_filter);
         /* Write new address of flexible filter */
-        ret = pfe_class_write_dmem(class, -1, (void *)ff_addr, &ff, sizeof(pfe_ct_flexible_filter_t));
+        ret = pfe_class_write_dmem(class, -1, (void *)(addr_t)ff_addr, &ff, sizeof(pfe_ct_flexible_filter_t));
     }
     return ret;
 }

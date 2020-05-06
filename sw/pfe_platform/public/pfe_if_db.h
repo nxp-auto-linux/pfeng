@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2019 NXP
+ *  Copyright 2017-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -87,6 +87,7 @@ errno_t pfe_if_db_get_next(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry
 uint32_t pfe_if_db_get_count(pfe_if_db_t *db, pfe_if_db_get_criterion_t crit, void *arg);
 pfe_phy_if_t *pfe_if_db_entry_get_phy_if(pfe_if_db_entry_t *entry) __attribute__((pure));
 pfe_log_if_t *pfe_if_db_entry_get_log_if(pfe_if_db_entry_t *entry) __attribute__((pure));
+errno_t pfe_if_db_get_single(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_criterion_t crit, void *arg, pfe_if_db_entry_t **db_entry);
 
 #endif /* PFE_LOG_IF_DB_H_ */
 

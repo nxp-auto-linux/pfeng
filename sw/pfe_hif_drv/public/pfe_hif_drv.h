@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -36,8 +36,17 @@
  * 					- Utilizes @link dxgr_PFE_HIF HIF instance @endlink
  * 					- Maintains RX/TX BD rings
  * 					- Handles TX confirmation events
- * 					- Allocates, distributes, and manages RX buffers
+ * 					- Allocates, distributes, and manages RX buffers,
+ * 					  by default, it's disableable, see NOTE.
  * 					- Handles HIF interrupts
+ *
+ * 		NOTE:	If pfe_hif_chnl is build without internal buffering support
+ * 			(PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED = FALSE in pfe_hif_chnl.h),
+ * 			then OS driver has to implement RX buffering on its own.
+ * 			In general, it is requested to implement two disabled API calls:
+ *				1) pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt()
+ *				2) void pfe_hif_pkt_free()
+ * 			See linux driver for the reference.
  *
  * @addtogroup  dxgr_PFE_HIF_DRV
  * @{
@@ -48,12 +57,12 @@
  *
  */
 
-#ifndef _pfe_hif_drv_H_
-#define _pfe_hif_drv_H_
+#ifndef _PFE_HIF_DRV_H_
+#define _PFE_HIF_DRV_H_
 
-#include "bpool.h"
 #include "pfe_ct.h"
 #include "pfe_log_if.h"
+#include "pfe_hif_chnl.h"
 
 #define HIF_STATS
 
@@ -101,6 +110,62 @@ enum
  */
 #define HIF_TX_POLL_BUDGET			128U
 
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+/*	When there is no need to modify HIF TX header with every TX frame then only
+	single static HIF TX header instance (client-owned) will be created and used for
+	each transmission. When HIF TX header modification is needed to be done with
+	every transmitted frame then multiple HIF TX headers are needed and therefore
+	they will be allocated within dedicated storage. */
+	#define HIF_CFG_USE_DYNAMIC_TX_HEADERS
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+#ifndef PFE_CFG_CSUM_ALL_FRAMES
+/*	Enable dynamic tx headers for individual CSUM 
+	(on demand) calculation if it is not already enabled */
+	#ifndef HIF_CFG_USE_DYNAMIC_TX_HEADERS
+		#define HIF_CFG_USE_DYNAMIC_TX_HEADERS
+	#endif /* HIF_CFG_USE_DYNAMIC_TX_HEADERS */
+#endif /* PFE_CFG_CSUM_ALL_FRAMES */
+
+/**
+ * @def	    HIF_CFG_DETACH_TX_CONFIRMATION_JOB
+ * @brief	If TRUE the TX confirmation procedure will be executed within deferred job.
+ * 			If FALSE the TX confirmation will be executed with every pfe_hif_drv_client_xmit call.
+ */
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+    #define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		TRUE
+#else
+    #define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		FALSE
+#endif    
+
+/**
+ * @def	    HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION
+ * @brief	If TRUE then TX confirmation job will be triggered as response to
+ * 			TX interrupt/event. If FALSE the TX confirmation job will be triggered
+ * 			from within the pfe_hif_drv_client_xmit call.
+ */
+#if defined(PFE_CFG_TARGET_OS_AUTOSAR)
+    #define	HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION	TRUE
+#else
+    #define	HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION	FALSE
+#endif
+
+/**
+ * @def		HIF_CFG_DETACH_RX_JOB
+ * @brief	If TRUE the RX procedure will be executed within deferred job.
+ * 			If FALSE the RX procedure will be executed within RX ISR.
+ */
+#define HIF_CFG_DETACH_RX_JOB						FALSE
+
+/**
+ * @brief	Maximum number of HIF clients. Right now it is set to cover all possible
+ * 			logical interfaces.
+ */
+#define HIF_CLIENTS_MAX							PFE_CFG_MAX_LOG_IFS
+
+#if ((FALSE == HIF_CFG_DETACH_TX_CONFIRMATION_JOB) && (TRUE == HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION))
+#error Impossible configuration
+#endif
+
 /**
  * @brief	HIF common RX/TX packet flags 
  */
@@ -126,12 +191,15 @@ typedef struct __sg_list_tag
 {
 	uint32_t size;						/*	Number of valid 'items' entries */
 
+#ifdef PFE_CFG_HIF_TX_FIFO_FIX
+	uint32_t total_bytes;				/*	Total data length (sum of items[0..size].len) in number of bytes */
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
+
 	struct item
 	{
 		void *data_pa;					/*	Pointer to buffer (PA) */
 		void *data_va;					/*	Pointer to buffer (VA) */
 		uint32_t len;					/*	Buffer length */
-		uint32_t flags;					/*	Flags TODO: Not used, remove me */
 	} items[HIF_MAX_SG_LIST_LENGTH];	/*	SG list items */
 
 	/*	Internals */
@@ -155,8 +223,30 @@ enum
 	HIF_EVENT_MAX
 };
 
-typedef struct __pfe_hif_drv_tag pfe_hif_drv_t;
 typedef struct __pfe_pfe_hif_drv_client_tag pfe_hif_drv_client_t;
+
+/**
+ * @brief	Packet representation struct
+ */
+struct __attribute__((packed)) __pfe_hif_pkt_tag
+{
+	/*	When every transmitted frame needs to contain customized HIF TX header then
+	 	multiple HIF TX header instances are needed. For this purpose the TX metadata
+	 	storage is used. */
+#ifdef HIF_CFG_USE_DYNAMIC_TX_HEADERS
+	pfe_ct_hif_tx_hdr_t *hif_tx_header;
+	void *hif_tx_header_pa;
+#endif /* HIF_CFG_USE_DYNAMIC_TX_HEADERS */
+	pfe_hif_drv_client_t *client;
+	addr_t data;
+	uint16_t len;
+	uint8_t q_no;
+	pfe_hif_drv_flags_t flags;
+	pfe_ct_phy_if_id_t i_phy_if;
+	void *ref_ptr; /* Reference pointer (keep the original mbuf pointer here) */
+};
+
+typedef struct __pfe_hif_drv_tag pfe_hif_drv_t;
 typedef struct __pfe_hif_pkt_tag pfe_hif_pkt_t;
 typedef errno_t (* pfe_hif_drv_client_event_handler)(pfe_hif_drv_client_t *client, void *arg, uint32_t event, uint32_t qno);
 
@@ -171,19 +261,21 @@ void pfe_hif_drv_exit(pfe_hif_drv_t *hif);
 void pfe_hif_drv_show_ring_status(pfe_hif_drv_t *hif_drv, bool_t rx, bool_t tx);
 
 /*	IHC API */
-#ifdef GLOBAL_CFG_MULTI_INSTANCE_SUPPORT
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 pfe_hif_drv_client_t * pfe_hif_drv_ihc_client_register(pfe_hif_drv_t *hif_drv, pfe_hif_drv_client_event_handler handler, void *priv);
 void pfe_hif_drv_ihc_client_unregister(pfe_hif_drv_client_t *client);
 errno_t pfe_hif_drv_client_xmit_ihc_sg_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t dst, uint32_t queue, hif_drv_sg_list_t *sg_list, void *ref_ptr);
 errno_t pfe_hif_drv_client_xmit_ihc_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t dst, uint32_t queue, void *data_pa, void *data_va, uint32_t len, void *ref_ptr);
-#endif /* GLOBAL_CFG_MULTI_INSTANCE_SUPPORT */
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 /*	HIF client */
 pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif, pfe_log_if_t *log_if, uint32_t txq_num, uint32_t rxq_num,
 		uint32_t txq_depth, uint32_t rxq_depth, pfe_hif_drv_client_event_handler handler, void *priv);
 pfe_hif_drv_t *pfe_hif_drv_client_get_drv(pfe_hif_drv_client_t *client);
+void *pfe_hif_drv_client_get_priv(pfe_hif_drv_client_t *client);
 void pfe_hif_drv_client_unregister(pfe_hif_drv_client_t *client);
-bpool_t *pfe_hif_drv_get_rx_pool(pfe_hif_drv_t *hif);
+void pfe_hif_drv_client_rx_done(pfe_hif_drv_client_t *client);
+void pfe_hif_drv_client_tx_done(pfe_hif_drv_client_t *client);
 
 /*	Packet transmission */
 errno_t pfe_hif_drv_client_xmit_pkt(pfe_hif_drv_client_t *client, uint32_t queue, void *data_pa, void *data_va, uint32_t len, void *ref_ptr);
@@ -191,23 +283,208 @@ errno_t pfe_hif_drv_client_xmit_sg_pkt(pfe_hif_drv_client_t *client, uint32_t qu
 void * pfe_hif_drv_client_receive_tx_conf(pfe_hif_drv_client_t *client, uint32_t queue);
 
 /*	Packet reception */
-pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
 bool_t pfe_hif_drv_client_has_rx_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
+#if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
+pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
 void pfe_hif_pkt_free(pfe_hif_pkt_t *desc);
+#endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
-bool_t pfe_hif_pkt_is_last(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
-bool_t pfe_hif_pkt_ipv4_csum_valid(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
-bool_t pfe_hif_pkt_udpv4_csum_valid(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
-bool_t pfe_hif_pkt_udpv6_csum_valid(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
-bool_t pfe_hif_pkt_tcpv4_csum_valid(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
-bool_t pfe_hif_pkt_tcpv6_csum_valid(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
+/**
+ * @brief		Get information if packet is last in frame
+ * @param[in]	pkt The packet
+ * @return		TRUE if 'pkt' is last packet of a frame. False otherwise.
+ */
+static inline bool_t pfe_hif_pkt_is_last(pfe_hif_pkt_t *pkt)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pkt))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return TRUE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-addr_t pfe_hif_pkt_get_data(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
-uint32_t pfe_hif_pkt_get_data_len(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
-void *pfe_hif_pkt_get_ref_ptr(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
-pfe_hif_drv_client_t *pfe_hif_pkt_get_client(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
-pfe_ct_phy_if_id_t pfe_hif_pkt_get_ingress_phy_id(pfe_hif_pkt_t *pkt) __attribute__((pure, hot));
+	return !!(pkt->flags.common & HIF_LAST_BUFFER);
+}
 
-#endif /* _pfe_hif_drv_H_ */
+/**
+ * @brief		Get information that IP checksum has been verified by PFE
+ * @param[in]	pkt The packet
+ * @return		TRUE if IP checksum has been verified and is valid
+ */
+static inline bool_t pfe_hif_pkt_ipv4_csum_valid(pfe_hif_pkt_t *pkt)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pkt))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return TRUE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return !!(pkt->flags.rx_flags & HIF_RX_IPV4_CSUM);
+}
+
+/**
+ * @brief		Get information that UDP checksum within IP fragment has been verified by PFE
+ * @param[in]	pkt The packet
+ * @return		TRUE if UDP checksum has been verified and is valid
+ */
+static inline bool_t pfe_hif_pkt_udpv4_csum_valid(pfe_hif_pkt_t *pkt)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pkt))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return TRUE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return !!(pkt->flags.rx_flags & HIF_RX_UDPV4_CSUM);
+}
+/**
+ * @brief		Get information that UDP checksum within ipv6 fragment has been verified by PFE
+ * @param[in]	pkt The packet
+ * @return		TRUE if UDP checksum has been verified and is valid
+ */
+static inline bool_t pfe_hif_pkt_udpv6_csum_valid(pfe_hif_pkt_t *pkt)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pkt))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return TRUE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return !!(pkt->flags.rx_flags & HIF_RX_UDPV6_CSUM);
+}
+/**
+ * @brief		Get information that TCP checksum has been verified by PFE
+ * @param[in]	pkt The packet
+ * @return		TRUE if TCP checksum withing ipv4 frame has been verified and is valid
+ */
+static inline bool_t pfe_hif_pkt_tcpv4_csum_valid(pfe_hif_pkt_t *pkt)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pkt))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return TRUE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return !!(pkt->flags.rx_flags & HIF_RX_TCPV4_CSUM);
+}
+/**
+ * @brief		Get information that TCP checksum has been verified by PFE
+ * @param[in]	pkt The packet
+ * @return		TRUE if TCP checksum has been verified and is valid
+ */
+static inline bool_t pfe_hif_pkt_tcpv6_csum_valid(pfe_hif_pkt_t *pkt)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pkt))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return TRUE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return !!(pkt->flags.rx_flags & HIF_RX_TCPV6_CSUM);
+}
+
+/**
+ * @brief		Get pointer to data buffer
+ * @param[in]	pkt The packet
+ * @return		Pointer to packet data
+ */
+static inline addr_t pfe_hif_pkt_get_data(pfe_hif_pkt_t *pkt)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pkt))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pkt->data;
+}
+
+/**
+ * @brief		Get packet data length in bytes
+ * @param[in]	pkt The packet
+ * @return		Number of bytes in data buffer
+ */
+static inline uint32_t pfe_hif_pkt_get_data_len(pfe_hif_pkt_t *pkt)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pkt))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pkt->len;
+}
+
+/**
+ * @brief		Get pointer to packet-related memory
+ * @param[in]	pkt The packet
+ * @return		Pointer to memory associated with the packet where
+ * 				a packet-related data can be stored.
+ */
+static inline void *pfe_hif_pkt_get_ref_ptr(pfe_hif_pkt_t *pkt)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pkt))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return &pkt->ref_ptr;
+}
+
+/**
+ * @brief		Get HIF client associated with the packet
+ * @param[in]	pkt The packet
+ * @return		The HIF client instance
+ */
+static inline pfe_hif_drv_client_t *pfe_hif_pkt_get_client(pfe_hif_pkt_t *pkt)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pkt))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pkt->client;
+}
+
+/**
+ * @brief		Get ingress physical interface ID
+ * @param[in]	pkt The packet
+ * @return		The physical interface ID
+ */
+static inline pfe_ct_phy_if_id_t pfe_hif_pkt_get_ingress_phy_id(pfe_hif_pkt_t *pkt)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pkt))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return PFE_PHY_IF_ID_INVALID;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pkt->i_phy_if;
+}
+
+#endif /* _PFE_HIF_DRV_H_ */
 
 /** @}*/

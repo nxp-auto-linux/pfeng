@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2019 NXP
+ *  Copyright 2017-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -28,8 +28,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-#include <errno.h>
-
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 #include "fifo.h"
@@ -54,13 +53,13 @@
  */
 __attribute__((cold)) errno_t bpool_destroy(bpool_t * pool)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #if 0
 	/*	Sanity check */
@@ -101,13 +100,13 @@ __attribute__((hot)) errno_t bpool_get_fill_level(bpool_t *pool, uint32_t *fill_
 {
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pool) || (NULL == fill_level)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (unlikely(EOK != oal_mutex_lock(&pool->fifo_lock)))
 	{
@@ -131,13 +130,13 @@ __attribute__((hot)) errno_t bpool_get_fill_level(bpool_t *pool, uint32_t *fill_
  */
 __attribute__((pure, hot)) uint32_t bpool_get_depth(bpool_t *pool)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pool->buffer_num;
 }
@@ -152,13 +151,13 @@ __attribute__((hot)) void * bpool_get(bpool_t *pool)
 {
 	bpool_rx_buf_t *item;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (unlikely(EOK != oal_mutex_lock(&pool->fifo_lock)))
 	{
@@ -190,28 +189,28 @@ __attribute__((hot)) void * bpool_get(bpool_t *pool)
  */
 __attribute__((hot)) void bpool_put(bpool_t *pool, void *va)
 {
-#if defined (GLOBAL_CFG_GET_ALL_ERRORS)
+#if defined (PFE_CFG_GET_ALL_ERRORS)
 	errno_t ret;
-#endif /* GLOBAL_CFG_GET_ALL_ERRORS */
+#endif /* PFE_CFG_GET_ALL_ERRORS */
 	bpool_rx_buf_t *item;
 	
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	item = bpool_get_bd(pool, va);
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == item))
 	{
 		NXP_LOG_ERROR("bpool_put: Failed to get bp\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #ifdef BPOOL_CFG_MEM_BUF_WATCH
 	if (NXP_MAGICINT != item->magicword)
@@ -223,7 +222,7 @@ __attribute__((hot)) void bpool_put(bpool_t *pool, void *va)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined (GLOBAL_CFG_GET_ALL_ERRORS)
+#if defined (PFE_CFG_GET_ALL_ERRORS)
 	if (unlikely(EOK != fifo_put((fifo_t *)(pool->free_fifo), item)))
 	{
 		/*	Somehow we got more released buffers than is the FIFO capacity... */
@@ -231,7 +230,7 @@ __attribute__((hot)) void bpool_put(bpool_t *pool, void *va)
 	}
 #else
 	(void)fifo_put((fifo_t *)(pool->free_fifo), item);
-#endif /* GLOBAL_CFG_GET_ALL_ERRORS */
+#endif /* PFE_CFG_GET_ALL_ERRORS */
 
 	if (unlikely(EOK != oal_mutex_unlock(&pool->fifo_lock)))
 	{
@@ -246,9 +245,10 @@ __attribute__((hot)) void bpool_put(bpool_t *pool, void *va)
  *              values, otherwise memory will be wasted for alignment.
  *              Maximal value is 4096.
  * @param[in]	align Physical alignment of particular buffers
+ * @param[in]	cached Chache on/off for the buffer memory
  * @return		New pool instance or NULL if failed
  */
-__attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, uint32_t align)
+__attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, uint32_t align, bool_t cached)
 {
 	uint32_t i;
 	bpool_rx_buf_t *fifo_item;
@@ -354,8 +354,15 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 		goto release_fifo_and_fail;
 	}
 
-	/*	Get physically contiguous memory region */
-	vaddr = oal_mm_malloc_contig_aligned_cache(block_size, aligned_buf_size);
+	/*	Get physically contiguous memory region (buffers) */
+	if(TRUE == cached)
+	{
+		vaddr = oal_mm_malloc_contig_aligned_cache(block_size, aligned_buf_size);
+	}
+	else
+	{
+		vaddr = oal_mm_malloc_contig_aligned_nocache(block_size, aligned_buf_size);
+	}
 	if (!vaddr)
 	{
 		NXP_LOG_ERROR("Unable to get aligned memory block\n");
@@ -429,6 +436,12 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 		buf_vaddr += (addr_t)aligned_buf_size;
 		bd_addr   += sizeof(bpool_rx_buf_t);
 	}
+
+	NXP_LOG_DEBUG("Buffer pool (%d buffers, %d bytes each) created @ p0x%p/v0x%p\n",
+					the_pool->buffer_num,
+					aligned_buf_size,
+					(void *)the_pool->buffer_pa_start,
+					(void *)the_pool->buffer_va_start);
 
 	return the_pool;
 

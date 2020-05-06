@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -55,7 +55,7 @@ typedef struct __pfe_classifier_tag pfe_class_t;
 typedef struct
 {
 	bool_t resume;					/*	Resume flag */
-	bool_t toe_mode;					/*	TCP offload mode */
+	bool_t toe_mode;				/*	TCP offload mode */
 	uint32_t pe_sys_clk_ratio;		/*	Clock mode ratio for sys_clk and pe_clk */
 	uint32_t pkt_parse_offset;		/*	Offset which says from which point packet needs to be parsed */
 	void * route_table_base_pa;		/*	Route table physical address */
@@ -64,10 +64,13 @@ typedef struct
 	uint32_t route_hash_size;		/*	Route hash size (bits) */
 	void * ddr_base_va;				/*	DDR region base address (virtual) */
 	void * ddr_base_pa;				/*	DDR region base address (physical) */
-	uint32_t ddr_size;			/*	Size of the DDR region */
+	uint32_t ddr_size;				/*	Size of the DDR region */
 } pfe_class_cfg_t;
 
 pfe_class_t *pfe_class_create(void *cbus_base_va, uint32_t pe_num, pfe_class_cfg_t *cfg);
+errno_t pfe_class_isr(pfe_class_t *class);
+void pfe_class_irq_mask(pfe_class_t *class);
+void pfe_class_irq_unmask(pfe_class_t *class);
 void pfe_class_enable(pfe_class_t *class);
 void pfe_class_reset(pfe_class_t *class);
 void pfe_class_disable(pfe_class_t *class);

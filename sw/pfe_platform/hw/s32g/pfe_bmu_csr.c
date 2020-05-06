@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -38,6 +38,7 @@
  *
  */
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 #include "pfe_cbus.h"
@@ -48,9 +49,9 @@
 #endif /* PFE_CBUS_H_ */
 
 /*	Supported IPs. Defines are validated within pfe_cbus.h. */
-#if (GLOBAL_CFG_IP_VERSION != IP_VERSION_FPGA_5_0_4) && (GLOBAL_CFG_IP_VERSION != IP_VERSION_NPU_7_14)
+#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
-#endif /* GLOBAL_CFG_IP_VERSION */
+#endif /* PFE_CFG_IP_VERSION */
 
 static void pfe_bmu_cfg_clear_buf_cnt_memory(void *base_va, uint32_t cnt)
 {
@@ -145,7 +146,7 @@ errno_t pfe_bmu_cfg_isr(void *base_va, void *cbus_base_va)
 	if (reg_src & reg_en & BMU_FREE_ERR_INT)
 	{
 		/*	Free error interrupt. Keep this one always enabled */
-		NXP_LOG_INFO("BMU_FREE_ERR_INT (BMU @ p0x%p)\n", (void *)bmu_offset);
+		NXP_LOG_INFO("BMU_FREE_ERR_INT (BMU @ p0x%p) address 0x%x\n", (void *)bmu_offset, hal_read32(base_va + BMU_FREE_ERROR_ADDR));
 		ret = EOK;
 	}
 
@@ -321,13 +322,21 @@ uint32_t pfe_bmu_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, ui
 	uint32_t len = 0U;
 	uint32_t reg, ii;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received (pfe_bmu_cfg_get_text_stat)\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if(verb_level >= 10U)
+	{
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_REM_BUF_CNT     : 0x%x\n", hal_read32(base_va + BMU_REM_BUF_CNT));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_FREE_ERROR_ADDR : 0x%x\n", hal_read32(base_va + BMU_FREE_ERROR_ADDR));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_CURR_BUF_CNT    : 0x%x\n", hal_read32(base_va + BMU_CURR_BUF_CNT));
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_DEBUG_BUS       : 0x%x\n", hal_read32(base_va + BMU_DEBUG_BUS));
+	}
 
 	if(verb_level >= 9U)
 	{

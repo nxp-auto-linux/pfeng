@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -73,6 +73,14 @@ typedef enum
 	EMAC_DUPLEX_FULL
 } pfe_emac_duplex_t;
 
+typedef enum
+{
+	EMAC_LINK_SPEED_INVALID,
+	EMAC_LINK_SPEED_2_5_MHZ,
+	EMAC_LINK_SPEED_25_MHZ,
+	EMAC_LINK_SPEED_125_MHZ
+} pfe_emac_link_speed_t;
+
 typedef struct __pfe_emac_tag pfe_emac_t;
 
 /**
@@ -105,12 +113,16 @@ void pfe_emac_enable_broadcast(pfe_emac_t *emac);
 void pfe_emac_disable_broadcast(pfe_emac_t *emac);
 void pfe_emac_enable_flow_control(pfe_emac_t *emac);
 void pfe_emac_disable_flow_control(pfe_emac_t *emac);
-void pfe_emac_set_max_frame_length(pfe_emac_t *emac, uint32_t len);
+errno_t pfe_emac_set_max_frame_length(pfe_emac_t *emac, uint32_t len);
 pfe_emac_mii_mode_t pfe_emac_get_mii_mode(pfe_emac_t *emac);
-errno_t pfe_emac_mdio_read22(pfe_emac_t *emac, uint8_t pa, uint8_t ra, uint16_t *val);
-errno_t pfe_emac_mdio_write22(pfe_emac_t *emac, uint8_t pa, uint8_t ra, uint16_t val);
-errno_t pfe_emac_mdio_read45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t *val);
-errno_t pfe_emac_mdio_write45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t val);
+errno_t pfe_emac_get_link_config(pfe_emac_t *emac, pfe_emac_speed_t *speed, pfe_emac_duplex_t *duplex);
+errno_t pfe_emac_get_link_status(pfe_emac_t *emac, pfe_emac_link_speed_t *link_speed, pfe_emac_duplex_t *duplex, bool_t *link);
+errno_t pfe_emac_mdio_lock(pfe_emac_t *emac, uint32_t *key);
+errno_t pfe_emac_mdio_unlock(pfe_emac_t *emac, uint32_t key);
+errno_t pfe_emac_mdio_read22(pfe_emac_t *emac, uint8_t pa, uint8_t ra, uint16_t *val, uint32_t key);
+errno_t pfe_emac_mdio_write22(pfe_emac_t *emac, uint8_t pa, uint8_t ra, uint16_t val, uint32_t key);
+errno_t pfe_emac_mdio_read45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t *val, uint32_t key);
+errno_t pfe_emac_mdio_write45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t val, uint32_t key);
 errno_t pfe_emac_add_addr(pfe_emac_t *emac, pfe_mac_addr_t addr);
 errno_t pfe_emac_add_addr_to_hash_group(pfe_emac_t *emac, pfe_mac_addr_t addr);
 errno_t pfe_emac_get_addr(pfe_emac_t *emac, pfe_mac_addr_t addr);

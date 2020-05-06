@@ -60,16 +60,11 @@
  *
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-#include <errno.h>
-
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 
 #include "pfe_cbus.h"
-#include "pfe_mmap.h"
 #include "pfe_hif.h"
 #include "pfe_platform_cfg.h"
 
@@ -77,12 +72,12 @@ struct __pfe_hif_tag
 {
 	void *cbus_base_va;			/*	CBUS base virtual address */
 	pfe_hif_chnl_t **channels;
-#ifdef GLOBAL_CFG_PARANOID_IRQ
+#ifdef PFE_CFG_PARANOID_IRQ
 	oal_mutex_t lock;			/*	Mutex to lock access to HW resources */
-#endif /* GLOBAL_CFG_PARANOID_IRQ */
+#endif /* PFE_CFG_PARANOID_IRQ */
 };
 
-#ifdef GLOBAL_CFG_PFE_MASTER
+#ifdef PFE_CFG_PFE_MASTER
 /**
  * @brief		Master HIF ISR
  * @param[in]	hif The HIF instance
@@ -92,30 +87,30 @@ errno_t pfe_hif_isr(pfe_hif_t *hif)
 {
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == hif))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#ifdef GLOBAL_CFG_PARANOID_IRQ
+#ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&hif->lock))
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
-#endif /* GLOBAL_CFG_PARANOID_IRQ */
+#endif /* PFE_CFG_PARANOID_IRQ */
 
 	/*	Run the low-level ISR to identify and process the interrupt */
 	ret = pfe_hif_cfg_isr(hif->cbus_base_va);
 
-#ifdef GLOBAL_CFG_PARANOID_IRQ
+#ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_unlock(&hif->lock))
 	{
 		NXP_LOG_DEBUG("Mutex unlock failed\n");
 	}
-#endif /* GLOBAL_CFG_PARANOID_IRQ */
+#endif /* PFE_CFG_PARANOID_IRQ */
 
 	return ret;
 }
@@ -127,21 +122,21 @@ errno_t pfe_hif_isr(pfe_hif_t *hif)
  */
 void pfe_hif_irq_mask(pfe_hif_t *hif)
 {
-#ifdef GLOBAL_CFG_PARANOID_IRQ
+#ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&hif->lock))
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
-#endif /* GLOBAL_CFG_PARANOID_IRQ */
+#endif /* PFE_CFG_PARANOID_IRQ */
 
 	pfe_hif_cfg_irq_mask(hif->cbus_base_va);
 
-#ifdef GLOBAL_CFG_PARANOID_IRQ
+#ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_unlock(&hif->lock))
 	{
 		NXP_LOG_DEBUG("Mutex unlock failed\n");
 	}
-#endif /* GLOBAL_CFG_PARANOID_IRQ */
+#endif /* PFE_CFG_PARANOID_IRQ */
 }
 
 /**
@@ -151,23 +146,23 @@ void pfe_hif_irq_mask(pfe_hif_t *hif)
  */
 void pfe_hif_irq_unmask(pfe_hif_t *hif)
 {
-#ifdef GLOBAL_CFG_PARANOID_IRQ
+#ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&hif->lock))
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
-#endif /* GLOBAL_CFG_PARANOID_IRQ */
+#endif /* PFE_CFG_PARANOID_IRQ */
 
 	pfe_hif_cfg_irq_unmask(hif->cbus_base_va);
 
-#ifdef GLOBAL_CFG_PARANOID_IRQ
+#ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_unlock(&hif->lock))
 	{
 		NXP_LOG_DEBUG("Mutex unlock failed\n");
 	}
-#endif /* GLOBAL_CFG_PARANOID_IRQ */
+#endif /* PFE_CFG_PARANOID_IRQ */
 }
-#endif /* GLOBAL_CFG_PFE_MASTER */
+#endif /* PFE_CFG_PFE_MASTER */
 
 /**
  * @brief		Create new HIF instance
@@ -181,23 +176,23 @@ pfe_hif_t *pfe_hif_create(void *cbus_base_va, pfe_hif_chnl_id_t channels)
 	pfe_hif_t *hif;
 	int32_t ii;
 
-#ifdef GLOBAL_CFG_PFE_MASTER
+#ifdef PFE_CFG_PFE_MASTER
 	errno_t ret;
-#endif /* GLOBAL_CFG_PFE_MASTER */
-	
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#endif /* PFE_CFG_PFE_MASTER */
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == cbus_base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (channels >= (1 << HIF_CFG_MAX_CHANNELS))
 	{
 		return NULL;
 	}
-	
+
 	hif = oal_mm_malloc(sizeof(pfe_hif_t));
 		
 	if (NULL == hif)
@@ -210,8 +205,8 @@ pfe_hif_t *pfe_hif_create(void *cbus_base_va, pfe_hif_chnl_id_t channels)
 		hif->cbus_base_va = cbus_base_va;
 	}
 	
-#ifdef GLOBAL_CFG_PFE_MASTER
-#ifdef GLOBAL_CFG_PARANOID_IRQ
+#ifdef PFE_CFG_PFE_MASTER
+#ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_init(&hif->lock))
 	{
 		NXP_LOG_ERROR("Can't initialize HIF mutex\n");
@@ -223,17 +218,17 @@ pfe_hif_t *pfe_hif_create(void *cbus_base_va, pfe_hif_chnl_id_t channels)
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
-#endif /* GLOBAL_CFG_PARANOID_IRQ */
+#endif /* PFE_CFG_PARANOID_IRQ */
 
 	/*	Do HIF HW initialization */
 	ret = pfe_hif_cfg_init(hif->cbus_base_va);
 
-#ifdef GLOBAL_CFG_PARANOID_IRQ
+#ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_unlock(&hif->lock))
 	{
 		NXP_LOG_DEBUG("Mutex unlock failed\n");
 	}
-#endif /* GLOBAL_CFG_PARANOID_IRQ */
+#endif /* PFE_CFG_PARANOID_IRQ */
 
 	if (EOK != ret)
 	{
@@ -241,7 +236,7 @@ pfe_hif_t *pfe_hif_create(void *cbus_base_va, pfe_hif_chnl_id_t channels)
 		oal_mm_free(hif);
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_PFE_MASTER */
+#endif /* PFE_CFG_PFE_MASTER */
 
 	/*	Create channels */
 	hif->channels = oal_mm_malloc(HIF_CFG_MAX_CHANNELS * sizeof(pfe_hif_chnl_t *));
@@ -298,13 +293,13 @@ pfe_hif_chnl_t *pfe_hif_get_channel(pfe_hif_t *hif, pfe_hif_chnl_id_t channel_id
 {
 	uint32_t ii;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == hif))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Get array index from channel ID */
 	for (ii=0U; (channel_id > 0); (channel_id >>= 1), ii++)
@@ -351,17 +346,17 @@ void pfe_hif_destroy(pfe_hif_t *hif)
 			hif->channels = NULL;
 		}
 		
-#ifdef GLOBAL_CFG_PARANOID_IRQ
+#ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_lock(&hif->lock))
 		{
 			NXP_LOG_DEBUG("Mutex lock failed\n");
 		}
-#endif /* GLOBAL_CFG_PARANOID_IRQ */
+#endif /* PFE_CFG_PARANOID_IRQ */
 
 		/*	Finalize the HIF */
 		pfe_hif_cfg_fini(hif->cbus_base_va);
 
-#ifdef GLOBAL_CFG_PARANOID_IRQ
+#ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_unlock(&hif->lock))
 		{
 			NXP_LOG_DEBUG("Mutex unlock failed\n");
@@ -371,13 +366,13 @@ void pfe_hif_destroy(pfe_hif_t *hif)
 		{
 			NXP_LOG_WARNING("Unable to destroy HIF mutex\n");
 		}
-#endif /* GLOBAL_CFG_PARANOID_IRQ */
+#endif /* PFE_CFG_PARANOID_IRQ */
 
 		oal_mm_free(hif);
 	}
 }
 
-#ifdef GLOBAL_CFG_PFE_MASTER
+#ifdef PFE_CFG_PFE_MASTER
 /**
  * @brief		Return HIF runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
@@ -392,18 +387,18 @@ uint32_t pfe_hif_get_text_statistics(pfe_hif_t *hif, char_t *buf, uint32_t buf_l
 {
 	uint32_t len = 0U;
 	
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == hif))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	
 	len += pfe_hif_cfg_get_text_stat(hif->cbus_base_va, buf, buf_len, verb_level);
 
 	return len;
 }
-#endif /* GLOBAL_CFG_PFE_MASTER */
+#endif /* PFE_CFG_PFE_MASTER */
 
 /** @}*/

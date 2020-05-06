@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2019 NXP
+ *  Copyright 2017-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,6 +27,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
+#include "pfe_cfg.h"
 #include "fci_internal.h"
 #include "fci.h"
 #include "fci_rt_db.h" /* The 'routes' database */
@@ -54,13 +55,13 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 	uint32_t *reply_buf_len_ptr = NULL;
 	uint16_t *reply_retval_ptr = NULL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == context) || (NULL == msg) || (NULL == rep_msg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #if (FALSE == FCI_CFG_FORCE_LEGACY_API)
 	/*	Allocate space for return value by skipping first two bytes */
@@ -90,7 +91,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					break;
 				}
 
-				case FPP_CMD_LOG_INTERFACE:
+				case FPP_CMD_LOG_IF:
 				{
 					/*	Process 'interface' commands (add/del/update/query/...) */
 					ret = fci_interfaces_log_cmd(msg, &fci_ret, (fpp_log_if_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
@@ -98,7 +99,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					break;
 				}
 
-				case FPP_CMD_PHY_INTERFACE:
+				case FPP_CMD_PHY_IF:
 				{
 					/*	Process 'interface' commands (add/del/update/query/...) */
 					ret = fci_interfaces_phy_cmd(msg, &fci_ret, (fpp_phy_if_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
@@ -185,30 +186,30 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					break;
 				}
 
-				case FPP_CMD_L2BRIDGE_DOMAIN:
+				case FPP_CMD_L2_BD:
 				{
 					/*	Manage L2 bridge domains */
-					ret = fci_l2br_domain_cmd(msg, &fci_ret, (fpp_l2_bridge_domain_control_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					ret = fci_l2br_domain_cmd(msg, &fci_ret, (fpp_l2_bd_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
 
 					break;
 				}
 
                 case FPP_CMD_FP_TABLE:
                 {
-                    ret = fci_fp_table_cmd(msg, &fci_ret, (fpp_flexible_parser_table_cmd *)reply_buf_ptr, reply_buf_len_ptr);
+                    ret = fci_fp_table_cmd(msg, &fci_ret, (fpp_fp_table_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
                     break;
                 }
 
                 case FPP_CMD_FP_RULE:
                 {
-                    ret = fci_fp_rule_cmd(msg, &fci_ret, (fpp_flexible_parser_rule_cmd *)reply_buf_ptr, reply_buf_len_ptr);
+                    ret = fci_fp_rule_cmd(msg, &fci_ret, (fpp_fp_rule_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
                     break;
                 }
 
-                case FPP_FP_CMD_FLEXIBLE_FILTER:
+                case FPP_CMD_FP_FLEXIBLE_FILTER:
                 {
                     /* Configure Flexible filter */
-                    ret = fci_flexible_filter_cmd(msg, &fci_ret, (fpp_flexible_filter_cmd *)reply_buf_ptr, reply_buf_len_ptr);
+                    ret = fci_flexible_filter_cmd(msg, &fci_ret, (fpp_flexible_filter_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
                     break;
                 }
 
@@ -259,13 +260,13 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 	fci_t *context = (fci_t *)&__context;
 	errno_t err = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == info) || (NULL == identifier)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if(TRUE == context->fci_initialized)
 	{
@@ -346,11 +347,8 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 		}
 	}
 
-	/* Instal MAC change callbacks */
-	fci_interfaces_init_callback();
-
 	context->default_timeouts.timeout_tcp = 5U * 24U * 60U * 60U; 	/* 5 days */
-	context->default_timeouts.timeout_udp = 30U; 					/* 30 sec */
+	context->default_timeouts.timeout_udp = 300U; 					/* 5 min */
 	context->default_timeouts.timeout_other = 240U; 				/* 4 min */
 	context->fci_initialized = TRUE;
 	return err;
@@ -433,13 +431,13 @@ void fci_fini(void)
 errno_t fci_enable_if(pfe_phy_if_t *phy_if)
 {
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == phy_if))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return pfe_phy_if_enable(phy_if);
 }
@@ -457,7 +455,7 @@ errno_t fci_disable_if(pfe_phy_if_t *phy_if)
 	pfe_rtable_entry_t *rtable_entry;
 	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == phy_if))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -469,7 +467,7 @@ errno_t fci_disable_if(pfe_phy_if_t *phy_if)
 		NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Don't disable the interface if some routing table entry is using it */
 	route_entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_IF, phy_if);

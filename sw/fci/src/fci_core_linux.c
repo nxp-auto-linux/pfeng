@@ -38,6 +38,7 @@
  *
  */
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "fci.h"
 #include "fci_internal.h"
@@ -94,13 +95,13 @@ static fci_core_client_t *fci_core_get_client(fci_core_t *core, uint32_t port_id
 {
 	int ii;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == core))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/* The core is secured by lock in the caller */
 	for (ii=0U; ii<FCI_CFG_MAX_CLIENTS; ii++)
@@ -122,13 +123,13 @@ errno_t fci_core_init(const char_t *const id)
 	fci_core_t *core;
 	uint32_t ii;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == id))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if(NULL != GET_FCI_CORE())
 	{
@@ -293,7 +294,7 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 	fci_core_client_t *client;
 	fci_core_t *core = GET_FCI_CORE();
 	
-	NXP_LOG_INFO("FCI received msg of type %u from port_id 0x%x\n", msg->type, port_id);
+	NXP_LOG_DEBUG("FCI received msg of type %u from port_id 0x%x\n", msg->type, port_id);
 	
 	if(mutex_lock_interruptible(&core->lock))
 	{
@@ -413,13 +414,13 @@ static errno_t fci_netlink_send(uint32_t port_id, fci_msg_t *msg)
 	uint32_t msg_size = sizeof(fci_msg_t);
 	int32_t res;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == msg))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	skb_out = nlmsg_new(msg_size, 0);
 	if (!skb_out) {
@@ -427,7 +428,7 @@ static errno_t fci_netlink_send(uint32_t port_id, fci_msg_t *msg)
 		return ENOMEM;
 	}
 
-	NXP_LOG_INFO("FCI send netlink message to port_id 0x%x\n",port_id);	
+	NXP_LOG_DEBUG("FCI send netlink message to port_id 0x%x\n",port_id);
 	nlh = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, GFP_ATOMIC);
 	nlh->nlmsg_flags = NLM_F_REQUEST;
 	NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
@@ -451,7 +452,7 @@ static errno_t fci_netlink_send(uint32_t port_id, fci_msg_t *msg)
 */
 errno_t fci_core_send(fci_msg_t *msg, fci_msg_t *rep)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == GET_FCI_CORE()))
 	{
 		NXP_LOG_ERROR("FCI context is missing\n");
@@ -469,7 +470,7 @@ errno_t fci_core_send(fci_msg_t *msg, fci_msg_t *rep)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return fci_handle_msg(msg, rep, 0);
 }
@@ -481,7 +482,7 @@ errno_t fci_core_client_send(fci_core_client_t *client, fci_msg_t *msg, fci_msg_
 {
 	errno_t ret = ENOENT;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == GET_FCI_CORE()))
 	{
 		NXP_LOG_ERROR("FCI context is missing\n");
@@ -499,7 +500,7 @@ errno_t fci_core_client_send(fci_core_client_t *client, fci_msg_t *msg, fci_msg_
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if(mutex_lock_interruptible(&GET_FCI_CORE()->lock))
 	{
@@ -529,7 +530,7 @@ errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep)
 	uint32_t ii;
 	errno_t ret = ENOENT;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == GET_FCI_CORE()))
 	{
 		NXP_LOG_ERROR("FCI context is missing\n");
@@ -547,7 +548,7 @@ errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if(mutex_lock_interruptible(&core->lock))
 	{

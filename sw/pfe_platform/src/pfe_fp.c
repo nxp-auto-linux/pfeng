@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,10 +27,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "pfe_class.h"
 #include "pfe_fp.h"
@@ -61,7 +58,7 @@ void pfe_fp_init(void)
 */
 uint32_t pfe_fp_create_table(pfe_class_t *class, uint8_t rules_count)
 {
-    uint32_t addr;
+    addr_t addr;
     uint32_t size;
     pfe_ct_fp_table_t temp;
     errno_t res;
@@ -70,10 +67,10 @@ uint32_t pfe_fp_create_table(pfe_class_t *class, uint8_t rules_count)
     size = sizeof(pfe_ct_fp_table_t) + (rules_count * sizeof(pfe_ct_fp_rule_t));
     /* Allocate DMEM */
     addr = pfe_class_dmem_heap_alloc(class, size);
-    if(0 == addr)
+    if(0U == addr)
     {
         NXP_LOG_ERROR("Not enough DMEM memory\n");
-        return 0;
+        return 0U;
     }
     /* Write the table header */
     temp.count = rules_count;
@@ -101,7 +98,7 @@ uint32_t pfe_fp_create_table(pfe_class_t *class, uint8_t rules_count)
 uint32_t pfe_fp_table_write_rule(pfe_class_t *class, uint32_t table_address, pfe_ct_fp_rule_t *rule, uint8_t position)
 {
     pfe_ct_fp_rule_t temp;
-    uint32_t addr;
+    addr_t addr;
     errno_t res;
 
     /* Fill in a temporary structure - handle Endians */

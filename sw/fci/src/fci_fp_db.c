@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,6 +27,7 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "linked_list.h"
 #include "pfe_ct.h"
@@ -104,7 +105,8 @@ typedef struct fci_fp_table_tag
 typedef enum
 {
     FP_TABLE_CRIT_ALL,
-    FP_TABLE_CRIT_NAME
+    FP_TABLE_CRIT_NAME,
+    FP_TABLE_CRIT_ADDRESS
 } fci_fp_table_criterion_t;
 
 /**
@@ -113,6 +115,7 @@ typedef enum
 typedef union
 {
     char_t *name;
+    uint32_t address;
 } fci_fp_table_criterion_arg_t;
 
 /**
@@ -159,13 +162,13 @@ static fci_fp_table_t *fci_fp_table_get_next(fci_fp_table_db_t *db);
 static bool_t fci_fp_match_rule_by_criterion(fci_fp_rule_criterion_t crit, fci_fp_rule_criterion_arg_t *arg, fci_fp_rule_t *rule)
 {
     bool_t match;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely((NULL == rule) || (NULL == arg)))
     {
         NXP_LOG_ERROR("NULL argument received\n");
         return FALSE;
     }
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     switch (crit)
     {
         case FP_RULE_CRIT_ALL:
@@ -207,13 +210,13 @@ static fci_fp_rule_t *fci_fp_rule_get_first(fci_fp_rule_db_t *db, fci_fp_rule_cr
     LLIST_t *item;
     fci_fp_rule_t *rule;
     bool_t match = FALSE;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely((NULL == db) || (NULL == arg)))
     {
         NXP_LOG_ERROR("NULL argument received\n");
         return NULL;
     }
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     /* Free memory allocated by previous search (if any) */
     if(FP_RULE_CRIT_NAME == db->cur_crit)
     {
@@ -302,13 +305,13 @@ static fci_fp_rule_t *fci_fp_rule_get_next(fci_fp_rule_db_t *db, dbase_t dbase)
     fci_fp_rule_t *rule;
     bool_t match = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(NULL == db))
     {
         NXP_LOG_ERROR("NULL argument received\n");
         return NULL;
     }
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     if (db->cur_item == &db->rules)
     {
         /*    No more entries */
@@ -362,13 +365,13 @@ static fci_fp_rule_t *fci_fp_rule_get_next(fci_fp_rule_db_t *db, dbase_t dbase)
 static bool_t fci_fp_match_table_by_criterion(fci_fp_table_criterion_t crit, fci_fp_table_criterion_arg_t *arg, fci_fp_table_t *table)
 {
     bool_t match;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely((NULL == table) || (NULL == arg)))
     {
         NXP_LOG_ERROR("NULL argument received\n");
         return FALSE;
     }
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     switch (crit)
     {
         case FP_TABLE_CRIT_ALL:
@@ -379,6 +382,18 @@ static bool_t fci_fp_match_table_by_criterion(fci_fp_table_criterion_t crit, fci
         case FP_TABLE_CRIT_NAME:
         {
             if(0 == strcmp(arg->name, table->name))
+            {
+                match = TRUE;
+            }
+            else
+            {
+                match = FALSE;
+            }
+            break;
+        }
+        case FP_TABLE_CRIT_ADDRESS:
+        {
+            if(arg->address == table->dmem_addr)
             {
                 match = TRUE;
             }
@@ -409,13 +424,13 @@ static fci_fp_table_t *fci_fp_table_get_first(fci_fp_table_db_t *db, fci_fp_tabl
     LLIST_t *item;
     fci_fp_table_t *table;
     bool_t match = FALSE;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely((NULL == db) || (NULL == arg)))
     {
         NXP_LOG_ERROR("NULL argument received\n");
         return NULL;
     }
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     /* Free memory allocated by previous search (if any) */
     if(FP_TABLE_CRIT_NAME == db->cur_crit)
     {
@@ -445,6 +460,11 @@ static fci_fp_table_t *fci_fp_table_get_first(fci_fp_table_db_t *db, fci_fp_tabl
             db->cur_crit_arg.name = mem;
             /* Copy the string */
             strcpy(mem, (char_t *)arg);
+            break;
+        }
+        case FP_TABLE_CRIT_ADDRESS:
+        {
+            db->cur_crit_arg.address = *(uint32_t *)arg;
             break;
         }
         default:
@@ -498,13 +518,13 @@ static fci_fp_table_t *fci_fp_table_get_next(fci_fp_table_db_t *db)
     fci_fp_table_t *table;
     bool_t match = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(NULL == db))
     {
         NXP_LOG_ERROR("NULL argument received\n");
         return NULL;
     }
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     if (db->cur_item == &db->tables)
     {
         /*    No more entries */
@@ -582,9 +602,9 @@ void fci_fp_db_init(void)
 /**
 * @brief Crates a flexible parser rule
 * @param[in] name Name of the rule (unique identifier)
-* @param[in] data Expected value of the data
-* @param[in] mask Mask to be applied on the data
-* @param[in] offset Offset of the data to be compared
+* @param[in] data Expected value of the data (network endian)
+* @param[in] mask Mask to be applied on the data (network endian)
+* @param[in] offset Offset of the data to be compared (network endian)
 * @param[in] flags Flags describing the rule - see pfe_ct_fp_flags_t
 * @param[in] next_rule Name of the rule to be examined next if none of flags FP_FL_ACCEPT | FP_FL_REJECT is set
 * @return Either EOK or an error code.
@@ -595,7 +615,7 @@ errno_t fci_fp_db_create_rule(char_t *name, uint32_t data, uint32_t mask, uint16
     uint32_t mem_size;
     fci_fp_rule_t *rule = NULL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if(NULL == name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
@@ -640,6 +660,7 @@ errno_t fci_fp_db_create_rule(char_t *name, uint32_t data, uint32_t mask, uint16
     else
     {
         /* Initialize */
+        memset(rule, 0, mem_size);
         LLIST_Init(&rule->db_entry);
         LLIST_Init(&rule->table_entry);
         /* Store the input parameters */
@@ -673,7 +694,7 @@ errno_t fci_fp_db_destroy_rule(char_t *name)
 {
   fci_fp_rule_t *rule = NULL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if(NULL == name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
@@ -707,8 +728,9 @@ errno_t fci_fp_db_destroy_rule(char_t *name)
 */
 errno_t fci_fp_db_create_table(char_t *name)
 {
+    uint32_t mem_size;
     fci_fp_table_t *table;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if(NULL == name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
@@ -723,7 +745,8 @@ errno_t fci_fp_db_create_table(char_t *name)
     }
 
     /* Allocate memory for the table */
-    table = oal_mm_malloc(sizeof(fci_fp_table_t) + strlen(name) + 1U);
+    mem_size = sizeof(fci_fp_table_t) + strlen(name) + 1U;
+    table = oal_mm_malloc(mem_size);
     if(NULL == table)
     {
         NXP_LOG_ERROR("No memory for the table\n");
@@ -732,6 +755,7 @@ errno_t fci_fp_db_create_table(char_t *name)
     else
     {
         /* Initialize */
+        memset(table, 0, mem_size);
         LLIST_Init(&table->db_entry);
         LLIST_Init(&table->rules_db.rules);
         /* Store the input parameters */
@@ -755,7 +779,7 @@ errno_t fci_fp_db_destroy_table(char_t *name, bool_t force)
     fci_fp_table_t *table;
     fci_fp_rule_t *rule;
     LLIST_t *item, *aux;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if(NULL == name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
@@ -819,7 +843,7 @@ errno_t fci_fp_db_add_rule_to_table(char_t *table_name, char_t *rule_name, uint1
     LLIST_t *item;
     uint32_t i = 0U; /* Start search from position 0 */
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == table_name)||(NULL == rule_name))
     {
         NXP_LOG_ERROR("NULL argument received\n");
@@ -914,7 +938,7 @@ errno_t fci_fp_db_remove_rule_from_table(char_t *rule_name)
 {
     fci_fp_rule_t *rule;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == rule_name))
     {
         NXP_LOG_ERROR("NULL argument received\n");
@@ -952,7 +976,7 @@ uint32_t fci_fp_db_get_table_dmem_addr(char_t *table_name)
     fci_fp_table_t *table;
     uint32_t retval;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if(NULL == table_name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
@@ -993,7 +1017,7 @@ errno_t fci_fp_db_push_table_to_hw(pfe_class_t *class, char_t *table_name)
     uint8_t pos;
 
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == class)||(NULL == table_name))
     {
         NXP_LOG_ERROR("NULL argument received\n");
@@ -1067,7 +1091,7 @@ errno_t fci_fp_db_push_table_to_hw(pfe_class_t *class, char_t *table_name)
 errno_t fci_fp_db_pop_table_from_hw(char_t *table_name)
 {
     fci_fp_table_t *table;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if(NULL == table_name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
@@ -1091,6 +1115,38 @@ errno_t fci_fp_db_pop_table_from_hw(char_t *table_name)
 }
 
 /**
+* @brief Returns name of the table being written at given DMEM address
+* @param[in] addr Address to find the table
+* @param[out] table_name Returned table name
+* @return EOK or an error code
+*/
+errno_t fci_fp_db_get_table_from_addr(uint32_t addr, char_t **table_name)
+{
+    fci_fp_table_t *table;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+    if(NULL == table_name)
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return EINVAL;
+    }
+#endif
+    if(0U == addr)
+    {   /* 0 is not valid table address, used as no-address */
+        return EINVAL;
+    }
+    
+    table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_ADDRESS, &addr);
+    if(NULL == table)
+    {
+        NXP_LOG_WARNING("Table with address 0x%x not found\n", addr);
+        return ENOENT;
+    }
+    *table_name = table->name;
+    return EOK;
+}
+
+
+/**
 * @brief Returns parameters of the first rule in the database
 * @details Function is intended to start query of all rules in the database (by FCI).
 * @param[out] rule_name Name of the rule
@@ -1104,7 +1160,7 @@ errno_t fci_fp_db_pop_table_from_hw(char_t *table_name)
 errno_t fci_fp_db_get_first_rule(char_t **rule_name, uint32_t *data, uint32_t *mask, uint16_t *offset, pfe_ct_fp_flags_t *flags, char_t **next_rule)
 {
     fci_fp_rule_t *rule;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == rule_name) || (NULL == data) || (NULL == mask) || (NULL == offset) || (NULL == flags) || (NULL == next_rule))
     {
         NXP_LOG_ERROR("NULL argument received\n");
@@ -1143,7 +1199,7 @@ errno_t fci_fp_db_get_first_rule(char_t **rule_name, uint32_t *data, uint32_t *m
 errno_t fci_fp_db_get_next_rule(char_t **rule_name, uint32_t *data, uint32_t *mask, uint16_t *offset, pfe_ct_fp_flags_t *flags, char_t **next_rule)
 {
     fci_fp_rule_t *rule;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == rule_name) || (NULL == data) || (NULL == mask) || (NULL == offset) || (NULL == flags) || (NULL == next_rule))
     {
         NXP_LOG_ERROR("NULL argument received\n");
@@ -1173,9 +1229,9 @@ errno_t fci_fp_db_get_next_rule(char_t **rule_name, uint32_t *data, uint32_t *ma
 * @details Function is intended to start query of all rules in the table (by FCI).
 * @param[in]  table_name Name of the table to query
 * @param[out] rule_name Name of the rule
-* @param[out] data Rule data
-* @param[out] mask Rule mask
-* @param[out] offset Rule offset
+* @param[out] data Rule data (network endian)
+* @param[out] mask Rule mask (network endian)
+* @param[out] offset Rule offset (network endian)
 * @param[out] flags Rule flags
 * @param[out] next_rule Name of the next rule (if any)
 * @return EOK or an error code.
@@ -1184,7 +1240,7 @@ errno_t fci_fp_db_get_table_first_rule(char_t *table_name, char_t **rule_name, u
 {
     fci_fp_table_t *table;
     fci_fp_rule_t *rule;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == table_name) || (NULL == rule_name) || (NULL == data) || (NULL == mask) || (NULL == offset) || (NULL == flags) || (NULL == next_rule))
     {
         NXP_LOG_ERROR("NULL argument received\n");
@@ -1232,7 +1288,7 @@ errno_t fci_fp_db_get_table_next_rule(char_t *table_name, char_t **rule_name, ui
 {
     fci_fp_table_t *table;
     fci_fp_rule_t *rule;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == table_name) || (NULL == rule_name) || (NULL == data) || (NULL == mask) || (NULL == offset) || (NULL == flags) || (NULL == next_rule))
     {
         NXP_LOG_ERROR("NULL argument received\n");

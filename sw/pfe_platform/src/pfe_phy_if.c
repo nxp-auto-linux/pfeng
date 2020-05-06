@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -38,17 +38,12 @@
  *
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-#include <errno.h>
-
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 
 #include "pfe_platform_cfg.h"
 #include "pfe_cbus.h"
-#include "pfe_mmap.h"
 #include "pfe_ct.h"
 #include "pfe_phy_if.h"
 #include "linked_list.h"
@@ -68,12 +63,10 @@ struct __pfe_phy_if_tag
 	pfe_class_t *class;
 	addr_t dmem_base;
 	pfe_ct_phy_if_t phy_if_class;
-	pfe_phy_if_cbk_t callback;
-	void *callback_arg;
 	LLIST_t log_ifs;
 	oal_mutex_t lock;
 	bool_t is_enabled;
-
+    pfe_ct_block_state_t block_state; /* Copy of value in phy_if_class for faster access */
 	union
 	{
 		pfe_emac_t *emac;
@@ -91,6 +84,7 @@ typedef struct __pfe_phy_if_list_entry_tag
 #if 0
 static errno_t pfe_phy_if_read_from_class(pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if);
 #endif /* 0 */
+static errno_t pfe_phy_if_write_to_class_nostats(pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if);
 static errno_t pfe_phy_if_write_to_class(pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if);
 static bool_t pfe_phy_if_has_log_if_nolock(pfe_phy_if_t *iface, pfe_log_if_t *log_if);
 static bool_t pfe_phy_if_has_enabled_log_if_nolock(pfe_phy_if_t *iface);
@@ -108,13 +102,13 @@ static uint32_t pfe_phy_if_stat_to_str(pfe_ct_phy_if_stats_t *stat, char *buf, u
  */
 static errno_t pfe_phy_if_read_from_class(pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class_if) || (NULL == iface) || (0U == iface->dmem_base)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*
 		Read current interface configuration from classifier. Since all class PEs are running the
@@ -126,7 +120,32 @@ static errno_t pfe_phy_if_read_from_class(pfe_phy_if_t *iface, pfe_ct_phy_if_t *
 #endif /* 0 */
 
 /**
- * @brief		Write interface structure to classifier memory
+ * @brief		Write interface structure to classifier memory skipping interface statistics
+ * @param[in]	iface The interface instance
+ * @param[in]	class_if Pointer to the structure to be written
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+static errno_t pfe_phy_if_write_to_class_nostats(pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == class_if) || (NULL == iface) || (0U == iface->dmem_base)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/* Be sure that phy_stats are at correct place */
+	ct_assert((sizeof(pfe_ct_phy_if_t) - sizeof(pfe_ct_phy_if_stats_t)) == offsetof(pfe_ct_phy_if_t, phy_stats));
+
+	/*	Write to DMEM of ALL PEs */
+	return pfe_class_write_dmem(iface->class, -1, (void *)iface->dmem_base, class_if,
+								sizeof(pfe_ct_phy_if_t) - sizeof(pfe_ct_phy_if_stats_t));
+}
+
+/**
+ * @brief		Write interface structure to classifier memory with statistics
  * @param[in]	iface The interface instance
  * @param[in]	class_if Pointer to the structure to be written
  * @retval		EOK Success
@@ -134,13 +153,13 @@ static errno_t pfe_phy_if_read_from_class(pfe_phy_if_t *iface, pfe_ct_phy_if_t *
  */
 static errno_t pfe_phy_if_write_to_class(pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class_if) || (NULL == iface) || (0U == iface->dmem_base)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Write to DMEM of ALL PEs */
 	return pfe_class_write_dmem(iface->class, -1, (void *)iface->dmem_base, class_if, sizeof(pfe_ct_phy_if_t));
@@ -159,7 +178,7 @@ static uint32_t pfe_phy_if_stat_to_str(pfe_ct_phy_if_stats_t *stat, char *buf, u
 	uint32_t len = 0U;
 
     (void)verb_level;
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == stat) || (NULL == buf)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -187,13 +206,13 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, char_
 	pfe_phy_if_t *iface;
 	pfe_ct_pe_mmap_t pfe_pe_mmap = {0U};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == class))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	iface = oal_mm_malloc(sizeof(pfe_phy_if_t));
 
@@ -207,7 +226,6 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, char_
 		iface->type = PFE_PHY_IF_INVALID;
 		iface->id = id;
 		iface->class = class;
-		iface->callback = NULL;
 		iface->is_enabled = FALSE;
 		LLIST_Init(&iface->log_ifs);
 
@@ -248,6 +266,13 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, char_
 		/*	Initialize the interface structure in classifier */
 		iface->phy_if_class.id = id;
 		iface->phy_if_class.block_state = IF_BS_FORWARDING;
+		iface->phy_if_class.mirror = PFE_PHY_IF_ID_INVALID;
+
+		/* Be sure that statistics are zeroed (endianness doesn't mater for this) */
+		iface->phy_if_class.phy_stats.ingress	= 0;
+		iface->phy_if_class.phy_stats.egress	= 0;
+		iface->phy_if_class.phy_stats.discarded	= 0;
+		iface->phy_if_class.phy_stats.malformed	= 0;
 
 		/*	Write the configuration to classifier */
 		if (EOK != pfe_phy_if_write_to_class(iface, &iface->phy_if_class))
@@ -320,13 +345,13 @@ errno_t pfe_phy_if_destroy(pfe_phy_if_t *iface)
  */
 __attribute__((pure)) pfe_class_t *pfe_phy_if_get_class(pfe_phy_if_t *iface)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return iface->class;
 }
@@ -348,13 +373,13 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	pfe_phy_if_list_entry_t *entry, *tmp_entry;
 	addr_t log_if_dmem_base = 0U;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry = oal_mm_malloc(sizeof(pfe_phy_if_list_entry_t));
 	if (NULL == entry)
@@ -385,13 +410,13 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 			goto unlock_and_fail;
 		}
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 		if (0U == log_if_dmem_base)
 		{
 			NXP_LOG_ERROR("LogIf base is NULL (%s)\n", pfe_log_if_get_name(log_if));
 			goto unlock_and_fail;
 		}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 		/*	First added interface will become the default one */
 		iface->phy_if_class.def_log_if = oal_htonl((uint32_t)log_if_dmem_base);
@@ -427,13 +452,13 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 			goto unlock_and_fail;
 		}
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 		if (0U == log_if_dmem_base)
 		{
 			NXP_LOG_ERROR("LogIf base is NULL (%s)\n", pfe_log_if_get_name(tmp_entry->log_if));
 			goto unlock_and_fail;
 		}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 		/*	Change 'next' pointer of the new entry */
 		if (EOK != pfe_log_if_set_next_dmem_ptr(log_if, log_if_dmem_base))
@@ -459,7 +484,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	iface->phy_if_class.log_ifs = oal_htonl(PFE_CFG_CLASS_ELF_DMEM_BASE | (log_if_dmem_base & (PFE_CFG_CLASS_DMEM_SIZE - 1U)));
 
 	/*	Store physical interface changes (.phy_if_class) to DMEM */
-	if (EOK != pfe_phy_if_write_to_class(iface, &iface->phy_if_class))
+	if (EOK != pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class))
 	{
 		NXP_LOG_ERROR("Unable to update structure in DMEM (%s)\n", iface->name);
 		goto unlock_and_fail;
@@ -496,13 +521,13 @@ static bool_t pfe_phy_if_has_log_if_nolock(pfe_phy_if_t *iface, pfe_log_if_t *lo
 	LLIST_t *item;
 	pfe_phy_if_list_entry_t *entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	LLIST_ForEach(item, &iface->log_ifs)
 	{
@@ -521,13 +546,13 @@ static bool_t pfe_phy_if_has_enabled_log_if_nolock(pfe_phy_if_t *iface)
 	LLIST_t *item;
 	pfe_phy_if_list_entry_t *entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	LLIST_ForEach(item, &iface->log_ifs)
 	{
@@ -546,13 +571,13 @@ static bool_t pfe_phy_if_has_promisc_log_if_nolock(pfe_phy_if_t *iface)
 	LLIST_t *item;
 	pfe_phy_if_list_entry_t *entry;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	LLIST_ForEach(item, &iface->log_ifs)
 	{
@@ -578,13 +603,13 @@ bool_t pfe_phy_if_has_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 {
 	bool_t match = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -619,13 +644,13 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	addr_t log_if_dmem_base = 0U, next_dmem_ptr = 0U;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -726,7 +751,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	}
 
 	/*	Store physical interface changes (.phy_if_class) to DMEM */
-	if (EOK != pfe_phy_if_write_to_class(iface, &iface->phy_if_class))
+	if (EOK != pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class))
 	{
 		/*	TODO: How to handle this? */
 		NXP_LOG_ERROR("Unable to update structure in DMEM (%s)\n", iface->name);
@@ -780,6 +805,82 @@ unlock_and_fail:
 }
 
 /**
+ * @brief Set the block state
+ * @param[in] iface The interface instance
+ * @param[out] block_state Block state to set
+ * @return EOK on success or an error code
+ */
+errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t block_state)
+{
+	errno_t ret = EOK;  
+	pfe_ct_block_state_t tmp;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */   
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+	/* Set the requested state */
+	tmp = iface->block_state;
+	iface->block_state = block_state;
+	iface->phy_if_class.block_state = block_state;
+	/* Write changes into the HW */
+	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
+
+	if (EOK != ret)
+	{   /* Failure to update the HW */
+		/* Restore previous value */
+		iface->block_state = tmp;
+		iface->phy_if_class.block_state = tmp;
+		/* Report an error */
+		NXP_LOG_DEBUG("Can't write PHY IF structure to classifier\n");
+		ret = EINVAL;
+	}
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_ERROR("mutex unlock failed\n");
+	} 
+	return ret;
+}
+
+/**
+ * @brief Get the block state
+ * @param[in] iface The interface instance
+ * @param[out] block_state Current block state
+ * @return EOK On success or an error code
+ */
+errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *block_state)
+{
+	errno_t ret = EOK;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	/* The value is being stored in the iface structure and kept up-to-date
+	   with the value in PEs (HW) thus it can be simply returned */
+	*block_state = iface->block_state;
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_ERROR("mutex unlock failed\n");
+	}
+	return ret;
+}
+/**
  * @brief		Get operational mode
  * @param[in]	iface The interface instance
  * @retval		Current phy_if mode. See pfe_ct_if_op_mode_t.
@@ -816,13 +917,13 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 	pfe_ct_pe_mmap_t mmap;
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Get memory map */
 	ret = pfe_class_get_mmap(iface->class, 0U, &mmap);
@@ -839,7 +940,7 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 	}
 
 	iface->phy_if_class.mode = mode;
-	ret = pfe_phy_if_write_to_class(iface, &iface->phy_if_class);
+	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
 		NXP_LOG_DEBUG("Can't write PHY IF structure to classifier\n");
@@ -855,6 +956,74 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 }
 
 /**
+ * @brief Set mirroring on the given interface
+ * @param[in] iface The interface which traffic shall be mirrored
+ * @param[in] mirror The ID of the interface which shall send out the mirrored traffic.
+ *                   The value PFE_PHY_IF_ID_INVALID disables the feature.
+ * @return EOK on success or an error code.
+ */
+errno_t pfe_phy_if_set_mirroring(pfe_phy_if_t *iface, pfe_ct_phy_if_id_t mirror)
+{
+	pfe_ct_pe_mmap_t mmap;
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/*	Get memory map */
+	ret = pfe_class_get_mmap(iface->class, 0U, &mmap);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("Can't get memory map\n");
+		return EINVAL;
+	}
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	iface->phy_if_class.mirror = mirror;
+
+	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("Can't write PHY IF structure to classifier\n");
+		ret = EINVAL;
+	}
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+	return ret;
+}
+
+/**
+ * @brief Get mirroring configuration on the given interface
+ * @param[in] iface The interface which traffic shall be mirrored
+ * @return The ID of the interface where is the traffic mirrored 
+ *         (PFE_PHY_IF_ID_INVALID if is disabled).
+ */
+pfe_ct_phy_if_id_t pfe_phy_if_get_mirroring(pfe_phy_if_t *iface)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return PFE_PHY_IF_ID_INVALID;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	return iface->phy_if_class.mirror;
+
+}
+
+/**
  * @brief		Bind interface with EMAC
  * @param[in]	iface The interface instance
  * @param[in]	emac The EMAC instance
@@ -866,13 +1035,13 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
 {
 	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == emac) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -925,13 +1094,13 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
  */
 pfe_emac_t *pfe_phy_if_get_emac(pfe_phy_if_t *iface)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (PFE_PHY_IF_EMAC == iface->type)
 	{
@@ -956,13 +1125,13 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
 {
 	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == hif) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -995,13 +1164,13 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
  */
 pfe_hif_chnl_t *pfe_phy_if_get_hif(pfe_phy_if_t *iface)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (PFE_PHY_IF_HIF == iface->type)
 	{
@@ -1024,13 +1193,13 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 {
 	bool_t ret = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -1057,13 +1226,13 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 	errno_t ret = EOK;
 	pfe_ct_if_flags_t tmp;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -1075,7 +1244,7 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 	/*	Enable interface instance. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
 	iface->phy_if_class.flags |= IF_FL_ENABLED;
-	ret = pfe_phy_if_write_to_class(iface, &iface->phy_if_class);
+	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
 		/*	Failed. Revert flags. */
@@ -1127,7 +1296,7 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 			/*	HW configuration failure. Backup flags and disable the instance. */
 			tmp = iface->phy_if_class.flags;
 			iface->phy_if_class.flags &= ~IF_FL_ENABLED;
-			ret = pfe_phy_if_write_to_class(iface, &iface->phy_if_class);
+			ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 			if (EOK != ret)
 			{
 				/*	Failed. Revert flags. */
@@ -1154,13 +1323,13 @@ static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 	errno_t ret = EOK;
 	pfe_ct_if_flags_t tmp;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*
 		Go through all associated logical interfaces and search
@@ -1177,7 +1346,7 @@ static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 	/*	Disable interface instance. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
 	iface->phy_if_class.flags &= ~IF_FL_ENABLED;
-	ret = pfe_phy_if_write_to_class(iface, &iface->phy_if_class);
+	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
 		/*	Failed. Revert flags. */
@@ -1227,13 +1396,13 @@ errno_t pfe_phy_if_disable(pfe_phy_if_t *iface)
 {
 	errno_t ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -1260,13 +1429,13 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 {
 	bool_t ret = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -1293,13 +1462,13 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 	errno_t ret = EOK;
 	pfe_ct_if_flags_t tmp;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -1309,7 +1478,7 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 	/*	Enable instance promiscuous mode. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
 	iface->phy_if_class.flags |= IF_FL_PROMISC;
-	ret = pfe_phy_if_write_to_class(iface, &iface->phy_if_class);
+	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
 		/*	Failed. Revert flags. */
@@ -1362,13 +1531,13 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 	errno_t ret = EOK;
 	pfe_ct_if_flags_t tmp;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -1396,7 +1565,7 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 	/*	Disable instance promiscuous mode. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
 	iface->phy_if_class.flags &= ~IF_FL_PROMISC;
-	ret = pfe_phy_if_write_to_class(iface, &iface->phy_if_class);
+	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
 		/*	Failed. Revert flags. */
@@ -1450,13 +1619,13 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 {
 	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -1502,11 +1671,6 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		if (EOK == ret)
 		{
 			NXP_LOG_INFO("Address %02x:%02x:%02x:%02x:%02x:%02x added to %s\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], iface->name);
-
-			if (NULL != iface->callback)
-			{
-				iface->callback(iface, PHY_IF_EVT_MAC_ADDR_UPDATE, iface->callback_arg);
-			}
 		}
 	}
 
@@ -1530,13 +1694,13 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 {
 	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -1572,11 +1736,6 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		if (EOK == ret)
 		{
 			NXP_LOG_INFO("Address %02x:%02x:%02x:%02x:%02x:%02x removed from %s\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], iface->name);
-
-			if (NULL != iface->callback)
-			{
-				iface->callback(iface, PHY_IF_EVT_MAC_ADDR_UPDATE, iface->callback_arg);
-			}
 		}
 	}
 
@@ -1600,13 +1759,13 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 {
 	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
@@ -1652,13 +1811,13 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
  */
 __attribute__((pure)) pfe_ct_phy_if_id_t pfe_phy_if_get_id(pfe_phy_if_t *iface)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return PFE_PHY_IF_ID_INVALID;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return iface->id;
 }
@@ -1670,93 +1829,15 @@ __attribute__((pure)) pfe_ct_phy_if_id_t pfe_phy_if_get_id(pfe_phy_if_t *iface)
  */
 __attribute__((pure)) char_t *pfe_phy_if_get_name(pfe_phy_if_t *iface)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return iface->name;
-}
-
-/**
- * @brief		Set event callback
- * @details		Routine will bind a callback with interface instance which will
- * 				be called on various interface-related events. See pfe_phy_if_event_t.
- * @param[in]	iface The interface instance
- * @param[in]	callback Routine to be called
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- */
-errno_t pfe_phy_if_set_callback(pfe_phy_if_t *iface, pfe_phy_if_cbk_t callback, void *arg)
-{
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-
-	iface->callback = callback;
-	iface->callback_arg = arg;
-
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-
-	return EOK;
-}
-
-/**
- * @brief		Delete event callback
- * @param[in]	iface The interface instance
- * @param[in]	callback Routine to be removed
- * @retval		EOK Success
- * @retval		ENOENT Callback not found
- * @retval		EINVAL Invalid or missing argument
- */
-errno_t pfe_phy_if_del_callback(pfe_phy_if_t *iface, pfe_phy_if_cbk_t callback)
-{
-	errno_t ret = EOK;
-
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-
-	if (iface->callback == callback)
-	{
-		iface->callback = NULL;
-		iface->callback_arg = NULL;
-	}
-	else
-	{
-		ret = ENOENT;
-	}
-
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-
-	return ret;
 }
 
 /**
@@ -1774,13 +1855,13 @@ uint32_t pfe_phy_if_get_text_statistics(pfe_phy_if_t *iface, char_t *buf, uint32
 	pfe_ct_phy_if_t phy_if_class = {0U};
 	uint32_t i;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/* Repeat read for all PEs (just because of statistics) */
 	for(i = 0U; i < pfe_class_get_num_of_pes(iface->class); i++)

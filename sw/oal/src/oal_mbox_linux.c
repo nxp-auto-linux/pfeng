@@ -46,6 +46,7 @@
 #include <linux/types.h>
 #include <linux/timer.h>
 
+#include "pfe_cfg.h"
 #include "oal.h"
 #include "oal_time.h"
 #include "oal_mbox.h"
@@ -137,13 +138,13 @@ static void mbox_ack_msg_internal(oal_mbox_msg_t *msg)
 */
 void oal_mbox_ack_msg(oal_mbox_msg_t *msg)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == msg) || unlikely(NULL == msg->metadata.ptr))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (OAL_MBOX_MSG_MESSAGE == msg->metadata.type)
 	{
@@ -159,13 +160,13 @@ static errno_t mbox_send_generic(oal_mbox_t *mbox, oal_mbox_msg_type mtype, int3
 {
 	int ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mbox))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	if(mutex_lock_interruptible(&mbox->lock))
 		return EINTR;
 
@@ -252,13 +253,13 @@ errno_t oal_mbox_send_signal(oal_mbox_t *mbox, int32_t code)
 {
 	uint32_t transcode;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mbox))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (code < 0)
 	{
@@ -285,13 +286,13 @@ static bool_t mbox_irq_handler(void *data)
 	int32_t ii;
 	bool_t ret = FALSE;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mbox))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	for (ii=0; ii<OAL_MBOX_MAX_IRQS; ii++)
 	{
@@ -313,13 +314,13 @@ errno_t oal_mbox_attach_irq(oal_mbox_t *mbox, oal_irq_t *irq, int32_t code)
 {
 	int32_t id, ii;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == mbox) || (NULL == irq)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Get IRQ ID */
 	id = oal_irq_get_id(irq);
@@ -377,13 +378,13 @@ errno_t oal_mbox_detach_irq(oal_mbox_t *mbox, oal_irq_t *irq)
 	int32_t ii;
 	errno_t err;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == mbox) || (NULL == irq)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if(mutex_lock_interruptible(&mbox->lock))
 	{
@@ -446,13 +447,13 @@ static void mbox_timer_handler(struct timer_list *t)
  */
 errno_t oal_mbox_attach_timer(oal_mbox_t *mbox, unsigned int msec, int code)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mbox))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if(mutex_lock_interruptible(&mbox->lock))
 	{
@@ -483,13 +484,13 @@ errno_t oal_mbox_attach_timer(oal_mbox_t *mbox, unsigned int msec, int code)
  */
 errno_t oal_mbox_detach_timer(oal_mbox_t *mbox)
 {
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mbox))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if(mutex_lock_interruptible(&mbox->lock))
 	{
@@ -518,13 +519,13 @@ errno_t oal_mbox_receive(oal_mbox_t *mbox, oal_mbox_msg_t *msg)
 {
 	int ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == mbox) || (NULL == msg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	ret = wait_event_interruptible(mbox->msg.wait, atomic_read(&mbox->msg.up) > 0);
 	if(0 != ret)
