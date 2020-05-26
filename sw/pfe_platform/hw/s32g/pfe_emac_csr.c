@@ -33,7 +33,7 @@
  * @{
  *
  * @file		s32g/pfe_emac_csr.c
- * @brief		The EMAC module low-level API (s32g)(Synopsys EQoS).
+ * @brief		The EMAC module low-level API (s32g)
  * @details
  *
  */

@@ -37,10 +37,9 @@ BUILD_PROFILE ?= release
 include ../../build_env.mak
 
 ifeq ($(TARGET_OS),LINUX)
-  OUTPUT_DIR = build/$(CONFIG_NAME)
-  CC = $(PLATFORM)-gcc
-  CXX =$(PLATFORM)-g++
-  LD =ar rsc
+  OUTPUT_DIR = build/$(BUILD_PROFILE)
+  CC ?= $(PLATFORM)-gcc
+  CXX ?= $(PLATFORM)-g++
   INC_PREFIX = 
 else
   #Build architecture/variant string, possible values: x86, armv7le, etc...
@@ -86,6 +85,12 @@ CCFLAGS_all += -Wall -fmessage-length=0
 CCFLAGS_all += $(CCFLAGS_$(BUILD_PROFILE))
 CCFLAGS_all += $(CCFLAGS_pfe)
 CCFLAGS_all += -D$(PFE_CFG_TARGET_ARCH_DEF) -D$(PFE_CFG_TARGET_OS_DEF) -D$(PFE_CFG_BUILD_PROFILE_DEF)
+#Include YOCTO sysroot
+ifeq ($(TARGET_OS),LINUX)
+ifdef PKG_CONFIG_SYSROOT_DIR
+CCFLAGS_all += --sysroot=$(PKG_CONFIG_SYSROOT_DIR)
+endif
+endif
 #Shared library has to be compiled with -fPIC
 #CCFLAGS_all += -fPIC
 LDFLAGS_all += $(LDFLAGS_$(BUILD_PROFILE))
@@ -123,7 +128,11 @@ $(OUTPUT_DIR)/%.o: %.c
 #Linking rule
 EMPTY = 
 $(TARGET):$(OBJS) $(subst -L,,$(subst $(EMPTY) $(EMPTY)-l:,/,$(LIBS)))
+ifeq ($(TARGET_OS),LINUX)
+	$(AR) rcs  $(TARGET) $(OBJS)
+else
 	$(LD) $(TARGET) $(LDFLAGS_all) $(LDFLAGS) $(OBJS) $(LIBS_all) $(LIBS)
+endif
 
 .PHONY clean:
 clean: $(addsuffix .clean,$(DEPENDENCIES))
@@ -132,7 +141,6 @@ clean: $(addsuffix .clean,$(DEPENDENCIES))
 #Deps cleaning rule
 %.clean:
 	make --no-print-directory -C $(subst build/$(PLATFORM)-$(BUILD_PROFILE),,$(dir $@)) clean
-
 
 rebuild: clean all
 
@@ -149,3 +157,4 @@ linux:
 	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) M=`pwd`
 
 linux-clean: clean
+

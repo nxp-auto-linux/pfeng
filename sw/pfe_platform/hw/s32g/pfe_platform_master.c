@@ -2737,7 +2737,7 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 	pfe.util_pe_count = 1U;
 #else /* FPGA */
 	pfe.class_pe_count = 1U;
-	pfe.util_pe_count = 0U;	/* Current IMG FPGA bitfile does not implement UTIL PE */
+	pfe.util_pe_count = 0U;	/* Current FPGA bitfile does not implement UTIL PE */
 #endif
 	pfe.tmu_pe_count = 0U;
 

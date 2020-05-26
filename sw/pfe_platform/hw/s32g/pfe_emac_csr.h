@@ -33,7 +33,7 @@
  * @{
  *
  * @file		s32g/pfe_emac_csr.h
- * @brief		The EMAC module registers definition file (s32g)(Synopsys EQoS).
+ * @brief		The EMAC module registers definition file (s32g).
  * @details
  *
  */
@@ -48,37 +48,6 @@
 /**
  * @def		EMAC_PFE_VARIANT
  * @brief	Specify if the MAC is the PFE or full GMAC variant.
- *
- * 			In PFE variant some functionality is not available and some differs
- * 			from the full GMAC implementation. For PFE variant following parameters
- * 			apply:
- *
- * 			- Number of RX and TX queues			: 1/1
- * 			- Checksum verification/generation		: Enabled
- * 			- Exact match MAC addresses				: 8
- * 			- MAC address hash table				: 64 entries
- * 			- VLAN hash table						: Disabled
- * 			- Extended RX VLAN filter				: Enabled
- * 			- Number of perfect VLAN tag filters	: 4
- * 			- Queue/channel based VLAN insertion	: Disabled
- * 			- Double VLAN support					: Enabled
- * 			- L3/4 filtering & flexible parser		: Disabled
- * 			- Split header							: Disabled
- * 			- Data Center Bridging					: Disabled
- * 			- Audio Video Bridging					: Disabled
- * 			- Time based scheduling					: Disabled
- * 			- ARP offload							: Disabled
- * 			- TSN 802.1Qbv time aware shaper		: Disabled
- * 			- TSN 802.1Qbu frame pre-emption		: Disabled
- * 			- Multicast packet duplication			: Disabled
- * 			- IEE 1588/802.1AS timestamping			: Enabled
- * 			- IEEE 1588 system time source			: External or internal
- * 			- One and two step timestamping			: Enabled
- * 			- 1588 auxiliary snapshot				: Disabled
- * 			- PPS output							: Enabled (1 output)
- * 			- Power management						: TBD
- * 			- MAC management (RMON) counters		: Enabled
- * 			- RMON checksum counters				: Enabled
  */
 #define EMAC_PFE_VARIANT
 

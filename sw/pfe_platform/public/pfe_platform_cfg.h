@@ -88,7 +88,6 @@
 
 /**
  * @brief	The CLASS_PE_SYS_CLK_RATIO[csr_clmode]
- * @details	See the IMG-NPU Technical Reference Manual
  */
 #define PFE_CFG_CLMODE						1U	/* SYS/AXI = 250MHz, HFE = 500MHz */
 
