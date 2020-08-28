@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,33 +28,16 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- *
- * @defgroup    dxgr_PFE_L2BR_TABLE L2 Bridge Table
- * @brief		The L2 Bridge Table
- * @details     This is the software representation of L2 Bridge Table.
- *
- * @addtogroup  dxgr_PFE_L2BR_TABLE
- * @{
- *
- * @file		pfe_l2br_table.h
- * @brief		The L2 Bridge Table module header file.
- * @details		This file contains L2 Bridge tables-related API.
- *
- */
-
 #ifndef PUBLIC_PFE_L2BR_TABLE_H_
 #define PUBLIC_PFE_L2BR_TABLE_H_
 
-#include "pfe_phy_if.h" /* pfe_interface_t */
+#include "pfe_phy_if.h"
 
 typedef enum
 {
 	PFE_L2BR_TABLE_INVALID,
-	PFE_L2BR_TABLE_MAC2F,		/*	2-field MAC table (MAC+VLAN) */
-	PFE_L2BR_TABLE_VLAN			/*	VLAN table */
+	PFE_L2BR_TABLE_MAC2F,
+	PFE_L2BR_TABLE_VLAN
 } pfe_l2br_table_type_t;
 
 /**
@@ -90,6 +73,3 @@ bool_t pfe_l2br_table_entry_is_static(pfe_l2br_table_entry_t *entry) __attribute
 uint32_t pfe_l2br_table_entry_to_str(pfe_l2br_table_entry_t *entry, char_t *buf, uint32_t buf_len);
 
 #endif /* PUBLIC_PFE_L2BR_TABLE_H_ */
-
-/** @}*/
-/** @}*/

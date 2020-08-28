@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_TMU
- * @{
- * 
- * @file		pfe_tmu_csr.h
- * @brief		The TMU LITE module registers definition file (s32g).
- * @details		Applicable for IP versions listed below.
- *
- */
-
 #ifndef _TMU_CSR_H_
 #define _TMU_CSR_H_
 
@@ -47,7 +37,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
@@ -203,7 +192,6 @@
 #define TLITE_PHYn_SHPm_MIN_CREDIT(n, m)	(TLITE_PHYn_SHPm_BASE_ADDR(n, m) + TMU_SHP_MIN_CREDIT)
 #define TLITE_PHYn_SHPm_STATUS(n, m)		(TLITE_PHYn_SHPm_BASE_ADDR(n, m) + TMU_SHP_STATUS)
 
-/*	TMU/TLITE Scheduler */
 #define TMU_SCH_CTRL			(0x00U)
 #define TMU_SCH_Q0_WGHT			(0x20U)
 #define TMU_SCH_Q1_WGHT			(0x24U)
@@ -219,19 +207,15 @@
 #define TMU_SCH_Q_ALLOCn(n)		(TMU_SCH_Q_ALLOC0 + ((n) * 4U))
 #define TMU_SCH_BIT_RATE		(0x48U)
 #define TMU_SCH_POS				(0x54U)
-
-/*	TMU/TLITE Shaper */
 #define TMU_SHP_CTRL			(0x00U)
 #define TMU_SHP_WGHT			(0x04U)
 #define TMU_SHP_MAX_CREDIT		(0x08U)
 #define TMU_SHP_CTRL2			(0x0cU)
 #define TMU_SHP_MIN_CREDIT		(0x10U)
 #define TMU_SHP_STATUS			(0x14U)
-
-/*	Properties */
-#define TLITE_PHYS_CNT			5U	/*	Number of PHYs */
-#define TLITE_PHY_QUEUES_CNT	8U	/*	Number of queues per PHY */
-#define TLITE_SCH_INPUTS_CNT	8U	/*	Number of inputs per scheduler */
+#define TLITE_PHYS_CNT			5U
+#define TLITE_PHY_QUEUES_CNT	8U
+#define TLITE_SCH_INPUTS_CNT	8U
 
 errno_t pfe_tmu_q_cfg_get_fill_level(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *level);
 errno_t pfe_tmu_q_cfg_get_drop_count(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
@@ -264,5 +248,3 @@ void pfe_tmu_cfg_send_pkt(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t qu
 uint32_t pfe_tmu_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
 #endif /* _TMU_CSR_H_ */
-
-/** @}*/

@@ -103,8 +103,11 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 
 	ADD_DEBUGFS_ENTRY("class", class, priv->dbgfs, priv->pfe->classifier, &dsav);
 	ADD_DEBUGFS_ENTRY("hif", hif, priv->dbgfs, priv->pfe->hif, &dsav);
-	ADD_DEBUGFS_ENTRY("bmu", bmu, priv->dbgfs, priv->pfe->bmu, &dsav);
-	ADD_DEBUGFS_ENTRY("gpi", gpi, priv->dbgfs, priv->pfe->gpi, &dsav);
+	ADD_DEBUGFS_ENTRY("bmu1", bmu, priv->dbgfs, priv->pfe->bmu[0], &dsav);
+	ADD_DEBUGFS_ENTRY("bmu2", bmu, priv->dbgfs, priv->pfe->bmu[1], &dsav);
+	ADD_DEBUGFS_ENTRY("egpi1", gpi, priv->dbgfs, priv->pfe->gpi[0], &dsav);
+	ADD_DEBUGFS_ENTRY("egpi2", gpi, priv->dbgfs, priv->pfe->gpi[1], &dsav);
+	ADD_DEBUGFS_ENTRY("egpi3", gpi, priv->dbgfs, priv->pfe->gpi[2], &dsav);
 	ADD_DEBUGFS_ENTRY("tmu", tmu, priv->dbgfs, priv->pfe->tmu, &dsav);
 	ADD_DEBUGFS_ENTRY("util", util, priv->dbgfs, priv->pfe->util, &dsav);
 	ADD_DEBUGFS_ENTRY("emac0", emac, priv->dbgfs, priv->pfe->emac[0], &dsav);

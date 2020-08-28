@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,28 +28,11 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- *
- * @defgroup    dxgr_PFE_L2BR_TABLE L2 Bridge Table
- * @brief		The L2 Bridge Table
- * @details     This is the software representation of L2 Bridge Table.
- *
- * @addtogroup  dxgr_PFE_L2BR
- * @{
- *
- * @file		pfe_l2br.h
- * @brief		The L2 Bridge module header file.
- * @details		This file contains L2 Bridge-related API.
- *
- */
-
 #ifndef PUBLIC_PFE_L2BR_H_
 #define PUBLIC_PFE_L2BR_H_
 
-#include "pfe_log_if.h" /* pfe_log_if_t */
-#include "pfe_l2br_table.h" /* pfe_ct_l2br_action_t */
+#include "pfe_log_if.h"
+#include "pfe_l2br_table.h"
 
 typedef struct __pfe_l2br_tag pfe_l2br_t;
 typedef struct __pfe_l2br_domain_tag pfe_l2br_domain_t;
@@ -97,7 +80,3 @@ uint32_t pfe_l2br_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t 
 
 
 #endif /* PUBLIC_PFE_L2BR_H_ */
-
-
-/** @}*/
-/** @}*/

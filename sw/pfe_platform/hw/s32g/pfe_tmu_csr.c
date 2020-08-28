@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_TMU
- * @{
- *
- * @file		pfe_tmu_csr.c
- * @brief		The TMU module low-level API (s32g).
- * @details		Applicable for IP versions listed below.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -49,7 +39,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
@@ -60,29 +49,12 @@ static const pfe_ct_phy_if_id_t phys[] =
     PFE_PHY_IF_ID_EMAC1,
     PFE_PHY_IF_ID_EMAC2,
     PFE_PHY_IF_ID_HIF_NOCPY,
-    PFE_PHY_IF_ID_HIF
+    PFE_PHY_IF_ID_HIF,
+    PFE_PHY_IF_ID_UTIL
 };
 
 static errno_t pfe_tmu_cntx_mem_write(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t loc, uint32_t data);
 static errno_t pfe_tmu_cntx_mem_read(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t loc, uint32_t *data);
-
-#if 0
-static inline void dump_regs(void *base_va, uint32_t phy, uint32_t queue)
-{
-	uint32_t reg;
-
-	hal_write32(((phy & 0x1fU) << 8) | (queue & 0x7U), base_va + TMU_PHY_QUEUE_SEL);
-
-	reg = hal_read32(base_va + TMU_CURQ_PTR);
-	NXP_LOG_INFO("[PHY:%02d][Q:%02d][TMU_CURQ_PTR]      : 0x%08x\n", phy, queue, reg);
-	reg = hal_read32(base_va + TMU_CURQ_PKT_CNT);
-	NXP_LOG_INFO("[PHY:%02d][Q:%02d][TMU_CURQ_PKT_CNT]  : 0x%08x\n", phy, queue, reg);
-	reg = hal_read32(base_va + TMU_CURQ_DROP_CNT);
-	NXP_LOG_INFO("[PHY:%02d][Q:%02d][TMU_CURQ_DROP_CNT] : 0x%08x\n", phy, queue, reg);
-	reg = hal_read32(base_va + TMU_CURQ_TRANS_CNT);
-	NXP_LOG_INFO("[PHY:%02d][Q:%02d][TMU_CURQ_TRANS_CNT]: 0x%08x\n", phy, queue, reg);
-}
-#endif /* 0 */
 
 /**
  * @brief		Initialize and configure the TMU
@@ -96,26 +68,30 @@ errno_t pfe_tmu_cfg_init(void *cbus_base_va, pfe_tmu_cfg_t *cfg)
 	errno_t ret;
 
 	(void)cfg;
-	/*	TDQ CTRL: Disable all schedulers/shapers */
-	hal_write32(0x0U, cbus_base_va + TMU_PHY0_TDQ_CTRL);	/* EMAC0 */
-	hal_write32(0x0U, cbus_base_va + TMU_PHY1_TDQ_CTRL);	/* EMAC1 */
-	hal_write32(0x0U, cbus_base_va + TMU_PHY2_TDQ_CTRL);	/* EMAC2 */
-	hal_write32(0x0U, cbus_base_va + TMU_PHY3_TDQ_CTRL);	/* HIF */
+
+	hal_write32(0x0U, cbus_base_va + TMU_PHY0_TDQ_CTRL);
+	hal_write32(0x0U, cbus_base_va + TMU_PHY1_TDQ_CTRL);
+	hal_write32(0x0U, cbus_base_va + TMU_PHY2_TDQ_CTRL);
+	hal_write32(0x0U, cbus_base_va + TMU_PHY3_TDQ_CTRL);
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	hal_write32(0x0U, cbus_base_va + TMU_PHY4_TDQ_CTRL);	/* HIF NOCPY */
+	hal_write32(0x0U, cbus_base_va + TMU_PHY4_TDQ_CTRL);
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
+	hal_write32(0x0U, cbus_base_va + TMU_PHY5_TDQ_CTRL);	/* UTIL PE */
 
 	/*	Reset */
 	pfe_tmu_cfg_reset(cbus_base_va);
 
 	/*	INQ */
-	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_EGPI1_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY0_INQ_ADDR); /* EGPI1 */
-	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_EGPI2_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY1_INQ_ADDR); /* EGPI2 */
-	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_EGPI3_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY2_INQ_ADDR); /* EGPI3 */
-	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_HGPI_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY3_INQ_ADDR); /* HGPI */
+	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_EGPI1_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY0_INQ_ADDR);
+	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_EGPI2_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY1_INQ_ADDR);
+	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_EGPI3_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY2_INQ_ADDR);
+	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_HGPI_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY16_INQ_ADDR);
+	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_HGPI_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY3_INQ_ADDR);
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_HIF_NOCPY_BASE_ADDR + HIF_NOCPY_RX_INQ0_PKTPTR, cbus_base_va + TMU_PHY4_INQ_ADDR); /* HIF_NOCPY */
+	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_HIF_NOCPY_BASE_ADDR + HIF_NOCPY_RX_INQ0_PKTPTR, cbus_base_va + TMU_PHY4_INQ_ADDR);
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
+    /* The macro UTIL_INQ_PKTPTR already contains the CBUS_UTIL_CSR_BASE_ADDR (difference to above lines) */
+    hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + UTIL_INQ_PKTPTR, cbus_base_va + TMU_PHY5_INQ_ADDR); /* UTIL */
 
 	/*	Context memory initialization */
 	for (ii=0U; ii < (sizeof(phys) / sizeof(pfe_ct_phy_if_id_t)); ii++)
@@ -123,10 +99,7 @@ errno_t pfe_tmu_cfg_init(void *cbus_base_va, pfe_tmu_cfg_t *cfg)
 		/*	Initialize queues */
 		for (queue=0U; queue<TLITE_PHY_QUEUES_CNT; queue++)
 		{
-			/*	Set direct context memory access */
 			hal_write32(0x1U, cbus_base_va + TMU_CNTX_ACCESS_CTRL);
-
-			/*	Select PHY and QUEUE */
 			hal_write32((((uint32_t)phys[ii] & 0x1fU) << 8) | (queue & 0x7U), cbus_base_va + TMU_PHY_QUEUE_SEL);
 			hal_nop();
 
@@ -192,24 +165,19 @@ errno_t pfe_tmu_cfg_init(void *cbus_base_va, pfe_tmu_cfg_t *cfg)
 		}
 	}
 
-	/*	BMU1 */
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_BMU1_BASE_ADDR + BMU_FREE_CTRL, cbus_base_va + TMU_BMU_INQ_ADDR);
-
-	/*	BMU2 */
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_BMU2_BASE_ADDR + BMU_FREE_CTRL, cbus_base_va + TMU_BMU2_INQ_ADDR);
-
-	/*	Thresholds */
 	hal_write32(0x100U, cbus_base_va + TMU_AFULL_THRES);
 	hal_write32(0xfcU, cbus_base_va + TMU_INQ_WATERMARK);
-
-	/*	TDQ CTRL */
-	hal_write32(0xfU, cbus_base_va + TMU_PHY0_TDQ_CTRL);	/* EMAC0 */
-	hal_write32(0xfU, cbus_base_va + TMU_PHY1_TDQ_CTRL);	/* EMAC1 */
-	hal_write32(0xfU, cbus_base_va + TMU_PHY2_TDQ_CTRL);	/* EMAC2 */
-	hal_write32(0xfU, cbus_base_va + TMU_PHY3_TDQ_CTRL);	/* HIF */
+	hal_write32(0xfU, cbus_base_va + TMU_PHY0_TDQ_CTRL);
+	hal_write32(0xfU, cbus_base_va + TMU_PHY1_TDQ_CTRL);
+	hal_write32(0xfU, cbus_base_va + TMU_PHY2_TDQ_CTRL);
+	hal_write32(0xfU, cbus_base_va + TMU_PHY16_TDQ_CTRL);
+	hal_write32(0xfU, cbus_base_va + TMU_PHY3_TDQ_CTRL);
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	hal_write32(0xfU, cbus_base_va + TMU_PHY4_TDQ_CTRL);	/* HIF NOCPY */
+	hal_write32(0xfU, cbus_base_va + TMU_PHY4_TDQ_CTRL);
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
+    hal_write32(0xfU, cbus_base_va + TMU_PHY5_TDQ_CTRL);	/* UTIL */
 
 	return EOK;
 }
@@ -268,12 +236,7 @@ void pfe_tmu_cfg_disable(void *cbus_base_va)
  */
 void pfe_tmu_cfg_send_pkt(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, void *buf_pa, uint16_t len)
 {
-	/*	TODO: Seems that these two registers are swapped - we're writing packet pointer to PKTINFO and info into PKTPTR */
-
-	/*	Write buffer address */
 	hal_write32((uint32_t)((addr_t)PFE_CFG_MEMORY_PHYS_TO_PFE(buf_pa) & 0xffffffffU), cbus_base_va + TMU_PHY_INQ_PKTPTR);
-
-	/*	Write packet info */
 	hal_write32(((uint32_t)phy << 24) | (queue << 16) | len, cbus_base_va + TMU_PHY_INQ_PKTINFO);
 }
 
@@ -281,7 +244,7 @@ void pfe_tmu_cfg_send_pkt(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t qu
  * @brief		Write TMU context memory
  * @param[in]	cbus_base_va The cbus base address
  * @param[in]	phy The physical interface
- * @param[in]	loc Location to be written (0-63)
+ * @param[in]	loc Location to be written
  * @param[out]	data Data to be written
  * @return		EOK if success, error code otherwise
  */
@@ -290,12 +253,6 @@ static errno_t pfe_tmu_cntx_mem_write(void *cbus_base_va, pfe_ct_phy_if_id_t phy
 	uint32_t reg;
 	uint32_t timeout = 20U;
 
-	if (loc > 63U)
-	{
-		return EINVAL;
-	}
-
-	/*	Set indirect access to context memory */
 	hal_write32(0U, cbus_base_va + TMU_CNTX_ACCESS_CTRL);
 
 	switch (phy)
@@ -304,6 +261,7 @@ static errno_t pfe_tmu_cntx_mem_write(void *cbus_base_va, pfe_ct_phy_if_id_t phy
 		case PFE_PHY_IF_ID_EMAC1:
 		case PFE_PHY_IF_ID_EMAC2:
 		case PFE_PHY_IF_ID_HIF_NOCPY:
+        case PFE_PHY_IF_ID_UTIL:
 		{
 			break;
 		}
@@ -322,16 +280,10 @@ static errno_t pfe_tmu_cntx_mem_write(void *cbus_base_va, pfe_ct_phy_if_id_t phy
 		}
 	}
 
-	/*	Set context memory address (phy+location) */
 	hal_write32(((phy & 0x1fU) << 16) | loc, cbus_base_va + TMU_CNTX_ADDR);
-
-	/*	Prepare the data */
 	hal_write32(data, cbus_base_va + TMU_CNTX_DATA);
-
-	/*	Issue the WRITE command */
 	hal_write32(0x3U, cbus_base_va + TMU_CNTX_CMD);
 
-	/*	Wait until command has been finished */
 	do
 	{
 		oal_time_usleep(10U);
@@ -351,7 +303,7 @@ static errno_t pfe_tmu_cntx_mem_write(void *cbus_base_va, pfe_ct_phy_if_id_t phy
  * @brief		Read TMU context memory
  * @param[in]	cbus_base_va The cbus base address
  * @param[in]	phy The physical interface
- * @param[in]	loc Location to be read (0-63)
+ * @param[in]	loc Location to be read
  * @param[out]	data Pointer to memory where read data shall be written
  * @return		EOK if success, error code otherwise
  */
@@ -360,12 +312,6 @@ static errno_t pfe_tmu_cntx_mem_read(void *cbus_base_va, pfe_ct_phy_if_id_t phy,
 	uint32_t reg;
 	uint32_t timeout = 20U;
 
-	if (loc > 63U)
-	{
-		return EINVAL;
-	}
-
-	/*	Set indirect access to context memory */
 	hal_write32(0U, cbus_base_va + TMU_CNTX_ACCESS_CTRL);
 
 	switch (phy)
@@ -374,6 +320,7 @@ static errno_t pfe_tmu_cntx_mem_read(void *cbus_base_va, pfe_ct_phy_if_id_t phy,
 		case PFE_PHY_IF_ID_EMAC1:
 		case PFE_PHY_IF_ID_EMAC2:
 		case PFE_PHY_IF_ID_HIF_NOCPY:
+        case PFE_PHY_IF_ID_UTIL:
 		{
 			break;
 		}
@@ -392,13 +339,9 @@ static errno_t pfe_tmu_cntx_mem_read(void *cbus_base_va, pfe_ct_phy_if_id_t phy,
 		}
 	}
 
-	/*	Set context memory address (phy+location) */
 	hal_write32(((phy & 0x1fU) << 16) | loc, cbus_base_va + TMU_CNTX_ADDR);
-
-	/*	Issue the READ command */
 	hal_write32(0x2U, cbus_base_va + TMU_CNTX_CMD);
 
-	/*	Wait until command has been finished */
 	do
 	{
 		oal_time_usleep(10U);
@@ -467,12 +410,10 @@ errno_t pfe_tmu_q_cfg_get_tx_count(void *cbus_base_va, pfe_ct_phy_if_id_t phy, u
  */
 errno_t pfe_tmu_q_mode_set_default(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue)
 {
-	/*	Enable LLM (?) in TEQ (TLITE Enqueue) and drop packets if LLM becomes full (bit 1). If
-		bit 1 is zero then in case when LLM is full the TMU will wait. */
+	/*	If bit 1 is zero then in case when LLM is full the TMU will wait. */
 	hal_write32(0x0U | (0x0U << 1), cbus_base_va + TMU_TEQ_CTRL);
 
-	/*	Put the queue to default mode: no taildrop, no wred. TEQ configuration will be used
-	 	to treat the LLM overflow  */
+	/*	Put the queue to default mode */
 	/*	curQ_Qmax[8:0], curQ_Qmin[8:0], curQ_cfg[1:0] are @ position 4 per queue */
 	return pfe_tmu_cntx_mem_write(cbus_base_va, phy, (8U * queue) + 4U, 0U);
 }
@@ -490,9 +431,7 @@ errno_t pfe_tmu_q_mode_set_tail_drop(void *cbus_base_va, pfe_ct_phy_if_id_t phy,
 {
 	uint32_t reg;
 
-	/*	TODO: 	PFE documentation says that it should be 0x1ff but it does not work. Experiments
-				show that maximum queue fill level (curQ_pkt_cnt) for HIF is 256. */
-	if (max > 0xffU /*0x1ff*/)
+	if (max > 0xffU)
 	{
 		return EINVAL;
 	}
@@ -755,19 +694,6 @@ errno_t pfe_tmu_shp_cfg_enable(void *cbus_base_va, void *shp_base_va, pfe_tmu_ra
 	sys_clk_hz = (reg & 0xffffU) * 1000000U;
 	NXP_LOG_INFO("TMU: Using PFE sys_clk value %dHz\n", sys_clk_hz);
 
-	/*	Get weight
-
-		 	TRM 2.17:
-		 		wgt = (idlesloperate(Mbps) * clkdiv * (2^(fracwgt_width)/ 8)) / sysclk_Mhz;
-
-		 	RTL:
-		 		- weight integer : 8-bits
-		 		- weight fraction: 12-bits
-
-			TODO:
-		 		- where is send slope (idle_slope - port_tx_rate)?
-		 		- how the shaper knows send slope without possibility to configure TX rate?
-	*/
 	if (RATE_MODE_DATA_RATE == mode)
 	{
 		wgt = (isl * clk_div * (2U << 12)) / (8U * sys_clk_hz); /* [bytes] */

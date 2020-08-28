@@ -28,23 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- * 
- * @defgroup    dxgr_PFE_HIF HIF
- * @brief		The Host Interface
- * @details     This is the software representation of the HIF block.
- * 
- * @addtogroup  dxgr_PFE_HIF
- * @{
- * 
- * @file		pfe_hif.h
- * @brief		The HIF module header file.
- * @details		This file contains HIF-related API.
- *
- */
-
 #ifndef PUBLIC_PFE_HIF_H_
 #define PUBLIC_PFE_HIF_H_
 
@@ -100,6 +83,3 @@ uint32_t pfe_hif_get_text_statistics(pfe_hif_t *hif, char_t *buf, uint32_t buf_l
 #endif /* PFE_CFG_PFE_MASTER */
 
 #endif /* PUBLIC_PFE_HIF_H_ */
-
-/** @}*/
-/** @}*/

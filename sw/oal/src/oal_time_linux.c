@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -50,10 +50,10 @@
 
 void oal_time_usleep(uint32_t usec)
 {
-	if(usec < 10U)
+	if(usec <= 10U)
 		/* less then 10 usec = use udelay (busywait!) */
 		udelay(usec);
-	else if(usec < (10U * MSEC))
+	else if(usec <= (10U * MSEC))
 		usleep_range(usec < 100U ? 0U : (usec - 100U), usec + 50U);
 	else
 		/* more then 10ms = use msleep_int */

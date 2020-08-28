@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2019 NXP
+ *  Copyright 2017-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -37,6 +37,7 @@
 #include "pfe_l2br.h" /* pfe_l2br_t */
 #include "pfe_class.h" /* pfe_class_t */
 #include "pfe_if_db.h"
+#include "fci_msg.h"
 
 
 /**
@@ -59,5 +60,6 @@ typedef struct __fci_tag fci_t;
 
 errno_t fci_init(fci_init_info_t *info, const char_t *const identifier);
 void fci_fini(void);
+errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep);
 
 #endif /* _FCI_H_ */

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_SAFETY
- * @{
- *
- * @file		pfe_safety_csr.h
- * @brief		The safety module registers definition file (s32g).
- * @details
- *
- */
-
 #ifndef PFE_SAFETY_CSR_H_
 #define PFE_SAFETY_CSR_H_
 
@@ -49,5 +39,3 @@ void pfe_safety_cfg_irq_unmask(void *base_va);
 void pfe_safety_cfg_irq_unmask_all(void *base_va);
 
 #endif /* PFE_SAFETY_CSR_H_ */
-
-/** @}*/

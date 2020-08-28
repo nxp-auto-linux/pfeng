@@ -28,29 +28,11 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- *
- * @defgroup    dxgr_PFE_PE PE
- * @brief		The Processing Engine
- * @details     This is the software representation of the PE block.
- *
- * @addtogroup  dxgr_PFE_HIF
- * @{
- *
- * @file		pfe_pe.h
- * @brief		The PE module header file.
- * @details		This file contains PE-related API.
- *
- */
-
 #ifndef PFE_PE_H_
 #define PFE_PE_H_
 
-#include "pfe_ct.h" /* fw/host shared types */
+#include "pfe_ct.h"
 
-/*	Processing engine type */
 typedef enum
 {
 	PE_TYPE_INVALID,
@@ -60,7 +42,6 @@ typedef enum
 	PE_TYPE_MAX
 } pfe_pe_type_t;
 
-/*	Processing Engine representation */
 typedef struct __pfe_pe_tag pfe_pe_t;
 
 pfe_pe_t * pfe_pe_create(void *cbus_base_va, pfe_pe_type_t type, uint8_t id);
@@ -73,6 +54,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf);
 errno_t pfe_pe_get_mmap(pfe_pe_t *pe, pfe_ct_pe_mmap_t *mmap);
 void pfe_pe_memcpy_from_host_to_dmem_32(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len);
 void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst, addr_t src, uint32_t len);
+errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_count, void *dst, addr_t src, uint32_t buffer_len, uint32_t read_len);
 void pfe_pe_memcpy_from_imem_to_host_32(pfe_pe_t *pe, void *dst, addr_t src, uint32_t len);
 void pfe_pe_dmem_memset(pfe_pe_t *pe, uint8_t val, addr_t addr, uint32_t len);
 void pfe_pe_imem_memset(pfe_pe_t *pe, uint8_t val, addr_t addr, uint32_t len);
@@ -84,9 +66,8 @@ uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len,
 void pfe_pe_destroy(pfe_pe_t *pe);
 errno_t pfe_pe_check_mmap(pfe_pe_t *pe);
 errno_t pfe_pe_get_fw_errors(pfe_pe_t *pe);
+errno_t pfe_pe_get_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf);
+errno_t pfe_pe_put_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf);
 errno_t pfe_pe_mem_lock(pfe_pe_t *pe);
 errno_t pfe_pe_mem_unlock(pfe_pe_t *pe);
 #endif /* PFE_PE_H_ */
-
-/** @}*/
-/** @}*/

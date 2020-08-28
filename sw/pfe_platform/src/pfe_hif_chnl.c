@@ -29,9 +29,6 @@
  * ========================================================================= */
 
 /**
- * @addtogroup  dxgr_PFE_HIF_CHNL
- * @{
- *
  * @file		pfe_hif_chnl.c
  * @brief		The HIF channel module source file.
  * @details		This file contains HIF channel-related functionality abstracted using
@@ -2044,9 +2041,7 @@ __attribute__((hot)) bool_t pfe_hif_chnl_is_tx_dma_active(pfe_hif_chnl_t *chnl)
  * 				causes memory corruption when channel driver is stopped and then
  * 				started with other BD rings because HIF is missing possibility
  * 				to reset particular channels separately without affecting the
- * 				other channels. This is wrong IP design. This function is workaround
- * 				for that and ensures that channel is properly finalized in terms
- * 				of flushing the internal BD buffer.
+ * 				other channels.
  * @param[in]	chnl The channel instance
  * @return		EOK if success, error code otherwise
  */
@@ -2198,6 +2193,7 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 	if (NULL != chnl)
 	{
 		/*	Disable channel interrupts */
+		pfe_hif_chnl_irq_mask(chnl);
 		pfe_hif_chnl_rx_irq_mask(chnl);
 		pfe_hif_chnl_tx_irq_mask(chnl);
 
@@ -2466,5 +2462,3 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_get_text_statistics(pfe_hif_chnl_t *
 
 	return len;
 }
-
-/** @}*/

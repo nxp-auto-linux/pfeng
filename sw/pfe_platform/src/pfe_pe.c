@@ -28,18 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_PE
- * @{
- *
- * @file		pfe_pe.c
- * @brief		The PE module source file.
- * @details		This file contains PE-related functionality:
- * 				- Firmware loading
- * 				- Internal memories access
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -54,10 +42,6 @@
 
 /**
  * @brief	Mutex protecting access to common mem_access_* registers
- * @details	PE instances are accessing the internal PFE memory via indirect
- * 			access registers. Since there is only a single set of this registers
- * 			they must be protected from accessing from multiple PE instances
- * 			at a time.
  */
 static oal_mutex_t mem_access_lock;
 static bool_t mem_access_lock_init = FALSE;
@@ -100,7 +84,7 @@ struct __pfe_pe_tag
 	/*	MMap */
 	pfe_ct_pe_mmap_t *mmap_data;		/* Buffer containing the memory map data */
 	/* Mutex */
-	oal_mutex_t lock_mutex;				/* Locking PE  API mutex */
+	oal_mutex_t lock_mutex;				/* Locking PE API mutex */
 };
 
 typedef enum
@@ -145,7 +129,7 @@ static bool_t pfe_pe_is_active(pfe_pe_t *pe)
 		return FALSE;
 	}
 	/* PFE_FW_STATE_INIT == state_monitor.state is considered as running because
-	   the transition to ne next state is short */
+	   the transition to next state is short */
 
 	return TRUE;
 }
@@ -161,7 +145,7 @@ errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 {
 	PFE_PTR(pfe_ct_pe_misc_control_t) misc_dmem;
 	pfe_ct_pe_misc_control_t misc_ctrl = {0};
-	uint32_t timeout_ms = 10;
+	uint32_t timeout = 10;
 
 	if (NULL == pe->mmap_data)
 	{
@@ -223,7 +207,7 @@ errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 	/*	Wait for response */
 	do
 	{
-		if (0U == timeout_ms)
+		if (0U == timeout)
 		{
 			NXP_LOG_ERROR("Timed-out\n");
 
@@ -239,8 +223,8 @@ errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 			return ETIME;
 		}
 
-		oal_time_usleep(1000U);
-		timeout_ms--;
+		oal_time_usleep(10U);
+		timeout--;
 		pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
 
 	} while(0U == misc_ctrl.graceful_stop_confirmation);
@@ -292,12 +276,11 @@ errno_t pfe_pe_mem_unlock(pfe_pe_t *pe)
 
 /**
  * @brief		Read data from PE memory
- * @details		Reads PE internal memory from the host through indirect access registers.
  * @param[in]	pe The PE instance
  * @param[in]	mem Memory to access
- * @param[in]	addr Read address (physical within PE memory space, for better performance should be aligned to 32-bits)
+ * @param[in]	addr Read address (should be aligned to 32 bits)
  * @param[in]	size Number of bytes to read (maximum 4)
- * @return		The data read (in PE endianess, i.e BE).
+ * @return		The data read (BE).
  */
 static uint32_t pfe_pe_mem_read(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t addr, uint8_t size)
 {
@@ -351,18 +334,17 @@ static uint32_t pfe_pe_mem_read(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t addr, uin
 		memsel = PE_IBUS_ACCESS_IMEM;
 	}
 
-	addr = (addr & 0xfffffU)				/* Address (low 20bits) */
-				| PE_IBUS_READ				/* Direction (r/w) */
-				| memsel					/* Memory selector */
-				| PE_IBUS_PE_ID(pe->id)		/* PE instance */
-				| PE_IBUS_WREN(0U);			/* Byte(s) selector, unused for read operations */
+	addr = (addr & 0xfffffU)
+				| PE_IBUS_READ
+				| memsel
+				| PE_IBUS_PE_ID(pe->id)
+				| PE_IBUS_WREN(0U);
 
 	if (EOK != oal_mutex_lock(&mem_access_lock))
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-	/*	Indirect access interface is byte swapping data being read */
 	hal_write32((uint32_t)addr, pe->mem_access_addr);
 	val = oal_ntohl(hal_read32(pe->mem_access_rdata));
 
@@ -382,34 +364,14 @@ static uint32_t pfe_pe_mem_read(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t addr, uin
 
 /**
  * @brief		Write data into PE memory
- * @details		Writes PE internal memory from the host through indirect access registers.
  * @param[in]	pe The PE instance
  * @param[in]	mem Memory to access
- * @param[in]	addr Write address (physical within PE memory space, for better performance should be aligned to 32-bits)
- * @param[in]	val Value to write (in PE endianess, i.e BE)
+ * @param[in]	addr Write address (should be aligned to 32 bits)
+ * @param[in]	val Value to write (BE)
  * @param[in]	size Number of bytes to write (maximum 4)
  */
 static void pfe_pe_mem_write(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_t addr, uint8_t size)
 {
-	/*	The bytesel is 4-bit value representing bytes which shall be written
-		to addressed 4-byte word. It's like 'write enable' for particular bytes.
-
-		Configuration such:
-							---+----+----+----+----+---
-			WRITE DATA:		   | B3 | B2 | B1 | B0 |
-							---+----+----+----+----+---
-			SELECTOR:		     0    1    1    0
-
-		writes to PE memory only bytes marked with 1s:
-
-			ADDRESS: ----------+
-							   |
-							---+----+----+----+----+---
-			PE MEM DATA:	   | x  | B2 | B1 | x  |
-							---+----+----+----+----+---
-
-		where 'x' means no change in destination memory. See below for usage.
-	*/
 	uint8_t bytesel = 0U;
 	uint32_t memsel;
 	uint32_t offset;
@@ -464,18 +426,17 @@ static void pfe_pe_mem_write(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_
 		memsel = PE_IBUS_ACCESS_IMEM;
 	}
 
-	addr = (addr & 0xfffffU)			/* Address (low 20bits) */
-			| PE_IBUS_WRITE				/* Direction (r/w) */
-			| memsel					/* Memory selector */
-			| PE_IBUS_PE_ID(pe->id)		/* PE instance */
-			| PE_IBUS_WREN(bytesel);	/* Byte(s) selector */
+	addr = (addr & 0xfffffU)
+			| PE_IBUS_WRITE
+			| memsel
+			| PE_IBUS_PE_ID(pe->id)
+			| PE_IBUS_WREN(bytesel);
 
 	if (EOK != oal_mutex_lock(&mem_access_lock))
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-	/*	Indirect access interface is byte swapping data being written */
 	hal_write32(oal_htonl(val), pe->mem_access_wdata);
 	hal_write32((uint32_t)addr, pe->mem_access_addr);
 
@@ -569,12 +530,10 @@ void pfe_pe_imem_memset(pfe_pe_t *pe, uint8_t val, addr_t addr, uint32_t len)
 
 /**
  * @brief		Write 'len' bytes to DMEM
- * @details		Writes a buffer to PE internal data memory (DMEM) from the host
- * 				through indirect access registers.
  * @note		Function expects the source data to be in host endian format.
  * @param[in]	pe The PE instance
  * @param[in]	src Buffer source address (virtual)
- * @param[in]	dst DMEM destination address (physical within PE, must be 32bit aligned)
+ * @param[in]	dst DMEM destination address (must be 32-bit aligned)
  * @param[in]	len Number of bytes to read
  */
 static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len)
@@ -621,12 +580,10 @@ static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(pfe_pe_t *pe, addr_t dst, 
 
 /**
  * @brief		Write 'len' bytes to DMEM
- * @details		Writes a buffer to PE internal data memory (DMEM) from the host
- * 				through indirect access registers.
  * @note		Function expects the source data to be in host endian format.
  * @param[in]	pe The PE instance
  * @param[in]	src Buffer source address (virtual)
- * @param[in]	dst DMEM destination address (physical within PE, must be 32bit aligned)
+ * @param[in]	dst DMEM destination address (must be 32-bit aligned)
  * @param[in]	len Number of bytes to read
  */
 void pfe_pe_memcpy_from_host_to_dmem_32(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len)
@@ -647,10 +604,8 @@ void pfe_pe_memcpy_from_host_to_dmem_32(pfe_pe_t *pe, addr_t dst, const void *sr
 
 /**
  * @brief		Read 'len' bytes from DMEM
- * @details		Reads PE internal data memory (DMEM) into a host memory through indirect
- *				access registers.
  * @param[in]	pe The PE instance
- * @param[in]	src DMEM source address (physical within PE, must be 32bit aligned)
+ * @param[in]	src DMEM source address (must be 32-bit aligned)
  * @param[in]	dst Destination address (virtual)
  * @param[in]	len Number of bytes to read
  *
@@ -699,10 +654,8 @@ static void pfe_pe_memcpy_from_dmem_to_host_32_nolock(pfe_pe_t *pe, void *dst, a
 
 /**
  * @brief		Read 'len' bytes from DMEM
- * @details		Reads PE internal data memory (DMEM) into a host memory through indirect
- *				access registers.
  * @param[in]	pe The PE instance
- * @param[in]	src DMEM source address (physical within PE, must be 32bit aligned)
+ * @param[in]	src DMEM source address (must be 32-bit aligned)
  * @param[in]	dst Destination address (virtual)
  * @param[in]	len Number of bytes to read
  *
@@ -724,13 +677,78 @@ void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst, addr_t src, uin
 }
 
 /**
+ * @brief		Read 'len' bytes from DMEM from each PE
+ * @details		Reads PE internal data memory (DMEM) into a host memory through indirect
+ *				access registers. The result from each PE are stored consecutively in memory
+ *				pointed by dst.
+ * @param[in]	pe Array of the PE instances
+ * @param[in]	src DMEM source address (physical within PE, must be 32bit aligned)
+ * @param[in]	dst Destination address (virtual) the size required to store the data is pe_count*len
+ * @param[in]	buffer_len Destination buffer length
+ * @param[in]	read_len Number of bytes to read (from one PE)
+ *
+ */
+errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_count, void *dst, addr_t src, uint32_t buffer_len, uint32_t read_len)
+{
+	int32_t ii;
+	errno_t ret = EOK;
+	errno_t ret_store = EOK;
+
+	for(ii = 0; ii < pe_count; ii++)
+	{
+		ret = pfe_pe_mem_lock(pe[ii]);
+		if(EOK != ret)
+		{
+			NXP_LOG_DEBUG("Memory unlock failed\n");
+			/* Free all already locked PEs */
+			for(; ii >= 0; ii--)
+			{
+				pfe_pe_mem_unlock(pe[ii]);
+			}
+			return ret;
+		}
+	}
+
+	/* Perform the read from required PEs*/
+	for(ii = 0; ii < pe_count; ii++)
+	{
+		/* Check if there is still memory  */
+		if(buffer_len >= ((read_len * ii) + read_len))
+		{
+			pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe[ii], (void *)((uint8_t*)dst + (read_len * ii)), src, read_len);
+		}
+		else
+		{
+			ret = ENOMEM;
+			break;
+		}
+	}
+
+	for(ii = 0; ii < pe_count; ii++)
+	{
+		/* Backup return from mecpy */
+		ret_store = ret;
+		ret = pfe_pe_mem_unlock(pe[ii]);
+		if(EOK != ret)
+		{
+			NXP_LOG_DEBUG("Memory unlock failed\n");
+			/* Error occurred override the return from previous actions */
+			ret_store = ret;
+		}
+	}
+
+	/* Restore return to before unlock */
+	ret = ret_store;
+
+	return ret;
+}
+
+/**
  * @brief		Write 'len'bytes to IMEM
- * @details		Writes a buffer to PE internal instruction memory (IMEM) from the host
- *				through indirect access registers.
  * @note		Function expects the source data to be in host endian format.
  * @param[in]	pe The PE instance
  * @param[in]	src Buffer source address (host, virtual)
- * @param[in]	dst IMEM destination address (physical within PE, must be 32bit aligned)
+ * @param[in]	dst IMEM destination address (must be 32-bit aligned)
  * @param[in]	len Number of bytes to copy
  */
 static void pfe_pe_memcpy_from_host_to_imem_32_nolock(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len)
@@ -777,12 +795,10 @@ static void pfe_pe_memcpy_from_host_to_imem_32_nolock(pfe_pe_t *pe, addr_t dst, 
 
 /**
  * @brief		Write 'len'bytes to IMEM
- * @details		Writes a buffer to PE internal instruction memory (IMEM) from the host
- *				through indirect access registers.
  * @note		Function expects the source data to be in host endian format.
  * @param[in]	pe The PE instance
  * @param[in]	src Buffer source address (host, virtual)
- * @param[in]	dst IMEM destination address (physical within PE, must be 32bit aligned)
+ * @param[in]	dst IMEM destination address (must be 32-bit aligned)
  * @param[in]	len Number of bytes to copy
  */
 void pfe_pe_memcpy_from_host_to_imem_32(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len)
@@ -803,10 +819,8 @@ void pfe_pe_memcpy_from_host_to_imem_32(pfe_pe_t *pe, addr_t dst, const void *sr
 
 /**
  * @brief		Read 'len' bytes from IMEM
- * @details		Reads PE internal instruction memory (IMEM) into a host memory through indirect
- *				access registers.
  * @param[in]	pe The PE instance
- * @param[in]	src IMEM source address (physical within PE, must be 32bit aligned)
+ * @param[in]	src IMEM source address (physical within PE, must be 32-bit aligned)
  * @param[in]	dst Destination address (host, virtual)
  * @param[in]	len Number of bytes to read
  *
@@ -855,10 +869,8 @@ static void pfe_pe_memcpy_from_imem_to_host_32_nolock(pfe_pe_t *pe, void *dst, a
 
 /**
  * @brief		Read 'len' bytes from IMEM
- * @details		Reads PE internal instruction memory (IMEM) into a host memory through indirect
- *				access registers.
  * @param[in]	pe The PE instance
- * @param[in]	src IMEM source address (physical within PE, must be 32bit aligned)
+ * @param[in]	src IMEM source address (physical within PE, must be 32-bit aligned)
  * @param[in]	dst Destination address (host, virtual)
  * @param[in]	len Number of bytes to read
  *
@@ -926,9 +938,7 @@ static errno_t pfe_pe_load_dmem_section(pfe_pe_t *pe, void *sdata, addr_t addr, 
 			void *buf = oal_mm_malloc(size);
 #endif /* FW_WRITE_CHECK_EN */
 
-			/*	Write section data to DMEM. Convert destination address from .elf to DMEM base.
-			 	We're not stopping the PE here (memory lock) since we expect that firmware is
-			 	being uploaded while classifier is stopped. */
+			/*	Write section data */
 			pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, addr - pe->dmem_elf_base_va, sdata, size);
 
 #if defined(FW_WRITE_CHECK_EN)
@@ -1016,9 +1026,7 @@ static errno_t pfe_pe_load_imem_section(pfe_pe_t *pe, const void *data, addr_t a
 			void *buf = oal_mm_malloc(size);
 #endif /* FW_WRITE_CHECK_EN */
 
-			/*	Write section data to IMEM. Convert destination address from .elf to IMEM base.
-			 	We're not stopping the PE here (memory lock) since we expect that firmware is
-			 	being uploaded while classifier is stopped. */
+			/*	Write section data */
 			pfe_pe_memcpy_from_host_to_imem_32_nolock(pe, addr - pe->imem_elf_base_va, data, size);
 
 #if defined(FW_WRITE_CHECK_EN)
@@ -1047,11 +1055,11 @@ static errno_t pfe_pe_load_imem_section(pfe_pe_t *pe, const void *data, addr_t a
 }
 
 /**
- * @brief		Check if memory region belongs to PE's DMEM
+ * @brief		Check if memory region belongs to DMEM
  * @param[in]	pe The PE instance
- * @param[in]	addr Address (as seen by PE) to be checked
+ * @param[in]	addr Address to be checked
  * @param[in]	size Length of the region to be checked
- * @return		TRUE if given range belongs to PEs DMEM
+ * @return		TRUE if given range belongs to DMEM
  */
 static bool_t pfe_pe_is_dmem(pfe_pe_t *pe, addr_t addr, uint32_t size)
 {
@@ -1078,11 +1086,11 @@ static bool_t pfe_pe_is_dmem(pfe_pe_t *pe, addr_t addr, uint32_t size)
 }
 
 /**
- * @brief		Check if memory region belongs to PE's IMEM
+ * @brief		Check if memory region belongs to IMEM
  * @param[in]	pe The PE instance
- * @param[in]	addr Address (as seen by PE) to be checked
+ * @param[in]	addr Address to be checked
  * @param[in]	size Length of the region to be checked
- * @return		TRUE if given range belongs to PEs IMEM
+ * @return		TRUE if given range belongs to IMEM
  */
 static bool_t pfe_pe_is_imem(pfe_pe_t *pe, addr_t addr, uint32_t size)
 {
@@ -1109,11 +1117,11 @@ static bool_t pfe_pe_is_imem(pfe_pe_t *pe, addr_t addr, uint32_t size)
 }
 
 /**
- * @brief		Check if memory region belongs to PE's LMEM
+ * @brief		Check if memory region belongs to LMEM
  * @param[in]	pe The PE instance
- * @param[in]	addr Address (as seen by PE) to be checked
+ * @param[in]	addr Address to be checked
  * @param[in]	size Length of the region to be checked
- * @return		TRUE if given range belongs to PEs LMEM
+ * @return		TRUE if given range belongs to LMEM
  */
 static bool_t pfe_pe_is_lmem(pfe_pe_t *pe, addr_t addr, uint32_t size)
 {
@@ -1283,8 +1291,6 @@ pfe_pe_t * pfe_pe_create(void *cbus_base_va, pfe_pe_type_t type, uint8_t id)
 
 /**
  * @brief		Set DMEM base address for .elf mapping
- * @details		Information will be used by pfe_pe_load_firmware() to determine how and
- * 				which sections of the input .elf file will be written to DMEM.
  * @warning		Not intended to be called when PE is running
  * @param[in]	pe The PE instance
  * @param[in]	elf_base DMEM base virtual address within .elf
@@ -1302,17 +1308,11 @@ void pfe_pe_set_dmem(pfe_pe_t *pe, addr_t elf_base, addr_t len)
 
 	pe->dmem_elf_base_va = elf_base;
 	pe->dmem_size = len;
-
-	/*	Initialize DMEM including packet buffer */
-	NXP_LOG_DEBUG("PE %d: Initializing DMEM (%"PRINTADDR_T" bytes)\n", pe->id, len);
-	NXP_LOG_DEBUG("CLASS PE %d: Initializing DMEM (%"PRINTADDR_T" bytes)\n", pe->id, len);
 	pfe_pe_mem_memset_nolock(pe, PFE_PE_DMEM, 0U, 0U, len);
 }
 
 /**
  * @brief		Set IMEM base address for .elf mapping
- * @details		Information will be used by pfe_pe_load_firmware() to determine how and
- * 				which sections of the input .elf file will be written to IMEM.
  * @warning		Not intended to be called when PE is running
  * @param[in]	pe The PE instance
  * @param[in]	elf_base_va IMEM base virtual address within .elf
@@ -1330,16 +1330,11 @@ void pfe_pe_set_imem(pfe_pe_t *pe, addr_t elf_base, addr_t len)
 
 	pe->imem_elf_base_va = elf_base;
 	pe->imem_size = len;
-
-	/*	Initialize IMEM */
-	NXP_LOG_DEBUG("CLASS PE %d: Initializing IMEM (%"PRINTADDR_T" bytes)\n", pe->id, len);
 	pfe_pe_mem_memset_nolock(pe, PFE_PE_IMEM, 0U, 0U, len);
 }
 
 /**
  * @brief		Set LMEM base address
- * @details		Information will be used by pfe_pe_load_firmware() to determine how and
- * 				which sections of the input .elf file will be written to LMEM.
  * @param[in]	pe The PE instance
  * @param[in]	elf_base_va LMEM base virtual address within .elf
  * @param[in]	len LMEM memory length
@@ -1382,9 +1377,6 @@ void pfe_pe_set_ddr(pfe_pe_t *pe, void *base_pa, void *base_va, addr_t len)
 
 /**
  * @brief		Set indirect access registers
- * @details		Internal PFE memories can be accessed from host using indirect
- * 				access registers. This function sets CBUS addresses of this
- * 				registers.
  * @param[in]	pe The PE instance
  * @param[in]	wdata_reg The WDATA register address as appears on CBUS
  * @param[in]	rdata_reg The RDATA register address as appears on CBUS
@@ -1445,7 +1437,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 	uint32_t section_idx;
 	ELF_File_t *elf_file = (ELF_File_t *)elf;
 	Elf32_Shdr *shdr = NULL;
-	pfe_ct_pe_mmap_t *tmp_mmap = NULL;
+	static pfe_ct_pe_mmap_t *tmp_mmap = NULL;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == elf)))
@@ -1715,6 +1707,117 @@ errno_t pfe_pe_get_fw_errors(pfe_pe_t *pe)
 }
 
 /**
+ * @brief		Read "put" buffer
+ * @param[in]	pe The PE instance
+ * @param[out]	buf Pointer to memory where buffer shall be written
+ * @retval		EOK Success and buffer is valid
+ * @retval		EAGAIN Buffer is invalid
+ * @retval		ENOENT Buffer not found
+ */
+errno_t pfe_pe_get_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
+{
+	uint8_t flags;
+	errno_t ret = ENOENT;
+
+	if(NULL != pe->mmap_data)
+	{
+		if (0U == pe->mmap_data->put_buffer)
+		{
+			return ENOENT;
+		}
+
+		if (EOK != oal_mutex_lock(&pe->lock_mutex))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+			return EPERM;
+		}
+
+		/*	Get "put" buffer status */
+		pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &flags,
+				oal_ntohl(pe->mmap_data->put_buffer) + offsetof(pfe_ct_buffer_t, flags),
+					sizeof(uint8_t));
+
+		if (0U != flags)
+		{
+			/*	Copy buffer to local memory */
+			pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, buf, oal_ntohl(pe->mmap_data->put_buffer), sizeof(pfe_ct_buffer_t));
+
+			/*	Clear flags */
+			flags = 0U;
+			pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe,
+					oal_ntohl(pe->mmap_data->put_buffer) + offsetof(pfe_ct_buffer_t, flags),
+						&flags, sizeof(uint8_t));
+
+			ret = EOK;
+		}
+		else
+		{
+			ret = EAGAIN;
+		}
+
+		if (EOK != oal_mutex_unlock(&pe->lock_mutex))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Write "get" buffer
+ * @param[in]	pe The PE instance
+ * @param[out]	buf Pointer to data to be written
+ * @retval		EOK Success and buffer is valid
+ * @retval		EAGAIN Buffer is occupied
+ * @retval		ENOENT Buffer not found
+ */
+errno_t pfe_pe_put_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
+{
+	uint8_t flags;
+	errno_t ret = ENOENT;
+
+	if(NULL != pe->mmap_data)
+	{
+		if (0U == pe->mmap_data->get_buffer)
+		{
+			return ENOENT;
+		}
+
+		if (EOK != oal_mutex_lock(&pe->lock_mutex))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+			return EPERM;
+		}
+
+		/*	Get "get" buffer status */
+		pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &flags,
+				oal_ntohl(pe->mmap_data->get_buffer) + offsetof(pfe_ct_buffer_t, flags),
+					sizeof(uint8_t));
+
+		if (0U == flags)
+		{
+			/*	Send data to PFE */
+			buf->flags |= 1U;
+			pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe,
+					oal_ntohl(pe->mmap_data->get_buffer), buf, sizeof(pfe_ct_buffer_t));
+			ret = EOK;
+		}
+		else
+		{
+			ret = EAGAIN;
+		}
+
+		if (EOK != oal_mutex_unlock(&pe->lock_mutex))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
+	}
+
+	return ret;
+}
+
+/**
  * @brief Reads and validates PE mmap
  * @param[in] pe The PE instance
  */
@@ -1739,21 +1842,12 @@ errno_t pfe_pe_check_mmap(pfe_pe_t *pe)
 			pfe_pe_mmap.version.major,
 			pfe_pe_mmap.version.minor,
 			pfe_pe_mmap.version.patch,
-			(char_t *)pfe_pe_mmap.version.date,
-			(char_t *)pfe_pe_mmap.version.time,
+			(char_t *)pfe_pe_mmap.version.build_date,
+			(char_t *)pfe_pe_mmap.version.build_time,
 			(char_t *)pfe_pe_mmap.version.vctrl,
 			pfe_pe_mmap.version.id);
 
-	NXP_LOG_INFO("[PE %u MMAP]\n \
-			DMEM Heap Base: 0x%08x (%d bytes)\n \
-			PHY IF Base   : 0x%08x (%d bytes)\n",
-			pe->id,
-			oal_ntohl(pfe_pe_mmap.dmem_heap_base),
-			oal_ntohl(pfe_pe_mmap.dmem_heap_size),
-			oal_ntohl(pfe_pe_mmap.dmem_phy_if_base),
-			oal_ntohl(pfe_pe_mmap.dmem_phy_if_size));
 	return EOK;
-
 }
 
 /**
@@ -1957,5 +2051,3 @@ uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len,
 
 	return len;
 }
-
-/** @}*/

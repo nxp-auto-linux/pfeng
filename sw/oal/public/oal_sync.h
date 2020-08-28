@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -73,6 +73,14 @@
 #elif defined(PFE_CFG_TARGET_OS_AUTOSAR)
 #include "oal_spinlock_autosar.h"
 #include "SchM_Eth_43_PFE.h"
+
+/*
+ * BARE METAL
+ * 
+ */
+#elif defined(PFE_CFG_TARGET_OS_BARE)
+#include "oal_spinlock_bare.h"
+#include "oal_mutex_bare.h"
 
 /*
  * unknown OS

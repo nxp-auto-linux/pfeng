@@ -28,46 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_EMAC
- * @{
- * 
- * @file		pfe_emac.c
- * @brief		The EMAC module source file.
- * @details		This file contains EMAC-related functionality.
- *
- * 				EMAC configuration and control
- * 				------------------------------
- * 				Module contains API to access the EMAC and configure particular properties.
- *
- *				Address Management
- *				------------------
- *				The MAC addresses associated with an EMAC instance are organized within internal
- *				database. Each manipulation (add/delete) is done in the SW DB first and then
- *				propagated to the HW configuration. To access EMAC HW resources the HW-specific
- *				routines are called by the high level API.
- *
- *				One can assign MAC address to an EMAC using two ways:
- *
- *				1. Using so called "perfect" filtering (pfe_emac_add_addr())
- *				2. Using hash table (pfe_emac_add_addr_to_hash_group())
- *
- *				The perfect filter will ensure that the assigned MAC address will be compared with
- *				destination address of an ingress packet exactly as is. Disadvantage of this
- *				approach is limited number of perfect match entries (HW-specific parameter).
- *
- *				Hash table is not as strong as the perfect match but allows adding big amount of
- *				MAC addresses the EMAC will accept for reception. Disadvantage here are possible
- *				hash collisions and reception of frames with destination MAC address not explicitly
- *				allowed by user.
- *
- *				MDIO Access
- *				-----------
- *				Basic functions are provided to access the MDIO bus connected to particular EMAC.
- *				There are both, pfe_emac_mdio_read() and pfe_emac_mdio_write() functions.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -91,6 +51,11 @@ struct __pfe_emac_tag
 	oal_mutex_t mutex;			/*	Mutex */
 	bool_t mdio_locked;			/*	If TRUE then MDIO access is locked and 'mdio_key' is valid */
 	uint32_t mdio_key;
+	oal_mutex_t ts_mutex;		/*	Mutex protecting IEEE1588 resources */
+	uint32_t i_clk_hz;			/*	IEEE1588 input clock */
+	uint32_t o_clk_hz;			/*	IEEE1588 desired output clock */
+	uint32_t adj_ppb;			/*	IEEE1588 frequency adjustment value */
+	bool_t adj_sign;			/*	IEEE1588 frequency adjustment sign (TRUE - positive, FALSE - negative) */
 };
 
 typedef struct __pfe_mac_addr_entry_tag
@@ -459,6 +424,14 @@ pfe_emac_t *pfe_emac_create(void *cbus_base_va, void *emac_base, pfe_emac_mii_mo
 			return NULL;
 		}
 		
+		if (EOK != oal_mutex_init(&emac->ts_mutex))
+		{
+			NXP_LOG_ERROR("TS mutex init failed\n");
+			oal_mutex_destroy(&emac->mutex);
+			oal_mm_free(emac);
+			return NULL;
+		}
+
 		/*	All slots are free */
 		emac->mac_addr_slots = 0U;
 		
@@ -474,6 +447,7 @@ pfe_emac_t *pfe_emac_create(void *cbus_base_va, void *emac_base, pfe_emac_mii_mo
 			/*	Invalid configuration */
 			NXP_LOG_ERROR("Invalid configuration requested\n");
 			oal_mutex_destroy(&emac->mutex);
+			oal_mutex_destroy(&emac->ts_mutex);
 			oal_mm_free(emac);
 			emac = NULL;
 			return NULL;
@@ -484,7 +458,7 @@ pfe_emac_t *pfe_emac_create(void *cbus_base_va, void *emac_base, pfe_emac_mii_mo
 			emac->speed = speed;
 			emac->duplex = duplex;
 		}
-		
+
 		/*	Disable loop-back */
 		pfe_emac_disable_loopback(emac);
 		
@@ -532,6 +506,200 @@ void pfe_emac_disable(pfe_emac_t *emac)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pfe_emac_cfg_set_enable(emac->emac_base_va, FALSE);
+}
+
+/**
+ * @brief		Enable timestamping
+ * @param[in]	emac The EMAC instance
+ * @param[in]	i_clk_hz Input reference clock frequency (Hz) when internal timer is
+ * 					   used. The timer ticks with 1/clk_hz period. If zero then external
+ * 					   clock reference is used.
+ * @param[in]	o_clk_hz Desired output clock frequency. This one will be used to
+ * 						 increment IEEE1588 system time. Directly impacts the timer
+ * 						 accuracy and must be less than i_clk_hz. If zero then external
+ * 						 clock reference is used.
+ */
+errno_t pfe_emac_enable_ts(pfe_emac_t *emac, uint32_t i_clk_hz, uint32_t o_clk_hz)
+{
+	errno_t ret;
+	bool_t eclk = (i_clk_hz == 0U) || (o_clk_hz == 0U);
+
+	if (!eclk && (i_clk_hz <= o_clk_hz))
+	{
+		NXP_LOG_ERROR("Invalid clock configuration\n");
+		return EINVAL;
+	}
+
+	emac->i_clk_hz = i_clk_hz;
+	emac->o_clk_hz = o_clk_hz;
+
+	if (EOK != oal_mutex_lock(&emac->ts_mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	ret = pfe_emac_cfg_enable_ts(emac->emac_base_va, eclk, i_clk_hz, o_clk_hz);
+
+	if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Adjust timestamping clock frequency to compensate drift
+ * @param[in]	emac The EMAC instance
+ * @param[in]	ppb Frequency change in [ppb]
+ * @param[in]	pos The ppb sign. If TRUE then the value is positive, else it is negative
+ */
+errno_t pfe_emac_set_ts_freq_adjustment(pfe_emac_t *emac, uint32_t ppb, bool_t sgn)
+{
+	errno_t ret;
+
+	if (EOK != oal_mutex_lock(&emac->ts_mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	emac->adj_ppb = ppb;
+	emac->adj_sign = sgn;
+
+	ret = pfe_emac_cfg_adjust_ts_freq(emac->emac_base_va, emac->i_clk_hz, emac->o_clk_hz, ppb, sgn);
+
+	if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief			Get current adjustment value
+ * @param[in]		emac The EMAC instance
+ * @param[in,out]	ppb Pointer where the current adjustment value in ppb shall be written
+ * @param[in,out]	sgn Pointer where the sign flag shall be written (TRUE means that
+ * 					the 'ppb' is positive, FALSE means it is nagative)
+ * @return			EOK if success, error code otherwise
+ */
+errno_t pfe_emac_get_ts_freq_adjustment(pfe_emac_t *emac, uint32_t *ppb, bool_t *sgn)
+{
+	if ((NULL == ppb) || (NULL == sgn))
+	{
+		return EINVAL;
+	}
+	else
+	{
+		if (EOK != oal_mutex_lock(&emac->ts_mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		*ppb = emac->adj_ppb;
+		*sgn = emac->adj_sign;
+
+		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		return EOK;
+	}
+}
+
+/**
+ * @brief			Get current time
+ * @param[in]		emac THe EMAC instance
+ * @param[in,out]	sec Pointer where seconds value shall be written
+ * @param[in,out]	nsec Pointer where nano-seconds value shall be written
+ * @return			EOK if success, error code otherwise
+ */
+errno_t pfe_emac_get_ts_time(pfe_emac_t *emac, uint32_t *sec, uint32_t *nsec)
+{
+	errno_t ret;
+
+	if ((NULL == sec) || (NULL == nsec))
+	{
+		ret = EINVAL;
+	}
+	else
+	{
+		if (EOK != oal_mutex_lock(&emac->ts_mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		pfe_emac_cfg_get_ts_time(emac->emac_base_va, sec, nsec);
+		ret = EOK;
+
+		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Adjust current time
+ * @details		Current timer value will be adjusted by adding or subtracting the
+ * 				desired value.
+ * @param[in]	emac The EMAC instance
+ * @param[in]	sec Seconds
+ * @param[in]	nsec NanoSeconds
+ * @param[in]	sgn Sign of the adjustment. If TRUE then the adjustment will be positive
+ * 					('sec' and 'nsec' will be added to the current time. If FALSE then the
+ * 					adjustment will be negative ('sec' and 'nsec' will be subtracted from
+ *					the current time).
+ */
+errno_t pfe_emac_adjust_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, bool_t sgn)
+{
+	errno_t ret;
+
+	if (EOK != oal_mutex_lock(&emac->ts_mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	ret = pfe_emac_cfg_adjust_ts_time(emac->emac_base_va, sec, nsec, sgn);
+
+	if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Set current time
+ * @details		Funcion will set new system time. Current timer value
+ * 				will be overwritten with the desired value.
+ * @param[in]	emac The EMAC instance
+ * @param[in]	sec New seconds value
+ * @param[in]	nsec New nano-seconds value
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_emac_set_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec)
+{
+	errno_t ret;
+
+	if (EOK != oal_mutex_lock(&emac->ts_mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	ret = pfe_emac_cfg_set_ts_time(emac->emac_base_va, sec, nsec);
+
+	if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	return ret;
 }
 
 /**
@@ -1052,11 +1220,15 @@ void pfe_emac_destroy(pfe_emac_t *emac)
 		/*	Disable traffic */
 		pfe_emac_disable(emac);
 		
+		/*	Disable TS */
+		pfe_emac_cfg_disable_ts(emac->emac_base_va);
+
 		/*	Dispose the MAC address DB */
 		pfe_emac_addr_db_drop_all(emac);
 		
 		/*	Destroy mutex */
 		oal_mutex_destroy(&emac->mutex);
+		oal_mutex_destroy(&emac->ts_mutex);
 		
 		/*	Release the EMAC instance */
 		oal_mm_free(emac);
@@ -1393,5 +1565,3 @@ uint32_t pfe_emac_get_text_statistics(pfe_emac_t *emac, char_t *buf, uint32_t bu
 
 	return len;
 }
-
-/** @}*/

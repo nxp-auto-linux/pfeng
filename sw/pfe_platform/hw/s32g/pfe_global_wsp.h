@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_GLOBAL
- * @{
- * 
- * @file		pfe_global_csr.h
- * @brief		The global WSP registers definition file (s32g).
- * @details		Applicable for IP versions listed below.
- *
- */
-
 #ifndef PFE_GLOBAL_WSP_CSR_H_
 #define PFE_GLOBAL_WSP_CSR_H_
 
@@ -45,12 +35,10 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
 
-/*	CBUS offsets */
 #define WSP_VERSION				(0x00U)
 #define WSP_CLASS_PE_CNT		(0x04U)
 #define WSP_PE_IMEM_DMEM_SIZE	(0x08U)
@@ -95,8 +83,6 @@
 #endif /* PFE_CFG_IP_VERSION_NPU_7_14 */
 
 #if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4)
-/*	TODO: Taken from NPU 7.6. Remove this comment once confirmed
- 	that FPGA is based on 7.6. Ticket no.: 123703. */
 #define WDT_INT_SRC				(0x58U)
 #define WDT_TIMER_VAL_1			(0x5cU)
 #define WDT_TIMER_VAL_2			(0x60U)
@@ -106,7 +92,6 @@
 #endif /* PFE_CFG_IP_VERSION_FPGA_5_0_4 */
 
 /*	WDT_IN_EN bits */
-/*	Due to same name of bits and registers the bits are renamed using _BIT postfix */
 #define WDT_INT_EN_BIT					(1U << 0)
 #define WDT_CLASS_WDT_INT_EN_BIT		(1U << 1)
 #define WDT_UTIL_PE_WDT_INT_EN_BIT		(1U << 2)
@@ -199,5 +184,3 @@
 #define	SAFETY_INT_ENABLE_ALL	0x1FFFFFFFU
 
 #endif /* PFE_GLOBAL_WSP_CSR_H_ */
-
-/** @}*/

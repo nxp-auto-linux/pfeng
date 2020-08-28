@@ -63,10 +63,20 @@ export PFE_CFG_NULL_ARG_CHECK?=0
 export PFE_CFG_PARANOID_IRQ?=0
 #Code for debugging. Adds program parts useful for debugging but reduces performance.
 export PFE_CFG_DEBUG?=0
+#HIF driver mode. 0 - SC, 1 - MC
+export PFE_CFG_HIF_DRV_MODE?=0
+#Host interfaces to be used by particular driver interfaces (see pfe_ct_phy_if_id_t)
+export PFE_CFG_PFE0_IF=6
+export PFE_CFG_PFE1_IF=7
+export PFE_CFG_PFE2_IF=8
 #Multi-instance driver support (includes IHC API). 1 - enable, 0 - disable.
 export PFE_CFG_MULTI_INSTANCE_SUPPORT?=0
 #Master/Slave variant switch
 export PFE_CFG_PFE_MASTER?=1
+#Host interface identifying the 'master' driver location (see pfe_ct_phy_if_id_t)
+export PFE_CFG_MASTER_IF?=6
+#Main local host interface to be used for data communication (see pfe_ct_phy_if_id_t)
+export PFE_CFG_LOCAL_IF?=$(PFE_CFG_PFE0_IF)
 #HIF NOCPY support
 export PFE_CFG_HIF_NOCPY_SUPPORT?=0
 #HIF NOCPY direct mode. When disabled then LMEM copy mode is used.
@@ -89,12 +99,27 @@ export PFE_CFG_GLOB_ERR_POLL_WORKER?=1
 export PFE_CFG_FLEX_PARSER_AND_FILTER?=1
 #Enable Interface Database worker thread. 1 - enable, 0 - disable
 export PFE_CFG_IF_DB_WORKER?=0
-#Use multi-client HIF driver. Required when multiple logical interfaces need to
-#send/receive packets using the same HIF channel.
-export PFE_CFG_MC_HIF?=0
-#Use single-client HIF driver. Beneficial when more HIF channels are available and
-#every logical interface can send/receive packets using dedicated HIF channel.
-export PFE_CFG_SC_HIF?=1
+#Enable IEEE1588 timestamping support
+export PFE_CFG_IEEE1588_SUPPORT?=0
+#Input clock frequency for the IEEE1588 timestamping unit (EMAC)
+export PFE_CFG_IEEE1588_I_CLK_HZ=0
+#Output clock to be used to drive the IEEE1588 system time counter
+export PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ=0
+export PFE_CFG_IEEE1588_EMAC1_O_CLK_HZ=0
+export PFE_CFG_IEEE1588_EMAC2_O_CLK_HZ=0
+
+ifeq ($(PFE_CFG_HIF_DRV_MODE),0)
+  #Use multi-client HIF driver. Required when multiple logical interfaces need to
+  #send/receive packets using the same HIF channel.
+  export PFE_CFG_MC_HIF?=0
+  export PFE_CFG_SC_HIF?=1
+else
+  #Use single-client HIF driver. Beneficial when more HIF channels are available and
+  #every logical interface can send/receive packets using dedicated HIF channel.
+  export PFE_CFG_MC_HIF?=1
+  export PFE_CFG_SC_HIF?=0
+endif
+
 #Enable or disable HIF traffic routing. When enabled, traffic sent from host via
 #HIF will be routed according to HIF physical interface setup. When disabled, the
 #traffic will be directly injected to specified list of interfaces.
@@ -109,6 +134,13 @@ endif
 ifneq ($(PFE_CFG_SC_HIF),0)
   ifneq ($(PFE_CFG_MC_HIF),0)
     $(error Impossible configuration)
+  endif
+endif
+
+ifeq ($(PFE_CFG_PFE_MASTER),0)
+  ifeq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),0)
+    $(warning Slave driver must have multi-instance support enabled)
+    PFE_CFG_MULTI_INSTANCE_SUPPORT=1
   endif
 endif
 
@@ -152,6 +184,12 @@ ifneq ($(PFE_CFG_PFE_MASTER),0)
 else
     GLOBAL_CCFLAGS+=-DPFE_CFG_PFE_SLAVE
 endif
+
+GLOBAL_CCFLAGS+=-DPFE_CFG_MASTER_IF=$(PFE_CFG_MASTER_IF)
+GLOBAL_CCFLAGS+=-DPFE_CFG_LOCAL_IF=$(PFE_CFG_LOCAL_IF)
+GLOBAL_CCFLAGS+=-DPFE_CFG_PFE0_IF=$(PFE_CFG_PFE0_IF)
+GLOBAL_CCFLAGS+=-DPFE_CFG_PFE1_IF=$(PFE_CFG_PFE1_IF)
+GLOBAL_CCFLAGS+=-DPFE_CFG_PFE2_IF=$(PFE_CFG_PFE2_IF)
 
 ifneq ($(PFE_CFG_HIF_NOCPY_SUPPORT),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_NOCPY_SUPPORT
@@ -213,6 +251,17 @@ endif
 
 ifneq ($(PFE_CFG_HIF_TX_FIFO_FIX),0)
     GLOBAL_CCFLAGS+= -DPFE_CFG_HIF_TX_FIFO_FIX
+endif
+
+ifneq ($(PFE_CFG_IEEE1588_SUPPORT),0)
+  ifeq ($(PFE_CFG_IEEE1588_I_CLK_HZ),0)
+    $(error When IEEE1588 support is enabled the PFE_CFG_IEEE1588_I_CLK_HZ shall not be zero)
+  endif
+    GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_SUPPORT
+	GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_I_CLK_HZ=$(PFE_CFG_IEEE1588_I_CLK_HZ)
+	GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_EMAC0_O_CLK_HZ=$(PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ)
+	GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_EMAC1_O_CLK_HZ=$(PFE_CFG_IEEE1588_EMAC1_O_CLK_HZ)
+	GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_EMAC2_O_CLK_HZ=$(PFE_CFG_IEEE1588_EMAC2_O_CLK_HZ)
 endif
 
 # This variable will be propagated to every Makefile in the project

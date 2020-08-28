@@ -177,7 +177,7 @@ int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 hif_chnl, bool hif_ch
 	if (unlikely(ret < 0)) {
 		dev_err(&priv->pdev->dev, "Error allocating the IRQ %d for '%s', error %d\n",
 			priv->cfg->irq_vector_hif_chnls[hif_chnl], irq_name, ret);
-               	return ret;
+		return ret;
 	}
 	chnl->irqnum = priv->cfg->irq_vector_hif_chnls[hif_chnl];
 #endif
@@ -189,7 +189,7 @@ int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 hif_chnl, bool hif_ch
 		ret = -ENODEV;
 		goto err;
 	}
-	
+
 	if (EOK != pfe_hif_drv_init(chnl->drv)) {
 		dev_err(&priv->pdev->dev, "HIF%d drv init failed\n", hif_chnl);
 		ret = -ENODEV;
@@ -293,6 +293,9 @@ int pfeng_drv_probe(struct pfeng_priv *priv)
 		goto err;
 	}
 
+	/* debug fs */
+	pfeng_debugfs_create(priv);
+
 	/* Create network interfaces */
 	list_for_each_entry_safe(eth, tmp, &priv->plat.eth_list, lnode) {
 		ndev = pfeng_napi_if_create(priv, eth);
@@ -303,9 +306,6 @@ int pfeng_drv_probe(struct pfeng_priv *priv)
 
 		list_add_tail(&ndev->lnode, &priv->ndev_list);
 	}
-
-	/* debug fs */
-	pfeng_debugfs_create(priv);
 
 	return 0;
 

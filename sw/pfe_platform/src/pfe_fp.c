@@ -33,11 +33,6 @@
 #include "pfe_fp.h"
 
 /**
- * @file		pfe_fp.c
- * @brief		The Flexible Parser
- */
-
-/**
 * @brief Initializes the module
 */
 /* Magic function - QNX runtime linker fails to find the rest of the functions if this
@@ -129,4 +124,3 @@ void pfe_fp_destroy_table(pfe_class_t *class, uint32_t table_address)
     /* Just free the memory */
     pfe_class_dmem_heap_free(class, table_address);
 }
-

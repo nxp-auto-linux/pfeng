@@ -45,7 +45,6 @@
 #include "hal.h"
 #include "fifo.h"
 #include "pfe_hif.h"
-#include "pfe_hif_chnl.h"
 #include "pfe_hif_drv.h"
 #include "pfe_platform_cfg.h"
 
@@ -57,12 +56,21 @@ typedef struct __pfe_hif_pkt_tag pfe_hif_rx_meta_t;
  */
 struct __attribute__((aligned(HAL_CACHE_LINE_SIZE), packed)) __pfe_pfe_hif_drv_client_tag
 {
-	pfe_phy_if_t *phy_if;
-	pfe_log_if_t *log_if;
+	pfe_ct_phy_if_id_t phy_if_id;
+	uint8_t log_if_id;
 	pfe_hif_drv_client_event_handler event_handler;
 	void *priv;
 	pfe_hif_drv_t *hif_drv;
 	bool_t active;
+#ifndef HIF_CFG_USE_DYNAMIC_TX_HEADERS
+	pfe_ct_hif_tx_hdr_t *hif_tx_header;	/*	Storage for the HIF header */
+	void *hif_tx_header_pa;
+#endif /* HIF_CFG_USE_DYNAMIC_TX_HEADERS */
+
+#ifdef PFE_CFG_IEEE1588_SUPPORT
+	/*	Storage for PTP timestamps */
+	pfe_hif_ptp_ts_db_t ptpdb;
+#endif /* PFE_CFG_IEEE1588_SUPPORT */
 };
 
 /**
@@ -81,7 +89,6 @@ struct __attribute__((aligned(HAL_CACHE_LINE_SIZE), packed)) __pfe_hif_drv_tag
 	pfe_hif_tx_meta_t *tx_meta;
 	uint32_t tx_meta_rd_idx;
 	uint32_t tx_meta_wr_idx;
-	uint32_t tx_meta_idx_mask;
 	pfe_ct_phy_if_id_t i_phy_if;
 	bool_t tx_enabled;
 
@@ -202,7 +209,6 @@ static errno_t pfe_hif_drv_create_data_channel(pfe_hif_drv_t *hif_drv)
 	memset(hif_drv->tx_meta, 0, sizeof(pfe_hif_tx_meta_t) * pfe_hif_chnl_get_tx_fifo_depth(hif_drv->channel));
 	hif_drv->tx_meta_rd_idx = 0U;
 	hif_drv->tx_meta_wr_idx = 0U;
-	hif_drv->tx_meta_idx_mask =  pfe_hif_chnl_get_tx_fifo_depth(hif_drv->channel) - 1U;
 
 #ifdef HIF_CFG_USE_DYNAMIC_TX_HEADERS
 	/*	Allocate HIF TX headers. Allocate smaller chunks to reduce memory segmentation. */
@@ -293,7 +299,7 @@ static void pfe_hif_drv_destroy_data_channel(pfe_hif_drv_t *hif_drv)
  * 				client's queues. HIF driver remains suspended after the call and pfe_hif_drv_start()
  * 				is required to re-enable the operation.
  * @param[in]	hif_drv The HIF driver instance the client shall be associated with
- * @param[in]	log_if Logical interface to be handled by the client
+ * @param[in]	log_if_id Logical interface ID to be handled by the client
  * @param[in]	txq_num Number of client's TX queues
  * @param[in]	rxq_num Number of client's RX queues
  * @param[in]	txq_depth Depth of each TX queue
@@ -304,7 +310,7 @@ static void pfe_hif_drv_destroy_data_channel(pfe_hif_drv_t *hif_drv)
  *
  * @return 		Client instance or NULL if failed
  */
-pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif_drv, pfe_log_if_t *log_if, uint32_t txq_num, uint32_t rxq_num,
+pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif_drv, uint8_t log_if_id, uint32_t txq_num, uint32_t rxq_num,
 								uint32_t txq_depth, uint32_t rxq_depth, pfe_hif_drv_client_event_handler handler, void *priv)
 {
 	pfe_hif_drv_client_t *client = NULL;
@@ -317,7 +323,7 @@ pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif_drv, pfe_l
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	NXP_LOG_INFO("Attempt to register HIF client: %s\n", pfe_log_if_get_name(log_if));
+	NXP_LOG_INFO("Attempt to register HIF client: %d\n", log_if_id);
 
 	if (NULL == handler)
 	{
@@ -337,13 +343,8 @@ pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif_drv, pfe_l
 	memset(client, 0, sizeof(pfe_hif_drv_client_t));
 	client->active = FALSE;
 	client->hif_drv = hif_drv;
-	client->log_if = log_if;
-	client->phy_if = pfe_log_if_get_parent(log_if);
-	if (NULL == client->phy_if)
-	{
-		NXP_LOG_ERROR("Can't get physical interface associated with %s\n", pfe_log_if_get_name(log_if));
-		goto unlock_and_fail;
-	}
+	client->log_if_id = log_if_id;
+	client->phy_if_id = PFE_PHY_IF_ID_INVALID;
 
 #ifndef HIF_CFG_USE_DYNAMIC_TX_HEADERS
 	/*	Get PA of the HIF header storage. HIF header is used to provide
@@ -357,33 +358,39 @@ pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif_drv, pfe_l
 	}
 
 	/*	Initialize the HIF TX header */
-	client->hif_tx_header->chid = pfe_hif_chnl_get_id(client->hif_drv->channel);
+	client->hif_tx_header->chid = pfe_hif_chnl_get_id(hif_drv->channel);
 
 #ifdef PFE_CFG_ROUTE_HIF_TRAFFIC
 	/*	Tag the frame with ID of target physical interface */
-	client->hif_tx_header->cookie = oal_htonl(pfe_phy_if_get_id(client->phy_if));
+	client->hif_tx_header->cookie = oal_htonl(client->phy_if_id);
 	client->hif_tx_header->flags = (pfe_ct_hif_tx_flags_t)0;
 #else
 	client->hif_tx_header->flags = HIF_TX_INJECT;
-	client->hif_tx_header->e_phy_ifs = oal_htonl(1U << pfe_phy_if_get_id(client->phy_if));
+	client->hif_tx_header->e_phy_ifs = oal_htonl(1U << client->phy_if_id);
 #endif /* PFE_CFG_ROUTE_HIF_TRAFFIC */
 
 #ifdef PFE_CFG_CSUM_ALL_FRAMES
-	client->hif_tx_header->flags |= HIF_IP_CSUM | HIF_TCP_CSUM | HIF_UDP_CSUM;
+	client->hif_tx_header->flags |= HIF_TX_IP_CSUM | HIF_TX_TCP_CSUM | HIF_TX_UDP_CSUM;
 #endif /* PFE_CFG_CSUM_ALL_FRAMES */
 #endif /* HIF_CFG_USE_DYNAMIC_TX_HEADERS */
 
 	client->event_handler = handler;
 	client->priv = priv;
 
+#ifdef PFE_CFG_IEEE1588_SUPPORT
+	/*	Initialize PTP timestamp database */
+	if (EOK != pfe_hif_ptp_ts_db_init(&client->ptpdb))
+	{
+		NXP_LOG_ERROR("PTP DB init failed\n");
+		goto unlock_and_fail;
+	}
+#endif /* PFE_CFG_IEEE1588_SUPPORT */
+
 	/*	Suspend HIF driver to get exclusive access to client table */
 	pfe_hif_drv_stop(hif_drv);
 
 	/*	Activate the client */
 	client->active = TRUE;
-
-	NXP_LOG_INFO("HIF client %s id %d registered\n", pfe_log_if_get_name(log_if), pfe_log_if_get_id(log_if));
-
 	return client;
 
 unlock_and_fail:
@@ -445,8 +452,6 @@ void pfe_hif_drv_client_unregister(pfe_hif_drv_client_t *client)
 {
 	if (NULL != client)
 	{
-		NXP_LOG_INFO("Attempt to remove HIF client: %s\n", pfe_log_if_get_name(client->log_if));
-
 		/*	Suspend HIF driver to get exclusive access to client table */
 		pfe_hif_drv_stop(client->hif_drv);
 
@@ -462,7 +467,12 @@ void pfe_hif_drv_client_unregister(pfe_hif_drv_client_t *client)
 		}
 #endif /* HIF_CFG_USE_DYNAMIC_TX_HEADERS */
 
-		NXP_LOG_INFO("HIF client %s removed\n", pfe_log_if_get_name(client->log_if));
+#ifdef PFE_CFG_IEEE1588_SUPPORT
+		/*	Finalize the timestamp DB */
+		pfe_hif_ptp_ts_db_fini(&client->ptpdb);
+#endif /* PFE_CFG_IEEE1588_SUPPORT */
+
+		NXP_LOG_INFO("HIF client %d removed\n", client->log_if_id);
 
 		/*	Cleanup memory */
 		memset(client, 0, sizeof(pfe_hif_drv_client_t));
@@ -488,6 +498,9 @@ pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uin
 	bool_t lifm;
 	pfe_hif_rx_meta_t *rx_metadata;
 	pfe_hif_drv_t *hif_drv;
+#ifdef PFE_CFG_IEEE1588_SUPPORT
+	errno_t ret;
+#endif /* PFE_CFG_IEEE1588_SUPPORT */
 
 #ifdef PFE_CFG_NULL_ARG_CHECK
 	if (unlikely(NULL == client))
@@ -515,18 +528,73 @@ pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uin
 		/*	Remember ingress physical interface */
 		hif_drv->i_phy_if = hif_hdr_ptr->i_phy_if;
 
-#ifdef PFE_CFG_DEBUG
-		if (hif_hdr_ptr->flags & HIF_RX_TS)
+		if (hif_hdr_ptr->flags & HIF_RX_ETS)
 		{
+#ifdef PFE_CFG_IEEE1588_SUPPORT
+			pfe_ct_ets_report_t *etsr = (pfe_ct_ets_report_t *)((addr_t)buf_va + sizeof(pfe_ct_hif_rx_hdr_t));
+
+			/*	Match received TS with a frame in DB. Timestamp values are already in host endian... */
+			if (EOK != pfe_hif_ptp_ts_db_push_ts(&client->ptpdb, oal_ntohs(etsr->ref_num), etsr->ts_sec, etsr->ts_nsec))
+			{
+				NXP_LOG_ERROR("Got TS for an unknown frame\n");
+			}
+#endif /* PFE_CFG_IEEE1588_SUPPORT */
+
 			/*	Drop the frame. Resource protection is embedded. */
-			NXP_LOG_INFO("Time-stamp report received: TODO: IMPLEMENT ME\n");
-			ret = pfe_hif_chnl_release_buf(hif_drv->channel, buf_va);
-			if (unlikely(EOK != ret))
+			if (unlikely(EOK != pfe_hif_chnl_release_buf(hif_drv->channel, buf_va)))
 			{
 				NXP_LOG_ERROR("Unable to release RX buffer\n");
 			}
+
+			/*	9999 this is wrong approach. We should iterate here and try to get next packet. */
+			return NULL;
 		}
+
+#ifdef PFE_CFG_IEEE1588_SUPPORT
+		if (hif_hdr_ptr->flags & HIF_RX_TS)
+		{
+			if (hif_hdr_ptr->flags & HIF_RX_PTP)
+			{
+				oal_util_ptp_header_t *ptph;
+				uint16_t ref = (uint16_t)(oal_util_get_unique_seqnum32() & 0xffffU);
+
+				if (EOK == oal_util_parse_ptp((void *)((addr_t)buf_va+sizeof(pfe_ct_hif_rx_hdr_t)),
+						rx_len-sizeof(pfe_ct_hif_rx_hdr_t), &ptph))
+				{
+					/*	Store the RX frame reference and timestamp into the DB */
+					ret = pfe_hif_ptp_ts_db_push_msg(&client->ptpdb, TRUE, ref, ptph->messageType,
+							oal_ntohs(ptph->sourcePortID), oal_ntohs(ptph->sequenceID));
+					if (EOK != ret)
+					{
+						NXP_LOG_ERROR("Could not store received PTP message: %d\n", ret);
+					}
+					else
+					{
+						/*	Timestamp is in little-endian format */
+						ret = pfe_hif_ptp_ts_db_push_ts(&client->ptpdb,
+								ref, hif_hdr_ptr->rx_timestamp_s, hif_hdr_ptr->rx_timestamp_ns);
+
+						if (EOK == ret)
+						{
+#ifdef PFE_CFG_DEBUG
+							NXP_LOG_DEBUG("New (RX) PTP frame: Type: 0x%x, Port: 0x%x, SeqID: 0x%x, Sec: 0x%x, nSec: 0x%x\n",
+								ptph->messageType, oal_ntohs(ptph->sourcePortID), oal_ntohs(ptph->sequenceID),
+									hif_hdr_ptr->rx_timestamp_s, hif_hdr_ptr->rx_timestamp_ns);
 #endif /* PFE_CFG_DEBUG */
+						}
+						else
+						{
+							NXP_LOG_ERROR("Could not store received timestamp: %d\n", ret);
+						}
+					}
+				}
+				else
+				{
+					NXP_LOG_ERROR("PTP frame not found\n");
+				}
+			}
+		}
+#endif /* PFE_CFG_IEEE1588_SUPPORT */
 
 		flags = HIF_FIRST_BUFFER;
 		hif_drv->started = TRUE;
@@ -545,7 +613,7 @@ pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uin
 
 	/*	Fill the RX metadata */
 	rx_metadata = (pfe_hif_rx_meta_t *)meta_va;
-	rx_metadata->client = &hif_drv->client;
+	rx_metadata->client = client;
 	rx_metadata->data = (addr_t)buf_va;
 	rx_metadata->len = rx_len;
 	rx_metadata->flags.common = (pfe_hif_drv_common_flags_t)flags;
@@ -578,7 +646,7 @@ bool_t pfe_hif_drv_client_has_rx_pkt(pfe_hif_drv_client_t *client, uint32_t queu
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	/*	TODO: Maybe sometimes... */
+	/*	Implement check when needed */
 	return TRUE;
 }
 
@@ -634,7 +702,7 @@ void * pfe_hif_drv_client_receive_tx_conf(pfe_hif_drv_client_t *client, uint32_t
 
 	/*	Get confirmation directly from channel. This is actually only check whether
 		some next frame has been transmitted. */
-	if (EOK != pfe_hif_chnl_get_tx_conf(client->hif_drv->channel))
+	if (EOK != pfe_hif_chnl_get_tx_conf(hif_drv->channel))
 	{
 		/*	No more entries to dequeue */
 		return NULL;
@@ -642,7 +710,7 @@ void * pfe_hif_drv_client_receive_tx_conf(pfe_hif_drv_client_t *client, uint32_t
 	else
 	{
 		/*	Get metadata associated with the transmitted frame */
-		tx_metadata = &hif_drv->tx_meta[hif_drv->tx_meta_rd_idx & hif_drv->tx_meta_idx_mask];
+		tx_metadata = &hif_drv->tx_meta[hif_drv->tx_meta_rd_idx & (PFE_HIF_RING_CFG_LENGTH-1U)];
 
 		/*	Move to next entry */
 		hif_drv->tx_meta_rd_idx++;
@@ -650,6 +718,35 @@ void * pfe_hif_drv_client_receive_tx_conf(pfe_hif_drv_client_t *client, uint32_t
 		/*	Return the reference data */
 		return tx_metadata->ref_ptr;
 	}
+}
+
+/**
+ * @brief		Set physical interface for TX traffic injection
+ * @details		Set physical interface to be used when driver will attempt to transmit
+ * 				a packet in "inject" mode.
+ * @param[in]	client Client instance
+ * @param[in]	phy_if_id The physical interface ID
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_hif_drv_client_set_inject_if(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t phy_if_id)
+{
+	if (phy_if_id >= PFE_PHY_IF_ID_INVALID)
+	{
+		return EINVAL;
+	}
+
+	/*	Set new physical interface */
+	client->phy_if_id = phy_if_id;
+
+#ifndef HIF_CFG_USE_DYNAMIC_TX_HEADERS
+	/*	Update static TX header */
+	client->hif_tx_header->e_phy_ifs = oal_htonl(1U << client->phy_if_id);
+#else
+	/*	Dynamic header will be updated with every "xmit" call */
+	;
+#endif /* HIF_CFG_USE_DYNAMIC_TX_HEADERS */
+
+	return EOK;
 }
 
 /**
@@ -712,13 +809,15 @@ errno_t pfe_hif_drv_client_xmit_sg_pkt(pfe_hif_drv_client_t *client, uint32_t qu
 		are being used.
 	*/
 
+	/*	Get metadata storage */
+	tx_metadata = &hif_drv->tx_meta[hif_drv->tx_meta_wr_idx & (PFE_HIF_RING_CFG_LENGTH-1U)];
+
 #ifndef HIF_CFG_USE_DYNAMIC_TX_HEADERS
 	/*	Use static TX header from client */
 	tx_hdr = client->hif_tx_header;
 	tx_hdr_pa = client->hif_tx_header_pa;
 #else
 	/*	Use dynamic TX header */
-	tx_metadata = &hif_drv->tx_meta[hif_drv->tx_meta_wr_idx & hif_drv->tx_meta_idx_mask];
 	tx_hdr = tx_metadata->hif_tx_header;
 	tx_hdr_pa = tx_metadata->hif_tx_header_pa;
 
@@ -728,18 +827,42 @@ errno_t pfe_hif_drv_client_xmit_sg_pkt(pfe_hif_drv_client_t *client, uint32_t qu
 
 #ifdef PFE_CFG_ROUTE_HIF_TRAFFIC
 	/*	Tag the frame with ID of target physical interface */
-	tx_hdr->cookie = oal_htonl(pfe_phy_if_get_id(client->phy_if));
+	tx_hdr->cookie = oal_htonl(client->phy_if_id);
 #else
 	tx_hdr->flags |= HIF_TX_INJECT;
-	tx_hdr->e_phy_ifs = oal_htonl(1U << pfe_phy_if_get_id(client->phy_if));
+	tx_hdr->e_phy_ifs = oal_htonl(1U << client->phy_if_id);
 #endif /* PFE_CFG_ROUTE_HIF_TRAFFIC */
 
 #ifdef PFE_CFG_CSUM_ALL_FRAMES
-	tx_hdr->flags |= HIF_IP_CSUM | HIF_TCP_CSUM | HIF_UDP_CSUM;
+	tx_hdr->flags |= HIF_TX_IP_CSUM | HIF_TX_TCP_CSUM | HIF_TX_UDP_CSUM;
 #endif /* PFE_CFG_CSUM_ALL_FRAMES */
 
-	/*	Remember client */
-	tx_metadata->client = client;
+#ifdef PFE_CFG_IEEE1588_SUPPORT
+	/*	Check if frame is a PTP message and need timestamp */
+	oal_util_ptp_header_t *ptph;
+	if (EOK == oal_util_parse_ptp(sg_list->items[0].data_va, sg_list->items[0].len, &ptph))
+	{
+		/*	Request TS */
+		tx_hdr->refnum = oal_util_get_unique_seqnum32() & 0xffff; /* Don't switch endian */
+		tx_hdr->flags |= HIF_TX_ETS;
+
+		/*	Store the TX frame to DB */
+		err = pfe_hif_ptp_ts_db_push_msg(&client->ptpdb, FALSE, tx_hdr->refnum, ptph->messageType,
+				oal_ntohs(ptph->sourcePortID), oal_ntohs(ptph->sequenceID));
+		if (EOK != err)
+		{
+			NXP_LOG_ERROR("Could not store PTP message: %d\n", err);
+			tx_hdr->flags &= ~HIF_TX_ETS;
+		}
+		else
+		{
+#ifdef PFE_CFG_DEBUG
+			NXP_LOG_DEBUG("New (TX) PTP frame: Type: 0x%x, Port: 0x%x, SeqID: 0x%x\n",
+					ptph->messageType, oal_ntohs(ptph->sourcePortID), oal_ntohs(ptph->sequenceID));
+#endif /* PFE_CFG_DEBUG */
+		}
+	}
+#endif /* PFE_CFG_IEEE1588_SUPPORT */
 #endif /* HIF_CFG_USE_DYNAMIC_TX_HEADERS */
 
 	/*	Enqueue the HIF packet header */
@@ -751,7 +874,7 @@ errno_t pfe_hif_drv_client_xmit_sg_pkt(pfe_hif_drv_client_t *client, uint32_t qu
 
 	if (unlikely(EOK != err))
 	{
-		/*	Channel did not accept the buffer. Return SW descriptor and fail. */
+		/*	Channel did not accept the buffer */
 		NXP_LOG_ERROR("Channel did not accept buffer: %d\n", err);
 		return ECANCELED;
 	}
@@ -772,26 +895,14 @@ errno_t pfe_hif_drv_client_xmit_sg_pkt(pfe_hif_drv_client_t *client, uint32_t qu
 			NXP_LOG_ERROR("Fatal error, TX channel will get stuck...\n");
 			return ECANCELED;
 		}
-		else
-		{
-			/*	Store the frame metadata */
-			if (TRUE == ((ii+1) >= sg_list->size))
-			{
-#ifndef HIF_CFG_USE_DYNAMIC_TX_HEADERS
-				tx_metadata = &hif_drv->tx_meta[hif_drv->tx_meta_wr_idx & hif_drv->tx_meta_idx_mask];
-				tx_metadata->client = client;
-#endif /* HIF_CFG_USE_DYNAMIC_TX_HEADERS */
-				tx_metadata->len = sg_list->items[ii].len;
-				tx_metadata->q_no = queue;
-				tx_metadata->flags.common = HIF_LAST_BUFFER;
-				tx_metadata->data = (addr_t)sg_list->items[ii].data_pa;
-				tx_metadata->ref_ptr = ref_ptr;
-
-				/*	Move to next entry */
-				hif_drv->tx_meta_wr_idx++;
-			}
-		}
 	}
+
+	/*	Store the frame metadata */
+	/* tx_metadata->q_no = queue; */
+	tx_metadata->ref_ptr = ref_ptr;
+
+	/*	Move to next entry */
+	hif_drv->tx_meta_wr_idx++;
 
 	return EOK;
 }
@@ -823,6 +934,31 @@ errno_t pfe_hif_drv_client_xmit_pkt(pfe_hif_drv_client_t *client, uint32_t queue
 	sg_list.items[0].len = len;
 
 	return pfe_hif_drv_client_xmit_sg_pkt(client, queue, &sg_list, ref_ptr);
+}
+
+/**
+ * @brief		Get PTP timestamp
+ * @details		Function will return timestamp for PTP message given by set arguments
+ * 				if such timestamp has been captured
+ * @param[in]	client The client instance
+ * @param[in]	rx TRUE means to get ingress TS, FALSE means egress
+ * @param[in]	type PTP message type
+ * @param[in]	port PTP source port ID
+ * @param[in]	seq_id PTP sequence ID
+ * @param[out]	ts_sec Seconds part of the timestamp
+ * @param[out]	ts_nsec Nanoseconds part of the timestamp
+ * @retval		EOK Timestamp has been found and is valid
+ * @retval		ENOENT Timestamp matching given criteria not found
+ */
+errno_t pfe_hif_drv_client_get_ts(pfe_hif_drv_client_t *client, bool_t rx,
+		uint8_t type, uint16_t port, uint16_t seq_id, uint32_t *ts_sec, uint32_t *ts_nsec)
+{
+#ifdef PFE_CFG_IEEE1588_SUPPORT
+	return pfe_hif_ptp_ts_db_pop(&client->ptpdb, type, port, seq_id, ts_sec, ts_nsec, rx);
+#else
+	NXP_LOG_ERROR("PTP support not enabled\n");
+	return EINVAL;
+#endif /* */
 }
 
 /**
@@ -1139,10 +1275,8 @@ void pfe_hif_drv_exit(pfe_hif_drv_t *hif_drv)
 
 	/*	Release HIF channel and buffers */
 	pfe_hif_drv_destroy_data_channel(hif_drv);
-
 	hif_drv->initialized = FALSE;
-
-	NXP_LOG_INFO("HIF exited\n");
+	NXP_LOG_INFO("HIF SC exited\n");
 }
 
 void pfe_hif_drv_destroy(pfe_hif_drv_t *hif_drv)

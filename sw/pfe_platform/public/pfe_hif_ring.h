@@ -28,23 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- * 
- * @defgroup    dxgr_PFE_HIF_RING HIF BD Ring
- * @brief		The HIF Buffer Descriptor ring
- * @details     This is the software representation of the HIF buffer descriptor ring.
- * 
- * @addtogroup  dxgr_PFE_HIF_RING
- * @{
- * 
- * @file		pfe_hif_ring.h
- * @brief		The HIF BD ring driver header file.
- * @details		
- *
- */
-
 #ifndef PUBLIC_PFE_HIF_RING_H_
 #define PUBLIC_PFE_HIF_RING_H_
 
@@ -79,6 +62,3 @@ void pfe_hif_ring_set_egress_if(pfe_hif_ring_t *ring, pfe_ct_phy_if_id_t id) __a
 #endif /* PFE_CFG_HIF_NOCPY_DIRECT */
 
 #endif /* PUBLIC_PFE_HIF_RING_H_ */
-
-/** @}*/
-/** @}*/

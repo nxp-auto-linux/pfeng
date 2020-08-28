@@ -142,14 +142,18 @@
  *                <i>Management of IPv6 connections.</i>
  *              - @ref FPP_CMD_IPV4_SET_TIMEOUT <br>
  *                <i>Configuration of connection timeouts.</i>
- * 
- * @if FCI_EVENTS_IMPLEMENTED
+ *              - @ref FPP_CMD_DATA_BUF_PUT <br>
+ *                <i>Send arbitrary data to the accelerator.</i>
+ *
  * @section cbks Events summary
+ * @if FCI_EVENTS_IMPLEMENTED
  *              - @ref FPP_CMD_IPV4_CONNTRACK_CHANGE <br>
  *                <i>Endpoint reports event related to IPv4 connection.</i>
  *              - @ref FPP_CMD_IPV6_CONNTRACK_CHANGE <br>
  *                <i>Endpoint reports event related to IPv6 connection.</i>
  * @endif
+ *              - @ref FPP_CMD_DATA_BUF_AVAIL <br>
+ *                <i>Network accelerator sends a data buffer to host.</i>
  * 
  * @section if_mgmt Interface Management
  *              Physical Interface
@@ -668,28 +672,21 @@ int fci_close(FCI_CLIENT *client);
 
 /**
  * @brief       Catch and process all FCI messages delivered to the FCI client
- * @details     Function is intended to be called in its own thread. It waits for message reception.
- *              If there is an event callback associated with the FCI client, assigned by function
- *              @ref fci_register_cb, then, when message is received, the callback is called to
- *              process the data. As long as there is no error and the callback returns
- *              @ref FCI_CB_CONTINUE, fci_catch continues waiting for another message. Otherwise it
+ * @details     Function is intended to be called in its own thread. It waits for message/event
+ *              reception. If there is an event callback associated with the FCI client, assigned
+ *              by function @ref fci_register_cb(), then, when message is received, the callback is
+ *              called to process the data. As long as there is no error and the callback returns
+ *              @ref FCI_CB_CONTINUE, @ref fci_catch() continues waiting for another message. Otherwise it
  *              returns.
  *
  * @note        This is a blocking function.
  *
  * @note        Multicast group FCI_GROUP_CATCH shall be used when opening the client for catching
  *              messages
- * @internal
- * @note        Better solution would be not to call this function from the application but rather
- *              implement an internal thread-based mechanism to listen for messages and to process
- *              the messages internally. The callback would then be executed in this thread's
- *              context.
- * @endinternal
  *
  * @see         fci_register_cb()
  * @param[in]   client The FCI client instance
- * @retval      0 Success
- * @retval      Error code. See the 'errno' for more details
+ * @return      0 if success, error code otherwise
  */
 int fci_catch(FCI_CLIENT *client);
 
@@ -712,7 +709,7 @@ int fci_catch(FCI_CLIENT *client);
  * @param[in]   cmd_len Length of the command arguments structure in bytes.
  * @param[out]  rep_buf Pointer to memory where the data response shall be written. Can be NULL.
  * @param[in,out]   rep_len Pointer to variable where number of response bytes shall be written.
- * @retval      <0 Failed to execute the command. Can be NULL.
+ * @retval      <0 Failed to execute the command.
  * @retval      >=0 Command was executed with given return value (@c FPP_ERR_OK for success).
  */
 int fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *cmd_buf, unsigned short cmd_len, unsigned short *rep_buf, unsigned short *rep_len);
@@ -761,17 +758,15 @@ int fci_write(FCI_CLIENT *client, unsigned short fcode, unsigned short cmd_len, 
 
 /**
  * @brief       Register event callback function
- * @details     Once FCI endpoint (or another client in the same multicast group) sends message to the
- *              FCI client, this callback is called. The callback will work only if function @ref fci_catch
- *              is running.
- * @param[in]   client The FCI client instance, use the same instance as when calling @ref fci_catch
- *              function
- * @param[in]   event_cb The callback function to be executed
+ * @details     FCI endpoint can send various asynchronous messages to the FCI client. In such case, 
+ *              a callback registered via this function is executed if @ref fci_catch() is running.
+ * @param[in]   client The FCI client instance
+ * @param[in]   event_cb The callback function to be executed. When called then @c fcode specifies event
+ *                       code (available events are listed in @ref cbks), @c payload is pointer to event
+ *                       payload and the @c len is number of bytes in the payload buffer.
  * @return      0 if success, error code otherwise
  * @note        In order to continue receiving messages, the callback function shall always return
  *              @ref FCI_CB_CONTINUE. Any other value will cause the @ref fci_catch to return.
- * @note        Here is the list of defined messages. Expected @c fcode value is either
- *              @ref FPP_CMD_IPV4_CONNTRACK_CHANGE or @ref FPP_CMD_IPV6_CONNTRACK_CHANGE.
  */
 int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned short fcode, unsigned short len, unsigned short *payload));
 

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -28,17 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_BMU
- * @{
- * 
- * @file		pfe_bmu_csr.h
- * @brief		The BMU module registers definition file (s32g).
- * @details		Applicable for IP versions listed below. Order of registers
- * 				follows IP documentation...
- *
- */
-
 #ifndef PFE_BMU_CSR_H_
 #define PFE_BMU_CSR_H_
 
@@ -48,7 +37,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
@@ -111,7 +99,6 @@
 #define BMU_BUF_CNT_MEM_ACCESS2		0x110U
 #define BMU_BUF_CNT_MEM_ACCESS_ADDR	0x114U
 
-/*	BMU_INT_SRC/BMU_INT_ENABLE bits */
 #define BMU_INT						(1U << 0)
 #define BMU_EMPTY_INT				(1U << 1)
 #define BMU_FULL_INT				(1U << 2)
@@ -135,5 +122,3 @@ void pfe_bmu_cfg_free_buf(void *base_va, void *buffer);
 uint32_t pfe_bmu_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
 #endif /* PFE_BMU_CSR_H_ */
-
-/** @}*/

@@ -28,21 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- *
- * @file		pfe_platform.c
- * @brief		The PFE platform management (S32G master)
- * @details		This file contains HW-specific code. It is used to create structured SW representation
- *				of a given PFE HW implementation. File is intended to be created by user
- *				each time a new HW setup with different PFE configuration needs to be
- *				supported.
- * @note		Various variants of this file should exist for various HW implementations (please
- *				keep this file clean, not containing platform-specific preprocessor switches).
- *
- */
-
 #include "pfe_cfg.h"
 #include "elf_cfg.h"
 #include "elf.h"
@@ -68,19 +53,7 @@
 #include "fci.h"
 #endif /* PFE_CFG_FCI_ENABLE */
 
-/**
- * This is a platform specific file. All routines shall be implemented
- * according to application-given HW setup.
- */
-
-/*
- * @brief The main PFE structure
- */
 static pfe_platform_t pfe = {.probed = FALSE};
-
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-static errno_t pfe_platform_unregister_log_if(pfe_platform_t *platform, uint32_t session_id, pfe_log_if_t *log_if);
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 /**
  * @brief		BMU interrupt service routine
@@ -92,9 +65,6 @@ static bool_t pfe_platform_bmu_isr(void *arg)
 	pfe_platform_t *platform = (pfe_platform_t *)arg;
 	bool_t handled = FALSE;
 
-	/*	BMU interrupt line is shared by 2 BMU instances. Additionally, the BMU keeps the interrupt
-		line permanently asserted (watermarks and so on = bad design). Therefore disable all sources
-		here before particular ISRs will be called to dispatch the interrupts. */
 	if (NULL != platform->bmu[0])
 	{
 		pfe_bmu_irq_mask(platform->bmu[0]);
@@ -105,7 +75,6 @@ static bool_t pfe_platform_bmu_isr(void *arg)
 		pfe_bmu_irq_mask(platform->bmu[1]);
 	}
 
-	/*	Run ISRs */
 	if (EOK == pfe_bmu_isr(platform->bmu[0]))
 	{
 		handled |= TRUE;
@@ -116,7 +85,6 @@ static bool_t pfe_platform_bmu_isr(void *arg)
 		handled |= TRUE;
 	}
 
-	/*	Re-enable interrupts from both BMU instances */
 	if (NULL != platform->bmu[0])
 	{
 		pfe_bmu_irq_unmask(platform->bmu[0]);
@@ -178,9 +146,6 @@ static void *pfe_poller_func(void *arg)
 				if (NULL != platform->safety)
 				{
 					pfe_safety_irq_mask(platform->safety);
-					/*	TODO: Note that safety IRQ is not connected to host but to FCCU. There
-						will be conflict in case when FCCU will try to concurrently handle the
-						interrupt. */
 					(void)pfe_safety_isr(platform->safety);
 					pfe_safety_irq_unmask(platform->safety);
 				}
@@ -190,9 +155,6 @@ static void *pfe_poller_func(void *arg)
 				if (NULL != platform->wdt)
 				{
 					pfe_wdt_irq_mask(platform->wdt);
-					/*	TODO: Note that watchdog IRQ is not connected to host but to FCCU. There
-						will be conflict in case when FCCU will try to concurrently handle the
-						interrupt. */
 					(void)pfe_wdt_isr(platform->wdt);
 					pfe_wdt_irq_unmask(platform->wdt);
 				}
@@ -225,11 +187,6 @@ static void *pfe_poller_func(void *arg)
 
 /**
  * @brief		Global interrupt service routine
- * @details		This must be here on platforms (FPGA...) where all PFE interrupts
- * 				are combined to a single physical interrupt line :(
- * 				Because we want to catch interrupts during platform initialization some
- * 				of platform modules might have not been initialized yet. Therefore the NULL
- * 				checks...
  * @details		See the oal_irq_handler_t
  */
 static bool_t pfe_platform_global_isr(void *arg)
@@ -411,7 +368,7 @@ static bool_t pfe_platform_global_isr(void *arg)
  * @param[in]	arg Custom argument provided via pfe_idex_set_rpc_cbk()
  * @note		This callback runs in dedicated context/thread.
  */
-static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg)
+void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg)
 {
 	pfe_platform_t *platform = (pfe_platform_t *)arg;
 	pfe_phy_if_t *phy_if_arg = NULL;
@@ -429,9 +386,9 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/* Check if phy_if should be extracted from argument */
-	if(id == PFE_PLATFORM_RPC_PFE_LOG_IF_CREATE ||
-	   (id >= PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE &&
-	   id <= PFE_PLATFORM_RPC_PFE_PHY_IF_IS_PROMISC))
+	if((PFE_PLATFORM_RPC_PFE_LOG_IF_CREATE == id) ||
+	   ((PFE_PLATFORM_RPC_PFE_PHY_IF_ID_COMPATIBLE_FIRST <= id) &&
+		(PFE_PLATFORM_RPC_PFE_PHY_IF_ID_COMPATIBLE_LAST >= id)))
 	{
 		ret = pfe_if_db_get_first(	platform->phy_if_db, sender, IF_DB_CRIT_BY_ID,
 									(void *)(addr_t)((pfe_platform_rpc_pfe_phy_if_generic_t*)buf)->phy_if_id, &entry);
@@ -447,8 +404,8 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 	}
 
 	/* Check if log_if should be extracted from argument */
-	if(id >= PFE_PLATFORM_RPC_PFE_LOG_IF_DESTROY &&
-	   id <= PFE_PLATFORM_RPC_PFE_LOG_IF_SET_MATCH_AND)
+	if((PFE_PLATFORM_RPC_PFE_LOG_IF_ID_COMPATIBLE_FIRST <= id) &&
+	   (PFE_PLATFORM_RPC_PFE_LOG_IF_ID_COMPATIBLE_LAST >= id))
 	{
 		ret = pfe_if_db_get_first(	platform->log_if_db, sender, IF_DB_CRIT_BY_ID,
 									(void *)(addr_t)((pfe_platform_rpc_pfe_log_if_generic_t*)buf)->log_if_id, &entry);
@@ -459,6 +416,7 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 		else
 		{
 			/* Entry doesn't exist */
+			NXP_LOG_DEBUG("Requested entry not found\n");
 			ret = ENOENT;
 		}
 	}
@@ -488,6 +446,7 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 		}
 		case PFE_PLATFORM_RPC_PFE_LOG_IF_CREATE:
 		{
+			pfe_platform_rpc_pfe_log_if_create_arg_t *arg = (pfe_platform_rpc_pfe_log_if_create_arg_t *)buf;
 			pfe_platform_rpc_pfe_log_if_create_ret_t rpc_ret = {0};
 			pfe_log_if_t *log_if = NULL;
 			static char_t namebuf[16];
@@ -496,8 +455,10 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 
 			if (EOK == ret)
 			{
-				/*	Generate some name to easily identify non-local interfaces */
-				(void)oal_util_snprintf(namebuf, sizeof(namebuf), "[cl%d]", sender);
+				/*	Generate some name to easily identify non-local interfaces. Foreign interfaces (the ones
+					created by slave driver instances contains sN. prefix where N identifies the slave
+					driver instance via host interface ID. */
+				(void)oal_util_snprintf(namebuf, sizeof(namebuf), "s%d.%s", sender, arg->name);
 				log_if = pfe_log_if_create(phy_if_arg, namebuf);
 				if (NULL == log_if)
 				{
@@ -514,13 +475,18 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 						pfe_log_if_destroy(log_if);
 						log_if = NULL;
 					}
+					else
+					{
+						NXP_LOG_INFO("Logical interface %s created in %s\n", \
+							pfe_log_if_get_name(log_if), pfe_phy_if_get_name(phy_if_arg));
+					}
 				}
 			}
 
 			/*	Report execution status to caller */
 			if (EOK != pfe_idex_set_rpc_ret_val(ret, &rpc_ret, sizeof(rpc_ret)))
 			{
-				NXP_LOG_ERROR("Could not send RPC response\n");
+				NXP_LOG_ERROR("Could not send RPC response. Reverting.\n");
 				if (NULL != log_if)
 				{
 					ret = pfe_if_db_get_first(platform->log_if_db, sender, IF_DB_CRIT_BY_INSTANCE, (void *)log_if, &entry);
@@ -541,6 +507,7 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 					else
 					{
 						pfe_log_if_destroy(log_if);
+						NXP_LOG_INFO("Interface destroyed\n");
 						log_if = NULL;
 					}
 				}
@@ -571,6 +538,7 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 				}
 				else
 				{
+					NXP_LOG_INFO("Removing %s\n", pfe_log_if_get_name(log_if_arg));
 					pfe_log_if_destroy(log_if_arg);
 					log_if_arg = NULL;
 				}
@@ -594,6 +562,14 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 			if (EOK == ret)
 			{
 				ret = pfe_log_if_set_match_rules(log_if_arg, oal_ntohl(arg->rules), &arg->args);
+				if (EOK == ret)
+				{
+					NXP_LOG_INFO("New match rules 0x%x set to %s\n", (uint32_t)oal_ntohl(arg->rules), pfe_log_if_get_name(log_if_arg));
+				}
+				else
+				{
+					NXP_LOG_ERROR("Can't set matching rules for %s\n", pfe_log_if_get_name(log_if_arg));
+				}
 			}
 
 			/*	Report execution status to caller */
@@ -636,6 +612,14 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 			if (EOK == ret)
 			{
 				ret = pfe_log_if_add_match_rule(log_if_arg, oal_ntohl(arg->rule), arg->arg, oal_ntohl(arg->arg_len));
+				if (EOK == ret)
+				{
+					NXP_LOG_INFO("New match rule 0x%x added to %s\n", oal_ntohl(arg->rule), pfe_log_if_get_name(log_if_arg));
+				}
+				else
+				{
+					NXP_LOG_ERROR("Can't add match rule 0x%x for %s\n", oal_ntohl(arg->rule), pfe_log_if_get_name(log_if_arg));
+				}
 			}
 
 			/*	Report execution status to caller */
@@ -656,6 +640,14 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 			if (EOK == ret)
 			{
 				ret = pfe_log_if_del_match_rule(log_if_arg, oal_ntohl(arg->rule));
+				if (EOK == ret)
+				{
+					NXP_LOG_INFO("Match rule 0x%x removed from %s\n", oal_ntohl(arg->rule), pfe_log_if_get_name(log_if_arg));
+				}
+				else
+				{
+					NXP_LOG_ERROR("Can't delete match rule 0x%x for %s\n", oal_ntohl(arg->rule), pfe_log_if_get_name(log_if_arg));
+				}
 			}
 
 			/*	Report execution status to caller */
@@ -949,6 +941,27 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 			break;
 		}
 
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_STATS:
+		{
+			pfe_platform_rpc_pfe_log_if_stats_ret_t rpc_ret = {0};
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_STATS\n");
+
+			if (EOK == ret)
+			{
+				_ct_assert(sizeof(rpc_ret.stats) == sizeof(pfe_ct_class_algo_stats_t));
+				ret = pfe_log_if_get_stats(phy_if_arg, &rpc_ret.stats)
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, &rpc_ret, sizeof(rpc_ret)))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
 		case PFE_PLATFORM_RPC_PFE_PHY_IF_CREATE:
 		{
 			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_CREATE\n");
@@ -1210,6 +1223,27 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 			break;
 		}
 
+		case PFE_PLATFORM_RPC_PFE_PHY_IF_STATS:
+		{
+			pfe_platform_rpc_pfe_phy_if_stats_ret_t rpc_ret = {0};
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_STATS\n");
+
+			if (EOK == ret)
+			{
+				_ct_assert(sizeof(pfe_ct_phy_if_stats_t) == sizeof(rpc_ret.stats));
+				ret = pfe_phy_if_get_stats(phy_if_arg, &rpc_ret.stats)
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, &rpc_ret, sizeof(rpc_ret)))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
 		default:
 		{
 			NXP_LOG_WARNING("Unsupported RPC code: %d\n", id);
@@ -1368,7 +1402,6 @@ static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, pfe_platform_co
 {
 	pfe_bmu_cfg_t bmu_cfg;
 
-	/*	Create storage for instances */
 	platform->bmu = oal_mm_malloc(platform->bmu_count * sizeof(pfe_bmu_t *));
 	if (NULL == platform->bmu)
 	{
@@ -1376,7 +1409,7 @@ static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, pfe_platform_co
 		return ENOMEM;
 	}
 
-	/*	BMU1 - LMEM buffers */
+	/*	Must be aligned to BUF_COUNT * BUF_SIZE */
 	bmu_cfg.pool_pa = (void *)(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_LMEM_BASE_ADDR + PFE_CFG_BMU1_LMEM_BASEADDR);
 	NXP_LOG_INFO("BMU1 buffer base: p0x%p\n", bmu_cfg.pool_pa);
 	bmu_cfg.max_buf_cnt = PFE_CFG_BMU1_BUF_COUNT;
@@ -1399,34 +1432,26 @@ static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, pfe_platform_co
 			return EOK;
 	}
 
-	/*	BMU2 - DDR buffers */
+	/*	Must be aligned to BUF_COUNT * BUF_SIZE */
+	platform->bmu_buffers_size = PFE_CFG_BMU2_BUF_COUNT * (1U << PFE_CFG_BMU2_BUF_SIZE);
+	platform->bmu_buffers_va = oal_mm_malloc_contig_named_aligned_nocache("pfe_ddr", platform->bmu_buffers_size, platform->bmu_buffers_size);
+	if (NULL == platform->bmu_buffers_va)
 	{
-		/*
-			Due to RTL bug the BMU2 base address must be 2k aligned.
-			TRM also says that the base shall be aligned to BUF_COUNT * BUF_SIZE.
+		NXP_LOG_ERROR("Unable to get BMU2 pool memory\n");
+		return ENOMEM;
+	}
 
-			UPDATE: When not aligned to BUF_COUNT * BUF_SIZE the BMU is reporting buffer free errors.
-		*/
-		platform->bmu_buffers_size = PFE_CFG_BMU2_BUF_COUNT * (1U << PFE_CFG_BMU2_BUF_SIZE);
-		platform->bmu_buffers_va = oal_mm_malloc_contig_named_aligned_nocache("pfe_ddr", platform->bmu_buffers_size, platform->bmu_buffers_size);
-		if (NULL == platform->bmu_buffers_va)
-		{
-			NXP_LOG_ERROR("Unable to get BMU2 pool memory\n");
-			return ENOMEM;
-		}
+	bmu_cfg.pool_va = platform->bmu_buffers_va;
+	bmu_cfg.pool_pa = oal_mm_virt_to_phys_contig(platform->bmu_buffers_va);
 
-		bmu_cfg.pool_va = platform->bmu_buffers_va;
-		bmu_cfg.pool_pa = oal_mm_virt_to_phys_contig(platform->bmu_buffers_va);
-
-		/*	S32G: Some of PFE AXI MASTERs can only access range p0x00020000 - p0xbfffffff */
-		if (((addr_t)bmu_cfg.pool_pa < 0x00020000U) || (((addr_t)bmu_cfg.pool_pa + platform->bmu_buffers_size)) > 0xbfffffffU)
-		{
-			NXP_LOG_WARNING("BMU2 buffers not in required range: starts @ p0x%p\n", bmu_cfg.pool_pa);
-		}
-		else
-		{
-			NXP_LOG_INFO("BMU2 buffer base: p0x%p (%"PRINTADDR_T" bytes)\n", bmu_cfg.pool_pa, platform->bmu_buffers_size);
-		}
+	/*	S32G: Some of PFE AXI MASTERs can only access range p0x00020000 - p0xbfffffff */
+	if (((addr_t)bmu_cfg.pool_pa < 0x00020000U) || (((addr_t)bmu_cfg.pool_pa + platform->bmu_buffers_size)) > 0xbfffffffU)
+	{
+		NXP_LOG_WARNING("BMU2 buffers not in required range: starts @ p0x%p\n", bmu_cfg.pool_pa);
+	}
+	else
+	{
+		NXP_LOG_INFO("BMU2 buffer base: p0x%p (%"PRINTADDR_T" bytes)\n", bmu_cfg.pool_pa, platform->bmu_buffers_size);
 	}
 
 	bmu_cfg.max_buf_cnt = PFE_CFG_BMU2_BUF_COUNT;
@@ -1519,7 +1544,6 @@ static errno_t pfe_platform_create_gpi(pfe_platform_t *platform)
 {
 	pfe_gpi_cfg_t gpi_cfg;
 
-	/*	Create storage for instances */
 	platform->gpi = oal_mm_malloc(platform->gpi_count * sizeof(pfe_gpi_t *));
 	if (NULL == platform->gpi)
 	{
@@ -1530,7 +1554,7 @@ static errno_t pfe_platform_create_gpi(pfe_platform_t *platform)
 	/*	GPI1 */
 	gpi_cfg.alloc_retry_cycles = 0x200U;
 	gpi_cfg.gpi_tmlf_txthres = 0x178U;
-	gpi_cfg.gpi_dtx_aseq_len = 0x40; /* AAVB-2028 - DTX_ASEQ_LEN shall be 0x40 to have HW CSUMs working */
+	gpi_cfg.gpi_dtx_aseq_len = 0x40; /* See AAVB-2028 */
 	gpi_cfg.emac_1588_ts_en = TRUE;
 
 	platform->gpi[0] = pfe_gpi_create(platform->cbus_baseaddr, (void *)CBUS_EGPI1_BASE_ADDR, &gpi_cfg);
@@ -1543,7 +1567,7 @@ static errno_t pfe_platform_create_gpi(pfe_platform_t *platform)
 	/*	GPI2 */
 	gpi_cfg.alloc_retry_cycles = 0x200U;
 	gpi_cfg.gpi_tmlf_txthres = 0x178U;
-	gpi_cfg.gpi_dtx_aseq_len = 0x40; /* AAVB-2028 - DTX_ASEQ_LEN shall be 0x40 to have HW CSUMs working */
+	gpi_cfg.gpi_dtx_aseq_len = 0x40; /* See AAVB-2028 */
 	gpi_cfg.emac_1588_ts_en = TRUE;
 
 	platform->gpi[1] = pfe_gpi_create(platform->cbus_baseaddr, (void *)CBUS_EGPI2_BASE_ADDR, &gpi_cfg);
@@ -1556,7 +1580,7 @@ static errno_t pfe_platform_create_gpi(pfe_platform_t *platform)
 	/*	GPI3 */
 	gpi_cfg.alloc_retry_cycles = 0x200U;
 	gpi_cfg.gpi_tmlf_txthres = 0x178U;
-	gpi_cfg.gpi_dtx_aseq_len = 0x40; /* AAVB-2028 - DTX_ASEQ_LEN shall be 0x40 to have HW CSUMs working */
+	gpi_cfg.gpi_dtx_aseq_len = 0x40; /* See AAVB-2028 */
 	gpi_cfg.emac_1588_ts_en = TRUE;
 
 	platform->gpi[2] = pfe_gpi_create(platform->cbus_baseaddr, (void *)CBUS_EGPI3_BASE_ADDR, &gpi_cfg);
@@ -1599,7 +1623,6 @@ static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
 {
 	pfe_gpi_cfg_t gpi_cfg;
 
-	/*	Create storage for instances */
 	platform->etgpi = oal_mm_malloc(platform->etgpi_count * sizeof(pfe_gpi_t *));
 	if (NULL == platform->etgpi)
 	{
@@ -1610,7 +1633,7 @@ static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
 	/*	ETGPI1 */
 	gpi_cfg.alloc_retry_cycles = 0x200U;
 	gpi_cfg.gpi_tmlf_txthres = 0xbcU;
-	gpi_cfg.gpi_dtx_aseq_len = 0x40; /* AAVB-2028 - DTX_ASEQ_LEN shall be 0x40 to have HW CSUMs working */
+	gpi_cfg.gpi_dtx_aseq_len = 0x40; /* See AAVB-2028 */
 	gpi_cfg.emac_1588_ts_en = TRUE;
 
 	platform->etgpi[0] = pfe_gpi_create(platform->cbus_baseaddr, (void *)CBUS_ETGPI1_BASE_ADDR, &gpi_cfg);
@@ -1623,7 +1646,7 @@ static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
 	/*	ETGPI2 */
 	gpi_cfg.alloc_retry_cycles = 0x200U;
 	gpi_cfg.gpi_tmlf_txthres = 0xbcU;
-	gpi_cfg.gpi_dtx_aseq_len = 0x40; /* AAVB-2028 - DTX_ASEQ_LEN shall be 0x40 to have HW CSUMs working */
+	gpi_cfg.gpi_dtx_aseq_len = 0x40; /* See AAVB-2028 */
 	gpi_cfg.emac_1588_ts_en = TRUE;
 
 	platform->etgpi[1] = pfe_gpi_create(platform->cbus_baseaddr, (void *)CBUS_ETGPI2_BASE_ADDR, &gpi_cfg);
@@ -1636,7 +1659,7 @@ static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
 	/*	ETGPI3 */
 	gpi_cfg.alloc_retry_cycles = 0x200U;
 	gpi_cfg.gpi_tmlf_txthres = 0xbcU;
-	gpi_cfg.gpi_dtx_aseq_len = 0x40; /* AAVB-2028 - DTX_ASEQ_LEN shall be 0x40 to have HW CSUMs working */
+	gpi_cfg.gpi_dtx_aseq_len = 0x40; /* See AAVB-2028 */
 	gpi_cfg.emac_1588_ts_en = TRUE;
 
 	platform->etgpi[2] = pfe_gpi_create(platform->cbus_baseaddr, (void *)CBUS_ETGPI3_BASE_ADDR, &gpi_cfg);
@@ -1679,7 +1702,6 @@ static errno_t pfe_platform_create_hgpi(pfe_platform_t *platform)
 {
 	pfe_gpi_cfg_t hgpi_cfg;
 
-	/*	Create storage for instances */
 	platform->hgpi = oal_mm_malloc(platform->hgpi_count * sizeof(pfe_gpi_t *));
 	if (NULL == platform->hgpi)
 	{
@@ -1762,12 +1784,6 @@ static errno_t pfe_platform_create_class(pfe_platform_t *platform)
 	}
 	else
 	{
-		/*	Here we need to initialize data structures within the DMEM */
-					/*	TODO */
-	#if 0
-		class_fw_init(platform->classifier, platform->cbus_baseaddr);
-	#endif /* 0 */
-
 		temp = (uint8_t *)platform->fw->class_data;
 
 		if ((temp[0] == 0x7fU) &&
@@ -2061,6 +2077,14 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 		pfe_emac_enable_flow_control(platform->emac[0]);
 		pfe_emac_enable_broadcast(platform->emac[0]);
 
+#ifdef PFE_CFG_IEEE1588_SUPPORT
+		if (EOK != pfe_emac_enable_ts(platform->emac[0],
+				PFE_CFG_IEEE1588_I_CLK_HZ, PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ))
+		{
+			NXP_LOG_WARNING("EMAC0: Could not configure the timestamping unit\n");
+		}
+#endif /* PFE_CFG_IEEE1588_SUPPORT */
+
 		/*	MAC address will be added with phy/log interface */
 	}
 
@@ -2081,6 +2105,14 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 		pfe_emac_enable_flow_control(platform->emac[1]);
 		pfe_emac_enable_broadcast(platform->emac[1]);
 
+#ifdef PFE_CFG_IEEE1588_SUPPORT
+		if (EOK != pfe_emac_enable_ts(platform->emac[1],
+				PFE_CFG_IEEE1588_I_CLK_HZ, PFE_CFG_IEEE1588_EMAC1_O_CLK_HZ))
+		{
+			NXP_LOG_WARNING("EMAC1: Could not configure the timestamping unit\n");
+		}
+#endif /* PFE_CFG_IEEE1588_SUPPORT */
+
 		/*	MAC address will be added with phy/log interface */
 	}
 
@@ -2100,6 +2132,14 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 		pfe_emac_set_max_frame_length(platform->emac[2], 1522);
 		pfe_emac_enable_flow_control(platform->emac[2]);
 		pfe_emac_enable_broadcast(platform->emac[2]);
+
+#ifdef PFE_CFG_IEEE1588_SUPPORT
+		if (EOK != pfe_emac_enable_ts(platform->emac[2],
+				PFE_CFG_IEEE1588_I_CLK_HZ, PFE_CFG_IEEE1588_EMAC2_O_CLK_HZ))
+		{
+			NXP_LOG_WARNING("EMAC2: Could not configure the timestamping unit\n");
+		}
+#endif /* PFE_CFG_IEEE1588_SUPPORT */
 
 		/*	MAC address will be added with phy/log interface */
 	}
@@ -2163,10 +2203,6 @@ static errno_t pfe_platform_create_safety(pfe_platform_t *platform, pfe_platform
 		NXP_LOG_INFO("Watchdog instance created\n");
 	}
 #endif /* PFE_CFG_IP_VERSION */
-
-	/*	Interrupts. Safety and Watchdog interrupts are not connected to host but to FCCU.
-		We'll use polling to at least detect that something has happened... See the polling
-		thread where safety and wdt ISRs are being periodically called. */
 
 	pfe_safety_irq_unmask(platform->safety);
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4)
@@ -2233,7 +2269,7 @@ static void pfe_platform_destroy_fci(pfe_platform_t *platform)
 #endif /* PFE_CFG_FCI_ENABLE */
 
 /**
- * @brief		Regiseter logical interface
+ * @brief		Register logical interface
  * @details		Add logical interface to internal database
  */
 errno_t pfe_platform_register_log_if(pfe_platform_t *platform, pfe_log_if_t *log_if)
@@ -2257,7 +2293,7 @@ errno_t pfe_platform_register_log_if(pfe_platform_t *platform, pfe_log_if_t *log
 	}
 	
 	/*	Register in platform to db */
-	ret = pfe_if_db_add(platform->log_if_db, session_id, log_if, PFE_CFG_LOCAL_PHY_IF_ID);
+	ret = pfe_if_db_add(platform->log_if_db, session_id, log_if, PFE_CFG_LOCAL_IF);
 	if (EOK != ret)
 	{
 		NXP_LOG_ERROR("Could not register %s: %d\n", pfe_log_if_get_name(log_if), ret);
@@ -2335,7 +2371,7 @@ static errno_t pfe_platform_register_phy_if(pfe_platform_t *platform, uint32_t s
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Owner of the interface is local driver instance */
-	ret = pfe_if_db_add(platform->phy_if_db, session_id, phy_if, PFE_CFG_LOCAL_PHY_IF_ID);
+	ret = pfe_if_db_add(platform->phy_if_db, session_id, phy_if, PFE_CFG_LOCAL_IF);
 
 	return ret;
 }
@@ -2463,12 +2499,12 @@ pfe_phy_if_t *pfe_platform_get_phy_if_by_id(pfe_platform_t *platform, pfe_ct_phy
 /**
  * @brief		Assign interfaces to the platform.
  */
-static errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
+errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 {
 	int32_t ii;
 	pfe_phy_if_t *phy_if = NULL;
-	errno_t ret = EOK;
 	uint32_t session_id;
+	pfe_if_db_entry_t *entry = NULL;
 
 	struct
 	{
@@ -2495,82 +2531,113 @@ static errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 			{.name = NULL, .id = PFE_PHY_IF_ID_INVALID, .mac = {0}, {NULL}}
 	};
 
-	if (EOK != pfe_if_db_lock(&session_id))
+	/*	Create interface databases */
+	if (NULL == platform->phy_if_db)
 	{
-		NXP_LOG_DEBUG("DB lock failed\n");
-	}
-
-	/*	Create interfaces. This also configures in interfaces in firmware. */
-	for (ii=0; phy_ifs[ii].id!=PFE_PHY_IF_ID_INVALID; ii++)
-	{
-		/*	Create physical IF */
-		phy_if = pfe_phy_if_create(platform->classifier, phy_ifs[ii].id, phy_ifs[ii].name);
-		if (NULL == phy_if)
+		platform->phy_if_db = pfe_if_db_create(PFE_IF_DB_PHY);
+		if (NULL == platform->phy_if_db)
 		{
-			NXP_LOG_ERROR("Couldn't create %s\n", phy_ifs[ii].name);
+			NXP_LOG_DEBUG("Can't create physical interface DB\n");
 			return ENODEV;
 		}
 		else
 		{
-			/*	Set default operation mode */
-			if (EOK != pfe_phy_if_set_op_mode(phy_if, IF_OP_DEFAULT))
+			if (EOK != pfe_if_db_lock(&session_id))
 			{
-				NXP_LOG_ERROR("Could not set default operational mode (%s)\n", phy_ifs[ii].name);
-				return ENODEV;
+				NXP_LOG_DEBUG("DB lock failed\n");
 			}
 
-			if ((pfe_phy_if_get_id(phy_if) == PFE_PHY_IF_ID_EMAC0)
-					|| (pfe_phy_if_get_id(phy_if) == PFE_PHY_IF_ID_EMAC1)
-					|| (pfe_phy_if_get_id(phy_if) == PFE_PHY_IF_ID_EMAC2))
+			/*	Create interfaces */
+			for (ii=0; phy_ifs[ii].id!=PFE_PHY_IF_ID_INVALID; ii++)
 			{
-				/*	Bind EMAC instance with the physical IF */
-				if (EOK != pfe_phy_if_bind_emac(phy_if, phy_ifs[ii].emac))
+				/*	Check if physical IF with given ID is already registered. We need
+					only one local instance per PHY IF. */
+				pfe_if_db_get_first(platform->phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)phy_ifs[ii].id, &entry);
+				if (NULL != entry)
 				{
-					NXP_LOG_ERROR("Can't bind interface with EMAC (%s)\n", phy_ifs[ii].name);
-					return ENODEV;
+					/*	Duplicate found */
+					continue;
 				}
 
-				/*	Do not set MAC address here. Will be configured via logical interfaces later. */
-			
-			}
-			else
-			{
-				/*	Bind HIF channel instance with the physical IF */
-				if (NULL != phy_ifs[ii].chnl)
+				/*	Create physical IF */
+				phy_if = pfe_phy_if_create(platform->classifier, phy_ifs[ii].id, phy_ifs[ii].name);
+				if (NULL == phy_if)
 				{
-					if (EOK != pfe_phy_if_bind_hif(phy_if, phy_ifs[ii].chnl))
-					{
-						NXP_LOG_ERROR("Can't bind interface with HIF (%s)\n", phy_ifs[ii].name);
-						return ENODEV;
-					}
+					NXP_LOG_ERROR("Couldn't create %s\n", phy_ifs[ii].name);
+					return ENODEV;
 				}
 				else
 				{
-					/*	This driver instance is not managing given channel */
+					/*	Set default operation mode */
+					if (EOK != pfe_phy_if_set_op_mode(phy_if, IF_OP_DEFAULT))
+					{
+						NXP_LOG_ERROR("Could not set default operational mode (%s)\n", phy_ifs[ii].name);
+						return ENODEV;
+					}
+
+					if ((pfe_phy_if_get_id(phy_if) == PFE_PHY_IF_ID_EMAC0)
+							|| (pfe_phy_if_get_id(phy_if) == PFE_PHY_IF_ID_EMAC1)
+							|| (pfe_phy_if_get_id(phy_if) == PFE_PHY_IF_ID_EMAC2))
+					{
+						/*	Bind EMAC instance with the physical IF */
+						if (EOK != pfe_phy_if_bind_emac(phy_if, phy_ifs[ii].emac))
+						{
+							NXP_LOG_ERROR("Can't bind interface with EMAC (%s)\n", phy_ifs[ii].name);
+							return ENODEV;
+						}
+
+						/*	Do not set MAC address here. Will be configured via logical interfaces later. */
+					}
+					else
+					{
+						/*	Bind HIF channel instance with the physical IF */
+						if (NULL != phy_ifs[ii].chnl)
+						{
+							if (EOK != pfe_phy_if_bind_hif(phy_if, phy_ifs[ii].chnl))
+							{
+								NXP_LOG_ERROR("Can't bind interface with HIF (%s)\n", phy_ifs[ii].name);
+								return ENODEV;
+							}
+						}
+						else
+						{
+							/*	This driver instance is not managing given channel */
+						}
+					}
+
+					/*	Register in platform */
+					if (EOK != pfe_platform_register_phy_if(platform, session_id, phy_if))
+					{
+						NXP_LOG_ERROR("Could not register %s\n", pfe_phy_if_get_name(phy_if));
+						if (EOK != pfe_phy_if_destroy(phy_if))
+						{
+							NXP_LOG_DEBUG("Could not destroy physical interface\n");
+						}
+
+						phy_if = NULL;
+						return ENODEV;
+					}
 				}
 			}
 
-			/*	Register in platform */
-			if (EOK != pfe_platform_register_phy_if(platform, session_id, phy_if))
+			if (EOK != pfe_if_db_unlock(session_id))
 			{
-				NXP_LOG_ERROR("Could not register %s\n", pfe_phy_if_get_name(phy_if));
-				if (EOK != pfe_phy_if_destroy(phy_if))
-				{
-					NXP_LOG_DEBUG("Could not destroy physical interface\n");
-				}
-
-				phy_if = NULL;
-				return ENODEV;
+				NXP_LOG_DEBUG("DB unlock failed\n");
 			}
 		}
 	}
 
-	if (EOK != pfe_if_db_unlock(session_id))
+	if (NULL == platform->log_if_db)
 	{
-		NXP_LOG_DEBUG("DB unlock failed\n");
+		pfe.log_if_db = pfe_if_db_create(PFE_IF_DB_LOG);
+		if (NULL == pfe.log_if_db)
+		{
+			NXP_LOG_DEBUG("Can't create logical interface DB\n");
+			return ENODEV;
+		}
 	}
 
-	return ret;
+	return EOK;
 }
 
 /**
@@ -2615,6 +2682,12 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 		{
 			NXP_LOG_DEBUG("DB unlock failed\n");
 		}
+
+		if (NULL != platform->log_if_db)
+		{
+			pfe_if_db_destroy(platform->log_if_db);
+			platform->log_if_db = NULL;
+		}
 	}
 
 	if (NULL != platform->phy_if_db)
@@ -2651,6 +2724,12 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 		{
 			NXP_LOG_DEBUG("DB unlock failed\n");
 		}
+
+		if (NULL != platform->phy_if_db)
+		{
+			pfe_if_db_destroy(platform->phy_if_db);
+			platform->phy_if_db = NULL;
+		}
 	}
 }
 
@@ -2667,7 +2746,7 @@ errno_t pfe_platform_soft_reset(pfe_platform_t *platform)
 	regval = hal_read32(addr) | (1U << 30);
 	hal_write32(regval, addr);
 
-	oal_time_usleep(100000); /* 100ms (taken from reference code) */
+	oal_time_usleep(100000);
 
 	regval &= ~(1U << 30);
 	hal_write32(regval, addr);
@@ -2689,21 +2768,6 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 	memset(&pfe, 0U, sizeof(pfe_platform_t));
 	pfe.fci_created = FALSE;
 
-	/*	Create interface databases */
-	pfe.phy_if_db = pfe_if_db_create(PFE_IF_DB_PHY);
-	if (NULL == pfe.phy_if_db)
-	{
-		NXP_LOG_DEBUG("Can't create physical interface DB\n");
-		goto exit;
-	}
-
-	pfe.log_if_db = pfe_if_db_create(PFE_IF_DB_LOG);
-	if (NULL == pfe.log_if_db)
-	{
-		NXP_LOG_DEBUG("Can't create logical interface DB\n");
-		goto exit;
-	}
-
 	pfe.fw = config->fw;
 
 	/*	Map CBUS address space */
@@ -2720,7 +2784,6 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 
 	/*	Initialize LMEM TODO: Get LMEM size from global WSP_LMEM_SIZE register */
 	addr = (uint32_t*)(void*)((addr_t)pfe.cbus_baseaddr + CBUS_LMEM_BASE_ADDR);
-	NXP_LOG_DEBUG("Initializing LMEM (%d bytes)\n", (int)CBUS_LMEM_SIZE);
 	for (ii = addr; ii - addr < CBUS_LMEM_SIZE; ++ii)
 	{
 		*ii = 0U;
@@ -2737,7 +2800,7 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 	pfe.util_pe_count = 1U;
 #else /* FPGA */
 	pfe.class_pe_count = 1U;
-	pfe.util_pe_count = 0U;	/* Current FPGA bitfile does not implement UTIL PE */
+	pfe.util_pe_count = 0U;
 #endif
 	pfe.tmu_pe_count = 0U;
 
@@ -2778,27 +2841,6 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 
 	/*	BMU */
 	ret = pfe_platform_create_bmu(&pfe, config);
-	if (EOK != ret)
-	{
-		goto exit;
-	}
-
-	/*	GPI */
-	ret = pfe_platform_create_gpi(&pfe);
-	if (EOK != ret)
-	{
-		goto exit;
-	}
-
-	/*	ETGPI */
-	ret = pfe_platform_create_etgpi(&pfe);
-	if (EOK != ret)
-	{
-		goto exit;
-	}
-
-	/*	HGPI */
-	ret = pfe_platform_create_hgpi(&pfe);
 	if (EOK != ret)
 	{
 		goto exit;
@@ -2850,21 +2892,32 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 			goto exit;
 		}
 	}
-#if 0
-#warning EXPERIMENTAL STUFF
-	/*	This is not optimal. Firmware is sampling the register during initialization (only once)
-		to get ports assigned to bridge. If something has changed during runtime (interface added/removed)
-		the firmware never gets this information. */
-	addr = (addr_t *)(CBUS_GLOBAL_CSR_BASE_ADDR + 0x44U + (addr_t)(pfe.cbus_baseaddr));
-	val = *addr;
-	val = val | 0x7U; /* this should configure ALL EMAC ports as SWITCH ports */
-	*addr = val;
-#endif /* 0 */
 
 	/*	SOFT RESET */
 	if (EOK != pfe_platform_soft_reset(&pfe))
 	{
 		NXP_LOG_ERROR("Platform reset failed\n");
+	}
+
+	/*	GPI */
+	ret = pfe_platform_create_gpi(&pfe);
+	if (EOK != ret)
+	{
+		goto exit;
+	}
+
+	/*	HGPI */
+	ret = pfe_platform_create_hgpi(&pfe);
+	if (EOK != ret)
+	{
+		goto exit;
+	}
+
+	/*	ETGPI */
+	ret = pfe_platform_create_etgpi(&pfe);
+	if (EOK != ret)
+	{
+		goto exit;
 	}
 
 #ifdef PFE_CFG_FCI_ENABLE
@@ -2878,7 +2931,7 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 #endif /* PFE_CFG_L2BRIDGE_ENABLE */
 #endif /* PFE_CFG_FCI_ENABLE */
 
-	/*	HIF (HIF DOES NOT LIKE SOFT RESET ONCE HAS BEEN CONFIGURED...) */
+	/*	HIF */
 	ret = pfe_platform_create_hif(&pfe, config);
 	if (EOK != ret)
 	{
@@ -2910,7 +2963,6 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 #endif /* PFE_CFG_GLOB_ERR_POLL_WORKER */
 
 	/*	Activate the classifier */
-	NXP_LOG_INFO("Enabling the CLASS block\n");
 	pfe_class_enable(pfe.classifier);
 	/*	Wait a (micro) second to let classifier firmware to initialize */
 	oal_time_usleep(50000);
@@ -2949,8 +3001,7 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 	{
 		pfe_util_enable(pfe.util);
 	}
-	/*	Enable MAC's TODO: FIXME: Really? What does this write do? (it does not work without this but we need to know
-		what is the purpose of this - description is missing in TRM of course... */
+
 	addr = (void *)(CBUS_GLOBAL_CSR_BASE_ADDR + 0x20U + (addr_t)(pfe.cbus_baseaddr));
 	val = hal_read32(addr);
 	hal_write32((val | 0x80000003U), addr);
@@ -2992,7 +3043,6 @@ errno_t pfe_platform_remove(void)
 	}
 #endif /* PFE_CFG_GLOB_ERR_POLL_WORKER */
 
-	pfe_platform_destroy_ifaces(&pfe); /* Need classifier instance to be available */
 	pfe_platform_destroy_hif(&pfe);
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	pfe_platform_destroy_hif_nocpy(&pfe);
@@ -3010,6 +3060,8 @@ errno_t pfe_platform_remove(void)
 #ifdef PFE_CFG_FCI_ENABLE /* temp solution, disabled for Linux and MCAL now */
 	pfe_platform_destroy_fci(&pfe);
 #endif /* PFE_CFG_FCI_ENABLE */
+
+	pfe_platform_destroy_ifaces(&pfe);
 	pfe_platform_destroy_class(&pfe);
 	pfe_platform_destroy_tmu(&pfe);
 	pfe_platform_destroy_util(&pfe);
@@ -3026,44 +3078,10 @@ errno_t pfe_platform_remove(void)
 		}
 	}
 
-	if (NULL != pfe.phy_if_db)
-	{
-		pfe_if_db_destroy(pfe.phy_if_db);
-		pfe.phy_if_db = NULL;
-	}
-
-	if (NULL != pfe.log_if_db)
-	{
-		pfe_if_db_destroy(pfe.log_if_db);
-		pfe.log_if_db = NULL;
-	}
-
 	pfe.cbus_baseaddr = 0x0ULL;
 	pfe.probed = FALSE;
 
 	return EOK;
-}
-
-/**
- * @brief		Read and print PFE HW IP blocks versions
- */
-void pfe_platform_print_versions(pfe_platform_t *platform)
-{
-	NXP_LOG_INFO("CLASS version    : 0x%x\n", hal_read32(platform->cbus_baseaddr + CLASS_VERSION));
-	NXP_LOG_INFO("TMU version      : 0x%x\n", hal_read32(platform->cbus_baseaddr + TMU_VERSION));
-	NXP_LOG_INFO("BMU1 version     : 0x%x\n", hal_read32(platform->cbus_baseaddr + CBUS_BMU1_BASE_ADDR + BMU_VERSION));
-	NXP_LOG_INFO("BMU2 version     : 0x%x\n", hal_read32(platform->cbus_baseaddr + CBUS_BMU2_BASE_ADDR + BMU_VERSION));
-	NXP_LOG_INFO("EGPI1 version    : 0x%x\n", hal_read32(platform->cbus_baseaddr + CBUS_EGPI1_BASE_ADDR + GPI_VERSION));
-	NXP_LOG_INFO("EGPI2 version    : 0x%x\n", hal_read32(platform->cbus_baseaddr + CBUS_EGPI2_BASE_ADDR + GPI_VERSION));
-	NXP_LOG_INFO("EGPI3 version    : 0x%x\n", hal_read32(platform->cbus_baseaddr + CBUS_EGPI3_BASE_ADDR + GPI_VERSION));
-	NXP_LOG_INFO("ETGPI1 version   : 0x%x\n", hal_read32(platform->cbus_baseaddr + CBUS_ETGPI1_BASE_ADDR + GPI_VERSION));
-	NXP_LOG_INFO("ETGPI2 version   : 0x%x\n", hal_read32(platform->cbus_baseaddr + CBUS_ETGPI2_BASE_ADDR + GPI_VERSION));
-	NXP_LOG_INFO("ETGPI3 version   : 0x%x\n", hal_read32(platform->cbus_baseaddr + CBUS_ETGPI3_BASE_ADDR + GPI_VERSION));
-	NXP_LOG_INFO("HGPI version     : 0x%x\n", hal_read32(platform->cbus_baseaddr + CBUS_HGPI_BASE_ADDR + GPI_VERSION));
-	/* NXP_LOG_INFO("GPT version      : 0x%x\n", hal_read32(platform->cbus_baseaddr + CBUS_GPT_VERSION)); */
-	NXP_LOG_INFO("HIF version      : 0x%x\n", hal_read32(platform->cbus_baseaddr + CBUS_HIF_BASE_ADDR + HIF_VERSION));
-	NXP_LOG_INFO("HIF NOPCY version: 0x%x\n", hal_read32(platform->cbus_baseaddr + CBUS_HIF_NOCPY_BASE_ADDR + HIF_NOCPY_VERSION));
-	NXP_LOG_INFO("UTIL version     : 0x%x\n", hal_read32(platform->cbus_baseaddr + UTIL_VERSION));
 }
 
 /**
@@ -3080,5 +3098,3 @@ pfe_platform_t * pfe_platform_get_instance(void)
 		return NULL;
 	}
 }
-
-/** @}*/

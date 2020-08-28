@@ -5,6 +5,7 @@
  *
  */
 
+#include <linux/version.h>
 #include <linux/of.h>
 #include <linux/of_net.h>
 #include <linux/of_device.h>
@@ -18,6 +19,7 @@
 #include "pfeng.h"
 
 #define MAC_PHYIF_CTRL_STATUS	0xF8
+#define EMAC_TX_RATE_325M	325000000	/* 325MHz */
 #define EMAC_TX_RATE_125M	125000000	/* 125MHz */
 #define EMAC_TX_RATE_25M	25000000	/* 25MHz */
 #define EMAC_TX_RATE_2M5	2500000		/* 2.5MHz */
@@ -25,8 +27,15 @@
 /**
  * @brief	Validate and update the link configuration
  */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
+static void pfeng_phylink_validate(struct phylink_config *config, unsigned long *supported, struct phylink_link_state *state)
+{
+	struct pfeng_ndev *ndev = netdev_priv(to_net_dev(config->dev));
+#else
 static void pfeng_phylink_validate(struct net_device *netdev, unsigned long *supported, struct phylink_link_state *state)
 {
+	struct pfeng_ndev *ndev = netdev_priv(netdev);
+#endif
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(mac_supported) = { 0, };
 
@@ -50,11 +59,15 @@ static void pfeng_phylink_validate(struct net_device *netdev, unsigned long *sup
 
 	phylink_set(mac_supported, Autoneg);
 	phylink_set(mac_supported, MII);
+	phylink_set_port_modes(mac_supported);
 
-	if (state->interface == PHY_INTERFACE_MODE_SGMII) {
+	/* Only PFE_EMAC_0 supports 2.5G over SGMII */
+	if (!ndev->eth->emac_id && state->interface == PHY_INTERFACE_MODE_SGMII) {
 		phylink_set(mac_supported, 2500baseT_Full);
 		phylink_set(mac_supported, 2500baseX_Full);
 	}
+
+	//TODO: limit if max-speed or fixed-speed
 
 	bitmap_and(supported, supported, mac_supported,
 		 __ETHTOOL_LINK_MODE_MASK_NBITS);
@@ -65,15 +78,23 @@ static void pfeng_phylink_validate(struct net_device *netdev, unsigned long *sup
 	bitmap_andnot(state->advertising, state->advertising, mask,
 		__ETHTOOL_LINK_MODE_MASK_NBITS);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,4,0)
 	phylink_helper_basex_speed(state);
+#endif
 }
 
 /**
  * @brief	Read the current link state from the hardware
  */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
+static int pfeng_mac_link_state(struct phylink_config *config, struct phylink_link_state *state)
+{
+	struct pfeng_ndev *ndev = netdev_priv(to_net_dev(config->dev));
+#else
 static int pfeng_mac_link_state(struct net_device *netdev, struct phylink_link_state *state)
 {
 	struct pfeng_ndev *ndev = netdev_priv(netdev);
+#endif
 	pfe_emac_t *emac = ndev->priv->pfe->emac[ndev->eth->emac_id];
 	int updated = 0;
 	u32 speed, duplex;
@@ -119,7 +140,11 @@ static int pfeng_mac_link_state(struct net_device *netdev, struct phylink_link_s
 	return updated;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
+static void pfeng_mac_an_restart(struct phylink_config *config)
+#else
 static void pfeng_mac_an_restart(struct net_device *netdev)
+#endif
 {
 	return;
 }
@@ -131,30 +156,33 @@ static void s32g_set_tx_clock(struct pfeng_ndev *ndev, unsigned int speed)
 {
 	u32 emac_speed;
 
-	if (!ndev->eth->tx_clk)
-		return;
-
-	/* SGMII mode doesn't support the clock reconfiguration */
-	if (ndev->eth->intf_mode == PHY_INTERFACE_MODE_SGMII)
-		return;
-
 	switch (speed) {
 	default:
 		netdev_dbg(ndev->netdev, "Skipped TX clock setting\n");
 		return;
+	case SPEED_2500:
+		/* Seting TX clock for 2.5Gbps is unsupported */
+		emac_speed = EMAC_SPEED_2500_MBPS;
+		break;
 	case SPEED_1000:
-		netdev_info(ndev->netdev, "Set TX clock to 125M\n");
-		clk_set_rate(ndev->eth->tx_clk, EMAC_TX_RATE_125M);
+		if (ndev->eth->tx_clk) {
+			netdev_info(ndev->netdev, "Set TX clock to 125M\n");
+			clk_set_rate(ndev->eth->tx_clk, EMAC_TX_RATE_125M);
+		}
 		emac_speed = EMAC_SPEED_1000_MBPS;
 		break;
 	case SPEED_100:
-		netdev_info(ndev->netdev, "Set TX clock to 25M\n");
-		clk_set_rate(ndev->eth->tx_clk, EMAC_TX_RATE_25M);
+		if (ndev->eth->tx_clk) {
+			netdev_info(ndev->netdev, "Set TX clock to 25M\n");
+			clk_set_rate(ndev->eth->tx_clk, EMAC_TX_RATE_25M);
+		}
 		emac_speed = EMAC_SPEED_100_MBPS;
 		break;
 	case SPEED_10:
-		netdev_info(ndev->netdev, "Set TX clock to 2.5M\n");
-		clk_set_rate(ndev->eth->tx_clk, EMAC_TX_RATE_2M5);
+		if (ndev->eth->tx_clk) {
+			netdev_info(ndev->netdev, "Set TX clock to 2.5M\n");
+			clk_set_rate(ndev->eth->tx_clk, EMAC_TX_RATE_2M5);
+		}
 		emac_speed = EMAC_SPEED_10_MBPS;
 		break;
 	}
@@ -162,15 +190,21 @@ static void s32g_set_tx_clock(struct pfeng_ndev *ndev, unsigned int speed)
 	pfe_emac_cfg_set_speed(ndev->emac_regs, emac_speed);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
+static void pfeng_mac_config(struct phylink_config *config, unsigned int mode, const struct phylink_link_state *state)
+{
+	struct pfeng_ndev *ndev = netdev_priv(to_net_dev(config->dev));
+#else
 static void pfeng_mac_config(struct net_device *netdev, unsigned int mode, const struct phylink_link_state *state)
 {
 	struct pfeng_ndev *ndev = netdev_priv(netdev);
+#endif
 
 	switch (mode) {
 		case MLO_AN_FIXED:
 			if (state->speed == ndev->emac_speed)
 				break;
-			/* pass through */
+			/* FALLTHRU */
 		case MLO_AN_PHY:
 			s32g_set_tx_clock(ndev, state->speed);
 			ndev->emac_speed = state->speed;
@@ -180,6 +214,23 @@ static void pfeng_mac_config(struct net_device *netdev, unsigned int mode, const
 	}
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
+static void pfeng_mac_link_down(struct phylink_config *config, unsigned int mode, phy_interface_t interface)
+{
+	struct pfeng_ndev *ndev = netdev_priv(to_net_dev(config->dev));
+
+	/* Disable Rx and Tx */
+	netif_tx_stop_all_queues(ndev->netdev);
+}
+
+static void pfeng_mac_link_up(struct phylink_config *config, unsigned int mode, phy_interface_t interface, struct phy_device *phy)
+{
+	struct pfeng_ndev *ndev = netdev_priv(to_net_dev(config->dev));
+
+	/* Enable Rx and Tx */
+	netif_tx_wake_all_queues(ndev->netdev);
+}
+#else
 static void pfeng_mac_link_down(struct net_device *netdev, unsigned int mode, phy_interface_t interface)
 {
 	/* Disable Rx and Tx */
@@ -191,6 +242,7 @@ static void pfeng_mac_link_up(struct net_device *netdev, unsigned int mode, phy_
 	/* Enable Rx and Tx */
 	netif_tx_wake_all_queues(netdev);
 }
+#endif
 
 static const struct phylink_mac_ops pfeng_phylink_ops = {
 	.validate = pfeng_phylink_validate,
@@ -212,7 +264,14 @@ int pfeng_phylink_create(struct pfeng_ndev *ndev)
 	struct phylink *phylink;
 	void *syscon;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
+	ndev->phylink_cfg.dev = &ndev->netdev->dev;
+	ndev->phylink_cfg.type = PHYLINK_NETDEV;
+	phylink = phylink_create(&ndev->phylink_cfg, of_fwnode_handle(ndev->eth->dn), ndev->eth->intf_mode, &pfeng_phylink_ops);
+#else
 	phylink = phylink_create(ndev->netdev, of_fwnode_handle(ndev->eth->dn), ndev->eth->intf_mode, &pfeng_phylink_ops);
+
+#endif
 	if (IS_ERR(phylink))
 		return PTR_ERR(phylink);
 

@@ -29,9 +29,6 @@
  * ========================================================================= */
 
 /**
- * @addtogroup  dxgr_PFE_PHY_IF
- * @{
- *
  * @file		pfe_phy_if_slave.c
  * @brief		The PFE physical interface module source file (slave).
  * @details		This file contains physical interface-related functionality for
@@ -67,6 +64,32 @@ typedef struct __pfe_mac_addr_entry_tag
 } pfe_mac_addr_list_entry_t;
 
 static bool_t pfe_phy_if_has_log_if_nolock(pfe_phy_if_t *iface, pfe_log_if_t *log_if);
+
+static errno_t pfe_phy_if_db_lock(void)
+{
+	errno_t ret;
+
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_LOCK, NULL, 0, NULL, 0U);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("Unable to lock interface DB: %d\n", ret);
+	}
+
+	return ret;
+}
+
+static errno_t pfe_phy_if_db_unlock(void)
+{
+	errno_t ret;
+
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_UNLOCK, NULL, 0, NULL, 0U);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("Unable to lock interface DB: %d\n", ret);
+	}
+
+	return ret;
+}
 
 /**
  * @brief		Create new physical interface instance
@@ -249,6 +272,7 @@ static bool_t pfe_phy_if_has_log_if_nolock(pfe_phy_if_t *iface, pfe_log_if_t *lo
 {
 	pfe_platform_rpc_pfe_phy_if_has_log_if_arg_t arg = {0};
 	errno_t ret;
+	bool_t val = TRUE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
@@ -264,20 +288,26 @@ static bool_t pfe_phy_if_has_log_if_nolock(pfe_phy_if_t *iface, pfe_log_if_t *lo
 	ct_assert(sizeof(arg.log_if_id) == sizeof(uint8_t));
 	arg.log_if_id = pfe_log_if_get_id(log_if);
 
+	(void)pfe_phy_if_db_lock();
+
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_HAS_LOG_IF, &arg, sizeof(arg), NULL, 0U);
 	if (EOK == ret)
 	{
-		return TRUE;
+		val = TRUE;
 	}
 	else if (ENOENT == ret)
 	{
-		return FALSE;
+		val = FALSE;
 	}
 	else
 	{
 		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_HAS_LOG_IF failed: %d\n", ret);
-		return FALSE;
+		val = FALSE;
 	}
+
+	(void)pfe_phy_if_db_unlock();
+
+	return val;
 }
 
 /**
@@ -367,6 +397,8 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
+	(void)pfe_phy_if_db_lock();
+
 	/*	Ask the master driver to change the operation mode */
 	arg.phy_if_id = iface->id;
 
@@ -379,6 +411,8 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 	{
 		mode = rpc_ret.mode;
 	}
+
+	(void)pfe_phy_if_db_unlock();
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -413,6 +447,8 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
+	(void)pfe_phy_if_db_lock();
+
 	/*	Ask the master driver to change the operation mode */
 	arg.phy_if_id = iface->id;
 	arg.op_mode = mode;
@@ -421,6 +457,8 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 	{
 		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE failed: %d\n", ret);
 	}
+
+	(void)pfe_phy_if_db_unlock();
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -510,6 +548,8 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
+	(void)pfe_phy_if_db_lock();
+
 	/*	Ask the master driver to enable the interface */
 	arg.phy_if_id = iface->id;
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
@@ -521,6 +561,8 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 	{
 		status = rpc_ret.status;
 	}
+
+	(void)pfe_phy_if_db_unlock();
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -554,6 +596,8 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
+	(void)pfe_phy_if_db_lock();
+
 	/*	Ask the master driver to enable the interface */
 	arg.phy_if_id = iface->id;
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE, &arg, sizeof(arg), NULL, 0U);
@@ -561,6 +605,8 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 	{
 		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE failed: %d\n", ret);
 	}
+
+	(void)pfe_phy_if_db_unlock();
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -583,6 +629,8 @@ errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
+	(void)pfe_phy_if_db_lock();
+
 	/*	Ask the master driver to disable the interface */
 	arg.phy_if_id = iface->id;
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE, &arg, sizeof(arg), NULL, 0U);
@@ -590,6 +638,8 @@ errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 	{
 		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE failed: %d\n", ret);
 	}
+
+	(void)pfe_phy_if_db_unlock();
 
 	return ret;
 }
@@ -653,6 +703,8 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
+	(void)pfe_phy_if_db_lock();
+
 	/*	Ask the master driver to enable the interface */
 	arg.phy_if_id = iface->id;
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
@@ -664,6 +716,8 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 	{
 		status = rpc_ret.status;
 	}
+
+	(void)pfe_phy_if_db_unlock();
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -697,6 +751,8 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
+	(void)pfe_phy_if_db_lock();
+
 	/*	Ask the master driver to enable the promiscuous mode */
 	arg.phy_if_id = iface->id;
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_ENABLE, &arg, sizeof(arg), NULL, 0U);
@@ -704,6 +760,8 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 	{
 		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_ENABLE failed: %d\n", ret);
 	}
+
+	(void)pfe_phy_if_db_unlock();
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -737,6 +795,8 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
+	(void)pfe_phy_if_db_lock();
+
 	/*	Ask the master driver to disable the promiscuous mode */
 	arg.phy_if_id = iface->id;
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_DISABLE, &arg, sizeof(arg), NULL, 0U);
@@ -744,6 +804,8 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 	{
 		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
 	}
+
+	(void)pfe_phy_if_db_unlock();
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -780,6 +842,8 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
+	(void)pfe_phy_if_db_lock();
+
 	/*	Add address to local list */
 	entry = oal_mm_malloc(sizeof(pfe_mac_addr_list_entry_t));
 	if (NULL == entry)
@@ -808,6 +872,8 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 			entry = NULL;
 		}
 	}
+
+	(void)pfe_phy_if_db_unlock();
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -846,6 +912,8 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
+	(void)pfe_phy_if_db_lock();
+
 	ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg.mac_addr));
 
 	/*	Ask the master driver to delete the MAC address */
@@ -882,6 +950,8 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		}
 	}
 
+	(void)pfe_phy_if_db_unlock();
+
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
 		NXP_LOG_DEBUG("mutex unlock failed\n");
@@ -916,6 +986,8 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
+	(void)pfe_phy_if_db_lock();
+
 	if (FALSE == LLIST_IsEmpty(&iface->mac_addr_list))
 	{
 		/*	Get first address from the list */
@@ -930,6 +1002,8 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		/*	No address assigned */
 		ret = ENOENT;
 	}
+
+	(void)pfe_phy_if_db_unlock();
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -987,6 +1061,51 @@ __attribute__((pure)) char_t *pfe_phy_if_get_name(pfe_phy_if_t *iface)
 }
 
 /**
+ * @brief		Get phy interface statistics
+ * @param[in]	iface The interface instance
+ * @param[out]	stat Statistic structure
+ * @retval		EOK Success
+ * @retval		NOMEM Not possible to allocate memory for read
+ */
+errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
+{
+	errno_t ret = EOK;
+	pfe_platform_rpc_pfe_phy_if_stats_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_stats_ret_t rpc_ret = {0};
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == iface) || (NULL == stat)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	arg.phy_if_id = iface->id;
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_STATS, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_STATS failed: %d\n", ret);
+	}
+	else
+	{
+		memcpy(stat,&rpc_ret.stats,sizeof(rpc_ret.stats));
+	}
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	return ret;
+}
+
+/**
  * @brief		Return physical interface runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	iface 		The physical interface instance
@@ -1011,5 +1130,3 @@ uint32_t pfe_phy_if_get_text_statistics(pfe_phy_if_t *iface, char_t *buf, uint32
 	
 	return len;
 }
-
-/** @}*/

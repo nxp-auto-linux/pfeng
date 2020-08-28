@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_HIF
- * @{
- *
- * @file		pfe_hif_csr.c
- * @brief		The HIF module low-level API (S32G).
- * @details		Applicable for IP versions listed below.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -49,7 +39,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
@@ -397,8 +386,7 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 		}
 
 #if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
-		/*	Don't re-enable these interrupts. They will periodically be triggered
-			without way to get rid of them. AAVB-2144 created to research this. */
+		/*	Don't re-enable these interrupts. See AAVB-2144. */
 #else
 		/*	Enable timeout interrupts */
 		reg_en = hal_read32(base_va + HIF_CHn_INT_EN(channel_id));
@@ -430,21 +418,9 @@ errno_t pfe_hif_chnl_cfg_init(void *base_va, uint32_t channel_id)
 	pfe_hif_chnl_cfg_rx_disable(base_va, channel_id);
 	pfe_hif_chnl_cfg_tx_disable(base_va, channel_id);
 
-#if 0 /* TODO: Only timer-based coalescing works, waiting for clarification. */
-	/*	Coalescence timer value in number of sys ticks. PFE_SYS_CLK = 300MHz so for 1ms use value 300k. */
-	hal_write32(2U * 30000U, base_va + HIF_ABS_INT_TIMER_CHn(channel_id)); /* 200us */
-	/*	Number of packets to generate interrupt */
-	hal_write32(32U, base_va + HIF_ABS_FRAME_COUNT_CHn(channel_id));
-	/*	Enable interrupt coalescing (timer+frame count) */
-	hal_write32(0x1U, base_va + HIF_INT_COAL_EN_CHn(channel_id));
-#else
-	/*	Disable interrupt coalescing */
 	hal_write32(0x0U, base_va + HIF_INT_COAL_EN_CHn(channel_id));
 	hal_write32(0x0U, base_va + HIF_ABS_INT_TIMER_CHn(channel_id));
 	hal_write32(0x0U, base_va + HIF_ABS_FRAME_COUNT_CHn(channel_id));
-#endif /* 0 */
-
-	/*	LTC reset (should not be used, but for sure...) */
 	hal_write32(0x0U, base_va + HIF_LTC_MAX_PKT_CHn_ADDR(channel_id));
 
 	/*	Enable channel status interrupts except of the RX/TX and
@@ -518,7 +494,6 @@ errno_t pfe_hif_cfg_init(void *base_va)
 	}
 
 #if (TRUE == PFE_HIF_CFG_USE_BD_POLLING)
-	/*	Numbers of poll cycles */
 	hal_write32((0xff << 16) | (0xff), base_va + HIF_TX_POLL_CTRL);
 	hal_write32((0xff << 16) | (0xff), base_va + HIF_RX_POLL_CTRL);
 #endif /* PFE_HIF_CFG_USE_BD_POLLING */
@@ -526,10 +501,7 @@ errno_t pfe_hif_cfg_init(void *base_va)
 	/*	MICS */
 	hal_write32(0U
 #ifdef PFE_CFG_HIF_SEQNUM_CHECK
-				| SEQ_NUM_CHECK_EN /* WARNING:	If this is enabled, SW __must__ ensure
-												that first BD will contain seqnum
-												equal to BD_START_SEQ_NUM value programmed
-												below */
+				| SEQ_NUM_CHECK_EN
 #endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 				/* | BDPRD_AXI_WRITE_DONE */
 				/* | DBPWR_AXI_WRITE_DONE */
@@ -539,22 +511,11 @@ errno_t pfe_hif_cfg_init(void *base_va)
 				| BD_START_SEQ_NUM(0x0)
 				, base_va + HIF_MISC);
 
-	/*	Timeout */
 	hal_write32(100000000U, base_va + HIF_TIMEOUT_REG);
-
-	/*	TMU queue mapping. 0,1->ch.0, 2,3->ch.1, 4,5->ch.2, 6,7->ch.3 */
 	hal_write32(0x33221100U, base_va + HIF_RX_QUEUE_MAP_CH_NO_ADDR);
-
-	/*	DMA burst size */
 	hal_write32(0x0U, base_va + HIF_DMA_BURST_SIZE_ADDR); /* 0 = 128B, 1 = 256B, 2 = 512B, 3 = 1024B */
-
-	/*	DMA base address */
 	hal_write32(0x0U, base_va + HIF_DMA_BASE_ADDR);
-
-	/*	LTC reset (should not be used, but for sure...) */
 	hal_write32(0x0U, base_va + HIF_LTC_PKT_CTRL_ADDR);
-
-	/*	Enable HIF error interrupts except the global enable bit */
 	hal_write32(0xffffffffU & ~(HIF_ERR_INT), base_va + HIF_ERR_INT_EN);
 	hal_write32(0xffffffffU & ~(HIF_TX_FIFO_ERR_INT), base_va + HIF_TX_FIFO_ERR_INT_EN);
 	hal_write32(0xffffffffU  & ~(HIF_RX_FIFO_ERR_INT), base_va + HIF_RX_FIFO_ERR_INT_EN);
@@ -587,8 +548,6 @@ uint32_t pfe_hif_cfg_get_tx_fifo_fill_level(void *base_va)
 
 /**
  * @brief		Enable TX
- * @details		This call shall ensure that the TX DMA is active and the TX
- * 				ring accepts entries. TX ring interrupt is enabled.
  * @param[in]	base_va Base address of HIF channel register space (virtual)
  * @param[in]	channel_id Channel identifier
  */
@@ -616,14 +575,12 @@ void pfe_hif_chnl_cfg_tx_enable(void *base_va, uint32_t channel_id)
 	pfe_hif_chnl_cfg_tx_irq_unmask(base_va, channel_id);
 
 #if (TRUE == PFE_HIF_CFG_USE_BD_POLLING)
-	/*	Trigger the BDP to fetch first descriptor */
 	pfe_hif_chnl_cfg_tx_dma_start(base_va, channel_id);
 #endif /* PFE_HIF_CFG_USE_BD_POLLING */
 }
 
 /**
  * @brief		Disable TX
- * @brief		Disable the TX ring DMA. TX ring interrupt is disabled.
  * @param[in]	base_va Base address of HIF channel register space (virtual)
  * @param[in]	channel_id Channel identifier
  */
@@ -647,8 +604,6 @@ void pfe_hif_chnl_cfg_tx_disable(void *base_va, uint32_t channel_id)
 
 /**
  * @brief		Enable RX
- * @details		Enable and start RX DMA. RX ring is being filled with data from
- * 				NPU and RX interrupts generated by the RX ring are enabled.
  * @param[in]	base_va Base address of HIF channel register space (virtual)
  * @param[in]	channel_id Channel identifier
  */
@@ -662,12 +617,11 @@ void pfe_hif_chnl_cfg_rx_enable(void *base_va, uint32_t channel_id)
 		return;
 	}
 
-	/*	Enable DMA engine and polling */
 	reg = hal_read32(base_va + HIF_CTRL_CHn(channel_id));
 
 #if (TRUE == PFE_HIF_CFG_USE_BD_POLLING)
 	reg |= RX_BDP_POLL_CNTR_EN;
-#endif /**/
+#endif /* PFE_HIF_CFG_USE_BD_POLLING */
 
 	reg |= RX_DMA_ENABLE;
 	hal_write32(reg, base_va + HIF_CTRL_CHn(channel_id));
@@ -675,15 +629,12 @@ void pfe_hif_chnl_cfg_rx_enable(void *base_va, uint32_t channel_id)
 	pfe_hif_chnl_cfg_rx_irq_unmask(base_va, channel_id);
 
 #if (FALSE == PFE_HIF_CFG_USE_BD_POLLING)
-	/*	Trigger the BDP to fetch first descriptor */
 	pfe_hif_chnl_cfg_rx_dma_start(base_va, channel_id);
 #endif /* PFE_HIF_CFG_USE_BD_POLLING */
 }
 
 /**
  * @brief		Disable RX
- * @details		Stop RX DMA. No data traffic from NPU to host will be possible after this call.
- * 				No interrupts from RX ring are enabled.
  * @param[in]	base_va Base address of HIF channel register space (virtual)
  * @param[in]	channel_id Channel identifier
  */
@@ -706,7 +657,6 @@ void pfe_hif_chnl_cfg_rx_disable(void *base_va, uint32_t channel_id)
 
 /**
  * @brief		Trigger RX DMA
- * @details		This shall be called once new entry has been written to the RX ring.
  * @param[in]	base_va Base address of HIF channel register space (virtual)
  * @param[in]	channel_id Channel identifier
  */
@@ -722,7 +672,6 @@ void pfe_hif_chnl_cfg_rx_dma_start(void *base_va, uint32_t channel_id)
 
 /**
  * @brief		Trigger TX DMA
- * @details		This shall be called once new entry has been written to the TX ring.
  * @param[in]	base_va Base address of HIF channel register space (virtual)
  * @param[in]	channel_id Channel identifier
  */
@@ -840,8 +789,6 @@ void pfe_hif_chnl_cfg_tx_irq_unmask(void *base_va, uint32_t channel_id)
 
 /**
  * @brief		Set RX buffer descriptor ring address
- * @details		Configure RX buffer descriptor ring address of the channel.
- * 				This binds channel with a RX BD ring.
  * @param[in]	base_va Base address of HIF channel register space (virtual)
  * @param[in]	channel_id Channel identifier
  * @param[in]	rx_ring_pa The RX ring address (physical, as seen by host)
@@ -860,8 +807,6 @@ void pfe_hif_chnl_cfg_set_rx_bd_ring_addr(void *base_va, uint32_t channel_id, vo
 
 /**
  * @brief		Set RX write-back table
- * @details		Configure RX write-back table of the channel.
- * 				This binds channel with a RX WB table.
  * @param[in]	base_va Base address of HIF channel register space (virtual)
  * @param[in]	channel_id Channel identifier
  * @param[in]	wb_ring_pa The write-back table address (physical, as seen by host)
@@ -888,8 +833,6 @@ void pfe_hif_chnl_cfg_set_rx_wb_table(void *base_va, uint32_t channel_id, void *
 
 /**
  * @brief		Set TX buffer descriptor ring address
- * @details		Configure TX buffer descriptor ring address of the channel.
- * 				This binds channel with a TX BD ring.
  * @param[in]	base_va Base address of HIF channel register space (virtual)
  * @param[in]	channel_id Channel identifier
  * @param[in]	tx_ring_pa The TX ring address (physical, as seen by host)
@@ -908,9 +851,7 @@ void pfe_hif_chnl_cfg_set_tx_bd_ring_addr(void *base_va, uint32_t channel_id, vo
 
 /**
  * @brief		Set TX write-back table
- * @details		Configure TX write-back table of the channel.
- * 				This binds channel with a TX WB table.
- * @param[in]	base_va Base address of HIF channel register space (virtual)
+  * @param[in]	base_va Base address of HIF channel register space (virtual)
  * @param[in]	channel_id Channel identifier
  * @param[in]	wb_ring_pa The write-back table address (physical, as seen by host)
  * @param[in]	ring_len Number of entries in the WB table
@@ -1150,11 +1091,6 @@ uint32_t pfe_hif_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, ui
 	reg = hal_read32(base_va + HIF_RX_PKT_CNT2);
 	len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_RX_PKT_CNT2           : 0x%x\n", reg);
 
-/*
-		reg = hal_read32(base_va + HIF_CTRL_CHn(0));
-		len += snprintf(buf + len, size - len, "HIF_CTRL_CH0              : 0x%x\n", reg);
-*/
-
 	reg = hal_read32(base_va + HIF_INT_SRC);
 	len += oal_util_snprintf(buf + len, size - len, "HIF_INT_SRC               : 0x%x\n", reg);
 	reg = hal_read32(base_va + HIF_ERR_INT_SRC);
@@ -1182,11 +1118,7 @@ uint32_t pfe_hif_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, ui
 	reg = hal_read32(base_va + HIF_TX_PKT_CNT2);
 	len += oal_util_snprintf(buf + len, size - len, "HIF_TX_PKT_CNT2           : 0x%x\n", reg);
 
-
-
 	dump_hif_channel(base_va, 0U);
 
 	return len;
 }
-
-/** @}*/

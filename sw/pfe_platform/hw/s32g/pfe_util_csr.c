@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -27,16 +27,6 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
-
-/**
- * @addtogroup  dxgr_PFE_UTIL
- * @{
- *
- * @file		pfe_util_csr.c
- * @brief		The UTIL module low-level API (LS1012a).
- * @details
- *
- */
 
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -80,5 +70,3 @@ uint32_t pfe_util_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, u
 
 	return len;
 }
-
-/** @}*/

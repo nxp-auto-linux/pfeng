@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_SAFETY
- * @{
- *
- * @file		pfe_safety_csr.c
- * @brief		The SAFETY module low-level API (s32g).
- * @details
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -272,5 +262,3 @@ void pfe_safety_cfg_irq_unmask_all(void *base_va)
 {
 	hal_write32(SAFETY_INT_ENABLE_ALL, base_va + WSP_SAFETY_INT_EN);
 }
-
-/** @}*/

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,66 +28,29 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-#ifndef __OAL_TYPES_LINUX__
-#define __OAL_TYPES_LINUX__
+#ifndef PUBLIC_PFE_HIF_PTP_H_
+#define PUBLIC_PFE_HIF_PTP_H_
 
-#include <linux/kernel.h>
-#include <linux/types.h>
-#include <stddef.h>
+#include "linked_list.h"
 
-#define __STR_HELPER(x) #x
-#define __STR(x) __STR_HELPER(x)
+typedef struct
+{
+	oal_mutex_t *lock;
+	LLIST_t entries;
+	oal_thread_t *worker;
+	uint8_t count;
+	bool_t reported;
+} pfe_hif_ptp_ts_db_t;
 
-#define NXP_LOG_WARNING(...) printk(KERN_WARNING "["__FILE__":"__STR(__LINE__)"] WRN: " __VA_ARGS__)
-#define NXP_LOG_ERROR(...) printk(KERN_ERR "["__FILE__":"__STR(__LINE__)"] ERR: " __VA_ARGS__)
+errno_t pfe_hif_ptp_ts_db_init(pfe_hif_ptp_ts_db_t *db);
+void pfe_hif_ptp_ts_db_fini(pfe_hif_ptp_ts_db_t *db);
+errno_t pfe_hif_ptp_ts_db_push_msg(pfe_hif_ptp_ts_db_t *db, bool_t rx,
+		uint16_t refnum, uint8_t type, uint16_t port, uint16_t seq_id);
+errno_t pfe_hif_ptp_ts_db_push_ts(pfe_hif_ptp_ts_db_t *db,
+		uint16_t refnum, uint32_t ts_sec, uint32_t ts_nsec);
+errno_t pfe_hif_ptp_ts_db_pop(pfe_hif_ptp_ts_db_t *db,
+		uint8_t type, uint16_t port, uint16_t seq_id,
+			uint32_t *ts_sec, uint32_t *ts_nsec, bool_t rx);
 
-#if (PFE_CFG_VERBOSITY_LEVEL >= 4)
-#define NXP_LOG_INFO(...) printk(KERN_INFO "["__FILE__":"__STR(__LINE__)"] INF: " __VA_ARGS__)
-#else
-#define NXP_LOG_INFO(...)
-#endif
 
-#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
-#define NXP_LOG_DEBUG(...) printk(KERN_DEBUG "["__FILE__":"__STR(__LINE__)"] DBG: " __VA_ARGS__)
-#else
-#define NXP_LOG_DEBUG(...)
-#endif
-
-#if defined(PFE_CFG_TARGET_ARCH_i386)
-typedef unsigned int addr_t;
-#define PRINT64 "l"
-#define PRINTADDR_T "u"
-#elif defined(PFE_CFG_TARGET_ARCH_x86_64) || defined(PFE_CFG_TARGET_ARCH_aarch64)
-
-#define MAX_ADDR_T_VAL UINT_MAX
-
-typedef unsigned long long addr_t;
-#define PRINT64 "ll"
-#define PRINTADDR_T "llu"
-#else
-#error Unsupported or no platform defined
-#endif
-
-typedef int errno_t;
-typedef bool bool_t;
-typedef char char_t;
-typedef int int_t; /* For use within printf like functions that require "int" regardless its size */
-typedef unsigned int uint_t; /* For use within printf like functions */
-
-#ifndef EOK
-#define EOK 0
-#endif
-
-#ifndef TRUE
-#define TRUE 1
-#endif /* TRUE */
-#ifndef FALSE
-#define FALSE 0
-#endif /* FALSE */
-
-#define oal_htons(x)	htons(x)
-#define oal_ntohs(x)	ntohs(x)
-#define oal_htonl(x)	htonl(x)
-#define oal_ntohl(x)	ntohl(x)
-
-#endif
+#endif /* PUBLIC_PFE_HIF_PTP_H_ */

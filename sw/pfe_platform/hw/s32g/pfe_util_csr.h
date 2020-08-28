@@ -1,6 +1,6 @@
 /* =========================================================================
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2019 NXP
+ *  Copyright 2017-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -28,16 +28,6 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
-
-/**
- * @addtogroup  dxgr_PFE_UTIL
- * @{
- * 
- * @file		pfe_util_csr.h
- * @brief		The UTIL module registers definition file (LS1012a).
- * @details		
- *
- */
 
 #ifndef _UTIL_CSR_H_
 #define _UTIL_CSR_H_
@@ -79,7 +69,6 @@
 
 #define UTIL_INQ_AFULL_THRES		(CBUS_UTIL_CSR_BASE_ADDR + 0x234U)
 
-/*	Internal Memory Access */
 #define UTIL_PE_IBUS_ACCESS_PMEM	(1U << 17)
 #define UTIL_PE_IBUS_ACCESS_DMEM	(1U << 18)
 #define UTIL_PE_IBUS_DMEM_BASE(i)	((((i) & 0x3) << 20) | UTIL_PE_IBUS_ACCESS_DMEM)
@@ -88,5 +77,3 @@
 uint32_t pfe_util_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
 #endif /* _UTIL_CSR_H_ */
-
-/** @}*/

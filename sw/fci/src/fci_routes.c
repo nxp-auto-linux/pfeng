@@ -152,11 +152,13 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 	{
 		/*	Convert to 'known' IPv6 address format */
 		memcpy(&ip.v6, &rt_cmd->dst_addr[0], 16);
+		ip.is_ipv4 = FALSE;
 	}
 	else
 	{
 		/*	Convert to 'known' IPv4 address format */
 		memcpy(&ip.v4, &rt_cmd->dst_addr[0], 4);
+		ip.is_ipv4 = TRUE;
 	}
 
 	switch (rt_cmd->action)
@@ -261,7 +263,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 				break;
 			}
 		}
-		/*	No break */
+		/* FALLTHRU */
 
 		case FPP_ACTION_QUERY_CONT:
 		{
@@ -283,7 +285,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			reply_buf->mtu = rt_entry->mtu;
 			memcpy(reply_buf->dst_mac, rt_entry->dst_mac, sizeof(pfe_mac_addr_t));
 
-			if (pfe_ip_addr_is_ipv4(&rt_entry->dst_ip))
+			if (rt_entry->dst_ip.is_ipv4)
 			{
 				/*	IPv4 */
 				memcpy(&reply_buf->dst_addr[0], &rt_entry->dst_ip.v4, 4);
@@ -444,7 +446,7 @@ void fci_routes_drop_all_ipv4(void)
 	entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_ALL, NULL);
 	while (NULL != entry)
 	{
-		if (TRUE == pfe_ip_addr_is_ipv4(&entry->dst_ip))
+		if (entry->dst_ip.is_ipv4)
 		{
 			ret = fci_routes_drop_one(entry);
 			if (EOK != ret)
@@ -481,7 +483,7 @@ void fci_routes_drop_all_ipv6(void)
 	entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_ALL, NULL);
 	while (NULL != entry)
 	{
-		if (TRUE == pfe_ip_addr_is_ipv6(&entry->dst_ip))
+		if (!entry->dst_ip.is_ipv4)
 		{
 			ret = fci_routes_drop_one(entry);
 			if (EOK != ret)

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,17 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_HIF_NOCPY
- * @{
- *
- * @file		pfe_hif_nocpy_csr.h
- * @brief		The HIF_NOCOPY module registers definition file (s32g).
- * @details		This is the HW-specific part of the HIF_NOCOPY module.
- *				Applicable for IP versions listed below.
- *
- */
-
 #ifndef PFE_HIF_NOCPY_CSR_H_
 #define PFE_HIF_NOCPY_CSR_H_
 
@@ -48,7 +37,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
@@ -83,7 +71,6 @@
 #define HIF_NOCPY_CSR_AXI_WAIT_DONE	(0x94U)
 #define HIF_NOCPY_ABS_FRAME_CNT		(0x98U)
 
-/*	HIF_NOCPY_INT_SRC, HIF_NOCPY_INT_EN bits */
 #define HIF_NOCPY_INT				(1U << 0)
 #define BDP_CSR_RX_CBD_INT			(1U << 1)
 #define BDP_CSR_RX_PKT_INT			(1U << 2)

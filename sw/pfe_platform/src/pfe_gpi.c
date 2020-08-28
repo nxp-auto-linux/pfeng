@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -27,16 +27,6 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
-
-/**
- * @addtogroup  dxgr_PFE_GPI
- * @{
- * 
- * @file		pfe_gpi.c
- * @brief		The GPI module source file.
- * @details		This file contains GPI-related functionality.
- *
- */
 
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -209,5 +199,3 @@ uint32_t pfe_gpi_get_text_statistics(pfe_gpi_t *gpi, char_t *buf, uint32_t buf_l
 	
 	return len;
 }
-
-/** @}*/

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -87,7 +87,7 @@ static void *__oal_mm_malloc_contig(const addr_t size, const uint32_t align, con
 	dma_addr_t handle;
 
 	/*	Get memory block */
-	vaddr = dma_zalloc_coherent(__dev, map_length, &handle, GFP_ATOMIC);
+	vaddr = dma_alloc_coherent(__dev, map_length, &handle, GFP_ATOMIC);
 	if (!vaddr)
 	{
 		return NULL;

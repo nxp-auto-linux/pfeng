@@ -28,27 +28,10 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- *
- * @defgroup    dxgr_PFE_CLASS CLASS
- * @brief		The Classifier
- * @details     This is the software representation of the classifier block.
- *
- * @addtogroup  dxgr_PFE_CLASS
- * @{
- *
- * @file		pfe_class.h
- * @brief		The CLASS module header file.
- * @details		This file contains CLASS-related API.
- *
- */
-
 #ifndef PFE_CLASS_H_
 #define PFE_CLASS_H_
 
- #include "pfe_ct.h" /* fw/host shared types */
+ #include "pfe_ct.h"
 
 typedef struct __pfe_classifier_tag pfe_class_t;
 
@@ -78,6 +61,7 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf);
 errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_pe_mmap_t *mmap);
 errno_t pfe_class_write_dmem(pfe_class_t *class, int32_t pe_idx, void *dst, void *src, uint32_t len);
 errno_t pfe_class_read_dmem(pfe_class_t *class, uint32_t pe_idx, void *dst, void *src, uint32_t len);
+errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst, void *src, uint32_t buffer_len, uint32_t read_len);
 errno_t pfe_class_read_pmem(pfe_class_t *class, uint32_t pe_idx, void *dst, void *src, uint32_t len);
 errno_t pfe_class_set_rtable(pfe_class_t *class, void *rtable_pa, uint32_t rtable_len, uint32_t entry_size);
 errno_t pfe_class_set_default_vlan(pfe_class_t *class, uint16_t vlan);
@@ -86,9 +70,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 void pfe_class_destroy(pfe_class_t *class);
 addr_t pfe_class_dmem_heap_alloc(pfe_class_t *class, uint32_t size);
 void pfe_class_dmem_heap_free(pfe_class_t *class, addr_t addr);
+uint32_t pfe_class_put_data(pfe_class_t *class, pfe_ct_buffer_t *buf);
 errno_t pfe_class_set_flexible_filter(pfe_class_t *class, const uint32_t dmem_addr);
 
 #endif /* PFE_CLASS_H_ */
-
-/** @}*/
-/** @}*/

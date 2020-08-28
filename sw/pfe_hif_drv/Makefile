@@ -89,6 +89,10 @@ else
   endif
 endif
 
+ifneq ($(PFE_CFG_IEEE1588_SUPPORT),0)
+  SRCS+=src/pfe_hif_ptp.c
+endif
+
 #Object files list
 OBJS = $(addprefix $(OUTPUT_DIR)/,$(addsuffix .o, $(basename $(SRCS))))
 
@@ -142,6 +146,9 @@ else
 endif
 
 #pfe_hif_drv-y := $(OBJS)
+ifneq ($(PFE_CFG_IEEE1588_SUPPORT),0)
+    pfe_hif_drv-y += src/pfe_hif_ptp.o
+endif
 
 obj-m += pfe_hif_drv.o
 

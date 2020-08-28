@@ -29,10 +29,7 @@
  * ========================================================================= */
 
 /**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- * 
- * @defgroup    dxgr_PFE_HIF_CHNL HIF Channel
+ * @file		pfe_hif_chnl.h
  * @brief		The Host Interface channel
  * @details     
  * 				Purpose
@@ -156,15 +153,6 @@
  *					were transmitted.
  *				5.	Destroy the HIF channel instance calling the pfe_hif_chnl_destroy()
  *				
- * 
- * @addtogroup  dxgr_PFE_HIF_CHNL
- * @{
- * 
- * @file		pfe_hif_chnl.h
- * @brief		The HIF channel module header file.
- * @details		This file contains HIF channel-related API providing control of both RX, and
- * 				TX data flows.
- *
  */
 
 #ifndef PUBLIC_PFE_HIF_CHNL_H_
@@ -258,6 +246,3 @@ uint32_t pfe_hif_chnl_dump_ring(pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dum
 uint32_t pfe_hif_chnl_get_text_statistics(pfe_hif_chnl_t *chnl, char_t *buf, uint32_t buf_len, uint8_t verb_level) __attribute__((cold));
 
 #endif /* PUBLIC_PFE_HIF_CHNL_H_ */
-
-/** @}*/
-/** @}*/

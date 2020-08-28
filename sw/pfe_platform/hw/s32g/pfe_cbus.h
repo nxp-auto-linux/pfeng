@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -28,18 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgrPFE_PLATFORM
- * @{
- * 
- * @file		pfe_cbus.h
- * @brief		The CBUS memory map of the PPFE (s32g)
- * @details		This file contains all necessary definitions to describe the
- * 				PPFE hardware from the CBUS point of view. It includes particular
- * 				base addresses and register descriptions.
- *
- */
-
 #ifndef PFE_CBUS_H_
 #define PFE_CBUS_H_
 
@@ -47,11 +35,9 @@
 #error Missing version define(s)
 #endif /* IP version checks */
 
-#if (PFE_CFG_IP_VERSION == 0) /* Checks if the PFE_CFG_IP_VERSION is undefined */
+#if (PFE_CFG_IP_VERSION == 0)
 #error PFE_CFG_IP_VERSION shall not be empty
 #endif /* PFE_CFG_IP_VERSION */
-
-/*	Addresses (offsets) within the CBUS memory space */
 
 #define CBUS_EMAC1_BASE_ADDR		(0xA0000U)
 #define CBUS_EGPI1_BASE_ADDR		(0xAC000U)
@@ -75,7 +61,6 @@
 #define CBUS_UTIL_CSR_BASE_ADDR		(0xCC000U)
 #define CBUS_GLOBAL_CSR_BASE_ADDR	(0x94000U)
 
-/* PFE cores states */
 #define PFE_CORE_DISABLE			0x00000000U
 #define PFE_CORE_ENABLE				0x00000001U
 #define PFE_CORE_SW_RESET			0x00000002U
@@ -88,9 +73,6 @@
 #include "pfe_hif_csr.h"
 #include "pfe_hif_nocpy_csr.h"
 #include "pfe_bmu_csr.h"
-/* #include "pfe_gpt_csr.h" */
 #include "pfe_emac_csr.h"
 
 #endif /* PFE_CBUS_H_ */
-
-/** @}*/

@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_SAFETY
- * @{
- *
- * @file		pfe_safety.c
- * @brief		The SAFETY module source file.
- * @details		This file contains SAFETY-related functionality.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -49,10 +39,10 @@
 
 struct __pfe_safety_tag
 {
-	void *cbus_base_va;		    /* CBUS base virtual address */
-	void *safety_base_offset;	/* SAFETY base offset within CBUS space (SAFETY is member of WSP global CSR)*/
-	void *safety_base_va;		/* SAFETY base address (virtual) (It is actually WSP global CSR base address)*/
-	oal_mutex_t *lock;          /* Mutex for resource protection */
+	void *cbus_base_va;
+	void *safety_base_offset;
+	void *safety_base_va;
+	oal_mutex_t *lock;
 };
 
 /**
@@ -204,5 +194,3 @@ void pfe_safety_irq_unmask(pfe_safety_t *safety)
 	pfe_safety_cfg_irq_unmask(safety->safety_base_va);
 	(void)oal_mutex_unlock(safety->lock);
 }
-
-/** @}*/

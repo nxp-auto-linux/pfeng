@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -28,23 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- * 
- * @defgroup    dxgr_PFE_UTIL UTIL
- * @brief		The UTIL-PE
- * @details     This is the software representation of the UTIL-PE block.
- * 
- * @addtogroup  dxgr_PFE_UTIL
- * @{
- * 
- * @file		pfe_util.h
- * @brief		The UTIL module header file.
- * @details		This file contains UTIL-related API.
- *
- */
-
 #ifndef SRC_PFE_UTIL_H_
 #define SRC_PFE_UTIL_H_
 
@@ -64,6 +47,3 @@ uint32_t pfe_util_get_text_statistics(pfe_util_t *util, char_t *buf, uint32_t bu
 void pfe_util_destroy(pfe_util_t *util);
 
 #endif /* SRC_PFE_UTIL_H_ */
-
-/** @}*/
-/** @}*/

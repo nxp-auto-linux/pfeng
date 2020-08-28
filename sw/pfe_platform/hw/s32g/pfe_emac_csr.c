@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_EMAC
- * @{
- *
- * @file		s32g/pfe_emac_csr.c
- * @brief		The EMAC module low-level API (s32g)
- * @details
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -128,9 +118,6 @@ static const char *emac_speed_to_str(pfe_emac_speed_t speed)
 
 /**
  * @brief		HW-specific initialization function
- * @details		This function is called during HW initialization routine and should
- * 				ensure that all necessary values are correctly configured before
- * 				the MAC is enabled.
  * @param[in]	base_va Base address of MAC register space (virtual)
  * @param[in]	mode MII mode to be configured @see pfe_emac_mii_mode_t
  * @param[in]	speed Speed to be configured @see pfe_emac_speed_t
@@ -141,52 +128,29 @@ errno_t pfe_emac_cfg_init(void *base_va, pfe_emac_mii_mode_t mode,  pfe_emac_spe
 {
 	uint32_t reg;
 
-	/*
-	 	 0. Ensure the TX/RX is disabled (MAC_CONFIGURATION)
-	*/
 	hal_write32(0U, (addr_t)base_va + MAC_CONFIGURATION);
-
-	/*
-		1. Set MAC address (MAC_ADDRESS0_HIGH, MAC_ADDRESS0_LOW)
-	*/
-	/*	TODO */
 	hal_write32(0x8000ffeeU, (addr_t)base_va + MAC_ADDRESS0_HIGH);
 	hal_write32(0xddccbbaaU, (addr_t)base_va + MAC_ADDRESS0_LOW);
-
-	/*
-		2. Configure packet filter (MAC_PACKET_FILTER)
-	*/
 	hal_write32(0U
 			| DROP_NON_TCP_UDP(0U)
 			| L3_L4_FILTER_ENABLE(0U)
 			| VLAN_TAG_FILTER_ENABLE(0U)
-			| HASH_OR_PERFECT_FILTER(1U)	/* Match either perfect filtering or hash filtering (see HMC/HUC) */
+			| HASH_OR_PERFECT_FILTER(1U)
 			| SA_FILTER(0U)
 			| SA_INVERSE_FILTER(0U)
 			| PASS_CONTROL_PACKETS(FORWARD_ALL_EXCEPT_PAUSE)
 			| DISABLE_BROADCAST_PACKETS(0U)
 			| PASS_ALL_MULTICAST(0U)
 			| DA_INVERSE_FILTER(0U)
-			| HASH_MULTICAST(1U)			/* Multicast packets are accepted when passed perfect OR hash MAC filter */
-			| HASH_UNICAST(1U)			/* Unicast packets are accepted when passed perfect OR hash MAC filter */
+			| HASH_MULTICAST(1U)
+			| HASH_UNICAST(1U)
 			| PROMISCUOUS_MODE(0U)
 			, (addr_t)base_va + MAC_PACKET_FILTER);
 
-	/*
-		3. Configure flow control (MAC_Q0_TX_FLOW_CTRL)
-	*/
 	reg = hal_read32((addr_t)base_va + MAC_Q0_TX_FLOW_CTRL);
-	reg &= ~TX_FLOW_CONTROL_ENABLE(1U); /* No flow control engaged */
+	reg &= ~TX_FLOW_CONTROL_ENABLE(1U);
 	hal_write32(reg, (addr_t)base_va + MAC_Q0_TX_FLOW_CTRL);
-
-	/*
-		4. Disable interrupts (MAC_INTERRUPT_ENABLE)
-	*/
 	hal_write32(0U, (addr_t)base_va + MAC_INTERRUPT_ENABLE);
-
-	/*
-		5. Set initial MAC configuration (MAC_CONFIGURATION)
-	*/
 	hal_write32(0U
 			| ARP_OFFLOAD_ENABLE(0U)
 			| SA_INSERT_REPLACE_CONTROL(CTRL_BY_SIGNALS)
@@ -220,25 +184,12 @@ errno_t pfe_emac_cfg_init(void *base_va, pfe_emac_mii_mode_t mode,  pfe_emac_spe
 			, (addr_t)base_va + MTL_RXQ0_OPERATION_MODE);
 
 	hal_write32(0U, (addr_t)base_va + MTL_TXQ0_OPERATION_MODE);
-
 	hal_write32(GIANT_PACKET_SIZE_LIMIT(0x3000U), (addr_t)base_va + MAC_EXT_CONFIGURATION);
-
-	/*	Enable Data Path Parity protection */
 	hal_write32(0x1U, (addr_t)base_va + MTL_DPP_CONTROL);
 
-	hal_write32(0U
-			| ENABLE_TIMESTAMP(1U)
-			| INITIALIZE_TIMESTAMP(1U)
-			| ENABLE_TIMESTAMP_FOR_All(1U)
-			| ENABLE_PTP_PROCESSING(1U)
-			| SELECT_PTP_PACKETS(3U)
-			, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	hal_write32(0U, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	hal_write32(0U, (addr_t)base_va + MAC_SUB_SECOND_INCREMENT);
 
-	hal_write32(0x140000U, (addr_t)base_va + MAC_SUB_SECOND_INCREMENT);
-
-	/*
-		6. Configure MAC mode
-	*/
 	/*	Set speed */
 	if (EOK != pfe_emac_cfg_set_speed(base_va, speed))
 	{
@@ -257,8 +208,293 @@ errno_t pfe_emac_cfg_init(void *base_va, pfe_emac_mii_mode_t mode,  pfe_emac_spe
 		return EINVAL;
 	}
 
-	/*	Now the MAC is initialized and disabled */
 	return EOK;
+}
+
+/**
+ * @brief		Enable timestamping
+ * @param[in]	base_va Base address
+ * @param[in]	eclk TRUE means to use external clock reference (chain)
+ * @param[in]	i_clk_hz Reference clock frequency
+ * @param[in]	o_clk_hz Requested nominal output frequency
+ * @param[in]	en TRUE means ENABLE, FALSE means DISABLE
+ */
+errno_t pfe_emac_cfg_enable_ts(void *base_va, bool_t eclk, uint32_t i_clk_hz, uint32_t o_clk_hz)
+{
+	uint64_t val = 1000000000000ULL;
+	uint32_t ss = 0U, sns = 0U;
+	uint32_t regval, ii;
+
+	hal_write32(0U
+			| EXTERNAL_TIME(eclk)
+			| SELECT_PTP_PACKETS(0x1U)
+			| PTP_OVER_IPV4(1U)
+			| PTP_OVER_IPV6(1U)
+			| PTP_OVER_ETH(1U)
+			| PTPV2(1U)
+			| DIGITAL_ROLLOVER(1U)
+			| FINE_UPDATE(1U)
+			| ENABLE_TIMESTAMP(1U), (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+
+	if (!eclk)
+	{
+		/*	Get output period [ns] */
+		ss = (val / 1000ULL) / o_clk_hz;
+
+		/*	Get sub-nanosecond part */
+		sns = (val / (uint64_t)o_clk_hz) - (((val / 1000ULL) / (uint64_t)o_clk_hz) * 1000ULL);
+
+		NXP_LOG_INFO("IEEE1588: Input Clock: %dHz, Output: %dHz(+-100%), Accuracy: %d.%dns\n", i_clk_hz, o_clk_hz, ss, sns);
+
+		if (0U == (regval & DIGITAL_ROLLOVER(1)))
+		{
+			/*	Binary roll-over, 0.465ns accuracy */
+			ss = (ss * 1000U) / 456U;
+		}
+
+		sns = (sns * 256U) / 1000U;
+	}
+	else
+	{
+		NXP_LOG_INFO("IEEE1588: Using external timestamp input\n");
+	}
+
+	/*	Set 'increment' values */
+	hal_write32(((uint8_t)ss << 16) | ((uint8_t)sns << 8), (addr_t)base_va + MAC_SUB_SECOND_INCREMENT);
+
+	/*	Set initial 'addend' value */
+	hal_write32(((uint64_t)o_clk_hz << 32) / (uint64_t)i_clk_hz, (addr_t)base_va + MAC_TIMESTAMP_ADDEND);
+
+	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	hal_write32(regval | UPDATE_ADDEND(1), (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	ii = 0U;
+	do
+	{
+		regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+		oal_time_usleep(100U);
+	} while ((regval & UPDATE_ADDEND(1)) && (ii++ < 10U));
+
+	if (ii >= 10U)
+	{
+		return ETIME;
+	}
+
+	/*	Set 'update' values */
+	hal_write32(0U, (addr_t)base_va + MAC_STSU);
+	hal_write32(0U, (addr_t)base_va + MAC_STNSU);
+
+	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	regval |= INITIALIZE_TIMESTAMP(1);
+	hal_write32(regval, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+
+	ii = 0U;
+	do
+	{
+		regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+		oal_time_usleep(100U);
+	} while ((regval & INITIALIZE_TIMESTAMP(1)) && (ii++ < 10U));
+
+	if (ii >= 10U)
+	{
+		return ETIME;
+	}
+
+	return EOK;
+}
+
+/**
+ * @brief	Disable timestamping
+ */
+void pfe_emac_cfg_disable_ts(void *base_va)
+{
+	hal_write32(0U, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+}
+
+/**
+ * @brief		Adjust timestamping clock frequency
+ * @param[in]	base_va Base address
+ * @param[in]	ppb Frequency change in [ppb]
+ * @param[in]	sgn If TRUE then 'ppb' is positive, else it is negative
+ */
+errno_t pfe_emac_cfg_adjust_ts_freq(void *base_va, uint32_t i_clk_hz, uint32_t o_clk_hz, uint32_t ppb, bool_t sgn)
+{
+	uint32_t nil, delta, regval, ii;
+
+	/*	Nil drift addend: 1^32 / (o_clk_hz / i_clk_hz) */
+	nil = ((uint64_t)o_clk_hz << 32) / (uint64_t)i_clk_hz;
+
+	/*	delta = x * ppb * 0.000000001 */
+	delta = ((uint64_t)nil * (uint64_t)ppb) / 1000000000ULL;
+
+	/*	Adjust the 'addend' */
+	if (sgn)
+	{
+		if (((uint64_t)nil + (uint64_t)delta) > 0xffffffffULL)
+		{
+			NXP_LOG_WARNING("IEEE1588: Frequency adjustment out of positive range\n");
+			regval = 0xffffffffU;
+		}
+		else
+		{
+			regval = nil + delta;
+		}
+	}
+	else
+	{
+		if (delta > nil)
+		{
+			NXP_LOG_WARNING("IEEE1588: Frequency adjustment out of negative range\n");
+			regval = 0U;
+		}
+		else
+		{
+			regval = nil - delta;
+		}
+	}
+
+	/*	Update the 'addend' value */
+	hal_write32(regval, (addr_t)base_va + MAC_TIMESTAMP_ADDEND);
+
+	/*	Wait for completion */
+	ii = 0U;
+	do
+	{
+		regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+		oal_time_usleep(100U);
+	} while ((regval & UPDATE_ADDEND(1)) && (ii++ < 10U));
+
+	if (ii >= 10U)
+	{
+		return ETIME;
+	}
+
+	return EOK;
+}
+
+/**
+ * @brief			Get syste time
+ * @param[in]		base_va Base address
+ * @param[in,out]	sec Seconds
+ * @param[in,out]	nsec NanoSeconds
+ */
+void pfe_emac_cfg_get_ts_time(void *base_va, uint32_t *sec, uint32_t *nsec)
+{
+	*sec = hal_read32((addr_t)base_va + MAC_SYSTEM_TIME_SECONDS);
+	*nsec = hal_read32((addr_t)base_va + MAC_SYSTEM_TIME_NANOSECONDS);
+}
+
+/**
+ * @brief		Set system time
+ * @details		Current time will be overwritten with the desired value
+ * @param[in]	base_va Base address
+ * @param[in]	sec Seconds
+ * @param[in]	nsec NanoSeconds
+ */
+errno_t pfe_emac_cfg_set_ts_time(void *base_va, uint32_t sec, uint32_t nsec)
+{
+	uint32_t regval, ii;
+
+	if (nsec > 0x7fffffffU)
+	{
+		return EINVAL;
+	}
+
+	hal_write32(sec, (addr_t)base_va + MAC_STSU);
+	hal_write32(nsec, (addr_t)base_va + MAC_STNSU);
+
+	/*	Initialize time */
+	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	regval |= INITIALIZE_TIMESTAMP(1);
+	hal_write32(regval, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+
+	/*	Wait for completion */
+	ii = 0U;
+	do
+	{
+		regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+		oal_time_usleep(100U);
+	} while ((regval & INITIALIZE_TIMESTAMP(1)) && (ii++ < 10U));
+
+	if (ii >= 10U)
+	{
+		return ETIME;
+	}
+
+	return EOK;
+}
+
+/**
+ * @brief		Adjust system time
+ * @param[in]	base_va Base address
+ * @param[in]	sec Seconds
+ * @param[in]	nsec NanoSeconds
+ * @param[in]	sgn Sing of the adjustment (TRUE - positive, FALSE - negative)
+ */
+errno_t pfe_emac_cfg_adjust_ts_time(void *base_va, uint32_t sec, uint32_t nsec, bool_t sgn)
+{
+	uint32_t regval, ii;
+
+	if (nsec > 0x7fffffffU)
+	{
+		return EINVAL;
+	}
+
+	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+
+	if (!sgn)
+	{
+		if (0U != (regval & DIGITAL_ROLLOVER(1)))
+		{
+			nsec = 1000000000U - nsec;
+		}
+		else
+		{
+			nsec = (1U << 31) - nsec;
+		}
+
+		sec = -sec;
+	}
+	else
+	{
+		nsec |= 1U << 31;
+	}
+
+	if (0U != (regval & DIGITAL_ROLLOVER(1)))
+	{
+		if (nsec > 0x3b9ac9ffU)
+		{
+			return EINVAL;
+		}
+	}
+
+	hal_write32(sec, (addr_t)base_va + MAC_STSU);
+	hal_write32(ADDSUB(!sgn) | nsec, (addr_t)base_va + MAC_STNSU);
+
+	/*	Trigger the update */
+	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	regval |= UPDATE_TIMESTAMP(1);
+	hal_write32(regval, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+
+	/*	Wait for completion */
+	ii = 0U;
+	do
+	{
+		regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+		oal_time_usleep(100U);
+	} while ((regval & UPDATE_TIMESTAMP(1)) && (ii++ < 10U));
+
+	if (ii >= 10U)
+	{
+		return ETIME;
+	}
+
+	return EOK;
+}
+
+void pfe_emac_cfg_tx_disable(void *base_va)
+{
+	hal_write32(0U, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
 }
 
 /**
@@ -520,22 +756,12 @@ void pfe_emac_cfg_write_addr_slot(void *base_va, pfe_mac_addr_t addr, uint8_t sl
 	/*	All-zeros MAC address is special case (invalid entry) */
 	if ((0U != top) || (0U != bottom))
 	{
-		/*	Write the Address Enable flag */
 		top |= 0x80000000U;
 	}
 
-	/*	Double synchronization (see MAC manual) */
-
-	/*	Write HIGH register FIRST */
 	hal_write32(top, (addr_t)base_va + MAC_ADDRESS_HIGH(slot));
-
-	/*	Write LOW register NOW */
 	hal_write32(bottom, (addr_t)base_va + MAC_ADDRESS_LOW(slot));
-
-	/*	Due to sync at least 4 clock cycles ((G)MII) should be spent here */
 	oal_time_usleep(100);
-
-	/*	Write LOW register AGAIN */
 	hal_write32(bottom, (addr_t)base_va + MAC_ADDRESS_LOW(slot));
 }
 
@@ -547,15 +773,7 @@ void pfe_emac_cfg_write_addr_slot(void *base_va, pfe_mac_addr_t addr, uint8_t sl
  */
 uint32_t pfe_emac_cfg_get_hash(void *base_va, pfe_mac_addr_t addr)
 {
-	/*
-	  	 - The EQoS is using the CRC32 - See IEEE 802.3, Section 3.2.8
-	  	 - The hash table has 64 entries so hash is 6-bits long
-	  	 - THe hash table is addressed by UPPER 6-bits of the CRC32
-	  	 	 - Most significant bits (1) are addressing hash table register
-	  	 	 - Remaining (5) bits are addressing position within the (32-bit long) register
-	*/
 	(void)base_va;
-	(void)addr;
 
 	return crc32_reversed((uint8_t *)&addr, 6U);
 }
@@ -584,7 +802,6 @@ void pfe_emac_cfg_set_uni_group(void *base_va, int32_t hash, bool_t en)
 		reg &= (uint32_t)~(1U << pos);
 	}
 
-	/*	Double synchronization (see MAC manual) */
 	hal_write32(reg, (addr_t)base_va + MAC_HASH_TABLE_REG(hash_table_idx));
 	/*	Wait at least 4 clock cycles ((G)MII) */
 	oal_time_usleep(100);
@@ -599,7 +816,6 @@ void pfe_emac_cfg_set_uni_group(void *base_va, int32_t hash, bool_t en)
  */
 void pfe_emac_cfg_set_multi_group(void *base_va, int32_t hash, bool_t en)
 {
-	/*	Both, uni- and multi-cast addresses go to the same hash table */
 	pfe_emac_cfg_set_uni_group(base_va, hash, en);
 }
 
@@ -713,9 +929,8 @@ errno_t pfe_emac_cfg_mdio_read22(void *base_va, uint8_t pa, uint8_t ra, uint16_t
 			| BACK_TO_BACK(0U)
 			| PREAMBLE_SUPPRESSION(0U);
 
-	/*	Start a read operation */
+
 	hal_write32(reg, base_va + MAC_MDIO_ADDRESS);
-	/*	Wait for completion */
 	while(GMII_BUSY(1) == ((reg = hal_read32(base_va + MAC_MDIO_ADDRESS)) & GMII_BUSY(1)))
 	{
 		if (timeout-- == 0U)
@@ -762,10 +977,7 @@ errno_t pfe_emac_cfg_mdio_read45(void *base_va, uint8_t pa, uint8_t dev, uint16_
 			| BACK_TO_BACK(0U)
 			| PREAMBLE_SUPPRESSION(0U);
 
-	/*	Start a read operation */
 	hal_write32(reg, base_va + MAC_MDIO_ADDRESS);
-
-	/*	Wait for completion */
 	while(GMII_BUSY(1) == (hal_read32(base_va + MAC_MDIO_ADDRESS) & GMII_BUSY(1)))
 	{
 		if (timeout-- == 0U)
@@ -796,7 +1008,6 @@ errno_t pfe_emac_cfg_mdio_write22(void *base_va, uint8_t pa, uint8_t ra, uint16_
 	uint32_t reg;
 	uint32_t timeout = 500U;
 
-	/*	Write data register first */
 	reg = GMII_DATA(val);
 	hal_write32(reg, (addr_t)base_va + MAC_MDIO_DATA);
 
@@ -812,9 +1023,7 @@ errno_t pfe_emac_cfg_mdio_write22(void *base_va, uint8_t pa, uint8_t ra, uint16_
 				| BACK_TO_BACK(0U)
 				| PREAMBLE_SUPPRESSION(0U);
 
-	/*	Start a write operation */
 	hal_write32(reg, (addr_t)base_va + MAC_MDIO_ADDRESS);
-	/*	Wait for completion */
 	while(GMII_BUSY(1) == (hal_read32((addr_t)base_va + MAC_MDIO_ADDRESS) & GMII_BUSY(1)))
 	{
 		if (timeout-- == 0U)
@@ -841,7 +1050,6 @@ errno_t pfe_emac_cfg_mdio_write45(void *base_va, uint8_t pa, uint8_t dev, uint16
 	uint32_t reg;
 	uint32_t timeout = 500U;
 
-	/*	Write data register first */
 	reg = GMII_DATA(val) | GMII_REGISTER_ADDRESS(ra);
 	hal_write32(reg, base_va + MAC_MDIO_DATA);
 
@@ -857,9 +1065,7 @@ errno_t pfe_emac_cfg_mdio_write45(void *base_va, uint8_t pa, uint8_t dev, uint16
 				| BACK_TO_BACK(0U)
 				| PREAMBLE_SUPPRESSION(0U);
 
-	/*	Start a write operation */
 	hal_write32(reg, base_va + MAC_MDIO_ADDRESS);
-	/*	Wait for completion */
 	while(GMII_BUSY(1) == (hal_read32(base_va + MAC_MDIO_ADDRESS) & GMII_BUSY(1)))
 	{
 		if (timeout-- == 0U)
@@ -1050,5 +1256,3 @@ uint32_t pfe_emac_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, u
 
 	return len;
 }
-
-/** @}*/

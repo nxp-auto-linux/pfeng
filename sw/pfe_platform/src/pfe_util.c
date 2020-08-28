@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_UTIL
- * @{
- * 
- * @file		pfe_util.c
- * @brief		The UTIL module source file.
- * @details		This file contains UTIL-related functionality.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -54,9 +44,9 @@
 
 struct __pfe_util_tag
 {
-	bool_t is_fw_loaded;		/*	Flag indicating that firmware has been loaded */
+	bool_t is_fw_loaded;	/*	Flag indicating that firmware has been loaded */
 	void *cbus_base_va;		/*	CBUS base virtual address */
-	uint32_t pe_num;				/*	Number of PEs */
+	uint32_t pe_num;		/*	Number of PEs */
 	pfe_pe_t **pe;			/*	List of particular PEs */
 };
 
@@ -204,7 +194,6 @@ void pfe_util_enable(pfe_util_t *util)
 
 /**
  * @brief		Disable the UTIL block
- * @details		Disable all UTIL PEs
  * @param[in]	util The UTIL instance
  */
 void pfe_util_disable(pfe_util_t *util)
@@ -305,10 +294,8 @@ uint32_t pfe_util_get_text_statistics(pfe_util_t *util, char_t *buf, uint32_t bu
 	/*	Get PE info per PE */
 	for (ii=0U; ii<util->pe_num; ii++)
 	{
-		len = pfe_pe_get_text_statistics(util->pe[ii], buf + len, buf_len - len, verb_level);
+		len += pfe_pe_get_text_statistics(util->pe[ii], buf + len, buf_len - len, verb_level);
 	}
 	
 	return len;
 }
-
-/** @}*/

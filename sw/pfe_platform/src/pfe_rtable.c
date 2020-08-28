@@ -37,52 +37,6 @@
  * @details		This file contains routing table-related functionality.
  *
  * All values at rtable input level (API) shall be in host byte order format.
- *
- * Entry addition process
- * ----------------------
- * -# Allocate entry via pfe_rtable_entry_create()
- * -# Construct the entry using pfe_rtable_entry_set_xxx() APIs
- * -# Insert entry into the routing table via pfe_rtable_add_entry()
- *
- * Entry removal process
- * ---------------------
- * -# Call pfe_rtable_get_first() and pfe_rtable_get_next() to get desired entry. Optionally
- *    the entry created by pfe_rtable_entry_create() can be used.
- * -# Remove entry from the routing table using pfe_rtable_del_entry()
- * -# Release the entry via pfe_rtable_entry_free()
- *
- * Entry query process
- * -------------------
- * One can query the routing table using various rules. Rule is passed with call of
- * pfe_rtable_get_first(). Subsequent calls of pfe_rtable_get_next() returns following
- * entries until all entries matching the criterion are returned. Then the function
- * returns NULL. The pfe_rtable_del_entry() can be called in the loop to remove
- * entries from the routing table.
- *
- * Entry invalidation
- * ------------------
- * Entries are being accessed by driver and the firmware at the same time. Driver makes changes
- * to them on demand and firmware updates at least the 'active' flag. Therefore the driver
- * needs to ensure that prior any entry change, the firmware must not touch the data. This
- * is done by invalidation of the entry by the driver. Driver first clears the 'RT_FL_VALID' flag
- * and waits some time to let the firmware do its updates of the entry if such operation is in
- * progress. It is expected that during the waiting time period the firmware will finish all
- * pending updates and will read the RT_FL_VALID flag indicating that the entry is not valid anymore.
- * Therefore firmware will then not touch invalidated entry and driver can access and modify it.
- * Once updated, the driver validates the entry by writing the 'RT_FL_VALID' flag.
- *
- * @internal
- * Table creation process
- * ----------------------
- * -# Allocate memory for the hash table
- * -# Write the base address to PFE register (CLASS_ROUTE_TABLE_BASE)
- *
- * Firmware-related information
- * ----------------------------
- * Current firmware will take the hash table address from the register and will use it for route
- * lookup.
- *
- * @endinternal
  */
 
 #include "pfe_cfg.h"
@@ -703,7 +657,7 @@ errno_t pfe_rtable_entry_set_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_ad
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (pfe_ip_addr_is_ipv4(ip_addr))
+	if (ip_addr->is_ipv4)
 	{
 		if ((entry->phys_entry->flag_ipv6 != IPV_INVALID) && (entry->phys_entry->flag_ipv6 != IPV4))
 		{
@@ -714,7 +668,7 @@ errno_t pfe_rtable_entry_set_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_ad
 		memcpy(&entry->phys_entry->u.v4.sip, &ip_addr->v4, 4);
 		entry->phys_entry->flag_ipv6 = IPV4;
 	}
-	else if (pfe_ip_addr_is_ipv6(ip_addr))
+	else
 	{
 		if ((entry->phys_entry->flag_ipv6 != IPV_INVALID) && (entry->phys_entry->flag_ipv6 != IPV6))
 		{
@@ -724,11 +678,6 @@ errno_t pfe_rtable_entry_set_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_ad
 
 		memcpy(&entry->phys_entry->u.v6.sip[0], &ip_addr->v6, 16);
 		entry->phys_entry->flag_ipv6 = IPV6;
-	}
-	else
-	{
-		NXP_LOG_ERROR("Invalid IP address (SIP)\n");
-		return EINVAL;
 	}
 
 	return EOK;
@@ -776,7 +725,7 @@ errno_t pfe_rtable_entry_set_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_ad
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (pfe_ip_addr_is_ipv4(ip_addr))
+	if (ip_addr->is_ipv4)
 	{
 		if ((entry->phys_entry->flag_ipv6 != IPV_INVALID) && (entry->phys_entry->flag_ipv6 != IPV4))
 		{
@@ -787,7 +736,7 @@ errno_t pfe_rtable_entry_set_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_ad
 		memcpy(&entry->phys_entry->u.v4.dip, &ip_addr->v4, 4);
 		entry->phys_entry->flag_ipv6 = IPV4;
 	}
-	else if (pfe_ip_addr_is_ipv6(ip_addr))
+	else
 	{
 		if ((entry->phys_entry->flag_ipv6 != IPV_INVALID) && (entry->phys_entry->flag_ipv6 != IPV6))
 		{
@@ -797,11 +746,6 @@ errno_t pfe_rtable_entry_set_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_ad
 
 		memcpy(&entry->phys_entry->u.v6.dip[0], &ip_addr->v6, 16);
 		entry->phys_entry->flag_ipv6 = IPV6;
-	}
-	else
-	{
-		NXP_LOG_ERROR("Invalid IP address (DIP)\n");
-		return EINVAL;
 	}
 
 	return EOK;
@@ -992,12 +936,12 @@ errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if ((IPV4 == entry->phys_entry->flag_ipv6) && (!pfe_ip_addr_is_ipv4(output_sip)))
+	if ((IPV4 == entry->phys_entry->flag_ipv6) && (!output_sip->is_ipv4))
 	{
 		NXP_LOG_ERROR("IP version mismatch\n");
 		return EINVAL;
 	}
-	else if ((IPV6 == entry->phys_entry->flag_ipv6) || (pfe_ip_addr_is_ipv6(output_sip)))
+	else if ((IPV6 == entry->phys_entry->flag_ipv6) || (!output_sip->is_ipv4))
 	{
 		NXP_LOG_ERROR("IPv6 not supported\n");
 		return EINVAL;
@@ -1030,12 +974,12 @@ errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if ((IPV4 == entry->phys_entry->flag_ipv6) && (!pfe_ip_addr_is_ipv4(output_dip)))
+	if ((IPV4 == entry->phys_entry->flag_ipv6) && (!output_dip->is_ipv4))
 	{
 		NXP_LOG_ERROR("IP version mismatch\n");
 		return EINVAL;
 	}
-	else if ((IPV6 == entry->phys_entry->flag_ipv6) || (pfe_ip_addr_is_ipv6(output_dip)))
+	else if ((IPV6 == entry->phys_entry->flag_ipv6) || (!output_dip->is_ipv4))
 	{
 		NXP_LOG_ERROR("IPv6 not supported\n");
 		return EINVAL;
@@ -2390,12 +2334,16 @@ errno_t pfe_rtable_entry_to_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
 		/*	SRC + DST IP */
 		memcpy(&tuple->src_ip.v4, &entry->phys_entry->u.v4.sip, 4);
 		memcpy(&tuple->dst_ip.v4, &entry->phys_entry->u.v4.dip, 4);
+		tuple->src_ip.is_ipv4 = TRUE;
+		tuple->dst_ip.is_ipv4 = TRUE;
 	}
 	else if (IPV6 == entry->phys_entry->flag_ipv6)
 	{
 		/*	SRC + DST IP */
 		memcpy(&tuple->src_ip.v6, &entry->phys_entry->u.v6.sip[0], 16);
 		memcpy(&tuple->dst_ip.v6, &entry->phys_entry->u.v6.dip[0], 16);
+		tuple->src_ip.is_ipv4 = FALSE;
+		tuple->dst_ip.is_ipv4 = FALSE;
 	}
 	else
 	{
@@ -2442,6 +2390,8 @@ errno_t pfe_rtable_entry_to_5t_out(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tup
 		/*	SRC + DST IP */
 		memcpy(&tuple->src_ip.v4, &entry->phys_entry->args.v4.sip, 4);
 		memcpy(&tuple->dst_ip.v4, &entry->phys_entry->args.v4.dip, 4);
+		tuple->src_ip.is_ipv4 = TRUE;
+		tuple->dst_ip.is_ipv4 = TRUE;
 		tuple->sport = oal_ntohs(entry->phys_entry->args.sport);
 		tuple->dport = oal_ntohs(entry->phys_entry->args.dport);
 		tuple->proto = entry->phys_entry->proto;
@@ -2686,5 +2636,3 @@ pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 		return NULL;
 	}
 }
-
-/** @}*/

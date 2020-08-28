@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -71,6 +71,13 @@
 #include "oal_types_autosar.h"
 
 /*
+ * BARE METAL
+ * 
+ */
+#elif defined(PFE_CFG_TARGET_OS_BARE)
+#include "oal_types_bare.h"
+
+/*
  * unknown OS
  *
  */
@@ -83,8 +90,12 @@
 
 #define _ASSERT_CONCAT_(a, b) a##b
 #define _ASSERT_CONCAT(a, b) _ASSERT_CONCAT_(a, b)
+
+#ifdef __ghs__ /* AAVB-2386 */
+#define ct_assert(e) 
+#else
 #define ct_assert(e) enum { _ASSERT_CONCAT(precompile_assert_, __COUNTER__) = 1/(!!(e)) }
-#define _ct_assert(e) enum { _ASSERT_CONCAT(precompile_assert_, __COUNTER__) = 1/(!!(e)) }
+#endif
 
 /**
  * @brief		Swap byte order in a buffer

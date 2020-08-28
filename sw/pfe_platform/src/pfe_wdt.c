@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_WDT
- * @{
- *
- * @file		pfe_wdt.c
- * @brief		The WDT module source file.
- * @details		This file contains WDT-related functionality.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -48,12 +38,11 @@
 
 struct __pfe_wdt_tag
 {
-	void *cbus_base_va;		/*	CBUS base virtual address */
-	void *wdt_base_offset;	/*	WDT base offset within CBUS space (WDT is member of WSP global CSR)*/
-	void *wdt_base_va;		/*	WDT base address (virtual) (It is actually WSP global CSR base address)*/
+	void *cbus_base_va;
+	void *wdt_base_offset;
+	void *wdt_base_va;
 	oal_mutex_t lock;
 };
-
 
 pfe_wdt_t *pfe_wdt_create(void *cbus_base_va, void *wdt_base)
 {
@@ -175,7 +164,7 @@ errno_t pfe_wdt_isr(pfe_wdt_t *wdt)
 }
 
 /**
- * @brief		Mask BMU interrupts
+ * @brief		Mask WDT interrupts
  * @param[in]	The WDT instance
  */
 void pfe_wdt_irq_mask(pfe_wdt_t *wdt)
@@ -237,5 +226,3 @@ uint32_t pfe_wdt_get_text_statistics(pfe_wdt_t *wdt, char_t *buf, uint32_t buf_l
 
 	return len;
 }
-
-/** @}*/

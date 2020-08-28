@@ -28,37 +28,10 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- *
- * @defgroup	dxgr_PFE_LOG_IF PFE Logical Interface
- * @brief		PFE logical interface representation module
- * @details		This is the software representation of PFE logical interfaces.
- *
- *				[TODO: Future extension]
- *				Interface properties are shared between PFE driver and PFE firmware. The
- *				PFE firmware is using the interfaces within traffic processing chain and
- *				thus needs to keep the interface-related properties in PFE internal memory.
- *				So the PFE interface SW module must ensure that every change done on
- *				interface in host domain (property/state change) will be propagated to data
- *				structures describing the interface in PFE domain. For instance, if port-based
- *				VLAN feature is implemented then once host changes the default port VLAN ID,
- *				this change must be announced to PFE firmware too.
- *
- * @addtogroup  dxgr_PFE_LOG_IF
- * @{
- *
- * @file		pfe_log_if.h
- * @brief		The PFE Logical Interface module header file.
- * @details		This file contains PFE Logical Interface-related API.
- *
- */
-
 #ifndef PUBLIC_PFE_LOG_IF_H_
 #define PUBLIC_PFE_LOG_IF_H_
 
-#include "pfe_ct.h" /* common (fw/host) types */
+#include "pfe_ct.h"
 
 /**
  * @brief	Interface callback reasons
@@ -71,7 +44,7 @@ typedef enum
 
 typedef struct __pfe_log_if_tag pfe_log_if_t;
 
-#include "pfe_phy_if.h" /* pfe_phy_if_t, needs pfe_log_if_t */
+#include "pfe_phy_if.h"
 
 /**
  * @brief	Interface callback type
@@ -109,10 +82,7 @@ char_t *pfe_log_if_get_name(pfe_log_if_t *iface) __attribute__((pure));
 errno_t pfe_log_if_discard_enable(pfe_log_if_t *iface);
 errno_t pfe_log_if_discard_disable(pfe_log_if_t *iface);
 bool_t pfe_log_if_is_discard(pfe_log_if_t *iface);
+errno_t pfe_log_if_get_stats(pfe_log_if_t *iface, pfe_ct_class_algo_stats_t *stat);
 uint32_t pfe_log_if_get_text_statistics(pfe_log_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 
 #endif /* PUBLIC_PFE_LOG_IF_H_ */
-
-/** @}*/
-/** @}*/
-

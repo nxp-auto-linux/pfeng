@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_WDT
- * @{
- *
- * @file		pfe_wdt_csr.c
- * @brief		The WDT module low-level API (s32g).
- * @details
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -283,5 +273,3 @@ uint32_t pfe_wdt_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, ui
 
 	return len;
 }
-
-/** @}*/

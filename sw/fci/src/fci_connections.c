@@ -75,13 +75,16 @@ static errno_t fci_connections_ipv4_cmd_to_rep_entry(fpp_ct_cmd_t *ct_cmd, pfe_r
 static errno_t fci_connections_ipv6_cmd_to_entry(fpp_ct6_cmd_t *ct_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface);
 static errno_t fci_connections_ipv6_cmd_to_rep_entry(fpp_ct6_cmd_t *ct_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface);
 static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, fci_msg_t *msg, uint16_t *fci_ret, void *reply_buf, uint32_t *reply_len);
+#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
 static char_t * fci_connections_ipv4_cmd_to_str(fpp_ct_cmd_t *ct_cmd);
 static char_t * fci_connections_ipv6_cmd_to_str(fpp_ct6_cmd_t *ct6_cmd);
 static char_t * fci_connections_entry_to_str(pfe_rtable_entry_t *entry);
 static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *dip, uint16_t *sport, uint16_t *dport,
 									uint8_t *sip_out, uint8_t *dip_out, uint16_t *sport_out, uint16_t *dport_out, uint8_t *proto);
+#endif /* PFE_CFG_VERBOSITY_LEVEL */
 static pfe_phy_if_t *fci_connections_rentry_to_if(pfe_rtable_entry_t *entry);
 
+#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
 /**
  * @brief		Convert CT (IPv4) command to string representation
  * @param[in]	ct_cmd The command
@@ -108,7 +111,9 @@ static char_t * fci_connections_ipv4_cmd_to_str(fpp_ct_cmd_t *ct_cmd)
 										&ct_cmd->sport_reply,
 										(uint8_t *)&ct_cmd->protocol);
 }
+#endif /* PFE_CFG_VERBOSITY_LEVEL */
 
+#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
 /**
  * @brief		Convert CT (IPv6) command to string representation
  * @param[in]	ct_cmd The command
@@ -135,7 +140,9 @@ static char_t * fci_connections_ipv6_cmd_to_str(fpp_ct6_cmd_t *ct6_cmd)
 											&ct6_cmd->sport_reply,
 											(uint8_t *)&ct6_cmd->protocol);
 }
+#endif /* PFE_CFG_VERBOSITY_LEVEL */
 
+#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
 /**
  * @brief		Build string from given values
  * @param[in]	ipv6 TRUE if IPv6 values, FALSE for IPv4
@@ -230,7 +237,9 @@ static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *di
 
 	return buf;
 }
+#endif /* PFE_CFG_VERBOSITY_LEVEL */
 
+#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
 /**
  * @brief		Convert routing table entry to a string representation
  * @param[in]	entry The entry
@@ -265,7 +274,7 @@ static char_t * fci_connections_entry_to_str(pfe_rtable_entry_t *entry)
 	tuple_out.sport = htons(tuple_out.sport);
 	tuple_out.dport = htons(tuple_out.dport);
 
-	if (pfe_ip_addr_is_ipv4(&tuple.src_ip))
+	if (tuple.src_ip.is_ipv4)
 	{
 		return fci_connections_build_str(FALSE,
 											(uint8_t *)&tuple.src_ip.v4,
@@ -292,6 +301,7 @@ static char_t * fci_connections_entry_to_str(pfe_rtable_entry_t *entry)
 											(uint8_t *)&tuple.proto);
 	}
 }
+#endif /* PFE_CFG_VERBOSITY_LEVEL */
 
 /**
  * @brief		Convert CT command (IPv4) to 5 tuple representation
@@ -312,6 +322,8 @@ static void fci_connections_ipv4_cmd_to_5t(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *
 
 	memcpy(&tuple->src_ip.v4, &ct_cmd->saddr, 4);
 	memcpy(&tuple->dst_ip.v4, &ct_cmd->daddr, 4);
+	tuple->src_ip.is_ipv4 = TRUE;
+	tuple->dst_ip.is_ipv4 = TRUE;
 	tuple->sport = oal_ntohs(ct_cmd->sport);
 	tuple->dport = oal_ntohs(ct_cmd->dport);
 	tuple->proto = ct_cmd->protocol;
@@ -336,6 +348,8 @@ static void fci_connections_ipv4_cmd_to_5t_rep(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple
 
 	memcpy(&tuple->src_ip.v4, &ct_cmd->saddr_reply, 4);
 	memcpy(&tuple->dst_ip.v4, &ct_cmd->daddr_reply, 4);
+	tuple->src_ip.is_ipv4 = TRUE;
+	tuple->dst_ip.is_ipv4 = TRUE;
 	tuple->sport = oal_ntohs(ct_cmd->sport_reply);
 	tuple->dport = oal_ntohs(ct_cmd->dport_reply);
 	tuple->proto = ct_cmd->protocol;
@@ -360,6 +374,8 @@ static void fci_connections_ipv6_cmd_to_5t(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t
 
 	memcpy(&tuple->src_ip.v6, &ct6_cmd->saddr[0], 16);
 	memcpy(&tuple->dst_ip.v6, &ct6_cmd->daddr[0], 16);
+	tuple->src_ip.is_ipv4 = FALSE;
+	tuple->dst_ip.is_ipv4 = FALSE;
 	tuple->sport = oal_ntohs(ct6_cmd->sport);
 	tuple->dport = oal_ntohs(ct6_cmd->dport);
 	tuple->proto = ct6_cmd->protocol;
@@ -384,6 +400,8 @@ static void fci_connections_ipv6_cmd_to_5t_rep(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tup
 
 	memcpy(&tuple->src_ip.v6, &ct6_cmd->saddr_reply[0], 16);
 	memcpy(&tuple->dst_ip.v6, &ct6_cmd->daddr_reply[0], 16);
+	tuple->src_ip.is_ipv4 = FALSE;
+	tuple->dst_ip.is_ipv4 = FALSE;
 	tuple->sport = oal_ntohs(ct6_cmd->sport_reply);
 	tuple->dport = oal_ntohs(ct6_cmd->dport_reply);
 	tuple->proto = ct6_cmd->protocol;
@@ -1191,7 +1209,7 @@ free_and_fail:
 				break;
 			}
 		}
-		/*	No break */
+		/* FALLTHRU */
 
 		case FPP_ACTION_QUERY_CONT:
 		{
@@ -1509,7 +1527,7 @@ errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry)
 	memset(&msg, 0, sizeof(fci_msg_t));
 	msg.type = FCI_MSG_CMD;
 
-	if (TRUE == pfe_ip_addr_is_ipv4(&tuple.src_ip))
+	if (TRUE == tuple.src_ip.is_ipv4)
 	{
 		/*	IPv4 */
 		NXP_LOG_DEBUG("Removing IPv4 connection:\n%s\n", fci_connections_entry_to_str(entry));
@@ -1537,7 +1555,7 @@ errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry)
 			; /*	No client ID, notification not required */
 		}
 	}
-	else if (TRUE == pfe_ip_addr_is_ipv6(&tuple.src_ip))
+	else
 	{
 		/*	IPv6 */
 		NXP_LOG_DEBUG("Removing IPv6 connection:\n%s\n", fci_connections_entry_to_str(entry));
@@ -1564,10 +1582,6 @@ errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry)
 		{
 			; /*	No client ID, notification not required */
 		}
-	}
-	else
-	{
-		NXP_LOG_WARNING("Invalid IP address (IP version)\n");
 	}
 
 	/*	Remove entry from the routing table */

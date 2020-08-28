@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_LOG_IF
- * @{
- *
- * @file		pfe_log_if.c
- * @brief		The PFE logical interface module source file.
- * @details		This file contains logical interface-related functionality.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -95,9 +85,8 @@ static errno_t pfe_log_if_read_from_class(pfe_log_if_t *iface, pfe_ct_log_if_t *
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*
-		Read current interface configuration from classifier. Since all class PEs are running the
-		same code, also the data are the same (except statistics counters...).
-		Returned data will be in __NETWORK__ endian format.
+		Read current interface configuration from classifier. Returned data will be in
+		__NETWORK__ endian format.
 	*/
 	return pfe_class_read_dmem(iface->class, pe_idx, class_if, (void *)iface->dmem_base, sizeof(pfe_ct_log_if_t));
 }
@@ -122,7 +111,6 @@ static errno_t pfe_log_if_write_to_class_nostats(pfe_log_if_t *iface, pfe_ct_log
 	/* Be sure that class_stats are at correct place */
 	ct_assert((sizeof(pfe_ct_log_if_t) - sizeof(pfe_ct_class_algo_stats_t)) == offsetof(pfe_ct_log_if_t, class_stats));
 
-	/*	Write to DMEM of ALL PEs */
 	return pfe_class_write_dmem(iface->class, -1, (void *)iface->dmem_base, class_if,
 							    sizeof(pfe_ct_log_if_t) - sizeof(pfe_ct_class_algo_stats_t));
 }
@@ -144,7 +132,6 @@ static errno_t pfe_log_if_write_to_class(pfe_log_if_t *iface, pfe_ct_log_if_t *c
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	/*	Write to DMEM of ALL PEs */
 	return pfe_class_write_dmem(iface->class, -1, (void *)iface->dmem_base, class_if, sizeof(pfe_ct_log_if_t));
 }
 
@@ -220,11 +207,11 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, char_t *name)
 			strcpy(iface->name, name);
 		}
 
-		/* Get the DMEM memory for logical interface */
+		/* Get the DMEM for logical interface */
 		iface->dmem_base = pfe_class_dmem_heap_alloc(iface->class, sizeof(pfe_ct_log_if_t));
 		if(0U == iface->dmem_base)
 		{
-			NXP_LOG_ERROR("No DMEM memory\n");
+			NXP_LOG_ERROR("No DMEM\n");
 			oal_mm_free(iface->name);
 			oal_mutex_destroy(&iface->lock);
 			oal_mm_free(iface);
@@ -311,7 +298,7 @@ __attribute__((pure)) pfe_phy_if_t *pfe_log_if_get_parent(pfe_log_if_t *iface)
 }
 
 /**
- * @brief		Set 'next' pointer of the logical interface (DMEM)
+ * @brief		Set 'next' pointer of the logical interface
  * @details		The value is used to form a simple linked list of logical interface structures
  * 				within the classifier memory. Classifier can then walk through the list with
  * 				every packet, try to find a matching logical interface, and perform subsequent
@@ -1786,6 +1773,64 @@ __attribute__((pure)) char_t *pfe_log_if_get_name(pfe_log_if_t *iface)
 }
 
 /**
+ * @brief		Get log interface statistics
+ * @param[in]	iface The interface instance
+ * @param[out]	stat Statistic structure
+ * @retval		EOK Success
+ * @retval		NOMEM Not possible to allocate memory for read
+ */
+errno_t pfe_log_if_get_stats(pfe_log_if_t *iface, pfe_ct_class_algo_stats_t *stat)
+{
+	int i = 0;
+	errno_t ret = EOK;
+	addr_t offset = 0;
+	uint32_t buff_len = 0;
+	pfe_ct_class_algo_stats_t * stats = NULL;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == iface) || (NULL == stat)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	memset(stat,0,sizeof(pfe_ct_class_algo_stats_t));
+
+	/* Store offset to stats */
+	offset = offsetof(pfe_ct_log_if_t,class_stats);
+
+	/* Prepare memory */
+	buff_len = sizeof(pfe_ct_class_algo_stats_t) * pfe_class_get_num_of_pes(iface->class);
+	stats = oal_mm_malloc(buff_len);
+	if(NULL == stats)
+	{
+		return ENOMEM;
+	}
+	/* Gather memory from all PEs*/
+	ret = pfe_class_gather_read_dmem(iface->class, stats, (void *)iface->dmem_base + offset, buff_len, sizeof(pfe_ct_class_algo_stats_t));
+
+	/* Calculate total statistics */
+	for(i = 0U; i < pfe_class_get_num_of_pes(iface->class); i++)
+	{
+		/* Store statistics */
+		stat->accepted	+= oal_ntohl(stats[i].accepted);
+		stat->discarded	+= oal_ntohl(stats[i].discarded);
+		stat->processed	+= oal_ntohl(stats[i].processed);
+		stat->rejected	+= oal_ntohl(stats[i].rejected);
+	}
+	oal_mm_free(stats);
+
+	/* Convert statistics back to network endian */
+	stat->accepted	= oal_htonl(stat->accepted);
+	stat->discarded	= oal_htonl(stat->discarded);
+	stat->processed	= oal_htonl(stat->processed);
+	stat->rejected	= oal_htonl(stat->rejected);
+
+	return ret;
+}
+
+/**
  * @brief		Return logical interface runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	iface 		The logical interface instance
@@ -1833,6 +1878,3 @@ uint32_t pfe_log_if_get_text_statistics(pfe_log_if_t *iface, char_t *buf, uint32
 
 	return len;
 }
-
-
-/** @}*/

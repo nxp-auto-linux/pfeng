@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -27,38 +27,6 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
-
-/**
- * @addtogroup  dxgr_PFE_HIF
- * @{
- * 
- * @file		pfe_hif.c
- * @brief		The HIF module source file.
- * @details
- *				Purpose
- *				-------
- *				This file contains HIF-related functionality. Every HIF instance is owner of number of
- *				underlying HIF Channel components representing particular HIF RX/TX resources
- *				(channels).
- *
- * 				Particular operations such channel initialization, data transmission and reception are
- *				then controlled via methods of a channel instance. For more information please see
- *				the @see pfe_hif_chnl_t.
- *
- *				Initialization
- *				--------------
- *				To create a HIF instance one shall call the pfe_hif_create() with valid parameters.
- *				Once created, instance is ready to be used. Data-path manipulation is done via
- *				pfe_hif_chnl_t instance as mentioned above. To retrieve a channel instance the
- *				pfe_hif_get_channel() function shall be called.
- *
- *				Shutdown
- *				--------
- *				When the HIF is no more needed it shall be properly terminated by pfe_hif_destroy().
- *				The call will ensure that all resources will be released and the HIF hardware will
- *				be finalized so it can be used again later.
- *
- */
 
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -247,7 +215,7 @@ pfe_hif_t *pfe_hif_create(void *cbus_base_va, pfe_hif_chnl_id_t channels)
 	}
 	else
 	{
-		for (ii=0; channels > 0U; (channels >>= 1), ii++)
+		for (ii=0; ii < HIF_CFG_MAX_CHANNELS; (channels >>= 1), ii++)
 		{
 			if (0 != (channels & 0x1))
 			{
@@ -400,5 +368,3 @@ uint32_t pfe_hif_get_text_statistics(pfe_hif_t *hif, char_t *buf, uint32_t buf_l
 	return len;
 }
 #endif /* PFE_CFG_PFE_MASTER */
-
-/** @}*/

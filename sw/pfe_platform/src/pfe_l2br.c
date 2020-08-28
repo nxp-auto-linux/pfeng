@@ -29,9 +29,6 @@
  * ========================================================================= */
 
 /**
- * @addtogroup  dxgr_PFE_L2BR
- * @{
- *
  * @file		pfe_l2br.c
  * @brief		The L2 bridge module source file.
  * @details		This file contains L2 bridge-related functionality.
@@ -148,9 +145,6 @@ enum pfe_rtable_worker_signals
 	SIG_TIMER_TICK		/*!< Pulse from timer */
 };
 
-#if 0
-static errno_t pfe_def_bd_read_from_class(pfe_l2br_t *bridge, pfe_ct_bd_entry_t *class_entry);
-#endif /* 0 */
 static errno_t pfe_fb_bd_write_to_class(pfe_l2br_t *bridge, pfe_ct_bd_entry_t *class_entry);
 static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain);
 static pfe_l2br_domain_t *pfe_l2br_create_default_domain(pfe_l2br_t *bridge, uint16_t vlan);
@@ -159,33 +153,6 @@ static void *pfe_l2br_worker_func(void *arg);
 static void pfe_l2br_do_timeouts(pfe_l2br_t *bridge);
 static bool_t pfe_l2br_domain_match_if_criterion(pfe_l2br_domain_t *domain, pfe_phy_if_t *iface);
 static bool_t pfe_l2br_domain_match_criterion(pfe_l2br_t *bridge, pfe_l2br_domain_t *domain);
-
-#if 0 /* For future use */
-/**
- * @brief		Read default bridge domain structure from classifier memory
- * @param[in]	bridge The bridge instance
- * @param[in]	class_entry Pointer where the structure shall be written
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- */
-static errno_t pfe_def_bd_read_from_class(pfe_l2br_t *bridge, pfe_ct_bd_entry_t *class_entry)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(((NULL == class_entry) || (NULL == bridge) || (0U == bridge->dmem_fb_bd_base)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*
-		Read current interface configuration from classifier. Since all class PEs are running the
-		same code, also the data are the same (except statistics counters...).
-		Returned data will be in __NETWORK__ endian format.
-	*/
-	return pfe_class_read_dmem(bridge->class, 0U, class_entry, (void *)bridge->dmem_fb_bd_base, sizeof(pfe_ct_bd_entry_t));
-}
-#endif /* 0 */
 
 /**
  * @brief		Write fall-back bridge domain structure to classifier memory
@@ -203,8 +170,6 @@ static errno_t pfe_fb_bd_write_to_class(pfe_l2br_t *bridge, pfe_ct_bd_entry_t *c
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	Write to DMEM of ALL PEs */
 
 	return pfe_class_write_dmem(bridge->class, -1, (void *)(addr_t)bridge->dmem_fb_bd_base, class_entry, sizeof(pfe_ct_bd_entry_t));
 }
@@ -243,8 +208,6 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 		memcpy(&fb_bd, &tmp64, sizeof(uint64_t));
 		if (0U == fb_bd.val)
 		{
-			/*	MIPS compiler expects that MSb of structure (55bits) is aligned
-				with MSb of container type (64bits). */
 			need_shift = TRUE;
 		}
 
@@ -253,10 +216,6 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 
 		if (TRUE == need_shift)
 		{
-			/*	The MIPS compiler represents the structure starting with MSb. Do the shift to align MSb
-				with MSb as represented by the structure on MIPS (64-55=9). We do memcpy here because
-				'val' is not 64-bits long and we don't want to add more members into the pfe_ct_bd_entry_t
-				just due to this single operation. */
 			tmp64 = (uint64_t)fb_bd.val << 9;
 			memcpy(&fb_bd, &tmp64, sizeof(pfe_ct_bd_entry_t));
 		}
@@ -274,10 +233,9 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 #error("todo")
 #endif
 
-		/*	Update classifier memory (all PEs) */
 		if (EOK != pfe_fb_bd_write_to_class(domain->bridge, &fb_bd))
 		{
-			NXP_LOG_DEBUG("Class memory write failed\n");
+			NXP_LOG_DEBUG("Memory write failed\n");
 		}
 	}
 	else
@@ -473,7 +431,7 @@ errno_t pfe_l2br_domain_destroy(pfe_l2br_domain_t *domain)
 
 	if (NULL != domain->vlan_entry)
 	{
-		/*	Remove entry from the HW table */
+		/*	Remove entry from the table */
 		ret = pfe_l2br_table_del_entry(domain->bridge->vlan_table, domain->vlan_entry);
 		if (EOK != ret)
 		{
@@ -576,13 +534,7 @@ static pfe_l2br_domain_t *pfe_l2br_create_default_domain(pfe_l2br_t *bridge, uin
 /**
  * @brief		Create fall-back L2 bridge domain instance
  * @details		Create fall-back bridge domain (empty, no interface assigned)
- *				Fallback domain:
- *					- Is written into classifier memory, AND the VLAN table
- * 					- Contains all PHY interfaces assigned to bridge
- *					- Contains default hit/miss actions
- *					- Contains default VLAN
  * @param[in]	bridge The L2 bridge instance
- * @param[in]	vlan VLAN ID to identify the bridge domain
  * @return		The instance or NULL if failed
  */
 static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
@@ -629,7 +581,6 @@ static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
 		return NULL;
 	}
 
-	/*	Write it to the classifier */
 	if (EOK != pfe_class_get_mmap(bridge->class, 0, &class_mmap))
 	{
 		NXP_LOG_ERROR("Could not get memory map\n");
@@ -649,19 +600,18 @@ static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
 		domain->action_data.mcast_hit_action = L2BR_ACT_DISCARD;
 		domain->action_data.mcast_miss_action = L2BR_ACT_DISCARD;
 
-		/*	Write the fall-back domain to classifier */
 		if (EOK != pfe_l2br_update_hw_entry(domain))
 		{
 			oal_mm_free(domain);
 			domain = NULL;
 		}
 
-		/*	Remember the domain instance in global list */
 		if (EOK != oal_mutex_lock(bridge->mutex))
 		{
 			NXP_LOG_DEBUG("Mutex lock failed\n");
 		}
 
+		/*	Remember the domain instance in global list */
 		LLIST_AddAtEnd(&domain->list_entry, &bridge->domains);
 
 		if (EOK != oal_mutex_unlock(bridge->mutex))
@@ -1302,7 +1252,6 @@ static void pfe_l2br_do_timeouts(pfe_l2br_t *bridge)
 	{
 		if (FALSE == pfe_l2br_table_entry_is_static(entry))
 		{
-
 			if (TRUE == pfe_l2br_table_entry_is_fresh(entry))
 			{
 				ret = pfe_l2br_table_del_entry(bridge->mac_table, entry);
@@ -1797,5 +1746,3 @@ uint32_t pfe_l2br_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t 
     (void)pfe_l2br_table_entry_destroy(entry);
     return len;
 }
-
-/** @}*/

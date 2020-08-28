@@ -28,44 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @defgroup	dxgrPFE_PLATFORM PFE Platform
- * @brief		The PFE Platform
- * @details		This SW module is intended to provide full PFE HW abstraction layer. Using
- * 				this module's API one is able to configure, control and encapsulate particular
- * 				PFE HW components like classifier, GPI or HIF as a single object.
- * 				
- * 				Module can be used to create and maintain various PFE instances depending on
- * 				currently used HW platform or HW configuration without need to modify upper
- * 				or application-level SW layers.
- * 				
- * 				Module consists of following components:
- * 				- pfe_pe - A generic processing engine representation
- * 				- pfe_class - The CLASS block
- * 				- pfe_rtable - The routing table
- * 				- pfe_tmu - The TMU block
- * 				- pfe_util - The UTIL block
- * 				- pfe_bmu - The BMU block
- * 				- pfe_gpi - The GPI block
- * 				- pfe_util - The UTIL block
- * 				- pfe_emac - The EMAC block
- * 				- pfe_hif - The HIF block
- * 				- pfe_hif_chnl - The HIF channel
- * 				- pfe_hif_ring - The HIF BD ring
- * 				- pfe_wdt - The WDT block
- * 				
- * 				These components can be used to synthesize SW representation of a PPFE HW block
- * 				using hierarchical structure where top level is the PFE platform object. 
- * 
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- * 
- * @file		pfe_platform.h
- * @brief		The PFE platform management
- * @details		Header for the HW-specific code
- *
- */
-
 #ifndef SRC_PFE_PLATFORM_H_
 #define SRC_PFE_PLATFORM_H_
 
@@ -128,6 +90,7 @@ typedef struct
 	uint32_t irq_vector_global;		/* Global IRQ number */
 	uint32_t irq_vector_bmu;		/* BMU IRQ number */
 	pfe_hif_chnl_id_t hif_chnls_mask; /* The bitmap list of the requested HIF channels */
+	pfe_ct_phy_if_id_t master_if; /* Interface where master driver is located */
 	uint32_t irq_vector_hif_chnls[HIF_CFG_MAX_CHANNELS];	/* HIF channels IRQ number */
 	uint32_t irq_vector_hif_nocpy;	/* HIF nocopy channel IRQ number */
 	uint32_t irq_vector_upe_gpt; /* UPE + GPT IRQ number */
@@ -135,10 +98,9 @@ typedef struct
 	bool_t enable_util;			/* Shall be UTIL enabled? */
 } pfe_platform_config_t;
 
-/*	The PFE platform data type */
 typedef struct
 {
-	volatile bool_t probed;		/* Flag indicating that instance has been successfully probed */
+	volatile bool_t probed;
 	void *cbus_baseaddr;
 	void *bmu_buffers_va;
 	addr_t bmu_buffers_size;
@@ -155,41 +117,42 @@ typedef struct
 	pfe_hif_nocpy_t *hif_nocpy;	/* The HIF_NOCPY block */
 	oal_irq_t *irq_hif_nocpy;	/* HIF nocopy channel IRQ */
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	uint32_t emac_count;		/* Number of EMAC blocks */
-	uint32_t gpi_count;			/* Number of GPI blocks */
-	uint32_t etgpi_count;		/* Number of ETGPI blocks */
-	uint32_t hgpi_count;		/* Number of HGPI blocks */
-	uint32_t bmu_count;			/* Number of BMU blocks */
-	uint32_t class_pe_count; 	/* Number of CLASS PEs */
-	uint32_t util_pe_count; 	/* Number of UTIL PEs */
-	uint32_t tmu_pe_count;		/* Number of TMU PEs */
+	uint32_t emac_count;
+	uint32_t gpi_count;
+	uint32_t etgpi_count;
+	uint32_t hgpi_count;
+	uint32_t bmu_count;
+	uint32_t class_pe_count;
+	uint32_t util_pe_count;
+	uint32_t tmu_pe_count;
 	pfe_fw_t *fw;
 #if defined(PFE_CFG_RTABLE_ENABLE)
-	pfe_rtable_t *rtable;		/* The routing table */
+	pfe_rtable_t *rtable;
 #endif /* PFE_CFG_RTABLE_ENABLE */
 #if defined(PFE_CFG_L2BRIDGE_ENABLE)
-	pfe_l2br_table_t *mactab;	/* The MAC table */
-	pfe_l2br_table_t *vlantab;	/* The VLAN table */
-	pfe_l2br_t *l2_bridge;		/* The L2 bridge */
+	pfe_l2br_table_t *mactab;
+	pfe_l2br_table_t *vlantab;
+	pfe_l2br_t *l2_bridge;
 #endif /* PFE_CFG_L2BRIDGE_ENABLE */
-	pfe_class_t *classifier;	/* The classifier block */
-	pfe_tmu_t *tmu;				/* The TMU block */
-	pfe_util_t *util;			/* The UTIL block */
-	pfe_bmu_t **bmu;			/* The BMU blocks */
-	pfe_gpi_t **gpi;			/* The GPI blocks */
-	pfe_gpi_t **etgpi;			/* The ETGPI blocks */
-	pfe_gpi_t **hgpi;			/* The HGPI blocks */
-	pfe_hif_t *hif;				/* The HIF block */
-	pfe_emac_t **emac;			/* The EMAC blocks */
-	pfe_safety_t *safety;		/* The SAFETY block */
-	pfe_wdt_t 	*wdt;			/* The WDT block */
-	pfe_if_db_t *phy_if_db;		/* The PFE physical interfaces */
-	pfe_if_db_t *log_if_db;		/* The PFE logical interfaces */
+	pfe_class_t *classifier;
+	pfe_tmu_t *tmu;
+	pfe_util_t *util;
+	pfe_bmu_t **bmu;
+	pfe_gpi_t **gpi;
+	pfe_gpi_t **etgpi;
+	pfe_gpi_t **hgpi;
+	pfe_hif_t *hif;
+	pfe_emac_t **emac;
+	pfe_safety_t *safety;
+	pfe_wdt_t 	*wdt;
+	pfe_if_db_t *phy_if_db;
+	pfe_if_db_t *log_if_db;
 	bool_t fci_created;
 } pfe_platform_t;
 
 pfe_fw_t *pfe_fw_load(char_t *class_fw_name, char_t *util_fw_name);
 errno_t pfe_platform_init(pfe_platform_config_t *config);
+errno_t pfe_platform_create_ifaces(pfe_platform_t *platform);
 errno_t pfe_platform_soft_reset(pfe_platform_t *platform);
 errno_t pfe_platform_remove(void);
 void pfe_platform_print_versions(pfe_platform_t *platform);
@@ -199,7 +162,6 @@ errno_t pfe_platform_unregister_log_if(pfe_platform_t *platform, pfe_log_if_t *l
 pfe_log_if_t *pfe_platform_get_log_if_by_id(pfe_platform_t *platform, uint8_t id);
 pfe_log_if_t *pfe_platform_get_log_if_by_name(pfe_platform_t *platform, char_t *name);
 pfe_phy_if_t *pfe_platform_get_phy_if_by_id(pfe_platform_t *platform, pfe_ct_phy_if_id_t id);
+void pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg);
 
 #endif /* SRC_PFE_PLATFORM_H_ */
-
-/** @}*/

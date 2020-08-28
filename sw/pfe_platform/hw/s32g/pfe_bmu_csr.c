@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_BMU
- * @{
- *
- * @file		pfe_bmu_csr.c
- * @brief		The BMU module low-level API (s32g).
- * @details
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -48,7 +38,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
@@ -56,8 +45,6 @@
 static void pfe_bmu_cfg_clear_buf_cnt_memory(void *base_va, uint32_t cnt)
 {
 	uint32_t ii;
-
-	NXP_LOG_DEBUG("BMU: Initializing 'buf_cnt_mem' (%d locations)\n", cnt);
 
 	for (ii=0U; ii<cnt; ii++)
 	{
@@ -70,8 +57,6 @@ static void pfe_bmu_cfg_clear_buf_cnt_memory(void *base_va, uint32_t cnt)
 static void pfe_bmu_cfg_clear_internal_memory(void *base_va, uint32_t cnt)
 {
 	uint32_t ii;
-
-	NXP_LOG_DEBUG("BMU: Initializing 'int_mem' (%d locations)\n", cnt);
 
 	for (ii=0U; ii<cnt; ii++)
 	{
@@ -197,17 +182,12 @@ void pfe_bmu_cfg_irq_unmask(void *base_va)
 
 /**
  * @brief		Initialize and configure the BMU block
- * @details		This routine is common for all BMU instances. Instance-specific
- * 				configuration values are passed within the 'cfg' structure.
  * @param[in]	base_va Base address of the BMU register space (virtual)
  * @param[in]	cfg Pointer to the configuration structure
  */
 void pfe_bmu_cfg_init(void *base_va, pfe_bmu_cfg_t *cfg)
 {
-	/*	Disable the BMU */
 	hal_write32(0U, base_va + BMU_CTRL);
-
-	/*	Disable and clear BMU interrupts */
 	hal_write32(0x0U, base_va + BMU_INT_ENABLE);
 	hal_write32(0xffffffffU, base_va + BMU_INT_SRC);
 
@@ -218,7 +198,6 @@ void pfe_bmu_cfg_init(void *base_va, pfe_bmu_cfg_t *cfg)
 	/*	Thresholds. 75% of maximum number of available buffers. */
 	hal_write32((cfg->max_buf_cnt * 75U) / 100U, base_va + BMU_THRES);
 
-	/*	Clear internal memories */
 	pfe_bmu_cfg_clear_internal_memory(base_va, cfg->int_mem_loc_cnt);
 	pfe_bmu_cfg_clear_buf_cnt_memory(base_va, cfg->buf_mem_loc_cnt);
 
@@ -232,18 +211,13 @@ void pfe_bmu_cfg_init(void *base_va, pfe_bmu_cfg_t *cfg)
  */
 void pfe_bmu_cfg_fini(void *base_va)
 {
-	/*	Disable the BMU */
 	hal_write32(0U, base_va + BMU_CTRL);
-
-	/*	Disable and clear BMU interrupts */
 	hal_write32(0x0U, base_va + BMU_INT_ENABLE);
 	hal_write32(0xffffffffU, base_va + BMU_INT_SRC);
 }
 
 /**
  * @brief		BMU reset
- * @details		Perform soft reset of the BMU. This reset is mandatory
- * 				to have the internal bitmap memory cleared.
  * @param[in]	base_va Base address of the BMU register space (virtual)
  * @return		EOK if success or error code otherwise
  */
@@ -288,8 +262,7 @@ void pfe_bmu_cfg_disable(void *base_va)
 /**
  * @brief		Allocate buffer from BMU
  * @param[in]	base_va Base address of the BMU register space (virtual)
- * @return		Pointer to the allocated buffer. Memory location depends
- * 				on the BMU instance (LMEM/DDR).
+ * @return		Pointer to the allocated buffer
  */
 void * pfe_bmu_cfg_alloc_buf(void *base_va)
 {
@@ -299,8 +272,7 @@ void * pfe_bmu_cfg_alloc_buf(void *base_va)
 /**
  * @brief		Free a previously allocated buffer
  * @param[in]	base_va Base address of the BMU register space (virtual)
- * @param[in]	buffer Pointer to the buffer to be released. It is PA as seen
- * 				by the PFE.
+ * @param[in]	buffer Pointer to the buffer to be released
  */
 void pfe_bmu_cfg_free_buf(void *base_va, void *buffer)
 {
@@ -371,5 +343,3 @@ uint32_t pfe_bmu_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, ui
 		}
 	return len;
 }
-
-/** @}*/

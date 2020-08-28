@@ -45,7 +45,7 @@ struct pfeng_rx_chnl_pool {
 	u32				avail;
 	u32				buf_size;
 
-	void			**va_tbl;	/* skb VA table in hif drv rx ring */
+	void				**va_tbl;	/* skb VA table in hif drv rx ring */
 	u32				va_tbl_rd_idx;
 	u32				va_tbl_wr_idx;
 	u32				va_tbl_idx_mask;
@@ -101,7 +101,7 @@ void pfeng_bman_pool_destroy(void *ctx)
 
 void *pfeng_bman_pool_create(pfe_hif_chnl_t *chnl, void *ref)
 {
-    struct device *dev = (struct device *)ref;
+	struct device *dev = (struct device *)ref;
 	struct pfeng_rx_chnl_pool *pool;
 
 	pool = kzalloc(sizeof(*pool), GFP_KERNEL);
@@ -115,7 +115,7 @@ void *pfeng_bman_pool_create(pfe_hif_chnl_t *chnl, void *ref)
 	pool->depth = pfe_hif_chnl_get_rx_fifo_depth(chnl);
 	pool->avail = pool->depth;
 	pool->chnl = chnl;
-    pool->dev = dev;
+	pool->dev = dev;
 	pool->buf_size = RX_BUF_SIZE;
 
 	pool->va_tbl = kzalloc(sizeof(void *) * pool->depth, GFP_KERNEL);
@@ -203,7 +203,7 @@ struct sk_buff *pfeng_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, u
 	uint32_t rx_len;
 	bool_t lifm;
 	struct sk_buff *skb;
-    struct pfeng_ndev *ndev = (struct pfeng_ndev *)pfe_hif_drv_client_get_priv(client);
+	struct pfeng_ndev *ndev = (struct pfeng_ndev *)pfe_hif_drv_client_get_priv(client);
 
 	/*	Get RX buffer */
 	if (EOK != pfe_hif_chnl_rx(ndev->chnl_sc.priv, &buf_pa, &rx_len, &lifm))
@@ -211,7 +211,7 @@ struct sk_buff *pfeng_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, u
 		return NULL;
 	}
 
-    /*  Get buffer VA */
+	/*  Get buffer VA */
 	buf_va = pfeng_bman_buf_pull_va(ndev->bman.rx_pool);
 	if (unlikely(!buf_va)) {
 		netdev_err(ndev->netdev, "chnl%d: pull VA failed\n", pfe_hif_chnl_get_id(ndev->chnl_sc.priv));
@@ -220,8 +220,8 @@ struct sk_buff *pfeng_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, u
 	}
 	prefetch(buf_va - SKB_VA_SIZE);
 
-    /*  Unmap DMAed area */
-    pfeng_bman_buf_unmap(ndev->bman.rx_pool, (addr_t)buf_pa);
+	/*  Unmap DMAed area */
+	pfeng_bman_buf_unmap(ndev->bman.rx_pool, (addr_t)buf_pa);
 
 #if 0
 	hif_hdr_ptr = (pfe_ct_hif_rx_hdr_t *)buf_va;
@@ -239,7 +239,7 @@ struct sk_buff *pfeng_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, u
 	__skb_put(skb, rx_len);
 
 	/* Skip HIF header */
-    skb_pull(skb, 16);
+	skb_pull(skb, 16);
 
 	return skb;
 }
@@ -247,7 +247,7 @@ struct sk_buff *pfeng_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, u
 int pfeng_hif_chnl_refill_rx_buffer(pfe_hif_chnl_t *chnl, struct pfeng_ndev *ndev)
 {
 	void *buf_va;
-    addr_t buf_pa;
+	addr_t buf_pa;
 	errno_t ret;
 
 	/*	Ask for new buffer */
@@ -272,7 +272,7 @@ int pfeng_hif_chnl_refill_rx_buffer(pfe_hif_chnl_t *chnl, struct pfeng_ndev *nde
 int pfeng_hif_chnl_fill_rx_buffers(pfe_hif_chnl_t *chnl, struct pfeng_ndev *ndev)
 {
 	errno_t ret;
-    int cnt = 0;
+	int cnt = 0;
 
 	while (pfe_hif_chnl_can_accept_rx_buf(chnl)) {
 		ret = pfeng_hif_chnl_refill_rx_buffer(chnl, ndev);

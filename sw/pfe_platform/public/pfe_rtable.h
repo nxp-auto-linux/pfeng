@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,24 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- *
- * @defgroup    dxgr_PFE_RTABLE Routing Table
- * @brief		The Routing Table
- * @details     This is the software representation of the routing table.
- *
- * @addtogroup  dxgr_PFE_RTABLE
- * @{
- *
- * @file		pfe_rtable.h
- * @brief		The rtable module header file.
- * @details		This file contains routing table-related API.
- * @note		All values at rtable input level (API) shall be in host byte order format.
- *
- */
-
 #ifndef PUBLIC_PFE_RTABLE_H_
 #define PUBLIC_PFE_RTABLE_H_
 
@@ -56,24 +38,6 @@
 typedef struct __pfe_rtable_tag pfe_rtable_t;
 typedef struct __pfe_rtable_entry_tag pfe_rtable_entry_t;
 
-/**
- * @brief	IP address representation
- * @details
- *
- * This IP address representation has been chosen to prevent confusion caused
- * by different endianness at the rtable API level.
- *
- * IPv4 Address Representation:
- * ----------------------------
- * IPv4 address is stored in binary, network endian form.
- *
- * IPv6 Address Representation:
- * ----------------------------
- * IPv6 address is stored in binary, network endian form.
- *
- * @endcode
- *
- */
 typedef struct
 {
 	union
@@ -85,6 +49,8 @@ typedef struct
 	{
 		uint16_t _8[16];
 	} v6;
+
+	bool_t is_ipv4;
 } pfe_ip_addr_t;
 
 /**
@@ -133,32 +99,6 @@ typedef enum
  */
 typedef void (* pfe_rtable_callback_t)(void *arg, pfe_rtable_cbk_event_t event);
 
-/**
- * @brief		Check if address is IPv4
- * @param[in]	ip_addr IP address to check
- * @return		TRUE if the address is IPv4
- */
-static inline bool_t pfe_ip_addr_is_ipv4(pfe_ip_addr_t *ip_addr)
-{
-	static uint32_t zero_ip_6[4] = {0U};
-
-	return ((0 != memcmp(&ip_addr->v4, &zero_ip_6, 4))
-			&& 	(0 == memcmp(&ip_addr->v6, &zero_ip_6[0], 16)));
-}
-
-/**
- * @brief		Check if address is IPv6
- * @param[in]	ip_addr IP address to check
- * @return		TRUE if the address is IPv6
- */
-static inline bool_t pfe_ip_addr_is_ipv6(pfe_ip_addr_t *ip_addr)
-{
-	static uint32_t zero_ip_6[4] = {0U};
-
-	return ((0 == memcmp(&ip_addr->v4, &zero_ip_6, 4))
-				&& 	(0 != memcmp(&ip_addr->v6, &zero_ip_6[0], 16)));
-}
-
 pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, void *htable_base_pa, uint32_t htable_size, void *pool_base_pa, uint32_t pool_size);
 errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
 errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
@@ -204,6 +144,3 @@ void pfe_rtable_entry_set_child(pfe_rtable_entry_t *entry, pfe_rtable_entry_t *c
 pfe_rtable_entry_t *pfe_rtable_entry_get_child(pfe_rtable_entry_t *entry);
 
 #endif /* PUBLIC_PFE_RTABLE_H_ */
-
-/** @}*/
-/** @}*/

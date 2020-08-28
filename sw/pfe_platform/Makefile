@@ -53,7 +53,8 @@ INCLUDES += -I$(INC_PREFIX).. \
 			-I$(INC_PREFIX)../fifo/public \
 			-I$(INC_PREFIX)../bpool/public \
 			-I$(INC_PREFIX)../pfe_hif_drv/public \
-			-I$(INC_PREFIX)../fci/public
+			-I$(INC_PREFIX)../fci/public \
+			-I$(INC_PREFIX)../xfci/libfci/public
 
 #Dependencies
 DEPENDENCIES = $(subst -L,,$(subst $(EMPTY) $(EMPTY)-l:,/,$(LIBS)))
@@ -93,9 +94,7 @@ SRCS =	src/pfe_class.c \
 		src/pfe_log_if_slave.c \
 		src/pfe_if_db.c \
 		src/pfe_pe.c \
-		src/pfe_phy_if_slave.c \
-		src/pfe_fp.c \
-		src/pfe_flexible_filter.c
+		src/pfe_phy_if_slave.c
 else
 SRCS =	src/pfe_bmu.c \
 		src/pfe_class.c \

@@ -28,19 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_PLATFORM
- * @{
- *
- * @file		pfe_if_db.c
- * @brief		Interface database
- *
- * @warning		All API calls related to a single DB instance must be protected
- * 				from being preempted by another API calls related to the same
- * 				DB instance.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "linked_list.h"
@@ -58,8 +45,7 @@
 
 typedef	union
 {
-    uint8_t log_if_id;
-    pfe_ct_phy_if_id_t phy_if_id;
+    uint8_t if_id;
     void *iface;
     char_t *name;
     pfe_ct_phy_if_id_t owner;
@@ -245,11 +231,11 @@ static bool_t pfe_if_db_match_criterion(pfe_if_db_t *db, pfe_if_db_get_criterion
 		{
 			if (PFE_IF_DB_LOG == db->type)
 			{
-				match = (arg->log_if_id == pfe_log_if_get_id(entry->log_if));
+				match = (arg->if_id == (uint8_t)pfe_log_if_get_id(entry->log_if));
 			}
 			else
 			{
-				match = (arg->phy_if_id == pfe_phy_if_get_id(entry->phy_if));
+				match = (arg->if_id == (uint8_t)pfe_phy_if_get_id(entry->phy_if));
 			}
 
 			break;
@@ -693,7 +679,7 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
 
 		case IF_DB_CRIT_BY_ID:
 		{
-			db->cur_crit_arg.log_if_id = (uint8_t)((addr_t)arg & 0xff);
+			db->cur_crit_arg.if_id = (uint8_t)((addr_t)arg & 0xff);
 			break;
 		}
 
@@ -820,7 +806,7 @@ errno_t pfe_if_db_get_single(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get
 
 		case IF_DB_CRIT_BY_ID:
 		{
-			argument.log_if_id = (uint8_t)((addr_t)arg & 0xff);
+			argument.if_id = (uint8_t)((addr_t)arg & 0xff);
 			break;
 		}
 
@@ -1184,7 +1170,3 @@ errno_t pfe_if_db_unlock(uint32_t session_id)
 	}
 	return ret;
 }
-
-
-
-/** @}*/

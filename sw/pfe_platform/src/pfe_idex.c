@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_IDEX
- * @{
- *
- * @file		pfe_idex.c
- * @brief		The inter-driver exchange module source file.
- * @details		This file contains IDEX-related functionality.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "linked_list.h"
@@ -46,28 +36,6 @@
 
 /* #define IDEX_CFG_VERBOSE */
 /* #define IDEX_CFG_VERY_VERBOSE */
-
-/**
- * @brief	List of interfaces involved in IDEX functionality.
- */
-/*	WARNING:	We must not send packets to a HIF channel which is not able to
-				accept data. It leads to whole HIF stall. This means there is
-				no way to broadcast master discovery requests, resp. driver must
-				somehow know which channels are active.
-
-	TODO:		1.) IDEX broadcast must be allowed only to channels witch are
-					enabled (HIF_CTRL_CHn).
-				2.) Channel monitoring must be implemented to detect HIF stalls.
-				3.) In case that stall is detected by master driver then HIF
-					must be reset.
-				4.) In case that stall is detected by slave driver then it must
-					be synchronized in terms of getting a valid sequence number.
-
-				The monitoring could be done by sending periodic messages and
-				watching if HIF is transferring them to PFE (HIF_TX_PKT_CNT1_CHn,
-				HIF_TX_PKT_CNT2_CHn).
-*/
-#define IDEX_CFG_HIF_LIST			{PFE_PHY_IF_ID_HIF0, PFE_PHY_IF_ID_HIF1, /* PFE_PHY_IF_ID_HIF2, PFE_PHY_IF_ID_HIF3, PFE_PHY_IF_ID_HIF_NOCPY*/}
 
 /**
  * @brief	Number of request allowed to be pending/waiting for confirmation at
@@ -184,6 +152,8 @@ typedef enum __attribute__((packed))
 	IDEX_REQ_STATE_COMMITTED,
 	/*	Transmitted request waiting for response. Can be timed-out. */
 	IDEX_REQ_STATE_TRANSMITTED,
+	/*	Finished request */
+	IDEX_REQ_STATE_COMPLETED,
 	/*	Invalid request. Will be destroyed be cleanup task. */
 	IDEX_REQ_STATE_INVALID = 0xff,
 } pfe_idex_request_state_t;
@@ -211,12 +181,12 @@ typedef struct __attribute__((packed)) __pfe_idex_request_tag
 	pfe_ct_phy_if_id_t dst_phy_id;
 	/*	Request state */
 	pfe_idex_request_state_t state;
-	/*	Internal sync object */
-	oal_mbox_t *mbox;
 	/*	Internal linked list hook */
 	LLIST_t list_entry;
 	/*	Internal timeout value */
 	uint32_t timeout;
+	void *resp_buf;
+	uint16_t resp_buf_len;
 } pfe_idex_request_t;
 
 /**
@@ -246,15 +216,11 @@ typedef struct __attribute__((packed)) __pfe_idex_response_tag
 typedef struct pfe_idex_tag
 {
 	pfe_hif_drv_client_t *ihc_client;	/*	HIF driver IHC client used for communication */
-	oal_job_t *idex_job;				/*	Deferred job to process IDEX protocol */
 	pfe_ct_phy_if_id_t master_phy_if;	/*	Physical interface ID where master driver is located */
-	pfe_ct_phy_if_id_t local_phy_if;	/*	Local physical interface ID */
 	pfe_idex_seqnum_t req_seq_num;		/*	Current sequence number */
 	LLIST_t req_list;					/*	Internal requests storage */
 	oal_mutex_t req_list_lock;			/*	Requests storage sync object */
 	bool_t req_list_lock_init;			/*	Flag indicating that mutex is initialized */
-	oal_thread_t *worker;				/*	Worker thread running request timeout logic */
-	oal_mbox_t *mbox;					/*	MBox used to periodically trigger the timeout thread */
 	pfe_idex_rpc_cbk_t rpc_cbk;			/*	Callback to be called in case of RPC requests */
 	void *rpc_cbk_arg;					/*	RPC callback argument */
 	pfe_idex_request_t *cur_req;		/*	Current IDEX request */
@@ -263,12 +229,9 @@ typedef struct pfe_idex_tag
 
 /*	Local IDEX instance storage */
 static pfe_idex_t __idex = {0};
-/*	All HIFs storage */
-#ifdef PFE_CFG_PFE_SLAVE
-static const pfe_ct_phy_if_id_t __hifs[] = IDEX_CFG_HIF_LIST;
-#endif /* PFE_CFG_PFE_SLAVE */
 
-static void *idex_worker_func(void *arg);
+static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex);
+static void pfe_idex_do_tx(pfe_hif_drv_client_t *client, pfe_idex_t *idex);
 static pfe_idex_request_t *pfe_idex_request_get_by_id(pfe_idex_seqnum_t seqnum);
 static errno_t pfe_idex_request_set_state(pfe_idex_seqnum_t seqnum, pfe_idex_request_state_t state);
 static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, pfe_idex_request_result_t res, void *resp_buf, uint16_t resp_len);
@@ -276,133 +239,7 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
 static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_type_t type, void *data, uint16_t data_len);
 #ifdef PFE_CFG_PFE_SLAVE
 static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_request_type_t type, void *data, uint16_t data_len, void *resp, uint16_t resp_len);
-static void pfe_idex_do_master_discovery(void);
 #endif /* PFE_CFG_PFE_SLAVE */
-
-/**
- * @brief		Worker thread body
- */
-static void *idex_worker_func(void *arg)
-{
-	pfe_idex_t *idex = (pfe_idex_t *)&__idex;
-	oal_mbox_msg_t msg;
-	LLIST_t *item, *aux;
-	pfe_idex_request_t *req;
-	errno_t ret;
-
-	(void)arg;
-#ifdef PFE_CFG_PFE_MASTER
-	NXP_LOG_INFO("IDEX worker started (master)\n");
-#endif /* PFE_CFG_PFE_MASTER */
-
-#ifdef PFE_CFG_PFE_SLAVE
-	NXP_LOG_INFO("IDEX worker started (slave)\n");
-#endif /* PFE_CFG_PFE_SLAVE */
-
-	while (TRUE)
-	{
-		if (EOK == oal_mbox_receive(idex->mbox, &msg))
-		{
-			if (IDEX_WORKER_QUIT == msg.payload.code)
-			{
-				break;
-			}
-
-			if (IDEX_WORKER_POLL == msg.payload.code)
-			{
-				/*	Lock request storage access */
-				if (EOK != oal_mutex_lock(&idex->req_list_lock))
-				{
-					NXP_LOG_DEBUG("Mutex lock failed\n");
-				}
-
-				/*	Do request timeouts */
-				if (FALSE == LLIST_IsEmpty(&idex->req_list))
-				{
-					LLIST_ForEachRemovable(item, aux, &idex->req_list)
-					{
-						req = (pfe_idex_request_t *)LLIST_Data(item, pfe_idex_request_t, list_entry);
-						if (unlikely(NULL != req))
-						{
-							switch (req->state)
-							{
-								case IDEX_REQ_STATE_NEW:
-								{
-									/*	This state is transient and request shall not remain there */
-									break;
-								}
-
-								case IDEX_REQ_STATE_COMMITTED:
-								case IDEX_REQ_STATE_TRANSMITTED:
-								{
-									if (req->timeout > 0U)
-									{
-										req->timeout--;
-									}
-									else
-									{
-										if (IDEX_REQ_STATE_COMMITTED == req->state)
-										{
-											NXP_LOG_WARNING("Non-transmitted IDEX request (dst: %d, sn: %d) timed-out\n", req->dst_phy_id, oal_ntohl(req->seqnum));
-										}
-										else
-										{
-#ifdef IDEX_CFG_VERBOSE
-											NXP_LOG_DEBUG("IDEX request timed-out (dst: %d, sn: %d)\n", req->dst_phy_id, oal_ntohl(req->seqnum));
-#endif /* IDEX_CFG_VERBOSE */
-										}
-
-										LLIST_Remove(item);
-
-										if (NULL != req->mbox)
-										{
-											/*	Unblock the request originator thread */
-											ret = oal_mbox_send_signal(req->mbox, IDEX_REQ_RES_TIMEOUT);
-											if (EOK != ret)
-											{
-												NXP_LOG_ERROR("Can't unblock IDEX request %d: %d\n", oal_ntohl(req->seqnum), ret);
-											}
-										}
-
-										oal_mm_free_contig(req);
-									}
-
-									break;
-								}
-
-								case IDEX_REQ_STATE_INVALID:
-								{
-#ifdef IDEX_CFG_VERBOSE
-									NXP_LOG_DEBUG("Disposing invalid IDEX request %d\n", oal_ntohl(req->seqnum));
-#endif /* IDEX_CFG_VERBOSE */
-									LLIST_Remove(item);
-									oal_mm_free_contig(req);
-									break;
-								}
-
-								default:
-								{
-									NXP_LOG_DEBUG("Unknow request state: %d", req->state);
-									break;
-								}
-							}
-						}
-					}
-				}
-
-				if (EOK != oal_mutex_unlock(&idex->req_list_lock))
-				{
-					NXP_LOG_DEBUG("Mutex unlock failed\n");
-				}
-			}
-
-			oal_mbox_ack_msg(&msg);
-		}
-	}
-
-	NXP_LOG_INFO("IDEX worker shutting down\n");
-	return NULL;
-}
 
 /**
  * @brief		IHC client event handler
@@ -411,85 +248,22 @@ static void *idex_worker_func(void *arg)
  */
 static errno_t pfe_idex_ihc_handler(pfe_hif_drv_client_t *client, void *arg, uint32_t event, uint32_t qno)
 {
-	pfe_idex_t *idex = (pfe_idex_t *)&__idex;
-	errno_t ret = EOK;
-	void *ref_ptr;
-	pfe_idex_frame_header_t *idex_header;
-
 	(void)arg;
 	(void)qno;
+
 	switch (event)
 	{
 		case EVENT_RX_PKT_IND:
 		{
-			/*	Trigger deferred job to get and process packets */
-			if (EOK != oal_job_run(idex->idex_job))
-			{
-				NXP_LOG_ERROR("Could not trigger RX job\n");
-			}
-
+			/*	Run RX routine */
+			pfe_idex_do_rx(client, &__idex);
 			break;
 		}
 
 		case EVENT_TXDONE_IND:
 		{
-			/*	Get the transmitted frame reference */
-			ref_ptr = pfe_hif_drv_client_receive_tx_conf(client, 0);
-			if (NULL == ref_ptr)
-			{
-				NXP_LOG_DEBUG("NULL reference in TX confirmation.\n");
-				break;
-			}
-
-			/*	We know that the reference is just pointer to transmitted
-			 	buffer containing IDEX Header followed by rest of the IDEX
-				frame. */
-			idex_header = (pfe_idex_frame_header_t *)ref_ptr;
-			switch (idex_header->type)
-			{
-				case IDEX_FRAME_CTRL_REQUEST:
-				{
-					pfe_idex_request_t *req_header = (pfe_idex_request_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
-
-#ifdef IDEX_CFG_VERBOSE
-					NXP_LOG_DEBUG("Request %d transmitted\n", oal_ntohl(req_header->seqnum));
-#endif /* IDEX_CFG_VERBOSE */
-
-					/*	Change request state */
-					if (EOK != pfe_idex_request_set_state(req_header->seqnum, IDEX_REQ_STATE_TRANSMITTED))
-					{
-#ifdef IDEX_CFG_VERBOSE
-						NXP_LOG_DEBUG("Transition to IDEX_REQ_STATE_TRANSMITTED failed\n");
-#endif /* IDEX_CFG_VERBOSE */
-					}
-
-					/*	Don't release the request instance but release the buffer
-					 	used to transmit the request. */
-					oal_mm_free_contig(ref_ptr);
-					ref_ptr = NULL;
-					break;
-				}
-
-				case IDEX_FRAME_CTRL_RESPONSE:
-				{
-#ifdef IDEX_CFG_VERBOSE
-					pfe_idex_response_t *resp_header = (pfe_idex_response_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
-
-					NXP_LOG_DEBUG("Response %d transmitted\n", oal_ntohl(resp_header->seqnum));
-#endif /* IDEX_CFG_VERBOSE */
-
-					/*	Responses are released immediately once transmitted */
-					oal_mm_free_contig(ref_ptr);
-					break;
-				}
-
-				default:
-				{
-					NXP_LOG_ERROR("Unknown IDEX frame transmitted\n");
-					break;
-				}
-			}
-
+			/*	Run TX routine */
+			pfe_idex_do_tx(client, &__idex);
 			break;
 		}
 
@@ -502,35 +276,30 @@ static errno_t pfe_idex_ihc_handler(pfe_hif_drv_client_t *client, void *arg, uin
 		default:
 		{
 			NXP_LOG_ERROR("Unexpected IHC event: 0x%x\n", event);
-			ret = EINVAL;
+			return EINVAL;
 			break;
 		}
 	}
 
-	return ret;
+	return EOK;
 }
 
 /**
- * @brief		IDEX deferred job
- * @param[in]	arg Argument. See oal_job.
+ * @brief		RX processing
  */
-static void pfe_idex_job_func(void *arg)
+static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 {
-	pfe_idex_t *idex = (pfe_idex_t *)&__idex;
 	pfe_hif_pkt_t *pkt;
 	pfe_idex_frame_header_t *idex_header;
 	pfe_idex_request_t *idex_req;
 	pfe_idex_response_t *idex_resp;
-	pfe_idex_msg_master_discovery_t *idex_md_msg;
 	errno_t ret;
 	pfe_ct_phy_if_id_t i_phy_id;
-
-	(void)arg;
 
 	while (TRUE)
 	{
 		/*	Get received packet */
-		pkt = pfe_hif_drv_client_receive_pkt(idex->ihc_client, 0U);
+		pkt = pfe_hif_drv_client_receive_pkt(client, 0U);
 		if (NULL == pkt)
 		{
 			/*	No more received packets */
@@ -552,18 +321,6 @@ static void pfe_idex_job_func(void *arg)
 				NXP_LOG_DEBUG("Request %d received\n", oal_ntohl(idex_req->seqnum));
 #endif /* IDEX_CFG_VERBOSE */
 
-				if (PFE_PHY_IF_ID_INVALID == idex->local_phy_if)
-				{
-					/*	Remember own physical interface ID. This is way how to get information about
-					 	on which physical interface THIS IDEX driver is located without need to specify
-					 	it via some configuration parameter. */
-					idex->local_phy_if = idex_req->dst_phy_id;
-
-#ifdef IDEX_CFG_VERBOSE
-					NXP_LOG_DEBUG("IDEX: Local physical interface ID is %d\n", idex_req->dst_phy_id);
-#endif /* IDEX_CFG_VERBOSE */
-				}
-
 				switch (idex_req->type)
 				{
 					case IDEX_MASTER_DISCOVERY:
@@ -574,33 +331,7 @@ static void pfe_idex_job_func(void *arg)
 						}
 						else
 						{
-#ifdef PFE_CFG_PFE_MASTER
-							/*	Master sends response */
-							pfe_idex_msg_master_discovery_t resp;
-
-							memset(&resp, 0, sizeof(resp));
-
-							/*	Response payload carries the master interface ID */
-							resp.phy_if_id = idex->local_phy_if;
-
-							/*	Send the response. Target interface is the one the packet is coming from. */
-							ret = pfe_idex_send_response(
-															i_phy_id,			/* Destination */
-															idex_req->type,		/* Response type */
-															idex_req->seqnum,	/* Response sequence number */
-															&resp,				/* Response payload */
-															sizeof(pfe_idex_msg_master_discovery_t) /* Response payload length */
-														);
-							if (EOK != ret)
-							{
-								NXP_LOG_ERROR("IDEX_MASTER_DISCOVERY response failed\n");
-							}
-#endif /* PFE_CFG_PFE_MASTER */
-
-#ifdef PFE_CFG_PFE_SLAVE
-							/*	Slave does nothing. */
-							;
-#endif /* PFE_CFG_PFE_SLAVE */
+							NXP_LOG_ERROR("Not implemented\n");
 						}
 
 						break;
@@ -660,18 +391,7 @@ static void pfe_idex_job_func(void *arg)
 				{
 					case IDEX_MASTER_DISCOVERY:
 					{
-						/*	Finalize the associated request */
-						ret = pfe_idex_request_finalize(idex_resp->seqnum, IDEX_REQ_RES_OK, NULL, 0U);
-						if (EOK != ret)
-						{
-							NXP_LOG_ERROR("Can't finalize IDEX request %d: %d\n", oal_ntohl(idex_resp->seqnum), ret);
-						}
-
-						/*	Master discovery is complete now. Remember the master physical interface ID delivered
-							within the master discovery message. */
-						idex_md_msg = (pfe_idex_msg_master_discovery_t *)((addr_t)idex_resp + sizeof(pfe_idex_response_t));
-						idex->master_phy_if = idex_md_msg->phy_if_id;
-
+						NXP_LOG_ERROR("Not implemented\n");
 						break;
 					}
 
@@ -713,6 +433,74 @@ static void pfe_idex_job_func(void *arg)
 }
 
 /**
+ * @brief		TX confirmations processing
+ */
+static void pfe_idex_do_tx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
+{
+	void *ref_ptr;
+	pfe_idex_frame_header_t *idex_header;
+
+	while (TRUE)
+	{
+		/*	Get the transmitted frame reference */
+		ref_ptr = pfe_hif_drv_client_receive_tx_conf(client, 0);
+		if (NULL == ref_ptr)
+		{
+			break;
+		}
+
+		/*	We know that the reference is just pointer to transmitted
+			buffer containing IDEX Header followed by rest of the IDEX
+			frame. */
+		idex_header = (pfe_idex_frame_header_t *)ref_ptr;
+		switch (idex_header->type)
+		{
+			case IDEX_FRAME_CTRL_REQUEST:
+			{
+				pfe_idex_request_t *req_header = (pfe_idex_request_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
+
+		#ifdef IDEX_CFG_VERBOSE
+				NXP_LOG_DEBUG("Request %d transmitted\n", oal_ntohl(req_header->seqnum));
+		#endif /* IDEX_CFG_VERBOSE */
+
+				/*	Change request state */
+				if (EOK != pfe_idex_request_set_state(req_header->seqnum, IDEX_REQ_STATE_TRANSMITTED))
+				{
+		#ifdef IDEX_CFG_VERBOSE
+					NXP_LOG_DEBUG("Transition to IDEX_REQ_STATE_TRANSMITTED failed\n");
+		#endif /* IDEX_CFG_VERBOSE */
+				}
+
+				/*	Don't release the request instance but release the buffer
+					used to transmit the request. */
+				oal_mm_free_contig(ref_ptr);
+				ref_ptr = NULL;
+				break;
+			}
+
+			case IDEX_FRAME_CTRL_RESPONSE:
+			{
+		#ifdef IDEX_CFG_VERBOSE
+				pfe_idex_response_t *resp_header = (pfe_idex_response_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
+
+				NXP_LOG_DEBUG("Response %d transmitted\n", oal_ntohl(resp_header->seqnum));
+		#endif /* IDEX_CFG_VERBOSE */
+
+				/*	Responses are released immediately once transmitted */
+				oal_mm_free_contig(ref_ptr);
+				break;
+			}
+
+			default:
+			{
+				NXP_LOG_ERROR("Unknown IDEX frame transmitted\n");
+				break;
+			}
+		}
+	}
+}
+
+/**
  * @brief		Get request by sequence number
  * @note		Every request can be identified by its unique sequence number.
  * 				This routine is responsible for translation between request
@@ -745,11 +533,8 @@ static pfe_idex_request_t *pfe_idex_request_get_by_id(pfe_idex_seqnum_t seqnum)
 /**
  * @brief		Find, acknowledge, remove, and dispose request by sequence number
  * @details		1.) Finds request by sequence number
- * 				2.) Removes found request from request storage
- * 				3.) Releases request related resources
- * 				In case of blocking request:
- * 					4.) Pass response data to the waiting thread
- * 					5.) Unblock the originator thread
+ * 				2.) Pass response data
+ * 				3.) Marks request as "completed"
  * @param[in]	seqnum Sequence number identifying the request
  * @param[in]	res Value to be passed to the waiting thread as blocking result
  * @param[in]	resp_buf Pointer to response data buffer. If NULL no response is passed.
@@ -776,21 +561,22 @@ static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, pfe_idex_requ
 	}
 	else
 	{
-		/*	2.) Remove request from the storage */
-		LLIST_Remove(&req->list_entry);
-
-		if (NULL != req->mbox)
+		/*	2.) Copy response data to buffer associated with request */
+		if ((NULL != resp_buf) && (NULL != req->resp_buf))
 		{
-			/*	Pass response data and unblock the request originator thread */
-			ret = oal_mbox_send_message(req->mbox, res, resp_buf, resp_len);
-			if (EOK != ret)
+			if (resp_len <= req->resp_buf_len)
 			{
-				NXP_LOG_ERROR("Can't unblock IDEX request %d: %d\n", oal_ntohl(req->seqnum), ret);
+				memcpy(req->resp_buf, resp_buf, resp_len);
+				req->resp_buf_len = resp_len;
+			}
+			else
+			{
+				NXP_LOG_DEBUG("Response buffer is too small\n");
 			}
 		}
 
-		/*	3.) Dispose the request instance */
-		oal_mm_free_contig(req);
+		/*	3.) Mark request as completed */
+		req->state = IDEX_REQ_STATE_COMPLETED;
 	}
 
 	if (EOK != oal_mutex_unlock(&idex->req_list_lock))
@@ -916,8 +702,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	errno_t ret;
 	void *payload;
 	pfe_idex_seqnum_t seqnum;
-	oal_mbox_t *mbox = NULL;
-	oal_mbox_msg_t msg;
+	uint32_t timeout_ms = 1500U;
 
 	/*	1.) Create the request instance with room for request payload */
 	req = oal_mm_malloc_contig_aligned_nocache(sizeof(pfe_idex_request_t) + data_len, 0U);
@@ -932,28 +717,6 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 		memset((void *)req, 0, sizeof(pfe_idex_request_t));
 	}
 
-	if (IDEX_RPC == type)
-	{
-		/*	This will be blocking request */
-		mbox = oal_mbox_create();
-		if (NULL == mbox)
-		{
-			NXP_LOG_ERROR("Can't create mbox\n");
-			oal_mm_free_contig(req);
-			return EFAULT;
-		}
-	}
-	else
-	{
-		/*	This will be non-blocking request */
-		if (NULL != resp)
-		{
-			NXP_LOG_ERROR("Non-blocking request can't return response data\n");
-			oal_mm_free_contig(req);
-			return EINVAL;
-		}
-	}
-
 	/*	Assign sequence number, type, and destination PHY ID */
 	seqnum = oal_htonl(idex->req_seq_num);
 	idex->req_seq_num++;
@@ -962,7 +725,8 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	req->dst_phy_id = dst_phy;
 	req->timeout = IDEX_CFG_REQ_TIMEOUT_SEC;
 	req->state = IDEX_REQ_STATE_NEW;
-	req->mbox = mbox;
+	req->resp_buf = resp;
+	req->resp_buf_len = resp_len;
 
 	/*	Add payload */
 	payload = (void *)((addr_t)req + sizeof(pfe_idex_request_t));
@@ -1006,55 +770,68 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			NXP_LOG_WARNING("Transition to IDEX_REQ_STATE_COMMITTED failed\n");
 		}
 
-		/*	4.) Block until request is processed */
-		if (NULL != mbox)
+		/*	4.) Block until response is received or timeout occurred. RX and
+		 	 	TX processing is expected to be done asynchronously in
+		 	 	pfe_idex_ihc_handler(). */
+		for ( ; timeout_ms>0U; timeout_ms--)
 		{
-			if (EOK == oal_mbox_receive(mbox, &msg))
+			if (IDEX_MASTER_DISCOVERY == type)
 			{
-				if (IDEX_REQ_RES_OK == msg.payload.code)
-				{
-#ifdef IDEX_CFG_VERY_VERBOSE
-					NXP_LOG_DEBUG("IDEX request unblock OK\n");
-#endif /* IDEX_CFG_VERY_VERBOSE */
-
-					/*	Get response data */
-					if ((NULL != resp) && (NULL != msg.payload.ptr))
-					{
-						if (msg.payload.len > resp_len)
-						{
-							NXP_LOG_ERROR("Response buffer too small (%d < %d)\n", resp_len, msg.payload.len);
-							ret = ENOMEM;
-						}
-						else
-						{
-							memcpy(resp, msg.payload.ptr, msg.payload.len);
-							ret = EOK;
-						}
-					}
-
-					/*	Unblock the message sender */
-					oal_mbox_ack_msg(&msg);
-				}
-				else if (IDEX_REQ_RES_TIMEOUT == msg.payload.code)
-				{
-#ifdef IDEX_CFG_VERY_VERBOSE
-					NXP_LOG_DEBUG("IDEX request timed-out\n");
-#endif /* IDEX_CFG_VERY_VERBOSE */
-					ret = ETIMEDOUT;
-				}
-				else
-				{
-					NXP_LOG_WARNING("Unexpected mbox code: %d\n", msg.payload.code);
-					ret = EOK;
-				}
+				NXP_LOG_ERROR("Not implemented\n");
 			}
 			else
 			{
-				NXP_LOG_ERROR("FATAL: oal_mbox_receive() failed\n");
+				/*	This is blocking type. We must wait until the request
+				 	is completed. */
+				if (IDEX_REQ_STATE_COMPLETED == req->state)
+				{
+					ret = EOK;
+					break;
+				}
 			}
 
-			oal_mbox_destroy(mbox);
-			mbox = NULL;
+			/*	Wait 1ms */
+			oal_time_usleep(1000U);
+		}
+
+		if (0U == timeout_ms)
+		{
+#ifdef IDEX_CFG_VERY_VERBOSE
+			NXP_LOG_DEBUG("IDEX request %d timed-out\n", oal_ntohl(req->seqnum));
+
+			if (IDEX_REQ_STATE_COMMITTED == req->state)
+			{
+				NXP_LOG_DEBUG("Request %d not transmitted\n", oal_ntohl(req->seqnum));
+			}
+			else if (IDEX_REQ_STATE_TRANSMITTED == req->state)
+			{
+				NXP_LOG_DEBUG("Request %d not responded\n", oal_ntohl(req->seqnum));
+			}
+			else
+			{
+				NXP_LOG_DEBUG("Request %d state is: %d\n", oal_ntohl(req->seqnum), req->state);
+			}
+#endif /* IDEX_CFG_VERY_VERBOSE */
+			ret = ETIMEDOUT;
+		}
+		else
+		{
+			/*	Response data is written in 'resp' */
+			;
+		}
+
+		/*	Release the blocking request instance here */
+		if (EOK != oal_mutex_lock(&idex->req_list_lock))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		LLIST_Remove(&req->list_entry);
+		oal_mm_free_contig(req);
+
+		if (EOK != oal_mutex_unlock(&idex->req_list_lock))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
 		}
 	}
 
@@ -1125,49 +902,13 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 	return ret;
 }
 
-#ifdef PFE_CFG_PFE_SLAVE
-/**
- * @brief		Run the master discovery task
- * @details		Routine will try to find master driver by broadcasting
- * 				master discovery requests. Result is writted directly
- * 				to IDEX instance structures.
- */
-static void pfe_idex_do_master_discovery(void)
-{
-	pfe_idex_t *idex =  &__idex;
-	uint32_t ii, jj;
-	pfe_idex_msg_master_discovery_t msg;
-
-	for (ii=0U; ii<10U; ii++) /* TODO: make this configurable */
-	{
-		/*	Broadcast master location request until master driver is found */
-		for (jj=0U; jj<(sizeof(__hifs)/sizeof(pfe_ct_phy_if_id_t)); jj++)
-		{
-			if (EOK != pfe_idex_request_send(__hifs[jj], IDEX_MASTER_DISCOVERY, &msg, sizeof(msg), NULL, 0U))
-			{
-				NXP_LOG_ERROR("pfe_idex_send_request() failed\n");
-			}
-		}
-
-		if (PFE_PHY_IF_ID_INVALID == idex->master_phy_if)
-		{
-			oal_time_usleep(1000000);
-		}
-		else
-		{
-			/*	Master found */
-			break;
-		}
-	}
-}
-#endif /* PFE_CFG_PFE_SLAVE */
-
 /**
  * @brief		IDEX initialization routine
  * @param[in]	hif_drv The HIF driver instance to be used to transport the data
+ * @param[in]	master Physical interface via which the master driver can be reached
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv)
+errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master)
 {
 	pfe_idex_t *idex = &__idex;
 	errno_t ret;
@@ -1183,9 +924,16 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv)
 	idex->req_seq_num = rand();
 
 	/*	Here we don't know even own interface ID... */
-	idex->master_phy_if = PFE_PHY_IF_ID_INVALID;
-	idex->local_phy_if = PFE_PHY_IF_ID_INVALID;
+	idex->master_phy_if = master;
 	idex->cur_req_phy_id = PFE_PHY_IF_ID_INVALID;
+
+#ifdef PFE_CFG_PFE_MASTER
+	NXP_LOG_INFO("IDEX-master @ interface %d\n", master);
+#elif PFE_CFG_PFE_SLAVE
+	NXP_LOG_INFO("IDEX-slave\n");
+#else
+#error Impossible configuration
+#endif /* PFE_CFG_PFE_MASTER/PFE_CFG_PFE_SLAVE */
 
 	/*	Create mutex */
 	ret = oal_mutex_init(&idex->req_list_lock);
@@ -1221,59 +969,6 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv)
 		return ret;
 	}
 
-	/*	Create IDEX worker job */
-	idex->idex_job = oal_job_create(&pfe_idex_job_func, NULL, "IDEX Job", OAL_PRIO_TOP);
-	if (NULL == idex->idex_job)
-	{
-		NXP_LOG_ERROR("Unable to create IDEX job\n");
-		pfe_idex_fini();
-		return EFAULT;
-	}
-
-	/*	Create MBOX */
-	idex->mbox = oal_mbox_create();
-	if (NULL == idex->mbox)
-	{
-		NXP_LOG_ERROR("Could not create MBOX\n");
-		pfe_idex_fini();
-		return EFAULT;
-	}
-
-	/*	Create timeout worker thread */
-	idex->worker = oal_thread_create(&idex_worker_func, NULL, "IDEX Worker", 0);
-	if (NULL == idex->worker)
-	{
-		NXP_LOG_ERROR("Could not create IDEX worker thread\n");
-		pfe_idex_fini();
-		return EFAULT;
-	}
-
-	/*	Attach timer to periodically wake up the worker thread every second */
-	ret = oal_mbox_attach_timer(idex->mbox, 1000U, IDEX_WORKER_POLL);
-	if (EOK != ret)
-	{
-		NXP_LOG_ERROR("Unable to attach timer\n");
-		pfe_idex_fini();
-		return ret;
-	}
-
-#ifdef PFE_CFG_PFE_SLAVE
-	/*	Get master driver coordinates. Result will be stored into the idex instance. */
-	pfe_idex_do_master_discovery();
-
-	if (PFE_PHY_IF_ID_INVALID == idex->master_phy_if)
-	{
-		/*	Can't continue */
-		NXP_LOG_ERROR("Could not determine master driver location\n");
-		pfe_idex_fini();
-		return ENXIO;
-	}
-	else
-	{
-		NXP_LOG_INFO("Master driver is at physical interface ID %d\n", idex->master_phy_if);
-	}
-#endif /* PFE_CFG_PFE_SLAVE */
-
 	return EOK;
 }
 
@@ -1290,63 +985,21 @@ void pfe_idex_fini(void)
 		idex->ihc_client = NULL;
 	}
 
-	if (NULL != idex->worker)
-	{
-		if (NULL != idex->mbox)
-		{
-			if (EOK != oal_mbox_detach_timer(idex->mbox))
-			{
-				NXP_LOG_DEBUG("Could not detach timer\n");
-			}
-
-			if (EOK != oal_mbox_send_signal(idex->mbox, IDEX_WORKER_QUIT))
-			{
-				NXP_LOG_DEBUG("oal_mbox_send_signal() failed\n");
-			}
-			else
-			{
-				if (EOK != oal_thread_join(idex->worker, NULL))
-				{
-					NXP_LOG_DEBUG("oal_thread_join() failed\n");
-				}
-
-				idex->worker = NULL;
-			}
-		}
-	}
-
-	if (NULL != idex->mbox)
-	{
-		(void)oal_mbox_detach_timer(idex->mbox);
-		oal_mbox_destroy(idex->mbox);
-		idex->mbox = NULL;
-	}
-
-	if (NULL != idex->idex_job)
-	{
-		oal_job_destroy(idex->idex_job);
-		idex->idex_job = NULL;
-	}
-
 #ifdef PFE_CFG_PFE_SLAVE
 	{
-		uint32_t ii;
 		LLIST_t *item, *aux;
 		pfe_idex_request_t *req;
 	
 		/*	Remove all entries remaining in requests storage */
-		for (ii=0U; ii<(sizeof(__hifs)/sizeof(pfe_ct_phy_if_id_t)); ii++)
+		if (FALSE == LLIST_IsEmpty(&idex->req_list))
 		{
-			if (FALSE == LLIST_IsEmpty(&idex->req_list))
+			LLIST_ForEachRemovable(item, aux, &idex->req_list)
 			{
-				LLIST_ForEachRemovable(item, aux, &idex->req_list)
+				req = (pfe_idex_request_t *)LLIST_Data(item, pfe_idex_request_t, list_entry);
+				if (unlikely(NULL != req))
 				{
-					req = (pfe_idex_request_t *)LLIST_Data(item, pfe_idex_request_t, list_entry);
-					if (unlikely(NULL != req))
-					{
-						LLIST_Remove(item);
-						oal_mm_free_contig(req);
-					}
+					LLIST_Remove(item);
+					oal_mm_free_contig(req);
 				}
 			}
 		}
@@ -1531,5 +1184,3 @@ errno_t pfe_idex_set_rpc_ret_val(errno_t retval, void *resp, uint16_t resp_len)
 
 	return ret;
 }
-
-/** @}*/

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -38,4 +38,3 @@ uint32_t pfe_fp_table_write_rule(pfe_class_t *class, uint32_t table_address, pfe
 void pfe_fp_destroy_table(pfe_class_t *class, uint32_t table_address);
 
 #endif
-

@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_CLASS
- * @{
- *
- * @file		pfe_class.c
- * @brief		The CLASS module source file.
- * @details		This file contains CLASS-related functionality.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -48,6 +38,9 @@
 #include "pfe_class.h"
 #include "pfe_class_csr.h"
 #include "blalloc.h"
+#include "fci.h"
+#include "fpp.h"
+#include "fpp_ext.h"
 
 /* Configures size of the dmem heap allocator chunk (the smallest allocated memory size)
 * The size is actually 2^configured value: 1 means 2, 2 means 4, 3 means 8, 4 means 16 etc.
@@ -77,6 +70,8 @@ static errno_t pfe_class_dmem_heap_init(pfe_class_t *class);
 errno_t pfe_class_isr(pfe_class_t *class)
 {
 	uint32_t i;
+	pfe_ct_buffer_t buf;
+	fci_msg_t msg;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (NULL == class)
@@ -90,6 +85,31 @@ errno_t pfe_class_isr(pfe_class_t *class)
 	for (i = 0U; i < class->pe_num; i++)
 	{
 		pfe_pe_get_fw_errors(class->pe[i]);
+	}
+
+	/*	Read data to be delivered to host */
+	for (i=0U; i<class->pe_num; i++)
+	{
+		/*	Check if there is new message */
+		if (EOK == pfe_pe_get_data(class->pe[i], &buf))
+		{
+			/*	Provide data to user via FCI */
+			msg.msg_cmd.code = FPP_CMD_DATA_BUF_AVAIL;
+			msg.msg_cmd.length = buf.len;
+
+			if (buf.len > sizeof(msg.msg_cmd.payload))
+			{
+				NXP_LOG_ERROR("FCI buffer is too small\n");
+			}
+			else
+			{
+				memcpy(&msg.msg_cmd.payload, buf.payload, buf.len);
+				if (EOK != fci_core_client_send_broadcast(&msg, NULL))
+				{
+					NXP_LOG_ERROR("Can't report data to FCI clients\n");
+				}
+			}
+		}
 	}
 
 	return EOK;
@@ -125,8 +145,6 @@ void pfe_class_irq_unmask(pfe_class_t *class)
 
 /**
  * @brief		Create new classifier instance
- * @details		Creates and initializes classifier instance. After successful
- * 				call the classifier is configured and disabled.
  * @param[in]	cbus_base_va CBUS base virtual address
  * @param[in]	pe_num Number of PEs to be included
  * @param[in]	cfg The classifier block configuration
@@ -224,8 +242,6 @@ static errno_t pfe_class_dmem_heap_init(pfe_class_t *class)
 	pfe_ct_pe_mmap_t mmap;
 	errno_t ret = EOK;
 
-	/* All PEs share the same memory map therefore we can read
-	   arbitrary one (in this case 0U) */
 	ret = pfe_pe_get_mmap(class->pe[0U], &mmap);
 	if(EOK == ret)
 	{
@@ -575,6 +591,41 @@ errno_t pfe_class_read_dmem(pfe_class_t *class, uint32_t pe_idx, void *dst, void
 }
 
 /**
+ * @brief		Read data from DMEM from all PEs atomically to host memory
+ * @param[in]	class The classifier instance (All PEs from given class are read)
+ * @param[in]	dst Destination address within host memory (virtual) available memory has to be pe_count * len
+ * @param[in]	src Source address within DMEM (physical)
+ * @param[in]	buffer_len Destination buffer size
+ * @param[in]	read_len Number of bytes to be read (From one PE)
+ * @return		EOK or error code in case of failure
+ */
+errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst, void *src, uint32_t buffer_len, uint32_t read_len)
+{
+	errno_t ret = EOK;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == class) || (NULL == dst)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&class->mutex))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	ret = pfe_pe_gather_memcpy_from_dmem_to_host_32(class->pe, class->pe_num, dst, (addr_t)src, buffer_len, read_len);
+
+	if (EOK != oal_mutex_unlock(&class->mutex))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	return ret;
+}
+
+/**
  * @brief		Read data from PMEM to host memory
  * @param[in]	class The classifier instance
  * @param[in]	pe_idx PE index
@@ -815,6 +866,40 @@ uint32_t pfe_class_stat_to_str(pfe_ct_class_algo_stats_t *stat, char *buf, uint3
 }
 
 /**
+ * @brief		Send data buffer
+ * @param[in]	class The CLASS instance
+ * @param[in]	buf Buffer to be sent
+ * @return		EOK success, error code otherwise
+ */
+uint32_t pfe_class_put_data(pfe_class_t *class, pfe_ct_buffer_t *buf)
+{
+	uint32_t ii, tries;
+	errno_t ret;
+
+	for (ii=0U; ii<class->pe_num; ii++)
+	{
+		do
+		{
+			tries = 0U;
+			ret = pfe_pe_put_data(class->pe[ii], buf);
+			if (EAGAIN == ret)
+			{
+				tries++;
+				oal_time_usleep(200U);
+			}
+		} while ((ret == EAGAIN) && (tries < 10U));
+
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Unable to update pe %d\n", ii);
+			return EBUSY;
+		}
+	}
+
+	return EOK;
+}
+
+/**
  * @brief		Return CLASS runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	class 		The CLASS instance
@@ -975,5 +1060,3 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 
 	return len;
 }
-
-/** @}*/

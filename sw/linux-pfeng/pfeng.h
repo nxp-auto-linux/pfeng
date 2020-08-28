@@ -8,12 +8,14 @@
 #ifndef _PFENG_H_
 #define _PFENG_H_
 
+#include <linux/version.h>
 #include <linux/etherdevice.h>
 #include <linux/netdevice.h>
 #include <linux/stmmac.h>
 #include <linux/phy.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/phylink.h>
 
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -22,14 +24,14 @@
 #include "pfe_hif_drv.h"
 
 #define PFENG_DRIVER_NAME		"pfeng"
-#define PFENG_DRIVER_VERSION	"1.0.0"
+#define PFENG_DRIVER_VERSION		"1.0.0"
 
-#define PFENG_MAX_RX_QUEUES	1
-#define PFENG_MAX_TX_QUEUES	1
+#define PFENG_MAX_RX_QUEUES		1
+#define PFENG_MAX_TX_QUEUES		1
 
-#define PFENG_FW_NAME "pfe-s32g-class.fw"
+#define PFENG_FW_NAME			"pfe-s32g-class.fw"
 
-#define PFENG_LOGIF_OPTS_PHY_CONNECTED		(1 << 1)
+#define PFENG_LOGIF_OPTS_PHY_CONNECTED	(1 << 1)
 
 static const pfe_hif_chnl_id_t pfeng_chnl_ids[] = {
 	HIF_CHNL_0,
@@ -51,29 +53,29 @@ enum {
 };
 
 /* represents DT ethernet@ node */
-#define PFENG_DT_NODENAME_ETHERNET		"fsl,pfeng-logif"
+#define PFENG_DT_NODENAME_ETHERNET	"fsl,pfeng-logif"
 /* represents DT mdio@ node */
-#define PFENG_DT_NODENAME_MDIO			"fsl,pfeng-mdio"
+#define PFENG_DT_NODENAME_MDIO		"fsl,pfeng-mdio"
 
 /* config option for ethernet@ node */
 struct pfeng_eth {
 	struct list_head		lnode;
-	const char				*name;
-	u32						hif_chnl_sc;
-	u8						*addr;
-	u8						fixed_link;
-	int						intf_mode;
-	u32						emac_id;
+	const char			*name;
+	u32				hif_chnl_sc;
+	u8				*addr;
+	u8				fixed_link;
+	int				intf_mode;
+	u32				emac_id;
 	struct device_node		*dn;
-	struct clk				*tx_clk;
-	struct clk				*rx_clk;
+	struct clk			*tx_clk;
+	struct clk			*rx_clk;
 };
 
 /* here comes rest of DT config which not fits to pfe_platform_config_t */
 struct pfeng_plat_cfg {
-	u32						hif_mode;
+	u32				hif_mode;
 	struct resource			syscon;
-	u32						hif_chnl_mc;
+	u32				hif_chnl_mc;
 	struct list_head		eth_list;
 	// more come
 };
@@ -84,9 +86,9 @@ struct pfeng_priv;
 struct pfeng_hif_chnl {
 	pfe_hif_chnl_t			*priv;
 #ifdef OAL_IRQ_MODE
-	oal_irq_t				*irq;
+	oal_irq_t			*irq;
 #else
-	u32						irqnum;
+	u32				irqnum;
 #endif
 	pfe_hif_drv_t			*drv;
 	struct dentry			*dentry;
@@ -99,21 +101,24 @@ struct pfeng_ndev {
 	struct device			*dev;
 	struct net_device		*netdev;
 	struct phylink			*phylink;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
+	struct phylink_config		phylink_cfg;
+#endif
 	struct mii_bus			*mii_bus;
-	void					*emac_regs;
-	u32						emac_speed;
+	void				*emac_regs;
+	u32				emac_speed;
 
 	struct pfeng_priv		*priv;
 	struct pfeng_eth		*eth;
-	pfe_hif_drv_client_t	*client;
+	pfe_hif_drv_client_t		*client;
 	pfe_phy_if_t			*phyif;
 	pfe_log_if_t			*logif;
-	struct pfeng_hif_chnl	chnl_sc;
+	struct pfeng_hif_chnl		chnl_sc;
 	struct {
-		void				*rx_pool;
+		void			*rx_pool;
 	} bman;
 
-	u32						opts;
+	u32				opts;
 
 	struct {
 		u64			napi_poll;
@@ -129,16 +134,16 @@ struct pfeng_ndev {
 
 /* driver private data */
 struct pfeng_priv {
-	struct platform_device	*pdev;
+	struct platform_device		*pdev;
 	struct dentry			*dbgfs;
 	struct list_head		ndev_list;
-	struct clk				*sys_clk;
-	struct pfeng_plat_cfg	plat;
-	u32						msg_enable;
-	u32						msg_verbosity;
+	struct clk			*sys_clk;
+	struct pfeng_plat_cfg		plat;
+	u32				msg_enable;
+	u32				msg_verbosity;
 
-	pfe_platform_config_t	*cfg;
-	const char				*fw_name;
+	pfe_platform_config_t		*cfg;
+	const char			*fw_name;
 	pfe_platform_t			*pfe;
 
 };
@@ -146,7 +151,7 @@ struct pfeng_priv {
 /* drv */
 struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev);
 int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 hif_chnl, bool hif_chnl_sc,
-		struct pfeng_hif_chnl *chnl);
+	struct pfeng_hif_chnl *chnl);
 void pfeng_hif_chnl_drv_remove(struct pfeng_hif_chnl *chnl);
 int pfeng_drv_remove(struct pfeng_priv *priv);
 int pfeng_drv_probe(struct pfeng_priv *priv);

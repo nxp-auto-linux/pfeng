@@ -372,6 +372,31 @@ typedef struct CAL_PACKED_ALIGNED(4)
 	uint32_t hif_cookie;
 } fpp_if_m_args_t;
 
+/**
+ * @brief	Physical interface statistics
+ * @details Statistics used by physical interfaces (EMAC, HIF).
+ * @note All statistics counters are in network byte order.
+ */
+typedef struct CAL_PACKED_ALIGNED(4)
+{
+	uint32_t ingress;	/*!< Number of ingress frames for the given interface  */
+	uint32_t egress;	/*!< Number of egress frames for the given interface */
+	uint32_t malformed;	/*!< Number of ingress frames with detected error (i.e. checksum) */
+	uint32_t discarded;	/*!< Number of ingress frames which were discarded */
+} fpp_phy_if_stats_t;
+
+/**
+ * @brief	Algorithm statistics
+ * @details Statistics used by algorithms in class (eg. log ifs).
+ * @note All statistics counters are in network byte order.
+ */
+typedef struct CAL_PACKED_ALIGNED(4)
+{
+	uint32_t processed;	/*!< Number of frames processed regardless the result */
+	uint32_t accepted;	/*!< Number of frames matching the selection criteria */
+	uint32_t rejected;	/*!< Number of frames not matching the selection criteria */
+	uint32_t discarded;	/*!< Number of frames marked to be dropped */
+} fpp_algo_stats_t;
 
 /**
  * @brief	Interface blocking state
@@ -402,6 +427,7 @@ typedef struct CAL_PACKED
 	fpp_phy_if_block_state_t block_state;	/**< Phy if block state */
 	uint8_t mac_addr[6];		/**< Phy if MAC (network endian) */
 	char mirror[IFNAMSIZ];		/**< Name of interface to mirror the traffic to */
+	fpp_phy_if_stats_t	stats;	/**< Physical interface statistics */
 } fpp_phy_if_cmd_t;
 
 /**
@@ -424,6 +450,7 @@ typedef struct CAL_PACKED
 	fpp_if_flags_t flags;		/**< Interface flags from query or flags to be set (network endian) */
 	fpp_if_m_rules_t match;		/**< Match rules from query or match rules to be set (network endian) */
 	fpp_if_m_args_t arguments;	/**< Arguments for match rules (network endian) */
+	fpp_algo_stats_t stats;		/**< Logical interface statistics */
 } fpp_log_if_cmd_t;
 
 /**
@@ -982,7 +1009,7 @@ typedef struct CAL_PACKED fpp_flexible_parser_table_cmd
 #define FPP_CMD_FP_FLEXIBLE_FILTER 0xf225
 
 /*
-* @brief Argumenst for the FPP_CMD_FP_FLEXIBLE_FILTER command
+* @brief Arguments for the FPP_CMD_FP_FLEXIBLE_FILTER command
 */
 typedef struct CAL_PACKED fpp_flexible_filter_cmd
 {
@@ -990,6 +1017,58 @@ typedef struct CAL_PACKED fpp_flexible_filter_cmd
     uint8_t table_name[16];  /**< Name of the Flexible Parser table to be used */
 } fpp_flexible_filter_cmd_t;
 
+/**
+ * @def FPP_CMD_DATA_BUF_PUT
+ * @brief FCI command to send an arbitrary data to the accelerator
+ * @details Command is intended to be used to send custom data to the accelerator.
+ *          Format of the command argument is given by the @ref fpp_buf_cmd_t
+ *          structure which also defines the maximum payload length. Subsequent
+ *          commands are not successful until the accelerator reads and
+ *          acknowledges the current request.
+ *
+ * Items to be set in command argument structure:
+ * @code{.c}
+ *   fpp_buf_cmd_t cmd_data =
+ *   {
+ *     // Specify buffer payload
+ *     .payload = ...,
+ *     // Payload length in number of bytes
+ *     .len = ...,
+ *   };
+ * @endcode
+ *
+ * Possible command return values are:
+ *     - @c FPP_ERR_OK: Data written and available to the accelerator
+ *     - @c FPP_ERR_AGAIN: Previous command has not been finished yet
+ *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure
+ */
+#define FPP_CMD_DATA_BUF_PUT		0xf300
+
+/**
+ * @def FPP_CMD_DATA_BUF_AVAIL
+ * @brief Event reported when accelerator wants to send a data buffer to host
+ * @details Indication of this event also carries the buffer payload and payload
+ *          length. Both are available via the event callback arguments (see the
+ *          callback type and arguments within description of @ref fci_register_cb()).
+ */
+#define FPP_CMD_DATA_BUF_AVAIL		0xf301
+
+/**
+ * @def FPP_ERR_AGAIN
+ * @hideinitializer
+ */
+#define FPP_ERR_AGAIN				0xf302
+
+/**
+ * @brief Argument structure for the FPP_CMD_DATA_BUF_PUT command
+ */
+typedef struct CAL_PACKED fpp_buf_cmd_tag
+{
+    uint8_t payload[64];	/**< The payload area */
+    uint8_t len;			/**< Payload length in number of bytes */
+    uint8_t reserved1;
+    uint16_t reserved2;
+} fpp_buf_cmd_t;
 
 #endif /* FPP_EXT_H_ */
 

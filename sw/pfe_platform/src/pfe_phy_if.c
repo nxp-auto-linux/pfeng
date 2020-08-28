@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_PHY_IF
- * @{
- *
- * @file		pfe_phy_if.c
- * @brief		The PFE physical interface module source file.
- * @details		This file contains physical interface-related functionality.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -81,9 +71,6 @@ typedef struct __pfe_phy_if_list_entry_tag
 	LLIST_t iterator;
 } pfe_phy_if_list_entry_t;
 
-#if 0
-static errno_t pfe_phy_if_read_from_class(pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if);
-#endif /* 0 */
 static errno_t pfe_phy_if_write_to_class_nostats(pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if);
 static errno_t pfe_phy_if_write_to_class(pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if);
 static bool_t pfe_phy_if_has_log_if_nolock(pfe_phy_if_t *iface, pfe_log_if_t *log_if);
@@ -91,33 +78,6 @@ static bool_t pfe_phy_if_has_enabled_log_if_nolock(pfe_phy_if_t *iface);
 static bool_t pfe_phy_if_has_promisc_log_if_nolock(pfe_phy_if_t *iface);
 static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface);
 static uint32_t pfe_phy_if_stat_to_str(pfe_ct_phy_if_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
-
-#if 0 /* For future use */
-/**
- * @brief		Read interface structure from classifier memory
- * @param[in]	iface The interface instance
- * @param[in]	class_if Pointer where the structure shall be written
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- */
-static errno_t pfe_phy_if_read_from_class(pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class_if) || (NULL == iface) || (0U == iface->dmem_base)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*
-		Read current interface configuration from classifier. Since all class PEs are running the
-		same code, also the data are the same (except statistics counters...).
-		Returned data will be in __NETWORK__ endian format.
-	*/
-	return pfe_class_read_dmem(iface->class, 0U, class_if, (void *)iface->dmem_base, sizeof(pfe_ct_phy_if_t));
-}
-#endif /* 0 */
 
 /**
  * @brief		Write interface structure to classifier memory skipping interface statistics
@@ -139,7 +99,6 @@ static errno_t pfe_phy_if_write_to_class_nostats(pfe_phy_if_t *iface, pfe_ct_phy
 	/* Be sure that phy_stats are at correct place */
 	ct_assert((sizeof(pfe_ct_phy_if_t) - sizeof(pfe_ct_phy_if_stats_t)) == offsetof(pfe_ct_phy_if_t, phy_stats));
 
-	/*	Write to DMEM of ALL PEs */
 	return pfe_class_write_dmem(iface->class, -1, (void *)iface->dmem_base, class_if,
 								sizeof(pfe_ct_phy_if_t) - sizeof(pfe_ct_phy_if_stats_t));
 }
@@ -161,7 +120,6 @@ static errno_t pfe_phy_if_write_to_class(pfe_phy_if_t *iface, pfe_ct_phy_if_t *c
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	/*	Write to DMEM of ALL PEs */
 	return pfe_class_write_dmem(iface->class, -1, (void *)iface->dmem_base, class_if, sizeof(pfe_ct_phy_if_t));
 }
 
@@ -229,7 +187,6 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, char_
 		iface->is_enabled = FALSE;
 		LLIST_Init(&iface->log_ifs);
 
-		/*	Get mmap base from PE[0] since all PEs have the same memory map */
 		if (EOK != pfe_class_get_mmap(class, 0U, &pfe_pe_mmap))
 		{
 			NXP_LOG_ERROR("Could not get memory map\n");
@@ -442,7 +399,6 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 		/*	Get current first item of the list */
 		tmp_entry = LLIST_Data(iface->log_ifs.prNext, pfe_phy_if_list_entry_t, iterator);
 
-		/*	Get address of the first item in DMEM */
 		log_if_dmem_base = 0U;
 		if (EOK != pfe_log_if_get_dmem_base(tmp_entry->log_if, &log_if_dmem_base))
 		{
@@ -682,9 +638,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 		return ENOENT;
 	}
 
-	/*
-		Bypass the entry within the linked list in DMEM
-	*/
+	/*	Bypass the entry within the linked list in DMEM */
 	next_dmem_ptr = 0U;
 	if (EOK != pfe_log_if_get_next_dmem_ptr(entry->log_if, &next_dmem_ptr))
 	{
@@ -696,10 +650,6 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 
 	if (NULL == prev_entry)
 	{
-		/*
-			First in list
-		*/
-
 		if (0U == next_dmem_ptr)
 		{
 			/*	No next entry, no previous entry. Just remove. */
@@ -718,10 +668,6 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	}
 	else
 	{
-		/*
-			Previous entry needs to be updated
-		*/
-
 		/*	Set 'next' pointer of previous entry to 'next' pointer of deleted entry */
 		if (EOK != pfe_log_if_set_next_dmem_ptr(prev_entry->log_if, next_dmem_ptr))
 		{
@@ -753,20 +699,16 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	/*	Store physical interface changes (.phy_if_class) to DMEM */
 	if (EOK != pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class))
 	{
-		/*	TODO: How to handle this? */
 		NXP_LOG_ERROR("Unable to update structure in DMEM (%s)\n", iface->name);
 		goto unlock_and_fail;
 	}
 	else
 	{
-		/*	Now the change is visible to classifier */
 		log_if_dmem_base = 0U;
 		if (EOK != pfe_log_if_get_dmem_base(log_if, &log_if_dmem_base))
 		{
 			NXP_LOG_ERROR("Could not get DMEM base (%s, parent: %s)\n",
 					pfe_log_if_get_name(log_if), iface->name);
-
-			/*	Don't leave here as the previous entry is set up to bypass the deleted entry */
 		}
 
 		NXP_LOG_INFO("%s (p0x%p) removed from %s (p0x%p)\n",
@@ -871,7 +813,7 @@ errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *bl
 	}
 
 	/* The value is being stored in the iface structure and kept up-to-date
-	   with the value in PEs (HW) thus it can be simply returned */
+	   with the value in FW thus it can be simply returned */
 	*block_state = iface->block_state;
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
@@ -1805,6 +1747,64 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 }
 
 /**
+ * @brief		Get phy interface statistics
+ * @param[in]	iface The interface instance
+ * @param[out]	stat Statistic structure
+ * @retval		EOK Success
+ * @retval		NOMEM Not possible to allocate memory for read
+ */
+errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
+{
+	int i = 0;
+	errno_t ret = EOK;;
+	addr_t offset = 0;
+	uint32_t buffer_len = 0;
+	pfe_ct_phy_if_stats_t * stats = NULL;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == iface) || (NULL == stat)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	memset(stat,0,sizeof(pfe_ct_phy_if_stats_t));
+
+	/* Store offset to stats */
+	offset = offsetof(pfe_ct_phy_if_t,phy_stats);
+
+	/* Prepare memory */
+	buffer_len = sizeof(pfe_ct_phy_if_stats_t) * pfe_class_get_num_of_pes(iface->class);
+	stats = oal_mm_malloc(buffer_len);
+	if(NULL == stats)
+	{
+		return ENOMEM;
+	}
+	/* Gather memory from all PEs*/
+	ret = pfe_class_gather_read_dmem(iface->class, stats, (void *)iface->dmem_base + offset, buffer_len, sizeof(pfe_ct_phy_if_stats_t));
+
+	/* Calculate total statistics */
+	for(i = 0U; i < pfe_class_get_num_of_pes(iface->class); i++)
+	{
+		/* Store statistics */
+		stat->discarded	+= oal_ntohl(stats[i].discarded);
+		stat->egress	+= oal_ntohl(stats[i].egress);
+		stat->ingress	+= oal_ntohl(stats[i].ingress);
+		stat->malformed	+= oal_ntohl(stats[i].malformed);
+	}
+	oal_mm_free(stats);
+
+	/* Convert statistics back to network endian */
+	stat->discarded	= oal_htonl(stat->discarded);
+	stat->egress	= oal_htonl(stat->egress);
+	stat->ingress	= oal_htonl(stat->ingress);
+	stat->malformed	= oal_htonl(stat->malformed);
+
+	return ret;
+}
+
+/**
  * @brief		Get HW ID of the interface
  * @param[in]	iface The interface instance
  * @return		Interface ID
@@ -1885,5 +1885,3 @@ uint32_t pfe_phy_if_get_text_statistics(pfe_phy_if_t *iface, char_t *buf, uint32
 	}
 	return len;
 }
-
-/** @}*/

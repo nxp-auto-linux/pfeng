@@ -1,6 +1,6 @@
 /* =========================================================================
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2019 NXP
+ *  Copyright 2017-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -29,16 +29,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_CLASS
- * @{
- * 
- * @file		pfe_class_csr.c
- * @brief		The CLASS module registers definition file (s32g).
- * @details		Applicable for IP versions listed below. Order of registers
- * 				follows IP documentation...
- */
-
 #ifndef PFE_CLASS_CSR_H_
 #define PFE_CLASS_CSR_H_
 
@@ -48,7 +38,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
@@ -318,8 +307,8 @@
 #define CLASS_PE_CONFIG					(CBUS_CLASS_CSR_BASE_ADDR + 0x510U)
 
 /* CLASS defines */
-#define CLASS_PBUF_SIZE				0x200U	/* Fixed by hardware */
-#define CLASS_PBUF_HEADER_OFFSET	0x00U	/* Can be configured */
+#define CLASS_PBUF_SIZE				0x200U
+#define CLASS_PBUF_HEADER_OFFSET	0x00U
 
 #define CLASS_PBUF0_BASE_ADDR		0x000U
 #define CLASS_PBUF1_BASE_ADDR		(CLASS_PBUF0_BASE_ADDR + CLASS_PBUF_SIZE)
@@ -337,7 +326,6 @@
 #define CLASS_PE0_QB_DM_ADDR0_VAL	((CLASS_PBUF1_HEADER_BASE_ADDR << 16) | CLASS_PBUF0_HEADER_BASE_ADDR)
 #define CLASS_PE0_QB_DM_ADDR1_VAL	((CLASS_PBUF3_HEADER_BASE_ADDR << 16) | CLASS_PBUF2_HEADER_BASE_ADDR)
 
-/*	CLASS_ROUTE_MULTI bits */
 #define RT_TWO_LEVEL_REF(x)			((!!x) ? (1U << 0) : 0U)
 #define PHYNO_IN_HASH(x)			((!!x) ? (1U << 1) : 0U)
 #define PARSE_ROUTE_EN(x)			((!!x) ? (1U << 3) : 0U)
@@ -357,12 +345,8 @@
 #define SYM_RTENTRY(x)				((!!x) ? (1U << 14) : 0U)
 #define QB2BUS_ENDIANESS(x)			((!!x) ? (1U << 15) : 0U)
 #define LEN_CHECK(x)				((!!x) ? (1U << 16) : 0U)
-
-/*	CLASS_VLAN_ID bits */
 #define USE_DEFAULT_VLANID(x)		((!!x) ? (1U << 0) : 0U)
 #define DEF_VLANID(x)				(((x) & 0xfffU) << 1)
-
-/*	Internal Memory Access */
 #define PE_IBUS_WRITE				(1U<<31)
 #define PE_IBUS_READ				(0U<<31)
 #define PE_IBUS_ACCESS_IMEM			(1U<<17)
@@ -380,5 +364,3 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
 void pfe_class_cfg_set_def_vlan(void *base_va, uint16_t vlan);
 
 #endif /* PFE_CLASS_CSR_H_ */
-
-/** @}*/

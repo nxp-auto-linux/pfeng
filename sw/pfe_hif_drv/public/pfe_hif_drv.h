@@ -64,6 +64,10 @@
 #include "pfe_log_if.h"
 #include "pfe_hif_chnl.h"
 
+#ifdef PFE_CFG_IEEE1588_SUPPORT
+#include "pfe_hif_ptp.h"
+#endif /* PFE_CFG_IEEE1588_SUPPORT */
+
 #define HIF_STATS
 
 enum
@@ -110,7 +114,7 @@ enum
  */
 #define HIF_TX_POLL_BUDGET			128U
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+#if defined(PFE_CFG_MULTI_INSTANCE_SUPPORT) || defined(PFE_CFG_IEEE1588_SUPPORT)
 /*	When there is no need to modify HIF TX header with every TX frame then only
 	single static HIF TX header instance (client-owned) will be created and used for
 	each transmission. When HIF TX header modification is needed to be done with
@@ -256,6 +260,7 @@ pfe_hif_drv_t *pfe_hif_drv_create(pfe_hif_chnl_t *channel);
 void pfe_hif_drv_destroy(pfe_hif_drv_t *hif);
 errno_t pfe_hif_drv_init(pfe_hif_drv_t *hif);
 errno_t pfe_hif_drv_start(pfe_hif_drv_t *hif_drv);
+void pfe_hif_drv_tick(pfe_hif_drv_t *hif_drv);
 void pfe_hif_drv_stop(pfe_hif_drv_t *hif);
 void pfe_hif_drv_exit(pfe_hif_drv_t *hif);
 void pfe_hif_drv_show_ring_status(pfe_hif_drv_t *hif_drv, bool_t rx, bool_t tx);
@@ -269,8 +274,9 @@ errno_t pfe_hif_drv_client_xmit_ihc_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 /*	HIF client */
-pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif, pfe_log_if_t *log_if, uint32_t txq_num, uint32_t rxq_num,
+pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif, uint8_t log_if_id, uint32_t txq_num, uint32_t rxq_num,
 		uint32_t txq_depth, uint32_t rxq_depth, pfe_hif_drv_client_event_handler handler, void *priv);
+errno_t pfe_hif_drv_client_set_inject_if(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t phy_if_id);
 pfe_hif_drv_t *pfe_hif_drv_client_get_drv(pfe_hif_drv_client_t *client);
 void *pfe_hif_drv_client_get_priv(pfe_hif_drv_client_t *client);
 void pfe_hif_drv_client_unregister(pfe_hif_drv_client_t *client);
@@ -288,6 +294,10 @@ bool_t pfe_hif_drv_client_has_rx_pkt(pfe_hif_drv_client_t *client, uint32_t queu
 pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
 void pfe_hif_pkt_free(pfe_hif_pkt_t *desc);
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
+
+/*	PTP Timestamps */
+errno_t pfe_hif_drv_client_get_ts(pfe_hif_drv_client_t *client, bool_t rx,
+		uint8_t type, uint16_t port, uint16_t seq_id, uint32_t *ts_sec, uint32_t *ts_nsec);
 
 /**
  * @brief		Get information if packet is last in frame

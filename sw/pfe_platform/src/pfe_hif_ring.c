@@ -29,9 +29,6 @@
  * ========================================================================= */
 
 /**
- * @addtogroup  dxgr_PFE_HIF_RING
- * @{
- *
  * @file		pfe_hif_ring.c
  * @brief		The HIF BD ring driver.
  * @details		This is the HW BD ring interface providing basic manipulation
@@ -1367,7 +1364,9 @@ __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t se
 	pfe_hif_ring_t *ring;
 	uint32_t ii, size;
 	pfe_hif_bd_t *hw_desc_va, *hw_desc_pa;
+#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
 	char_t *variant_str;
+#endif /* PFE_CFG_VERBOSITY_LEVEL */
 
 #ifndef PFE_CFG_HIF_SEQNUM_CHECK
 	(void)seqnum;
@@ -1503,6 +1502,7 @@ __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t se
 
 	}
 
+#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
 	if (ring->is_rx)
 	{
 		variant_str = "RX";
@@ -1519,6 +1519,7 @@ __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t se
 					(void *)ring->base_va,
 					(void *)ring->wb_tbl_base_pa,
 					(void *)ring->wb_tbl_base_va);
+#endif /* PFE_CFG_VERBOSITY_LEVEL */
 
 	return ring;
 
@@ -1558,5 +1559,3 @@ __attribute__((cold)) errno_t pfe_hif_ring_destroy(pfe_hif_ring_t *ring)
 
 	return EOK;
 }
-
-/** @}*/

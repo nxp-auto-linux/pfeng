@@ -47,7 +47,7 @@ static int pfeng_logif_set_mac_address(struct net_device *netdev, void *p)
 
 static void pfeng_hif_client_remove(struct pfeng_ndev *ndev)
 {
-	
+
 	/* HIF SC mode: Mask HIF channel IRQ */
 	if (ndev->chnl_sc.irqnum)
 		pfe_hif_chnl_irq_mask(ndev->chnl_sc.priv);
@@ -152,7 +152,7 @@ static int pfeng_hif_client_add(struct pfeng_ndev *ndev)
 	/* Connect to HIF */
 	ndev->client = pfe_hif_drv_client_register(
 				ndev->chnl_sc.drv,	/* HIF Driver instance */
-				ndev->logif,			/* Client ID */
+				pfe_log_if_get_id(ndev->logif),	/* Client ID */
 				1,				/* TX Queue Count */
 				1,				/* RX Queue Count */
 				PFE_HIF_RING_CFG_LENGTH,	/* TX Queue Depth */
@@ -164,6 +164,13 @@ static int pfeng_hif_client_add(struct pfeng_ndev *ndev)
 		netdev_err(ndev->netdev, "Unable to register HIF client: %s\n", ndev->eth->name);
 		ndev->logif = NULL;
 		return -ENODEV;
+	}
+
+	if (EOK != pfe_hif_drv_client_set_inject_if(ndev->client,
+					pfe_phy_if_get_id(ndev->phyif)))
+	{
+		netdev_err(ndev->netdev, "Can't set inject interface\n");
+		goto err;
 	}
 
 	/* Send packets received via 'log_if' to exclusively associated HIF channel */
@@ -196,17 +203,22 @@ static int pfeng_logif_release(struct net_device *netdev)
 
 	netdev_info(netdev, "%s\n", __func__);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,4,0)
+	/*
+	 * Note: phylink_stop() causes backtraces on 5.4
+	 *       but worked correctly on 4.19
+	 */
+	/* stop phylink */
+	if (ndev->phylink)
+		pfeng_phylink_stop(ndev);
+#endif
+
 	/* stop napi */
 	netif_tx_stop_queue(netdev_get_tx_queue(netdev, 0));
 
 	napi_disable(&ndev->napi);
 
 	pfe_log_if_disable(ndev->logif);
-
-	/* stop phylink */
-	if (ndev->phylink) {
-		pfeng_phylink_stop(ndev);
-	}
 
 	return 0;
 }
@@ -376,9 +388,9 @@ static netdev_tx_t pfeng_logif_xmit(struct sk_buff *skb, struct net_device *netd
 #endif
 
 #ifdef PFE_CFG_HIF_TX_FIFO_FIX
-                sg_list.total_bytes += skb->len;
+	sg_list.total_bytes += skb->len;
 #endif /* PFE_CFG_HIF_TX_FIFO_FIX */
-	
+
 	//TODO: skb_tx_timestamp(skb);
 
 	ret = pfe_hif_drv_client_xmit_sg_pkt(ndev->client, 0, &sg_list, skb);

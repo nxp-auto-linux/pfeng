@@ -28,44 +28,14 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- *
- * @defgroup	dxgr_PFE_PHY_IF PFE Physical Interface
- * @brief		PFE physical interface representation module
- * @details		This is the software representation of PFE physical interfaces. It is
- *				intended to abstract various types of Ethernet interfaces provided by
- * 				the PFE (EMAC, HIF channel) and enable driver and rest of the PFE software
- * 				to manage them via single API.
- *
- *				[TODO: Future extension]
- *				Interface properties are shared between PFE driver and PFE firmware. The
- *				PFE firmware is using the interfaces within traffic processing chain and
- *				thus needs to keep the interface-related properties in PFE internal memory.
- *				So the PFE interface SW module must ensure that every change done on
- *				interface in host domain (property/state change) will be propagated to data
- *				structures describing the interface in PFE domain. For instance, if port-based
- *				VLAN feature is implemented then once host changes the default port VLAN ID,
- *				this change must be announced to PFE firmware too.
- *
- * @addtogroup  dxgr_PFE_PHY_IF
- * @{
- *
- * @file		pfe_phy_if.h
- * @brief		The PFE Physical Interface module header file.
- * @details		This file contains PFE Physical Interface-related API.
- *
- */
-
 #ifndef PUBLIC_PFE_PHY_IF_H_
 #define PUBLIC_PFE_PHY_IF_H_
 
 #include "oal_types.h"
-#include "pfe_ct.h" /* common (fw/host) types */
-#include "pfe_emac.h" /* pfe_emac_t, pfe_mac_addr_t */
-#include "pfe_hif_chnl.h" /* pfe_hif_chnl_t */
-#include "pfe_class.h" /* pfe_class_t */
+#include "pfe_ct.h"
+#include "pfe_emac.h"
+#include "pfe_hif_chnl.h"
+#include "pfe_class.h"
 
 /**
  * @brief	Interface callback reasons
@@ -78,7 +48,7 @@ typedef enum
 
 typedef struct __pfe_phy_if_tag pfe_phy_if_t;
 
-#include "pfe_log_if.h" /* pfe_log_if_t, needs pfe_phy_if_t */
+#include "pfe_log_if.h"
 
 /**
  * @brief	Interface callback type
@@ -108,11 +78,9 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface);
 errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr);
 errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr);
 errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr);
+errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat);
 uint32_t pfe_phy_if_get_text_statistics(pfe_phy_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 errno_t pfe_phy_if_set_mirroring(pfe_phy_if_t *iface, pfe_ct_phy_if_id_t mirror);
 pfe_ct_phy_if_id_t pfe_phy_if_get_mirroring(pfe_phy_if_t *iface);
 
 #endif /* PUBLIC_PFE_PHY_IF_H_ */
-
-/** @}*/
-/** @}*/

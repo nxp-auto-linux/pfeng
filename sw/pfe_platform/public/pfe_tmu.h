@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -27,23 +27,6 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
-
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- * 
- * @defgroup    dxgr_PFE_TMU TMU
- * @brief		The Traffic Manager Unit
- * @details     This is the software representation of the TMU block.
- * 
- * @addtogroup  dxgr_PFE_TMU
- * @{
- * 
- * @file		pfe_tmu.h
- * @brief		The TMU module header file.
- * @details		This file contains TMU-related API.
- *
- */
 
 #ifndef PFE_TMU_H_
 #define PFE_TMU_H_
@@ -122,12 +105,8 @@ pfe_tmu_t *pfe_tmu_create(void *cbus_base_va, uint32_t pe_num, pfe_tmu_cfg_t *cf
 void pfe_tmu_enable(pfe_tmu_t *class);
 void pfe_tmu_reset(pfe_tmu_t *class);
 void pfe_tmu_disable(pfe_tmu_t *class);
-errno_t pfe_tmu_load_firmware(pfe_tmu_t *class, const void *elf);
 void pfe_tmu_send(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, void *buf_pa, uint16_t len);
 uint32_t pfe_tmu_get_text_statistics(pfe_tmu_t *tmu, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 void pfe_tmu_destroy(pfe_tmu_t *class);
 
 #endif /* PFE_TMU_H_ */
-
-/** @}*/
-/** @}*/

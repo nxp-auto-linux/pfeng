@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_GPI
- * @{
- *
- * @file		pfe_gpi_csr.c
- * @brief		The GPI module low-level API (s32g).
- * @details		Applicable for IP versions listed below. Also applicable
- * 				for ETGPI and HGPI except IGQOS registers.
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -51,7 +41,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
@@ -67,12 +56,6 @@ static void pfe_gpi_cfg_init_inqos(void *base_va)
 	uint32_t ii;
 	uint32_t val;
 
-	/*
-	 * The way how tables are initialized is proposed way how to do it. From
-	 * performance perspective this could be pretty much optimized.
-	 */
-
-	/*	Entry table */
 	for (ii=0U; ii<IGQOS_ENTRY_TABLE_LEN; ii++)
 	{
 		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG0);
@@ -90,7 +73,6 @@ static void pfe_gpi_cfg_init_inqos(void *base_va)
 		hal_write32(val, base_va + CSR_IGQOS_ENTRY_CMDCNTRL);
 	}
 
-	/*	LRU table */
 	for (ii=0U; ii<IGQOS_LRU_TABLE_LEN; ii++)
 	{
 		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG0);
@@ -111,16 +93,12 @@ static void pfe_gpi_cfg_init_inqos(void *base_va)
 
 /**
  * @brief		HW-specific initialization function
- * @details		This function is called during HW initialization routine and should
- * 				ensure that all necessary values are correctly configured before
- * 				the MAC is enabled.
  * @param[in]	cbus_va CBUS base address (virtual)
  * @param[in]	base_va Base address of GPI register space (virtual)
  * @return		EOK if success, error code if invalid configuration is detected
  */
 errno_t pfe_gpi_cfg_init(void *cbus_va, void *base_va, pfe_gpi_cfg_t *cfg)
 {
-	uint32_t reg;
 	addr_t gpi_cbus_offset = (addr_t)base_va - (addr_t)cbus_va;
 
 	switch (gpi_cbus_offset)
@@ -129,8 +107,6 @@ errno_t pfe_gpi_cfg_init(void *cbus_va, void *base_va, pfe_gpi_cfg_t *cfg)
 		case CBUS_EGPI2_BASE_ADDR:
 		case CBUS_EGPI3_BASE_ADDR:
 		{
-			/*	Initialize ingress QoS entry table */
-			NXP_LOG_DEBUG("GPI (@cbus 0x%x): Initializing INQOS memory\n", (uint32_t)gpi_cbus_offset);
 			pfe_gpi_cfg_init_inqos(base_va);
 			break;
 		}
@@ -141,58 +117,25 @@ errno_t pfe_gpi_cfg_init(void *cbus_va, void *base_va, pfe_gpi_cfg_t *cfg)
 		}
 	}
 
-	/*	GPI_EMAC_1588_TIMESTAMP_EN */
-	hal_write32(0x0U, base_va + GPI_EMAC_1588_TIMESTAMP_EN); /* ENABLE PADDING AND CRC(FSC) INSERTION */
-
-	/*	GPI_EMAC_1588_TIMESTAMP_EN */
+	hal_write32(0x0U, base_va + GPI_EMAC_1588_TIMESTAMP_EN);
 	if (cfg->emac_1588_ts_en)
 	{
-		/*	Enable 1588 timestamp, CRC insertion(?), tx pbl = 7 */
-		reg = hal_read32(base_va + GPI_EMAC_1588_TIMESTAMP_EN);
-		reg |= 0xe01U;
-		hal_write32(reg, base_va + GPI_EMAC_1588_TIMESTAMP_EN);
+		hal_write32(0xe01U, base_va + GPI_EMAC_1588_TIMESTAMP_EN);
 	}
 
-	/*	GPI_RX_CONFIG */
 	hal_write32(((cfg->alloc_retry_cycles << 16) | GPI_DDR_BUF_EN | GPI_LMEM_BUF_EN), base_va + GPI_RX_CONFIG);
-
-	/*	GPI_HDR_SIZE */
 	hal_write32((PFE_CFG_DDR_HDR_SIZE << 16) | PFE_CFG_LMEM_HDR_SIZE, base_va + GPI_HDR_SIZE);
-
-	/*	GPI_BUF_SIZE */
 	hal_write32((PFE_CFG_DDR_BUF_SIZE << 16) | PFE_CFG_LMEM_BUF_SIZE, base_va + GPI_BUF_SIZE);
-
-	/*	GPI_LMEM_ALLOC_ADDR */
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_BMU1_BASE_ADDR + BMU_ALLOC_CTRL, base_va + GPI_LMEM_ALLOC_ADDR);
-
-	/*	GPI_LMEM_FREE_ADDR */
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_BMU1_BASE_ADDR + BMU_FREE_CTRL, base_va + GPI_LMEM_FREE_ADDR);
-
-	/*	GPI_DDR_ALLOC_ADDR */
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_BMU2_BASE_ADDR + BMU_ALLOC_CTRL, base_va + GPI_DDR_ALLOC_ADDR);
-
-	/*	GPI_DDR_FREE_ADDR */
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_BMU2_BASE_ADDR + BMU_FREE_CTRL, base_va + GPI_DDR_FREE_ADDR);
-
-	/*	GPI_CLASS_ADDR */
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CLASS_INQ_PKTPTR, base_va + GPI_CLASS_ADDR);
-
-	/*	GPI_DDR_DATA_OFFSET */
 	hal_write32(PFE_CFG_DDR_HDR_SIZE, base_va + GPI_DDR_DATA_OFFSET);
-
-	/*	GPI_LMEM_DATA_OFFSET */
 	hal_write32(0x30U, base_va + GPI_LMEM_DATA_OFFSET);
-
-	/*	GPI_LMEM_SEC_BUF_DATA_OFFSET */
 	hal_write32(PFE_CFG_LMEM_HDR_SIZE, base_va + GPI_LMEM_SEC_BUF_DATA_OFFSET);
-
-	/*	GPI_TMLF_TX */
 	hal_write32(cfg->gpi_tmlf_txthres, base_va + GPI_TMLF_TX);
-
-	/*	GPI_DTX_ASEQ */
 	hal_write32(cfg->gpi_dtx_aseq_len, base_va + GPI_DTX_ASEQ);
-
-	/*	IP/TCP/UDP Checksum Offload */
 	hal_write32(1, base_va + GPI_CSR_TOE_CHKSUM_EN);
 
 	return EOK;
@@ -200,8 +143,6 @@ errno_t pfe_gpi_cfg_init(void *cbus_va, void *base_va, pfe_gpi_cfg_t *cfg)
 
 /**
  * @brief		Reset the GPI
- * @details		Function initiates reset of the given GPI module and waits
- * 				until it is done.
  * @param[in]	base_va Base address of GPI register space (virtual)
  * @retval		EOK Success
  * @retval		ETIMEDOUT Reset procedure timed-out
@@ -231,7 +172,6 @@ errno_t pfe_gpi_cfg_reset(void *base_va)
 
 /**
  * @brief		Enable the GPI module
- * @details
  * @param[in]	base_va Base address of GPI register space (virtual)
  */
 void pfe_gpi_cfg_enable(void *base_va)
@@ -243,7 +183,6 @@ void pfe_gpi_cfg_enable(void *base_va)
 
 /**
  * @brief		Disable the GPI module
- * @details
  * @param[in]	base_va Base address of GPI register space (virtual)
  */
 void pfe_gpi_cfg_disable(void *base_va)
@@ -326,5 +265,3 @@ uint32_t pfe_gpi_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, ui
 
 	return len;
 }
-
-/** @}*/

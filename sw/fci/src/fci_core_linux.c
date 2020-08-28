@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -543,7 +543,7 @@ errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep)
 		return EPERM;
 	}
 
-	if (unlikely(NULL == msg) || unlikely(NULL == rep))
+	if (unlikely(NULL == msg))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;

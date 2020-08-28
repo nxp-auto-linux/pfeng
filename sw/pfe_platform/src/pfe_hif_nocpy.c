@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -27,37 +27,6 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
-
-/**
- * @addtogroup  dxgr_PFE_HIF
- * @{
- *
- * @file		pfe_hif_nocpy.c
- * @brief		The HIF_NOCPY module source file.
- * @details
- *				Purpose
- *				-------
- *				This file contains HIF_NOCPY-related functionality. Every HIF_NOCPY instance is owner
- *				of a single underlying HIF Channel component representing particular HIF RX/TX resource
- *				(channel). Since the HIF_NOCPY is not partitioned into multiple channels it is using
- *				this approach due to stronger compatibility with the "standard" HIF.
- *
- *				For more information please see the @see pfe_hif_chnl_t and @see pfe_hif_t.
- *
- *				Initialization
- *				--------------
- *				To create a HIF_NOCPY instance one shall call the pfe_hif_nocpy_create() with valid
- *				parameters.	Once created, instance is ready to be used. Data-path manipulation is done
- *				via pfe_hif_chnl_t instance as mentioned above. To retrieve a channel instance the
- *				pfe_hif_nocpy_get_channel() function shall be called.
- *
- *				Shutdown
- *				--------
- *				When the HIF is no more needed it shall be properly terminated by pfe_hif_nocpy_destroy().
- *				The call will ensure that all instance-related resources will be released and the HIF_NOCPY
- *				hardware will be finalized in way that it can be used again later.
- *
- */
 
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -185,6 +154,3 @@ uint32_t pfe_hif_nocpy_get_text_statistics(pfe_hif_nocpy_t *hif, char_t *buf, ui
 
 	return len;
 }
-
-
-/** @}*/

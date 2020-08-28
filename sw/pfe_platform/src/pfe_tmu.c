@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_TMU
- * @{
- * 
- * @file		pfe_tmu.c
- * @brief		The TMU module source file.
- * @details		This file contains TMU-related functionality.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -49,10 +39,7 @@
 
 struct __pfe_tmu_tag
 {
-	bool_t is_fw_loaded;		/*	Flag indicating that firmware has been loaded */
-	void *cbus_base_va;			/*	CBUS base virtual address */
-	uint32_t pe_num;			/*	Number of PEs */
-	pfe_pe_t **pe;				/*	List of particular PEs */
+	void *cbus_base_va;
 };
 
 /*	Queue instance */
@@ -123,10 +110,7 @@ static void pfe_tmu_init(pfe_tmu_t *tmu, pfe_tmu_cfg_t *cfg)
 pfe_tmu_t *pfe_tmu_create(void *cbus_base_va, uint32_t pe_num, pfe_tmu_cfg_t *cfg)
 {
 	pfe_tmu_t *tmu;
-#if (PFE_CFG_TMU_VARIANT == TMU_TYPE_TMU)
-	pfe_pe_t *pe;
-	uint32_t ii;
-#endif /* PFE_CFG_TMU_VARIANT */
+	(void)pe_num;
 	
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == cbus_base_va) || (NULL == cfg)))
@@ -148,48 +132,6 @@ pfe_tmu_t *pfe_tmu_create(void *cbus_base_va, uint32_t pe_num, pfe_tmu_cfg_t *cf
 		tmu->cbus_base_va = cbus_base_va;
 	}
 	
-#if (PFE_CFG_TMU_VARIANT == TMU_TYPE_TMU)
-	if (pe_num > 0U)
-	{
-		tmu->pe = oal_mm_malloc(pe_num * sizeof(pfe_pe_t *));
-		
-		if (NULL == tmu->pe)
-		{
-			oal_mm_free(tmu);
-			return NULL;
-		}
-		
-		/*	Create PEs */
-		for (ii=0; ii<pe_num; ii++)
-		{
-			pe = pfe_pe_create(cbus_base_va, PE_TYPE_TMU);
-			
-			if (NULL == pe)
-			{
-				goto free_and_fail;
-			}
-			else
-			{
-				pfe_pe_set_dmem(pe, TMU_PE_IBUS_DMEM_BASE(ii), PFE_CFG_TMU_ELF_DMEM_BASE, PFE_CFG_TMU_DMEM_SIZE);
-				pfe_pe_set_pmem(pe, TMU_PE_IBUS_PMEM_BASE(ii), PFE_CFG_TMU_ELF_PMEM_BASE, PFE_CFG_TMU_PMEM_SIZE);
-				/* pfe_pe_set_ddr(pe, cfg->ddr_base_pa, cfg->ddr_base_va, cfg->ddr_size); */
-				pfe_pe_set_iaccess(pe, TMU_MEM_ACCESS_WDATA, TMU_MEM_ACCESS_RDATA, TMU_MEM_ACCESS_ADDR);
-				
-				tmu->pe[ii] = pe;
-				tmu->pe_num++;
-			}
-		}
-		
-		/*	Wait until HW initialization is done */
-		while(!(hal_read32(tmu->cbus_base_va + TMU_CTRL) & ECC_MEM_INIT_DONE))
-		{
-			;
-		}
-	}
-#else
-    (void)pe_num;
-#endif /* PFE_CFG_TMU_VARIANT */
-	
 	/*	Issue block reset */
 	pfe_tmu_reset(tmu);
 	
@@ -200,14 +142,6 @@ pfe_tmu_t *pfe_tmu_create(void *cbus_base_va, uint32_t pe_num, pfe_tmu_cfg_t *cf
 	pfe_tmu_init(tmu, cfg);
 	
 	return tmu;
-	
-#if (PFE_CFG_TMU_VARIANT == TMU_TYPE_TMU)
-free_and_fail:
-	pfe_tmu_destroy(tmu);
-	tmu = NULL;
-	
-	return NULL;
-#endif /* PFE_CFG_TMU_VARIANT */
 }
 
 /**
@@ -242,13 +176,6 @@ void pfe_tmu_enable(pfe_tmu_t *tmu)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if (PFE_CFG_TMU_VARIANT == TMU_TYPE_TMU)
-	if (unlikely(FALSE == tmu->is_fw_loaded))
-	{
-		NXP_LOG_WARNING("Attempt to enable TMU without previous firmware upload\n");
-	}
-#endif /* PFE_CFG_TMU_VARIANT */
-	
 	pfe_tmu_cfg_enable(tmu->cbus_base_va);
 }
 
@@ -268,64 +195,6 @@ void pfe_tmu_disable(pfe_tmu_t *tmu)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pfe_tmu_cfg_disable(tmu->cbus_base_va);
-}
-
-/**
- * @brief		Load firmware elf into PEs memories
- * @param[in]	tmu The TMU instance
- * @param[in]	elf The elf file object to be uploaded
- * @return		EOK when success or error code otherwise
- */
-errno_t pfe_tmu_load_firmware(pfe_tmu_t *tmu, const void *elf)
-{
-#if (PFE_CFG_TMU_VARIANT == TMU_TYPE_TMU)
-	uint32_t ii;
-	errno_t ret;
-#endif /* PFE_CFG_TMU_VARIANT */
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == tmu))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#if (PFE_CFG_TMU_VARIANT == TMU_TYPE_TMU)
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == elf))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	
-	for (ii=0U; ii<tmu->pe_num; ii++)
-	{
-		/*	On LS1012 skip the TMU2 (not present) */
-		if (ii == 2U)
-		{
-			continue;
-		}
-
-		ret = pfe_pe_load_firmware(tmu->pe[ii], elf);
-		
-		if (EOK != ret)
-		{
-			NXP_LOG_ERROR("TMU firmware loading failed: %d\n", ret);
-			return ret;
-		}
-	}
-	
-	tmu->is_fw_loaded = TRUE;
-	
-	return EOK;
-#else
-    (void)tmu;
-    (void)elf;
-	NXP_LOG_WARNING("Chosen TMU variant does not implement processing engines\n");
-	return ENXIO;
-#endif /* PFE_CFG_TMU_VARIANT */
 }
 
 /**
@@ -355,19 +224,9 @@ void pfe_tmu_send(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, void *b
  */
 void pfe_tmu_destroy(pfe_tmu_t *tmu)
 {
-	uint32_t ii;
 	if (NULL != tmu)
 	{
 		pfe_tmu_disable(tmu);
-		
-		for (ii=0; ii<tmu->pe_num; ii++)
-		{
-			pfe_pe_destroy(tmu->pe[ii]);
-			tmu->pe[ii] = NULL;
-		}
-		
-		tmu->pe_num = 0U;
-		
 		oal_mm_free(tmu);
 	}
 }
@@ -873,10 +732,6 @@ uint32_t pfe_tmu_get_text_statistics(pfe_tmu_t *tmu, char_t *buf, uint32_t buf_l
 {
 	uint32_t len = 0U;
 
-#if (PFE_CFG_TMU_VARIANT == TMU_TYPE_TMU)
-	uint32_t ii;
-#endif /* PFE_CFG_TMU_VARIANT */
-	
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
@@ -886,16 +741,6 @@ uint32_t pfe_tmu_get_text_statistics(pfe_tmu_t *tmu, char_t *buf, uint32_t buf_l
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	
 	len += pfe_tmu_cfg_get_text_stat(tmu->cbus_base_va, buf, buf_len, verb_level);
-	
-#if (PFE_CFG_TMU_VARIANT == TMU_TYPE_TMU)
-	/*	Get PE info per PE */
-	for (ii=0U; ii<tmu->pe_num; ii++)
-	{
-		len = pfe_pe_get_text_statistics(tmu->pe[ii], buf + len, buf_len - len, verb_level);
-	}
-#endif /* PFE_CFG_TMU_VARIANT */
-	
+
 	return len;
 }
-
-/** @}*/

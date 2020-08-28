@@ -83,6 +83,34 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 		{
 			switch (msg->msg_cmd.code)
 			{
+				case FPP_CMD_DATA_BUF_PUT:
+				{
+					pfe_ct_buffer_t buf;
+					fpp_buf_cmd_t *fci_buf = (fpp_buf_cmd_t *)msg->msg_cmd.payload;
+
+					if (sizeof(buf.payload) < fci_buf->len)
+					{
+						NXP_LOG_ERROR("Put buffer is too small\n");
+						ret = EINVAL;
+						fci_ret = FPP_ERR_INTERNAL_FAILURE;
+					}
+					else
+					{
+						buf.flags = 1;
+						buf.len = fci_buf->len;
+						memcpy(&buf.payload, fci_buf->payload, fci_buf->len);
+
+						ret = pfe_class_put_data(context->class, &buf);
+						if (EOK != ret)
+						{
+							NXP_LOG_DEBUG("pfe_class_buf_put() failed: %d\n", ret);
+							fci_ret = FPP_ERR_INTERNAL_FAILURE;
+						}
+					}
+
+					break;
+				}
+
 				case FPP_CMD_IF_LOCK_SESSION:
 				case FPP_CMD_IF_UNLOCK_SESSION:
 				{

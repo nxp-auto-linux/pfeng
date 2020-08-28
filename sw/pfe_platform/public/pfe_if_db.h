@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_PLATFORM
- * @{
- *
- * @file		pfe_if_db.h
- * @brief		Interface database header file
- * @details
- *
- */
-
 #ifndef PFE_LOG_IF_DB_H_
 #define PFE_LOG_IF_DB_H_
 
@@ -90,6 +80,3 @@ pfe_log_if_t *pfe_if_db_entry_get_log_if(pfe_if_db_entry_t *entry) __attribute__
 errno_t pfe_if_db_get_single(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_criterion_t crit, void *arg, pfe_if_db_entry_t **db_entry);
 
 #endif /* PFE_LOG_IF_DB_H_ */
-
-/** @}*/
-

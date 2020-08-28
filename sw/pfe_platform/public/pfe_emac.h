@@ -28,23 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- * 
- * @defgroup    dxgr_PFE_EMAC EMAC
- * @brief		The Ethernet Peripheral (MAC)
- * @details     This is the software representation of the EMAC block.
- * 
- * @addtogroup  dxgr_PFE_EMAC
- * @{
- * 
- * @file		pfe_emac.h
- * @brief		The EMAC module header file.
- * @details		This file contains EMAC-related API.
- *
- */
-
 #ifndef PUBLIC_PFE_EMAC_H_
 #define PUBLIC_PFE_EMAC_H_
 
@@ -105,6 +88,12 @@ typedef uint8_t pfe_mac_addr_t[6];
 pfe_emac_t *pfe_emac_create(void *cbus_base_va, void *emac_base, pfe_emac_mii_mode_t mode, pfe_emac_speed_t speed, pfe_emac_duplex_t duplex);
 void pfe_emac_enable(pfe_emac_t *emac);
 void pfe_emac_disable(pfe_emac_t *emac);
+errno_t pfe_emac_enable_ts(pfe_emac_t *emac, uint32_t i_clk_hz, uint32_t o_clk_hz);
+errno_t pfe_emac_set_ts_freq_adjustment(pfe_emac_t *emac, uint32_t ppb, bool_t sgn);
+errno_t pfe_emac_get_ts_freq_adjustment(pfe_emac_t *emac, uint32_t *ppb, bool_t *sgn);
+errno_t pfe_emac_set_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec);
+errno_t pfe_emac_adjust_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, bool_t sgn);
+errno_t pfe_emac_get_ts_time(pfe_emac_t *emac, uint32_t *sec, uint32_t *nsec);
 void pfe_emac_enable_loopback(pfe_emac_t *emac);
 void pfe_emac_disable_loopback(pfe_emac_t *emac);
 void pfe_emac_enable_promisc_mode(pfe_emac_t *emac);
@@ -133,6 +122,3 @@ uint32_t pfe_emac_get_text_statistics(pfe_emac_t *emac, char_t *buf, uint32_t bu
 void pfe_emac_test(void *cbus_base_va, void *emac_base);
 
 #endif /* PUBLIC_PFE_EMAC_H_ */
-
-/** @}*/
-/** @}*/

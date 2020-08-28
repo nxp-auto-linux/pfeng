@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_GPI
- * @{
- * 
- * @file		pfe_gpi_csr.h
- * @brief		The GPI module registers definition file (s32g).
- * @details		Applicable for IP versions listed below. Also applicable
- * 				for ETGPI and HGPI except IGQOS registers.
- */
-
 #ifndef PFE_GPI_CSR_H_
 #define PFE_GPI_CSR_H_
 
@@ -47,7 +37,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
@@ -175,12 +164,8 @@
 #define CSR_IGQOS_STAT_TOTAL_DROP_CNT		0x23cU
 #define CSR_IGQOS_LRU_TIMER					0x240U
 #define CSR_IGQOS_LRU_TIMER_LOAD_VALUE		0x244U
-
-/*	Number of entries in entry table. TRM says 64, but RTL says 128 */
 #define IGQOS_ENTRY_TABLE_LEN				128U
 #define IGQOS_LRU_TABLE_LEN					128U
-
-/*	CSR_IGQOS_ENTRY_CMDCNTRL bits */
 #define CMDCNTRL_CMD_WRITE					0x1
 #define CMDCNTRL_CMD_READ					0x2
 #define CMDCNTRL_CMD_TAB_ADDR(x)			(((x) & 0x7fU) << 8)
@@ -193,12 +178,8 @@ typedef struct {
 	uint32_t aseq_len;
 } GPI_CFG;
 
-
-/* GPI commons defines */ 
 #define GPI_LMEM_BUF_EN					0x1U
 #define GPI_DDR_BUF_EN					0x2U
-
-/* HGPI defines */ 
 #define HGPI_LMEM_RTRY_CNT				0x40U
 #define HGPI_TMLF_TXTHRES				0xBCU
 #define HGPI_ASEQ_LEN					0x40U
@@ -210,5 +191,3 @@ void pfe_gpi_cfg_disable(void *base_va);
 uint32_t pfe_gpi_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
 #endif /* PFE_GPI_CSR_H_ */
-
-/** @}*/

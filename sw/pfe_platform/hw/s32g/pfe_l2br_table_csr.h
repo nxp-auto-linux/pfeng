@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_GPI
- * @{
- *
- * @file		pfe_l2br_table_csr.h
- * @brief		The L2 Bridge Table module registers definition file (s32g).
- * @details		Applicable for IP versions listed below.
- *
- */
-
 #ifndef HW_S32G_PFE_L2BR_TABLE_CSR_H_
 #define HW_S32G_PFE_L2BR_TABLE_CSR_H_
 
@@ -45,15 +35,9 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
-
-/*
-	2-field MAC TABLE
-	Depth: 512 entries, Width: 124 bits
-*/
 
 #define _MAC2F_TABLE_HASH_ENTRIES		256U /* Must be power-of-2 */
 #define _MAC2F_TABLE_COLL_ENTRIES		256U
@@ -74,10 +58,6 @@
 #define HOST_MAC2F_FREE_LIST_HEAD_PTR	(CLASS_DAMACHASH_FREELIST_HEAD_PTR)
 #define HOST_MAC2F_FREE_LIST_TAIL_PTR	(CLASS_DAMACHASH_FREELIST_TAIL_PTR)
 
-/*
-	VLAN TABLE
-	Depth: 128 entries, Width: 100 bits
-*/
 #define _VLAN_TABLE_HASH_ENTRIES		64U /* Must be power-of-2 */
 #define _VLAN_TABLE_COLL_ENTRIES		64U
 #define _VLAN_TABLE_HASH_SPACE_START	0U
@@ -97,28 +77,22 @@
 #define HOST_VLAN_FREE_LIST_HEAD_PTR	(CLASS_DAVLANHASH_FREELIST_HEAD_PTR)
 #define HOST_VLAN_FREE_LIST_TAIL_PTR	(CLASS_DAVLANHASH_FREELIST_TAIL_PTR)
 
-/*	*_STATUS_REG (resp. REQ1_STATUS_REG) bits */
 #define STATUS_REG_CMD_DONE				(1U << 0)
 #define STATUS_REG_SIG_ENTRY_NOT_FOUND	(1U << 1)
 #define STATUS_REG_SIG_INIT_DONE		(1U << 2)
 #define STATUS_REG_SIG_ENTRY_ADDED		(1U << 3)
 #define STATUS_REG_MATCH				(1U << 4)
 
-/**
- * @brief	Available commands (see *_CMD_REG, resp. REQ1_CMD_REG)
- */
 typedef enum
 {
-	L2BR_CMD_INIT = 0x1,     /**< L2BR_CMD_INIT */
-	L2BR_CMD_ADD = 0x2,      /**< L2BR_CMD_ADD */
-	L2BR_CMD_DELETE = 0x3,   /**< L2BR_CMD_DELETE */
-	L2BR_CMD_UPDATE = 0x4,   /**< L2BR_CMD_UPDATE */
-	L2BR_CMD_SEARCH = 0x5,   /**< L2BR_CMD_SEARCH */
-	L2BR_CMD_MEM_READ = 0x6, /**< L2BR_CMD_MEM_READ */
-	L2BR_CMD_MEM_WRITE = 0x7,/**< L2BR_CMD_MEM_WRITE */
-	L2BR_CMD_FLUSH = 0x8     /**< L2BR_CMD_FLUSH */
+	L2BR_CMD_INIT = 0x1,
+	L2BR_CMD_ADD = 0x2,
+	L2BR_CMD_DELETE = 0x3,
+	L2BR_CMD_UPDATE = 0x4,
+	L2BR_CMD_SEARCH = 0x5,
+	L2BR_CMD_MEM_READ = 0x6,
+	L2BR_CMD_MEM_WRITE = 0x7,
+	L2BR_CMD_FLUSH = 0x8
 } pfe_l2br_table_cmd_t;
 
 #endif /* HW_S32G_PFE_L2BR_TABLE_CSR_H_ */
-
-/** @}*/

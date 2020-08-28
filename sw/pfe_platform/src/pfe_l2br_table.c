@@ -28,21 +28,11 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_L2BR_TABLE
- * @{
- *
- * @file		pfe_l2br_table.c
- * @brief		The L2 bridge table module source file.
- * @details		This file contains L2 bridge table-related functionality.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 
-#include "pfe_platform_cfg.h" /* due to pfe_interface_t */
+#include "pfe_platform_cfg.h"
 #include "pfe_cbus.h"
 #include "pfe_l2br_table.h"
 #include "pfe_l2br_table_csr.h"
@@ -130,13 +120,13 @@ typedef enum
  */
 typedef struct __attribute__((packed)) __pfe_vlan_table_entry_tag
 {
-	uint32_t vlan								: 13;	/*!< [12:0]											*/
-	uint64_t action_data						: 55;	/*!< [67:13], see pfe_vlan_table_action_entry_t		*/
-	uint32_t field_valids						: 8;	/*!< [75:68], see pfe_vlan_table_entry_valid_bits_t	*/
-	uint32_t port								: 4;	/*!< [79:76]										*/
-	uint32_t col_ptr							: 16;	/*!< [95:80]										*/
-	uint32_t flags								: 4;	/*!< [99:96], see pfe_vlan_table_entry_flags_t		*/
-	uint32_t padding							: 28;	/*!< [127:100], Round up to integer number of bytes	*/
+	uint32_t vlan			: 13;	/*!< [12:0]											*/
+	uint64_t action_data	: 55;	/*!< [67:13], see pfe_vlan_table_action_entry_t		*/
+	uint32_t field_valids	: 8;	/*!< [75:68], see pfe_vlan_table_entry_valid_bits_t	*/
+	uint32_t port			: 4;	/*!< [79:76]										*/
+	uint32_t col_ptr		: 16;	/*!< [95:80]										*/
+	uint32_t flags			: 4;	/*!< [99:96], see pfe_vlan_table_entry_flags_t		*/
+	uint32_t padding		: 28;	/*!< [127:100], Round up to integer number of bytes	*/
 } pfe_vlan_table_entry_t;
 
 /**
@@ -182,9 +172,6 @@ struct __pfe_l2br_table_entry_tag
 static errno_t pfe_l2br_table_init_cmd(pfe_l2br_table_t *l2br);
 static errno_t pfe_l2br_table_write_cmd(pfe_l2br_table_t *l2br, uint16_t addr, pfe_l2br_table_entry_t *entry);
 static errno_t pfe_l2br_table_read_cmd(pfe_l2br_table_t *l2br, uint16_t addr, pfe_l2br_table_entry_t *entry);
-#if 0 /*	For future use */
-static uint32_t pfe_l2br_table_entry_get_hash(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
-#endif /* 0 */
 static errno_t pfe_l2br_wait_for_cmd_done(pfe_l2br_table_t *l2br, uint32_t *status_val);
 static errno_t pfe_l2br_entry_to_cmd_args(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry);
 static uint32_t pfe_l2br_table_get_col_ptr(pfe_l2br_table_entry_t *entry);
@@ -300,65 +287,6 @@ static uint32_t pfe_l2br_table_get_col_ptr(pfe_l2br_table_entry_t *entry)
 	return 0U;
 }
 
-#if 0 /*	For future use */
-/**
- * @brief		Get hash
- * @param[in]	l2br The L2 Bridge table instance
- * @param[in]	entry Entry
- * @return		Hash value computed from input entry as defined by PFE HW.
- */
-static uint32_t pfe_l2br_table_entry_get_hash(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
-{
-	uint16_t *entry16 = (uint16_t *)entry;
-	uint32_t hash = 0U;
-	bool_t match = FALSE;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == l2br) || (NULL == entry)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (PFE_L2BR_TABLE_MAC2F == l2br->type)
-	{
-		if (0U != (entry->mac2f_entry.field_valids & MAC2F_ENTRY_MAC_VALID))
-		{
-			hash ^= entry16[0] ^ entry16[1] ^ entry16[2]; /* MAC address */
-			match = TRUE;
-		}
-
-		if (0U != (entry->mac2f_entry.field_valids & MAC2F_ENTRY_VLAN_VALID))
-		{
-			hash ^= (entry16[3] & 0x1ffffU); /* VLAN is 13-bits here */
-			match = TRUE;
-		}
-	}
-	else if (PFE_L2BR_TABLE_VLAN == l2br->type)
-	{
-		if (0U != (entry->vlan_entry.field_valids & VLAN_ENTRY_VLAN_VALID))
-		{
-			hash ^= (entry16[0] & 0x1ffffU); /* VLAN is 13-bits here */
-			match = TRUE;
-		}
-	}
-	else
-	{
-		NXP_LOG_DEBUG("Invalid table type\n");
-		return 0U;
-	}
-
-	if (FALSE == match)
-	{
-		NXP_LOG_DEBUG("No valid entry to compute hash. Result is invalid.\n");
-		return 0U;
-	}
-
-	return hash & (l2br->hash_space_depth - 1U);
-}
-#endif /* 0 */
-
 /**
  * @brief		Convert entry to command arguments
  * @details		Function will write necessary data to registers as preparation
@@ -387,7 +315,7 @@ static errno_t pfe_l2br_entry_to_cmd_args(pfe_l2br_table_t *l2br, pfe_l2br_table
 		hal_write32(oal_htonl(entry32[0]), l2br->regs.mac1_addr_reg);
 		hal_write32(oal_htons(entry32[1] & 0x0000ffffU) | (entry32[1] & 0xffff0000U), l2br->regs.mac2_addr_reg);
 
-		/*	Write action entry. There is 31-bits of action data */
+		/*	Write action entry */
 		hal_write32(entry->mac2f_entry.action_data & 0x7fffffffU, l2br->regs.entry_reg);
 	}
 	else if (PFE_L2BR_TABLE_VLAN == l2br->type)
@@ -395,12 +323,7 @@ static errno_t pfe_l2br_entry_to_cmd_args(pfe_l2br_table_t *l2br, pfe_l2br_table
 		/*	Write VLAN */
 		hal_write32(entry->vlan_entry.vlan, l2br->regs.mac1_addr_reg);
 
-		/*
-		 	Write action entry. There is 55-bits of action data.
-
-		 	According to the TRM v2.16 chapter 4.5.5.14 the action data MSB (upper 23-bits) shall be
-			put into the DIRECT_REG while LSB (lower 32-bits) shall be put into the ENTRY_REG.
-		*/
+		/*	Write action entry */
 		action_data = entry->vlan_entry.action_data & 0xffffffffU;
 		hal_write32(action_data, l2br->regs.entry_reg);
 		action_data = (entry->vlan_entry.action_data >> 32) & 0x7fffffU;
@@ -500,7 +423,7 @@ errno_t pfe_l2br_table_update_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry
 
 /**
  * @brief		Delete entry from table
- * @details		Entry is removed from table if exists. If does not exist, the call is
+ * @details		Entry is removed from table if exists. If does not exist, the call
  *				returns success (EOK).
  * @param[in]	l2br The L2 Bridge Table instance
  * @param[in]	data Entry to be deleted
@@ -740,22 +663,6 @@ errno_t pfe_l2br_table_search_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry
 		action_data = hal_read32(l2br->regs.entry_reg);
 		action_data |= ((uint64_t)hal_read32(l2br->regs.direct_reg) << 32);
 		entry->vlan_entry.action_data = (action_data & 0x7fffffffffffffULL);
-		/*
-		 	TODO: Issue: VLAN table action data can't be read by host.
-
-		 	Seems that the SEARCH command does not update the DIRECT_REG value. This is OK for
-		 	2-field table where action data is 31-bits long but it is an issue in case of VLAN
-			table where action data is 55-bits long. Need to confirm with vendor if this behavior
-		 	is only a bug of FPGA bitfile (v5.0.4) or it is a potential bug in the PFE IP.
-
-		 	Usage of the VLAN table commands is described by chapter 4.5.5.14 of the TRM v2.16.
-		 	According to the manual the SEARCH command shall return the 'Entry MSB' via the
-		 	DIRECT_REG and 'Entry LSB' via ENTRY_REG. ENTRY_REG gives correct value but
-		 	DIRECT_REG remains zero.
-
-		 	Note that when entry is fetched via direct memory access (MEM_READ command) the
-			action data is present and correctly read from the table.
-		*/
 	}
 	else
 	{
@@ -803,8 +710,7 @@ errno_t pfe_l2br_table_get_first(pfe_l2br_table_t *l2br, pfe_l2br_table_get_crit
 		{
 			if (TRUE == pfe_l2br_table_entry_match_criterion(l2br, entry))
 			{
-				/*	Remember entry to be processed next. If collision pointer is zero then
-					next hash table entry will be processed. */
+				/*	Remember entry to be processed next */
 				l2br->cur_coll_addr = pfe_l2br_table_get_col_ptr(entry);
 				return EOK;
 			}
@@ -841,15 +747,11 @@ errno_t pfe_l2br_table_get_next(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *
 	{
 		if (0U == l2br->cur_coll_addr)
 		{
-			/*	Collision pointer zero is invalid here since it points to very first entry
-				within hash table, i.e. valid collision pointer can't be zero. Get next entry
-				from hash space. */
 			l2br->cur_hash_addr++;
 			ret = pfe_l2br_table_read_cmd(l2br, l2br->cur_hash_addr, entry);
 		}
 		else
 		{
-			/*	Collision pointer is valid, get entry from current collision space address */
 			ret = pfe_l2br_table_read_cmd(l2br, l2br->cur_coll_addr, entry);
 		}
 
@@ -862,8 +764,6 @@ errno_t pfe_l2br_table_get_next(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *
 		{
 			if (TRUE == pfe_l2br_table_entry_match_criterion(l2br, entry))
 			{
-				/*	Remember entry to be processed next. If collision pointer is zero then
-				 	next hash table entry will be processed. */
 				l2br->cur_coll_addr = pfe_l2br_table_get_col_ptr(entry);
 				return EOK;
 			}
@@ -1046,8 +946,6 @@ static errno_t pfe_l2br_table_read_cmd(pfe_l2br_table_t *l2br, uint16_t addr, pf
 		rdata[4] = hal_read32(l2br->regs.mac5_addr_reg);
 		rdata[5] = hal_read32(l2br->regs.entry_reg);
 
-		/*	Seems that the direct access registers do endian conversion from PFE(BE) to host(LE). The
-			MAC address bytes are therefore out of order. Need correction here. */
 		memcpy(&entry->mac2f_entry.mac[0], &data32, sizeof(uint32_t));
 		memcpy(&entry->mac2f_entry.mac[4], &data16, sizeof(uint16_t));
 
@@ -1063,8 +961,6 @@ static errno_t pfe_l2br_table_read_cmd(pfe_l2br_table_t *l2br, uint16_t addr, pf
 
 /**
  * @brief		Issue the INIT command
- * @details		Function will perform complete HW table initialization as described
- * 				by PFE reference manual.
  * @param[in]	l2br The L2 bridge table instance
  * @retval		EOK Success
  * @retval		EINVAL Invalid/missing argument
@@ -1099,14 +995,12 @@ static errno_t pfe_l2br_table_init_cmd(pfe_l2br_table_t *l2br)
 		return ENOEXEC;
 	}
 
-	/*	Initialize MAC ADDR registers */
 	hal_write32(0U, l2br->regs.mac1_addr_reg);
 	hal_write32(0U, l2br->regs.mac2_addr_reg);
 	hal_write32(0U, l2br->regs.mac3_addr_reg);
 	hal_write32(0U, l2br->regs.mac4_addr_reg);
 	hal_write32(0U, l2br->regs.mac5_addr_reg);
 
-	/*	Chain the collision space */
 	for (ii=0U; ii<l2br->coll_space_depth; ii++)
 	{
 		if (PFE_L2BR_TABLE_MAC2F == l2br->type)
@@ -1125,22 +1019,16 @@ static errno_t pfe_l2br_table_init_cmd(pfe_l2br_table_t *l2br)
 			return EINVAL;
 		}
 
-		/*	Collision space begins right after last hash space entry */
 		ret = pfe_l2br_table_write_cmd(l2br, l2br->hash_space_depth + ii, (void *)&entry);
 		if (EOK != ret)
 		{
-			NXP_LOG_ERROR("Collision space init failed: %d\n", ret);
+			NXP_LOG_ERROR("Init failed: %d\n", ret);
 			return ret;
 		}
 	}
 
-	/*	Set free list head */
 	hal_write32(l2br->hash_space_depth, l2br->regs.free_head_ptr_reg);
-
-	/*	Set free list tail */
 	hal_write32(l2br->hash_space_depth + l2br->coll_space_depth - 1U, l2br->regs.free_tail_ptr_reg);
-
-	/*	Set number of entries in the free list */
 	hal_write32(l2br->coll_space_depth, l2br->regs.free_entries_reg);
 
 	return EOK;
@@ -1627,7 +1515,5 @@ uint32_t pfe_l2br_table_entry_to_str(pfe_l2br_table_entry_t *entry, char_t *buf,
 	{
 		len += snprintf(buf + len, buf_len - len, "Invalid entry type\n");
 	}
-    return len;
+	return len;
 }
-
-/** @}*/

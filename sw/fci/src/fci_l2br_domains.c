@@ -156,7 +156,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 				NXP_LOG_DEBUG("Bridge domain %d created\n", oal_ntohs(bd_cmd->vlan));
 			}
 		}
-		/*	no break */
+		/* FALLTHRU */
 
 		case FPP_ACTION_UPDATE:
 		{
@@ -410,7 +410,7 @@ finalize_domain_registration:
 				break;
 			}
 		}
-		/*	No break */
+		/* FALLTHRU */
 
 		case FPP_ACTION_QUERY_CONT:
 		{
@@ -455,12 +455,12 @@ finalize_domain_registration:
 
 			if (TRUE == pfe_l2br_domain_is_default(domain))
 			{
-				bd_cmd->flags |= oal_htonl(FPP_L2BR_DOMAIN_DEFAULT);
+				bd_cmd->flags |= FPP_L2BR_DOMAIN_DEFAULT;
 			}
 
 			if (TRUE == pfe_l2br_domain_is_fallback(domain))
 			{
-				bd_cmd->flags |= oal_htonl(FPP_L2BR_DOMAIN_FALLBACK);
+				bd_cmd->flags |= FPP_L2BR_DOMAIN_FALLBACK;
 			}
 
 			bd_cmd->if_list = oal_htonl(pfe_l2br_domain_get_if_list(domain));

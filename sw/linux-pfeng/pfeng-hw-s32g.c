@@ -16,6 +16,7 @@
 #include <linux/of_reserved_mem.h>
 #include <linux/of_address.h>
 #include <linux/of_mdio.h>
+#include <linux/dma-mapping.h>
 
 #include "pfe_cfg.h"
 
@@ -24,18 +25,18 @@
  */
 #define S32G_MAIN_GPR_PFE_COH_EN			0x0
 #define S32G_MAIN_GPR_PFE_PWR_CTRL			0x20
-#define GPR_PFE_COH_EN_UTIL					(1 << 5)
-#define GPR_PFE_COH_EN_HIF3					(1 << 4)
-#define GPR_PFE_COH_EN_HIF2					(1 << 3)
-#define GPR_PFE_COH_EN_HIF1					(1 << 2)
-#define GPR_PFE_COH_EN_HIF0					(1 << 1)
-#define GPR_PFE_COH_EN_DDR					(1 << 0)
-#define S32G_MAIN_GPR_PFE_EMACX_INTF_SEL	0x4
+#define GPR_PFE_COH_EN_UTIL				(1 << 5)
+#define GPR_PFE_COH_EN_HIF3				(1 << 4)
+#define GPR_PFE_COH_EN_HIF2				(1 << 3)
+#define GPR_PFE_COH_EN_HIF1				(1 << 2)
+#define GPR_PFE_COH_EN_HIF0				(1 << 1)
+#define GPR_PFE_COH_EN_DDR				(1 << 0)
+#define S32G_MAIN_GPR_PFE_EMACX_INTF_SEL		0x4
 #define GPR_PFE_EMACn_PWR_ACK(n)			(1 << (9 + n)) /* RD Only */
 #define GPR_PFE_EMACn_PWR_ISO(n)			(1 << (6 + n))
 #define GPR_PFE_EMACn_PWR_DWN(n)			(1 << (3 + n))
 #define GPR_PFE_EMACn_PWR_CLAMP(n)			(1 << (0 + n))
-#define GPR_PFE_EMAC_IF_MII					(1)
+#define GPR_PFE_EMAC_IF_MII				(1)
 #define GPR_PFE_EMAC_IF_RMII				(9)
 #define GPR_PFE_EMAC_IF_RGMII				(2)
 #define GPR_PFE_EMAC_IF_SGMII				(0)
@@ -55,6 +56,16 @@ MODULE_DEVICE_TABLE(of, pfeng_id_table);
  */
 static int init_reserved_memory(struct device *dev)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
+	int ret;
+	ret = of_reserved_mem_device_init(dev);
+	if (ret) {
+		dev_err(dev, "Could not get reserved memory. Error %d\n", ret);
+		return ret;
+	}
+
+	return 0;
+#else
 	struct resource res;
 	struct device_node *np;
 	int ret;
@@ -76,7 +87,7 @@ static int init_reserved_memory(struct device *dev)
 		res.end - res.start + 1, DMA_MEMORY_EXCLUSIVE);
 
 	return ret;
-
+#endif
 }
 
 static unsigned int xlate_to_s32g_intf(unsigned int n, phy_interface_t intf)
@@ -417,23 +428,25 @@ static int pfeng_s32g_probe(struct platform_device *pdev)
 
 	dev_info(&pdev->dev, "%s, ethernet driver loading ...\n", PFENG_DRIVER_NAME);
 
-	if (init_reserved_memory(&pdev->dev))
-		return -ENOMEM;
-
 	if (dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32)) != 0) {
 		dev_err(&pdev->dev, "System does not support DMA, aborting\n");
 		return -EINVAL;
-	 }
+	}
+
+	if (init_reserved_memory(&pdev->dev))
+		return -ENOMEM;
 
 	/* allocate driver context */
 	priv = pfeng_drv_alloc(pdev);
-	if(!priv)
-		return -ENOMEM;
+	if(!priv) {
+		ret = -ENOMEM;
+		goto err_set_mask;
+	}
 
 	/* overwrite by DT values */
 	ret = create_config_from_dt(priv);
 	if (ret)
-		return ret;
+		goto err_set_mask;
 
 	if(pfeng_s32g_set_emac_interfaces(priv,
 		pfeng_drv_cfg_get_emac_intf_mode(priv, 0),
@@ -449,6 +462,10 @@ static int pfeng_s32g_probe(struct platform_device *pdev)
 
 err_mod_probe:
 	pfeng_drv_remove(priv);
+err_set_mask:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
+	of_reserved_mem_device_release(&pdev->dev);
+#endif
 
 	return ret;
 }

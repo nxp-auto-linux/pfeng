@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_CLASS
- * @{
- *
- * @file		pfe_class_csr.h
- * @brief		The CLASS module low-level API (s32g).
- * @details
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -49,7 +39,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
@@ -61,57 +50,22 @@
  */
 void pfe_class_cfg_set_config(void *base_va, pfe_class_cfg_t *cfg)
 {
-	/*	LMEM buffer free address (BMU1). CLASS will write here when an LMEM buffer needs to be released. */
+	(void)cfg;
+
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_BMU1_BASE_ADDR + BMU_FREE_CTRL, base_va + CLASS_BMU1_BUF_FREE);
-
-	/*	1st and 2nd buffer address (DMEM) on the re-order side */
 	hal_write32(CLASS_PE0_RO_DM_ADDR0_VAL, base_va + CLASS_PE0_RO_DM_ADDR0);
-	/*	3rd and 4th buffer address (DMEM) on the re-order side */
 	hal_write32(CLASS_PE0_RO_DM_ADDR1_VAL, base_va + CLASS_PE0_RO_DM_ADDR1);
-
-	/*	1st and 3nd buffer address (DMEM) on the queuing side */
 	hal_write32(CLASS_PE0_QB_DM_ADDR0_VAL, base_va + CLASS_PE0_QB_DM_ADDR0);
-	/*	3rd and 4th buffer address (DMEM) on the re-order side */
 	hal_write32(CLASS_PE0_QB_DM_ADDR1_VAL, base_va + CLASS_PE0_QB_DM_ADDR1);
-
-	/*	TMU input queue register address */
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + TMU_PHY_INQ_PKTPTR, base_va + CLASS_TM_INQ_ADDR);
-
-	/*	Maximum buffer count for llm FIFO */
 	hal_write32(0x18U, base_va + CLASS_MAX_BUF_CNT);
-
-	/*	Threshold for llm FIFO */
 	hal_write32(0x14U, base_va + CLASS_AFULL_THRES);
-
-	/*	Class INQ FIFO is almost full threshold */
 	hal_write32(0x3c0U, base_va + CLASS_INQ_AFULL_THRES);
-
-#if 0
-	/*	TSQ FIFO threshold */
-	hal_write32(0x14U, base_va + CLASS_TSQ_FIFO_THRES);
-
-	/*	TSQ max count */
-	hal_write32(0x20U, base_va + CLASS_TSQ_MAX_CNT);
-#endif /* 0 */
-
-	/*	*/
 	hal_write32(0x1U, base_va + CLASS_USE_TMU_INQ);
-
-	/*	System clock ratio; TODO: Register should be read-only but the reference driver is writing it... */
 	hal_write32(0x1U, base_va + CLASS_PE_SYS_CLK_RATIO);
-
-	/*	Disable TCP/UDP/IPv4 checksum drop */
 	hal_write32(0U, base_va + CLASS_L4_CHKSUM);
-
-    /* Configure the LMEM header size and RO (documentation is wrong, it is not DDR but RO) buffer size */
 	hal_write32((PFE_CFG_RO_HDR_SIZE << 16) | PFE_CFG_LMEM_HDR_SIZE, base_va + CLASS_HDR_SIZE);
 	hal_write32(PFE_CFG_LMEM_BUF_SIZE, base_va + CLASS_LMEM_BUF_SIZE);
-  #if 0
-	hal_write32(CLASS_ROUTE_ENTRY_SIZE(cfg->route_entry_size) | CLASS_ROUTE_HASH_SIZE(cfg->route_hash_size), base_va + CLASS_ROUTE_HASH_ENTRY_SIZE);
-	hal_write32(HIF_PKT_CLASS_EN| HIF_PKT_OFFSET(cfg->pkt_parse_offset), base_va + CLASS_HIF_PARSE);
-  #else
-    (void)cfg;
-  #endif
 
 	hal_write32(0U
 			| RT_TWO_LEVEL_REF(FALSE)
@@ -130,10 +84,6 @@ void pfe_class_cfg_set_config(void *base_va, pfe_class_cfg_t *cfg)
 			| QB2BUS_ENDIANESS(TRUE)
 			| LEN_CHECK(FALSE)
 			, base_va + CLASS_ROUTE_MULTI);
-
-  #if 0
-	hal_write32(PFE_CFG_MEMORY_PHYS_TO_PFE(cfg->route_table_base_pa), base_va + CLASS_ROUTE_TABLE_BASE);
-  #endif
 }
 
 /**
@@ -177,7 +127,6 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
 	uint8_t ii;
 	uint32_t reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
 
-	/* First try NULL rtable, what means "disable hw route fetch" */
 	if (NULL == rtable_pa)
 	{
 		hal_write32(reg & (~PARSE_ROUTE_EN(TRUE)), base_va + CLASS_ROUTE_MULTI);
@@ -193,8 +142,6 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
 	reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
 	if (0U != (reg & PARSE_ROUTE_EN(TRUE)))
 	{
-		/*	According to PFE reference manual, in this case the PFE HW requires
-			that entry must be 128bytes long. */
 		if (entry_size != 128U)
 		{
 			NXP_LOG_ERROR("FATAL: Route table entry length exceeds 128bytes\n");
@@ -212,7 +159,6 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
 
 			if ((ii < 6) || (ii > 20))
 			{
-				/*	RTL limitation, hash length will be set to 20bits */
 				NXP_LOG_WARNING("Table length out of boundaries\n");
 			}
 
@@ -226,7 +172,6 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
 				| ROUTE_ENTRY_SIZE(entry_size)
 				, base_va + CLASS_ROUTE_HASH_ENTRY_SIZE);
 
-	/* enable hw route fetch */
 	reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
 	hal_write32(reg | PARSE_ROUTE_EN(TRUE), base_va + CLASS_ROUTE_MULTI);
 }
@@ -462,5 +407,3 @@ uint32_t pfe_class_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, 
 
 	return len;
 }
-
-/** @}*/

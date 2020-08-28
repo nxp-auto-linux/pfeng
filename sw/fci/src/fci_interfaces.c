@@ -269,6 +269,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 	uint32_t fp_table_addr;
 	uint32_t fp_table_destroy[2];
 	char_t *table_name;
+	pfe_ct_class_algo_stats_t stats = {0};
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -690,7 +691,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 					break;
 				}
 			}
-			/*	No break */
+			/* FALLTHRU */
 		case FPP_ACTION_QUERY_CONT:
 		{
 			if (NULL == entry)
@@ -727,6 +728,15 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 				break;
 			}
+
+			if(EOK != (ret = pfe_log_if_get_stats(log_if,&stats)))
+			{
+				NXP_LOG_ERROR("Could not get interface statistics\n");
+				break;
+			}
+
+			/* Copy the log if statistics to reply */
+			memcpy(&reply_buf->stats, &stats, sizeof(reply_buf->stats));
 
 			/* Get important flag values */
 			reply_buf->flags = 0U;
@@ -822,6 +832,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 	pfe_ct_block_state_t block_state;
 	pfe_phy_if_t *mirror_if = NULL;
 	pfe_ct_phy_if_id_t mirror_if_id = PFE_PHY_IF_ID_INVALID;
+	pfe_ct_phy_if_stats_t stats = {0};
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -992,7 +1003,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				break;
 			}
 		}
-		/*	No break */
+		/* FALLTHRU */
 
 		case FPP_ACTION_QUERY_CONT:
 		{
@@ -1021,6 +1032,14 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 				break;
 			}
+
+			if(EOK != (ret = pfe_phy_if_get_stats(phy_if, &stats)))
+			{
+				NXP_LOG_ERROR("Could not get interface statistics\n");
+				break;
+			}
+			/* Copy the phy if statistics to reply */
+			memcpy(&reply_buf->stats, &stats, sizeof(reply_buf->stats));
 
 			/* Store phy_if name and MAC */
 			strncpy(reply_buf->name, pfe_phy_if_get_name(phy_if), IFNAMSIZ-1);

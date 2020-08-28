@@ -28,17 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_HIF
- * @{
- *
- * @file		pfe_hif_csr.h
- * @brief		The HIF module registers definition file (S32G).
- * @details		This is the HW-specific part of the HIF module. Applicable for
- *				IP versions listed below.
- *
- */
-
 #ifndef PFE_HIF_CSR_H_
 #define PFE_HIF_CSR_H_
 
@@ -48,7 +37,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-/*	Supported IPs. Defines are validated within pfe_cbus.h. */
 #if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
@@ -73,16 +61,16 @@
 #define HIF_TX_CTRL_WORD_FIFO_CNT1			(0x90U)
 #define HIF_TX_CTRL_WORD_FIFO_CNT2			(0x94U)
 #define HIF_TX_BVALID_FIFO_CNT				(0x98U)
-#define HIF_TX_PKT_CNT1						(0x9cU)	/* TODO: STAT */
-#define HIF_TX_PKT_CNT2						(0xa0U)	/* TODO: STAT */
+#define HIF_TX_PKT_CNT1						(0x9cU)
+#define HIF_TX_PKT_CNT2						(0xa0U)
 #define HIF_RX_STATE						(0xa4U)
 #define HIF_RX_ACTV							(0xa8U)
 #define HIF_RX_CURR_CH_NO					(0xacU)
 #define HIF_DXR_RX_FIFO_CNT					(0xb0U)
 #define HIF_RX_CTRL_WORD_FIFO_CNT			(0xb4U)
 #define HIF_RX_BVALID_FIFO_CNT				(0xb8U)
-#define HIF_RX_PKT_CNT1						(0xbcU)	/* TODO: STAT */
-#define HIF_RX_PKT_CNT2						(0xc0U)	/* TODO: STAT */
+#define HIF_RX_PKT_CNT1						(0xbcU)
+#define HIF_RX_PKT_CNT2						(0xc0U)
 #define HIF_DMA_BASE_ADDR					(0xc4U)
 #define HIF_DMA_BURST_SIZE_ADDR				(0xc8U)
 #define HIF_RX_QUEUE_MAP_CH_NO_ADDR			(0xccU)
@@ -111,18 +99,18 @@
 #define HIF_TX_DMA_STATUS_0_CH0				(0x194U)
 #define HIF_TX_STATUS_0_CH0					(0x198U)
 #define HIF_TX_STATUS_1_CH0					(0x19cU)
-#define HIF_TX_PKT_CNT0_CH0					(0x1a0U)	/* TODO: STAT */
-#define HIF_TX_PKT_CNT1_CH0					(0x1a4U)	/* TODO: STAT */
-#define HIF_TX_PKT_CNT2_CH0					(0x1a8U)	/* TODO: STAT */
+#define HIF_TX_PKT_CNT0_CH0					(0x1a0U)
+#define HIF_TX_PKT_CNT1_CH0					(0x1a4U)
+#define HIF_TX_PKT_CNT2_CH0					(0x1a8U)
 #define HIF_RX_RD_CURR_BD_LOW_ADDR_CH0		(0x1c0U)
 #define HIF_RX_RD_CURR_BD_HIGH_ADDR_CH0		(0x1c4U)
 #define HIF_RX_WR_CURR_BD_LOW_ADDR_CH0		(0x1c8U)
 #define HIF_RX_WR_CURR_BD_HIGH_ADDR_CH0		(0x1ccU)
-#define HIF_BDP_CH0_RX_FIFO_CNT				(0x1d0U)	/* TODO: STAT */
+#define HIF_BDP_CH0_RX_FIFO_CNT				(0x1d0U)
 #define HIF_RX_DMA_STATUS_0_CH0				(0x1d4U)
 #define HIF_RX_STATUS_0_CH0					(0x1d8U)
-#define HIF_RX_PKT_CNT0_CH0					(0x1dcU)	/* TODO: STAT */
-#define HIF_RX_PKT_CNT1_CH0					(0x1e0U)	/* TODO: STAT */
+#define HIF_RX_PKT_CNT0_CH0					(0x1dcU)
+#define HIF_RX_PKT_CNT1_CH0					(0x1e0U)
 #define HIF_LTC_MAX_PKT_CH0_ADDR			(0x1e4U)
 #define HIF_ABS_INT_TIMER_CH0				(0x1e8U)
 #define HIF_ABS_FRAME_COUNT_CH0				(0x1ecU)
@@ -151,24 +139,23 @@
 #define HIF_TX_DMA_STATUS_0_CHn(n)			((((n) & 0x3U) * 0x100U) + HIF_TX_DMA_STATUS_0_CH0)
 #define HIF_TX_STATUS_0_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_TX_STATUS_0_CH0)
 #define HIF_TX_STATUS_1_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_TX_STATUS_1_CH0)
-#define HIF_TX_PKT_CNT0_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_TX_PKT_CNT0_CH0)	/* TODO: STAT */
-#define HIF_TX_PKT_CNT1_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_TX_PKT_CNT1_CH0)	/* TODO: STAT */
-#define HIF_TX_PKT_CNT2_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_TX_PKT_CNT2_CH0)	/* TODO: STAT */
+#define HIF_TX_PKT_CNT0_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_TX_PKT_CNT0_CH0)
+#define HIF_TX_PKT_CNT1_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_TX_PKT_CNT1_CH0)
+#define HIF_TX_PKT_CNT2_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_TX_PKT_CNT2_CH0)
 #define HIF_RX_RD_CURR_BD_LOW_ADDR_CHn(n)	((((n) & 0x3U) * 0x100U) + HIF_RX_RD_CURR_BD_LOW_ADDR_CH0)
 #define HIF_RX_RD_CURR_BD_HIGH_ADDR_CHn(n)	((((n) & 0x3U) * 0x100U) + HIF_RX_RD_CURR_BD_HIGH_ADDR_CH0)
 #define HIF_RX_WR_CURR_BD_LOW_ADDR_CHn(n)	((((n) & 0x3U) * 0x100U) + HIF_RX_WR_CURR_BD_LOW_ADDR_CH0)
 #define HIF_RX_WR_CURR_BD_HIGH_ADDR_CHn(n)	((((n) & 0x3U) * 0x100U) + HIF_RX_WR_CURR_BD_HIGH_ADDR_CH0)
-#define HIF_BDP_CHn_RX_FIFO_CNT(n)			((((n) & 0x3U) * 0x100U) + HIF_BDP_CH0_RX_FIFO_CNT)	/* TODO: STAT */
+#define HIF_BDP_CHn_RX_FIFO_CNT(n)			((((n) & 0x3U) * 0x100U) + HIF_BDP_CH0_RX_FIFO_CNT)
 #define HIF_RX_DMA_STATUS_0_CHn(n)			((((n) & 0x3U) * 0x100U) + HIF_RX_DMA_STATUS_0_CH0)
 #define HIF_RX_STATUS_0_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_RX_STATUS_0_CH0)
-#define HIF_RX_PKT_CNT0_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_RX_PKT_CNT0_CH0)	/* TODO: STAT */
-#define HIF_RX_PKT_CNT1_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_RX_PKT_CNT1_CH0)	/* TODO: STAT */
+#define HIF_RX_PKT_CNT0_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_RX_PKT_CNT0_CH0)
+#define HIF_RX_PKT_CNT1_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_RX_PKT_CNT1_CH0)
 #define HIF_LTC_MAX_PKT_CHn_ADDR(n)			((((n) & 0x3U) * 0x100U) + HIF_LTC_MAX_PKT_CH0_ADDR)
 #define HIF_ABS_INT_TIMER_CHn(n)			((((n) & 0x3U) * 0x100U) + HIF_ABS_INT_TIMER_CH0)
 #define HIF_ABS_FRAME_COUNT_CHn(n)			((((n) & 0x3U) * 0x100U) + HIF_ABS_FRAME_COUNT_CH0)
 #define HIF_INT_COAL_EN_CHn(n)				((((n) & 0x3U) * 0x100U) + HIF_INT_COAL_EN_CH0)
 
-/*	HIF_MISC bitfields */
 #define SEQ_NUM_CHECK_EN					(1U << 0)
 #define BDPRD_AXI_WRITE_DONE				(1U << 1)
 #define DBPWR_AXI_WRITE_DONE				(1U << 2)
@@ -176,20 +163,12 @@
 #define TXDXR_AXI_WRITE_DONE				(1U << 4)
 #define HIF_TIMEOUT_EN						(1U << 5)
 #define BD_START_SEQ_NUM(x)					(((x) & 0xffffU) << 16)
-
-/*	HIF_CTRL_CHn bitfields */
 #define TX_DMA_ENABLE						(1U << 0)
 #define RX_DMA_ENABLE						(1U << 16)
 #define TX_BDP_POLL_CNTR_EN					(1U << 1)
 #define RX_BDP_POLL_CNTR_EN					(1U << 17)
-
-/*	HIF_RX_CHn_START bitfields */
 #define RX_BDP_CH_START						(1U << 0)
-
-/*	HIF_TX_CHn_START bitfields */
 #define TX_BDP_CH_START						(1U << 0)
-
-/*	HIF_CHn_INT_EN bitfields */
 #define HIF_CH_INT_EN						(1U << 0)
 #define BDP_CSR_RX_CBD_CH_INT_EN			(1U << 1)
 #define BDP_CSR_RX_PKT_CH_INT_EN			(1U << 2)
@@ -201,8 +180,6 @@
 #define BDP_WD_CSR_TX_TIMEOUT_CH_INT_EN		(1U << 8)
 #define DXR_CSR_RX_TIMEOUT_CH_INT_EN		(1U << 9)
 #define DXR_CSR_TX_TIMEOUT_CH_INT_EN		(1U << 10)
-
-/*	HIF_CHn_INT_SRC bitfields */
 #define HIF_CH_INT							(1U << 0)
 #define BDP_CSR_RX_CBD_CH_INT				(1U << 1)
 #define BDP_CSR_RX_PKT_CH_INT				(1U << 2)
@@ -214,37 +191,23 @@
 #define BDP_WR_CSR_TX_TIMEOUT_CH_INT		(1U << 8)
 #define DXR_CSR_RX_TIMEOUT_CH_INT			(1U << 9)
 #define DXR_CSR_TX_TIMEOUT_CH_INT			(1U << 10)
-
-
-/*HIF_INT_SRC/ HIF_INT_ENABLE control bits */
-#define HIF_INT        						(1U << 0)
-#define HIF_RXBD_INT   						(1U << 1)
-#define HIF_RXPKT_INT  						(1U << 2)
-#define HIF_TXBD_INT   						(1U << 3)
-#define HIF_TXPKT_INT  						(1U << 4)
-
-/*HIF_TX_CTRL bits */
+#define HIF_INT								(1U << 0)
+#define HIF_RXBD_INT						(1U << 1)
+#define HIF_RXPKT_INT						(1U << 2)
+#define HIF_TXBD_INT						(1U << 3)
+#define HIF_TXPKT_INT						(1U << 4)
 #define HIF_CTRL_DMA_EN						(1U << 0)
 #define HIF_CTRL_BDP_POLL_CTRL_EN			(1U << 1)
 #define HIF_CTRL_BDP_CH_START_WSTB			(1U << 2)
-
-/*HIF_INT_ENABLE bits */
 #define HIF_INT_EN							(1U << 0)
 #define HIF_RXBD_INT_EN						(1U << 1)
 #define HIF_RXPKT_INT_EN					(1U << 2)
 #define HIF_TXBD_INT_EN						(1U << 3)
 #define HIF_TXPKT_INT_EN					(1U << 4)
-
-/*HIF_POLL_CTRL bits*/
 #define HIF_RX_POLL_CTRL_CYCLE				0x0400U
 #define HIF_TX_POLL_CTRL_CYCLE				0x0400U
-
-/*HIF_INT_COAL bits*/
 #define HIF_INT_COAL_ENABLE					(1U << 31)
-
 #define BDP_CSR_RX_DMA_ACTV					(1U << 16)
-
-/*	HIF_INT_SRC */
 #define HIF_INT_SRC_HIF_CH0_INT				(1U << 0)
 #define HIF_INT_SRC_HIF_CH1_INT				(1U << 1)
 #define HIF_INT_SRC_HIF_CH2_INT				(1U << 2)
@@ -252,8 +215,6 @@
 #define HIF_INT_SRC_HIF_ERR_INT				(1U << 16)
 #define HIF_INT_SRC_HIF_TX_FIFO_ERR_INT		(1U << 17)
 #define HIF_INT_SRC_HIF_RX_FIFO_ERR_INT		(1U << 18)
-
-/*	HIF_ERR_INT_SRC, HIF_ERR_INT_EN bits */
 #define HIF_ERR_INT							(1U << 0)
 #define DXR_CSR_TX_PKT_LEN_ERR_INT			(1U << 1)
 #define DXR_CSR_TX_SOF_ERR_INT				(1U << 2)
@@ -270,7 +231,6 @@
 #define BDP_CSR_TX_AXI_ERR_INT				(1U << 13)
 #define BDP_CSR_RX_AXI_ERR_INT				(1U << 14)
 
-/*	HIF_TX_FIFO_ERR_INT_SRC, HIF_TX_FIFO_ERR_INT_EN bits */
 #define HIF_TX_FIFO_ERR_INT							(1U << 0)
 #define BDP_CSR_TX_RD_FIFO_OVERRUN_INT				(1U << 1)
 #define BDP_CSR_TX_WR_FIFO_OVERRUN_INT				(1U << 2)
@@ -290,8 +250,6 @@
 #define DXR_CSR_TX_SAD_FIFO_UNDERRUN_INT			(1U << 16)
 #define BDP_CSR_TX_BVALID_FIFO_UNDERRUN_INT			(1U << 17)
 #define HIF_AXI_BDP_CSR_TX_BVALID_FIFO_UNDERRUN_INT	(1U << 18)
-
-/*	HIF_RX_FIFO_ERR_INT_SRC, HIF_RX_FIFO_ERR_INT_EN bits */
 #define HIF_RX_FIFO_ERR_INT							(1U << 0)
 #define BDP_CSR_RX_RD_FIFO_OVERRUN_INT				(1U << 1)
 #define BDP_CSR_RX_WR_FIFO_OVERRUN_INT				(1U << 2)
@@ -349,5 +307,3 @@ uint32_t pfe_hif_chnl_cfg_get_text_stat(void *base_va, uint32_t channel_id, char
 uint32_t pfe_hif_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
 #endif /* PFE_HIF_CSR_H_ */
-
-/** @}*/

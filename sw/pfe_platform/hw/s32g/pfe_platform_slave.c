@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,21 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- *
- * @file		pfe_platform.c
- * @brief		The PFE platform management (S32G slave)
- * @details		This file contains HW-specific code. It is used to create structured SW representation
- *				of a given PFE HW implementation. File is intended to be created by user
- *				each time a new HW setup with different PFE configuration needs to be
- *				supported.
- * @note		Various variants of this file should exist for various HW implementations (please
- *				keep this file clean, not containing platform-specific preprocessor switches).
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -53,62 +38,12 @@
 #include "pfe_ct.h"
 #include "pfe_idex.h"
 
-/**
- * This is a platform specific file. All routines shall be implemented
- * according to application-given HW setup.
- */
-
-static bool_t pfe_platform_global_isr(void *arg);
-
-/*
- * @brief Platform instance storage
- */
 static pfe_platform_t pfe = {.probed = FALSE};
-
-/*
- * @brief Stuff needed to workaround missing IRQ lines on FPGA platform. To
- * 		  be removed.
- */
-#define IRQ_WORKER_POLL		1U
-#define IRQ_WORKER_QUIT		2U
-static oal_mbox_t *mbox;
-static oal_thread_t *worker;
-
-/**
- * @brief		IRQ polling thread body
- * @param[in]	arg Argument. See oal_thread_create().
- * @return		Custom return value provided via oal_thread_join().
- */
-static void *worker_func(void *arg)
-{
-	pfe_platform_t *platform = (pfe_platform_t *)arg;
-	oal_mbox_msg_t msg;
-
-	while (TRUE)
-	{
-		if (EOK == oal_mbox_receive(mbox, &msg))
-		{
-			if (IRQ_WORKER_POLL == msg.payload.code)
-			{
-				(void)pfe_platform_global_isr(platform);
-			}
-
-			if (IRQ_WORKER_QUIT == msg.payload.code)
-			{
-				break;
-			}
-
-			oal_mbox_ack_msg(&msg);
-		}
-	}
-
-	return NULL;
-}
 
 /**
  * @brief		IDEX RPC callback
  */
-static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg)
+void pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg)
 {
 	pfe_platform_t *platform = (pfe_platform_t *)arg;
 
@@ -122,7 +57,7 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 
 	(void)platform;
 
-	NXP_LOG_INFO("Got IDEX RPC request\n");
+	NXP_LOG_INFO("Got IDEX RPC request (reference for future use)\n");
 
 	/*	Report execution status to caller */
 	if (EOK != pfe_idex_set_rpc_ret_val(EINVAL, NULL, 0U))
@@ -134,56 +69,32 @@ static void idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint
 }
 
 /**
- * @brief		Global interrupt service routine
- * @details		This must be here on platforms (FPGA...) where all PFE interrupts
- * 				are combined to a single physical interrupt line :(
- * 				Because we want to catch interrupts during platform initialization some
- * 				of platform modules might have not been initialized yet. Therefore the NULL
- * 				checks...
- * @details		See the oal_irq_handler_t
- */
-static bool_t pfe_platform_global_isr(void *arg)
-{
-	pfe_platform_t *platform = (pfe_platform_t *)arg;
-	uint32_t ii;
-	static pfe_hif_chnl_id_t ids[] = {HIF_CHNL_1}; /* Here we handle only HIF ch.1 interrupts */
-	pfe_hif_chnl_t *chnls[sizeof(ids)/sizeof(pfe_hif_chnl_id_t)] = {NULL};
-
-	if (NULL != platform->hif)
-	{
-		for (ii=0U; ii<(sizeof(ids)/sizeof(pfe_hif_chnl_id_t)); ii++)
-		{
-			chnls[ii] = pfe_hif_get_channel(platform->hif, ids[ii]);
-			if (NULL != chnls[ii])
-			{
-				if (TRUE == pfe_hif_chnl_isr(chnls[ii]))
-				{
-					;
-				}
-			}
-		}
-	}
-
-	/*	Does not matter. We're polling... */
-	return FALSE;
-}
-
-/**
  * @brief		Assign HIF to the platform
  */
-static errno_t pfe_platform_create_hif(pfe_platform_t *platform)
+static errno_t pfe_platform_create_hif(pfe_platform_t *platform, pfe_platform_config_t *config)
 {
-	platform->hif = pfe_hif_create(platform->cbus_baseaddr + CBUS_HIF_BASE_ADDR, HIF_CHNL_1);
+	uint32_t ii;
+	static pfe_hif_chnl_id_t ids[HIF_CFG_MAX_CHANNELS] = {HIF_CHNL_0, HIF_CHNL_1, HIF_CHNL_2, HIF_CHNL_3};
+	pfe_hif_chnl_t *chnl;
+
+	platform->hif = pfe_hif_create(platform->cbus_baseaddr + CBUS_HIF_BASE_ADDR, config->hif_chnls_mask);
 	if (NULL == platform->hif)
 	{
 		NXP_LOG_ERROR("Couldn't create HIF instance\n");
 		return ENODEV;
 	}
-	else
+
+	/*	Enable channel interrupts */
+	for (ii = 0U; ii < HIF_CFG_MAX_CHANNELS; ii++)
 	{
-		/*	Now particular interrupt sources can be enabled */
-		/*	TODO: Enable off FPGA platform. When unmask is done master driver gets stuck due to edge-triggered IRQ line not falling down... */
-		/*pfe_hif_chnl_irq_unmask(pfe_hif_get_channel(platform->hif, HIF_CHNL_1)); */
+		chnl = pfe_hif_get_channel(platform->hif, ids[ii]);
+		if (NULL == chnl)
+		{
+			/* not requested HIF channel, skipping */
+			continue;
+		}
+
+		pfe_hif_chnl_irq_unmask(chnl);
 	}
 
 	return EOK;
@@ -201,81 +112,6 @@ static void pfe_platform_destroy_hif(pfe_platform_t *platform)
 	}
 }
 
-/**
- * @brief		Assign HIF driver(s) to the platform
- */
-static errno_t pfe_platform_create_hif_drv(pfe_platform_t *platform)
-{
-	pfe_hif_chnl_t *channel;
-
-	/*	Create HIF driver */
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	/*	Create HIF driver instance (HIF NOCPY) */
-	channel = pfe_hif_nocpy_get_channel(platform->hif_nocpy, PFE_HIF_CHNL_NOCPY_ID);
-#else
-	/*	Create HIF driver instance (HIF channel 1) */
-	channel = pfe_hif_get_channel(platform->hif, HIF_CHNL_1);
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-
-	if (NULL != channel)
-	{
-		platform->hif_drv = pfe_hif_drv_create(pfe_hif_get_channel(platform->hif, HIF_CHNL_1));
-	}
-	else
-	{
-		NXP_LOG_ERROR("Could not get HIF channel\n");
-		return ENODEV;
-	}
-
-	if (EOK != pfe_hif_drv_init(platform->hif_drv))
-	{
-		NXP_LOG_ERROR("HIF driver initialization failed\n");
-		return ENODEV;
-	}
-
-	if (EOK != pfe_idex_init(platform->hif_drv))
-	{
-		NXP_LOG_ERROR("Can't initialize IDEX\n");
-		return ENODEV;
-	}
-	else
-	{
-		if (EOK != pfe_idex_set_rpc_cbk(&idex_rpc_cbk, (void *)platform))
-		{
-			NXP_LOG_ERROR("Unable to set IDEX RPC callback\n");
-			return ENODEV;
-		}
-	}
-
-	return EOK;
-}
-
-/**
- * @brief		Release HIF driver(s)
- */
-static void pfe_platform_destroy_hif_drv(pfe_platform_t *platform)
-{
-	if (NULL != platform->hif_drv)
-	{
-		/*	Shut down IDEX */
-		pfe_idex_fini();
-
-		/*	Shut down HIF driver */
-		pfe_hif_drv_destroy(platform->hif_drv);
-		platform->hif_drv = NULL;
-	}
-}
-
-/**
- * @brief		Get HIF driver instance
- * @param[in]	platform The platform instance
- * @param[in]	id The HIF driver ID (in case there are more drivers available)
- * @return		HIF driver instance or NULL if failed
- */
-pfe_hif_drv_t *pfe_platform_get_hif_drv(pfe_platform_t *platform, uint32_t id)
-{
-	return platform->hif_drv;
-}
 
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 /**
@@ -312,24 +148,246 @@ static void pfe_platform_destroy_hif_nocpy(pfe_platform_t *platform)
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 /**
- * @brief		Get logical interface by its ID
+ * @brief		Register logical interface
+ * @details		Add logical interface to internal database
+ */
+errno_t pfe_platform_register_log_if(pfe_platform_t *platform, pfe_log_if_t *log_if)
+{
+	uint32_t session_id;
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == platform) || (NULL == log_if)))
+	{
+		NXP_LOG_ERROR("Null argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	ret = pfe_if_db_lock(&session_id);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("DB lock failed: %d\n", ret);
+		return ret;
+	}
+	
+	/*	Register in platform to db */
+	ret = pfe_if_db_add(platform->log_if_db, session_id, log_if, PFE_CFG_LOCAL_IF);
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Could not register %s: %d\n", pfe_log_if_get_name(log_if), ret);
+		pfe_log_if_destroy(log_if);
+	}
+	
+	if (EOK != pfe_if_db_unlock(session_id))
+	{
+		NXP_LOG_DEBUG("DB unlock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Unregister logical interface
+ * @details		Logical interface will be removed from internal database
+ * @warning		Should be called only with locked DB
+ */
+errno_t pfe_platform_unregister_log_if(pfe_platform_t *platform, pfe_log_if_t *log_if)
+{
+	errno_t ret = EOK;
+	pfe_if_db_entry_t *entry = NULL;
+	uint32_t session_id;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == platform) || (NULL == log_if)))
+	{
+		NXP_LOG_ERROR("Null argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	ret = pfe_if_db_lock(&session_id);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("DB lock failed: %d\n", ret);
+		return ret;
+	}
+
+	ret = pfe_if_db_get_first(platform->log_if_db, session_id, IF_DB_CRIT_BY_INSTANCE, (void *)log_if, &entry);
+	if (NULL == entry)
+	{
+		ret = ENOENT;
+	}
+	else if (EOK == ret)
+	{
+		ret = pfe_if_db_remove(platform->log_if_db, session_id, entry);
+	}
+
+	if (EOK != pfe_if_db_unlock(session_id))
+	{
+		NXP_LOG_DEBUG("DB unlock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Register physical interface
+ */
+static errno_t pfe_platform_register_phy_if(pfe_platform_t *platform, uint32_t session_id, pfe_phy_if_t *phy_if)
+{
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == platform) || (NULL == phy_if)))
+	{
+		NXP_LOG_ERROR("Null argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/*	Owner of the interface is local driver instance */
+	ret = pfe_if_db_add(platform->phy_if_db, session_id, phy_if, PFE_CFG_LOCAL_IF);
+
+	return ret;
+}
+
+/**
+ * @brief		Get physical interface by its ID
  * @param[in]	platform Platform instance
- * @param[in]	id Logical interface ID. See pfe_log_if_t.
+ * @param[in]	id Physical interface ID
  * @return		Logical interface instance or NULL if failed.
  */
-pfe_log_if_t *pfe_platform_get_log_if_by_id(pfe_platform_t *platform, uint8_t id)
+pfe_phy_if_t *pfe_platform_get_phy_if_by_id(pfe_platform_t *platform, pfe_ct_phy_if_id_t id)
 {
-	/*	TODO */
-	return NULL;
+	pfe_if_db_entry_t *entry = NULL;
+	uint32_t session_id;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == platform))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+
+	if (unlikely(NULL == platform->phy_if_db))
+	{
+		NXP_LOG_ERROR("Physical interface DB not found\n");
+		return NULL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK != pfe_if_db_lock(&session_id))
+	{
+		NXP_LOG_DEBUG("DB lock failed\n");
+	}
+
+	pfe_if_db_get_first(platform->phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)id, &entry);
+
+	if (EOK != pfe_if_db_unlock(session_id))
+	{
+		NXP_LOG_DEBUG("DB unlock failed\n");
+	}
+
+	return pfe_if_db_entry_get_phy_if(entry);
 }
 
 /**
  * @brief		Assign interfaces to the platform.
  */
-static errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
+errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 {
-	/*	TODO */
-	return EOK;
+	int32_t ii;
+	pfe_phy_if_t *phy_if = NULL;
+	errno_t ret = EOK;
+	uint32_t session_id;
+	static struct
+	{
+		char_t *name;
+		pfe_ct_phy_if_id_t id;
+		pfe_mac_addr_t mac;
+	}
+	phy_ifs[] =
+	{
+			{.name = "emac0", .id = PFE_PHY_IF_ID_EMAC0, .mac = GEMAC0_MAC},
+			{.name = "emac1", .id = PFE_PHY_IF_ID_EMAC1, .mac = GEMAC1_MAC},
+			{.name = "emac2", .id = PFE_PHY_IF_ID_EMAC2, .mac = GEMAC2_MAC},
+			{.name = "hif0", .id = PFE_PHY_IF_ID_HIF0, .mac = {0},},
+			{.name = "hif1", .id = PFE_PHY_IF_ID_HIF1, .mac = {0},},
+			{.name = "hif2", .id = PFE_PHY_IF_ID_HIF2, .mac = {0},},
+			{.name = "hif3", .id = PFE_PHY_IF_ID_HIF3, .mac = {0},},
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
+			{.name = "hifncpy", .id = PFE_PHY_IF_ID_HIF_NOCPY, .mac = {0}},
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
+			{.name = NULL, .id = PFE_PHY_IF_ID_INVALID, .mac = {0}}
+	};
+	
+	if (NULL == platform->phy_if_db)
+	{
+		/*	Create database */
+		platform->phy_if_db = pfe_if_db_create(PFE_IF_DB_PHY);
+		if (NULL == platform->phy_if_db)
+		{
+			NXP_LOG_DEBUG("Can't create physical interface DB\n");
+			return ENODEV;
+		}
+
+		if (EOK != pfe_if_db_lock(&session_id))
+		{
+			NXP_LOG_DEBUG("DB lock failed\n");
+		}
+
+		/*	Create physical interfaces */
+		for (ii=0; phy_ifs[ii].id!=PFE_PHY_IF_ID_INVALID; ii++)
+		{
+			/*	Create physical IF */
+			phy_if = pfe_phy_if_create(NULL, phy_ifs[ii].id, phy_ifs[ii].name);
+			if (NULL == phy_if)
+			{
+				NXP_LOG_ERROR("Couldn't create %s\n", phy_ifs[ii].name);
+				ret = ENODEV;
+				break;
+			}
+			else
+			{
+				/*	Register in platform */
+				if (EOK != pfe_platform_register_phy_if(platform, session_id, phy_if))
+				{
+					NXP_LOG_ERROR("Could not register %s\n", pfe_phy_if_get_name(phy_if));
+					if (EOK != pfe_phy_if_destroy(phy_if))
+					{
+						NXP_LOG_DEBUG("Could not destroy physical interface\n");
+					}
+
+					phy_if = NULL;
+					ret = ENODEV;
+					break;
+				}
+			}
+		}
+
+		if (EOK != pfe_if_db_unlock(session_id))
+		{
+			NXP_LOG_DEBUG("DB unlock failed\n");
+		}
+
+		if (EOK != ret)
+		{
+			return ret;
+		}
+	}
+
+	if (NULL == platform->log_if_db)
+	{
+		platform->log_if_db = pfe_if_db_create(PFE_IF_DB_LOG);
+		if (NULL == platform->log_if_db)
+		{
+			NXP_LOG_DEBUG("Can't create logical interface DB\n");
+			return ENODEV;
+		}
+	}
+
+	return ret;
 }
 
 /**
@@ -354,6 +412,7 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 		NXP_LOG_INFO("PFE CBUS p0x%p mapped @ v0x%p\n", (void *)config->cbus_base, pfe.cbus_baseaddr);
 	}
 
+#if 0
 	/*	Create interrupt polling thread and associated stuff */
 	mbox = oal_mbox_create();
 	if (NULL == mbox)
@@ -371,8 +430,9 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 	{
 		goto exit;
 	}
+#endif
 
-	ret = pfe_platform_create_hif(&pfe);
+	ret = pfe_platform_create_hif(&pfe, config);
 	if (EOK != ret)
 	{
 		goto exit;
@@ -386,20 +446,6 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 		goto exit;
 	}
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-
-	/*	Interfaces */
-	ret = pfe_platform_create_ifaces(&pfe);
-	if (EOK != ret)
-	{
-		goto exit;
-	}
-
-	/*	Create HIF driver(s) */
-	ret = pfe_platform_create_hif_drv(&pfe);
-	if (EOK != ret)
-	{
-		goto exit;
-	}
 
 	pfe.probed = TRUE;
 
@@ -416,25 +462,6 @@ exit:
 errno_t pfe_platform_remove(void)
 {
 	errno_t ret;
-
-	if (NULL != mbox)
-	{
-		if (EOK != oal_mbox_detach_timer(mbox))
-		{
-			NXP_LOG_DEBUG("Could not detach timer\n");
-		}
-
-		oal_mbox_send_signal(mbox, IRQ_WORKER_QUIT);
-		ret = oal_thread_join(worker, NULL);
-		if (EOK != ret)
-		{
-			NXP_LOG_ERROR("Can't join the worker thread: %d\n", ret);
-		}
-		oal_mbox_destroy(mbox);
-		mbox = NULL;
-	}
-
-	pfe_platform_destroy_hif_drv(&pfe);
 
 	pfe_platform_destroy_hif(&pfe);
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
@@ -468,5 +495,3 @@ pfe_platform_t * pfe_platform_get_instance(void)
 		return NULL;
 	}
 }
-
-/** @}*/

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -28,23 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup	dxgrPFE_PLATFORM
- * @{
- *
- * @defgroup    dxgr_PFE_HIF_NOCPY HIF_NOCPY
- * @brief		The Host Interface (NO COPY)
- * @details     This is the software representation of the HIF_NOCPY block.
- *
- * @addtogroup  dxgr_PFE_HIF_NOCPY
- * @{
- *
- * @file		pfe_hif_nocpy.h
- * @brief		The HIF module header file.
- * @details		This file contains HIF_NOCPY-related API.
- *
- */
-
 #ifndef PUBLIC_PFE_HIF_NOCPY_H_
 #define PUBLIC_PFE_HIF_NOCPY_H_
 
@@ -65,6 +48,3 @@ uint32_t pfe_hif_nocpy_get_text_statistics(pfe_hif_nocpy_t *hif, char_t *buf, ui
 void pfe_hif_nocpy_destroy(pfe_hif_nocpy_t *hif);
 
 #endif /* PUBLIC_PFE_HIF_NOCPY_H_ */
-
-/** @}*/
-/** @}*/

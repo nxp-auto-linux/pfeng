@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2020 NXP
  * 
  * Redistribution and use in source and binary forms, with or without 
  * modification, are permitted provided that the following conditions are met:
@@ -28,16 +28,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
-/**
- * @addtogroup  dxgr_PFE_BMU
- * @{
- * 
- * @file		pfe_bmu.c
- * @brief		The BMU module source file.
- * @details		This file contains BMU-related functionality.
- *
- */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -65,8 +55,6 @@ struct __pfe_bmu_tag
 	void *bmu_base_offset;	/*	BMU base offset within CBUS space */
 	uint32_t buf_size;
 };
-
-
 
 /**
  * @brief		BMU ISR
@@ -503,5 +491,3 @@ __attribute__((cold)) uint32_t pfe_bmu_get_text_statistics(pfe_bmu_t *bmu, char_
 
 	return len;
 }
-
-/** @}*/
