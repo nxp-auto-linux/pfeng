@@ -27,8 +27,8 @@ Release Specifics:
 - This release was developed and tested with:
     - Geany IDE version 1.33
     - editor VIM - Vi IMproved 7.4
-    - Linux s32g274aevb 4.19.59-rt24
-	- gcc 6.3.1 and gcc 9.2.0
+    - NXP Auto Linux BSP 25 (s32g274aevb 4.19.59-rt24)
+    - GCC 9.2.0
 - This release was developed and tested using:
     - Evaluation board: S32G-VNP-EVB
         S32GRV-PLATEVB 700-30081
@@ -67,6 +67,8 @@ Directory Structure:
 - sw/xfci/libfci/ library sources (FCI library and dependency for linux-pfeng)
 - doc/ user's manual, FCI API Reference manual and device-tree
 - PFE_S32G_A53_LNX_BETA_0.9.0_ReleaseNotes.txt: this file
+- LICENSE.txt: License text
+- PFE_S32G_A53_LNX_BETA_0.9.0_SCR.txt: Software Content Register
 
 ========================================================
 Compiler Options:
@@ -86,6 +88,8 @@ Known Issues and planned features
 ========================================================
 
 [AAVB-2238] - [PFE_PLATFORM] FCI PHY IF update command fails
+[AAVB-2468] - [S32G Linux] SW forwarding doesn't work well with IPv6
+[AAVB-2469] - [PFE_LINUX] pfeng: udp reassembling failure
 [AAVB-2526] - [PFE_LINUX] pfeng: interface autonegotiation doesn't follow SGMII possibilities
 
 ========================================================
@@ -101,10 +105,12 @@ What's Modified in BETA_0.9.0
 [AAVB-2494] - [PFE_LINUX] Fix mistake in the sysfs + add new syfs files
 
 # Bug
+[AAVB-2008] - [PC-FPGA-PFE-Linux]: Bridging of the PFE-interfaces eth0/pfe-0 and rename4/pfe-1 is NOT WORKING as expected.
 [AAVB-2297] - [PFE Linux] periodic load/unload of driver sometimes fails
 [AAVB-2345] - [PFE_PLATFORM] Wrong IP address version detection
 [AAVB-2380] - [PFE_LINUX] pfeng: incorrectly use highest speed of PHY
 [AAVB-2444] - [ALB 25.0] Observed crash dump while  running IPerf3 routing traffic 
+[AAVB-2501] - [S23G RDB - ALB25.0]: tcpdump crash on pfe0/pfe2 while running the IPv4 Fast path UDP traffic
 
 # New Feature
 [AAVB-1951] - [PFE_PLATFORM] Add FCI API to get physical/logical interface statistics
@@ -113,8 +119,8 @@ What's Modified in BETA_0.9.0
 [AAVB-2213] - [PFE_PLATFORM] Port mirroring FCI API
 [AAVB-2225] - [PFE_PLATFORM] Multi-instance HIF driver
 [AAVB-2272] - [PFE_PLATFORM] Show required fw version
-[AAVB-2423] - [PFE_PLATFORM] Arbitrary data passing (FCI)
 [AAVB-2348] - [PFE_DRV_LINUX] Add support for kernel 5.4 to PFE driver
+[AAVB-2423] - [PFE_PLATFORM] Arbitrary data passing (FCI)
 
 ========================================================
 What's Modified in EAR_0.8.0 Patch1
