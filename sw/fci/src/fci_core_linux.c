@@ -178,7 +178,8 @@ void fci_core_fini(void)
 	uint32_t ii;
 	fci_msg_t msg = {0};
 
-	msg.type = FCI_MSG_ENDPOINT_SHUTDOWN;
+	msg.type = FCI_MSG_CMD;
+	msg.msg_cmd.code = FPP_CMD_ENDPOINT_SHUTDOWN;
 
 	if (NULL != GET_FCI_CORE())
 	{

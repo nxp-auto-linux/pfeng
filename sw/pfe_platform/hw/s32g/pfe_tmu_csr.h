@@ -37,7 +37,9 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
+#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
 
@@ -213,32 +215,57 @@
 #define TMU_SHP_CTRL2			(0x0cU)
 #define TMU_SHP_MIN_CREDIT		(0x10U)
 #define TMU_SHP_STATUS			(0x14U)
-#define TLITE_PHYS_CNT			5U
+#define TLITE_PHYS_CNT			6U
 #define TLITE_PHY_QUEUES_CNT	8U
 #define TLITE_SCH_INPUTS_CNT	8U
+#define TLITE_SHP_INVALID_POS	0x1fU
+#define TLITE_SCH_INVALID_INPUT 0xffU
+
+/*	Implementation of the pfe_tmu_phy_cfg_t */
+struct __pfe_tmu_phy_cfg_tag
+{
+	pfe_ct_phy_if_id_t id;
+	uint8_t q_cnt;
+	uint8_t sch_cnt;
+	uint8_t shp_cnt;
+};
+
+const pfe_tmu_phy_cfg_t *const pfe_tmu_cfg_get_phy_config(pfe_ct_phy_if_id_t phy);
 
 errno_t pfe_tmu_q_cfg_get_fill_level(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *level);
 errno_t pfe_tmu_q_cfg_get_drop_count(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
 errno_t pfe_tmu_q_cfg_get_tx_count(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
+pfe_tmu_queue_mode_t pfe_tmu_q_get_mode(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *min, uint32_t *max);
 errno_t pfe_tmu_q_mode_set_default(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue);
 errno_t pfe_tmu_q_mode_set_tail_drop(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint16_t max);
 errno_t pfe_tmu_q_mode_set_wred(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint16_t min, uint16_t max);
 errno_t pfe_tmu_q_set_wred_probability(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t prob);
 errno_t pfe_tmu_q_get_wred_probability(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t *prob);
 uint8_t pfe_tmu_q_get_wred_zones(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue);
-uint8_t pfe_tmu_cfg_get_q_count(pfe_ct_phy_if_id_t phy);
 
-void pfe_tmu_shp_cfg_init(void *shp_base_va);
-errno_t pfe_tmu_shp_cfg_enable(void *cbus_base_va, void *shp_base_va, pfe_tmu_rate_mode_t mode, uint32_t isl);
-errno_t pfe_tmu_shp_cfg_set_limits(void *shp_base_va, int32_t max_credit, int32_t min_credit);
-void pfe_tmu_shp_cfg_disable(void *shp_base_va);
+void pfe_tmu_shp_cfg_init(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_cfg_enable(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_cfg_set_rate_mode(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, pfe_tmu_rate_mode_t mode);
+pfe_tmu_rate_mode_t pfe_tmu_shp_cfg_get_rate_mode(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_cfg_set_idle_slope(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, uint32_t isl);
+uint32_t pfe_tmu_shp_cfg_get_idle_slope(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_cfg_set_limits(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t max_credit, int32_t min_credit);
+errno_t pfe_tmu_shp_cfg_get_limits(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t *max_credit, int32_t *min_credit);
+errno_t pfe_tmu_shp_cfg_set_position(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, uint8_t pos);
+uint8_t pfe_tmu_shp_cfg_get_position(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
+void pfe_tmu_shp_cfg_disable(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
 
-void pfe_tmu_sch_cfg_init(void *sch_base_va);
-errno_t pfe_tmu_sch_cfg_set_rate_mode(void *sch_base_va, pfe_tmu_rate_mode_t mode);
-errno_t pfe_tmu_sch_cfg_set_algo(void *sch_base_va, pfe_tmu_sched_algo_t algo);
-errno_t pfe_tmu_sch_cfg_set_input_weight(void *sch_base_va, uint8_t input, uint32_t weight);
-errno_t pfe_tmu_sch_cfg_bind_sch_output(void *sch_base_va, uint8_t input, void *sch_base_va_out, void *cbus_base);
-errno_t pfe_tmu_sch_cfg_bind_queue(void *sch_base_va, uint8_t input, uint8_t queue);
+void pfe_tmu_sch_cfg_init(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch);
+errno_t pfe_tmu_sch_cfg_set_rate_mode(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, pfe_tmu_rate_mode_t mode);
+pfe_tmu_rate_mode_t pfe_tmu_sch_cfg_get_rate_mode(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch);
+errno_t pfe_tmu_sch_cfg_set_algo(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, pfe_tmu_sched_algo_t algo);
+pfe_tmu_sched_algo_t pfe_tmu_sch_cfg_get_algo(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch);
+errno_t pfe_tmu_sch_cfg_set_input_weight(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input, uint32_t weight);
+uint32_t pfe_tmu_sch_cfg_get_input_weight(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
+errno_t pfe_tmu_sch_cfg_bind_sched_output(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t src_sch, uint8_t dst_sch, uint8_t input);
+uint8_t pfe_tmu_sch_cfg_get_bound_sched_output(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
+errno_t pfe_tmu_sch_cfg_bind_queue(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input, uint8_t queue);
+uint8_t pfe_tmu_sch_cfg_get_bound_queue(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
 
 errno_t pfe_tmu_cfg_init(void *cbus_base_va, pfe_tmu_cfg_t *cfg);
 void pfe_tmu_cfg_reset(void *cbus_base_va);

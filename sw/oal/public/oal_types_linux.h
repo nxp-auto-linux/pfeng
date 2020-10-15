@@ -90,4 +90,8 @@ typedef unsigned int uint_t; /* For use within printf like functions */
 #define oal_htonl(x)	htonl(x)
 #define oal_ntohl(x)	ntohl(x)
 
+#ifndef ENOTSUP
+#define ENOTSUP		EOPNOTSUPP
+#endif
+
 #endif

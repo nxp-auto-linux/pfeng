@@ -144,6 +144,14 @@
  *                <i>Configuration of connection timeouts.</i>
  *              - @ref FPP_CMD_DATA_BUF_PUT <br>
  *                <i>Send arbitrary data to the accelerator.</i>
+ *              - @ref FPP_CMD_SPD <br>
+ *                <i>Configure the IPsec offload.</i>
+ *              - @ref FPP_CMD_QOS_QUEUE <br>
+ *                <i>Management of @ref egress_qos queues.</i>
+ *              - @ref FPP_CMD_QOS_SCHEDULER <br>
+ *                <i>Management of @ref egress_qos schedulers.</i>
+ *              - @ref FPP_CMD_QOS_SHAPER <br>
+ *                <i>Management of @ref egress_qos shapers.</i>
  *
  * @section cbks Events summary
  * @if FCI_EVENTS_IMPLEMENTED
@@ -491,6 +499,149 @@
  *             well as @ref l2_bridge. Such usage is of course not recommended since both mentioned
  *             features exist as fully optimized implementation and usage of Flexible Router this way
  *             would pointlessly affect forwarding performance.
+ *
+ * @subsection ipsec_offload IPsec Offload
+ *             Introduction
+ *             ------------
+ *             The IPsec offload feature is a premium one and requires a special premium firmware version
+ *             to be available for use. It allows the chosen IP frames to be transparently encoded by the IPsec and
+ *             IPsec frames to be transparently decoded without the CPU intervention using just the PFE and HSE engines.
+ *             
+ *             The SPD database needs to be established on an interface which contains entries describing frame 
+ *             match criteria together with the SA ID reference to the SA established within the HSE describing
+ *             the IPsec processing criteria. Frames matching the criteria are then processed by the HSE according
+ *             to the chosen SA and returned for the classification via physical interface of UTIL PE. Normal 
+ *             classification follows the IPsec processing thus the decrypted packets can be e.g. routed.
+ *
+ *             Configuration
+ *             -------------
+ *             -# Use (repeatedly) the @ref FPP_CMD_SPD command with FPP_ACTION_REGISTER action to set the SPD entries
+ *             -# Optionally the @ref FPP_CMD_SPD command with FPP_ACTION_DEREGISTER action can be used to delete SPD entries
+ *
+ *             The HSE also requires the configuration via interfaces of the HSE firmware which is out of the scope of this
+ *             document. The SAs referenced within the SPD entries must exist prior creation of the respective SPD entry.
+ *
+ * @subsection egress_qos Egress QoS
+ *             Introduction
+ *             ------------
+ *             The egress QoS allows user to prioritize, aggregate and shape traffic intended to
+ *             leave the accelerator via physical interface. Each physical interface contains dedicated
+ *             QoS block with specific number of schedulers, shapers and queues.
+ *             @if S32G2
+ *                Following applies for the S32G2/PFE:
+ *                - Number of queues: 8
+ *                - Maximum queue depth: 255
+ *                - Probability zones per queue: 8
+ *                - Number of schedulers: 2
+ *                - Number of scheduler inputs: 8
+ *                - Allowed data sources which can be connected to the scheduler inputs:
+ *
+ *                  Source|Description
+ *                  ------|----------------------
+ *                  0 - 7 | Queue 0 - 7
+ *                  8     | Output of Scheduler 0
+ *                  255   | Invalid
+ *
+ *                - Number of shapers: 4
+ *                - Allowed shaper positions:
+ *
+ *                  Position  |Description
+ *                  ----------|------------------------------------------
+ *                  0         | Output of Scheduler 1 (QoS master output)
+ *                  1 - 8     | Input 0 - 7 of Scheduler 1
+ *                  9 - 16    | Input 0 - 7 of Scheduler 0
+ *                  255       | Invalid, Shaper disconnected
+ *
+ *                  Note that only shapers connected to a common scheduler inputs are aware
+ *                  of each other and do share the 'conflicting transmission' signal.
+ *
+ *                Configuration
+ *                -------------
+ *                By default, the egress QoS topology looks like this:
+ *                @verbatim
+                           SCH1
+                           (RR)
+                        +--------+
+                  Q0--->| 0      |
+                  Q1--->| 1      |
+                  Q2--->| 2      |
+                  Q3--->| 3      +--->
+                  Q4--->| 4      |
+                  ...   | ...    |
+                  Q7--->| 7      |
+                        +--------+
+                  @endverbatim
+ *                meaning that all queues are connected to Scheduler 1 and the scheduler discipline
+ *                is set to Round Robin. Rate mode is set to Data Rate (bps). Queues are in Tail Drop
+ *                Mode.
+ *
+ *                To <b> list queue </b> properties:
+ *                -# Read queue properties via @ref FPP_CMD_QOS_QUEUE + @ref FPP_ACTION_QUERY.
+ *
+ *                To <b> list scheduler </b> properties:
+ *                -# Read scheduler properties via @ref FPP_CMD_QOS_SCHEDULER + @ref FPP_ACTION_QUERY.
+ *
+ *                To <b> list shaper </b> properties:
+ *                -# Read shaper properties via @ref FPP_CMD_QOS_SHAPER + @ref FPP_ACTION_QUERY.
+ *
+ *                To <b> modify queue </b> properties:
+ *                -# Read scheduler properties via @ref FPP_CMD_QOS_QUEUE + @ref FPP_ACTION_QUERY.
+ *                -# Modify desired properties.
+ *                -# Write modifications using @ref FPP_CMD_QOS_QUEUE + @ref FPP_ACTION_UPDATE.
+ *
+ *                To <b> modify scheduler </b> properties (read-modify-write):
+ *                -# Read scheduler properties via @ref FPP_CMD_QOS_SCHEDULER + @ref FPP_ACTION_QUERY.
+ *                -# Modify desired properties.
+ *                -# Write modifications using @ref FPP_CMD_QOS_SCHEDULER + @ref FPP_ACTION_UPDATE.
+ *
+ *                To <b> modify shaper </b> properties (read-modify-write):
+ *                -# Read shaper properties via @ref FPP_CMD_QOS_SHAPER + @ref FPP_ACTION_QUERY.
+ *                -# Modify desired properties.
+ *                -# Write modifications using @ref FPP_CMD_QOS_SCHEDULER + @ref FPP_ACTION_UPDATE.
+ *
+ *                To <b> change QoS topology </b> to following example form:
+ *                @verbatim
+                           SCH0
+                           (WRR)
+                        +--------+
+                  Q0--->| 0      |           SCH1
+                  Q1--->| 1      |           (PQ)
+                  Q2--->| 2      |        +--------+
+                  Q3--->| 3      +------->| 0      |
+                  Q4--->| 4      |        | 1      |
+                        | ...    |        | 2      |
+                        | 7      |        | 3      +--->
+                        +--------+        | ...    |
+                                    Q6--->| 6      |
+                                    Q7--->| 7      |
+                                          +--------+
+                  @endverbatim
+ *                -# Please see the @ref FPP_CMD_QOS_SCHEDULER for full C example
+ *                (@ref fpp_cmd_qos_scheduler.c).
+ *                
+ *                To <b> add traffic shapers </b>:
+ *                @verbatim
+                           SCH0
+                           (WRR)
+                        +--------+
+                  Q0--->| 0      |               SCH1
+                  Q1--->| 1      |               (PQ)
+                  Q2--->| 2      |            +--------+
+                  Q3--->| 3      +--->SHP0--->| 0      |
+                  Q4--->| 4      |            | 1      |
+                        | ...    |            | 2      |
+                        | 7      |            | 3      +--->SHP2--->
+                        +--------+            | ...    |
+                                 Q6---SHP1--->| 6      |
+                                 Q7---------->| 7      |
+                                              +--------+
+                  @endverbatim
+ *                -# Please see the @ref FPP_CMD_QOS_SHAPER for full C example
+ *                (@ref fpp_cmd_qos_shaper.c).
+ *             @else
+ *                Device is unknown...
+ *             @endif
+ *
  */
 
 /**
@@ -499,6 +650,9 @@
  * @example fpp_cmd_ip_route.c
  * @example fpp_cmd_ipv4_conntrack.c
  * @example fpp_cmd_ipv6_conntrack.c
+ * @example fpp_cmd_qos_queue.c
+ * @example fpp_cmd_qos_scheduler.c
+ * @example fpp_cmd_qos_shaper.c
  */
 
 /**

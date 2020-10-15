@@ -42,23 +42,6 @@ struct __pfe_tmu_tag
 	void *cbus_base_va;
 };
 
-/*	Queue instance */
-struct __pfe_tmu_queue_tag
-{
-	void *cbus_base_va;			/*	CBUS base virtual address */
-	pfe_ct_phy_if_id_t phy;		/*	Associated physical interface ID */
-	uint8_t qid;				/*	Queue ID */
-};
-
-/*	Queue set instance */
-struct __pfe_tmu_qset_tag
-{
-	void *cbus_base_va;			/*	CBUS base virtual address */
-	pfe_ct_phy_if_id_t phy;		/*	Associated physical interface ID */
-	uint8_t count;				/*	Number of queues */
-	pfe_tmu_queue_t **queues;	/*	The queues */
-};
-
 /*	Scheduler instance */
 struct __pfe_tmu_sch_tag
 {
@@ -231,491 +214,994 @@ void pfe_tmu_destroy(pfe_tmu_t *tmu)
 	}
 }
 
+/*
+ * @brief		Check if phy+queue combination is valid
+ * @param[in]	tmu The TMU instance
+ * @param[in]	phy Physical interface ID
+ * @param[in]	queue Queue ID
+ * @return		EOK if the arguments are valid
+ */
+static errno_t pfe_tmu_check_queue(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue)
+{
+	const pfe_tmu_phy_cfg_t *pcfg;
+
+	(void)tmu;
+
+	pcfg = pfe_tmu_cfg_get_phy_config(phy);
+	if (NULL == pcfg)
+	{
+		NXP_LOG_ERROR("Invalid phy: %d\n", phy);
+		return EINVAL;
+	}
+	else
+	{
+		if ((queue >= pcfg->q_cnt) && (queue != PFE_TMU_INVALID_QUEUE))
+		{
+			NXP_LOG_ERROR("Invalid queue ID (%d). PHY %d implements %d queues\n",
+					queue, phy, pcfg->q_cnt);
+			return EINVAL;
+		}
+	}
+
+	return EOK;
+}
+
+/*
+ * @brief		Check if phy+scheduler combination is valid
+ * @param[in]	tmu The TMU instance
+ * @param[in]	phy Physical interface ID
+ * @param[in]	sch Scheduler ID
+ * @return		EOK if the arguments are valid
+ */
+static errno_t pfe_tmu_check_scheduler(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
+{
+	const pfe_tmu_phy_cfg_t *pcfg;
+
+	(void)tmu;
+
+	pcfg = pfe_tmu_cfg_get_phy_config(phy);
+	if (NULL == pcfg)
+	{
+		NXP_LOG_ERROR("Invalid phy: %d\n", (uint32_t)phy);
+		return EINVAL;
+	}
+	else
+	{
+		if (sch >= pcfg->sch_cnt)
+		{
+			NXP_LOG_ERROR("Invalid scheduler ID (%d). PHY %d implements %d schedulers\n",
+					sch, phy, pcfg->sch_cnt);
+			return EINVAL;
+		}
+	}
+
+	return EOK;
+}
+
+/**
+ * @brief		Check if phy+shaper combination is valid
+ * @param[in]	tmu The TMU instance
+ * @param[in]	phy Physical interface ID
+ * @param[in]	shp Shaper ID
+ * @return		EOK if the arguments are valid
+ */
+static errno_t pfe_tmu_check_shaper(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
+{
+	const pfe_tmu_phy_cfg_t *pcfg;
+
+	(void)tmu;
+
+	pcfg = pfe_tmu_cfg_get_phy_config(phy);
+	if (NULL == pcfg)
+	{
+		NXP_LOG_ERROR("Invalid phy: %d\n", (uint32_t)phy);
+		return EINVAL;
+	}
+	else
+	{
+		if (shp >= pcfg->shp_cnt)
+		{
+			NXP_LOG_ERROR("Invalid shaper ID (%d). PHY %d implements %d shapers\n",
+					shp, phy, pcfg->shp_cnt);
+			return EINVAL;
+		}
+	}
+
+	return EOK;
+}
+
 /**
  * @brief		Get number of packets in the queue
- * @param[in]	queue The queue instance
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	queue The queue ID
  * @param[out]	level Pointer to memory where the fill level value shall be written
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_queue_get_fill_level(pfe_tmu_queue_t *queue, uint32_t *level)
+errno_t pfe_tmu_queue_get_fill_level(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *level)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == queue) || (NULL == level)))
+	if (unlikely((NULL == tmu) || (NULL == level)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_tmu_q_cfg_get_fill_level(queue->cbus_base_va, queue->phy, queue->qid, level);
+	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+	{
+		return pfe_tmu_q_cfg_get_fill_level(tmu->cbus_base_va, phy, queue, level);
+	}
+	else
+	{
+		return EINVAL;
+	}
 }
 
 /**
  * @brief		Get number of packet dropped by queue
- * @param[in]	queue The queue instance
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	queue The queue ID
  * @param[out]	level Pointer to memory where the count shall be written
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_queue_get_drop_count(pfe_tmu_queue_t *queue, uint32_t *cnt)
+errno_t pfe_tmu_queue_get_drop_count(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == queue) || (NULL == cnt)))
+	if (unlikely((NULL == tmu) || (NULL == cnt)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_tmu_q_cfg_get_drop_count(queue->cbus_base_va, queue->phy, queue->qid, cnt);
+	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+	{
+		return pfe_tmu_q_cfg_get_drop_count(tmu->cbus_base_va, phy, queue, cnt);
+	}
+	else
+	{
+		return EINVAL;
+	}
 }
 
 /**
  * @brief		Get number of packet transmitted from queue
- * @param[in]	queue The queue instance
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	queue The queue ID
  * @param[out]	level Pointer to memory where the count shall be written
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_queue_get_tx_count(pfe_tmu_queue_t *queue, uint32_t *cnt)
+errno_t pfe_tmu_queue_get_tx_count(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == queue) || (NULL == cnt)))
+	if (unlikely((NULL == tmu) || (NULL == cnt)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_tmu_q_cfg_get_tx_count(queue->cbus_base_va, queue->phy, queue->qid, cnt);
+	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+	{
+		return pfe_tmu_q_cfg_get_tx_count(tmu->cbus_base_va, phy, queue, cnt);
+	}
+	else
+	{
+		return EINVAL;
+	}
 }
 
 /**
  * @brief		Set queue mode
- * @param[in]	queue The queue instance
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	queue The queue ID
  * @param[in]	mode Mode
  * @param[in]	min Min threshold (number of packets)
  * @param[in]	max Max threshold (number of packets)
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_queue_set_mode(pfe_tmu_queue_t *queue, pfe_tmu_queue_mode_t mode, uint32_t min, uint32_t max)
+errno_t pfe_tmu_queue_set_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue,
+		pfe_tmu_queue_mode_t mode, uint32_t min, uint32_t max)
 {
     errno_t ret_val;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == queue))
+	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	switch (mode)
+	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
 	{
-		case TMU_Q_MODE_TAIL_DROP:
+		switch (mode)
 		{
-			ret_val = pfe_tmu_q_mode_set_tail_drop(queue->cbus_base_va, queue->phy, queue->qid, max);
-			break;
-		}
+			case TMU_Q_MODE_TAIL_DROP:
+			{
+				ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, max);
+				break;
+			}
 
-		case TMU_Q_MODE_WRED:
-		{
-			ret_val = pfe_tmu_q_mode_set_wred(queue->cbus_base_va, queue->phy, queue->qid, min, max);
-			break;
-		}
+			case TMU_Q_MODE_WRED:
+			{
+				ret_val = pfe_tmu_q_mode_set_wred(tmu->cbus_base_va, phy, queue, min, max);
+				break;
+			}
 
-		case TMU_Q_MODE_NONE:
-		{
-			ret_val = pfe_tmu_q_mode_set_default(queue->cbus_base_va, queue->phy, queue->qid);
-			break;
-		}
+			case TMU_Q_MODE_DEFAULT:
+			{
+				ret_val = pfe_tmu_q_mode_set_default(tmu->cbus_base_va, phy, queue);
+				break;
+			}
 
-		default:
-		{
-			NXP_LOG_ERROR("Unknown queue mode: %d\n", mode);
-			ret_val = EINVAL;
-            break;
+			default:
+			{
+				NXP_LOG_ERROR("Unknown queue mode: %d\n", mode);
+				ret_val = EINVAL;
+				break;
+			}
 		}
+	}
+	else
+	{
+		ret_val = EINVAL;
 	}
 
 	return ret_val;
 }
 
 /**
+ * @brief		Get queue mode
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	queue The queue ID
+ * @param[in]	mode Mode
+ * @param[in]	min Pointer to memory where 'min' value shall be written
+ * @param[in]	max Pointer to memory where 'max' value shall be written
+ * @return		EOK if success, error code otherwise
+ */
+pfe_tmu_queue_mode_t pfe_tmu_queue_get_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
+		uint8_t queue, uint32_t *min, uint32_t *max)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return TMU_Q_MODE_INVALID;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+	{
+		return pfe_tmu_q_get_mode(tmu->cbus_base_va, phy, queue, min, max);
+	}
+	else
+	{
+		return TMU_Q_MODE_INVALID;
+	}
+}
+
+/**
  * @brief		Set WRED zone probability
- * @param[in]	queue The queue instance
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	queue The queue ID
  * @param[in]	zone Zone index
  * @param[in]	prob Drop probability in [%]
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_queue_set_wred_prob(pfe_tmu_queue_t *queue, uint8_t zone, uint8_t prob)
+errno_t pfe_tmu_queue_set_wred_prob(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t prob)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == queue))
+	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (zone >= pfe_tmu_queue_get_wred_zones(queue))
+	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
 	{
-		NXP_LOG_DEBUG("Zone index out of range\n");
+		if (zone >= pfe_tmu_queue_get_wred_zones(tmu, phy, queue))
+		{
+			NXP_LOG_DEBUG("Zone index out of range\n");
+			return EINVAL;
+		}
+
+		if (prob > 100U)
+		{
+			NXP_LOG_DEBUG("Probability out of range\n");
+			return EINVAL;
+		}
+
+		return pfe_tmu_q_set_wred_probability(tmu->cbus_base_va, phy, queue, zone, prob);
+	}
+	else
+	{
 		return EINVAL;
 	}
+}
 
-	if (prob > 100U)
+/**
+ * @brief		Get WRED zone probability
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	queue The queue ID
+ * @param[in]	zone Zone index
+ * @param[in]	prob Poiter to memory where drop probability in [%] shall be written
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_tmu_queue_get_wred_prob(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t *prob)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
 	{
-		NXP_LOG_DEBUG("Probability out of range\n");
+		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_tmu_q_set_wred_probability(queue->cbus_base_va, queue->phy, queue->qid, zone, prob);
+	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+	{
+		if (zone >= pfe_tmu_queue_get_wred_zones(tmu, phy, queue))
+		{
+			NXP_LOG_DEBUG("Zone index out of range\n");
+			return EINVAL;
+		}
+
+		return pfe_tmu_q_get_wred_probability(tmu->cbus_base_va, phy, queue, zone, prob);
+	}
+	else
+	{
+		return EINVAL;
+	}
 }
 
 /**
  * @brief		Get number of WRED probability zones
- * @param[in]	queue The queue instance
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	queue The queue ID
  * @return		Number of zones between 'min' and 'max'
  */
-uint8_t pfe_tmu_queue_get_wred_zones(pfe_tmu_queue_t *queue)
+uint8_t pfe_tmu_queue_get_wred_zones(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == queue))
+	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_tmu_q_get_wred_zones(queue->cbus_base_va, queue->phy, queue->qid);
-}
-
-/**
- * @brief		Get queue from queue set
- * @param[in]	qset The queue set instance
- * @param[in]	queue Queue index
- * @return		Queue instance or NULL if failed
- */
-pfe_tmu_queue_t *pfe_tmu_qset_get_queue(pfe_tmu_qset_t *qset, uint8_t queue)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == qset))
+	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
 	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (queue < qset->count)
-	{
-		return qset->queues[queue];
+		return pfe_tmu_q_get_wred_zones(tmu->cbus_base_va, phy, queue);
 	}
 	else
 	{
-		return NULL;
+		return EINVAL;
 	}
 }
 
 /**
- * @brief		Create set of queues for given physical interface
+ * @brief		Get number of queues for given physical interface
+ * @param[in]	tmu The TMU instance
  * @param[in]	phy Physical interface ID
- * @return		Queue set instance or NULL if failed
+ * @return		Number of queues
  */
-pfe_tmu_qset_t * pfe_tmu_qset_create(void *cbus_base_va, pfe_ct_phy_if_id_t phy)
+uint8_t pfe_tmu_queue_get_cnt(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy)
 {
-	uint8_t count, ii;
-	pfe_tmu_qset_t *qset;
+	const pfe_tmu_phy_cfg_t *pcfg;
 
-	count = pfe_tmu_cfg_get_q_count(phy);
-	if (0U == count)
+	(void)tmu;
+
+	pcfg = pfe_tmu_cfg_get_phy_config(phy);
+	if (NULL == pcfg)
 	{
-		NXP_LOG_WARNING("No queues for PHY ID %d\n", phy);
-		return NULL;
+		NXP_LOG_ERROR("Invalid phy: 0x%x\n", phy);
+		return 0U;
 	}
-
-	qset = oal_mm_malloc(sizeof(pfe_tmu_qset_t));
-	if (NULL == qset)
+	else
 	{
-		return NULL;
-	}
-
-	qset->queues = oal_mm_malloc(count * sizeof(pfe_tmu_queue_t));
-	if (NULL == qset->queues)
-	{
-		oal_mm_free(qset);
-		return NULL;
-	}
-
-	qset->count = count;
-	qset->cbus_base_va = cbus_base_va;
-	qset->phy = phy;
-
-	for (ii=0U; ii<count; ii++)
-	{
-		qset->queues[ii]->cbus_base_va = cbus_base_va;
-		qset->queues[ii]->phy = phy;
-		qset->queues[ii]->qid = ii;
-	}
-
-	return qset;
-}
-
-/**
- * @brief		Destroy set of queues
- * @param[in]	qset The queue set instance
- */
-void pfe_tmu_qset_destroy(pfe_tmu_qset_t *qset)
-{
-	uint32_t ii;
-
-	if (qset != NULL)
-	{
-		for (ii=0U; ii<qset->count; ii++)
-		{
-			if (NULL != qset->queues[ii])
-			{
-				oal_mm_free(qset->queues[ii]);
-				qset->queues[ii] = NULL;
-			}
-		}
-
-		oal_mm_free(qset);
+		return pcfg->q_cnt;
 	}
 }
 
 /**
  * @brief		Set shaper credit limits
  * @details		Value units depend on chosen shaper mode
- * @param[in]	shp_base_va Shaper base address (VA)
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	shp The shaper ID
  * @param[in]	max_credit Maximum credit value
  * @param[in]	min_credit Minimum credit value
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_shp_set_limits(pfe_tmu_shp_t *shp, int32_t max_credit, int32_t min_credit)
+errno_t pfe_tmu_shp_set_limits(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
+		uint8_t shp, int32_t max_credit, int32_t min_credit)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == shp))
+	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_tmu_shp_cfg_set_limits(shp->shp_base_va, max_credit, min_credit);
+	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+	{
+		return pfe_tmu_shp_cfg_set_limits(tmu->cbus_base_va, phy, shp, max_credit, min_credit);
+	}
+	else
+	{
+		return EINVAL;
+	}
+}
+
+/**
+ * @brief		Get shaper credit limits
+ * @details		Value units depend on chosen shaper mode
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	shp The shaper ID
+ * @param[out]	max_credit Pointer to memory where maximum credit value shall be written
+ * @param[out]	min_credit Pointer to memory where minimum credit value shall be written
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_tmu_shp_get_limits(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t *max_credit, int32_t *min_credit)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu) || unlikely(NULL == max_credit) || unlikely(NULL == min_credit))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+	{
+		return pfe_tmu_shp_cfg_get_limits(tmu->cbus_base_va, phy, shp, max_credit, min_credit);
+	}
+	else
+	{
+		return EINVAL;
+	}
+}
+
+/**
+ * @brief		Set shaper position within the QoS topology
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	shp The shaper ID
+ * @param[in]	pos Shaper position. Setting to PFE_TMU_INVALID_POSITION makes
+ *					the shaper unused.
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_tmu_shp_set_position(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint8_t pos)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+	{
+		return pfe_tmu_shp_cfg_set_position(tmu->cbus_base_va, phy, shp, pos);
+	}
+	else
+	{
+		return EINVAL;
+	}
+}
+
+/**
+ * @brief		Get shaper position within the QoS topology
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	shp The shaper ID
+ * @param[in]	pos Shaper position. Setting to PFE_TMU_INVALID_POSITION makes
+ *					the shaper unused.
+ * @return		EOK if success, error code otherwise
+ */
+uint8_t pfe_tmu_shp_get_position(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return PFE_TMU_INVALID_POSITION;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+	{
+		return pfe_tmu_shp_cfg_get_position(tmu->cbus_base_va, phy, shp);
+	}
+	else
+	{
+		return PFE_TMU_INVALID_POSITION;
+	}
 }
 
 /**
  * @brief		Enable shaper
- * @param[in]	shp The shaper instance
- * @param[in]	mode Shaper mode
- * @param[in]	isl Idle slope in units per second as given by chosen mode
- *					(bits-per-second, packets-per-second)
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	shp The shaper ID
  */
-errno_t pfe_tmu_shp_enable(pfe_tmu_shp_t *shp, pfe_tmu_rate_mode_t mode, uint32_t isl)
+errno_t pfe_tmu_shp_enable(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == shp))
+	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_tmu_shp_cfg_enable(shp->cbus_base_va, shp->shp_base_va, mode, isl);
+	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+	{
+		return pfe_tmu_shp_cfg_enable(tmu->cbus_base_va, phy, shp);
+	}
+	else
+	{
+		return EINVAL;
+	}
+}
+
+/**
+ * @brief		Set shaper rate mode
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	shp The shaper ID
+ * @param[in]	mode Shaper mode
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_tmu_shp_set_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, pfe_tmu_rate_mode_t mode)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+	{
+		return pfe_tmu_shp_cfg_set_rate_mode(tmu->cbus_base_va, phy, shp, mode);
+	}
+	else
+	{
+		return EINVAL;
+	}
+}
+
+/**
+ * @brief		Get shaper rate mode
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	shp The shaper ID
+ * @return		Shaper rate mode
+ */
+pfe_tmu_rate_mode_t pfe_tmu_shp_get_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return RATE_MODE_INVALID;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+	{
+		return pfe_tmu_shp_cfg_get_rate_mode(tmu->cbus_base_va, phy, shp);
+	}
+	else
+	{
+		return RATE_MODE_INVALID;
+	}
+}
+
+/**
+ * @brief		Set shaper idle slope
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	shp The shaper ID
+ * @param[in]	isl Idle slope in units per second as given by chosen mode
+ *					(bits-per-second, packets-per-second)
+ */
+errno_t pfe_tmu_shp_set_idle_slope(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint32_t isl)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+	{
+		return pfe_tmu_shp_cfg_set_idle_slope(tmu->cbus_base_va, phy, shp, isl);
+	}
+	else
+	{
+		return EINVAL;
+	}
+}
+
+/**
+ * @brief		Get shaper idle slope
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	shp The shaper ID
+ * @return		Current idle slope value
+ */
+uint32_t pfe_tmu_shp_get_idle_slope(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0U;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+	{
+		return pfe_tmu_shp_cfg_get_idle_slope(tmu->cbus_base_va, phy, shp);
+	}
+	else
+	{
+		return 0U;
+	}
 }
 
 /**
  * @brief		Disable shaper
- * @param[in]	shp The shaper instance
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	shp The shaper ID
  */
-errno_t pfe_tmu_shp_disable(pfe_tmu_shp_t *shp)
+errno_t pfe_tmu_shp_disable(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == shp))
+	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	pfe_tmu_shp_cfg_disable(shp->shp_base_va);
-
-	return EOK;
-}
-
-/**
- * @brief		Create shaper instance
- * @details		This will bind HW shaper implementation with SW representation.
- * @param[in]	cbus_base_va CBUS base virtual address
- * @param[in]	shp_base_offset Shaper base address offset within CBUS address space
- * @return		Shaper instance or NULL if failed
- */
-pfe_tmu_shp_t *pfe_tmu_shp_create(void *cbus_base_va, void *shp_base_offset)
-{
-	pfe_tmu_shp_t *shp;
-
-	shp = oal_mm_malloc(sizeof(pfe_tmu_shp_t));
-
-	if (NULL == shp)
+	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
 	{
-		return NULL;
+		pfe_tmu_shp_cfg_disable(tmu->cbus_base_va, phy, shp);
+		return EOK;
 	}
 	else
 	{
-		shp->cbus_base_va = cbus_base_va;
-		shp->shp_base_va = (void *)((addr_t)cbus_base_va + (addr_t)shp_base_offset);
-
-		/*	Disable and initialize the shaper */
-		pfe_tmu_shp_cfg_disable(shp->shp_base_va);
-		pfe_tmu_shp_cfg_init(shp->shp_base_va);
-	}
-
-	return shp;
-}
-
-/**
- * @brief		Destroy shaper instance
- * @param[in]	shp The shaper instance
- */
-void pfe_tmu_shp_destroy(pfe_tmu_shp_t *shp)
-{
-	if (NULL != shp)
-	{
-		oal_mm_free(shp);
+		return EINVAL;
 	}
 }
 
 /**
- * @brief		Set rate mode
- * @param[in]	sch Scheduler instance
+ * @brief		Set scheduler rate mode
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	sch The scheduler ID
  * @param[in]	mode The rate mode to be used by scheduler
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_sch_set_rate_mode(pfe_tmu_sch_t *sch, pfe_tmu_rate_mode_t mode)
+errno_t pfe_tmu_sch_set_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
+		uint8_t sch, pfe_tmu_rate_mode_t mode)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == sch))
+	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_tmu_sch_cfg_set_rate_mode(sch->sch_base_va, mode);
+	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+	{
+		return pfe_tmu_sch_cfg_set_rate_mode(tmu->cbus_base_va, phy, sch, mode);
+	}
+	else
+	{
+		return EINVAL;
+	}
+}
+
+/**
+ * @brief	Get scheduler rate mode
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	sch The scheduler ID
+ * @return		Current rate mode or RATE_MODE_INVALID in case of error
+ */
+pfe_tmu_rate_mode_t pfe_tmu_sch_get_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return RATE_MODE_INVALID;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+	{
+		return pfe_tmu_sch_cfg_get_rate_mode(tmu->cbus_base_va, phy, sch);
+	}
+	else
+	{
+		return RATE_MODE_INVALID;
+	}
 }
 
 /**
  * @brief		Set scheduler algorithm
- * @param[in]	sch Scheduler instance
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	sch The scheduler ID
  * @param[in]	algo The algorithm to be used
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_sch_set_algo(pfe_tmu_sch_t *sch, pfe_tmu_sched_algo_t algo)
+errno_t pfe_tmu_sch_set_algo(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
+		uint8_t sch, pfe_tmu_sched_algo_t algo)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == sch))
+	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_tmu_sch_cfg_set_algo(sch->sch_base_va, algo);
+	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+	{
+		return pfe_tmu_sch_cfg_set_algo(tmu->cbus_base_va, phy, sch, algo);
+	}
+	else
+	{
+		return EINVAL;
+	}
 }
 
 /**
- * @brief		Set input weight
- * @param[in]	sch Scheduler instance
+ * @brief		Get scheduler algorithm
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	sch The scheduler ID
+ * @return		Current rate mode or SCHED_ALGO_INVALID in case of error
+ */
+pfe_tmu_sched_algo_t pfe_tmu_sch_get_algo(pfe_tmu_t *tmu,
+		pfe_ct_phy_if_id_t phy, uint8_t sch)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return SCHED_ALGO_INVALID;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+	{
+		return pfe_tmu_sch_cfg_get_algo(tmu->cbus_base_va, phy, sch);
+	}
+	else
+	{
+		return SCHED_ALGO_INVALID;
+	}
+}
+
+/**
+ * @brief		Get number of scheduler inputs
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	sch The scheduler ID
+ * @return		Number of scheduler inputs
+ */
+uint8_t pfe_tmu_sch_get_input_cnt(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
+{
+	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+	{
+		/*	Number of scheduler inputs is equal to number of available queues */
+		return pfe_tmu_queue_get_cnt(tmu, phy);
+	}
+	else
+	{
+		return 0U;
+	}
+}
+
+/**
+ * @brief		Set scheduler input weight
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	sch The scheduler ID
  * @param[in]	input Scheduler input
  * @param[in]	weight The weight value to be used by chosen scheduling algorithm
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_sch_set_input_weight(pfe_tmu_sch_t *sch, uint8_t input, uint32_t weight)
+errno_t pfe_tmu_sch_set_input_weight(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
+		uint8_t sch, uint8_t input, uint32_t weight)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == sch))
+	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_tmu_sch_cfg_set_input_weight(sch->sch_base_va, input, weight);
+	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+	{
+		return pfe_tmu_sch_cfg_set_input_weight(tmu->cbus_base_va,
+			phy, sch, input, weight);
+	}
+	else
+	{
+		return EINVAL;
+	}
 }
 
 /**
- * @brief		Connect scheduler output to another scheduler input
- * @param[in]	sch Scheduler instance
- * @param[in]	input Scheduler where the other scheduler output shall be connected to
- * @param[in]	sch_out The other scheduler instance providing the output to be connected
- * @return		EOK if success, error code otherwise
+ * @brief		Get scheduler input weight
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	sch The scheduler ID
+ * @param[in]	input Scheduler input
+ * @return		Input weight
  */
-errno_t pfe_tmu_sch_bind_sch_output(pfe_tmu_sch_t *sch, uint8_t input, pfe_tmu_sch_t *sch_out)
+uint32_t pfe_tmu_sch_get_input_weight(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == sch) || (NULL == sch_out)))
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0U;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+	{
+		return pfe_tmu_sch_cfg_get_input_weight(tmu->cbus_base_va,
+				phy, sch, input);
+	}
+	else
+	{
+		return 0U;
+	}
+}
+
+/**
+ * @brief		Connect another scheduler output to some scheduler input
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	src_sch Source scheduler instance/index
+ * @param[in]	dst_sch Destination scheduler instance/index
+ * @param[in]	input Input of 'dst_sch' where output of 'src_sch' shall be connected
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_tmu_sch_bind_sch_output(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t src_sch, uint8_t dst_sch, uint8_t input)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_tmu_sch_cfg_bind_sch_output(sch->sch_base_va, input, sch_out->sch_base_va, sch->cbus_base_va);
+	if ((EOK == pfe_tmu_check_scheduler(tmu, phy, src_sch))
+			&& (EOK == pfe_tmu_check_scheduler(tmu, phy, dst_sch)))
+	{
+		return pfe_tmu_sch_cfg_bind_sched_output(tmu->cbus_base_va, phy, src_sch, dst_sch, input);
+	}
+	else
+	{
+		return EINVAL;
+	}
+}
+
+/**
+ * @brief		Get scheduler which output is connected to given scheduler input
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	sch The scheduler ID
+ * @param[in]	input Scheduler input
+ * @return		ID of the connected scheduler or PFE_TMU_INVALID_SCHEDULER
+ */
+uint8_t pfe_tmu_sch_get_bound_sch_output(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return PFE_TMU_INVALID_SCHEDULER;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+	{
+		return pfe_tmu_sch_cfg_get_bound_sched_output(tmu->cbus_base_va, phy, sch, input);
+	}
+	else
+	{
+		return PFE_TMU_INVALID_SCHEDULER;
+	}
 }
 
 /**
  * @brief		Connect queue to some scheduler input
- * @param[in]	sch Scheduler instance
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	sch The scheduler ID
  * @param[in]	input Scheduler input the queue shall be connected to
  * @param[in]	queue Queue to be connected to the scheduler input
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_sch_bind_queue(pfe_tmu_sch_t *sch, uint8_t input, uint8_t queue)
+errno_t pfe_tmu_sch_bind_queue(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
+		uint8_t sch, uint8_t input, uint8_t queue)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == sch))
+	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_tmu_sch_cfg_bind_queue(sch->sch_base_va, input, queue);
-}
-
-/**
- * @brief		Create scheduler instance
- * @details		This will bind HW scheduler implementation with SW representation.
- * @param[in]	cbus_base_va CBUS base virtual address
- * @param[in]	sch_base_offset Scheduler base address offset within CBUS address space
- * @return		Scheduler instance or NULL if failed
- */
-pfe_tmu_sch_t *pfe_tmu_sch_create(void *cbus_base_va, void *sch_base_offset)
-{
-	pfe_tmu_sch_t *sch;
-
-	sch = oal_mm_malloc(sizeof(pfe_tmu_sch_t));
-
-	if (NULL == sch)
+	if ((EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+			&& (EOK == pfe_tmu_check_queue(tmu, phy, queue)))
 	{
-		return NULL;
+		return pfe_tmu_sch_cfg_bind_queue(tmu->cbus_base_va, phy, sch, input, queue);
 	}
 	else
 	{
-		sch->cbus_base_va = cbus_base_va;
-		sch->sch_base_va = (void *)((addr_t)cbus_base_va + (addr_t)sch_base_offset);
+		return EINVAL;
 	}
-
-	return sch;
 }
 
 /**
- * @brief		Destroy scheduler instance
- * @param[in]	sch The scheduler instance
+ * @brief		Get queue connected to given scheduler input
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	sch The scheduler ID
+ * @param[in]	input Scheduler input to be queried
+ * @return		Queue ID connected to the input or PFE_TMU_INVALID_QUEUE if not present
  */
-void pfe_tmu_sch_destroy(pfe_tmu_sch_t *sch)
+uint8_t pfe_tmu_sch_get_bound_queue(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
 {
-	if (NULL != sch)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
 	{
-		oal_mm_free(sch);
+		NXP_LOG_ERROR("NULL argument received\n");
+		return PFE_TMU_INVALID_QUEUE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+	{
+		return pfe_tmu_sch_cfg_get_bound_queue(tmu->cbus_base_va, phy, sch, input);
+	}
+	else
+	{
+		return PFE_TMU_INVALID_QUEUE;
 	}
 }
 

@@ -39,6 +39,8 @@
  */
 
 #include "pfe_cfg.h"
+#ifdef PFE_CFG_PFE_SLAVE
+
 #include "oal.h"
 #include "hal.h"
 
@@ -442,10 +444,12 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Update the interface structure */
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 	(void)pfe_phy_if_db_lock();
 
@@ -460,10 +464,12 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 
 	(void)pfe_phy_if_db_unlock();
 
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
 		NXP_LOG_DEBUG("mutex unlock failed\n");
 	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 	return ret;
 }
@@ -509,6 +515,32 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == hif) || (NULL == iface)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/*	We're not going to allow slave driver to do this */
+	NXP_LOG_ERROR("%s: Not supported\n", __func__);
+	ret = ENOTSUP;
+
+	return ret;
+}
+
+/**
+ * @brief		Initialize util physical interface
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ * @retval		EPERM Operation not permitted
+ */
+errno_t pfe_phy_if_bind_util(pfe_phy_if_t *iface)
+{
+	errno_t ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -1130,3 +1162,5 @@ uint32_t pfe_phy_if_get_text_statistics(pfe_phy_if_t *iface, char_t *buf, uint32
 	
 	return len;
 }
+
+#endif /* PFE_CFG_PFE_SLAVE */

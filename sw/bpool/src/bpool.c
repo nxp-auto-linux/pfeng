@@ -357,11 +357,11 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 	/*	Get physically contiguous memory region (buffers) */
 	if(TRUE == cached)
 	{
-		vaddr = oal_mm_malloc_contig_aligned_cache(block_size, aligned_buf_size);
+		vaddr = oal_mm_malloc_contig_named_aligned_cache(PFE_CFG_RX_MEM, block_size, aligned_buf_size);
 	}
 	else
 	{
-		vaddr = oal_mm_malloc_contig_aligned_nocache(block_size, aligned_buf_size);
+		vaddr = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_RX_MEM, block_size, aligned_buf_size);
 	}
 	if (!vaddr)
 	{

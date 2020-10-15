@@ -29,6 +29,8 @@
  * ========================================================================= */
 
 #include "pfe_cfg.h"
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+
 #include "oal.h"
 #include "linked_list.h"
 #include "pfe_hif_drv.h"
@@ -99,6 +101,8 @@ typedef enum __attribute__((packed))
 	IDEX_RPC
 } pfe_idex_request_type_t;
 
+ct_assert(sizeof(pfe_idex_request_type_t) == sizeof(uint8_t));
+
 /**
  * @brief	IDEX Response types
  */
@@ -114,6 +118,8 @@ typedef struct __attribute__((packed)) __pfe_idex_msg_master_discovery_tag
 	/*	Physical interface ID where master driver is located */
 	pfe_ct_phy_if_id_t phy_if_id;
 } pfe_idex_msg_master_discovery_t;
+
+ct_assert(sizeof(pfe_idex_msg_master_discovery_t) == sizeof(uint8_t));
 
 /**
  * @brief	IDEX RPC Message header
@@ -140,6 +146,8 @@ typedef struct __attribute__((packed)) __pfe_idex_frame_header_tag
 	/*	Type of frame */
 	pfe_idex_frame_type_t type;
 } pfe_idex_frame_header_t;
+
+ct_assert(sizeof(pfe_idex_frame_header_t) == 2);
 
 /**
  * @brief	IDEX request states
@@ -182,12 +190,19 @@ typedef struct __attribute__((packed)) __pfe_idex_request_tag
 	/*	Request state */
 	pfe_idex_request_state_t state;
 	/*	Internal linked list hook */
-	LLIST_t list_entry;
-	/*	Internal timeout value */
-	uint32_t timeout;
-	void *resp_buf;
-	uint16_t resp_buf_len;
+	union { /* Avoids changing struct size between 32/64bit architectures */
+        struct __attribute__((packed)) {
+        	LLIST_t list_entry;
+			/*	Internal timeout value */
+			uint32_t timeout;
+			void *resp_buf;
+			uint16_t resp_buf_len;
+        };
+        uint8_t padding[30U];
+    };
 } pfe_idex_request_t;
+
+ct_assert(sizeof(pfe_idex_request_t) == 37);
 
 /**
  * @brief	IDEX Response Header. Also used as response instance.
@@ -209,6 +224,8 @@ typedef struct __attribute__((packed)) __pfe_idex_response_tag
 	/*	Payload length in number of bytes */
 	uint16_t plen;
 } pfe_idex_response_t;
+
+ct_assert(sizeof(pfe_idex_response_t) == 7);
 
 /**
  * @brief	This is IDEX instance representation type
@@ -439,6 +456,8 @@ static void pfe_idex_do_tx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 {
 	void *ref_ptr;
 	pfe_idex_frame_header_t *idex_header;
+    
+    (void)idex;
 
 	while (TRUE)
 	{
@@ -702,7 +721,15 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	errno_t ret;
 	void *payload;
 	pfe_idex_seqnum_t seqnum;
-	uint32_t timeout_ms = 1500U;
+	uint32_t timeout_us = 1500U * 1000;
+#ifndef PFE_CFG_TARGET_OS_LINUX
+	/*	Wait 1ms */
+	const uint32_t timeout_step = 1000;
+#else
+	/*	Linux requires busy-looping wait here.
+		What can be achieved with oal_time_usleep(10) or smaller only */
+	const uint32_t timeout_step = 10;
+#endif
 
 	/*	1.) Create the request instance with room for request payload */
 	req = oal_mm_malloc_contig_aligned_nocache(sizeof(pfe_idex_request_t) + data_len, 0U);
@@ -751,6 +778,11 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 #endif /* IDEX_CFG_VERBOSE */
 
 	/*	Send it out as payload of IDEX frame */
+	if (EOK != pfe_idex_request_set_state(seqnum, IDEX_REQ_STATE_COMMITTED))
+	{
+		NXP_LOG_WARNING("Transition to IDEX_REQ_STATE_COMMITTED failed\n");
+	}
+
 	ret = pfe_idex_send_frame(dst_phy, IDEX_FRAME_CTRL_REQUEST, req, (sizeof(pfe_idex_request_t) + data_len));
 	if (EOK != ret)
 	{
@@ -765,15 +797,11 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	else
 	{
 		/*	Request transmitted. Will be released once it is processed. */
-		if (EOK != pfe_idex_request_set_state(seqnum, IDEX_REQ_STATE_COMMITTED))
-		{
-			NXP_LOG_WARNING("Transition to IDEX_REQ_STATE_COMMITTED failed\n");
-		}
 
 		/*	4.) Block until response is received or timeout occurred. RX and
 		 	 	TX processing is expected to be done asynchronously in
 		 	 	pfe_idex_ihc_handler(). */
-		for ( ; timeout_ms>0U; timeout_ms--)
+		for ( ; timeout_us>0U; timeout_us-=timeout_step)
 		{
 			if (IDEX_MASTER_DISCOVERY == type)
 			{
@@ -790,11 +818,11 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 				}
 			}
 
-			/*	Wait 1ms */
-			oal_time_usleep(1000U);
+			/*	Wait a bit */
+			oal_time_usleep(timeout_step);
 		}
 
-		if (0U == timeout_ms)
+		if (0U == timeout_us)
 		{
 #ifdef IDEX_CFG_VERY_VERBOSE
 			NXP_LOG_DEBUG("IDEX request %d timed-out\n", oal_ntohl(req->seqnum));
@@ -851,7 +879,7 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 	pfe_idex_frame_header_t *idex_hdr, *idex_hdr_pa;
 	void *payload;
 	errno_t ret;
-	hif_drv_sg_list_t sg_list;
+	hif_drv_sg_list_t sg_list = { 0U };
 
 	/*	Get IDX frame buffer */
 	idex_hdr = oal_mm_malloc_contig_aligned_nocache(sizeof(pfe_idex_frame_header_t) + data_len, 0U);
@@ -921,7 +949,7 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master)
 
 	memset(idex, 0, sizeof(pfe_idex_t));
 
-	idex->req_seq_num = rand();
+	idex->req_seq_num = oal_util_rand();
 
 	/*	Here we don't know even own interface ID... */
 	idex->master_phy_if = master;
@@ -929,7 +957,7 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master)
 
 #ifdef PFE_CFG_PFE_MASTER
 	NXP_LOG_INFO("IDEX-master @ interface %d\n", master);
-#elif PFE_CFG_PFE_SLAVE
+#elif defined(PFE_CFG_PFE_SLAVE)
 	NXP_LOG_INFO("IDEX-slave\n");
 #else
 #error Impossible configuration
@@ -989,7 +1017,7 @@ void pfe_idex_fini(void)
 	{
 		LLIST_t *item, *aux;
 		pfe_idex_request_t *req;
-	
+
 		/*	Remove all entries remaining in requests storage */
 		if (FALSE == LLIST_IsEmpty(&idex->req_list))
 		{
@@ -1067,9 +1095,12 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, void *buf, uint16_
 {
 	errno_t ret;
 	pfe_idex_msg_rpc_t *msg = oal_mm_malloc(sizeof(pfe_idex_msg_rpc_t) + buf_len);
-	uint8_t local_resp_buf[256] = {0U};
+	uint8_t local_resp_buf[256] = { 0U };
 	uint16_t msg_plen;
 	void *payload;
+
+	if (NULL == msg)
+		return ENOMEM;
 
 	msg->rpc_id = oal_htonl(id);
 	msg->plen = oal_htons(buf_len);
@@ -1184,3 +1215,5 @@ errno_t pfe_idex_set_rpc_ret_val(errno_t retval, void *resp, uint16_t resp_len)
 
 	return ret;
 }
+
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */

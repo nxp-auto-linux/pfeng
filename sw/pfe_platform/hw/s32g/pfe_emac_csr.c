@@ -34,6 +34,12 @@
 #include "pfe_cbus.h"
 #include "pfe_emac_csr.h"
 
+#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
+#error Unsupported IP version
+#endif /* PFE_CFG_IP_VERSION */
+
 /* Mode conversion table */
 static const char_t * phy_mode[] =
 {
@@ -245,7 +251,7 @@ errno_t pfe_emac_cfg_enable_ts(void *base_va, bool_t eclk, uint32_t i_clk_hz, ui
 		/*	Get sub-nanosecond part */
 		sns = (val / (uint64_t)o_clk_hz) - (((val / 1000ULL) / (uint64_t)o_clk_hz) * 1000ULL);
 
-		NXP_LOG_INFO("IEEE1588: Input Clock: %dHz, Output: %dHz(+-100%), Accuracy: %d.%dns\n", i_clk_hz, o_clk_hz, ss, sns);
+		NXP_LOG_INFO("IEEE1588: Input Clock: %dHz, Output: %dHz, Accuracy: %d.%dns\n", i_clk_hz, o_clk_hz, ss, sns);
 
 		if (0U == (regval & DIGITAL_ROLLOVER(1)))
 		{

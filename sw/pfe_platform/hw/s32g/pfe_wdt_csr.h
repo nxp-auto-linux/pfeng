@@ -33,6 +33,12 @@
 
 #include "pfe_wdt.h"
 
+#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
+#error Unsupported IP version
+#endif /* PFE_CFG_IP_VERSION */
+
 errno_t pfe_wdt_cfg_isr(void *base_va, void *cbus_base_va);
 void pfe_wdt_cfg_irq_mask(void *base_va);
 void pfe_wdt_cfg_irq_unmask(void *base_va);

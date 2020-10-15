@@ -29,6 +29,8 @@
  * ========================================================================= */
 
 #include "pfe_cfg.h"
+#ifndef PFE_CFG_PFE_SLAVE
+
 #include "oal.h"
 #include "hal.h"
 
@@ -42,7 +44,8 @@ typedef enum
 {
 	PFE_PHY_IF_INVALID,
 	PFE_PHY_IF_EMAC,
-	PFE_PHY_IF_HIF
+	PFE_PHY_IF_HIF,
+	PFE_PHY_IF_UTIL
 } pfe_phy_if_type_t;
 
 struct __pfe_phy_if_tag
@@ -1126,6 +1129,51 @@ pfe_hif_chnl_t *pfe_phy_if_get_hif(pfe_phy_if_t *iface)
 }
 
 /**
+ * @brief		Initialize util physical interface
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ * @retval		EPERM Operation not permitted
+ */
+errno_t pfe_phy_if_bind_util(pfe_phy_if_t *iface)
+{
+	errno_t ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	if (PFE_PHY_IF_INVALID == iface->type)
+	{
+		iface->type = PFE_PHY_IF_UTIL;
+		/* Configure instance to NULL */
+		/* With NULL nothing will be done on en/dis promisc en/dis etc.. */
+		iface->port.instance = NULL;
+	}
+	else
+	{
+		NXP_LOG_DEBUG("Interface already bound\n");
+		ret = EPERM;
+	}
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	return ret;
+}
+
+/**
  * @brief		Check if interface is enabled
  * @param[in]	iface The interface instance
  * @retval		TRUE if enabled
@@ -1443,7 +1491,7 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 			}
 			else if (PFE_PHY_IF_HIF == iface->type)
 			{
-				/*	HIF does not offer filtering ability */
+				/*	HIF/UTIL does not offer filtering ability */
 				;
 			}
 			else
@@ -1747,6 +1795,33 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 }
 
 /**
+ * @brief Sets the SPD (security policy database for IPsec) of the physical interface
+ * @param[in] iface Inteface which SPD shall be set
+ * @param[in] spd_addr Address of the SPD in the DMEM to be set (value 0 disables the IPsec feature for given interface)
+ * @return EOK or an error value in case of failure
+ */
+errno_t pfe_phy_if_set_spd(pfe_phy_if_t *iface, uint32_t spd_addr)
+{
+	errno_t ret;
+    /* Update configuration */
+    iface->phy_if_class.ipsec_spd = oal_htonl(spd_addr);        
+    /* Propagate the change into the classifier */
+    ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
+    return ret;
+}
+
+/**
+ * @brief Returns the SPD address used by the physical interface
+ * @param[in] iface Physical interface which shall be queried
+ * @return Address of the SPD being used by the given physical interface. Value 0 means that no
+ * *       SPD is in use thus the IPsec feature is disabled for the given interface.
+ */
+uint32_t pfe_phy_if_get_spd(pfe_phy_if_t *iface)
+{
+    return oal_ntohl(iface->phy_if_class.ipsec_spd);
+}
+
+/**
  * @brief		Get phy interface statistics
  * @param[in]	iface The interface instance
  * @param[out]	stat Statistic structure
@@ -1885,3 +1960,5 @@ uint32_t pfe_phy_if_get_text_statistics(pfe_phy_if_t *iface, char_t *buf, uint32
 	}
 	return len;
 }
+
+#endif /* ! PFE_CFG_PFE_SLAVE */

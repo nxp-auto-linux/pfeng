@@ -34,6 +34,12 @@
 #include "pfe_cbus.h"
 #include "pfe_wdt_csr.h"
 
+#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
+#error Unsupported IP version
+#endif /* PFE_CFG_IP_VERSION */
+
 /**
  * @brief		WDT ISR
  * @details		MASK, ACK, and process triggered interrupts.

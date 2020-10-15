@@ -1403,7 +1403,7 @@ __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t se
 	}
 
 	size = RING_LEN * sizeof(pfe_hif_bd_t);
-	ring->base_va = oal_mm_malloc_contig_aligned_nocache(size, ii);
+	ring->base_va = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_BD_MEM, size, ii);
 
 	if (unlikely(NULL == ring->base_va))
 	{
@@ -1429,7 +1429,7 @@ __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t se
 
 	/*	Allocate memory for write-back descriptors */
 	size = RING_LEN * sizeof(pfe_hif_wb_bd_t);
-	ring->wb_tbl_base_va = oal_mm_malloc_contig_aligned_nocache(size, ii);
+	ring->wb_tbl_base_va = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_BD_MEM, size, ii);
 
 	if (unlikely(NULL == ring->wb_tbl_base_va))
 	{

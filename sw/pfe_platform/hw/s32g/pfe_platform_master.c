@@ -29,6 +29,7 @@
  * ========================================================================= */
 
 #include "pfe_cfg.h"
+#ifdef PFE_CFG_PFE_MASTER
 #include "elf_cfg.h"
 #include "elf.h"
 
@@ -50,6 +51,7 @@
 #include "pfe_flexible_filter.h"
 #endif /* PFE_CFG_FLEX_PARSER_AND_FILTER */
 #ifdef PFE_CFG_FCI_ENABLE
+#include "pfe_spd_acc.h"
 #include "fci.h"
 #endif /* PFE_CFG_FCI_ENABLE */
 
@@ -949,8 +951,8 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 			if (EOK == ret)
 			{
-				_ct_assert(sizeof(rpc_ret.stats) == sizeof(pfe_ct_class_algo_stats_t));
-				ret = pfe_log_if_get_stats(phy_if_arg, &rpc_ret.stats)
+				ct_assert(sizeof(rpc_ret.stats) == sizeof(pfe_ct_class_algo_stats_t));
+				ret = pfe_log_if_get_stats(log_if_arg, &rpc_ret.stats);
 			}
 
 			/*	Report execution status to caller */
@@ -1231,8 +1233,8 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 			if (EOK == ret)
 			{
-				_ct_assert(sizeof(pfe_ct_phy_if_stats_t) == sizeof(rpc_ret.stats));
-				ret = pfe_phy_if_get_stats(phy_if_arg, &rpc_ret.stats)
+				ct_assert(sizeof(pfe_ct_phy_if_stats_t) == sizeof(rpc_ret.stats));
+				ret = pfe_phy_if_get_stats(phy_if_arg, &rpc_ret.stats);
 			}
 
 			/*	Report execution status to caller */
@@ -1434,7 +1436,8 @@ static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, pfe_platform_co
 
 	/*	Must be aligned to BUF_COUNT * BUF_SIZE */
 	platform->bmu_buffers_size = PFE_CFG_BMU2_BUF_COUNT * (1U << PFE_CFG_BMU2_BUF_SIZE);
-	platform->bmu_buffers_va = oal_mm_malloc_contig_named_aligned_nocache("pfe_ddr", platform->bmu_buffers_size, platform->bmu_buffers_size);
+	platform->bmu_buffers_va = oal_mm_malloc_contig_named_aligned_nocache(
+			PFE_CFG_SYS_MEM, platform->bmu_buffers_size, platform->bmu_buffers_size);
 	if (NULL == platform->bmu_buffers_va)
 	{
 		NXP_LOG_ERROR("Unable to get BMU2 pool memory\n");
@@ -1901,7 +1904,7 @@ static errno_t pfe_platform_create_rtable(pfe_platform_t *platform)
 	uint32_t pool_offs = 256U * pfe_rtable_get_entry_size();
 
 	platform->rtable_size = 2U * 256U * pfe_rtable_get_entry_size();
-	platform->rtable_va = oal_mm_malloc_contig_named_aligned_nocache("pfe_ddr", platform->rtable_size, 2048U);
+	platform->rtable_va = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_RT_MEM, platform->rtable_size, 2048U);
 	if (NULL == platform->rtable_va)
 	{
 		NXP_LOG_ERROR("Unable to get routing table memory\n");
@@ -2061,7 +2064,8 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 	}
 
 	/*	EMAC1 */
-#if PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, (void *)CBUS_EMAC1_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
 #else /* FPGA */
 	platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, (void *)CBUS_EMAC1_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_100_MBPS, EMAC_DUPLEX_FULL);
@@ -2089,7 +2093,8 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 	}
 
 	/*	EMAC2 */
-#if PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	platform->emac[1] = pfe_emac_create(platform->cbus_baseaddr, (void *)CBUS_EMAC2_BASE_ADDR, EMAC_MODE_RGMII, EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
 #else /* FPGA */
 	platform->emac[1] = pfe_emac_create(platform->cbus_baseaddr, (void *)CBUS_EMAC2_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_100_MBPS, EMAC_DUPLEX_FULL);
@@ -2117,7 +2122,8 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 	}
 
 	/*	EMAC3 */
-#if PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	platform->emac[2] = pfe_emac_create(platform->cbus_baseaddr, (void *)CBUS_EMAC3_BASE_ADDR, EMAC_MODE_RGMII, EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
 #else /* FPGA */
 	platform->emac[2] = pfe_emac_create(platform->cbus_baseaddr, (void *)CBUS_EMAC3_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_100_MBPS, EMAC_DUPLEX_FULL);
@@ -2521,6 +2527,7 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 			{.name = "emac0", .id = PFE_PHY_IF_ID_EMAC0, .mac = GEMAC0_MAC, .emac = platform->emac[0]},
 			{.name = "emac1", .id = PFE_PHY_IF_ID_EMAC1, .mac = GEMAC1_MAC, .emac = platform->emac[1]},
 			{.name = "emac2", .id = PFE_PHY_IF_ID_EMAC2, .mac = GEMAC2_MAC, .emac = platform->emac[2]},
+			{.name = "util", .id = PFE_PHY_IF_ID_UTIL, .mac = {0}, .chnl = NULL},
 			{.name = "hif0", .id = PFE_PHY_IF_ID_HIF0, .mac = {0}, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_0)},
 			{.name = "hif1", .id = PFE_PHY_IF_ID_HIF1, .mac = {0}, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_1)},
 			{.name = "hif2", .id = PFE_PHY_IF_ID_HIF2, .mac = {0}, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_2)},
@@ -2587,6 +2594,16 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 						}
 
 						/*	Do not set MAC address here. Will be configured via logical interfaces later. */
+					}
+					else if (pfe_phy_if_get_id(phy_if) == PFE_PHY_IF_ID_UTIL)
+					{
+						/* All actions on UTIL PHY will not do anything. */
+						/* This phy is only present to alow adding new logical interfaces. */
+						if (EOK != pfe_phy_if_bind_util(phy_if))
+						{
+							NXP_LOG_ERROR("Can't initialize UTIL PHY (%s)\n", phy_ifs[ii].name);
+							return ENODEV;
+						}
 					}
 					else
 					{
@@ -2795,7 +2812,8 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 	pfe.etgpi_count = 3U;
 	pfe.hgpi_count = 1U;
 	pfe.bmu_count = 2U;
-#if PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	pfe.class_pe_count = 8U;
 	pfe.util_pe_count = 1U;
 #else /* FPGA */
@@ -2975,6 +2993,11 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 	}
 
 #ifdef PFE_CFG_FCI_ENABLE
+    ret = pfe_spd_acc_init(pfe.classifier, pfe.rtable);
+	if (EOK != ret)
+	{
+		goto exit;
+	}    
 	ret = pfe_platform_create_fci(&pfe);
 	if (EOK != ret)
 	{
@@ -3058,7 +3081,8 @@ errno_t pfe_platform_remove(void)
 	pfe_platform_destroy_l2_bridge(&pfe);
 #endif /* PFE_CFG_L2BRIDGE_ENABLE */
 #ifdef PFE_CFG_FCI_ENABLE /* temp solution, disabled for Linux and MCAL now */
-	pfe_platform_destroy_fci(&pfe);
+	pfe_spd_acc_destroy();
+    pfe_platform_destroy_fci(&pfe);
 #endif /* PFE_CFG_FCI_ENABLE */
 
 	pfe_platform_destroy_ifaces(&pfe);
@@ -3098,3 +3122,5 @@ pfe_platform_t * pfe_platform_get_instance(void)
 		return NULL;
 	}
 }
+
+#endif /*PFE_CFG_PFE_MASTER*/

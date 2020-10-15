@@ -175,7 +175,8 @@ static void pfe_hif_chnl_refill_rx_buffers(pfe_hif_chnl_t *chnl) __attribute__((
 static uint32_t pfe_hif_tx_cbc = 0U;
 static oal_spinlock_t cbc_lock;
 static uint32_t cbc_lock_initialized = 0U;
-#if PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	#define PFE_HIF_TX_FIFO_SIZE	(1024U * 6U * 8U)
 #else
 	#error Please define HIF TX FIFO size
@@ -1638,9 +1639,11 @@ __attribute__((hot)) errno_t pfe_hif_chnl_release_buf(pfe_hif_chnl_t *chnl, void
 		}
 
 #if (TRUE == HAL_HANDLE_CACHE)
+	#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
 		/*	Without this flush the invalidation does not properly work. Recycled buffers
 			are not properly invalidated when this line is missing. */
 		oal_mm_cache_flush(buf_va, (void *)buf_pa, PFE_BUF_SIZE);
+	#endif /* PFE_CFG_IP_VERSION */
 #endif /* HAL_HANDLE_CACHE */
 
 		if (unlikely(EOK != oal_spinlock_lock(&chnl->rx_lock)))

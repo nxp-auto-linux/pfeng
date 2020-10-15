@@ -33,6 +33,12 @@
 
 #include "pfe_emac.h"
 
+#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
+#error Unsupported IP version
+#endif /* PFE_CFG_IP_VERSION */
+
 #define MAC_CONFIGURATION						0x0000U
 #define MAC_EXT_CONFIGURATION					0x0004U
 #define MAC_PACKET_FILTER						0x0008U

@@ -333,7 +333,7 @@ typedef enum __attribute__((packed))
 	IF_FL_PROMISC = (1U << 1),		/*!< If set, interface is promiscuous */
 	IF_FL_FF_ALL_TCP = (1U << 2),	/*!< Enable fast-forwarding of ingress TCP SYN|FIN|RST packets */
 	IF_FL_MATCH_OR = (1U << 3),		/*!< Result of match is logical OR of rules, else AND */
-    IF_FL_DISCARD = (1U << 4)		/*!< Discard packets on rules match */
+	IF_FL_DISCARD = (1U << 4)		/*!< Discard packets on rules match */
 } pfe_ct_if_flags_t;
 
 /*	We expect given pfe_ct_if_flags_t size due to byte order compatibility. */
@@ -394,6 +394,67 @@ typedef struct __attribute__((packed, aligned(4))) __pfe_ct_log_if_tag
 	pfe_ct_class_algo_stats_t __attribute__((aligned(4))) class_stats; /* Must be aligned at 4 bytes */
 } pfe_ct_log_if_t;
 
+typedef enum __attribute__((packed))
+{
+	SPD_ACT_INVALID = 0U,			/* Undefined action - configuration is required */
+	SPD_ACT_DISCARD,				/* Discard the frame */
+	SPD_ACT_BYPASS,					/* Bypass IPsec and forward normally */
+	SPD_ACT_PROCESS_ENCODE,			/* Process IPsec */
+	SPD_ACT_PROCESS_DECODE			/* Process IPsec */
+} pfe_ct_spd_entry_action_t;
+ct_assert(sizeof(pfe_ct_spd_entry_action_t) == sizeof(uint8_t));
+
+typedef enum __attribute__((packed))
+{
+	SPD_FLAG_5T = (1U << 0U),			/* 5-tuple acceleration by HW, if not set the id5t shall be 0 */
+	SPD_FLAG_IPv6 = (1U << 1U),			/* IPv4 if not set, IPv6 if set */
+	SPD_FLAG_SPORT_OPAQUE = (1U << 2U),	/* Do not match Source PORT */
+	SPD_FLAG_DPORT_OPAQUE = (1U << 3U),	/* Do not match Destination PORT */
+} pfe_ct_spd_flags_t;
+ct_assert(sizeof(pfe_ct_spd_flags_t) == sizeof(uint8_t));
+
+typedef struct __attribute__((packed, aligned(4)))
+{
+	pfe_ct_spd_flags_t flags;
+	/* --- Match criteria ---*/
+	/*	IP protocol number */
+	uint8_t proto;	/* IP protocol */
+	uint16_t pad;	/* align at 4 bytes boundary */
+	/*	L4 source port number */
+	uint16_t sport;
+	/*	L4 destination port number */
+	uint16_t dport;
+	/*	Source and destination IP addresses */
+	union
+	{
+		struct
+		{
+			uint32_t sip;
+			uint32_t dip;
+		} v4;
+
+		struct
+		{
+			uint32_t sip[4];
+			uint32_t dip[4];
+		} v6;
+	} u;
+	uint32_t id5t;	/* 5-tuple ID to speed search, 0 = invalid ID */
+	uint32_t spi;	/* SPI value to match - only for action SPD_ACT_PROCESS_DECODE */
+	/* --- Action --- */
+	uint32_t sad_entry; /* How to process IPsec */
+	pfe_ct_spd_entry_action_t action; /* What to do on match */
+	uint8_t pad8[3];
+} pfe_ct_spd_entry_t;
+
+typedef struct __attribute__((packed, aligned(4)))
+{
+	uint32_t entry_count;					/* Count of the entries in the database */
+	pfe_ct_spd_entry_action_t no_ip_action;	/* Non-ip traffic action - may not be SPD_ACT_PROCESS */
+	uint8_t pad[3U];						/* Align to 4 bytes */
+	PFE_PTR(pfe_ct_spd_entry_t) entries;	/* Database entries */
+} pfe_ct_ipsec_spd_t;
+
 /**
  * @brief	The physical interface structure as seen by classifier/firmware
  * @details	This structure is shared between firmware and the driver. It represents
@@ -418,6 +479,8 @@ typedef struct __attribute__((packed, aligned(4)))
 	pfe_ct_phy_if_id_t mirror;
 	/*	Reserved */
 	uint8_t reserved[3];
+	/*	SPD for IPsec */
+	PFE_PTR(pfe_ct_ipsec_spd_t) ipsec_spd;
 	/*	Gathered statistics */
 	pfe_ct_phy_if_stats_t __attribute__((aligned(4))) phy_stats; /* Must be aligned to 4 bytes */
 } pfe_ct_phy_if_t;
@@ -489,7 +552,7 @@ typedef struct __attribute__((packed))
 		uint64_t val;
 	};
 } pfe_ct_vlan_table_result_t;
-#elif PFE_COMPILER_BITFIELD_BEHAVIOR == PFE_COMPILER_BITFIELD_HIGH_FIRST    
+#elif PFE_COMPILER_BITFIELD_BEHAVIOR == PFE_COMPILER_BITFIELD_HIGH_FIRST
 /**
  * @brief	MAC table lookup result (31-bit)
  */
@@ -767,6 +830,8 @@ typedef struct __attribute__((packed, aligned(4)))
 	uint32_t dmem_phy_if_size;
 	/*	Fall-back bridge domain structure location (DMEM) */
 	PFE_PTR(pfe_ct_bd_entry_t) dmem_fb_bd_base;
+	/*	Default bridge domain structure location (DMEM) */
+	PFE_PTR(pfe_ct_bd_entry_t) dmem_def_bd_base;
 	/*	Misc. control  */
 	PFE_PTR(pfe_ct_pe_misc_control_t) pe_misc_control;
 	/*	Statistics provided for the PE (by the firmware) */
@@ -844,8 +909,10 @@ typedef struct __attribute__((packed))
 	uint8_t i_log_if;
 	/*	Rx frame flags */
 	pfe_ct_hif_rx_flags_t flags;
+	/*	Queue */
+	uint8_t queue;
 	/*	Reserved */
-	uint8_t reserved[2];
+	uint8_t reserved;
 	/*	RX timestamp */
 	uint32_t rx_timestamp_ns;
 	uint32_t rx_timestamp_s;
@@ -1085,7 +1152,8 @@ typedef struct __attribute__((packed, aligned(4))) __pfe_ct_rtable_entry_tag
 	pfe_ct_route_actions_t actions;
 	pfe_ct_route_actions_args_t args;
 	/*	General purpose storage */
-	uint32_t dummy[2];
+	uint32_t id5t; /* 5-tuple identifier for the IPsec */
+	uint32_t dummy;
 	uint32_t rt_orig;
 } pfe_ct_rtable_entry_t;
 

@@ -39,7 +39,9 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
+#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
 
@@ -186,7 +188,7 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
 void pfe_class_cfg_set_def_vlan(void *base_va, uint16_t vlan)
 {
 	hal_write32(0U
-			| USE_DEFAULT_VLANID(TRUE)
+			| USE_DEFAULT_VLANID(FALSE)
 			| DEF_VLANID(vlan & 0xfffU)
 			, base_va + CLASS_VLAN_ID);
 }

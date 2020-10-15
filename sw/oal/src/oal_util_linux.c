@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019 NXP
+ *  Copyright 2019-2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -42,6 +42,8 @@
 #include "oal_types.h"
 #include "oal_util.h"
 
+#include <linux/random.h>
+
 uint32_t oal_util_snprintf(char_t *buffer, size_t buf_len, const char_t *format, ...)
 {
 	uint32_t len = 0;
@@ -64,6 +66,15 @@ uint32_t oal_util_snprintf(char_t *buffer, size_t buf_len, const char_t *format,
 	len = vscnprintf(buffer, buf_len, format, ap);
 	va_end(ap);
 	return len;
+}
+
+int oal_util_rand(void)
+{
+	int val;
+
+	get_random_bytes(&val, sizeof(int));
+
+	return val;
 }
 
 /** @}*/

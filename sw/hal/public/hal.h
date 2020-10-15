@@ -134,11 +134,7 @@
 /**
  * @brief	If TRUE then platform need explicit cache maintenance (flush/invalidate)
  */
-#if defined(PFE_CFG_TARGET_OS_QNX) && !defined(PFE_CFG_TARGET_ARCH_x86)
-	#define HAL_HANDLE_CACHE	TRUE
-#else
-	#define HAL_HANDLE_CACHE	FALSE
-#endif
+#define HAL_HANDLE_CACHE	FALSE
 
 /**
  * @brief	Specify cache line size in number of bytes.

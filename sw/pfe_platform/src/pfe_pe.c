@@ -1406,7 +1406,7 @@ errno_t pfe_pe_set_number(pfe_pe_t *pe)
 {
 	if(NULL == pe->mmap_data)
 	{
-		NXP_LOG_ERROR("Memory map is not known\n");
+		NXP_LOG_WARNING("Memory map is not known\n");
 		return ENOENT;
 	}
 
@@ -1525,6 +1525,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 		load_addr = pfe_pe_get_elf_sect_load_addr(elf_file, &elf_file->arSectHead32[ii]);
 		if(0 == load_addr)
 		{	/* Failed */
+			ret = EINVAL;
 			goto free_and_fail;
 		}
 

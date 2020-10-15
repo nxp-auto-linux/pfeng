@@ -34,6 +34,7 @@
 #include "fci_fp.h"
 #include "fci_fp_db.h"
 #include "fci_flexible_filter.h"
+#include "fci_spd.h"
  /* Global variable used across all fci files */
 fci_t __context = {0};
 
@@ -240,6 +241,30 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
                     ret = fci_flexible_filter_cmd(msg, &fci_ret, (fpp_flexible_filter_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
                     break;
                 }
+
+                case FPP_CMD_SPD:
+                {
+                    ret = fci_spd_cmd(msg, &fci_ret, (fpp_spd_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+                    break;
+                }
+
+				case FPP_CMD_QOS_QUEUE:
+				{
+					ret = fci_qos_queue_cmd(msg, &fci_ret, (fpp_qos_queue_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
+
+				case FPP_CMD_QOS_SCHEDULER:
+				{
+					ret = fci_qos_scheduler_cmd(msg, &fci_ret, (fpp_qos_scheduler_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
+
+				case FPP_CMD_QOS_SHAPER:
+				{
+					ret = fci_qos_shaper_cmd(msg, &fci_ret, (fpp_qos_shaper_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
 
 				default:
 				{

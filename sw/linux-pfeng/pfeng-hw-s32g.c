@@ -45,7 +45,11 @@
 #include "pfeng.h"
 
 static const struct of_device_id pfeng_id_table[] = {
+#ifdef PFE_CFG_PFE_MASTER
 	{ .compatible = "fsl,s32g274a-pfeng" },
+#elif PFE_CFG_PFE_SLAVE
+	{ .compatible = "fsl,s32g274a-pfeng-slave" },
+#endif
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, pfeng_id_table);
@@ -90,6 +94,7 @@ static int init_reserved_memory(struct device *dev)
 #endif
 }
 
+#ifdef PFE_CFG_PFE_MASTER
 static unsigned int xlate_to_s32g_intf(unsigned int n, phy_interface_t intf)
 {
 	switch(intf) {
@@ -134,6 +139,7 @@ static int pfeng_s32g_set_emac_interfaces(struct pfeng_priv *priv, phy_interface
 
 	return 0;
 }
+#endif
 
 static int release_config(struct pfeng_priv *priv)
 {
@@ -173,6 +179,7 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 	pfe_cfg->cbus_len = res->end - res->start + 1;
 	dev_info(&pdev->dev, "Cbus addr 0x%llx size 0x%llx\n", pfe_cfg->cbus_base, pfe_cfg->cbus_len);
 
+#ifdef PFE_CFG_PFE_MASTER
 	/* S32G Main GPRs */
 	res = platform_get_resource(priv->pdev, IORESOURCE_MEM, 1);
 	if(unlikely(!res)) {
@@ -183,11 +190,22 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 	priv->plat.syscon.end = res->end;
 	dev_dbg(&pdev->dev, "Syscon addr 0x%llx size 0x%llx\n", priv->plat.syscon.start, priv->plat.syscon.end - priv->plat.syscon.start);
 
-	/* Firmware name */
-	if (of_find_property(np, "firmware-name", NULL))
-		if (!of_property_read_string(np, "firmware-name", &priv->fw_name)) {
-			dev_info(&pdev->dev, "firmware-name: %s", priv->fw_name);
+	/* Firmware CLASS name */
+	if (of_find_property(np, "fsl,fw-class-name", NULL))
+		if (!of_property_read_string(np, "fsl,fw-class-name", &priv->fw_class_name)) {
+			dev_info(&pdev->dev, "fsl,fw-class-name: %s\n", priv->fw_class_name);
 		}
+#endif
+
+	/* Firmware UTIL name */
+	if (of_find_property(np, "fsl,fw-util-name", NULL))
+		if (!of_property_read_string(np, "fsl,fw-util-name", &priv->fw_util_name)) {
+			dev_info(&pdev->dev, "fsl,fw-util-name: %s\n", priv->fw_util_name);
+ 		}
+
+	/* Unsupported property check 'firmware-name' */
+	if (of_find_property(np, "firmware-name", NULL))
+		dev_warn(&pdev->dev, "WARNING: Property 'firmware-name' is unsupported. Use 'fsl,fw-class-name' instead\n");
 
 	/* IRQ hif0 - hif3 */
 	for (i = 0; i < HIF_CFG_MAX_CHANNELS; i++) {
@@ -221,6 +239,7 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 	pfe_cfg->irq_vector_bmu = irq;
 	dev_dbg(&pdev->dev, "irq 'bmu' : %u\n", irq);
 
+#ifdef PFE_CFG_PFE_MASTER
 	/* IRQ upe/gpt */
 	irq = platform_get_irq_byname(pdev, "upegpt");
 	if (irq < 0) {
@@ -238,6 +257,17 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 	}
 	pfe_cfg->irq_vector_safety = irq;
 	dev_dbg(&pdev->dev, "irq 'safety' : %u\n", irq);
+#endif
+
+#ifdef PFE_CFG_PFE_SLAVE
+	if (of_property_read_u32(np, "fsl,pfeng-master-hif-channel", &propval)) {
+		dev_err(&pdev->dev, "Invalid hif-channel value");
+		priv->plat.ihc_master_chnl = HIF_CFG_MAX_CHANNELS;
+	} else {
+		priv->plat.ihc_master_chnl = propval;
+		dev_info(&pdev->dev, "MASTER IHC channel: %d", propval);
+	}
+#endif
 
 #if 0 /* MC HIF mode unsupported yet */
 	priv->plat.hif_chnl_mc = HIF_CFG_MAX_CHANNELS;
@@ -283,6 +313,12 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 			goto err;
 		}
 
+		/* HIF IHC option */
+		if (of_find_property(child, "fsl,pfeng-ihc", NULL))
+			eth->ihc = true;
+		else
+			eth->ihc = false;
+
 		/* HIF channel for SC mode */
 		propval = HIF_CFG_MAX_CHANNELS;
 		if (of_find_property(child, "fsl,pfeng-hif-channel", NULL)) {
@@ -324,6 +360,7 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 		if (eth->addr)
 			dev_dbg(&pdev->dev, "DT mac addr: %pM", eth->addr);
 
+#ifdef PFE_CFG_PFE_MASTER
 		/* fixed-link check */
 		eth->fixed_link = of_phy_is_fixed_link(child);
 
@@ -342,6 +379,12 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 			ret = -EINVAL;
 			goto err;
 		}
+#endif
+#ifdef PFE_CFG_PFE_SLAVE
+		/* Slave driver is using FIXED-LINK */
+		eth->fixed_link = true;
+		eth->intf_mode = PHY_INTERFACE_MODE_INTERNAL;
+#endif
 
 		/* EMAC link */
 		if (!of_find_property(child, "fsl,pfeng-emac-id", NULL)) {
@@ -427,6 +470,17 @@ static int pfeng_s32g_probe(struct platform_device *pdev)
 		return -ENODEV;
 
 	dev_info(&pdev->dev, "%s, ethernet driver loading ...\n", PFENG_DRIVER_NAME);
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+#ifdef PFE_CFG_PFE_MASTER
+	dev_info(&pdev->dev, "%s, MASTER INSTANCE\n", PFENG_DRIVER_NAME);
+#elif PFE_CFG_PFE_SLAVE
+	dev_info(&pdev->dev, "%s, SLAVE INSTANCE\n", PFENG_DRIVER_NAME);
+#else
+#error MULTI_INSTANCE_SUPPORT requires PFE_MASTER or PFE_SLAVE defined!
+#endif
+#else
+	dev_info(&pdev->dev, "%s, MULTI-INSTANCE disabled\n", PFENG_DRIVER_NAME);
+#endif
 
 	if (dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32)) != 0) {
 		dev_err(&pdev->dev, "System does not support DMA, aborting\n");
@@ -448,11 +502,13 @@ static int pfeng_s32g_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_set_mask;
 
+#ifdef PFE_CFG_PFE_MASTER
 	if(pfeng_s32g_set_emac_interfaces(priv,
 		pfeng_drv_cfg_get_emac_intf_mode(priv, 0),
 		pfeng_drv_cfg_get_emac_intf_mode(priv, 1),
 		pfeng_drv_cfg_get_emac_intf_mode(priv, 2)))
 		dev_err(&pdev->dev, "WARNING: cannot enable power for EMACs\n");
+#endif
 
 	ret = pfeng_drv_probe(priv);
 	if(ret)

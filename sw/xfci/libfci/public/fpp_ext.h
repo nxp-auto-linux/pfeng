@@ -1060,6 +1060,12 @@ typedef struct CAL_PACKED fpp_flexible_filter_cmd
 #define FPP_ERR_AGAIN				0xf302
 
 /**
+ * @def FPP_CMD_ENDPOINT_SHUTDOWN
+ * @brief Notify client about endpoint shutdown event. 
+ */
+#define FPP_CMD_ENDPOINT_SHUTDOWN	0xf303
+
+/**
  * @brief Argument structure for the FPP_CMD_DATA_BUF_PUT command
  */
 typedef struct CAL_PACKED fpp_buf_cmd_tag
@@ -1070,7 +1076,383 @@ typedef struct CAL_PACKED fpp_buf_cmd_tag
     uint16_t reserved2;
 } fpp_buf_cmd_t;
 
+/**
+ * @def FPP_CMD_SPD
+ * @brief Configures the SPD (Security Policy Database) for IPsec
+ * @note The feature is available only for some Premium firmware versions and it shall not be used
+ *       with firmware not supporting the IPsec to avoid undefined behavior.
+ * @details The command is connected with @c fpp_spd_cmd_t type and allows complete SPD management
+ *          which involves insertion of an entry at a given position (@c FPP_ACTION_REGISTER), removal
+ *          of an entry at a given position (@c FPP_ACTION_DEREGISTER) and reading the database data
+ *          (@c FPP_ACTION_QUERY and @c FPP_ACTION_QUERY_CONT).
+ *
+ * Action FPP_ACTION_REGISTER
+ * --------------------------
+ * The FPP_ACTION_REGISTER action adds an entry at a given position into the SPD belonging
+ * to a given physical interface. The SPD is created if the entry is the 1st one and the position
+ * is ignored in such case. Creation of the SPD enables the IPsec processing for given interface.
+ *
+ * Items to be set in command argument structure:
+ * @code{.c}
+ *   fpp_spd_cmd_t cmd_data =
+ *   {
+ *      // Set the new rule in SPD
+ *      .action = FPP_ACTION_REGISTER,
+ *      // Name of the physical interface which SPD shall be modified
+ *      .name = "emac0",
+ *      // Add as a 4th rule (1st rule used position 0), current 4th rule will follow the newly added rule
+ *      .position = 3,
+ *      // Set the traffic matching criteria
+ *      .saddr = 0xC0A80101, //192.168.1.1
+ *      .daddr = 0xC0A80102, //192.168.1.2
+ *      .protocol = 17,      //UDP
+ *      .sport = 0,          //Source port - not set, see the .flags
+ *      .dport = 0,          //Destination port - not set, see the .flags
+ *      // Set ports as opaque i.e. ignored, missing FPP_SPD_FLAG_IPv6 means IPv4 traffic
+ *      .flags = FPP_SPD_FLAG_SPORT_OPAQUE | FPP_SPD_FLAG_DPORT_OPAQUE
+ *      .spi = 1,            //SPI to match in ESP or AH header (used only for action FPP_SPD_ACTION_PROCESS_DECODE)
+ *      // Set action for matching traffic
+ *      .spd_action = FPP_SPD_ACTION_PROCESS_DECODE, //Do IPsec decoding
+ *      .sa_id = 1,          //HSE SAD entry ID to be used to process the traffic
+ *   }
+ * @endcode
+ *
+ * Action FPP_ACTION_DEREGISTER
+ * ----------------------------
+ * The FPP_ACTION_DEREGISTER action removes an entry at a given position in the SPD belonging
+ * to a given physical interface. The SPD is destroyed if the entry is the last one which disables
+ * the IPsec support on the given interface.
+ *
+ * Items to be set in command argument structure:
+ * @code{.c}
+ *   fpp_flexible_filter_cmd_t cmd_data =
+ *   {
+ *      // Disable the Flexible Filter
+ *      .action = FPP_ACTION_DEREGISTER,
+ *      // Name of the physical interface which SPD shall be modified
+ *      .name = "emac0",
+ *      // Remove the 4th rule (1st rule used position 0)
+ *      .position = 3,
+ *   }
+ * @endcode
+ *
+ * Action FPP_ACTION_QUERY
+ * -----------------------
+ * Items to be set in command argument structure:
+ * @code{.c}
+ *   fpp_spd_cmd_t cmd_data =
+ *   {
+ *      .action = FPP_ACTION_QUERY       // Start the rules query
+ *      // Name of the physical interface which SPD shall be queried
+ *      .name = "emac0",
+ *   };
+ * @endcode
+ *
+ * Response data type for queries: @ref fpp_spd_cmd_t
+ *
+ * Response data provided has the same format as FPP_ACTION_REGISTER action.
+ * @note All data is provided in the network byte order.
+ *
+ * Action FPP_ACTION_QUERY_CONT
+ * ----------------------------
+ * Items to be set in command argument structure:
+ * @code{.c}
+ *   fpp_spd_cmd_t cmd_data =
+ *   {
+ *      .action = FPP_ACTION_QUERY_CONT    // Continue with the rules query
+ *      // Name of the physical interface which SPD shall be queried
+ *      .name = "emac0",
+ *   };
+ * @endcode
+ * @hideinitializer
+ */
+#define FPP_CMD_SPD 0xf226
+
+/**
+* @brief Sets the action to be done for frames matching the SPD entry criteria
+*/
+typedef enum CAL_PACKED
+{
+	FPP_SPD_ACTION_INVALID = 0U,	/* Undefined action - do not set this one */
+	FPP_SPD_ACTION_DISCARD,			/* Discard the frame */
+	FPP_SPD_ACTION_BYPASS,			/* Bypass IPsec and forward normally */
+	FPP_SPD_ACTION_PROCESS_ENCODE,	/* Process IPsec */
+	FPP_SPD_ACTION_PROCESS_DECODE	/* Process IPsec */
+} fpp_spd_action_t;
+
+/**
+* @brief Flags values to be used in fpp_spd_cmd_t structure .flags field.
+*/
+typedef enum CAL_PACKED
+{
+	FPP_SPD_FLAG_IPv6 = (1U << 1U),			/* IPv4 if not set, IPv6 if set */
+	FPP_SPD_FLAG_SPORT_OPAQUE = (1U << 2U),	/* Do not match Source PORT */
+	FPP_SPD_FLAG_DPORT_OPAQUE = (1U << 3U),	/* Do not match Destination PORT */
+} fpp_spd_flags_t;
+
+/**
+ * @brief Argument structure for the FPP_CMD_SPD command
+ */
+typedef struct CAL_PACKED
+{
+	uint16_t action;			/**< Action */
+	char name[IFNAMSIZ];		/**< Interface name */
+	fpp_spd_flags_t flags;
+	uint16_t position;			/**< Rule position (0 = 1st one, X = insert before Xth rule, if X > count then add as a last one) */
+	uint32_t saddr[4];			/**< Source IP address (IPv4 uses only 1st word) */
+	uint32_t daddr[4];			/**< Destination IP address (IPv4 uses only 1st word) */
+	uint16_t sport;				/**< Source port */
+	uint16_t dport;				/**< Destination port */
+	uint8_t protocol;			/**< Protocol ID: TCP, UDP */
+	uint32_t sa_id;				/**< SAD entry identifier (used only for actions SPD_ACT_PROCESS_ENCODE) */
+	uint32_t spi;				/**< SPI to match if action is FPP_SPD_ACTION_PROCESS_DECODE */
+	fpp_spd_action_t spd_action;	/**< Action to be done on the frame */
+} fpp_spd_cmd_t;
+
+/**
+ * @def FPP_CMD_QOS_QUEUE
+ * @brief Management of QoS queues
+ * @details Command can be used with following `.action` values:
+ *          - @c FPP_ACTION_UPDATE: Update queue configuration
+ *          - @c FPP_ACTION_QUERY: Get queue properties
+ *
+ * Command Argument Type: @ref fpp_qos_queue_cmd_t
+ *
+ * Action FPP_ACTION_UPDATE
+ * ------------------------
+ * To update queue properties just set 
+ *   - `fpp_qos_queue_cmd_t.action` to @ref FPP_ACTION_QUERY
+ *   - `fpp_qos_queue_cmd_t.if_name` to name of the physical interface and
+ *   - `fpp_qos_queue_cmd_t.id` to the queue ID.
+ *
+ * Rest of the fpp_qos_queue_cmd_t structure members will be considered to be used as the new
+ * queue properties. It is recommended to use read-modify-write approach in combination with
+ * @ref FPP_ACTION_QUERY.
+ * 
+ * Action FPP_ACTION_QUERY
+ * -----------------------
+ * Get current queue properties. Set
+ *   - `fpp_qos_queue_cmd_t.action` to @ref FPP_ACTION_QUERY
+ *   - `fpp_qos_queue_cmd_t.if_name` to name of the physical interface and
+ *   - `fpp_qos_queue_cmd_t.id` to the queue ID.
+ *
+ * Response data type for the query command is fpp_qos_scheduler_cmd_t.
+ *
+ * Possible command return values are:
+ *     - @c FPP_ERR_OK: Success.
+ *     - @c FPP_ERR_QUEUE_NOT_FOUND: Queue not found.
+ *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Invalid argument/value.
+ *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ *
+ * @hideinitializer
+ */
+#define FPP_CMD_QOS_QUEUE			0xf400
+
+/**
+ * @def FPP_ERR_QOS_QUEUE_NOT_FOUND
+ * @hideinitializer
+ */
+#define FPP_ERR_QOS_QUEUE_NOT_FOUND	0xf401
+
+/**
+ * @brief Argument of the @ref FPP_CMD_QOS_QUEUE command.
+ */
+typedef struct CAL_PACKED fpp_qos_queue_cmd
+{
+	/**	Action */
+	uint16_t action;
+	/**	Interface name */
+	char if_name[IFNAMSIZ];
+	/**	Queue ID. IDs start with 0 and maximum value depends on the number of
+		available queues within the given interface `.if_name`. See @ref egress_qos. */
+	uint8_t id;
+	/**	Queue mode:
+		- 0 - Disabled. Queue will drop all packets.
+		- 1 - Default. HW implementation-specific. Normally not used.
+		- 2 - Tail drop
+		- 3 - WRED */
+	uint8_t mode;
+	/**	Minimum threshold (network endian). Value is `.mode`-specific:
+		- Disabled, Default: n/a
+		- Tail drop: n/a
+		- WRED: Threshold in number of packets in the queue at which the WRED lowest
+				drop probability zone starts, i.e. if queue fill level is below
+				this threshold the drop probability is 0%.
+	*/
+	uint32_t min;
+	/**	Maximum threshold (network endian). Value is `.mode`-specific:
+		- Disabled, Default: n/a
+		- Tail drop: The queue length in number of packets. Queue length
+					 is the number of packets the queue can accommodate before
+					 drops will occur.
+		- WRED: Threshold in number of packets in the queue at which the WRED highest
+				drop probability zone ends, i.e. if queue fill level is above this
+				threshold the drop probability is 100%.
+	*/
+	uint32_t max;
+	/** WRED drop probabilities for all probability zones in [%]. The lowest probability zone
+		is `.zprob[0]`. Only valid for `.mode = WRED`. Value 255 means 'invalid'. Number of zones
+		per queue is implementation-specific. See the @ref egress_qos. */
+	uint8_t zprob[32];
+} fpp_qos_queue_cmd_t;
+
+/**
+ * @def FPP_CMD_QOS_SCHEDULER
+ * @brief Management of QoS scheduler
+ * @details Command can be used with following `.action` values:
+ *          - @c FPP_ACTION_UPDATE: Update scheduler configuration
+ *          - @c FPP_ACTION_QUERY: Get scheduler properties
+ *
+ * Command Argument Type: @ref fpp_qos_scheduler_cmd_t
+ *
+ * Action FPP_ACTION_UPDATE
+ * ------------------------
+ * To update scheduler properties just set 
+ *   - `fpp_qos_scheduler_cmd_t.action` to @ref FPP_ACTION_QUERY
+ *   - `fpp_qos_scheduler_cmd_t.if_name` to name of the physical interface and
+ *   - `fpp_qos_scheduler_cmd_t.id` to the scheduler ID.
+ *
+ * Rest of the fpp_qos_scheduler_cmd_t structure members will be considered to be used as the new
+ * scheduler properties. It is recommended to use read-modify-write approach in combination with
+ * @ref FPP_ACTION_QUERY.
+ *
+ * Action FPP_ACTION_QUERY
+ * -----------------------
+ * Get current scheduler properties. Set
+ *   - `fpp_qos_scheduler_cmd_t.action` to @ref FPP_ACTION_QUERY
+ *   - `fpp_qos_scheduler_cmd_t.if_name` to name of the physical interface and
+ *   - `fpp_qos_scheduler_cmd_t.id` to the scheduler ID.
+ *
+ * Response data type for the query command is fpp_qos_scheduler_cmd_t.
+ *
+ * Possible command return values are:
+ *     - @c FPP_ERR_OK: Success.
+ *     - @c FPP_ERR_SCHEDULER_NOT_FOUND: Scheduler not found.
+ *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Invalid argument/value.
+ *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ *
+ * @hideinitializer
+ */
+#define FPP_CMD_QOS_SCHEDULER			0xf410
+
+/**
+ * @def FPP_ERR_QOS_SCHEDULER_NOT_FOUND
+ * @hideinitializer
+ */
+#define FPP_ERR_QOS_SCHEDULER_NOT_FOUND	0xf411
+
+/**
+ * @brief Argument of the @ref FPP_CMD_QOS_SCHEDULER command.
+ */
+typedef struct CAL_PACKED fpp_qos_scheduler_cmd
+{
+	/**	Action */
+	uint16_t action;
+	/**	Name of physical interface owning the scheduler */
+	char if_name[IFNAMSIZ];
+	/**	Scheduler ID. IDs start with 0 and maximum value depends on the number of
+		available schedulers within the given interface `.if_name`. See @ref egress_qos. */
+	uint8_t id;
+	/**	Scheduler mode:
+		- 0 - Scheduler disabled
+		- 1 - Data rate (payload length)
+		- 2 - Packet rate (number of packets) */
+	uint8_t mode;
+	/**	Scheduler algorithm:
+			- 0 - PQ (Priority Queue). Input with the highest priority
+				  is serviced first. Input 0 has the @b lowest priority.
+			- 1 - DWRR (Deficit Weighted Round Robin)
+			- 2 - RR (Round Robin)
+			- 3 - WRR (Weighted Round Robin) */
+	uint8_t algo;
+	/**	Input enable bitfield (network endian). When a bit `n` is
+		set it means that scheduler input `n` is enabled and connected
+		to traffic source defined by `.source[n]`. Number of inputs is
+		implementation-specific. See the @ref egress_qos. */
+	uint32_t input_en;
+	/**	Input weight (network endian). Scheduler algorithm-specific:
+			- PQ, RR - n/a
+			- WRR, DWRR - Weight in units given by scheduler `.mode` */
+	uint32_t input_w[32];
+	/**	Traffic source ID per scheduler input. Scheduler traffic sources
+		are implementation-specific. See the @ref egress_qos. */
+	uint8_t input_src[32];
+} fpp_qos_scheduler_cmd_t;
+
+/**
+ * @def FPP_CMD_QOS_SHAPER
+ * @brief Management of QoS shaper
+ * @details Command can be used with following `.action` values:
+ *          - @c FPP_ACTION_UPDATE: Update scheduler configuration
+ *          - @c FPP_ACTION_QUERY: Get scheduler properties
+ *
+ * Command Argument Type: @ref fpp_qos_shaper_cmd_t
+ *
+ * Action FPP_ACTION_UPDATE
+ * ------------------------
+ * To update scheduler properties just set 
+ *   - `fpp_qos_shaper_cmd_t.action` to @ref FPP_ACTION_QUERY
+ *   - `fpp_qos_shaper_cmd_t.if_name` to name of the physical interface and
+ *   - `fpp_qos_shaper_cmd_t.id` to the shaper ID.
+ *
+ * Rest of the fpp_qos_shaper_cmd_t structure members will be considered to be used as the new
+ * shaper properties. It is recommended to use read-modify-write approach in combination with
+ * @ref FPP_ACTION_QUERY.
+ * 
+ * Action FPP_ACTION_QUERY
+ * -----------------------
+ * Get current scheduler properties. Set
+ *   - `fpp_qos_shaper_cmd_t.action` to @ref FPP_ACTION_QUERY
+ *   - `fpp_qos_shaper_cmd_t.if_name` to name of the physical interface and
+ *   - `fpp_qos_shaper_cmd_t.id` to the shaper ID.
+ *
+ * Response data type for the query command is fpp_qos_shaper_cmd_t.
+ *
+ * Possible command return values are:
+ *     - @c FPP_ERR_OK: Success.
+ *     - @c FPP_ERR_SHAPER_NOT_FOUND: Shaper not found.
+ *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Invalid argument/value.
+ *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ *
+ * @hideinitializer
+ */
+#define FPP_CMD_QOS_SHAPER				0xf420
+
+/**
+ * @def FPP_ERR_QOS_SHAPER_NOT_FOUND
+ * @hideinitializer
+ */
+#define FPP_ERR_QOS_SHAPER_NOT_FOUND	0xf421
+
+/**
+ * @brief Argument of the @ref FPP_CMD_QOS_SHAPER command.
+ */
+typedef struct CAL_PACKED fpp_qos_shaper_cmd
+{
+	/**	Action */
+	uint16_t action;
+	/**	Interface name */
+	char if_name[IFNAMSIZ];
+	/**	Shaper ID. IDs start with 0 and maximum value depends on the number of
+		available shapers within the given interface `.if_name`. See @ref egress_qos. */
+	uint8_t id;
+	/**	Position of the shaper */
+	uint8_t position;
+	/**	Shaper mode:
+		- 0 - Shaper disabled
+		- 1 - Data rate. The `isl` is in units of bits-per-second and
+			  `max_credit` with `min_credit` are numbers of bytes.
+		- 2 - Packet rate. The `isl` is in units of packets-per-second
+			  and `max_credit` with `min_credit` are number of packets.*/
+	uint8_t mode;
+	/**	Idle slope in units per second (network endian) */
+	uint32_t isl;
+	/**	Max credit (network endian) */
+	int32_t max_credit;
+	/**	Min credit (network endian) */
+	int32_t min_credit;
+} fpp_qos_shaper_cmd_t;
+
 #endif /* FPP_EXT_H_ */
 
 /** @}*/
-

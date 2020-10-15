@@ -1,4 +1,8 @@
+*
+* Copyright 2020 NXP
+*
 * NXP S32G274A PFE networking accelerator (pfeng)
+*
 
 Required properties:
 - compatible : Should be "fsl,s32g274a-pfeng"
@@ -6,10 +10,11 @@ Required properties:
 - interrupts : Should contain all pfeng interrupts: hif0..hif3,nocpy,bmu,upegpt,safety
 - clocks : Should contain at least: pfe_sys, pfe_pe, xbar
 - memory-region : Physical address space for PFE buffers, must be in the range 0x00020000 - 0xbfffffff
-- phy-mode : See ethernet.txt file in the same directory
 
 Optional properties:
-- firmware-name : The name of PFE firmware
+- fsl,fw-class-name : PFE CLASS firmware filename
+- fsl,fw-util-name : PFE UTIL firmware filename
+- fsl,pfeng-master-hif-channel : [slave only] The number of master's HIF channel (0-3)
 
 Required subnode:
 - ethernet : specifies the logical network interface
@@ -23,6 +28,7 @@ Requires properties for 'ethernet' subnode:
 - fsl,pfeng-emac-id : PFE EMAC id where the interface will be linked to
 
 Optional properties for 'ethernet' subnode:
+- fsl,pfeng-ihc : [master/slave only] Declares the interface for IHC traffic
 - local-mac-address : MAC address
 - phy-handle : phandle to the PHY device connected to this device.
 - fixed-link : Assume a fixed link. See fixed-link.txt in the same directory.
@@ -60,7 +66,8 @@ pfe@46080000 {
 		 <&clks S32GEN1_CLK_PFE_PE>,
 		 <&clks S32GEN1_CLK_XBAR>;
 	clock-names = "pfe_sys", "pfe_pe", "xbar";
-	firmware-name = "s32g_pfe_class.fw";
+	fsl,fw-class-name = "s32g_pfe_class.fw";
+	fsl,fw-util-name = "s32g_pfe_util.fw";
 
 	/* EMAC 0 */
 	pfe0_if: ethernet@0 {

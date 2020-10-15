@@ -491,11 +491,6 @@ int fci_catch(FCI_CLIENT *client)
 					}
 				}
 			}
-			else if (FCI_MSG_ENDPOINT_SHUTDOWN == msg.type)
-			{
-				FCILIB_PRINTF(FCILIB_PRINT, "FCI server shutdown\n");
-				shall_quit = true;	
-			}
 			else
 			{
 				FCILIB_PRINTF(FCILIB_ERR, "Unknown message received (type = 0x%x)\n", msg.type);

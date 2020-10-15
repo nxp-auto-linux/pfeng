@@ -189,6 +189,7 @@ static errno_t pfe_if_db_check_precondition(if_db_context_t *context, uint32_t s
 	if(FALSE == context->is_locked)
 	{
 		ret = EPERM;
+        NXP_LOG_DEBUG("DB access not permitted\n");
 	}
 	else if(session_id != context->session_id)
 	{

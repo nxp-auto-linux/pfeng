@@ -29,6 +29,7 @@
  * ========================================================================= */
 
 #include "pfe_cfg.h"
+#ifdef PFE_CFG_PFE_SLAVE
 #include "oal.h"
 #include "hal.h"
 
@@ -495,3 +496,5 @@ pfe_platform_t * pfe_platform_get_instance(void)
 		return NULL;
 	}
 }
+
+#endif /*PFE_CFG_PFE_SLAVE*/

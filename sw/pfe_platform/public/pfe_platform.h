@@ -51,7 +51,6 @@
 #endif /* PFE_CFG_L2BRIDGE_ENABLE */
 #include "pfe_phy_if.h"
 #include "pfe_log_if.h"
-#include "pfe_hif_drv.h"
 #include "pfe_if_db.h"
 #include "pfe_wdt.h"
 

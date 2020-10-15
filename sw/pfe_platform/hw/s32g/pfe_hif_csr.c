@@ -39,7 +39,9 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) && (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14)
+#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
 
@@ -327,7 +329,9 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 	{
 		if (reg_src & reg_en & BDP_RD_CSR_RX_TIMEOUT_CH_INT)
 		{
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("BDP_RD_CSR_RX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
 #else
@@ -337,7 +341,9 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 
 		if (reg_src & reg_en & BDP_WR_CSR_RX_TIMEOUT_CH_INT)
 		{
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("BDP_WR_CSR_RX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
 #else
@@ -347,7 +353,9 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 
 		if (reg_src & reg_en & BDP_RD_CSR_TX_TIMEOUT_CH_INT)
 		{
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("BDP_RD_CSR_TX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
 #else
@@ -357,7 +365,9 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 
 		if (reg_src & reg_en & BDP_WR_CSR_TX_TIMEOUT_CH_INT)
 		{
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("BDP_WR_CSR_TX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
 #else
@@ -367,7 +377,9 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 
 		if (reg_src & reg_en & DXR_CSR_RX_TIMEOUT_CH_INT)
 		{
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("DXR_CSR_RX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
 #else
@@ -377,7 +389,9 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 
 		if (reg_src & reg_en & DXR_CSR_TX_TIMEOUT_CH_INT)
 		{
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("DXR_CSR_TX_TIMEOUT_CH%d_INT. Interrupt disabled.\n", channel_id);
 #else
@@ -385,7 +399,9 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 #endif /* PFE_CFG_IP_VERSION */
 		}
 
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 		/*	Don't re-enable these interrupts. See AAVB-2144. */
 #else
 		/*	Enable timeout interrupts */

@@ -115,6 +115,9 @@ errno_t fci_connections_set_default_timeout(uint8_t ip_proto, uint32_t timeout);
 uint32_t fci_connections_get_default_timeout(uint8_t ip_proto);
 errno_t fci_enable_if(pfe_phy_if_t *phy_if);
 errno_t fci_disable_if(pfe_phy_if_t *phy_if);
+errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t *reply_buf, uint32_t *reply_len);
+errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_scheduler_cmd_t *reply_buf, uint32_t *reply_len);
+errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd_t *reply_buf, uint32_t *reply_len);
 
 #endif /* SRC_FCI_INTERNAL_H_ */
 

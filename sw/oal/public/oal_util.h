@@ -123,6 +123,13 @@ errno_t oal_util_parse_ptp(uint8_t *buffer, size_t len, oal_util_ptp_header_t **
 uint32_t oal_util_get_unique_seqnum32(void);
 #endif /* PFE_CFG_IEEE1588_SUPPORT */
 
+/**
+ * @brief	Get pseudo-random integer
+ * @note	It is not thread-safe on some OSes
+ * @return	The number
+ */
+int32_t oal_util_rand(void);
+
 #endif /* OAL_UTIL_H_ */
 
 /** @}*/

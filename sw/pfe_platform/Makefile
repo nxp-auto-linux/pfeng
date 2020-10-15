@@ -116,7 +116,9 @@ SRCS =	src/pfe_bmu.c \
 		src/pfe_tmu.c \
 		src/pfe_util.c \
 		src/pfe_fp.c \
-		src/pfe_flexible_filter.c
+		src/pfe_flexible_filter.c \
+		src/pfe_spd.c \
+		src/pfe_spd_acc.c
 ifeq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),1)
 SRCS += src/pfe_idex.c
 endif
@@ -177,9 +179,22 @@ rebuild: clean all
 
 ccflags-y += $(INCLUDES)
 ccflags-y += -Wno-date-time
+ifneq ($(PFE_CFG_LINUX_TRACE),0)
+ccflags-y += -Og
+endif
 ccflags-y += $(CCFLAGS_pfe)
 ccflags-y += $(GLOBAL_CCFLAGS)
 
+ifeq ($(PFE_CFG_PFE_MASTER),0)
+pfe_platform-y := src/pfe_hif_chnl.o \
+		src/pfe_class.o \
+		src/pfe_hif_ring.o \
+		src/pfe_hif.o \
+		src/pfe_log_if_slave.o \
+		src/pfe_if_db.o \
+		src/pfe_pe.o \
+		src/pfe_phy_if_slave.o
+else
 pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_class.o \
 	src/pfe_flexible_filter.o \
@@ -196,6 +211,13 @@ pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_log_if.o \
 	src/pfe_if_db.o \
 	src/pfe_safety.o \
+	src/pfe_spd.o \
+	src/pfe_spd_acc.o
+endif
+
+
+
+pfe_platform-y += src/pfe_bmu.o \
 	hw/$(TARGET_HW)/pfe_bmu_csr.o \
 	hw/$(TARGET_HW)/pfe_emac_csr.o \
 	hw/$(TARGET_HW)/pfe_hif_csr.o \
@@ -214,6 +236,10 @@ ifeq ($(PFE_CFG_PFE_MASTER),0)
 pfe_platform-y += hw/$(TARGET_HW)/pfe_platform_slave.o
 else
 pfe_platform-y +=hw/$(TARGET_HW)/pfe_platform_master.o
+endif
+
+ifneq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),0)
+pfe_platform-y += src/pfe_idex.o
 endif
 
 ifeq ($(PFE_CFG_RTABLE_ENABLE),1)

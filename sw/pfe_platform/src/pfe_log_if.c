@@ -29,6 +29,8 @@
  * ========================================================================= */
 
 #include "pfe_cfg.h"
+#ifndef PFE_CFG_PFE_SLAVE
+
 #include "oal.h"
 #include "hal.h"
 
@@ -1878,3 +1880,5 @@ uint32_t pfe_log_if_get_text_statistics(pfe_log_if_t *iface, char_t *buf, uint32
 
 	return len;
 }
+
+#endif /* ! PFE_CFG_PFE_SLAVE */

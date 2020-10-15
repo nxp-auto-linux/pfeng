@@ -132,20 +132,14 @@ rebuild: clean all
 
 ccflags-y += $(INCLUDES)
 ccflags-y += -Wno-date-time
+ifneq ($(PFE_CFG_LINUX_TRACE),0)
+ccflags-y += -Og
+endif
 ccflags-y += $(CCFLAGS_pfe)
 ccflags-y += $(GLOBAL_CCFLAGS)
 
-ifeq ($(PFE_CFG_MC_HIF),1)
-	pfe_hif_drv-y := src/pfe_hif_drv.o
-else
-	ifeq ($(PFE_CFG_SC_HIF),1)
-		pfe_hif_drv-y := src/pfe_hif_drv_sc.o
-	else
-		$(error No HIF driver variant selected)
-	endif
-endif
+pfe_hif_drv-y := src/pfe_hif_drv_linux.o
 
-#pfe_hif_drv-y := $(OBJS)
 ifneq ($(PFE_CFG_IEEE1588_SUPPORT),0)
     pfe_hif_drv-y += src/pfe_hif_ptp.o
 endif

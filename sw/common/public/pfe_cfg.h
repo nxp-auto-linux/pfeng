@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 NXP
+ * Copyright 2019-2020 NXP
  *
  * SPDX-License-Identifier:     BSD OR GPL-2.0
  *
@@ -16,7 +16,7 @@
 /*  Predefined values for configuration options */
 #define PFE_CFG_IP_VERSION_FPGA_5_0_4   100
 #define PFE_CFG_IP_VERSION_NPU_7_14     101
-
+#define PFE_CFG_IP_VERSION_NPU_7_14a    102
 
 
 /*  Find the configuration parameters defined in makefiles  */

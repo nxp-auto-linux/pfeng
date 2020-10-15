@@ -88,7 +88,8 @@ typedef enum
 	RTABLE_CRIT_ALL_IPV6,			/*!< Match any entry in the routing table. The get_first() argument is NULL. */
 	RTABLE_CRIT_BY_DST_IF,			/*!< Match entries by destination interface. The get_first() argument is (pfe_interface_t *). */
 	RTABLE_CRIT_BY_ROUTE_ID,		/*!< Match entries by route ID. The get_first() argument is (uint32_t *). */
-	RTABLE_CRIT_BY_5_TUPLE			/*!< Match entries by 5-tuple. The get_first() argument is (pfe_5_tuple_t *). */
+	RTABLE_CRIT_BY_5_TUPLE,			/*!< Match entries by 5-tuple. The get_first() argument is (pfe_5_tuple_t *). */
+	RTABLE_CRIT_BY_ID5T,			/*!< Match entries by unique 5-tuple ID */
 } pfe_rtable_get_criterion_t;
 
 /**
@@ -108,6 +109,7 @@ errno_t pfe_rtable_entry_to_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple);
 errno_t pfe_rtable_entry_to_5t_out(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple);
 pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_criterion_t crit, void *arg);
 pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable);
+uint32_t pfe_rtable_get_size(pfe_rtable_t *rtable);
 
 pfe_rtable_entry_t *pfe_rtable_entry_create(void);
 void pfe_rtable_entry_free(pfe_rtable_entry_t *entry);
@@ -142,5 +144,9 @@ void pfe_rtable_entry_set_refptr(pfe_rtable_entry_t *entry, void *refptr);
 void *pfe_rtable_entry_get_refptr(pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_set_child(pfe_rtable_entry_t *entry, pfe_rtable_entry_t *child);
 pfe_rtable_entry_t *pfe_rtable_entry_get_child(pfe_rtable_entry_t *entry);
+
+void pfe_rtable_entry_set_id5t(pfe_rtable_entry_t *entry, uint32_t id5t);
+errno_t pfe_rtable_entry_get_id5t(pfe_rtable_entry_t *entry, uint32_t *id5t);
+errno_t pfe_rtable_entry_set_dstif_id(pfe_rtable_entry_t *entry, pfe_ct_phy_if_id_t if_id);
 
 #endif /* PUBLIC_PFE_RTABLE_H_ */

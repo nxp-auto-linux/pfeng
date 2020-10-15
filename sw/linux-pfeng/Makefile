@@ -7,10 +7,11 @@
 
 KERNELDIR ?= /usr/src/linux-headers-`uname -r`
 TARGET_OS := LINUX
-PFE_CFG_MULTI_INSTANCE_SUPPORT = 0
+PFE_CFG_MULTI_INSTANCE_SUPPORT ?= 0
 PLATFORM ?= aarch64-fsl-linux
 ARCH ?= arm64
-PFE_CFG_IP_VERSION ?= PFE_CFG_IP_VERSION_NPU_7_14
+PFE_CFG_IP_VERSION ?= PFE_CFG_IP_VERSION_NPU_7_14a
+PFE_CFG_LINUX_TRACE ?= 0
 
 # No HIF MC support yet
 PFE_CFG_MC_HIF=0
@@ -34,16 +35,34 @@ ccflags-y += -I$(PWD)/../fci/public
 ccflags-y += -DPFE_CFG_TARGET_OS_LINUX
 ccflags-y += -D$(PFE_CFG_TARGET_ARCH_DEF)
 ccflags-y += $(GLOBAL_CCFLAGS)
-ccflags-y += -g
+ifneq ($(PFE_CFG_LINUX_TRACE),0)
+ccflags-y += -Og
+endif
 ccflags-y += -Wno-date-time
 
 OBJ_LIBFCI_DIR = ../xfci/libfci
-OBJ_DIRS = ../oal ../bpool  ../elf  ../fifo  ../pfe_hif_drv  ../pfe_platform ../common ../fci
-pfeng-objs := ../pfe_platform/pfe_platform.o ../oal/oal.o ../elf/elf.o ../fifo/fifo.o ../pfe_hif_drv/pfe_hif_drv.o ../bpool/bpool.o ../common/blalloc.o ../fci/fci.o
+OBJ_DIRS = ../oal ../bpool  ../elf  ../fifo  ../pfe_hif_drv  ../pfe_platform ../common
 
+ifneq ($(PFE_CFG_FCI_ENABLE),0)
+OBJ_DIRS += ../fci
+endif
+
+pfeng-objs := ../pfe_platform/pfe_platform.o ../oal/oal.o ../elf/elf.o ../fifo/fifo.o ../pfe_hif_drv/pfe_hif_drv.o ../bpool/bpool.o ../common/blalloc.o
+pfeng-slave-objs := ../pfe_platform/pfe_platform.o ../oal/oal.o ../elf/elf.o ../fifo/fifo.o ../pfe_hif_drv/pfe_hif_drv.o ../bpool/bpool.o ../common/blalloc.o
+
+ifneq ($(PFE_CFG_FCI_ENABLE),0)
+pfeng-objs += ../fci/fci.o
+pfeng-slave-objs += ../fci/fci.o
+endif
+
+ifneq ($(PFE_CFG_PFE_MASTER),0)
 pfeng-objs += pfeng-drv.o pfeng-hw-s32g.o pfeng-fw.o pfeng-debugfs.o pfeng-napi.o pfeng-ethtool.o pfeng-mdio.o pfeng-phylink.o pfeng-hif.o
-
 obj-m += pfeng.o
+else
+pfeng-slave-objs += pfeng-drv.o pfeng-hw-s32g.o pfeng-fw.o pfeng-debugfs.o pfeng-napi.o pfeng-ethtool.o pfeng-hif.o
+obj-m += pfeng-slave.o
+endif
+
 
 .PHONY: all drv-build drv-clean libfci-build libfci-clean
 

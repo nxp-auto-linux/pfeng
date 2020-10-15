@@ -57,8 +57,10 @@
 
 /**
  * @brief	Maximum number of logical interfaces
+ * @details	This is the maximum number supported by driver. Real
+ *			number is limited by amount of available DMEM.
  */
-#define PFE_CFG_MAX_LOG_IFS					16U
+#define PFE_CFG_MAX_LOG_IFS					256U
 
 /**
  * @brief	The CLASS_PE_SYS_CLK_RATIO[csr_clmode]

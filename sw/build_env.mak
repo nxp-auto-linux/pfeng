@@ -86,7 +86,7 @@ export PFE_CFG_CSUM_ALL_FRAMES?=0
 #HIF sequence number check. 1 - enable, 0 - disable
 export PFE_CFG_HIF_SEQNUM_CHECK?=0
 #IP version
-export PFE_CFG_IP_VERSION?=PFE_CFG_IP_VERSION_NPU_7_14
+export PFE_CFG_IP_VERSION?=PFE_CFG_IP_VERSION_NPU_7_14a
 #Build of rtable feature. 1 - enable, 0 - disable
 export PFE_CFG_RTABLE_ENABLE?=1
 #Build of l2bridge feature. 1 - enable, 0 - disable
@@ -107,6 +107,16 @@ export PFE_CFG_IEEE1588_I_CLK_HZ=0
 export PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ=0
 export PFE_CFG_IEEE1588_EMAC1_O_CLK_HZ=0
 export PFE_CFG_IEEE1588_EMAC2_O_CLK_HZ=0
+#PFE system buffers location
+export PFE_CFG_SYS_MEM="pfe_ddr"
+#Buffer descriptors location
+export PFE_CFG_BD_MEM="pfe_ddr"
+#RX buffers location
+export PFE_CFG_RX_MEM="pfe_ddr"
+#Routing table location
+export PFE_CFG_RT_MEM="pfe_ddr"
+#Enable firmware-based priority control for HIF traffic
+export PFE_CFG_HIF_PRIO_CTRL=1
 
 ifeq ($(PFE_CFG_HIF_DRV_MODE),0)
   #Use multi-client HIF driver. Required when multiple logical interfaces need to
@@ -142,6 +152,7 @@ ifeq ($(PFE_CFG_PFE_MASTER),0)
     $(warning Slave driver must have multi-instance support enabled)
     PFE_CFG_MULTI_INSTANCE_SUPPORT=1
   endif
+  export PFE_CFG_FCI_ENABLE=0
 endif
 
 #Include HIF TX FIFO fix. This is SW workaround for HIF stall issue.
@@ -258,10 +269,50 @@ ifneq ($(PFE_CFG_IEEE1588_SUPPORT),0)
     $(error When IEEE1588 support is enabled the PFE_CFG_IEEE1588_I_CLK_HZ shall not be zero)
   endif
     GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_SUPPORT
-	GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_I_CLK_HZ=$(PFE_CFG_IEEE1588_I_CLK_HZ)
-	GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_EMAC0_O_CLK_HZ=$(PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ)
-	GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_EMAC1_O_CLK_HZ=$(PFE_CFG_IEEE1588_EMAC1_O_CLK_HZ)
-	GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_EMAC2_O_CLK_HZ=$(PFE_CFG_IEEE1588_EMAC2_O_CLK_HZ)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_I_CLK_HZ=$(PFE_CFG_IEEE1588_I_CLK_HZ)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_EMAC0_O_CLK_HZ=$(PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_EMAC1_O_CLK_HZ=$(PFE_CFG_IEEE1588_EMAC1_O_CLK_HZ)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_IEEE1588_EMAC2_O_CLK_HZ=$(PFE_CFG_IEEE1588_EMAC2_O_CLK_HZ)
+endif
+
+ifneq ($(PFE_CFG_SYS_MEM),0)
+  # Pass string literal
+  ifeq ($(TARGET_OS),LINUX)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_SYS_MEM='\"$(PFE_CFG_SYS_MEM)\"'
+  else
+    GLOBAL_CCFLAGS+=-DPFE_CFG_SYS_MEM='$(PFE_CFG_SYS_MEM)'
+  endif
+endif
+
+ifneq ($(PFE_CFG_BD_MEM),0)
+  # Pass string literal
+  ifeq ($(TARGET_OS),LINUX)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_BD_MEM='\"$(PFE_CFG_BD_MEM)\"'
+  else
+    GLOBAL_CCFLAGS+=-DPFE_CFG_BD_MEM='$(PFE_CFG_BD_MEM)'
+  endif
+endif
+
+ifneq ($(PFE_CFG_RX_MEM),0)
+  # Pass string literal
+  ifeq ($(TARGET_OS),LINUX)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_RX_MEM='\"$(PFE_CFG_RX_MEM)\"'
+  else
+    GLOBAL_CCFLAGS+=-DPFE_CFG_RX_MEM='$(PFE_CFG_RX_MEM)'
+  endif
+endif
+
+ifneq ($(PFE_CFG_RT_MEM),0)
+  # Pass string literal
+  ifeq ($(TARGET_OS),LINUX)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_RT_MEM='\"$(PFE_CFG_RT_MEM)\"'
+  else
+    GLOBAL_CCFLAGS+=-DPFE_CFG_RT_MEM='$(PFE_CFG_RT_MEM)'
+  endif
+endif
+
+ifneq ($(PFE_CFG_HIF_PRIO_CTRL),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_PRIO_CTRL
 endif
 
 # This variable will be propagated to every Makefile in the project

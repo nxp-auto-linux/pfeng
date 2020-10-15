@@ -71,9 +71,10 @@
  */
 typedef union
 {
-	 pfe_phy_if_t *iface;			/*!< Valid for the RTABLE_CRIT_BY_DST_IF criterion */
-	uint32_t route_id;				/*!< Valid for the RTABLE_CRIT_BY_ROUTE_ID criterion */
-	pfe_5_tuple_t five_tuple;		/*!< Valid for the RTABLE_CRIT_BY_5_TUPLE criterion */
+	pfe_phy_if_t *iface;				/*!< Valid for the RTABLE_CRIT_BY_DST_IF criterion */
+	uint32_t route_id;					/*!< Valid for the RTABLE_CRIT_BY_ROUTE_ID criterion */
+	uint32_t id5t;						/*!< Valid for the RTABLE_CRIT_BY_ID5T criterion */
+	pfe_5_tuple_t five_tuple;			/*!< Valid for the RTABLE_CRIT_BY_5_TUPLE criterion */
 } pfe_rtable_criterion_arg_t;
 
 /**
@@ -189,8 +190,49 @@ static void rtable_do_timeouts(pfe_rtable_t *rtable);
 static void *rtable_worker_func(void *arg);
 static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, pfe_rtable_criterion_arg_t *arg, pfe_rtable_entry_t *entry);
 static bool_t pfe_rtable_entry_is_in_table(pfe_rtable_entry_t *entry);
+static pfe_rtable_entry_t *pfe_rtable_get_by_phys_entry_va(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry_va);
 
 #define CRCPOLY_BE 0x04c11db7
+
+static pfe_rtable_entry_t *pfe_rtable_get_by_phys_entry_va(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry_va)
+{
+	LLIST_t *item;
+	pfe_rtable_entry_t *entry;
+	bool_t match = FALSE;
+
+	/* There is no protection for the multiple accesses to the table because the function is called
+	   from the code which has already locked the table */
+
+	/*	Search for first matching entry */
+	if (FALSE == LLIST_IsEmpty(&rtable->active_entries))
+	{
+		/*	Get first matching entry */
+		LLIST_ForEach(item, &rtable->active_entries)
+		{
+			/*	Get data */
+			entry = LLIST_Data(item, pfe_rtable_entry_t, list_entry);
+
+			/*	Remember current item to know where to start later */
+			if (NULL != entry)
+			{
+				if (phys_entry_va == entry->phys_entry)
+				{
+					match = TRUE;
+					break;
+				}
+			}
+		}
+	}
+
+	if (TRUE == match)
+	{
+		return entry;
+	}
+	else
+	{
+		return NULL;
+	}
+}
 
 static uint32_t pfe_get_crc32_be(uint32_t crc, uint8_t *data, uint16_t len)
 {
@@ -885,6 +927,31 @@ uint8_t pfe_rtable_entry_get_proto(pfe_rtable_entry_t *entry)
 }
 
 /**
+ * @brief		Set destination interface using its ID
+ * @param[in]	entry The routing table entry instance
+ * @param[in]	if_id Interface ID of interface to be used to forward traffic matching the entry
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid argument
+ */
+errno_t pfe_rtable_entry_set_dstif_id(pfe_rtable_entry_t *entry, pfe_ct_phy_if_id_t if_id)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */    
+	if (if_id > PFE_PHY_IF_ID_MAX)
+	{
+		NXP_LOG_WARNING("Physical interface ID is invalid: 0x%x\n", if_id);
+		return EINVAL;
+	}
+
+	entry->phys_entry->e_phy_if = if_id;
+    return EOK;
+}
+/**
  * @brief		Set destination interface
  * @param[in]	entry The routing table entry instance
  * @param[in]	emac The destination interface to be used to forward traffic matching
@@ -906,16 +973,10 @@ errno_t pfe_rtable_entry_set_dstif(pfe_rtable_entry_t *entry, pfe_phy_if_t *ifac
 
 	if_id = pfe_phy_if_get_id(iface);
 
-	if (if_id > PFE_PHY_IF_ID_MAX)
-	{
-		NXP_LOG_WARNING("Physical interface ID is invalid: 0x%x\n", if_id);
-		return EINVAL;
-	}
-
-	entry->phys_entry->e_phy_if = if_id;
-
-	return EOK;
+    return pfe_rtable_entry_set_dstif_id(entry, if_id);
+	 
 }
+
 
 /**
  * @brief		Set output source IP address
@@ -1288,6 +1349,33 @@ errno_t pfe_rtable_entry_set_action_flags(pfe_rtable_entry_t *entry, pfe_ct_rout
 	return EOK;
 }
 
+void pfe_rtable_entry_set_id5t(pfe_rtable_entry_t *entry, uint32_t id5t)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	entry->phys_entry->id5t = oal_htonl(id5t);   
+}
+
+errno_t pfe_rtable_entry_get_id5t(pfe_rtable_entry_t *entry, uint32_t *id5t)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+ 
+    *id5t = oal_ntohl(entry->phys_entry->id5t);
+    return EOK;
+}
+
 /**
  * @brief		Get actions associated with routing entry
  * @param[in]	entry The routing table entry instance
@@ -1598,7 +1686,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 	uint32_t hash;
 	pfe_ct_rtable_entry_t *hash_table_va = (pfe_ct_rtable_entry_t *)rtable->htable_base_va;
 	pfe_ct_rtable_entry_t *new_phys_entry_va = NULL, *new_phys_entry_pa = NULL, *last_phys_entry_va = NULL;
-	addr_t *tmp_ptr;
+
 #if (TRUE == PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE)
 	uint32_t valid_tmp;
 #endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
@@ -1710,12 +1798,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 	/*	Validate the new entry */
 	entry->phys_entry->flags = oal_htonl(RT_FL_VALID | ((IPV4 == entry->phys_entry->flag_ipv6) ? 0 : RT_FL_IPV6));
 
-	/*	Set up pointers. We use the dummy array to store pointer to our entry object. */
-	tmp_ptr = (addr_t *)&entry->phys_entry->dummy[0];
-	*tmp_ptr = (addr_t)entry;
-
-	tmp_ptr = (addr_t *)&last_phys_entry_va->dummy[0];
-	entry->prev = (NULL == last_phys_entry_va) ? NULL : (void *)*tmp_ptr;
+	entry->prev = (NULL == last_phys_entry_va) ? NULL : pfe_rtable_get_by_phys_entry_va(rtable, last_phys_entry_va);
 	entry->next = NULL;
 	if (NULL != entry->prev)
 	{
@@ -2093,7 +2176,7 @@ static void *rtable_worker_func(void *arg)
  * @details		Creates and initializes routing table at given memory location.
  * @param[in]	class The classifier instance implementing the routing
  * @param[in]	htable_base_va Virtual address where the hash table shall be placed
- * @param[in]	htable size Number of entries within the hash table
+ * @param[in]	htable_size Number of entries within the hash table
  * @param[in]	pool_base_va Virtual address where pool shall be placed
  * @param[in]	pool_size Number of entries within the pool
  * @return		The routing table instance or NULL if failed
@@ -2226,6 +2309,23 @@ free_and_fail:
 
 	pfe_rtable_destroy(rtable);
 	return NULL;
+}
+
+/**
+* @brief		Returns total count of entries within the table 
+* @param[in]	rtable The routing table instance
+* @return		Total count of entries within the table 
+*/
+uint32_t pfe_rtable_get_size(pfe_rtable_t *rtable)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == rtable))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	return rtable->pool_size + rtable->htable_size;
 }
 
 /**
@@ -2453,6 +2553,12 @@ static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, pfe_rt
 			break;
 		}
 
+		case RTABLE_CRIT_BY_ID5T:
+		{
+			match = (arg->id5t == entry->phys_entry->id5t);
+			break;
+		}
+
 		case RTABLE_CRIT_BY_5_TUPLE:
 		{
 			if (EOK != pfe_rtable_entry_to_5t(entry, &five_tuple))
@@ -2466,7 +2572,7 @@ static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, pfe_rt
 			}
 
 			break;
-		}
+		}        
 
 		default:
 		{
@@ -2522,6 +2628,12 @@ pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_cr
 		case RTABLE_CRIT_BY_ROUTE_ID:
 		{
 			memcpy(&rtable->cur_crit_arg.route_id, arg, sizeof(uint32_t));
+			break;
+		}
+
+		case RTABLE_CRIT_BY_ID5T:
+		{
+			memcpy(&rtable->cur_crit_arg.id5t, arg, sizeof(uint32_t));
 			break;
 		}
 

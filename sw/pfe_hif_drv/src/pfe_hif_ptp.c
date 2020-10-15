@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -83,6 +83,7 @@ static void *pfe_hif_ptp_ts_db_tick(void *arg)
 						entry->type, entry->port, entry->seq_id);
 				LLIST_Remove(item);
 				oal_mm_free(entry);
+				db->count--;
 			}
 			else
 			{

@@ -35,10 +35,10 @@ static int pfeng_logif_set_mac_address(struct net_device *netdev, void *p)
 
 	netdev_info(netdev, "setting MAC addr: %pM\n", netdev->dev_addr);
 
-	if (!ndata->logif)
+	if (!ndata->logif_emac)
 		return 0;
 
-	ret = pfe_log_if_set_mac_addr(ndata->logif, netdev->dev_addr);
+	ret = pfe_log_if_set_mac_addr(ndata->logif_emac, netdev->dev_addr);
 	if (!ret)
 		return 0;
 
@@ -48,30 +48,24 @@ static int pfeng_logif_set_mac_address(struct net_device *netdev, void *p)
 static void pfeng_hif_client_remove(struct pfeng_ndev *ndev)
 {
 
-	/* HIF SC mode: Mask HIF channel IRQ */
-	if (ndev->chnl_sc.irqnum)
-		pfe_hif_chnl_irq_mask(ndev->chnl_sc.priv);
+	/* EMAC */
+	if(ndev->logif_emac) {
+		if (EOK != pfe_platform_unregister_log_if(ndev->priv->pfe, ndev->logif_emac))
+			netdev_warn(ndev->netdev, "Can't unregister EMAC Logif\n");
+		else
+			pfe_log_if_destroy(ndev->logif_emac);
+		ndev->logif_emac = NULL;
+	}
+	ndev->phyif_emac = NULL; /* Don't destroy, just forget */
 
 	if(ndev->client) {
 		pfe_hif_drv_client_unregister(ndev->client);
 		ndev->client = NULL;
 	}
 
-	if(ndev->logif) {
-		if (EOK != pfe_platform_unregister_log_if(ndev->priv->pfe, ndev->logif))
-		{
-			netdev_err(ndev->netdev, "Can't unregister Logif\n");
-		}
-
-		pfe_log_if_destroy(ndev->logif);
-		ndev->logif = NULL;
-	}
-
-	ndev->phyif = NULL; /* Don't destroy, just forget */
-
 	/* Uninstall HIF SC channel */
 	if (ndev->chnl_sc.drv)
-		pfeng_hif_chnl_drv_remove(&ndev->chnl_sc);
+		pfeng_hif_chnl_drv_remove(ndev);
 }
 
 /**
@@ -100,37 +94,15 @@ static int pfeng_hif_event_handler(pfe_hif_drv_client_t *client, void *data, uin
 static int pfeng_hif_client_add(struct pfeng_ndev *ndev)
 {
 	int ret = 0;
+	struct sockaddr saddr;
 
-	/*	Get physical interface */
-	ndev->phyif = pfe_platform_get_phy_if_by_id(ndev->priv->pfe, ndev->eth->emac_id);
-	if (NULL == ndev->phyif) {
-		netdev_err(ndev->netdev, "Could not get physical interface\n");
-		return -ENODEV;
-	}
-
-	/*	Create logical interface */
-	ndev->logif = pfe_log_if_create(ndev->phyif, (char *)ndev->eth->name);
-	if (!ndev->logif) {
-		netdev_err(ndev->netdev, "Logif doesn't exist: %s\n", ndev->eth->name);
-		return -ENODEV;
-	}
-	else
-	{
-		if (EOK != pfe_platform_register_log_if(ndev->priv->pfe, ndev->logif))
-		{
-			netdev_err(ndev->netdev, "Can't register Logif\n");
-			pfe_log_if_destroy(ndev->logif);
-			return -ENODEV;
-		}
-	}
-
-	/* Create SC HIF channel */
 	if (ndev->eth->hif_chnl_sc >= HIF_CFG_MAX_CHANNELS) {
 		netdev_err(ndev->netdev, "Unsupported channel index: %u\n", ndev->eth->hif_chnl_sc);
 		return -ENODEV;
 	}
 
-	ret = pfeng_hif_chnl_drv_create(ndev->priv, ndev->eth->hif_chnl_sc, TRUE /*SC mode*/, &ndev->chnl_sc);
+	/* Create SC HIF channel */
+	ret = pfeng_hif_chnl_drv_create(ndev);
 	if (ret)
 		return ret;
 
@@ -139,20 +111,16 @@ static int pfeng_hif_client_add(struct pfeng_ndev *ndev)
 		ndev->bman.rx_pool = pfeng_bman_pool_create(ndev->chnl_sc.priv, ndev->dev);
 		if (!ndev->bman.rx_pool) {
 			netdev_err(ndev->netdev, "Unable to attach bman\n");
-			ndev->logif = NULL;
 			return -ENODEV;
 		}
 		/* Fill by prebuilt RX skbuf */
 		pfeng_hif_chnl_fill_rx_buffers(ndev->chnl_sc.priv, ndev);
 	}
 
-	/* Add debugfs entry for HIF channel */
-	pfeng_debugfs_add_hif_chnl(ndev->priv, ndev);
-
 	/* Connect to HIF */
 	ndev->client = pfe_hif_drv_client_register(
-				ndev->chnl_sc.drv,	/* HIF Driver instance */
-				pfe_log_if_get_id(ndev->logif),	/* Client ID */
+				ndev->chnl_sc.drv,		/* HIF Driver instance */
+				HIF_CLIENTS_MAX,		/* Client ID - unused for now */
 				1,				/* TX Queue Count */
 				1,				/* RX Queue Count */
 				PFE_HIF_RING_CFG_LENGTH,	/* TX Queue Depth */
@@ -162,31 +130,105 @@ static int pfeng_hif_client_add(struct pfeng_ndev *ndev)
 
 	if (!ndev->client) {
 		netdev_err(ndev->netdev, "Unable to register HIF client: %s\n", ndev->eth->name);
-		ndev->logif = NULL;
 		return -ENODEV;
 	}
 
+#ifdef PFE_CFG_PFE_SLAVE
+	/* start HIF channel driver */
+	napi_enable(&ndev->napi);
+	pfe_hif_drv_start(ndev->chnl_sc.drv);
+#endif
+
+	/* 
+	 * Create platform-wide pool of interfaces. Must be done here where HIF channel
+	 * is already initialized to allow slave driver create the instances via IDEX.
+	 */
+	if (pfe_platform_create_ifaces(ndev->priv->pfe)) {
+		netdev_err(ndev->netdev, "Can't init platform interfaces\n");
+		return -ENODEV;
+	}
+
+	/*	Get EMAC physical interface */
+	ndev->phyif_emac = pfe_platform_get_phy_if_by_id(ndev->priv->pfe, ndev->eth->emac_id);
+	if (NULL == ndev->phyif_emac) {
+		netdev_err(ndev->netdev, "Could not get EMAC physical interface\n");
+		return -ENODEV;
+	}
+
+	/*	Create EMAC logical interface */
+	ndev->logif_emac = pfe_log_if_create(ndev->phyif_emac, (char *)ndev->eth->name);
+	if (!ndev->logif_emac) {
+		netdev_err(ndev->netdev, "EMAC Logif doesn't exist: %s\n", ndev->eth->name);
+			return -ENODEV;
+	} else {
+		ret = pfe_platform_register_log_if(ndev->priv->pfe, ndev->logif_emac);
+		if (ret) {
+			netdev_err(ndev->netdev, "Can't register EMAC Logif\n");
+			goto err;
+		}
+	}
+
+	/* Set MAC address */
+	if (ndev->eth->addr && is_valid_ether_addr(ndev->eth->addr))
+		memcpy(&saddr.sa_data, ndev->eth->addr, sizeof(saddr.sa_data));
+	else
+		memset(&saddr.sa_data, 0, sizeof(saddr.sa_data));
+	pfeng_logif_set_mac_address(ndev->netdev, (void *)&saddr);
+
+	/* Add debugfs entry for HIF channel */
+	pfeng_debugfs_add_hif_chnl(ndev->priv, ndev);
+
+
 	if (EOK != pfe_hif_drv_client_set_inject_if(ndev->client,
-					pfe_phy_if_get_id(ndev->phyif)))
+					pfe_phy_if_get_id(ndev->phyif_emac)))
 	{
 		netdev_err(ndev->netdev, "Can't set inject interface\n");
 		goto err;
 	}
 
+#ifdef PFE_CFG_PFE_MASTER
 	/* Send packets received via 'log_if' to exclusively associated HIF channel */
-	ret = pfe_log_if_set_egress_ifs(ndev->logif, 1 << pfeng_hif_ids[ndev->eth->hif_chnl_sc]);
+	ret = pfe_log_if_set_egress_ifs(ndev->logif_emac, 1 << pfeng_hif_ids[ndev->eth->hif_chnl_sc]);
 	if (EOK != ret) {
-		netdev_err(ndev->netdev, "Can't set egress interface\n");
+		netdev_err(ndev->netdev, "Can't set egress interface %s\n", pfe_log_if_get_name(ndev->logif_emac));
 		ret = -ret;
 		goto err;
 	}
+#elif PFE_CFG_PFE_SLAVE
+	/* Make sure that EMAC ingress traffic will be forwarded to respective HIF channel */
+	ret = pfe_log_if_add_egress_if(ndev->logif_emac, pfe_platform_get_phy_if_by_id(ndev->priv->pfe, pfeng_hif_ids[ndev->eth->hif_chnl_sc]));
+	if (EOK != ret) {
+		netdev_err(ndev->netdev, "Can't set egress interface %s\n", pfe_log_if_get_name(ndev->logif_emac));
+		ret = -ret;
+		goto err;
+	}
+	/* Configure the logical interface to accept frames matching local MAC address */
+	ret = pfe_log_if_add_match_rule(ndev->logif_emac, IF_MATCH_DMAC, (void *)ndev->netdev->dev_addr, 6U);
+	if (EOK != ret) {
+		netdev_err(ndev->netdev, "Can't add match rule for %s\n", pfe_log_if_get_name(ndev->logif_emac));
+		ret = -ret;
+		goto err;
+	}
+	/* Set parent physical interface to FlexibleRouter mode */
+	ret = pfe_phy_if_set_op_mode(ndev->phyif_emac, IF_OP_FLEX_ROUTER);
+	if (EOK != ret) {
+		netdev_err(ndev->netdev, "Can't set operation mode for %s\n", pfe_log_if_get_name(ndev->logif_emac));
+		ret = -ret;
+		goto err;
+	}
+	netdev_info(ndev->netdev, "receive traffic matching its MAC address\n");
+#endif
 
-	netdev_info(ndev->netdev, "Register HIF client %s for logif %p\n", ndev->eth->name, ndev->logif);
+	netdev_info(ndev->netdev, "Register HIF client %s on logif %d\n", ndev->eth->name, pfe_log_if_get_id(ndev->logif_emac));
 
 	return 0;
 
 err:
 	pfeng_hif_client_remove(ndev);
+
+	/* convert to linux style */
+	if (ret > 0)
+		ret = -ret;
 
 	return ret;
 }
@@ -203,6 +245,15 @@ static int pfeng_logif_release(struct net_device *netdev)
 
 	netdev_info(netdev, "%s\n", __func__);
 
+	netif_tx_stop_queue(netdev_get_tx_queue(netdev, 0));
+
+	/* Stop log if */
+	pfe_log_if_disable(ndev->logif_emac);
+
+#ifdef PFE_CFG_PFE_MASTER
+	/* stop napi */
+	napi_disable(&ndev->napi);
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,4,0)
 	/*
 	 * Note: phylink_stop() causes backtraces on 5.4
@@ -211,14 +262,13 @@ static int pfeng_logif_release(struct net_device *netdev)
 	/* stop phylink */
 	if (ndev->phylink)
 		pfeng_phylink_stop(ndev);
-#endif
 
-	/* stop napi */
-	netif_tx_stop_queue(netdev_get_tx_queue(netdev, 0));
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5,4,0) */
 
-	napi_disable(&ndev->napi);
-
-	pfe_log_if_disable(ndev->logif);
+	pfe_hif_drv_stop(ndev->chnl_sc.drv);
+#else
+	netif_carrier_off(netdev);
+#endif /* PFE_CFG_PFE_MASTER */
 
 	return 0;
 }
@@ -235,7 +285,6 @@ static int pfeng_logif_release(struct net_device *netdev)
 static int pfeng_logif_open(struct net_device *netdev)
 {
 	struct pfeng_ndev *ndev = netdev_priv(netdev);
-	struct sockaddr saddr;
 	int ret;
 
 	netdev_dbg(netdev, "%s: %s\n", __func__, ndev ? ndev->eth->name : "???");
@@ -254,17 +303,14 @@ static int pfeng_logif_open(struct net_device *netdev)
 	ndev->xstats.txconf_loop = 0;
 	ndev->xstats.txconf = 0;
 	ndev->xstats.tx_busy = 0;
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	ndev->xstats.ihc_rx = 0;
+	ndev->xstats.ihc_tx = 0;
+#endif
 
-	/* pass eth addr to the logif */
-	memcpy(&saddr.sa_data, ndev->eth->addr, sizeof(saddr.sa_data));
-	pfeng_logif_set_mac_address(netdev, (void *)&saddr);
-
+#ifdef PFE_CFG_PFE_MASTER
 	/* start HIF channel driver */
-	pfe_hif_chnl_irq_unmask(ndev->chnl_sc.priv);
-
 	pfe_hif_drv_start(ndev->chnl_sc.drv);
-	pfe_hif_drv_client_rx_done(ndev->client);
-	pfe_hif_drv_client_tx_done(ndev->client);
 
 	/* start phylink */
 	if (ndev->phylink) {
@@ -281,15 +327,20 @@ static int pfeng_logif_open(struct net_device *netdev)
 				netdev_warn(netdev, "Error starting phylink: %d\n", ret);
 		}
 	}
+#endif
 
-	/* Enable logif */
-	ret = pfe_log_if_enable(ndev->logif);
+	/* Enable EMAC logif */
+	ret = pfe_log_if_enable(ndev->logif_emac);
 	if (ret) {
-		netdev_err(netdev, "Cannot enable: %d\n", ret);
+		netdev_err(netdev, "Cannot enable EMAC: %d\n", ret);
 		goto err_mac_ena;
 	}
 
+#ifdef PFE_CFG_PFE_MASTER
 	napi_enable(&ndev->napi);
+#elif PFE_CFG_PFE_SLAVE
+	netif_carrier_on(netdev);
+#endif
 
 	netif_tx_start_queue(netdev_get_tx_queue(netdev, 0));
 
@@ -391,8 +442,6 @@ static netdev_tx_t pfeng_logif_xmit(struct sk_buff *skb, struct net_device *netd
 	sg_list.total_bytes += skb->len;
 #endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 
-	//TODO: skb_tx_timestamp(skb);
-
 	ret = pfe_hif_drv_client_xmit_sg_pkt(ndev->client, 0, &sg_list, skb);
 
 	if (unlikely(EOK != ret)) {
@@ -447,8 +496,10 @@ static int pfeng_napi_ioctl(struct net_device *netdev, struct ifreq *rq, int cmd
 
 static int pfeng_napi_change_mtu(struct net_device *netdev, int mtu)
 {
+#ifdef PFE_CFG_PFE_MASTER
 	struct pfeng_ndev *ndev = netdev_priv(netdev);
 	pfe_emac_t *emac = ndev->priv->pfe->emac[ndev->eth->emac_id];
+#endif
 
 	netdev_info(netdev, "%s: mtu change to %d\n", __func__, mtu);
 
@@ -462,10 +513,12 @@ static int pfeng_napi_change_mtu(struct net_device *netdev, int mtu)
 		return -EBUSY;
 	}
 
+#ifdef PFE_CFG_PFE_MASTER
 	if (pfe_emac_set_max_frame_length(emac, mtu) != EOK) {
 		netdev_err(netdev, "Error: Invalid MTU value requested: %d\n", mtu);
 		return -EINVAL;
 	}
+#endif
 
 	netdev->mtu = mtu;
 
@@ -480,11 +533,11 @@ static void pfeng_logif_set_rx_mode(struct net_device *netdev)
 
 	if (netdev->flags & IFF_PROMISC) {
 		/* Enable promiscuous mode */
-		if (pfe_log_if_promisc_enable(ndev->logif) == EOK)
+		if (pfe_log_if_promisc_enable(ndev->logif_emac) == EOK)
 			netdev_dbg(netdev, "promisc enabled\n");
 	} else {
 		/* Disable promiscuous mode */
-		if (pfe_log_if_promisc_disable(ndev->logif) == EOK)
+		if (pfe_log_if_promisc_disable(ndev->logif_emac) == EOK)
 			netdev_dbg(netdev, "promisc disabled\n");
 	}
 }
@@ -499,9 +552,10 @@ static const struct net_device_ops pfeng_netdev_ops = {
 	.ndo_set_rx_mode	= pfeng_logif_set_rx_mode,
 };
 
-static struct sk_buff *pfeng_hif_rx_get(struct pfeng_ndev *ndev)
+static struct sk_buff *pfeng_hif_rx_get(struct pfeng_ndev *ndev, unsigned int *ihc_processed)
 {
 	struct sk_buff *skb;
+	pfe_ct_hif_rx_hdr_t *hif_hdr;
 
 	if(!ndev->client)
 		return NULL;
@@ -513,14 +567,29 @@ static struct sk_buff *pfeng_hif_rx_get(struct pfeng_ndev *ndev)
 			/* no more packets */
 			return NULL;
 
-#if 0
-		if (unlikely(FALSE == pfe_hif_pkt_is_last(pkt))) {
-			/*	Currently we only support one packet per buffer */
-			netdev_err(netdev, "Unsupported RX buffer received (len: %d)\n", pfe_hif_pkt_get_data_len(pkt));
-			pfeng_hif_pkt_free(pkt);
+		hif_hdr = (pfe_ct_hif_rx_hdr_t *)skb->data;
+		hif_hdr->flags = (pfe_ct_hif_rx_flags_t)oal_ntohs(hif_hdr->flags);
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+		/* Check for IHC frame */
+		if (unlikely (hif_hdr->flags & HIF_RX_IHC)) {
+			(*ihc_processed)++;
+
+			/* IHC client, deffer work */
+			if (!pfe_hif_drv_ihc_put_pkt(ndev->chnl_sc.drv, skb->data, skb->len, skb)) {
+				ndev->priv->q_elems++;
+				wake_up_interruptible(&ndev->priv->q_ihc);
+			} else {
+				netdev_err(ndev->netdev, "RX IHC queuing failed. Origin phyif %d\n", hif_hdr->i_phy_if);
+				kfree_skb(skb);
+			}
+
 			continue;
 		}
-#endif
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
+		/* Skip HIF header */
+		skb_pull(skb, 16);
 
 		return skb;
 	}
@@ -540,11 +609,10 @@ static int pfeng_napi_rx(struct pfeng_ndev *ndev, int limit)
 {
 	struct net_device *netdev = ndev->netdev;
 	unsigned int done = 0;
+	unsigned int ihc_processed = 0;
 	struct sk_buff *skb;
 
-	while((skb = pfeng_hif_rx_get(ndev))) {
-
-		//print_hex_dump(KERN_ALERT, "rx: ", DUMP_PREFIX_ADDRESS, 16, 1, skb->data, pfe_hif_pkt_get_data_len(pkt), 1);
+	while((skb = pfeng_hif_rx_get(ndev, &ihc_processed))) {
 
 		if (likely(netdev->features & NETIF_F_RXCSUM)) {
 			/* we have only OK info, signal it */
@@ -572,7 +640,14 @@ static int pfeng_napi_rx(struct pfeng_ndev *ndev, int limit)
 	if (likely(done))
 		ndev->xstats.napi_poll_rx++;
 
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	if (likely(ihc_processed))
+		ndev->xstats.ihc_rx += ihc_processed;
+
+	return done + ihc_processed;
+#else
 	return done;
+#endif
 }
 
 /**
@@ -614,7 +689,6 @@ struct pfeng_ndev *pfeng_napi_if_create(struct pfeng_priv *priv, struct pfeng_et
 	struct device *dev = &priv->pdev->dev;
 	struct net_device *netdev;
 	struct pfeng_ndev *ndev;
-	struct sockaddr saddr;
 	int ret;
 
 	if (!eth->name || !strlen(eth->name)) {
@@ -650,8 +724,6 @@ struct pfeng_ndev *pfeng_napi_if_create(struct pfeng_priv *priv, struct pfeng_et
 	/* Set netdev IRQ */
 	netdev->irq = priv->cfg->irq_vector_hif_chnls[eth->hif_chnl_sc];
 
-	pfeng_ethtool_init(netdev);
-
 	/* Configure real RX and TX queues */
 	netif_set_real_num_rx_queues(netdev, 1);
 	netif_set_real_num_tx_queues(netdev, 1);
@@ -661,13 +733,16 @@ struct pfeng_ndev *pfeng_napi_if_create(struct pfeng_priv *priv, struct pfeng_et
 
 	netdev->netdev_ops = &pfeng_netdev_ops;
 
+	/* MTU ranges */
+	netdev->min_mtu = ETH_ZLEN - ETH_HLEN;
+
+#ifdef PFE_CFG_PFE_MASTER
+	pfeng_ethtool_init(netdev);
+
 	/* Add phylink */
 	if (eth->intf_mode != PHY_INTERFACE_MODE_INTERNAL)
 		pfeng_phylink_create(ndev);
-
-	/* MTU ranges */
-	netdev->min_mtu = ETH_ZLEN - ETH_HLEN;
-	netdev->max_mtu = SKB_MAX_HEAD(NET_SKB_PAD + NET_IP_ALIGN);
+#endif
 
 	/* Accelerated feature */
 	netdev->hw_features |= /*NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |*/ NETIF_F_RXCSUM;
@@ -675,13 +750,6 @@ struct pfeng_ndev *pfeng_napi_if_create(struct pfeng_priv *priv, struct pfeng_et
 	//netdev->hw_features |=NETIF_F_SG;
 
 	netif_napi_add(netdev, &ndev->napi, pfeng_napi_poll, NAPI_POLL_WEIGHT);
-
-	/* Set MAC address */
-	if (eth->addr && is_valid_ether_addr(eth->addr))
-		memcpy(&saddr.sa_data, eth->addr, sizeof(saddr.sa_data));
-	else
-		memset(&saddr.sa_data, 0, sizeof(saddr.sa_data));
-	pfeng_logif_set_mac_address(netdev, (void *)&saddr);
 
 	ret = register_netdev(netdev);
 	if (ret) {
@@ -714,19 +782,21 @@ void pfeng_napi_if_release(struct pfeng_ndev *ndev)
 
 	netdev_info(ndev->netdev, "unregisted\n");
 
+	unregister_netdev(ndev->netdev); /* calls ndo_stop */
+
+	/* Remove HIF client */
+	pfeng_hif_client_remove(ndev);
+
 	/* Detach Bman */
 	if (ndev->bman.rx_pool) {
 		pfeng_bman_pool_destroy(ndev->bman.rx_pool);
 		ndev->bman.rx_pool = NULL;
 	}
 
-	unregister_netdev(ndev->netdev); /* calls ndo_stop */
-
+#ifdef PFE_CFG_PFE_MASTER
 	if (ndev->phylink)
 		pfeng_phylink_destroy(ndev);
-
-	/* Remove HIF client */
-	pfeng_hif_client_remove(ndev);
+#endif
 
 	netif_napi_del(&ndev->napi);
 	free_netdev(ndev->netdev);

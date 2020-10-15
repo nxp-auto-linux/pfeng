@@ -9,6 +9,7 @@
 #include <linux/module.h>
 #include <linux/rtnetlink.h>
 #include <linux/clk.h>
+#include <linux/kthread.h>
 
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -19,9 +20,14 @@
 
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Jan Petrous <jan.petrous@nxp.com>");
+#ifdef PFE_CFG_PFE_MASTER
 MODULE_DESCRIPTION("PFEng driver");
+MODULE_FIRMWARE(PFENG_FW_CLASS_NAME);
+MODULE_FIRMWARE(PFENG_FW_UTIL_NAME);
+#elif PFE_CFG_PFE_SLAVE
+MODULE_DESCRIPTION("PFEng SLAVE driver");
+#endif
 MODULE_VERSION(PFENG_DRIVER_VERSION);
-MODULE_FIRMWARE(PFENG_FW_NAME);
 
 static const u32 default_msg_level = (
 	NETIF_MSG_DRV | NETIF_MSG_PROBE |
@@ -29,18 +35,35 @@ static const u32 default_msg_level = (
 	NETIF_MSG_IFDOWN | NETIF_MSG_TIMER
 );
 
-static char *fw_name;
-module_param(fw_name, charp, 0444);
+#ifdef PFE_CFG_PFE_MASTER
+static char *fw_class_name;
+module_param(fw_class_name, charp, 0444);
 #ifdef OPT_FW_EMBED
 #define FW_DESC_TXT ", use - for built-in variant"
 #else
 #define FW_DESC_TXT ""
 #endif
-MODULE_PARM_DESC(fw_name, "\t The name of firmware file (default: read from device-tree" PFENG_FW_NAME FW_DESC_TXT ")");
+MODULE_PARM_DESC(fw_class_name, "\t The name of CLASS firmware file (default: read from device-tree or " PFENG_FW_CLASS_NAME FW_DESC_TXT ")");
+
+static char *fw_util_name;
+module_param(fw_util_name, charp, 0444);
+#ifdef OPT_FW_EMBED
+#define FW_DESC_TXT ", use - for built-in variant"
+#else
+#define FW_DESC_TXT ""
+#endif
+MODULE_PARM_DESC(fw_util_name, "\t The name of UTIL firmware file (default: read from device-tree or " PFENG_FW_UTIL_NAME FW_DESC_TXT ")");
+#endif
 
 static int msg_verbosity = PFE_CFG_VERBOSITY_LEVEL;
 module_param(msg_verbosity, int, 0644);
 MODULE_PARM_DESC(msg_verbosity, "\t 0 - 9, default 4");
+
+#ifdef PFE_CFG_PFE_SLAVE
+static int master_ihc_chnl = HIF_CFG_MAX_CHANNELS;
+module_param(master_ihc_chnl, int, 0644);
+MODULE_PARM_DESC(master_ihc_chnl, "\t 0 - <max-hif-chn-number>, default read from DT or invalid");
+#endif
 
 /**
  * @brief		Common HIF channel interrupt service routine
@@ -107,8 +130,18 @@ err_cfg_alloc:
 	return NULL;
 }
 
-void pfeng_hif_chnl_drv_remove(struct pfeng_hif_chnl *chnl)
+void pfeng_hif_chnl_drv_remove(struct pfeng_ndev *ndev)
 {
+	struct pfeng_hif_chnl *chnl = &ndev->chnl_sc;
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	if (ndev->eth->ihc) {
+		pfe_idex_fini();
+		ndev->eth->ihc = false;
+		kthread_stop(ndev->priv->thr_ihc);
+	}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
 #ifdef OAL_IRQ_MODE
 	/* Uninstall HIF channel IRQ */
 	if(chnl->irq) {
@@ -131,75 +164,108 @@ void pfeng_hif_chnl_drv_remove(struct pfeng_hif_chnl *chnl)
 	chnl->priv = NULL;
 }
 
-int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 hif_chnl, bool hif_chnl_sc, struct pfeng_hif_chnl *chnl)
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+/* IHC kthread main loop */
+static int pfeng_ihc_process(void *data)
 {
+	struct pfeng_ndev *ndev = (struct pfeng_ndev *)data;
+
+	do {
+		if (wait_event_interruptible(ndev->priv->q_ihc, ndev->priv->q_elems > 0 || !ndev->eth->ihc))
+			/* ERESTARTSYS */
+			continue;
+
+		if (kthread_should_stop() || !ndev->eth->ihc)
+			return 0;
+
+		ndev->priv->q_elems--;
+
+		/* Process IHC callback */
+		pfe_hif_drv_ihc_do_cbk(ndev->chnl_sc.drv);
+
+	} while (1);
+
+	return 0;
+}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
+int pfeng_hif_chnl_drv_create(struct pfeng_ndev *ndev)
+{
+	u32 hif_chnl = ndev->eth->hif_chnl_sc;
+	struct pfeng_hif_chnl *chnl = &ndev->chnl_sc;
+	bool hif_chnl_sc = true;
 	char irq_name[20];
 	int ret;
 
 	if (hif_chnl >= ARRAY_SIZE(pfeng_chnl_ids)) {
-		dev_err(&priv->pdev->dev, "Invalid HIF instance number: %u\n", hif_chnl);
+		dev_err(&ndev->priv->pdev->dev, "Invalid HIF instance number: %u\n", hif_chnl);
 		return -ENODEV;
 	}
 
-	chnl->priv = pfe_hif_get_channel(priv->pfe->hif, pfeng_chnl_ids[hif_chnl]);
+	chnl->priv = pfe_hif_get_channel(ndev->priv->pfe->hif, pfeng_chnl_ids[hif_chnl]);
 	if (NULL == chnl->priv) {
-		dev_err(&priv->pdev->dev, "Can't get HIF%d channel instance\n", hif_chnl);
+		dev_err(&ndev->priv->pdev->dev, "Can't get HIF%d channel instance\n", hif_chnl);
 		return -ENODEV;
 	}
 
 	/*	Create interrupt name */
 	scnprintf(irq_name, sizeof(irq_name), "pfe-hif-%d-%s", hif_chnl, hif_chnl_sc ? "sc" : "mc");
 
-#ifdef OAL_IRQ_MODE
-	/*	Create interrupt */
-	chnl->irq = oal_irq_create(
-			priv->cfg->irq_vector_hif_chnls[hif_chnl],
-			(oal_irq_flags_t)0,
-			irq_name);
-
-	if (NULL == chnl->irq) {
-		dev_err(&priv->pdev->dev, "Could not create HIF%d IRQ '%s'\n", hif_chnl, irq_name);
-		ret = -ENODEV;
-		goto err;
-	}
-
-	/*	Install IRQ handler */
-	ret = oal_irq_add_handler(chnl->irq, hif_chnl_isr, chnl->priv, NULL);
-	if (EOK != ret) {
-		dev_err(&priv->pdev->dev, "Could not add IRQ handler '%s'\n", irq_name);
-		goto err;
-	}
-#else
 	/* direct HIF channel IRQ */
-
-	ret = request_irq(priv->cfg->irq_vector_hif_chnls[hif_chnl], pfeng_chnl_direct_isr,
+	ret = request_irq(ndev->priv->cfg->irq_vector_hif_chnls[hif_chnl], pfeng_chnl_direct_isr,
 		0, kstrdup(irq_name, GFP_KERNEL), chnl->priv);
 	if (unlikely(ret < 0)) {
-		dev_err(&priv->pdev->dev, "Error allocating the IRQ %d for '%s', error %d\n",
-			priv->cfg->irq_vector_hif_chnls[hif_chnl], irq_name, ret);
+		dev_err(&ndev->priv->pdev->dev, "Error allocating the IRQ %d for '%s', error %d\n",
+			ndev->priv->cfg->irq_vector_hif_chnls[hif_chnl], irq_name, ret);
 		return ret;
 	}
-	chnl->irqnum = priv->cfg->irq_vector_hif_chnls[hif_chnl];
-#endif
+	chnl->irqnum = ndev->priv->cfg->irq_vector_hif_chnls[hif_chnl];
 
 	/*	Create HIF driver for the channel */
 	chnl->drv = pfe_hif_drv_create(chnl->priv);
 	if (NULL == chnl->drv) {
-		dev_err(&priv->pdev->dev, "Could not get HIF%d driver instance\n", hif_chnl);
+		dev_err(&ndev->priv->pdev->dev, "Could not get HIF%d driver instance\n", hif_chnl);
 		ret = -ENODEV;
 		goto err;
 	}
 
 	if (EOK != pfe_hif_drv_init(chnl->drv)) {
-		dev_err(&priv->pdev->dev, "HIF%d drv init failed\n", hif_chnl);
+		dev_err(&ndev->priv->pdev->dev, "HIF%d drv init failed\n", hif_chnl);
 		ret = -ENODEV;
 		goto err;
 	}
 
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	if (ndev->eth->ihc) {
+		if (pfe_idex_init(chnl->drv, pfeng_hif_ids[ndev->priv->plat.ihc_master_chnl])) {
+			dev_err(&ndev->priv->pdev->dev, "Can't initialize IDEX, HIF IHC support disabled.\n");
+			ndev->eth->ihc = false;
+		} else {
+			if (EOK != pfe_idex_set_rpc_cbk(&pfe_platform_idex_rpc_cbk, ndev->priv->pfe)) {
+				dev_err(&ndev->priv->pdev->dev, "Unable to set IDEX RPC callback. HIF IHC support disabled\n");
+				ndev->eth->ihc = false;
+				pfe_idex_fini();
+			} else {
+				init_waitqueue_head(&ndev->priv->q_ihc);
+
+				/* Create IHC processor */
+				ndev->priv->thr_ihc = kthread_run(pfeng_ihc_process, (void *)ndev, "pfeng-ihc/hif%d", hif_chnl);
+				if (IS_ERR(ndev->priv->thr_ihc)) {
+					dev_err(&ndev->priv->pdev->dev, "Unable to spawn IHC thread. HIF IHC support disabled\n");
+					ndev->eth->ihc = false;
+				} else {
+					dev_info(&ndev->priv->pdev->dev, "IDEX RPC installed. HIF IHC support enabled\n");
+				}
+			}
+		}
+	} else
+		dev_info(&ndev->priv->pdev->dev, "HIF IHC not enabled\n");
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
 	return 0;
 
 err:
-	pfeng_hif_chnl_drv_remove(chnl);
+	pfeng_hif_chnl_drv_remove(ndev);
 	return ret;
 }
 
@@ -219,7 +285,9 @@ int pfeng_drv_remove(struct pfeng_priv *priv)
 	/* NAPI shutdown */
 	if (!list_empty(&priv->ndev_list)) {
 		list_for_each_entry(ndev, &priv->ndev_list, lnode) {
+#ifdef PFE_CFG_PFE_MASTER
 			pfeng_mdio_unregister(ndev);
+#endif
 			pfeng_napi_if_release(ndev);
 		}
 		list_del(&priv->ndev_list);
@@ -251,11 +319,22 @@ int pfeng_drv_probe(struct pfeng_priv *priv)
 	struct pfeng_eth *eth, *tmp;
 	int ret;
 
+#ifdef PFE_CFG_PFE_SLAVE
+	/* HIF IHC channel number */
+	if (master_ihc_chnl < HIF_CFG_MAX_CHANNELS)
+		priv->plat.ihc_master_chnl = master_ihc_chnl;
+	if (priv->plat.ihc_master_chnl >= HIF_CFG_MAX_CHANNELS) {
+		dev_err(dev, "Slave mode required parameter for master channel id is missing\n");
+		return -EINVAL;
+	}
+#endif
+
 	/* PFE platform layer init */
 	oal_mm_init(dev);
 
 	dev_set_drvdata(dev, priv);
 
+#ifdef PFE_CFG_PFE_MASTER
 	/* apb clock */
 	priv->sys_clk = devm_clk_get(dev, "pfe_sys");
 	if (IS_ERR(priv->sys_clk)) {
@@ -270,16 +349,26 @@ int pfeng_drv_probe(struct pfeng_priv *priv)
 		goto err;
 	}
 
-	/* Load firmware */
-	if (fw_name && strlen(fw_name))
-		priv->fw_name = fw_name;
-	if (!priv->fw_name || !strlen(priv->fw_name))
-		priv->fw_name = PFENG_FW_NAME;
-	ret = pfeng_fw_load(priv, priv->fw_name);
-	if (ret) {
-		dev_err(dev, "Failed to load firmware '%s': %d\n", priv->fw_name, ret);
+	/* Build CLASS firmware name */
+	if (fw_class_name && strlen(fw_class_name))
+		priv->fw_class_name = fw_class_name;
+	if (!priv->fw_class_name || !strlen(priv->fw_class_name))
+		priv->fw_class_name = PFENG_FW_CLASS_NAME;
+
+	/* Build UTIL firmware name (optional) */
+	if (fw_util_name && strlen(fw_util_name))
+		priv->fw_util_name = fw_util_name;
+	if (!priv->fw_util_name || !strlen(priv->fw_util_name)) {
+		dev_info(dev, "UTIL firmware not requested. Disable UTIL\n");
+		priv->cfg->enable_util = false;
+	} else
+		priv->cfg->enable_util = true;
+
+	/* Request firmware(s) */
+	ret = pfeng_fw_load(priv, priv->fw_class_name, priv->fw_util_name);
+	if (ret)
 		goto err;
-	}
+#endif
 
 	/* Start PFE Platform */
 	ret = pfe_platform_init(priv->cfg);
@@ -302,8 +391,9 @@ int pfeng_drv_probe(struct pfeng_priv *priv)
 		if (!ndev)
 			goto err;
 
+#ifdef PFE_CFG_PFE_MASTER
 		pfeng_mdio_register(ndev);
-
+#endif
 		list_add_tail(&ndev->lnode, &priv->ndev_list);
 	}
 

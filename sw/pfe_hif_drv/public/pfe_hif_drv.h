@@ -162,9 +162,9 @@ enum
 
 /**
  * @brief	Maximum number of HIF clients. Right now it is set to cover all possible
- * 			logical interfaces.
+ * 			physical interfaces.
  */
-#define HIF_CLIENTS_MAX							PFE_CFG_MAX_LOG_IFS
+#define HIF_CLIENTS_MAX							(PFE_PHY_IF_ID_MAX + 1)
 
 #if ((FALSE == HIF_CFG_DETACH_TX_CONFIRMATION_JOB) && (TRUE == HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION))
 #error Impossible configuration
@@ -274,7 +274,7 @@ errno_t pfe_hif_drv_client_xmit_ihc_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 /*	HIF client */
-pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif, uint8_t log_if_id, uint32_t txq_num, uint32_t rxq_num,
+pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif, uint8_t phy_if_id, uint32_t txq_num, uint32_t rxq_num,
 		uint32_t txq_depth, uint32_t rxq_depth, pfe_hif_drv_client_event_handler handler, void *priv);
 errno_t pfe_hif_drv_client_set_inject_if(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t phy_if_id);
 pfe_hif_drv_t *pfe_hif_drv_client_get_drv(pfe_hif_drv_client_t *client);
@@ -290,7 +290,7 @@ void * pfe_hif_drv_client_receive_tx_conf(pfe_hif_drv_client_t *client, uint32_t
 
 /*	Packet reception */
 bool_t pfe_hif_drv_client_has_rx_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
-#if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
+#if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED) || defined(PFE_CFG_TARGET_OS_LINUX)
 pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
 void pfe_hif_pkt_free(pfe_hif_pkt_t *desc);
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */

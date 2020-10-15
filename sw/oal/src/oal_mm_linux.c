@@ -156,6 +156,15 @@ void *oal_mm_malloc_contig_named_aligned_nocache(const char_t *pool, const addr_
 }
 
 /**
+ *	Allocate aligned, contiguous, cached memory region from named pool
+ */
+void *oal_mm_malloc_contig_named_aligned_cache(const char_t *pool, const addr_t size, const uint32_t align)
+{
+	// TODO: switch to reserved memory
+	return __oal_mm_malloc_contig(size, align, TRUE);
+}
+
+/**
  *	Release memory allocated by __hwb_malloc_contig()
  */
 void oal_mm_free_contig(const void *vaddr)

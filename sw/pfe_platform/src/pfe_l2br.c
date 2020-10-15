@@ -85,6 +85,7 @@ struct __pfe_l2br_tag
 	LLIST_t domains;							/*!< List of standard domains */
 	uint16_t def_vlan;							/*!< Default VLAN */
 	uint32_t dmem_fb_bd_base;					/*!< Address within classifier memory where the fall-back bridge domain structure is located */
+	uint32_t dmem_def_bd_base;					/*!< Address within classifier memory where the default bridge domain structure is located */
 	oal_thread_t *worker;						/*!< Worker thread */
 	oal_mbox_t *mbox;							/*!< Message box to communicate with the worker thread */
 	oal_mutex_t *mutex;							/*!< Mutex protecting shared resources */
@@ -145,7 +146,7 @@ enum pfe_rtable_worker_signals
 	SIG_TIMER_TICK		/*!< Pulse from timer */
 };
 
-static errno_t pfe_fb_bd_write_to_class(pfe_l2br_t *bridge, pfe_ct_bd_entry_t *class_entry);
+static errno_t pfe_bd_write_to_class(pfe_l2br_t *bridge, uint32_t base, pfe_ct_bd_entry_t *class_entry);
 static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain);
 static pfe_l2br_domain_t *pfe_l2br_create_default_domain(pfe_l2br_t *bridge, uint16_t vlan);
 static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge);
@@ -155,24 +156,75 @@ static bool_t pfe_l2br_domain_match_if_criterion(pfe_l2br_domain_t *domain, pfe_
 static bool_t pfe_l2br_domain_match_criterion(pfe_l2br_t *bridge, pfe_l2br_domain_t *domain);
 
 /**
- * @brief		Write fall-back bridge domain structure to classifier memory
+ * @brief		Write bridge domain structure to classifier memory
  * @param[in]	bridge The bridge instance
+ * @param[in]	base Memory location where to write
  * @param[in]	class_entry Pointer to the structure to be written
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  */
-static errno_t pfe_fb_bd_write_to_class(pfe_l2br_t *bridge, pfe_ct_bd_entry_t *class_entry)
+static errno_t pfe_bd_write_to_class(pfe_l2br_t *bridge, uint32_t base, pfe_ct_bd_entry_t *class_entry)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class_entry) || (NULL == bridge) || (0U == bridge->dmem_fb_bd_base)))
+	if (unlikely((NULL == class_entry) || (NULL == bridge) || (0U == base)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_class_write_dmem(bridge->class, -1, (void *)(addr_t)bridge->dmem_fb_bd_base, class_entry, sizeof(pfe_ct_bd_entry_t));
+	return pfe_class_write_dmem(bridge->class, -1, (void *)(addr_t)base, class_entry, sizeof(pfe_ct_bd_entry_t));
 }
+
+
+static void pfe_l2br_update_hw_ll_entry(pfe_l2br_domain_t *domain, uint32_t base)
+{
+	pfe_ct_bd_entry_t sw_bd;
+	uint64_t tmp64;
+	bool_t need_shift = FALSE;
+
+	/*	Sanity check */
+	ct_assert(sizeof(pfe_ct_bd_entry_t) <= sizeof(uint64_t));
+
+	/*	Check if bitfields within structure are aligned as expected */
+	memset(&sw_bd, 0, sizeof(pfe_ct_bd_entry_t));
+	tmp64 = (1ULL << 63);
+	memcpy(&sw_bd, &tmp64, sizeof(uint64_t));
+	if (0U == sw_bd.val)
+	{
+		need_shift = TRUE;
+	}
+
+	/*	Convert VLAN table result to fallback domain representation */
+	sw_bd.val = domain->action_data.val;
+
+	if (TRUE == need_shift)
+	{
+		tmp64 = (uint64_t)sw_bd.val << 9;
+		memcpy(&sw_bd, &tmp64, sizeof(pfe_ct_bd_entry_t));
+	}
+
+	/*	Convert to network endian */
+	/* TODO: oal_swap64 or so */
+#if defined(PFE_CFG_TARGET_OS_QNX)
+	ENDIAN_SWAP64(&sw_bd.val);
+#elif defined(PFE_CFG_TARGET_OS_LINUX)
+	tmp64 = cpu_to_be64p((uint64_t *)&sw_bd);
+	memcpy(&sw_bd, &tmp64, sizeof(uint64_t));
+#elif defined(PFE_CFG_TARGET_OS_AUTOSAR)
+	*(uint64_t*)&sw_bd = cpu_to_be64(*(uint64_t*)&sw_bd);
+#else
+#error("todo")
+#endif
+
+	/*	Update classifier memory (all PEs) */
+	if (EOK != pfe_bd_write_to_class(domain->bridge, base, &sw_bd))
+	{
+		NXP_LOG_DEBUG("Class memory write failed\n");
+	}
+
+}
+
 
 /**
  * @brief		Update HW entry according to domain setup
@@ -184,9 +236,6 @@ static errno_t pfe_fb_bd_write_to_class(pfe_l2br_t *bridge, pfe_ct_bd_entry_t *c
 static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 {
 	errno_t ret;
-	uint64_t tmp64;
-	pfe_ct_bd_entry_t fb_bd;
-	bool_t need_shift = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == domain))
@@ -199,47 +248,17 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 	/*	In case of fall-back domain the classifier memory must be updated too */
 	if (TRUE == domain->is_fallback)
 	{
-		/*	Sanity check */
-		ct_assert(sizeof(pfe_ct_bd_entry_t) <= sizeof(uint64_t));
-
-		/*	Check if bitfields within structure are aligned as expected */
-		memset(&fb_bd, 0, sizeof(pfe_ct_bd_entry_t));
-		tmp64 = (1ULL << 63);
-		memcpy(&fb_bd, &tmp64, sizeof(uint64_t));
-		if (0U == fb_bd.val)
-		{
-			need_shift = TRUE;
-		}
-
-		/*	Convert VLAN table result to fallback domain representation */
-		fb_bd.val = domain->action_data.val;
-
-		if (TRUE == need_shift)
-		{
-			tmp64 = (uint64_t)fb_bd.val << 9;
-			memcpy(&fb_bd, &tmp64, sizeof(pfe_ct_bd_entry_t));
-		}
-
-		/*	Convert to network endian */
-		/* TODO: oal_swap64 or so */
-#if defined(PFE_CFG_TARGET_OS_QNX)
-		ENDIAN_SWAP64(&fb_bd.val);
-#elif defined(PFE_CFG_TARGET_OS_LINUX)
-		tmp64 = cpu_to_be64p((uint64_t *)&fb_bd);
-		memcpy(&fb_bd, &tmp64, sizeof(uint64_t));
-#elif defined(PFE_CFG_TARGET_OS_AUTOSAR)
-		*(uint64_t*)&fb_bd = cpu_to_be64(*(uint64_t*)&fb_bd);
-#else
-#error("todo")
-#endif
-
-		if (EOK != pfe_fb_bd_write_to_class(domain->bridge, &fb_bd))
-		{
-			NXP_LOG_DEBUG("Memory write failed\n");
-		}
+		/*	Update classifier memory (all PEs) */
+		pfe_l2br_update_hw_ll_entry(domain, domain->bridge->dmem_fb_bd_base );
 	}
 	else
 	{
+        /*	In case of fall-back domain the classifier memory must be updated too */
+        if (TRUE == domain->is_default)
+        {
+            /*	Update classifier memory (all PEs) */
+            pfe_l2br_update_hw_ll_entry(domain, domain->bridge->dmem_def_bd_base );
+        }
 		/*	Update standard or default domain entry */
 		ret = pfe_l2br_table_entry_set_action_data(domain->vlan_entry, domain->action_data_u64val);
 		if (EOK != ret)
@@ -590,8 +609,10 @@ static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
 	else
 	{
 		bridge->dmem_fb_bd_base = oal_ntohl(class_mmap.dmem_fb_bd_base);
+		bridge->dmem_def_bd_base = oal_ntohl(class_mmap.dmem_def_bd_base);
 
 		NXP_LOG_INFO("Fall-back bridge domain @ 0x%x (class)\n", bridge->dmem_fb_bd_base);
+		NXP_LOG_INFO("Default bridge domain @ 0x%x (class)\n", bridge->dmem_def_bd_base);
 
 		domain->action_data.forward_list = 0U;
 		domain->action_data.untag_list = 0U;
@@ -1728,11 +1749,11 @@ uint32_t pfe_l2br_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t 
     pfe_l2br_table_entry_t *entry;
     errno_t ret;
     uint32_t count = 0U;
-    
+
     /* Get memory */
     entry = pfe_l2br_table_entry_create(bridge->mac_table);
     /* Get the first entry */
-    ret = pfe_l2br_table_get_first(bridge->mac_table, L2BR_TABLE_CRIT_VALID, entry);    
+    ret = pfe_l2br_table_get_first(bridge->mac_table, L2BR_TABLE_CRIT_VALID, entry);
     while (EOK == ret)
     {
         /* Print out the entry */

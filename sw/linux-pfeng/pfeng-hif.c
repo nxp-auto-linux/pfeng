@@ -223,23 +223,9 @@ struct sk_buff *pfeng_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, u
 	/*  Unmap DMAed area */
 	pfeng_bman_buf_unmap(ndev->bman.rx_pool, (addr_t)buf_pa);
 
-#if 0
-	hif_hdr_ptr = (pfe_ct_hif_rx_hdr_t *)buf_va;
-	/*      Convert flags */
-	hif_hdr_ptr->flags = (pfe_ct_hif_rx_flags_t)oal_ntohs(hif_hdr_ptr->flags);
-
-	if (hif_hdr_ptr->flags & HIF_RX_TS) {
-		/*	Drop the frame. Resource protection is embedded. */
-		netdev_info(ndev->netdev, "Time-stamp report received: TODO: IMPLEMENT ME\n");
-	}
-#endif
-
 	/* Retrieve saved skb address */
 	skb = *((struct sk_buff **)(buf_va - SKB_VA_SIZE));
 	__skb_put(skb, rx_len);
-
-	/* Skip HIF header */
-	skb_pull(skb, 16);
 
 	return skb;
 }
@@ -247,7 +233,7 @@ struct sk_buff *pfeng_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, u
 int pfeng_hif_chnl_refill_rx_buffer(pfe_hif_chnl_t *chnl, struct pfeng_ndev *ndev)
 {
 	void *buf_va;
-	addr_t buf_pa;
+	addr_t buf_pa = 0;
 	errno_t ret;
 
 	/*	Ask for new buffer */

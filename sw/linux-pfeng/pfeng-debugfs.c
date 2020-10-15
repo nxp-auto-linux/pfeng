@@ -55,6 +55,7 @@ static const struct file_operations pfeng_##ename##_fops = {			\
 	.release	= single_release,					\
 };
 
+#ifdef PFE_CFG_PFE_MASTER
 CREATE_DEBUGFS_ENTRY_TYPE(hif);
 CREATE_DEBUGFS_ENTRY_TYPE(emac);
 CREATE_DEBUGFS_ENTRY_TYPE(class);
@@ -62,6 +63,7 @@ CREATE_DEBUGFS_ENTRY_TYPE(bmu);
 CREATE_DEBUGFS_ENTRY_TYPE(gpi);
 CREATE_DEBUGFS_ENTRY_TYPE(tmu);
 CREATE_DEBUGFS_ENTRY_TYPE(util);
+#endif
 CREATE_DEBUGFS_ENTRY_TYPE(hif_chnl);
 
 #define ADD_DEBUGFS_ENTRY(ename, etype, parent, epriv, esav)			\
@@ -85,7 +87,9 @@ CREATE_DEBUGFS_ENTRY_TYPE(hif_chnl);
 int pfeng_debugfs_create(struct pfeng_priv *priv)
 {
 	struct device *dev = &priv->pdev->dev;
+#ifdef PFE_CFG_PFE_MASTER
 	struct dentry *dsav = NULL;
+#endif
 
 	/* Create debugfs main directory if it doesn't exist yet */
 	if (priv->dbgfs)
@@ -101,6 +105,7 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 		return -ENOMEM;
 	}
 
+#ifdef PFE_CFG_PFE_MASTER
 	ADD_DEBUGFS_ENTRY("class", class, priv->dbgfs, priv->pfe->classifier, &dsav);
 	ADD_DEBUGFS_ENTRY("hif", hif, priv->dbgfs, priv->pfe->hif, &dsav);
 	ADD_DEBUGFS_ENTRY("bmu1", bmu, priv->dbgfs, priv->pfe->bmu[0], &dsav);
@@ -113,10 +118,10 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 	ADD_DEBUGFS_ENTRY("emac0", emac, priv->dbgfs, priv->pfe->emac[0], &dsav);
 	ADD_DEBUGFS_ENTRY("emac1", emac, priv->dbgfs, priv->pfe->emac[1], &dsav);
 	ADD_DEBUGFS_ENTRY("emac2", emac, priv->dbgfs, priv->pfe->emac[2], &dsav);
+#endif
 
 	return 0;
 }
-
 
 int pfeng_debugfs_add_hif_chnl(struct pfeng_priv *priv, struct pfeng_ndev *ndev)
 {
@@ -156,6 +161,10 @@ int pfeng_debugfs_add_hif_chnl(struct pfeng_priv *priv, struct pfeng_ndev *ndev)
 	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(txconf_loop);
 	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(txconf);
 	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(tx_busy);
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+        ADD_DEBUGFS_CHNL_XSTATS_ENTRY(ihc_rx);
+        ADD_DEBUGFS_CHNL_XSTATS_ENTRY(ihc_tx);
+#endif
 
 	return 0;
 }

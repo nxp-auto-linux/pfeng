@@ -49,7 +49,9 @@
  * @details This file origin is the fpp.h file from CMM sources.
  */
 
-#ifndef __KERNEL__
+#include "pfe_cfg.h"
+
+#if !defined(__KERNEL__) && !defined(PFE_CFG_TARGET_OS_AUTOSAR)
 #include <stdint.h>
 #else
 #include "oal_types.h"
@@ -513,7 +515,7 @@ typedef struct CAL_PACKED {
 	uint32_t fwmark;
 	uint32_t route_id;
 	uint32_t route_id_reply;
-        // optional security parameters
+        /* optional security parameters */
         uint8_t sa_dir;
         uint8_t sa_nr;
         uint16_t sa_handle[4];
@@ -886,7 +888,7 @@ typedef struct fpp_expt_queue_control_cmd {
 } __attribute__((__packed__)) fpp_expt_queue_control_cmd_t;
 
 /*--------------------------------------------- QM ---------------------------*/
-// 0x0200 -> 0x02FF : QM module
+/* 0x0200 -> 0x02FF : QM module */
 #define FPP_CMD_QM_QOSENABLE		0x0201
 #define FPP_CMD_QM_QOSALG		0x0202
 #define FPP_CMD_QM_NHIGH		0x0203
@@ -948,7 +950,7 @@ typedef struct fpp_qm_queue_qos_enable_cmd {
 	uint8_t	interface[IFNAMSIZ];
 #endif
 	uint16_t enable_flag;
-	uint32_t queue_qosenable_mask; // Bit mask of queues on which Qos is enabled
+	uint32_t queue_qosenable_mask; /* Bit mask of queues on which Qos is enabled */
 } __attribute__((__packed__)) fpp_qm_queue_qos_enable_cmd_t;
 
 
@@ -1027,15 +1029,15 @@ typedef struct fpp_qm_query_cmd
 {
 	uint16_t action;
 	uint16_t port;
-	uint32_t queue_qosenable_mask;         // bit mask of queues on which Qos is enabled
+	uint32_t queue_qosenable_mask;         /* bit mask of queues on which Qos is enabled */
 	uint32_t max_txdepth;
 
-	uint32_t shaper_qmask[FPP_NUM_SHAPERS];			// mask of queues assigned to this shaper
-	uint32_t tokens_per_clock_period[FPP_NUM_SHAPERS];	// bits worth of tokens available on every 1 msec clock period
-	uint32_t bucket_size[FPP_NUM_SHAPERS];		// max bucket size in bytes
+	uint32_t shaper_qmask[FPP_NUM_SHAPERS];			/* mask of queues assigned to this shaper */
+	uint32_t tokens_per_clock_period[FPP_NUM_SHAPERS];	/* bits worth of tokens available on every 1 msec clock period */
+	uint32_t bucket_size[FPP_NUM_SHAPERS];		/* max bucket size in bytes */
 
 	uint32_t sched_qmask[FPP_NUM_SCHEDULERS];
-	uint8_t sched_alg[FPP_NUM_SCHEDULERS];				// current scheduling algorithm
+	uint8_t sched_alg[FPP_NUM_SCHEDULERS];				/* current scheduling algorithm */
 	
 	uint16_t max_qdepth[FPP_NUM_QUEUES];
 } __attribute__((__packed__)) fpp_qm_query_cmd_t;
@@ -1050,8 +1052,8 @@ typedef struct fpp_qm_query_portinfo_cmd
 #else
 	uint8_t	interface[IFNAMSIZ];
 #endif
-	uint32_t queue_qosenable_mask;         // bit mask of queues on which Qos is enabled
-	uint16_t max_txdepth;			// ignored on C2000
+	uint32_t queue_qosenable_mask;         /* bit mask of queues on which Qos is enabled */
+	uint16_t max_txdepth;			/* ignored on C2000 */
 	uint8_t  ifg;
 	uint8_t  unused;
 } __attribute__((__packed__)) fpp_qm_query_portinfo_cmd_t;
@@ -1565,12 +1567,12 @@ typedef struct fpp_stat_flow_entry_response {
 #define FPP_ALTCONF_MCTTL_MODE_DEFAULT	FPP_ALTCONF_MODE_DEFAULT
 #define FPP_ALTCONF_MCTTL_MODE_IGNORE	1
 #define FPP_ALTCONF_MCTTL_MODE_MAX	FPP_ALTCONF_MCTTL_MODE_IGNORE
-#define FPP_ALTCONF_MCTTL_NUM_PARAMS	1  //maximu number of u32 allowed for this option
+#define FPP_ALTCONF_MCTTL_NUM_PARAMS	1  /* maximu number of u32 allowed for this option */
 
 /* IPSEC Rate Limiting Configuration definitions */
 #define FPP_ALTCONF_IPSECRL_OFF		0
 #define FPP_ALTCONF_IPSECRL_ON		1
-#define FPP_ALTCONF_IPSECRL_NUM_PARAMS	3  //maximu number of u32 allowed for this option
+#define FPP_ALTCONF_IPSECRL_NUM_PARAMS	3  /* maximu number of u32 allowed for this option */
 
 typedef struct fpp_alt_set_cmd {
 	uint16_t	option_id;
@@ -1640,7 +1642,7 @@ typedef struct fpp_ff_ctrl_cmd {
 /* VLAN command as understood by FPP */
 typedef struct fpp_vlan_cmd {
         uint16_t       action;
-        uint16_t       vlan_id; // Carries skip count for ACTION_QUERY
+        uint16_t       vlan_id; /* Carries skip count for ACTION_QUERY */
         char 		vlan_ifname[IFNAMSIZ];
         char 		vlan_phy_ifname[IFNAMSIZ];
 } __attribute__((__packed__)) fpp_vlan_cmd_t;
@@ -1800,7 +1802,7 @@ typedef struct fpp_pppoe_relay_cmd {
 #ifdef WIFI_ENABLE
 /*----------------------------------------WiFi ------------------------------*/
 #define FPP_ERR_WIFI_DUPLICATE_OPERATION	2001
-//0x2000: WiFi module
+/* 0x2000: WiFi module */
 #define FPP_CMD_WIFI_VAP_ENTRY			0x2001
 #define FPP_CMD_VWD_ENABLE			0x2002
 #define FPP_CMD_VWD_DISABLE			0x2003

@@ -93,6 +93,7 @@ errno_t pfe_class_isr(pfe_class_t *class)
 		/*	Check if there is new message */
 		if (EOK == pfe_pe_get_data(class->pe[i], &buf))
 		{
+#ifdef PFE_CFG_FCI_ENABLE
 			/*	Provide data to user via FCI */
 			msg.msg_cmd.code = FPP_CMD_DATA_BUF_AVAIL;
 			msg.msg_cmd.length = buf.len;
@@ -109,6 +110,7 @@ errno_t pfe_class_isr(pfe_class_t *class)
 					NXP_LOG_ERROR("Can't report data to FCI clients\n");
 				}
 			}
+#endif
 		}
 	}
 
@@ -121,7 +123,9 @@ errno_t pfe_class_isr(pfe_class_t *class)
  */
 void pfe_class_irq_mask(pfe_class_t *class)
 {
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4)
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	/*	Intentionally empty */
 	(void)class;
 #else
@@ -135,7 +139,9 @@ void pfe_class_irq_mask(pfe_class_t *class)
  */
 void pfe_class_irq_unmask(pfe_class_t *class)
 {
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4)
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	/*	Intentionally empty */
 	(void)class;
 #else
@@ -420,6 +426,7 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
+	ret = EINVAL;
 	for (ii=0U; ii<class->pe_num; ii++)
 	{
 		ret = pfe_pe_load_firmware(class->pe[ii], elf);

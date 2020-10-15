@@ -61,6 +61,7 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac);
 pfe_emac_t *pfe_phy_if_get_emac(pfe_phy_if_t *iface);
 errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif);
 pfe_hif_chnl_t *pfe_phy_if_get_hif(pfe_phy_if_t *iface);
+errno_t pfe_phy_if_bind_util(pfe_phy_if_t *iface);
 pfe_ct_phy_if_id_t pfe_phy_if_get_id(pfe_phy_if_t *iface) __attribute__((pure));
 char_t *pfe_phy_if_get_name(pfe_phy_if_t *iface) __attribute__((pure));
 errno_t pfe_phy_if_destroy(pfe_phy_if_t *iface);
@@ -82,5 +83,7 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat);
 uint32_t pfe_phy_if_get_text_statistics(pfe_phy_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 errno_t pfe_phy_if_set_mirroring(pfe_phy_if_t *iface, pfe_ct_phy_if_id_t mirror);
 pfe_ct_phy_if_id_t pfe_phy_if_get_mirroring(pfe_phy_if_t *iface);
+uint32_t pfe_phy_if_get_spd(pfe_phy_if_t *iface);
+errno_t pfe_phy_if_set_spd(pfe_phy_if_t *iface, uint32_t spd_addr);
 
 #endif /* PUBLIC_PFE_PHY_IF_H_ */

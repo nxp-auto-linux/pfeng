@@ -31,9 +31,11 @@
 #ifndef PFE_CBUS_H_
 #define PFE_CBUS_H_
 
-#if !defined(PFE_CFG_IP_VERSION) || !defined(PFE_CFG_IP_VERSION_FPGA_5_0_4) || !defined(PFE_CFG_IP_VERSION_NPU_7_14)
-#error Missing version define(s)
-#endif /* IP version checks */
+#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
+	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
+#error Unsupported IP version
+#endif /* PFE_CFG_IP_VERSION */
 
 #if (PFE_CFG_IP_VERSION == 0)
 #error PFE_CFG_IP_VERSION shall not be empty
