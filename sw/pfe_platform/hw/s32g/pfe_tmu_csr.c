@@ -1,31 +1,10 @@
 /* =========================================================================
+ *
+ *  Copyright (c) 2020 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions are met:
- * 
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- * 
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation 
- *    and/or other materials provided with the distribution.
- * 
- * 3. Neither the name of the copyright holder nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR 
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER
- * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, 
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
- * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *  SPDX-License-Identifier: GPL-2.0
+ *
  * ========================================================================= */
 
 #include "pfe_cfg.h"
@@ -60,7 +39,8 @@ static const pfe_tmu_phy_cfg_t phys[] = {
 	{.id = PFE_PHY_IF_ID_INVALID}
 };
 
-static const uint32_t clk_div = 256U;
+#define CLK_DIV_LOG2 (8U - 1U) /* clk_div_log2 = log2(clk_div/2) */
+#define CLK_DIV (1U << (CLK_DIV_LOG2 + 1U)) /* 256 */
 
 static errno_t pfe_tmu_cntx_mem_write(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t loc, uint32_t data);
 static errno_t pfe_tmu_cntx_mem_read(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t loc, uint32_t *data);
@@ -1051,14 +1031,14 @@ errno_t pfe_tmu_shp_cfg_set_idle_slope(void *cbus_base_va,
 		case RATE_MODE_DATA_RATE:
 		{
 			/*	ISL is bps, WGT is [bytes-per-tick] */
-			wgt = ((uint64_t)isl * (uint64_t)clk_div * (2ULL << 12)) / (8ULL * (uint64_t)sys_clk_hz);
+			wgt = ((uint64_t)isl * (uint64_t)CLK_DIV * (1ULL << 12)) / (8ULL * (uint64_t)sys_clk_hz);
 			break;
 		}
 
 		case RATE_MODE_PACKET_RATE:
 		{
 			/*	ISL is pps, WGT is [packets-per-tick] */
-			wgt = ((uint64_t)isl * (uint64_t)clk_div * (2ULL << 12)) / ((uint64_t)sys_clk_hz);
+			wgt = ((uint64_t)isl * (uint64_t)CLK_DIV * (1ULL << 12)) / ((uint64_t)sys_clk_hz);
 			break;
 		}
 
@@ -1080,8 +1060,8 @@ errno_t pfe_tmu_shp_cfg_set_idle_slope(void *cbus_base_va,
 	/*	Set clk_div */
 	reg = hal_read32(shp_base_va + TMU_SHP_CTRL);
 	reg &= 0x1U;
-	hal_write32(reg | (clk_div << 1), shp_base_va + TMU_SHP_CTRL);
-	NXP_LOG_INFO("Shaper tick is %dHz\n", sys_clk_hz / clk_div);
+	hal_write32(reg | (CLK_DIV_LOG2 << 1), shp_base_va + TMU_SHP_CTRL);
+	NXP_LOG_INFO("Shaper tick is %dHz\n", sys_clk_hz / CLK_DIV);
 
 	return EOK;
 }
@@ -1104,7 +1084,7 @@ uint32_t pfe_tmu_shp_cfg_get_idle_slope(void *cbus_base_va,
 	reg = hal_read32(cbus_base_va + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_CLK_FRQ);
 	sys_clk_hz = (reg & 0xffffU) * 1000000U;
 	wgt = hal_read32(shp_base_va + TMU_SHP_WGHT) & 0xfffffU;
-	isl = ((uint64_t)wgt * 8ULL * (uint64_t)sys_clk_hz) / ((uint64_t)clk_div * (2ULL << 12));
+	isl = ((uint64_t)wgt * 8ULL * (uint64_t)sys_clk_hz) / ((uint64_t)CLK_DIV * (1ULL << 12));
 
 	return (uint32_t)isl;
 }
@@ -1253,16 +1233,7 @@ errno_t pfe_tmu_sch_cfg_set_algo(void *cbus_base_va,
 	}
 	else if (algo == SCHED_ALGO_DWRR)
 	{
-		if (RATE_MODE_PACKET_RATE != pfe_tmu_sch_cfg_get_rate_mode(cbus_base_va, phy, sch))
-		{
-			/*	See RTL */
-			NXP_LOG_ERROR("DWRR only supported in Packet Rate scheduler mode\n");
-			return EINVAL;
-		}
-		else
-		{
-			reg = 2U;
-		}
+		reg = 2U;
 	}
 	else if (algo == SCHED_ALGO_RR)
 	{
@@ -1272,7 +1243,7 @@ errno_t pfe_tmu_sch_cfg_set_algo(void *cbus_base_va,
 	{
 		if (RATE_MODE_PACKET_RATE != pfe_tmu_sch_cfg_get_rate_mode(cbus_base_va, phy, sch))
 		{
-			/*	See RTL */
+			/*	See RTL and WRR pseudocode */
 			NXP_LOG_ERROR("WRR only supported in Packet Rate scheduler mode\n");
 			return EINVAL;
 		}

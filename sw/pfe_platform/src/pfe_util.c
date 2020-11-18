@@ -1,31 +1,10 @@
 /* =========================================================================
+ *
+ *  Copyright (c) 2020 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
- * 
- * Redistribution and use in source and binary forms, with or without 
- * modification, are permitted provided that the following conditions are met:
- * 
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- * 
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation 
- *    and/or other materials provided with the distribution.
- * 
- * 3. Neither the name of the copyright holder nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR 
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER
- * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, 
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
- * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *  SPDX-License-Identifier: GPL-2.0
+ *
  * ========================================================================= */
 
 #include "pfe_cfg.h"
@@ -269,6 +248,63 @@ void pfe_util_destroy(pfe_util_t *util)
 }
 
 /**
+ * @brief UTIL ISR
+ * @details Checks PE whether it reports a firmware error
+ * @param[in] util The UTIL instance
+ */
+errno_t pfe_util_isr(pfe_util_t *util)
+{
+	uint32_t i;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == util)
+	{
+		NXP_LOG_ERROR("NULL argument\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/* Read the error record from each PE */
+	for (i = 0U; i < util->pe_num; i++)
+	{
+		pfe_pe_get_fw_errors(util->pe[i]);
+	}
+
+	return EOK;
+}
+/**
+ * @brief		Mask UTIL interrupts
+ * @param[in]	util The UTIL instance
+ */
+void pfe_util_irq_mask(pfe_util_t *util)
+{
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
+	/*	Intentionally empty */
+	(void)util;
+#else
+	#error Not supported yet
+#endif /* PFE_CFG_IP_VERSION */
+}
+
+/**
+ * @brief		Unmask UTIL interrupts
+ * @param[in]	util The UTIL instance
+ */
+void pfe_util_irq_unmask(pfe_util_t *util)
+{
+#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
+	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
+	/*	Intentionally empty */
+	(void)util;
+#else
+	#error Not supported yet
+#endif /* PFE_CFG_IP_VERSION */
+}
+
+/**
  * @brief		Return UTIL runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	util 		The UTIL instance
@@ -280,6 +316,7 @@ void pfe_util_destroy(pfe_util_t *util)
 uint32_t pfe_util_get_text_statistics(pfe_util_t *util, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U, ii;
+	pfe_ct_version_t fw_ver;
 	
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == util))
@@ -288,6 +325,17 @@ uint32_t pfe_util_get_text_statistics(pfe_util_t *util, char_t *buf, uint32_t bu
 		return 0U;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/* FW version */
+	if (EOK == pfe_util_get_fw_version(util, &fw_ver))
+	{
+		len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION\t%u.%u.%u (api:%.32s)\n",
+			fw_ver.major, fw_ver.minor, fw_ver.patch, fw_ver.cthdr);
+	}
+	else
+	{
+		len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION <unknown>\n");
+	}
 	
 	len += pfe_util_cfg_get_text_stat(util->cbus_base_va, buf + len, buf_len - len, verb_level);
 
@@ -298,4 +346,24 @@ uint32_t pfe_util_get_text_statistics(pfe_util_t *util, char_t *buf, uint32_t bu
 	}
 	
 	return len;
+}
+
+/**
+ * @brief		Returns firmware versions
+ * @param[in]	util The UTIL instance
+ * @return		ver Parsed firmware metadata
+ */
+errno_t pfe_util_get_fw_version(pfe_util_t *util, pfe_ct_version_t *ver)
+{
+	pfe_ct_pe_mmap_t pfe_pe_mmap;
+
+	/*	Get mmap base from PE[0] since all PEs have the same memory map */
+	if ((NULL == util->pe[0]) || (EOK != pfe_pe_get_mmap(util->pe[0], &pfe_pe_mmap)))
+	{
+		return EINVAL;
+	}
+
+	memcpy(ver, &pfe_pe_mmap.util_pe.common.version, sizeof(pfe_ct_version_t));
+
+	return EOK;
 }

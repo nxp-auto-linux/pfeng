@@ -1,31 +1,10 @@
 /* =========================================================================
+ *
+ *  Copyright (c) 2020 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ *  SPDX-License-Identifier: GPL-2.0
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Neither the name of the copyright holder nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER
- * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
- * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
 #include "pfe_cfg.h"
@@ -165,7 +144,7 @@ static uint32_t pfe_phy_if_stat_to_str(pfe_ct_phy_if_stats_t *stat, char *buf, u
 pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, char_t *name)
 {
 	pfe_phy_if_t *iface;
-	pfe_ct_pe_mmap_t pfe_pe_mmap = {0U};
+	pfe_ct_class_mmap_t pfe_pe_mmap = {0U};
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == class))
@@ -859,7 +838,7 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 {
-	pfe_ct_pe_mmap_t mmap;
+	pfe_ct_class_mmap_t mmap;
 	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -909,7 +888,7 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
  */
 errno_t pfe_phy_if_set_mirroring(pfe_phy_if_t *iface, pfe_ct_phy_if_id_t mirror)
 {
-	pfe_ct_pe_mmap_t mmap;
+	pfe_ct_class_mmap_t mmap;
 	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1831,7 +1810,7 @@ uint32_t pfe_phy_if_get_spd(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 {
 	int i = 0;
-	errno_t ret = EOK;;
+	errno_t ret = EOK;
 	addr_t offset = 0;
 	uint32_t buffer_len = 0;
 	pfe_ct_phy_if_stats_t * stats = NULL;

@@ -1,31 +1,10 @@
 /* =========================================================================
+ *
+ *  Copyright (c) 2020 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ *  SPDX-License-Identifier: GPL-2.0
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Neither the name of the copyright holder nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER
- * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
- * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
 /**
@@ -54,6 +33,83 @@
 #define RING_LEN						PFE_HIF_RING_CFG_LENGTH
 #define RING_LEN_MASK					(PFE_HIF_RING_CFG_LENGTH - 1U)
 
+/* Buffer descriptor WORD0 */
+#define HIF_RING_BD_W0_DESC_EN				(1U << 31U)
+/* 30 .. 21 reserved */
+#define HIF_RING_BD_W0_DIR					(1U << 20U)
+#define HIF_RING_BD_W0_LAST_BD				(1U << 19U)
+#define HIF_RING_BD_W0_LIFM					(1U << 18U)
+#define HIF_RING_BD_W0_CBD_INT_EN			(1U << 17U)
+#define HIF_RING_BD_W0_PKT_INT_EN			(1U << 16U)
+
+#define HIF_RING_BD_W0_BD_SEQNUM_MASK		(0xFFFFU)
+#define HIF_RING_BD_W0_BD_SEQNUM_OFFSET		(0U)
+#define HIF_RING_BD_W0_BD_CTRL_MASK			(0xFFFFU)
+#define HIF_RING_BD_W0_BD_CTRL_OFFSET		(15U)
+
+#define HIF_RING_BD_W0_BD_SEQNUM(seqnum)	\
+		(((seqnum) & HIF_RING_BD_W0_BD_SEQNUM_MASK)	<< \
+					 HIF_RING_BD_W0_BD_SEQNUM_OFFSET)
+#define HIF_RING_BD_W0_BD_SEQNUM_GET(seqnum)	\
+		(((seqnum) >> HIF_RING_BD_W0_BD_SEQNUM_OFFSET) & \
+					  HIF_RING_BD_W0_BD_SEQNUM_MASK)
+
+#define HIF_RING_BD_W0_BD_CTRL(ctrl)	\
+		(((ctrl) & HIF_RING_BD_W0_BD_CTRL_MASK)	<< \
+					 HIF_RING_BD_W0_BD_CTRL_OFFSET)
+#define HIF_RING_BD_W0_BD_CTRL_GET(ctrl)	\
+		(((ctrl) >> HIF_RING_BD_W0_BD_CTRL_OFFSET) & \
+					  HIF_RING_BD_W0_BD_CTRL_MASK)
+
+
+/* Buffer descriptor WORD1 */
+#define HIF_RING_BD_W1_BD_BUFFLEN_MASK		(0xFFFFU)
+#define HIF_RING_BD_W1_BD_BUFFLEN_OFFSET	(0U)
+#define HIF_RING_BD_W1_BD_RSVD_STAT_MASK	(0xFFFFU)
+#define HIF_RING_BD_W1_BD_RSVD_STAT_OFFSET	(15U)
+
+#define HIF_RING_BD_W1_BD_BUFFLEN(buflen)	\
+		(((buflen) & HIF_RING_BD_W1_BD_BUFFLEN_MASK)	<< \
+					 HIF_RING_BD_W1_BD_BUFFLEN_OFFSET)
+#define HIF_RING_BD_W1_BD_BUFFLEN_GET(buflen)	\
+		(((buflen) >> HIF_RING_BD_W1_BD_BUFFLEN_OFFSET) & \
+					  HIF_RING_BD_W1_BD_BUFFLEN_MASK)
+
+#define HIF_RING_BD_W1_BD_RSVD_STAT(stat)	\
+		(((stat) & HIF_RING_BD_W1_BD_RSVD_STAT_MASK)	<< \
+				   HIF_RING_BD_W1_BD_RSVD_STAT_OFFSET)
+
+
+/* Write back Buffer descriptor WORD0 */
+#define HIF_RING_WB_BD_W0_DESC_EN			(1U << 9U)
+#define HIF_RING_WB_BD_W0_DIR				(1U << 8U)
+#define HIF_RING_WB_BD_W0_LAST_BD			(1U << 7U)
+#define HIF_RING_WB_BD_W0_LIFM				(1U << 6U)
+#define HIF_RING_WB_BD_W0_CBD_INT_EN		(1U << 5U)
+#define HIF_RING_WB_BD_W0_PKT_INT_EN		(1U << 4U)
+/* 3.. 0 Reserved */
+
+/* Write back Buffer descriptor WORD1 */
+#define HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_MASK	(0xFFFFU)
+#define HIF_RING_WB_BD_W1_WB_BD_SEQNUM_MASK		(0xFFFFU)
+#define HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_OFFSET	(0U)
+#define HIF_RING_WB_BD_W1_WB_BD_SEQNUM_OFFSET	(15U)
+
+#define HIF_RING_WB_BD_W1_WB_BD_BUFFLEN(buflen)	\
+		(((buflen) & HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_MASK)	<< \
+					 HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_OFFSET)
+#define HIF_RING_WB_BD_W1_WB_BD_SEQNUM(seqnum)	\
+		(((seqnum) & HIF_RING_WB_BD_W1_WB_BD_SEQNUM_MASK)	<< \
+				HIF_RING_WB_BD_W1_WB_BD_SEQNUM_OFFSET)
+
+#define HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_GET(buflen)	\
+		(((buflen) >> HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_OFFSET) & \
+					  HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_MASK)
+#define HIF_RING_WB_BD_W1_WB_BD_SEQNUM_GET(seqnum)	\
+		(((seqnum) >> HIF_RING_WB_BD_W1_WB_BD_SEQNUM_OFFSET) & \
+					  HIF_RING_WB_BD_W1_WB_BD_SEQNUM_MASK)
+
+
 /**
  * @brief	The BD as seen by HIF
  * @details	Properly pack to form the structure as expected by HIF.
@@ -66,27 +122,8 @@
  */
 typedef struct __attribute__((packed)) __pfe_hif_bd_tag
 {
-	volatile uint16_t seqnum;
-	union
-	{
-		volatile uint16_t ctrl;
-		struct
-		{
-			volatile uint16_t pkt_int_en	: 1; /* LSB */
-			volatile uint16_t cbd_int_en	: 1;
-			volatile uint16_t lifm			: 1;
-			volatile uint16_t last_bd		: 1;
-			volatile uint16_t dir			: 1;
-			volatile uint16_t reserved		: 10;
-			volatile uint16_t desc_en		: 1; /* MSB */
-		};
-	};
-	volatile uint16_t buflen;
-	union
-	{
-		volatile uint16_t rsvd;
-		volatile uint16_t status;	/* Due to backwards compatibility */
-	};
+	volatile uint32_t ctrl_seqnum_w0;
+	volatile uint32_t rsvd_buflen_w1;
 	volatile uint32_t data;
 	volatile uint32_t next;
 } pfe_hif_bd_t;
@@ -106,43 +143,57 @@ typedef struct __attribute__((packed)) __pfe_hif_nocpy_bd_tag
 {
 	union
 	{
-		volatile uint16_t rx_reserved;
-		volatile uint16_t tx_buflen;
-	};
-
-	union
-	{
-		volatile uint16_t ctrl;
 		struct
 		{
-			volatile uint16_t cbd_int_en	: 1;
-			volatile uint16_t pkt_int_en	: 1;
-			volatile uint16_t lifm			: 1;
-			volatile uint16_t last_bd		: 1;	/*	Not used */
-			volatile uint16_t dir			: 1;
-			volatile uint16_t lmem_cpy		: 1;
-			volatile uint16_t reserved1		: 2;
-			volatile uint16_t pkt_xfer		: 1;
-			volatile uint16_t reserved2		: 6;
-			volatile uint16_t desc_en		: 1;
+			union
+			{
+				volatile uint16_t rx_reserved;
+				volatile uint16_t tx_buflen;
+			};
+
+			union
+			{
+				volatile uint16_t ctrl;
+				struct
+				{
+					volatile uint16_t cbd_int_en	: 1;
+					volatile uint16_t pkt_int_en	: 1;
+					volatile uint16_t lifm			: 1;
+					volatile uint16_t last_bd		: 1;	/*	Not used */
+					volatile uint16_t dir			: 1;
+					volatile uint16_t lmem_cpy		: 1;
+					volatile uint16_t reserved1		: 2;
+					volatile uint16_t pkt_xfer		: 1;
+					volatile uint16_t reserved2		: 6;
+					volatile uint16_t desc_en		: 1;
+				};
+			};
 		};
+		volatile uint32_t ctrl_txlen_w0;
 	};
 
 	union
 	{
-		volatile uint16_t rx_buflen;
-		volatile uint16_t tx_status;
-	};
-
-	union
-	{
-		volatile uint16_t rx_status;
 		struct
 		{
-			uint16_t tx_portno		: 3;
-			uint16_t tx_queueno		: 4;
-			uint16_t tx_reserved4	: 9;
+			union
+			{
+				volatile uint16_t rx_buflen;
+				volatile uint16_t tx_status;
+			};
+
+			union
+			{
+				volatile uint16_t rx_status;
+				struct
+				{
+					uint16_t tx_portno		: 3;
+					uint16_t tx_queueno		: 4;
+					uint16_t tx_reserved4	: 9;
+				};
+			};
 		};
+		volatile uint32_t stat_rxlen_txstat_w1;
 	};
 
 	volatile uint32_t data;
@@ -162,30 +213,8 @@ typedef struct __attribute__((packed)) __pfe_hif_nocpy_bd_tag
  */
 typedef struct __attribute__((packed)) __pfe_hif_wb_bd_tag
 {
-	union
-	{
-		struct
-		{
-			volatile uint32_t ctrl:	11;
-			volatile uint32_t rsvd:	21;
-		};
-
-		struct
-		{
-			volatile uint32_t reserved		: 4;
-			volatile uint32_t cbd_int_en	: 1;
-			volatile uint32_t pkt_int_en	: 1;
-			volatile uint32_t lifm			: 1;
-			volatile uint32_t last_bd		: 1;
-			volatile uint32_t dir			: 1;
-			volatile uint32_t desc_en		: 1;
-			volatile uint32_t reserved1		: 1;
-			volatile uint32_t reserved2		: 21;
-		};
-	};
-
-	volatile uint16_t buflen;
-	volatile uint16_t seqnum;
+	volatile uint32_t rsvd_ctrl_w0;
+	volatile uint32_t seqnum_buflen_w1;
 } pfe_hif_wb_bd_t;
 
 /**
@@ -607,6 +636,8 @@ static inline errno_t pfe_hif_ring_enqueue_buf_nocpy(pfe_hif_ring_t *ring, void 
  */
 static inline errno_t pfe_hif_ring_enqueue_buf_std(pfe_hif_ring_t *ring, void *buf_pa, uint32_t length, bool_t lifm)
 {
+	uint32_t tmp_ctrl_seq_w0;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ring) | (NULL == buf_pa)))
 	{
@@ -615,7 +646,9 @@ static inline errno_t pfe_hif_ring_enqueue_buf_std(pfe_hif_ring_t *ring, void *b
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (unlikely(0U != ring->wr_bd->desc_en))
+	tmp_ctrl_seq_w0 = ring->wr_bd->ctrl_seqnum_w0;
+
+	if (unlikely(0U != (tmp_ctrl_seq_w0 & HIF_RING_BD_W0_DESC_EN)))
 	{
 		NXP_LOG_ERROR("Can't insert buffer since the BD entry is already used\n");
 		return EIO;
@@ -624,20 +657,23 @@ static inline errno_t pfe_hif_ring_enqueue_buf_std(pfe_hif_ring_t *ring, void *b
 	{
 		/*	Write the HW BD */
 		ring->wr_bd->data = (uint32_t)(addr_t)buf_pa;
-		ring->wr_bd->buflen = (uint16_t)length;
-		ring->wr_bd->status = 0U;
+		ring->wr_bd->rsvd_buflen_w1 = HIF_RING_BD_W1_BD_RSVD_STAT(0U) |
+									  HIF_RING_BD_W1_BD_BUFFLEN((uint16_t)length);
 
 		if (lifm)
 		{
-			ring->wr_bd->lifm = 1U;
+			tmp_ctrl_seq_w0 |= HIF_RING_BD_W0_LIFM;
 		}
 		else
 		{
-			ring->wr_bd->lifm = 0U;
+			tmp_ctrl_seq_w0 &= ~HIF_RING_BD_W0_LIFM;
 		}
 
 #ifdef PFE_CFG_HIF_SEQNUM_CHECK
-		ring->wr_bd->seqnum = ring->seqnum;
+		/* Discard old SEQ */
+		tmp_ctrl_seq_w0 &= ~(HIF_RING_BD_W0_BD_SEQNUM_MASK << HIF_RING_BD_W0_BD_SEQNUM_OFFSET);
+		/* Set new SEQ counter */
+		tmp_ctrl_seq_w0 |= HIF_RING_BD_W0_BD_SEQNUM(ring->seqnum);
 		ring->seqnum++;
 #endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 
@@ -653,9 +689,11 @@ static inline errno_t pfe_hif_ring_enqueue_buf_std(pfe_hif_ring_t *ring, void *b
 #endif /* EQ_DQ_RX_DEBUG */
 
 		/*	Write the BD 'enable' bit */
-		ring->wr_wb_bd->desc_en = 1U;
+
+		ring->wr_wb_bd->rsvd_ctrl_w0 |= HIF_RING_WB_BD_W0_DESC_EN;
+		/* Wait until wr_wb_bd is written */
 		hal_wmb();
-		ring->wr_bd->desc_en = 1U;
+		ring->wr_bd->ctrl_seqnum_w0 = (tmp_ctrl_seq_w0 | HIF_RING_BD_W0_DESC_EN);
 
 		/*	Increment the write pointer */
 		inc_write_index_std(ring);
@@ -749,6 +787,10 @@ static inline errno_t pfe_hif_ring_dequeue_buf_nocpy(pfe_hif_ring_t *ring, void 
  */
 static inline errno_t pfe_hif_ring_dequeue_buf_std(pfe_hif_ring_t *ring, void **buf_pa, uint32_t *length, bool_t *lifm)
 {
+	uint32_t tmp_bd_ctrl_seq_w0;
+	uint32_t tmp_wb_bd_ctrl_w0;
+	uint32_t tmp_wb_bd_seq_buf_w1;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ring) || (NULL == buf_pa) || (NULL == length) || (NULL == lifm)))
 	{
@@ -757,9 +799,23 @@ static inline errno_t pfe_hif_ring_dequeue_buf_std(pfe_hif_ring_t *ring, void **
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if ((0U == ring->rd_bd->desc_en) || (0U != ring->rd_wb_bd->desc_en)
+
+	tmp_wb_bd_ctrl_w0 = ring->rd_wb_bd->rsvd_ctrl_w0;
+	if(0U != (tmp_wb_bd_ctrl_w0 & HIF_RING_WB_BD_W0_DESC_EN))
+	{
+		/* Immediate return (do not waste time reading non-cached memory)
+		 * as the buffer is still used by HW */
+		return EAGAIN;
+	}
+	/* Single read buffer descriptor */
+	tmp_bd_ctrl_seq_w0 = ring->rd_bd->ctrl_seqnum_w0;
 #ifdef PFE_CFG_HIF_SEQNUM_CHECK
-		|| (ring->rd_bd->seqnum != ring->rd_wb_bd->seqnum)
+	tmp_wb_bd_seq_buf_w1 = ring->rd_wb_bd->seqnum_buflen_w1;
+#endif
+
+	if ((0U == (tmp_bd_ctrl_seq_w0 & HIF_RING_BD_W0_DESC_EN))
+#ifdef PFE_CFG_HIF_SEQNUM_CHECK
+		|| (HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_GET(tmp_wb_bd_seq_buf_w1) != HIF_RING_BD_W0_BD_SEQNUM_GET(tmp_ctrl_seq_w0))
 #endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 		)
 	{
@@ -767,12 +823,11 @@ static inline errno_t pfe_hif_ring_dequeue_buf_std(pfe_hif_ring_t *ring, void **
 	}
 	else
 	{
-		/*	Reset BD and WB BD enable flag. It is ensured that the current BD will not be reused
-		 	again until desc_en is reset since sequence number will become not sequential and
-		 	thus the BD is not valid. */
-		ring->rd_bd->desc_en = 0U;
-		ring->rd_wb_bd->desc_en = 1U;
-		hal_wmb();
+#ifndef PFE_CFG_HIF_SEQNUM_CHECK
+		tmp_wb_bd_seq_buf_w1 = ring->rd_wb_bd->seqnum_buflen_w1;
+#endif
+		/*	Reset BD EN flag so it is not reused by HW. */
+		ring->rd_bd->ctrl_seqnum_w0 = (tmp_bd_ctrl_seq_w0 & ~HIF_RING_BD_W0_DESC_EN);
 
 		*buf_pa = (void *)(addr_t)(ring->rd_bd->data);
 
@@ -787,8 +842,8 @@ static inline errno_t pfe_hif_ring_dequeue_buf_std(pfe_hif_ring_t *ring, void **
 		}
 #endif /* EQ_DQ_RX_DEBUG */
 
-		*length = ring->rd_wb_bd->buflen;
-		*lifm = (0U != ring->rd_wb_bd->lifm);
+		*length = HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_GET(tmp_wb_bd_seq_buf_w1);
+		*lifm = (0 != (tmp_wb_bd_ctrl_w0 & HIF_RING_WB_BD_W0_LIFM));
 		/*	Increment the read pointer */
 		inc_read_index_std(ring);
 	}
@@ -904,6 +959,12 @@ static inline errno_t pfe_hif_ring_dequeue_plain_std(pfe_hif_ring_t *ring, bool_
 static inline errno_t pfe_hif_ring_dequeue_plain_std(pfe_hif_ring_t *ring, bool_t *lifm)
 #endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 {
+	uint32_t tmp_bd_ctrl_seq_w0;
+	uint32_t tmp_wb_bd_ctrl_w0;
+#ifdef PFE_CFG_HIF_SEQNUM_CHECK
+	uint32_t tmp_wb_bd_seq_buf_w1;
+#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == ring))
 	{
@@ -912,9 +973,24 @@ static inline errno_t pfe_hif_ring_dequeue_plain_std(pfe_hif_ring_t *ring, bool_
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if ((0U == ring->rd_bd->desc_en) || (0U != ring->rd_wb_bd->desc_en)
+	tmp_wb_bd_ctrl_w0 = ring->rd_wb_bd->rsvd_ctrl_w0;
+	if(0U != (tmp_wb_bd_ctrl_w0 & HIF_RING_WB_BD_W0_DESC_EN))
+	{
+		/* Immediate return (do not waste time reading non-cached memory)
+		 * as the buffer is still used by HW */
+		return EAGAIN;
+	}
+
+	/* Perform single read */
+	tmp_bd_ctrl_seq_w0 = ring->rd_bd->ctrl_seqnum_w0;
+
 #ifdef PFE_CFG_HIF_SEQNUM_CHECK
-		|| (ring->rd_bd->seqnum != ring->rd_wb_bd->seqnum)
+	tmp_wb_bd_seq_buf_w1 = ring->rd_wb_bd->seqnum_buflen_w1;
+#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
+
+	if ((0U == (tmp_bd_ctrl_seq_w0 & HIF_RING_BD_W0_DESC_EN))
+#ifdef PFE_CFG_HIF_SEQNUM_CHECK
+		|| (HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_GET(tmp_wb_bd_seq_buf_w1) != HIF_RING_BD_W0_BD_SEQNUM_GET(tmp_ctrl_seq_w0))
 #endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 		)
 	{
@@ -923,19 +999,14 @@ static inline errno_t pfe_hif_ring_dequeue_plain_std(pfe_hif_ring_t *ring, bool_
 	else
 	{
 		/*	Return LIFM */
-		*lifm = (0U != ring->rd_bd->lifm);
+		*lifm = (0U != (tmp_bd_ctrl_seq_w0 & HIF_RING_BD_W0_LIFM));
 
 #ifdef PFE_CFG_HIF_TX_FIFO_FIX
 		/*	Return transmitted buffer length */
-		*len = ring->rd_bd->buflen;
+		*len = HIF_RING_BD_W1_BD_BUFFLEN_GET(ring->rd_bd->rsvd_buflen_w1);
 #endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 
-		/*	Reset BD and WB BD enable flag. It is ensured that the current BD will not be reused
-			again until desc_en is reset since sequence number will become not sequential and
-			thus the BD is not valid. */
-		ring->rd_bd->desc_en = 0U;
-		ring->rd_wb_bd->desc_en = 1U;
-		hal_wmb();
+		ring->rd_bd->ctrl_seqnum_w0 = (tmp_bd_ctrl_seq_w0  & ~HIF_RING_BD_W0_DESC_EN);
 
 		/*	Increment the read pointer */
 		inc_read_index_std(ring);
@@ -969,11 +1040,16 @@ __attribute__((cold)) errno_t pfe_hif_ring_drain_buf(pfe_hif_ring_t *ring, void 
 	if (ring->is_nocpy && ring->is_rx)
 	{
 		bool_t lifm;
+		uint32_t len;
 
 		/*	In this case we will do standard dequeue until the ring is empty. This
 			will ensure that application can drain RX buffers and return all BMU
 			buffers back to the HW pool. */
+#ifdef PFE_CFG_HIF_TX_FIFO_FIX
+		if (EOK == pfe_hif_ring_dequeue_plain_nocpy(ring, &lifm, &len))
+#else
 		if (EOK == pfe_hif_ring_dequeue_plain_nocpy(ring, &lifm))
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 		{
 			return EOK;
 		}
@@ -991,7 +1067,7 @@ __attribute__((cold)) errno_t pfe_hif_ring_drain_buf(pfe_hif_ring_t *ring, void 
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 		if (ring->is_nocpy)
 		{
-			*buf_pa = (void *)ring->rd_bd_nocpy->data;
+			*buf_pa = (void *)(addr_t)ring->rd_bd_nocpy->data;
 			ring->rd_bd_nocpy->desc_en = 0U;
 			inc_read_index_nocpy(ring);
 		}
@@ -1004,12 +1080,12 @@ __attribute__((cold)) errno_t pfe_hif_ring_drain_buf(pfe_hif_ring_t *ring, void 
 				the new ones will be enqueued with sequence number not matching
 				the current HW one. We need to adjust the SW value when draining
 				non-processed BDs. */
-			if (0U != ring->wr_wb_bd->desc_en)
+			if ( 0 != (HIF_RING_WB_BD_W0_DESC_EN & ring->wr_wb_bd->rsvd_ctrl_w0))
 			{
 				/*	This BD has not been processed yet. Revert the enqueue. */
 				*buf_pa = (void *)(addr_t)ring->wr_bd->data;
-				ring->wr_bd->desc_en = 0U;
-				ring->wr_wb_bd->desc_en = 1U;
+				ring->wr_bd->ctrl_seqnum_w0 &= ~HIF_RING_BD_W0_DESC_EN;
+				ring->wr_wb_bd->rsvd_ctrl_w0 |= HIF_RING_WB_BD_W0_DESC_EN;
 #ifdef PFE_CFG_HIF_SEQNUM_CHECK
 				ring->seqnum--;
 #endif /* PFE_CFG_HIF_SEQNUM_CHECK */
@@ -1019,8 +1095,8 @@ __attribute__((cold)) errno_t pfe_hif_ring_drain_buf(pfe_hif_ring_t *ring, void 
 			{
 				/*	Processed BD. Do standard dequeue. */
 				*buf_pa = (void *)(addr_t)ring->rd_bd->data;
-				ring->rd_bd->desc_en = 0U;
-				ring->rd_wb_bd->desc_en = 1U;
+				ring->rd_bd->ctrl_seqnum_w0 &= ~HIF_RING_BD_W0_DESC_EN;
+				ring->rd_wb_bd->rsvd_ctrl_w0 |= HIF_RING_WB_BD_W0_DESC_EN;
 				inc_read_index_std(ring);
 			}
 		}
@@ -1107,15 +1183,13 @@ __attribute__((cold)) static void pfe_hif_ring_invalidate_std(pfe_hif_ring_t *ri
 
 	for (ii=0U; ii<RING_LEN; ii++)
 	{
-		/*	Zero-out the EN flag */
-		(((pfe_hif_bd_t *)ring->base_va)[ii]).desc_en = 0U;
-
-		/*	Mark the descriptor as last BD */
-		(((pfe_hif_bd_t *)ring->base_va)[ii]).last_bd = 1U;
+		/*	Mark the descriptor as last BD and set enable flag */
+		(((pfe_hif_bd_t *)ring->base_va)[ii]).ctrl_seqnum_w0 &= ~HIF_RING_BD_W0_DESC_EN;
+		(((pfe_hif_bd_t *)ring->base_va)[ii]).ctrl_seqnum_w0 |= HIF_RING_BD_W0_LAST_BD;
 
 		/*	Reset the write-back descriptor */
-		(((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ii]).seqnum = 0xffffU;
-		(((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ii]).desc_en = 1U;
+		(((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ii]).seqnum_buflen_w1 |= HIF_RING_WB_BD_W1_WB_BD_SEQNUM(0xffffU);
+		(((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ii]).rsvd_ctrl_w0 |= HIF_RING_WB_BD_W0_DESC_EN;
 	}
 }
 
@@ -1176,7 +1250,7 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 				idx_str = "";
 			}
 
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "    p0x%px%5d: %04x:%04x:%08x:%08x:%08x:%04x%s\n",(void *)&((pfe_hif_bd_t *)ring->base_pa)[ii], ii, bd->buflen, bd->ctrl, bd->status, bd->data, bd->next, bd->seqnum, idx_str);
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "    p0x%px%5d: %04x:%04x:%08x:%08x:%04x%s\n",(void *)&((pfe_hif_bd_t *)ring->base_pa)[ii], ii, HIF_RING_BD_W1_BD_BUFFLEN_GET(bd->rsvd_buflen_w1), HIF_RING_BD_W0_BD_CTRL_GET(bd->ctrl_seqnum_w0), bd->data, bd->next, HIF_RING_BD_W0_BD_SEQNUM_GET(bd->ctrl_seqnum_w0), idx_str);
 		}
 
 		/* WB ring */
@@ -1202,7 +1276,7 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 					idx_str = "";
 				}
 
-				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "    p0x%px%5d: %04x:%06x:%04x:%04x%s\n", (void *)&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_pa)[ii], ii, wb->ctrl,  wb->rsvd, wb->buflen, wb->seqnum, idx_str);
+				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "    p0x%px%5d: %04x:%06x:%04x:%04x%s\n", (void *)&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_pa)[ii], ii, HIF_RING_BD_W0_BD_CTRL(wb->rsvd_ctrl_w0), HIF_RING_WB_BD_W1_WB_BD_BUFFLEN(wb->seqnum_buflen_w1), HIF_RING_WB_BD_W1_WB_BD_SEQNUM(wb->seqnum_buflen_w1), idx_str);
 			}
 		}
 	}
@@ -1468,17 +1542,17 @@ __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t se
 		if (TRUE == ring->is_rx)
 		{
 			/*	Mark BD as RX */
-			hw_desc_va[ii].dir = 1U;
+			hw_desc_va[ii].ctrl_seqnum_w0 |= HIF_RING_BD_W0_DIR;
 		}
 
 		/*	Enable BD interrupt */
-		hw_desc_va[ii].cbd_int_en = 1U;
+		hw_desc_va[ii].ctrl_seqnum_w0 |= HIF_RING_BD_W0_CBD_INT_EN;
 		hw_desc_va[ii].next = (uint32_t)((addr_t)&hw_desc_pa[ii + 1U] & 0xffffffffU);
 	}
 
 	/*	Chain last one with the first one */
 	hw_desc_va[ii-1].next = (uint32_t)((addr_t)&hw_desc_pa[0] & 0xffffffffU);
-	hw_desc_va[ii-1].last_bd = 1U;
+	hw_desc_va[ii-1].ctrl_seqnum_w0 |= HIF_RING_BD_W0_LAST_BD;
 
 	/*	Initialize write-back descriptors */
 	{
@@ -1492,11 +1566,11 @@ __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t se
 		wb_bd_va = (pfe_hif_wb_bd_t *)ring->wb_tbl_base_va;
 		for (ii=0U; ii<RING_LEN; ii++)
 		{
-			wb_bd_va->seqnum = 0xffffU;
+			wb_bd_va->seqnum_buflen_w1 |= HIF_RING_WB_BD_W1_WB_BD_SEQNUM(0xffffU);
 
 			/*	Initialize WB BD descriptor enable flag. Once descriptor is processed,
 				the PFE HW will clear it. */
-			wb_bd_va->desc_en = 1U;
+			wb_bd_va->rsvd_ctrl_w0 |= HIF_RING_WB_BD_W0_DESC_EN;
 			wb_bd_va++;
 		}
 

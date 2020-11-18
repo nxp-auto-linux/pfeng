@@ -1,7 +1,7 @@
 /*
- * 2020 NXP
+ * Copyright 2020 NXP
  *
- * SPDX-License-Identifier:     BSD OR GPL-2.0
+ * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -18,7 +18,7 @@
 
 #include "pfeng.h"
 
-MODULE_LICENSE("Dual BSD/GPL");
+MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Jan Petrous <jan.petrous@nxp.com>");
 #ifdef PFE_CFG_PFE_MASTER
 MODULE_DESCRIPTION("PFEng driver");
@@ -38,21 +38,11 @@ static const u32 default_msg_level = (
 #ifdef PFE_CFG_PFE_MASTER
 static char *fw_class_name;
 module_param(fw_class_name, charp, 0444);
-#ifdef OPT_FW_EMBED
-#define FW_DESC_TXT ", use - for built-in variant"
-#else
-#define FW_DESC_TXT ""
-#endif
-MODULE_PARM_DESC(fw_class_name, "\t The name of CLASS firmware file (default: read from device-tree or " PFENG_FW_CLASS_NAME FW_DESC_TXT ")");
+MODULE_PARM_DESC(fw_class_name, "\t The name of CLASS firmware file (default: read from device-tree or " PFENG_FW_CLASS_NAME ")");
 
 static char *fw_util_name;
 module_param(fw_util_name, charp, 0444);
-#ifdef OPT_FW_EMBED
-#define FW_DESC_TXT ", use - for built-in variant"
-#else
-#define FW_DESC_TXT ""
-#endif
-MODULE_PARM_DESC(fw_util_name, "\t The name of UTIL firmware file (default: read from device-tree or " PFENG_FW_UTIL_NAME FW_DESC_TXT ")");
+MODULE_PARM_DESC(fw_util_name, "\t The name of UTIL firmware file (default: read from device-tree or " PFENG_FW_UTIL_NAME ")");
 #endif
 
 static int msg_verbosity = PFE_CFG_VERBOSITY_LEVEL;
@@ -302,6 +292,9 @@ int pfeng_drv_remove(struct pfeng_priv *priv)
 			dev_info(dev, "PFE Platform stopped\n");
 		}
 	}
+
+	/* Shutdown memory management */
+	oal_mm_shutdown();
 
 	/* Release firmware */
 	if (priv->cfg->fw)

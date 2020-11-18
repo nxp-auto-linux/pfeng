@@ -1,9 +1,9 @@
-/*
- * Copyright 2019-2020 NXP
+/* =========================================================================
+ *  Copyright 2019-2020 NXP
  *
- * SPDX-License-Identifier:     BSD OR GPL-2.0
+ *  SPDX-License-Identifier: GPL-2.0
  *
- */
+ * ========================================================================= */
 /**
  *  @file       pfe_cfg.h
  *  @brief      PFE configuration file

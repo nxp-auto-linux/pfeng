@@ -1,31 +1,10 @@
 /* =========================================================================
+ *
+ *  Copyright (c) 2020 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ *  SPDX-License-Identifier: GPL-2.0
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Neither the name of the copyright holder nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER
- * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
- * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
 #include "pfe_cfg.h"
@@ -61,6 +40,135 @@ struct __pfe_classifier_tag
 };
 
 static errno_t pfe_class_dmem_heap_init(pfe_class_t *class);
+
+/**
+ * @brief		Read "put" buffer
+ * @param[in]	pe The PE instance
+ * @param[out]	buf Pointer to memory where buffer shall be written
+ * @retval		EOK Success and buffer is valid
+ * @retval		EAGAIN Buffer is invalid
+ * @retval		ENOENT Buffer not found
+ */
+errno_t pfe_pe_get_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
+{
+	uint8_t flags;
+	errno_t ret = ENOENT;
+	pfe_ct_pe_mmap_t mmap_data;
+	pfe_ct_class_mmap_t *class_mmap_data;
+
+	/*	Get mmap base from PE[0] since all PEs have the same memory map */
+	if (EOK != pfe_pe_get_mmap(pe, &mmap_data))
+	{
+		NXP_LOG_ERROR("Could not get memory map\n");
+		return ENOENT;
+	}
+
+	class_mmap_data = &mmap_data.class_pe;
+
+	if (0U == class_mmap_data->put_buffer)
+	{
+		return ENOENT;
+	}
+
+	if (EOK != pfe_pe_lock(pe))
+	{
+		NXP_LOG_DEBUG("PE lock failed\n");
+		return EPERM;
+	}
+
+	/*	Get "put" buffer status */
+	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &flags,
+			oal_ntohl(class_mmap_data->put_buffer) + offsetof(pfe_ct_buffer_t, flags),
+				sizeof(uint8_t));
+
+	if (0U != flags)
+	{
+		/*	Copy buffer to local memory */
+		pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, buf, oal_ntohl(class_mmap_data->put_buffer), sizeof(pfe_ct_buffer_t));
+
+		/*	Clear flags */
+		flags = 0U;
+		pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe,
+				oal_ntohl(class_mmap_data->put_buffer) + offsetof(pfe_ct_buffer_t, flags),
+					&flags, sizeof(uint8_t));
+
+		ret = EOK;
+	}
+	else
+	{
+		ret = EAGAIN;
+	}
+
+	if (EOK != pfe_pe_unlock(pe))
+	{
+		NXP_LOG_DEBUG("PE unlock failed\n");
+	}
+
+
+	return ret;
+}
+
+/**
+ * @brief		Write "get" buffer
+ * @param[in]	pe The PE instance
+ * @param[out]	buf Pointer to data to be written
+ * @retval		EOK Success and buffer is valid
+ * @retval		EAGAIN Buffer is occupied
+ * @retval		ENOENT Buffer not found
+ */
+errno_t pfe_pe_put_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
+{
+	uint8_t flags;
+	errno_t ret = ENOENT;
+	pfe_ct_pe_mmap_t mmap_data;
+	pfe_ct_class_mmap_t *class_mmap_data;
+
+	if (EOK != pfe_pe_get_mmap(pe, &mmap_data))
+	{
+		NXP_LOG_ERROR("Could not get memory map\n");
+		return ENOENT;
+	}
+
+	class_mmap_data = &mmap_data.class_pe;
+	if (0U == class_mmap_data->get_buffer)
+	{
+		return ENOENT;
+	}
+
+	if (EOK != pfe_pe_lock(pe))
+	{
+		NXP_LOG_DEBUG("PE lock failed\n");
+	return EPERM;
+	}
+
+	/*	Get "get" buffer status */
+	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &flags,
+			oal_ntohl(class_mmap_data->get_buffer) + offsetof(pfe_ct_buffer_t, flags),
+				sizeof(uint8_t));
+	
+	if (0U == flags)
+	{
+		/*	Send data to PFE */
+		buf->flags |= 1U;
+		pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe,
+				oal_ntohl(class_mmap_data->get_buffer), buf, sizeof(pfe_ct_buffer_t));
+		ret = EOK;
+	}
+	else
+	{
+		ret = EAGAIN;
+	}
+	
+	if (EOK != pfe_pe_unlock(pe))
+	{
+		NXP_LOG_DEBUG("PE unlock failed\n");
+	}
+
+
+	return ret;
+}
+
+
 
 /**
  * @brief CLASS ISR
@@ -251,14 +359,15 @@ static errno_t pfe_class_dmem_heap_init(pfe_class_t *class)
 	ret = pfe_pe_get_mmap(class->pe[0U], &mmap);
 	if(EOK == ret)
 	{
-		class->heap_context = blalloc_create(oal_ntohl(mmap.dmem_heap_size), PFE_CLASS_HEAP_CHUNK_SIZE);
+
+		class->heap_context = blalloc_create(oal_ntohl(mmap.class_pe.dmem_heap_size), PFE_CLASS_HEAP_CHUNK_SIZE);
 		if(NULL == class->heap_context)
 		{
 			ret = ENOMEM;
 		}
 		else
 		{
-			class->dmem_heap_base = oal_ntohl(mmap.dmem_heap_base);
+			class->dmem_heap_base = oal_ntohl(mmap.class_pe.dmem_heap_base);
 			ret = EOK;
 		}
 	}
@@ -473,9 +582,10 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  */
-errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_pe_mmap_t *mmap)
+errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_class_mmap_t *mmap)
 {
 	errno_t ret;
+	pfe_ct_pe_mmap_t mmap_tmp;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class) || (NULL == mmap)))
@@ -495,7 +605,8 @@ errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_pe_mmap_t 
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	ret = pfe_pe_get_mmap(class->pe[pe_idx], mmap);
+	ret = pfe_pe_get_mmap(class->pe[pe_idx], &mmap_tmp);
+	memcpy(mmap, &mmap_tmp.class_pe, sizeof(pfe_ct_class_mmap_t));
 
 	if (EOK != oal_mutex_unlock(&class->mutex))
 	{
@@ -819,7 +930,7 @@ static void pfe_class_pe_stats_endian(pfe_ct_pe_stats_t *stat)
 	stat->processed = oal_ntohl(stat->processed);
 	stat->discarded = oal_ntohl(stat->discarded);
 	stat->injected = oal_ntohl(stat->injected);
-	for(i = 0U; i < (PFE_PHY_IF_ID_MAX + 1U); i++) 
+	for(i = 0U; i < (PFE_PHY_IF_ID_MAX + 1U); i++)
 	{
 		stat->replicas[i] = oal_ntohl(stat->replicas[i]);
 	}
@@ -924,6 +1035,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	uint32_t ii, j;
 	pfe_ct_pe_stats_t *pe_stats;
 	pfe_ct_classify_stats_t *c_alg_stats;
+	pfe_ct_version_t fw_ver;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == class))
@@ -938,7 +1050,18 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	len += pfe_class_cfg_get_text_stat(class->cbus_base_va, buf, buf_len, verb_level);
+	/* FW version */
+	if (EOK == pfe_class_get_fw_version(class, &fw_ver))
+	{
+		len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION\t%u.%u.%u (api:%.32s)\n",
+			fw_ver.major, fw_ver.minor, fw_ver.patch, fw_ver.cthdr);
+	}
+	else
+	{
+		len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION <unknown>\n");
+	}
+
+	len += pfe_class_cfg_get_text_stat(class->cbus_base_va, buf + len, buf_len - len, verb_level);
 
 
 	/* Allocate memory to copy the statistics from PEs + one position for sums
@@ -956,7 +1079,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		NXP_LOG_ERROR("Memory allocation failed\n");
 		oal_mm_free(pe_stats);
 		return len;
-	}	
+	}
 	memset(c_alg_stats, 0U, sizeof(pfe_ct_classify_stats_t) * (class->pe_num + 1U));
 	/* Get the memory map - all PEs share the same memory map
 	   therefore we can read arbitrary one (in this case 0U) */
@@ -978,12 +1101,12 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 			len += oal_util_snprintf(buf + len, buf_len - len, "PE %u could not be locked - statistics are not coherent\n", ii);
 		}
 	}
-	/* Get PE info per PE 
+	/* Get PE info per PE
 	   - leave 1st position in allocated memory empty for sums */
 	for (ii = 0U; ii < class->pe_num; ii++)
 	{
-		pfe_pe_get_classify_stats(class->pe[ii], oal_ntohl(mmap.classification_stats), &c_alg_stats[ii + 1U]);
-		pfe_pe_get_pe_stats(class->pe[ii], oal_ntohl(mmap.pe_stats), &pe_stats[ii + 1U]);
+		pfe_pe_get_classify_stats(class->pe[ii], oal_ntohl(mmap.class_pe.classification_stats), &c_alg_stats[ii + 1U]);
+		pfe_pe_get_pe_stats(class->pe[ii], oal_ntohl(mmap.class_pe.pe_stats), &pe_stats[ii + 1U]);
 	}
 	 /* Enable all PEs */
 	for (ii = 0U; ii < class->pe_num; ii++)
@@ -994,11 +1117,11 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 			NXP_LOG_ERROR("PE %u could not be unlocked\n", ii);
 		}
 	}
-	
-	/* Process gathered info from all PEs 
-	   - convert endians 
+
+	/* Process gathered info from all PEs
+	   - convert endians
 	   - done separately to minimize time when PEs are locked
-	   - create sums in the 1st set 
+	   - create sums in the 1st set
 	*/
 	for (ii = 0U; ii < class->pe_num; ii++)
 	{
@@ -1025,7 +1148,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].log_if, &c_alg_stats[ii + 1U].log_if);
 		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].hif_to_hif, &c_alg_stats[ii + 1U].hif_to_hif);
 	}
-	
+
 	/* Print results */
 	len += oal_util_snprintf(buf + len, buf_len - len, "-- Per PE statistics --\n");
 	for (ii = 0U; ii < class->pe_num; ii++)
@@ -1041,7 +1164,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		len += oal_util_snprintf(buf + len, buf_len - len, "Frames with %u replicas: %u\n", j + 1U, pe_stats[0].replicas[j]);
 	}
 	len += oal_util_snprintf(buf + len, buf_len - len, "Frames with HIF_TX_INJECT: %u\n", pe_stats[0].injected);
-	
+
 	len += oal_util_snprintf(buf + len, buf_len - len, "- Flexible router -\n");
 	len += pfe_class_stat_to_str(&c_alg_stats[0U].flexible_router, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- IP Router -\n");
@@ -1054,7 +1177,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	len += pfe_class_stat_to_str(&c_alg_stats[0U].log_if, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- InterHIF -\n");
 	len += pfe_class_stat_to_str(&c_alg_stats[0U].hif_to_hif, buf + len, buf_len - len, verb_level);
-	
+
 	len += oal_util_snprintf(buf + len, buf_len - len, "\nDMEM heap\n---------\n");
 	len += blalloc_get_text_statistics(class->heap_context, buf + len, buf_len - len, verb_level);
 	/* Free allocated memory */
@@ -1066,4 +1189,24 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	}
 
 	return len;
+}
+
+/**
+ * @brief		Returns firmware versions
+ * @param[in]	class The classifier instance
+ * @return		ver Parsed firmware metadata
+ */
+errno_t pfe_class_get_fw_version(pfe_class_t *class, pfe_ct_version_t *ver)
+{
+	pfe_ct_pe_mmap_t pfe_pe_mmap;
+
+	/*	Get mmap base from PE[0] since all PEs have the same memory map */
+	if ((NULL == class->pe[0]) || (EOK != pfe_pe_get_mmap(class->pe[0], &pfe_pe_mmap)))
+	{
+		return EINVAL;
+	}
+
+	memcpy(ver, &pfe_pe_mmap.class_pe.common.version, sizeof(pfe_ct_version_t));
+
+	return EOK;
 }

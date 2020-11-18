@@ -1,0 +1,396 @@
+****************************************************************************************************
+Release Notes for NXP PFE S32G A53 LNX swv: 0.9.2 BETA
+
+NXP and the NXP logo are trademarks of NXP.
+
+All product or service names are the property of their respective owners.
+Copyright (C) 2018-2020 NXP
+****************************************************************************************************
+
+========================================================
+Installation
+========================================================
+Install the package into the desired directory and follow the enclosed user manual.
+
+========================================================
+Release Location:
+========================================================
+
+This BETA 0.9.2 release sources are internally stored at location:
+https://bitbucket.sw.nxp.com/projects/AUTO_ETH/repos/pfe/browse
+GIT release tag: BLN_PFE-DRV_S32G_A53_LNX_BETA_0.9.2
+
+========================================================
+Release Specifics:
+========================================================
+
+- This release was developed and tested with:
+    - Geany IDE version 1.33
+    - editor VIM - Vi IMproved 7.4
+    - NXP Auto Linux BSP 26
+    - GCC 9.2.0
+- This release was developed and tested using:
+    - Evaluation board: S32G-VNP-EVB
+        S32GRV-PLATEVB 700-30081
+        X-S32G-PROCEVB-S 700-32170
+
+- This release has BETA quality status in terms of testing and quality documentation
+
+========================================================
+Supported Features:
+========================================================
+
+- Integrates the S32G PFE Ethernet driver
+- Supports slow-path functionality
+- Supports fast-path features and configuration API
+
+========================================================
+Supported Derivatives:
+========================================================
+
+- PS32G274ABVUC 0P77B Rev. 2.0
+
+========================================================
+Directory Structure:
+========================================================
+
+- sw/bpool/ library sources (dependency for linux-pfeng)
+- sw/common/ library sources (dependency for linux-pfeng)
+- sw/linux-pfeng/ linux kernel driver sources (the driver project)
+- sw/elf/ library sources (dependency for linux-pfeng)
+- sw/fifo/ library sources (dependency for linux-pfeng)
+- sw/hal/ library sources (dependency for all other modules)
+- sw/oal/ library sources (dependency for all other modules)
+- sw/pfe_hif_drv/ library sources (dependency for linux-pfeng)
+- sw/pfe_platform/ library sources (dependency for linux-pfeng)
+- sw/fci/ library sources (dependency for linux-pfeng)
+- sw/xfci/libfci/ library sources (FCI library and dependency for linux-pfeng)
+- doc/ user's manual, FCI API Reference manual and device-tree
+- PFE_S32G_A53_LNX_BETA_0.9.2_ReleaseNotes.txt: this file
+- LICENSE-GPL2.txt: License text file
+- PFE_S32G_A53_LNX_BETA_0.9.2_SCR.txt: Software Content Register
+
+========================================================
+Compiler Options:
+========================================================
+
+Compiler options are described within Makefile located
+in every SW module directory.
+
+========================================================
+Assumptions:
+========================================================
+
+Compatible firmware: BLN_PFE-FW_S32G_BETA_0.9.2
+
+========================================================
+Known Issues and planned features
+========================================================
+
+[AAVB-2238] - [PFE_PLATFORM] FCI PHY IF update command fails
+[AAVB-2320] - [PFE_LINUX] pfeng: mtu setting doesn't work of value < 68
+[AAVB-2468] - [S32G Linux] SW forwarding doesn't work well with IPv6
+[AAVB-2469] - [PFE_LINUX] pfeng: udp reassembling failure
+[AAVB-2526] - [PFE_LINUX] pfeng: interface autonegotiation doesn't follow SGMII possibilities
+[AAVB-2613] - [PFE_LINUX] pfeng: IHC communication sometimes fails on timeout
+[AAVB-2673] - [PFE_LINUX] pfeng: IHC communication broken
+
+========================================================
+3rd Party Issues
+========================================================
+
+========================================================
+What's Modified in BETA_0.9.2
+========================================================
+
+# Improvement
+[AAVB-1886] - [PFE_PLATFORM] Optimize BD ring access
+[AAVB-1972] - [PFE_LINUX] add S/G support to TX path
+[AAVB-2560] - [PFE_PLATFORM] Add support for adding logical interfaces to UTIL PHY
+[AAVB-2570] - [PFE_PLATFORM] Dispatch HIF traffic using physical interfaces
+[AAVB-2612] - [PFE_LINUX] Declare PFE device as dma-coherent
+[AAVB-2623] - [PFE_LINUX] DMA32 memory should be preferred for rx buffers
+[AAVB-2669] - [PFE_LINUX] pfeng: notice about errata fix usage
+
+# Bug
+[AAVB-2523] - [PFE_LINUX] pfeng: phylink backtraces on interface changes
+[AAVB-2586] - [PFE_PLATFORM] PTP-over-Ethernet + VLAN stall
+[AAVB-2610] - [PFE_LINUX] Oal memory cached interface provides non-cached memory
+[AAVB-2614] - [PFE_PLATFORM] Incorrect shaper weight calculation
+[AAVB-2642] - [PFE_LINUX] pfeng: fix 100Base-T1 support
+[AAVB-2643] - [PFE_LINUX] pfeng: fix rgmii-id, rgmii-txid, rgmii-rxid support
+
+# New Feature
+[AAVB-1945] - [PFE_FW] Allow adding HIF interfaces to bridge (domain)
+[AAVB-2211] - [PFE_PLATFORM] Add API to get PE firmware version
+
+
+========================================================
+What's Modified in BETA_0.9.1
+========================================================
+
+# Improvement
+
+[AAVB-2067] - [PFE_LINUX][PFE_QNX] Notify FCI clients about FCI shutdown
+[AAVB-2568] - [PFE_LINUX] pfeng: enable util fw loading
+[AAVB-2571] - [PFE_PLATFORM] Firmware-based HIF traffic priority mgmt
+[AAVB-2575] - [PFE_PLATFORM] Disable HIF stall workaround
+
+# Bug
+[AAVB-2442] - [ALB 25.0 ]Unable to create bridge configuration
+
+# New Feature
+
+[AAVB-2206] - [PFE_PLATFORM] Egress QoS topology change API
+[AAVB-2472] - [PFE_FW] Implement SPD for IPsec
+[AAVB-2510] - [PFE_LINUX] pfeng: support for master/slave mode
+[AAVB-2534] - [PFE_QNX] PFE isolation support
+[AAVB-2561] - [PFE_PLATFORM] Egress QoS FCI API
+
+========================================================
+What's Modified in BETA_0.9.0
+========================================================
+
+# Improvement
+[AAVB-2436] - [PFE_PLATFORM] Code cleanup
+[AAVB-2494] - [PFE_LINUX] Fix mistake in the sysfs + add new syfs files
+
+# Bug
+[AAVB-2008] - [PC-FPGA-PFE-Linux]: Bridging of the PFE-interfaces eth0/pfe-0 and rename4/pfe-1 is NOT WORKING as expected.
+[AAVB-2297] - [PFE Linux] periodic load/unload of driver sometimes fails
+[AAVB-2345] - [PFE_PLATFORM] Wrong IP address version detection
+[AAVB-2380] - [PFE_LINUX] pfeng: incorrectly use highest speed of PHY
+[AAVB-2444] - [ALB 25.0] Observed crash dump while  running IPerf3 routing traffic 
+[AAVB-2501] - [S23G RDB - ALB25.0]: tcpdump crash on pfe0/pfe2 while running the IPv4 Fast path UDP traffic
+
+# New Feature
+[AAVB-1951] - [PFE_PLATFORM] Add FCI API to get physical/logical interface statistics
+[AAVB-2190] - [PFE_PLATFORM] Let FCI API enable and disable log+phy interfaces
+[AAVB-2212] - [PFE_PLATFORM] Port mirroring control
+[AAVB-2213] - [PFE_PLATFORM] Port mirroring FCI API
+[AAVB-2225] - [PFE_PLATFORM] Multi-instance HIF driver
+[AAVB-2272] - [PFE_PLATFORM] Show required fw version
+[AAVB-2348] - [PFE_DRV_LINUX] Add support for kernel 5.4 to PFE driver
+[AAVB-2423] - [PFE_PLATFORM] Arbitrary data passing (FCI)
+
+========================================================
+What's Modified in EAR_0.8.0 Patch1
+========================================================
+
+# List of Patched Files
+sw/xfci/libfci/Makefile
+sw/pfe_platform/hw
+sw/pfe_platform/hw/s32g
+sw/pfe_platform/hw/s32g/pfe_platform_master.c
+sw/pfe_platform/hw/s32g/pfe_emac_csr.c
+sw/pfe_platform/hw/s32g/pfe_emac_csr.h
+sw/pfe_platform/public/pfe_platform_cfg.h
+
+doc/PFE_S32G_A53_LNX_UserManual.pdf
+
+# Improvement
+[AAVB-2424] - [PFE_LINUX] libfci: allow building library in Yocto
+[AAVB-2390] - [PFE_LINUX] UM: add FCI chapter
+
+========================================================
+What's Modified in EAR_0.8.0
+========================================================
+
+# Improvement
+[AAVB-1584] - [PFE_LINUX] pfeng: sync HIF api
+[AAVB-1540] - [PFE_LINUX] create preallocated dma buffer for TX path
+[AAVB-1541] - [PFE_LINUX] user manual: fix formatting
+[AAVB-1572] - [PFE_LINUX] don't copy frame data to skbuf on receive
+[AAVB-1657] - [PFE_PLATFORM] CLASS PE Interrupt Dispatcher
+[AAVB-1878] - [[PFE_PLATFORM][PFE_LINUX] oal_irq: allow callback mask management
+[AAVB-1910] - [[PFE_QNX][PFE_LINUX] OAL API to manage named memory
+[AAVB-1913] - [[PFE_LINUX] Implement named memory management API
+[AAVB-1977] - [[PFE_LINUX] remove debug ifs component when VDK released
+[AAVB-2322] - [PFE_PLATFORM] Statistics for phy/log interface are reset with all updates on given interface
+[AAVB-2332] - [PFE_PLATFORM] Add FCI usage examples, stage 1
+[AAVB-2333] - [PFE_PLATFORM] Add FCI usage examples, stage 2
+[AAVB-2342] - [PFE_PLATFORM] HIF SC TX workaround
+
+# Bug
+[AAVB-2142] - [PFE_Linux] 32k ping not working on pfe1
+[AAVB-2268] - [PFE_PLATFORM] FPP_CMD_IPVx_RESET does not remove all routes
+[AAVB-2292] - [PFE_PLATFORM] FCI conntracks query doesn't provide route ID
+[AAVB-2305] - [PFE_LINUX] Reserved memory is detected one byte short then declared in DT
+[AAVB-2312] - [PFE_LINUX] pfeng: fix clause 45 support
+[AAVB-2379] - [PFE_LINUX] pfeng: evb: pfe2 clock setting looped forever on console
+
+# New Feature
+[AAVB-2202] - [PFE_PLATFORM] Multi-channel HIF driver
+[AAVB-2273] - [PFE_FW] Logical interface shall have configurable drop action
+[AAVB-2283] - [PFE_PLATFORM][PFE_QNX] Performance improvements stage 2
+[AAVB-2325] - [PFE_PLATFORM] HIF traffic steering
+
+========================================================
+What's Modified in PRE-EAR_0.4.4
+========================================================
+
+# Bug
+
+[AAVB-2014] - [PFE_PLATFORM] pfe_log_if_create should not call pfe_phy_if_add_log_if
+[AAVB-2028] - [PFE_FW][PFE_PLATFORM] PFE HW calculates incorrect IPv4 checksums for small frames
+[AAVB-2063] - [PFE_PLATFORM] Physical interfaces are not created correctly
+[AAVB-2107] - [PFE_PLATFORM] mutex double locked from platform during fci call
+[AAVB-2112] - [PFE_LINUX] libfci_cli does compile under linux
+[AAVB-2113] - [PFE_PLATFORM] TMU configuration
+[AAVB-2131] - [PFE Linux] Fatal errors on driver unload
+[AAVB-2149] - [PFE_LINUX] Promiscuous mode not working
+[AAVB-2150] - [PFE_LINUX] driver crashes when detected non-compatible fw
+[AAVB-2258] - [PFE_PLATFORM] pfe_l2br_table_init_cmd is writing wrong flags
+[AAVB-2259] - [PFE_PLATFORM] Bridge accesses out of boundary memory
+[AAVB-2261] - [PFE_PLATFORM] The initialization of L2 bridge is corrupted by soft reset
+[AAVB-2289] - [PFE_LINUX] FCI is not functional
+
+# New Feature
+
+[AAVB-1968] - [PFE_PLATFORM] HIF channel reset
+[AAVB-1985] - [PFE_PLATFORM] Split pfe_platform.c to master and slave variant
+[AAVB-1990] - [PFE_PLATFORM][PFE_QNX] FCI: Create core API to broadcast messages to all clients
+[AAVB-1992] - [PFE_PLATFORM] Multi-instance physical interfaces
+[AAVB-2016] - [PFE_PLATFORM] Multi-instance logical interfaces
+[AAVB-2019] - [PFE_PLATFORM] Add mdio Clause 45 support
+[AAVB-2053] - [PFE_FW] Implement exception handlers
+[AAVB-2054] - [PFE_FW] Implement a SW watchdog
+[AAVB-2075] - [PFE_FW] Add measurement of frame processing time by FW
+[AAVB-2111] - [PFE_PLATFORM] Extend interface-related RPC commands
+[AAVB-2189] - [PFE_LINUX] pfeng: add mdio support
+[AAVB-2199] - [PFE_FW]Add support for multicast replication
+[AAVB-2231] - [PFE_LINUX] Add total bytes into SG list in TX path
+[AAVB-2298] - [PFE_LINUX] pfeng: add more debug objects
+[AAVB-2300] - [PFE_LINUX] pfeng: support for GCC 9.2.0
+
+# Improvement
+
+[AAVB-1334] - [PFE_PLATFORM] Unify the elf module
+[AAVB-1392] - [PFE_PLATFORM] Do not use -1 as unsigned integer
+[AAVB-1529] - [PFE_PLATFORM] HIF stops operating under heavy traffic conditions
+[AAVB-1656] - [PFE_QNX] Proper mbuf dequeue (IFQ_DEQUEUE)
+[AAVB-1659] - [PFE_PLATFORM] Watchdog timers
+[AAVB-1670] - [PFE_PLATFORM] Sync PE memory updates
+[AAVB-1974] - [PFE_LINUX] pfeng: optimize config storages
+[AAVB-1994] - [PFE_PLATFORM] DMEM heap allocator
+[AAVB-2015] - [PFE_PLATFORM] Physical and logical interface database
+[AAVB-2061] - [PFE_PLATFORM] Review registers against NPU v7.14
+[AAVB-2064] - [PFE_PLATFORM] Improve classifier startup
+[AAVB-2098] - [PFE_PLATFORM] Unify phy_if/log_if db between platfrom driver and fci
+[AAVB-2117] - [PFE_PLATFORM] Remove LS1012 code
+[AAVB-2118] - [PFE_PLATFORM] Allow static block allocator instances
+[AAVB-2147] - [PFE_FW] implement aggregated CLASS PE statistics
+[AAVB-2153] - [PFE_PLATFORM][PFE_FW] Move compiler checks out of pfe_ct.h
+[AAVB-2165] - [PFE_PLATFORM,PFE_LINUX,PFE_MCAL,PFE_QNX] Create global configuration header
+[AAVB-2169] - [PFE_PLATFORM] Extend EMAC text statistics
+[AAVB-2170] - [PFE_FW]Add CPU ID to the firmware.
+[AAVB-2241] - [PFE_PLATFORM] Update FCI reference
+[AAVB-2248] - [PFE_PLATFORM] Extend the sysfs by debug registers
+[AAVB-2250] - [PFE_PLATFORM] Update libfci doc to correct bridge add and bridge update order.
+[AAVB-2252] - [PFE_FW]Allow to pass a 32-bit number together with error message through FP_ERROR
+[AAVB-2302] - [PFE_LINUX] pfeng: add libfci build
+
+========================================================
+What's modified in PRE-EAR_0.4.3
+========================================================
+# Bug
+AAVB-1983	[PFE_LINUX] get driver compilable without extra options
+AAVB-1984	[PFE_LINUX] fix BMU2 buffers error
+AAVB-1989	[PFE_FW] Missing cthdr field in the pfe_ct_version_t
+AAVB-2042	[PFE_LINUX] pfeng: unloading driver never finish
+
+# Improvement
+AAVB-1640	[PFE_LINUX] Create oal util for linux
+AAVB-1665	[PFE_LINUX] pfeng: add FCI subsystem
+AAVB-1914	[PFE_FW] Error reporting
+AAVB-1944	[PFE_LINUX] Create libfci for Linux
+AAVB-2004	Update help text for libfci_cli.
+AAVB-2051	[PFE_LINUX] pfeng: set explicit interface names
+AAVB-2052	[PFE_PLATFORM] oal:mbox: implement timers for Linux
+AAVB-2060	[PFE_LINUX] oal:thread: correctly signal thread join on linux
+AAVB-2094	[PFE_FW] Implement flexible parser
+AAVB-2119	[PFE_PLATFORM][PFE_LINUX][PFE_MCAL] remove VDK support
+AAVB-2146	[PFE_LINUX] pfeng: S32G bringup
+
+========================================================
+What's modified in PRE-EAR_0.4.2
+========================================================
+# Bug
+n/a
+
+# Improvement
+[AAVB-1387] [PFE_PLATFORM] Ensure correct HIF driver worker thread scheduling
+[AAVB-1427] [PFE_PLATFORM] Make FCI endpoint OS-independent
+[AAVB-1484] [PFE_PLATFORM] Optimize frequently used structures
+[AAVB-1521] [PFE_PLATFORM] Set default interface operational mode when interface not being used
+[AAVB-1536] [PFE_PLATFORM] oal_msg: improve msg_signal
+[AAVB-1545] [PFE_PLATFORM] Make NULL argument checks switchable
+[AAVB-1548] [PFE_PLATFORM] Rework the get_text_stat() functions
+[AAVB-1553] [PFE_PLATFORM] HIF polling configurable
+[AAVB-1559] [PFE_PLATFORM] Move HIF header types to pfe_ct.h
+[AAVB-1621] [PFE_PLATFORM] Define firmware-driver control interface
+[AAVB-1633] [PFE_PLATFORM] Sync with latest design (1.0.4)
+[AAVB-1641] [PFE_PLATFORM] Get real system clock frequency for TMU shaper configuration
+[AAVB-1648] [PFE_QNX][PFE_PLATFORM] Thread driven OAL IRQ
+[AAVB-1650] [PFE_LINUX] Sync OAL IRQ module
+[AAVB-1651] [PFE_PLATFORM] HIF Interrupt Dispatcher
+[AAVB-1652] [PFE_PLATFORM] BMU Interrupt Dispatcher
+[AAVB-1654] [PFE_PLATFORM] Remove HIF DRV worker thread
+[AAVB-1655] [PFE_PLATFORM] Init PFE memories before soft reset
+[AAVB-1658] [PFE_PLATFORM] HIF NOCPY Interrupt Dispatcher
+[AAVB-1663] [PFE_PLATFORM][PFE_QNX] Create deferred job OAL abstraction module
+[AAVB-1871] [PFE_PLATFORM] Return all HIF NOCPY BMU buffers on shutdown
+[AAVB-1882] [PFE_PLATFORM] Fix HIF and HIF NOCPY interrupts
+[AAVB-1887] [PFE_LINUX][PFE_PLATFORM] pfeng: integrate enhanced irq manager
+[AAVB-1892] [PFE_PLATFORM] Uninstall IRQ when BMU instance is being destroyed
+[AAVB-1896] [PFE_PLATFORM] Global interrupt dispatcher
+[AAVB-1903] [PFE_PLATFORM] Improve RX buffer management
+[AAVB-1906] [PFE_PLATFORM] PFE AXI address range restriction
+[AAVB-1919] [PFE_PLATFORM] Out of HIF RX buffers event detection
+[AAVB-1925] [PFE_PLATFORM] RX termination
+[AAVB-1953] [PFE_QNX][PFE_LINUX][PFE_PLAFORM] Remove compiler warnings
+[AAVB-1962] [PFE_PLATFORM] More robust HIF ring handling
+
+# New Feature
+[AAVB-1435] [PFE_FW] Prepare statistics gathering
+[AAVB-1499] [PFE_PLATFORM][PFE_QNX][PFE_LINUX] Bind PFE logical interfaces with HIF driver clients
+[AAVB-1608] [PFE_LINUX][PFE_PLATFORM][PFE_QNX] support VDK platform
+[AAVB-1629] [PFE_PLATFORM] Create the TLITE platform driver
+[AAVB-1660] [PFE_PLATFORM] Fabric parity protection
+[AAVB-1920] [PFE_PLATFORM] Ignore the ELF section MIPS.abiflags
+[AAVB-1928] [PFE_PLATFORM][PFE_FW] Add HIF channel ID to HIF TX header (pfe_ct.h)
+[AAVB-1935] [PFE_PLATFORM][PFE_FW] Define IHC flags within HIF TX and RX headers
+[AAVB-1936] [PFE_PLATFORM] Implement the IHC API
+
+
+========================================================
+What's modified in PRE-EAR_0.4.0
+========================================================
+
+# Bug
+AAVB-1422 [PFE_PLATFORM] Read beyond size of object
+
+# New Feature
+AAVB-1156 [PFE_PLATFORM][PFE_QNX] Port the PFE HW library to QNX environment
+AAVB-1157 [PFE_PLATFORM][PFE_QNX] Import the HW initialization module
+AAVB-1158 [PFE_PLATFORM][PFE_QNX] Import the HIF driver
+AAVB-1159 [PFE_PLATFORM][PFE_QNX] Import the firmware driver
+AAVB-1300 [PFE_PLATFORM][PFE_QNX] Add HIF channel abstraction class
+AAVB-1301 [PFE_PLATFORM][PFE_QNX] OS abstraction
+AAVB-1337 [PFE_PLATFORM] Update the pfe_platform to support the latest x86 FPGA HW
+AAVB-1366 [PFE_PLATFORM] Make the HIF working on x86 FPGA HW
+AAVB-1378 [PFE_LINUX] Make sources Linux compilable
+AAVB-1486 [PFE_PLATFORM][PFE_QNX] Create SW module for L2 bridge tables
+AAVB-1488 [PPFE_LINUX] Implement PFE linux driver core
+AAVB-1498 [PFE_QNX][PFE_PLATFORM] Create PFE interface representation type
+
+# Improvement
+AAVB-1388 [PFE_PLATFORM][PFE_QNX] Command-line build
+AAVB-1391 [PFE_PLATFORM] Replace native types by custom types
+AAVB-1397 [PFE_PLATFORM][PFE_QNX] Make RELEASE as default build profile
+AAVB-1398 [PFE_PLATFORM][PFE_QNX] Update headers in all deliverables
+AAVB-1444 [PFE_PLATFORM] Simplify rtable entries representation
+AAVB-1463 [PFE_PLATFORM] Improve PFE HIF ring handling
+AAVB-1466 [PFE_PLATFORM] HIF driver improvement
+AAVB-1534 [PFE_PLATFORM] Generalize the HW initialization
+

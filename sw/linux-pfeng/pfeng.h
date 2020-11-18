@@ -1,7 +1,7 @@
 /*
  * Copyright 2018-2020 NXP
  *
- * SPDX-License-Identifier:     BSD OR GPL-2.0
+ * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -74,6 +74,7 @@ struct pfeng_eth {
 	bool				ihc;
 	u8				*addr;
 	u8				fixed_link;
+	u32				max_speed;
 	int				intf_mode;
 	u32				emac_id;
 	struct device_node		*dn;
@@ -105,6 +106,8 @@ struct pfeng_hif_chnl {
 };
 
 /* net interface private data */
+struct pfeng_rx_chnl_pool;
+struct pfeng_tx_chnl_pool;
 struct pfeng_ndev {
 	struct list_head		lnode;
 	struct napi_struct		napi ____cacheline_aligned_in_smp;
@@ -125,7 +128,8 @@ struct pfeng_ndev {
 	pfe_log_if_t			*logif_emac;
 	struct pfeng_hif_chnl		chnl_sc;
 	struct {
-		void			*rx_pool;
+		struct pfeng_rx_chnl_pool	*rx_pool;
+		struct pfeng_tx_chnl_pool	*tx_pool;
 	} bman;
 
 	u32				opts;
@@ -139,6 +143,8 @@ struct pfeng_ndev {
 		u64			txconf_loop;
 		u64			tx_busy;
 		u64			txconf;
+		u64			tx_pkt_frags;
+		u64			tx_pkt_frag_deep;
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 		u64			ihc_rx;
 		u64			ihc_tx;
@@ -192,11 +198,14 @@ void pfeng_napi_if_release(struct pfeng_ndev *ndev);
 void pfeng_ethtool_init(struct net_device *netdev);
 
 /* hif */
-void pfeng_bman_pool_destroy(void *pool);
-void *pfeng_bman_pool_create(pfe_hif_chnl_t *chnl, void *ref);
+void pfeng_bman_pool_destroy(struct pfeng_ndev *ndev);
+int pfeng_bman_pool_create(struct pfeng_ndev *ndev);
 struct sk_buff *pfeng_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
-int pfeng_hif_chnl_refill_rx_buffer(pfe_hif_chnl_t *chnl, struct pfeng_ndev *ndev);
-int pfeng_hif_chnl_fill_rx_buffers(pfe_hif_chnl_t *chnl, struct pfeng_ndev *ndev);
+int pfeng_hif_chnl_refill_rx_buffer(struct pfeng_ndev *ndev, bool preempt);
+int pfeng_hif_chnl_fill_rx_buffers(struct pfeng_ndev *ndev);
+bool pfeng_hif_chnl_txconf_check(struct pfeng_ndev *ndev, u32 elems);
+int pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_ndev *ndev, void *va_addr, addr_t pa_addr, u32 size, struct sk_buff *skb);
+int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_ndev *ndev, u32 idx);
 int pfe_hif_drv_ihc_do_cbk(pfe_hif_drv_t *hif_drv);
 int pfe_hif_drv_ihc_put_pkt(pfe_hif_drv_t *hif_drv, void *data, uint32_t len, void *ref);
 

@@ -1,7 +1,7 @@
 #
 # Copyright 2018-2020 NXP
 #
-# SPDX-License-Identifier:     BSD OR GPL-2.0
+# SPDX-License-Identifier: GPL-2.0
 #
 #
 
@@ -12,12 +12,14 @@ PLATFORM ?= aarch64-fsl-linux
 ARCH ?= arm64
 PFE_CFG_IP_VERSION ?= PFE_CFG_IP_VERSION_NPU_7_14a
 PFE_CFG_LINUX_TRACE ?= 0
-
-# No HIF MC support yet
 PFE_CFG_MC_HIF=0
 PFE_CFG_SC_HIF=1
 
-PLAT_DEFINES = TARGET_OS=$(TARGET_OS) KERNELDIR=$(KERNELDIR) PLATFORM=$(PLATFORM) ARCH=$(ARCH) CROSS_COMPILE=$(PLATFORM)-
+# Unsupported config options
+# * PFE_CFG_CSUM_ALL_FRAMES	: dynamically managable in driver
+# * PFE_CFG_MC_HIF		: only one client per channel
+
+PLAT_DEFINES = KBUILD_MODPOST_WARN=1 TARGET_OS=$(TARGET_OS) KERNELDIR=$(KERNELDIR) PLATFORM=$(PLATFORM) ARCH=$(ARCH) CROSS_COMPILE=$(PLATFORM)-
 
 -include ../build_env.mak
 

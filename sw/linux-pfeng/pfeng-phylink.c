@@ -1,7 +1,7 @@
 /*
- * 2020 NXP
+ * Copyright 2020 NXP
  *
- * SPDX-License-Identifier: BSD OR GPL-2.0
+ * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -38,6 +38,7 @@ static void pfeng_phylink_validate(struct net_device *netdev, unsigned long *sup
 #endif
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(mac_supported) = { 0, };
+	int max_speed = ndev->eth->max_speed;
 
 	/* We only support SGMII and R/G/MII modes */
 	if (state->interface != PHY_INTERFACE_MODE_NA &&
@@ -51,23 +52,32 @@ static void pfeng_phylink_validate(struct net_device *netdev, unsigned long *sup
 
 	phylink_set(mac_supported, 10baseT_Half);
 	phylink_set(mac_supported, 10baseT_Full);
-	phylink_set(mac_supported, 100baseT_Half);
-	phylink_set(mac_supported, 100baseT_Full);
-	phylink_set(mac_supported, 1000baseT_Half);
-	phylink_set(mac_supported, 1000baseT_Full);
-	phylink_set(mac_supported, 1000baseX_Full);
 
-	phylink_set(mac_supported, Autoneg);
-	phylink_set(mac_supported, MII);
-	phylink_set_port_modes(mac_supported);
+	if (max_speed > SPEED_10) {
+		phylink_set(mac_supported, 100baseT_Half);
+		phylink_set(mac_supported, 100baseT_Full);
+		phylink_set(mac_supported, 100baseT1_Full);
+	}
 
-	/* Only PFE_EMAC_0 supports 2.5G over SGMII */
-	if (!ndev->eth->emac_id && state->interface == PHY_INTERFACE_MODE_SGMII) {
+	if (max_speed > SPEED_100) {
+		phylink_set(mac_supported, 1000baseT_Half);
+		phylink_set(mac_supported, 1000baseT_Full);
+		phylink_set(mac_supported, 1000baseX_Full);
+	}
+
+	if (max_speed > SPEED_1000 &&
+		/* Only PFE_EMAC_0 supports 2.5G over SGMII */
+		!ndev->eth->emac_id &&
+		state->interface == PHY_INTERFACE_MODE_SGMII) {
 		phylink_set(mac_supported, 2500baseT_Full);
 		phylink_set(mac_supported, 2500baseX_Full);
 	}
 
-	//TODO: limit if max-speed or fixed-speed
+	if (!ndev->eth->fixed_link)
+		phylink_set(mac_supported, Autoneg);
+
+	phylink_set(mac_supported, MII);
+	phylink_set_port_modes(mac_supported);
 
 	bitmap_and(supported, supported, mac_supported,
 		 __ETHTOOL_LINK_MODE_MASK_NBITS);
@@ -106,6 +116,9 @@ static int pfeng_mac_link_state(struct net_device *netdev, struct phylink_link_s
 	case PHY_INTERFACE_MODE_SGMII:
 		break;
 	case PHY_INTERFACE_MODE_RGMII:
+	case PHY_INTERFACE_MODE_RGMII_ID:
+	case PHY_INTERFACE_MODE_RGMII_TXID:
+	case PHY_INTERFACE_MODE_RGMII_RXID:
 		if (EOK == pfe_emac_get_link_config(emac, &speed, (pfe_emac_duplex_t *)&duplex)) {
 			switch (speed) {
 			default:

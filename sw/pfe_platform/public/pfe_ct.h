@@ -1,31 +1,10 @@
 /* =========================================================================
+ *
+ *  Copyright (c) 2020 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ *  SPDX-License-Identifier: GPL-2.0
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Neither the name of the copyright holder nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER
- * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
- * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
 /**
@@ -645,6 +624,19 @@ typedef uint8_t pfe_vctrl_str_t[16];
 typedef char_t pfe_cthdr_str_t[36]; /* 32 Characters + NULL + 3 padding */
 
 /**
+* @brief Identification of PE type the FW is used for
+*/
+typedef enum __attribute__((packed))
+{
+	PE_TYPE_INVALID,
+	PE_TYPE_CLASS,
+	PE_TYPE_TMU,
+	PE_TYPE_UTIL,
+	PE_TYPE_MAX
+} pfe_ct_pe_type_t;
+ct_assert(sizeof(pfe_ct_pe_type_t) == 1);
+
+/**
  * @brief Firmware version information
  */
 typedef struct __attribute__((packed))
@@ -655,7 +647,8 @@ typedef struct __attribute__((packed))
 	uint8_t major;
 	uint8_t minor;
 	uint8_t patch;
-	uint8_t res;
+	/*  PE type */
+    pfe_ct_pe_type_t pe_type;
 	/*	Firmware properties */
 	uint32_t flags;
 	/*	Build date and time */
@@ -812,14 +805,35 @@ typedef struct __attribute__((packed))
 } pfe_ct_buffer_t;
 
 /**
- * @brief PE memory map representation type shared between host and PFE
+ * @brief Common PE memory map representation type shared between host and PFE
  */
 typedef struct __attribute__((packed, aligned(4)))
 {
-	/*	Size of the structure in number of bytes */
+	/*	Size of the structure in number of bytes - must be 1st in structure */
 	uint32_t size;
 	/*	Version information */
 	pfe_ct_version_t version;
+	/*	Misc. control  */
+	PFE_PTR(pfe_ct_pe_misc_control_t) pe_misc_control;
+	/*	Errors reported by the FW */
+	PFE_PTR(pfe_ct_error_record_t) error_record;
+	/*	FW state */
+	PFE_PTR(pfe_ct_pe_sw_state_monitor_t) state_monitor;
+	/*	Count of the measurement storages - 0 = feature not enabled */
+	uint32_t measurement_count;
+	/*	Performance measurement storages - NULL = none (feature not enabled) */
+	PFE_PTR(pfe_ct_measurement_t) measurements;
+	/*	PE ID */
+	PFE_PTR(uint8_t) pe_id;
+} pfe_ct_common_mmap_t;
+
+/**
+ * @brief Class PE memory map representation type shared between host and PFE
+ */
+typedef struct __attribute__((packed, aligned(4)))
+{
+	/*  Common part for all PE types - must be 1st in the structure */
+	pfe_ct_common_mmap_t common;
 	/*	Pointer to DMEM heap */
 	PFE_PTR(void) dmem_heap_base;
 	/*	DMEM heap size in number of bytes */
@@ -832,28 +846,33 @@ typedef struct __attribute__((packed, aligned(4)))
 	PFE_PTR(pfe_ct_bd_entry_t) dmem_fb_bd_base;
 	/*	Default bridge domain structure location (DMEM) */
 	PFE_PTR(pfe_ct_bd_entry_t) dmem_def_bd_base;
-	/*	Misc. control  */
-	PFE_PTR(pfe_ct_pe_misc_control_t) pe_misc_control;
 	/*	Statistics provided for the PE (by the firmware) */
 	PFE_PTR(pfe_ct_pe_stats_t) pe_stats;
 	/*	Statistics provided for each classification algorithm */
 	PFE_PTR(pfe_ct_classify_stats_t) classification_stats;
-	/*	Errors reported by the FW */
-	PFE_PTR(pfe_ct_error_record_t) error_record;
-	/*	FW state */
-	PFE_PTR(pfe_ct_pe_sw_state_monitor_t) state_monitor;
-	/*	Count of the measurement storages - 0 = feature not enabled */
-	uint32_t measurement_count;
-	/*	Performance measurement storages - NULL = none (feature not enabled) */
-	PFE_PTR(pfe_ct_measurement_t) measurements;
 	/*	Flexible Filter */
 	PFE_PTR(pfe_ct_flexible_filter_t) flexible_filter;
-	/*	PE ID */
-	PFE_PTR(uint8_t) pe_id;
 	/*	Put buffer: FW-to-SW data transfers */
 	PFE_PTR(pfe_ct_buffer_t) put_buffer;
 	/*	Get buffer: SW-to-FW data transfers */
 	PFE_PTR(pfe_ct_buffer_t) get_buffer;
+} pfe_ct_class_mmap_t;
+
+
+/**
+ * @brief UTIL PE memory map representation type shared between host and PFE
+ */
+typedef struct __attribute__((packed, aligned(4)))
+{
+	/*  Common part for all PE types - must be 1st in the structure */
+	pfe_ct_common_mmap_t common;
+} pfe_ct_util_mmap_t;
+
+typedef union __attribute__((packed, aligned(4)))
+{
+	pfe_ct_common_mmap_t common;	/* Common for both */
+	pfe_ct_class_mmap_t class_pe;	/* Class PE variant */
+	pfe_ct_util_mmap_t util_pe;		/* UTIL PE variant */
 } pfe_ct_pe_mmap_t;
 
 typedef enum __attribute__((packed))

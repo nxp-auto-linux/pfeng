@@ -1,7 +1,7 @@
 /*
- * 2020 NXP
+ * Copyright 2020 NXP
  *
- * SPDX-License-Identifier: BSD OR GPL-2.0
+ * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -108,13 +108,13 @@ static int pfeng_hif_client_add(struct pfeng_ndev *ndev)
 
 	/* Create bman for channel */
 	if (!ndev->bman.rx_pool) {
-		ndev->bman.rx_pool = pfeng_bman_pool_create(ndev->chnl_sc.priv, ndev->dev);
-		if (!ndev->bman.rx_pool) {
+		ret = pfeng_bman_pool_create(ndev);
+		if (ret) {
 			netdev_err(ndev->netdev, "Unable to attach bman\n");
 			return -ENODEV;
 		}
 		/* Fill by prebuilt RX skbuf */
-		pfeng_hif_chnl_fill_rx_buffers(ndev->chnl_sc.priv, ndev);
+		pfeng_hif_chnl_fill_rx_buffers(ndev);
 	}
 
 	/* Connect to HIF */
@@ -254,16 +254,9 @@ static int pfeng_logif_release(struct net_device *netdev)
 	/* stop napi */
 	napi_disable(&ndev->napi);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,4,0)
-	/*
-	 * Note: phylink_stop() causes backtraces on 5.4
-	 *       but worked correctly on 4.19
-	 */
 	/* stop phylink */
 	if (ndev->phylink)
 		pfeng_phylink_stop(ndev);
-
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5,4,0) */
 
 	pfe_hif_drv_stop(ndev->chnl_sc.drv);
 #else
@@ -303,6 +296,8 @@ static int pfeng_logif_open(struct net_device *netdev)
 	ndev->xstats.txconf_loop = 0;
 	ndev->xstats.txconf = 0;
 	ndev->xstats.tx_busy = 0;
+	ndev->xstats.tx_pkt_frags = 0;
+	ndev->xstats.tx_pkt_frag_deep = 0;
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	ndev->xstats.ihc_rx = 0;
 	ndev->xstats.ihc_tx = 0;
@@ -357,12 +352,10 @@ static int pfeng_napi_txack(struct pfeng_ndev *ndev, int limit)
 	void *ref;
 
 	while((ref = pfe_hif_drv_client_receive_tx_conf(ndev->client, 0))) {
-		/* release skbuf of TX packet */
-		struct sk_buff *skb = (struct sk_buff *)ref;
-		struct pfeng_qdesc *qdesc = (struct pfeng_qdesc *)&skb->cb;
+		u32 refid = (u32)(u64)ref;
 
-		dma_unmap_single(ndev->dev, qdesc->map, qdesc->len, DMA_TO_DEVICE);
-		dev_consume_skb_any(skb);
+		/* Decrement required after transportation */
+		pfeng_hif_chnl_txconf_free_map_full(ndev, refid - 1);
 
 		done++;
 	}
@@ -389,20 +382,28 @@ static netdev_tx_t pfeng_logif_xmit(struct sk_buff *skb, struct net_device *netd
 	hif_drv_sg_list_t sg_list = { 0 };
 	errno_t ret = -EINVAL;
 	unsigned int plen = skb_headlen(skb);
-	u32 nfrags = skb_shinfo(skb)->nr_frags;
+	u32 nfrags;
 	dma_addr_t des = 0;
-	struct pfeng_qdesc *qdesc = (struct pfeng_qdesc *)&skb->cb;
-
-	qdesc->map = 0;
+	int f, refid = -1;
 
 	/* Cleanup Tx ring first */
 	pfeng_napi_txack(ndev, 0 /* no NAPI */);
 
-	/* Not supporting S/G yet, so max value can be 1+1 */
-	if ((nfrags + 1) >= 2 /*HIF_MAX_SG_LIST_LENGTH*/) {
-		netdev_err(netdev, "So big frame for xmit. Frame dropped.\n");
-		goto pkt_drop;
-	}
+	/* Check if fragmented skb fits in our SG_LIST */
+	if (unlikely(skb_shinfo(skb)->nr_frags > (HIF_MAX_SG_LIST_LENGTH - 2))) {
+		ret = skb_linearize(skb);
+		if (ret)
+			return ret;
+        }
+
+	/* Check for space in TX ring */
+	if (unlikely(!pfeng_hif_chnl_txconf_check(ndev, skb_shinfo(skb)->nr_frags + 2))) {
+		ret = skb_linearize(skb);
+		if (ret)
+			return ret;
+        }
+
+	nfrags = skb_shinfo(skb)->nr_frags;
 
 	/* Fill first part of packet */
 	des = dma_map_single(ndev->dev, skb->data, plen, DMA_TO_DEVICE);
@@ -410,64 +411,66 @@ static netdev_tx_t pfeng_logif_xmit(struct sk_buff *skb, struct net_device *netd
 		netdev_err(netdev, "No possible to map frame, dropped.\n");
 		goto pkt_drop;
 	}
+	refid = pfeng_hif_chnl_txconf_put_map_frag(ndev, skb->data, des, plen, skb);
+	/* Increment to be able to pass number 0 */
+	refid++;
 
 	sg_list.items[0].data_pa = (void *)des;
 	sg_list.items[0].data_va = skb->data;
 	sg_list.items[0].len = plen;
+#ifdef PFE_CFG_HIF_TX_FIFO_FIX
+	sg_list.total_bytes += plen;
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 	sg_list.size = 1;
-	qdesc->map = des;
-	qdesc->len = plen;
 
-#if 0
-	// TODO: S/G
-	for (i = 0; i < nfrags; i++) {
-		skb_frag_t *frag = &skb_shinfo(skb)->frags[i];
-                //bool last_segment = (i == (nfrags - 1));
+	/* Process frags */
+	for (f = 0; f < nfrags; f++) {
+		skb_frag_t *frag = &skb_shinfo(skb)->frags[f];
 
                 plen = skb_frag_size(frag);
+		if (!plen) {
+			printk("DEB: FRAG id %d ZERO!!!\n", f);
+			continue;
+		}
+
 		des = skb_frag_dma_map(ndev->dev, frag, 0, plen, DMA_TO_DEVICE);
 		if (dma_mapping_error(ndev->dev, des)) {
-			netdev_err(netdev, "No possible to map frame, dropped.\n");
+			netdev_err(netdev, "No possible to map frag, dropped.\n");
 			goto pkt_drop;
 		}
-		sg_list->items[i].data_pa = (void *)des;
-		sg_list->items[i].data_va = frag;
-		sg_list->items[i].len = plen;
-		sg_list->size++;
-
-	}
-#endif
-
+		sg_list.items[f + 1].data_pa = (void *)des;
+		sg_list.items[f + 1].data_va = frag;
+		sg_list.items[f + 1].len = plen;
 #ifdef PFE_CFG_HIF_TX_FIFO_FIX
-	sg_list.total_bytes += skb->len;
+		sg_list.total_bytes += plen;
 #endif /* PFE_CFG_HIF_TX_FIFO_FIX */
+		sg_list.size++;
 
-	ret = pfe_hif_drv_client_xmit_sg_pkt(ndev->client, 0, &sg_list, skb);
+		pfeng_hif_chnl_txconf_put_map_frag(ndev, frag, des, plen, NULL);
+	}
 
+	if (likely(netdev->features & NETIF_F_IP_CSUM))
+		sg_list.flags.tx_flags |= HIF_TX_IP_CSUM | HIF_TX_TCP_CSUM | HIF_TX_UDP_CSUM;
+
+	ret = pfe_hif_drv_client_xmit_sg_pkt(ndev->client, 0, &sg_list, (void *)(u64)refid);
 	if (unlikely(EOK != ret)) {
 		ndev->xstats.tx_busy++;
-		ret = NETDEV_TX_BUSY;
-		goto pkt_busy;
+		goto pkt_drop;
 	}
 
 	netdev->stats.tx_packets++;
 	netdev->stats.tx_bytes += skb->len;
+	if (nfrags) {
+		ndev->xstats.tx_pkt_frags++;
+		if (ndev->xstats.tx_pkt_frag_deep < nfrags)
+			ndev->xstats.tx_pkt_frag_deep = nfrags;
+	}
 
 	return NETDEV_TX_OK;
 
-pkt_busy:
-	/* the same like drop but not free skbuf */
 pkt_drop:
-	if (qdesc->map) {
-		dma_unmap_single(ndev->dev, qdesc->map, qdesc->len, DMA_TO_DEVICE);
-		qdesc->map = 0;
-	}
-
-	if (ret == NETDEV_TX_BUSY)
-		return NETDEV_TX_BUSY;
-
 	netdev_info(netdev, "Packet dropped (skb len=0x%x)\n", skb->len);
-	dev_kfree_skb_any(skb);
+	pfeng_hif_chnl_txconf_free_map_full(ndev, refid - 1);
 	netdev->stats.tx_dropped++;
 
 	return NET_XMIT_DROP;
@@ -617,6 +620,8 @@ static int pfeng_napi_rx(struct pfeng_ndev *ndev, int limit)
 		if (likely(netdev->features & NETIF_F_RXCSUM)) {
 			/* we have only OK info, signal it */
 			skb->ip_summed = CHECKSUM_UNNECESSARY;
+			/* one level csumming support */
+			skb->csum_level = 0;
 		}
 
 		/* Pass to upper layer */
@@ -630,8 +635,7 @@ static int pfeng_napi_rx(struct pfeng_ndev *ndev, int limit)
 		netdev->stats.rx_packets++;
 		netdev->stats.rx_bytes += skb_headlen(skb);
 
-		pfeng_hif_chnl_refill_rx_buffer(ndev->chnl_sc.priv, ndev);
-
+		pfeng_hif_chnl_refill_rx_buffer(ndev, false);
 		done++;
 		if(unlikely(done == limit))
 			break;
@@ -745,9 +749,9 @@ struct pfeng_ndev *pfeng_napi_if_create(struct pfeng_priv *priv, struct pfeng_et
 #endif
 
 	/* Accelerated feature */
-	netdev->hw_features |= /*NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |*/ NETIF_F_RXCSUM;
+	netdev->hw_features |= NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM | NETIF_F_RXCSUM;
+	netdev->hw_features |= NETIF_F_SG;
 	netdev->features = netdev->hw_features;
-	//netdev->hw_features |=NETIF_F_SG;
 
 	netif_napi_add(netdev, &ndev->napi, pfeng_napi_poll, NAPI_POLL_WEIGHT);
 
@@ -789,7 +793,7 @@ void pfeng_napi_if_release(struct pfeng_ndev *ndev)
 
 	/* Detach Bman */
 	if (ndev->bman.rx_pool) {
-		pfeng_bman_pool_destroy(ndev->bman.rx_pool);
+		pfeng_bman_pool_destroy(ndev);
 		ndev->bman.rx_pool = NULL;
 	}
 

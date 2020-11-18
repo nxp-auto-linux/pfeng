@@ -1,7 +1,7 @@
 /*
  * Copyright 2018-2020 NXP
  *
- * SPDX-License-Identifier:     BSD OR GPL-2.0
+ * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -9,11 +9,6 @@
 
 #include "pfe_cfg.h"
 #include "pfeng.h"
-
-#ifdef OPT_FW_EMBED
-#include "fw-s32g-class.h"
-#include "fw-s32g-util.h"
-#endif
 
 static int pfeng_fw_load_file(struct device *dev, const char *name, void **data, u32 *len)
 {
@@ -61,12 +56,6 @@ int pfeng_fw_load(struct pfeng_priv *priv, const char *class_name, const char *u
 
 	priv->cfg->fw = fw;
 
-#ifdef OPT_FW_EMBED
-	fw->class_data = __fw_class_s32g_elf_bin;
-	fw->class_size = __fw_class_s32g_elf_len;
-	fw->util_data = __fw_util_s32g_elf_bin;
-	fw->util_size = __fw_util_s32g_elf_len;
-#else
 	/* load CLASS fw */
 	ret = pfeng_fw_load_file(dev, class_name, &fw->class_data, &fw->class_size);
 	if (ret)
@@ -78,7 +67,6 @@ int pfeng_fw_load(struct pfeng_priv *priv, const char *class_name, const char *u
 		if (ret)
 			goto err;
 	}
-#endif
 
 	dev_info(dev, "Firmware: CLASS %s [%d bytes]\n", class_name, fw->class_size);
 	if (enable_util)
@@ -96,7 +84,6 @@ void pfeng_fw_free(struct pfeng_priv *priv)
 {
 	pfe_fw_t *fw = priv->cfg->fw;
 
-#ifndef OPT_FW_EMBED
 	if(fw->class_data) {
 		kfree(fw->class_data);
 		fw->class_data = NULL;
@@ -106,7 +93,6 @@ void pfeng_fw_free(struct pfeng_priv *priv)
 		kfree(fw->util_data);
 		fw->util_data = NULL;
 	}
-#endif
 
 	priv->cfg->fw = NULL;
 

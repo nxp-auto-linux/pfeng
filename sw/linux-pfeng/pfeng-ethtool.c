@@ -1,7 +1,7 @@
 /*
  * Copyright 2018-2020 NXP
  *
- * SPDX-License-Identifier:     BSD OR GPL-2.0
+ * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -12,9 +12,20 @@
 #include <linux/ethtool.h>
 #include <linux/phylink.h>
 
-static void pfeng_ethtool_getdrvinfo(struct net_device *dev, struct ethtool_drvinfo *info)
+static void pfeng_ethtool_getdrvinfo(struct net_device *netdev, struct ethtool_drvinfo *info)
 {
+	struct pfeng_ndev *ndev = netdev_priv(netdev);
+	pfe_ct_version_t fwver_class, fwver_util;
+
+	/* driver */
 	strlcpy(info->driver, PFENG_DRIVER_NAME, sizeof(info->version));
+
+	/* fw_version */
+	pfe_platform_get_fw_versions(ndev->priv->pfe, &fwver_class, &fwver_util);
+	scnprintf(info->fw_version, sizeof(info->fw_version), "%u.%u.%u-%u.%u.%u api:%.8s",
+			fwver_class.major, fwver_class.minor, fwver_class.patch,
+			fwver_util.major, fwver_util.minor, fwver_util.patch,
+			fwver_class.cthdr);
 }
 
 static int pfeng_ethtool_get_link_ksettings(struct net_device *netdev, struct ethtool_link_ksettings *cmd)

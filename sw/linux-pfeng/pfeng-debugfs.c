@@ -1,7 +1,7 @@
 /*
  * Copyright 2018,2020 NXP
  *
- * SPDX-License-Identifier: BSD OR GPL-2.0
+ * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -161,6 +161,8 @@ int pfeng_debugfs_add_hif_chnl(struct pfeng_priv *priv, struct pfeng_ndev *ndev)
 	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(txconf_loop);
 	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(txconf);
 	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(tx_busy);
+	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(tx_pkt_frags);
+	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(tx_pkt_frag_deep);
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
         ADD_DEBUGFS_CHNL_XSTATS_ENTRY(ihc_rx);
         ADD_DEBUGFS_CHNL_XSTATS_ENTRY(ihc_tx);

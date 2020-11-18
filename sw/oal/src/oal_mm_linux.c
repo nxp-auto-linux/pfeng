@@ -1,31 +1,8 @@
 /* =========================================================================
  *  Copyright 2018-2020 NXP
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ *  SPDX-License-Identifier: GPL-2.0
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Neither the name of the copyright holder nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER
- * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
- * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
 
 /**
@@ -42,12 +19,26 @@
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
 #include <linux/types.h>
+#include <linux/hashtable.h>
 
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "oal_mm.h"
 
 #define PTR_ALIGN(p, a)         ((typeof(p))ALIGN((unsigned long)(p), (a)))
+
+enum pfe_kmem_type
+{
+	PFE_MEM_INVALID = 0,
+	PFE_MEM_KMALLOC,
+};
+
+struct pfe_kmem
+{
+	struct hlist_node node;
+	enum pfe_kmem_type type;
+	void *addr;
+};
 
 /**
  * Memory range properties
@@ -71,6 +62,9 @@ struct mem_props
 
 /* struct device *dev associated with mm */
 static struct device *__dev = NULL;
+
+/* define hash table to store address */
+static DEFINE_HASHTABLE(pfe_addr_htable, 8);
 
 /**
  *	Allocate physically contiguous buffer physically aligned to "align" bytes. If
@@ -129,7 +123,38 @@ static void *__oal_mm_malloc_contig(const addr_t size, const uint32_t align, con
 
 	return vaddr;
 }
+static void *__oal_mm_kmalloc_htable(const addr_t size)
+{
+	struct pfe_kmem *hnode;
+	void *new_mem;
 
+	new_mem = kmalloc(size, GFP_KERNEL);
+	if (!new_mem)
+		return NULL;
+
+	hnode = kmalloc(sizeof(struct pfe_kmem), GFP_KERNEL);
+	if (!hnode) {
+		kfree(new_mem);
+		return NULL;
+	}
+
+	hash_add(pfe_addr_htable, &hnode->node, (uint64_t)new_mem);
+	hnode->type = PFE_MEM_KMALLOC;
+	hnode->addr = new_mem;
+
+	return new_mem;
+}
+
+static void __oal_mm_kfree_htable(struct pfe_kmem *hnode)
+{
+	hnode->type = PFE_MEM_INVALID;
+	if (hnode)
+	{
+		if (hnode->addr)
+			kfree(hnode->addr);
+		kfree(hnode);
+	}
+}
 /**
  *	Allocate aligned, contiguous, non-cacheable memory region
  */
@@ -143,7 +168,14 @@ void *oal_mm_malloc_contig_aligned_nocache(const addr_t size, const uint32_t ali
  */
 void *oal_mm_malloc_contig_aligned_cache(const addr_t size, const uint32_t align)
 {
-	return __oal_mm_malloc_contig(size, align, TRUE);
+	/* All kmalloc memory is automatically aligned to at least 128B(or higher power of two) on arm64.
+	 * This should be replaced with genpool align allocator in future.*/
+	if (align && 0 != (ARCH_KMALLOC_MINALIGN % align))
+	{
+		NXP_LOG_ERROR("Alignment not supported\n");
+		return NULL;
+	}
+	return __oal_mm_kmalloc_htable(size);
 }
 
 /**
@@ -160,8 +192,14 @@ void *oal_mm_malloc_contig_named_aligned_nocache(const char_t *pool, const addr_
  */
 void *oal_mm_malloc_contig_named_aligned_cache(const char_t *pool, const addr_t size, const uint32_t align)
 {
-	// TODO: switch to reserved memory
-	return __oal_mm_malloc_contig(size, align, TRUE);
+	/* All kmalloc memory is automatically aligned to at least 128B(or higher power of two) on arm64.
+	 * This should be replaced with genpool align allocator in future.*/
+	if (align && 0 != (ARCH_KMALLOC_MINALIGN % align))
+	{
+		NXP_LOG_ERROR("Alignment not supported\n");
+		return NULL;
+	}
+	return __oal_mm_kmalloc_htable(size);
 }
 
 /**
@@ -170,13 +208,28 @@ void *oal_mm_malloc_contig_named_aligned_cache(const char_t *pool, const addr_t 
 void oal_mm_free_contig(const void *vaddr)
 {
 	struct mem_props *props = (struct mem_props *)(vaddr - sizeof(struct mem_props));
-
+	struct pfe_kmem *mem;
 	if (NULL == vaddr)
 	{
 		NXP_LOG_ERROR("Attempt to release NULL-pointed memory\n");
 	}
 	else
 	{
+		hash_for_each_possible(pfe_addr_htable, mem, node, (uint64_t)vaddr) {
+			if (vaddr == mem->addr)
+			{
+				if (PFE_MEM_KMALLOC == mem->type) {
+					hash_del(&mem->node);
+					__oal_mm_kfree_htable(mem);
+					return;
+				}
+				else
+				{
+					NXP_LOG_ERROR("Invalid oal_mm_free_contig\n");
+				}
+			}
+		}
+/* Check only for dma coherent memory */
 #ifdef HWB_CFG_MEM_BUF_WATCH
 		if (NXP_MAGICINT != props->magicword)
 		{
@@ -286,6 +339,7 @@ uint32_t oal_mm_cache_get_line_size(void)
 errno_t oal_mm_init(void *dev)
 {
 	__dev = (struct device *)dev;
+	hash_init(pfe_addr_htable);
 
 	return EOK;
 }
@@ -293,6 +347,9 @@ errno_t oal_mm_init(void *dev)
 void oal_mm_shutdown(void)
 {
 	__dev = NULL;
+	if (!hash_empty(pfe_addr_htable)) {
+		NXP_LOG_ERROR("Unfreed memory detected\n");
+	}
 
 	return;
 }

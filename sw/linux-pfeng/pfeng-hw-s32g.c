@@ -1,7 +1,7 @@
 /*
  * Copyright 2019-2020 NXP
  *
- * SPDX-License-Identifier: BSD OR GPL-2.0
+ * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -364,6 +364,10 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 		/* fixed-link check */
 		eth->fixed_link = of_phy_is_fixed_link(child);
 
+		 /* Get max speed */
+		if (of_property_read_u32(child, "max-speed", &eth->max_speed))
+			eth->max_speed = SPEED_2500;
+
 		/* Interface mode */
 		eth->intf_mode = of_get_phy_mode(child);
 		if (eth->intf_mode < 0)
@@ -372,7 +376,7 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 		dev_dbg(&pdev->dev, "interface mode: %d", eth->intf_mode);
 		if ((eth->intf_mode != PHY_INTERFACE_MODE_INTERNAL) &&
 			(eth->intf_mode != PHY_INTERFACE_MODE_SGMII) &&
-			(eth->intf_mode != PHY_INTERFACE_MODE_RGMII) &&
+			!phy_interface_mode_is_rgmii(eth->intf_mode) &&
 			(eth->intf_mode != PHY_INTERFACE_MODE_RMII) &&
 			(eth->intf_mode != PHY_INTERFACE_MODE_MII)) {
 			dev_err(&pdev->dev, "Not supported phy interface mode: %s\n", phy_modes(eth->intf_mode));
@@ -480,6 +484,14 @@ static int pfeng_s32g_probe(struct platform_device *pdev)
 #endif
 #else
 	dev_info(&pdev->dev, "%s, MULTI-INSTANCE disabled\n", PFENG_DRIVER_NAME);
+#endif
+
+#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
+	dev_info(&pdev->dev, "%s, s32g2 cut 1.1 errata activated\n", PFENG_DRIVER_NAME);
+#endif
+#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a)
+	if (!pdev->dev.dma_coherent)
+		dev_warn(&pdev->dev, "WARNING: you are running with disabled device coherency! Consider impact on device performance.\n");
 #endif
 
 	if (dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32)) != 0) {
