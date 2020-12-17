@@ -48,7 +48,7 @@ Supported Features:
 Supported Derivatives:
 ========================================================
 
-- PS32G274ABVUC 0P77B Rev. 2.0
+- PS32G274ABVUC 1N92V Rev. 2.0
 
 ========================================================
 Directory Structure:
@@ -87,13 +87,26 @@ Compatible firmware: BLN_PFE-FW_S32G_BETA_0.9.2
 Known Issues and planned features
 ========================================================
 
+[AAVB-2224] - [PFE_LINUX] named memory API cannot be divided
 [AAVB-2238] - [PFE_PLATFORM] FCI PHY IF update command fails
+[AAVB-2313] - [PFE_PLATFORM] pfe_class_create causes destruction of a mutex which does not exist
 [AAVB-2320] - [PFE_LINUX] pfeng: mtu setting doesn't work of value < 68
+[AAVB-2326] - [PFE_PLATFORM] Logical interface 'discard' API missing in slave variant
+[AAVB-2445] - [ALB 25.0]Observed zero throughput numbers for Rx traffic while measuring IPerf3 UDP self termination traffic for 1518B frame size.
+[AAVB-2446] - [ALB 25.0]ping6 traffic is started working when I run tcpdump on DUT,while doing ping6 from the Linux Host
+[AAVB-2447] - [ALB 25.0]IPerf3 session is not getting connected from the DUT while running UDP bi-directional traffic,if I start IPerf client in Linux Host first, then Iperf client in S32G
+[AAVB-2448] - Observed "Zero Throughput numbers" while measuring IPv4/IPv6 routing Bi-directional RAW/UDP traffic
 [AAVB-2468] - [S32G Linux] SW forwarding doesn't work well with IPv6
 [AAVB-2469] - [PFE_LINUX] pfeng: udp reassembling failure
-[AAVB-2526] - [PFE_LINUX] pfeng: interface autonegotiation doesn't follow SGMII possibilities
+[AAVB-2526] - [PFE_LINUX] pfeng: interface autonegotiation doesn't follow SGMII possibilities 
+[AAVB-2538] - IPv6 fast-forward is not working
 [AAVB-2613] - [PFE_LINUX] pfeng: IHC communication sometimes fails on timeout
 [AAVB-2673] - [PFE_LINUX] pfeng: IHC communication broken
+[AAVB-2695] - [ALB 27.0] [Regression]: Observed "0" throughput number for IPv4 64B while measuring Slow path routing performance (Uni-directional)
+[AAVB-2701] - [ALB 27.0-RDB2]Sometimes S32G DUT is getting hanged while adding 100 flexible parser rules
+[AAVB-2719] - [PFE_LINUX] pfeng: kernel 4.19: missing 100baseT1_Full
+[AAVB-2720] - [PFE_LINUX] pfeng: kernel 4.19: driver backtrace when util fw version requested
+[AAVB-2724] - [ALB 27.0] S32G RDB2 is getting hanged while running UDP bi-directional tests with IPerf3
 
 ========================================================
 3rd Party Issues
@@ -108,11 +121,11 @@ What's Modified in BETA_0.9.2
 [AAVB-1972] - [PFE_LINUX] add S/G support to TX path
 [AAVB-2560] - [PFE_PLATFORM] Add support for adding logical interfaces to UTIL PHY
 [AAVB-2570] - [PFE_PLATFORM] Dispatch HIF traffic using physical interfaces
-[AAVB-2612] - [PFE_LINUX] Declare PFE device as dma-coherent
 [AAVB-2623] - [PFE_LINUX] DMA32 memory should be preferred for rx buffers
 [AAVB-2669] - [PFE_LINUX] pfeng: notice about errata fix usage
 
 # Bug
+[AAVB-2499] - [S32G EVB:ALB 25]Low throughput observed for Bridge scenario
 [AAVB-2523] - [PFE_LINUX] pfeng: phylink backtraces on interface changes
 [AAVB-2586] - [PFE_PLATFORM] PTP-over-Ethernet + VLAN stall
 [AAVB-2610] - [PFE_LINUX] Oal memory cached interface provides non-cached memory
@@ -121,16 +134,15 @@ What's Modified in BETA_0.9.2
 [AAVB-2643] - [PFE_LINUX] pfeng: fix rgmii-id, rgmii-txid, rgmii-rxid support
 
 # New Feature
-[AAVB-1945] - [PFE_FW] Allow adding HIF interfaces to bridge (domain)
+[AAVB-1945] - [PFE_FW,PFE_PLATFORM] Allow adding HIF interfaces to bridge (domain)
 [AAVB-2211] - [PFE_PLATFORM] Add API to get PE firmware version
-
+[AAVB-2276] - [PFE_FW]L2 bridge learning shall be switchable per port
 
 ========================================================
 What's Modified in BETA_0.9.1
 ========================================================
 
 # Improvement
-
 [AAVB-2067] - [PFE_LINUX][PFE_QNX] Notify FCI clients about FCI shutdown
 [AAVB-2568] - [PFE_LINUX] pfeng: enable util fw loading
 [AAVB-2571] - [PFE_PLATFORM] Firmware-based HIF traffic priority mgmt
