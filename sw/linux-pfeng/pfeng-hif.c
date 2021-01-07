@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 NXP
+ * Copyright 2020-2021 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -299,6 +299,33 @@ int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_ndev *ndev, u32 idx)
 
 		idx = pool->rd_idx = (pool->rd_idx + 1 ) & pool->idx_mask;
 	}
+
+	dev_consume_skb_any(skb);
+
+	return 0;
+}
+
+int pfeng_hif_chnl_txconf_unroll_map_full(struct pfeng_ndev *ndev, u32 idx, u32 nfrags)
+{
+	struct pfeng_tx_chnl_pool *pool = ndev->bman.tx_pool;
+	struct sk_buff *skb = pool->tx_tbl[idx].skb;
+
+	BUG_ON(!skb);
+	BUG_ON(idx != ((pool->wr_idx - 1) & pool->idx_mask));
+
+	/* Unmap frags */
+	while (nfrags--) {
+		dma_unmap_page(ndev->dev, pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].size, DMA_TO_DEVICE);
+		pool->tx_tbl[idx].size = 0;
+
+		idx = pool->wr_idx = (pool->wr_idx - 1 ) & pool->idx_mask;
+	}
+
+	/* Unmap linear part */
+	dma_unmap_single_attrs(ndev->dev, pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].size, DMA_TO_DEVICE, 0);
+	pool->tx_tbl[idx].size = 0;
+
+	idx = pool->wr_idx = (pool->wr_idx - 1 ) & pool->idx_mask;
 
 	dev_consume_skb_any(skb);
 

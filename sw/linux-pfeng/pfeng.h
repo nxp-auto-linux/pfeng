@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2020 NXP
+ * Copyright 2018-2021 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -166,11 +166,6 @@ struct pfeng_priv {
 	const char			*fw_class_name;
 	const char			*fw_util_name;
 	pfe_platform_t			*pfe;
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	struct task_struct 		*thr_ihc;
-	wait_queue_head_t		q_ihc;
-	u32				q_elems;
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 };
 
@@ -206,6 +201,7 @@ int pfeng_hif_chnl_fill_rx_buffers(struct pfeng_ndev *ndev);
 bool pfeng_hif_chnl_txconf_check(struct pfeng_ndev *ndev, u32 elems);
 int pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_ndev *ndev, void *va_addr, addr_t pa_addr, u32 size, struct sk_buff *skb);
 int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_ndev *ndev, u32 idx);
+int pfeng_hif_chnl_txconf_unroll_map_full(struct pfeng_ndev *ndev, u32 idx, u32 nfrags);
 int pfe_hif_drv_ihc_do_cbk(pfe_hif_drv_t *hif_drv);
 int pfe_hif_drv_ihc_put_pkt(pfe_hif_drv_t *hif_drv, void *data, uint32_t len, void *ref);
 

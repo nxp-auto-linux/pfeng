@@ -1,7 +1,7 @@
 /* =========================================================================
- *
- *  Copyright (c) 2020 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  
+ *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -140,7 +140,9 @@ errno_t pfe_platform_unregister_log_if(pfe_platform_t *platform, pfe_log_if_t *l
 pfe_log_if_t *pfe_platform_get_log_if_by_id(pfe_platform_t *platform, uint8_t id);
 pfe_log_if_t *pfe_platform_get_log_if_by_name(pfe_platform_t *platform, char_t *name);
 pfe_phy_if_t *pfe_platform_get_phy_if_by_id(pfe_platform_t *platform, pfe_ct_phy_if_id_t id);
+#if defined(PFE_CFG_MULTI_INSTANCE_SUPPORT)
 void pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg);
+#endif
 errno_t pfe_platform_get_fw_versions(pfe_platform_t *platform, pfe_ct_version_t *class_fw, pfe_ct_version_t *util_fw);
 
 #endif /* SRC_PFE_PLATFORM_H_ */

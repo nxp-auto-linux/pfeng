@@ -1,7 +1,7 @@
 /* =========================================================================
- *
- *  Copyright (c) 2020 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  
+ *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -376,56 +376,8 @@ void pfe_hif_drv_client_unregister(pfe_hif_drv_client_t *client)
  *		pfe_hif_drv_ihc_client_register()
  *		pfe_hif_drv_ihc_client_unregister()
  *		pfe_hif_drv_client_receive_pkt()
- *		pfe_hif_pkt_free()
- *		pfe_hif_drv_client_xmit_ihc_sg_pkt()
  *
  */
-
-/**
- * @brief		Transmit IHC packet given as a SG list of buffers
- * @param[in]	client Client instance
- * @param[in]	dst Destination physical interface ID. Should by HIFs only.
- * @param[in]	queue TX queue number
- * @param[in]	sg_list Pointer to the SG list
- * @param[in]	ref_ptr Reference pointer to be provided within TX confirmation.
- * @return		EOK if success, error code otherwise.
- */
-errno_t pfe_hif_drv_client_xmit_ihc_sg_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t dst, uint32_t queue, hif_drv_sg_list_t *sg_list, void *ref_ptr)
-{
-	sg_list->dst_phy = dst;
-
-#ifdef PFE_CFG_HIF_TX_FIFO_FIX
-	sg_list->total_bytes = sg_list->items[0].len;
-#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
-
-	return pfe_hif_drv_client_xmit_sg_pkt(client, queue, sg_list, ref_ptr);
-}
-
-/**
- * @brief		Release packet
- * @param[in]	pkt The packet instance
- */
-void pfe_hif_pkt_free(pfe_hif_pkt_t *pkt)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == pkt))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
-	
-	if (unlikely(NULL == pkt->client))
-	{
-		NXP_LOG_ERROR("Client is NULL\n");
-		return;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	Release SKB and associated pkt header */
-	kfree_skb((struct sk_buff *)pkt->ref_ptr);
-
-	oal_mm_free(pkt);
-}
 
 /**
  * @brief		Get packet from RX queue for IHC data
@@ -564,7 +516,8 @@ pfe_hif_drv_client_t * pfe_hif_drv_ihc_client_register(pfe_hif_drv_t *hif_drv, p
 
 	client->hif_drv = hif_drv;
 	client->event_handler = handler;
-	client->priv = priv;
+	/* Use hif_drv's client priv if priv == NULL */
+	client->priv = priv ? : hif_drv->client.priv;
 
 	return client;
 

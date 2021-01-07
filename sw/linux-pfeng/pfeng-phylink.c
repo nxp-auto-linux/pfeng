@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 NXP
+ * Copyright 2020-2021 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -56,7 +56,9 @@ static void pfeng_phylink_validate(struct net_device *netdev, unsigned long *sup
 	if (max_speed > SPEED_10) {
 		phylink_set(mac_supported, 100baseT_Half);
 		phylink_set(mac_supported, 100baseT_Full);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
 		phylink_set(mac_supported, 100baseT1_Full);
+#endif
 	}
 
 	if (max_speed > SPEED_100) {

@@ -1,7 +1,7 @@
 /* =========================================================================
- *
- *  Copyright (c) 2020 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  
+ *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -841,7 +841,7 @@ __attribute__((hot)) void pfe_hif_chnl_rx_irq_mask(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
@@ -858,7 +858,7 @@ __attribute__((hot)) void pfe_hif_chnl_rx_irq_mask(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 }
 
@@ -879,7 +879,7 @@ __attribute__((hot)) void pfe_hif_chnl_rx_irq_unmask(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
@@ -896,7 +896,7 @@ __attribute__((hot)) void pfe_hif_chnl_rx_irq_unmask(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 }
 

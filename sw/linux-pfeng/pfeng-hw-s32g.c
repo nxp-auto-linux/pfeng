@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2020 NXP
+ * Copyright 2019-2021 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -490,8 +490,10 @@ static int pfeng_s32g_probe(struct platform_device *pdev)
 	dev_info(&pdev->dev, "%s, s32g2 cut 1.1 errata activated\n", PFENG_DRIVER_NAME);
 #endif
 #if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
 	if (!pdev->dev.dma_coherent)
 		dev_warn(&pdev->dev, "WARNING: you are running with disabled device coherency! Consider impact on device performance.\n");
+#endif
 #endif
 
 	if (dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32)) != 0) {

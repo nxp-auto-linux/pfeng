@@ -1,7 +1,7 @@
 /* =========================================================================
- *
- *  Copyright (c) 2020 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  
+ *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -747,7 +747,7 @@ void pfe_emac_cfg_write_addr_slot(void *base_va, pfe_mac_addr_t addr, uint8_t sl
 
 	hal_write32(top, (addr_t)base_va + MAC_ADDRESS_HIGH(slot));
 	hal_write32(bottom, (addr_t)base_va + MAC_ADDRESS_LOW(slot));
-	oal_time_usleep(100);
+	oal_time_usleep(10);
 	hal_write32(bottom, (addr_t)base_va + MAC_ADDRESS_LOW(slot));
 }
 
@@ -790,7 +790,7 @@ void pfe_emac_cfg_set_uni_group(void *base_va, int32_t hash, bool_t en)
 
 	hal_write32(reg, (addr_t)base_va + MAC_HASH_TABLE_REG(hash_table_idx));
 	/*	Wait at least 4 clock cycles ((G)MII) */
-	oal_time_usleep(100);
+	oal_time_usleep(10);
 	hal_write32(reg, (addr_t)base_va + MAC_HASH_TABLE_REG(hash_table_idx));
 }
 

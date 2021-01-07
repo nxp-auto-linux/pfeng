@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -699,14 +699,8 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	void *payload;
 	pfe_idex_seqnum_t seqnum;
 	uint32_t timeout_us = 1500U * 1000;
-#ifndef PFE_CFG_TARGET_OS_LINUX
 	/*	Wait 1ms */
 	const uint32_t timeout_step = 1000;
-#else
-	/*	Linux requires busy-looping wait here.
-		What can be achieved with oal_time_usleep(10) or smaller only */
-	const uint32_t timeout_step = 10;
-#endif
 
 	/*	1.) Create the request instance with room for request payload */
 	req = oal_mm_malloc_contig_aligned_nocache(sizeof(pfe_idex_request_t) + data_len, 0U);

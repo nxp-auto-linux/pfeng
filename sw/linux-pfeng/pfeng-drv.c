@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 NXP
+ * Copyright 2020-2021 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -128,7 +128,6 @@ void pfeng_hif_chnl_drv_remove(struct pfeng_ndev *ndev)
 	if (ndev->eth->ihc) {
 		pfe_idex_fini();
 		ndev->eth->ihc = false;
-		kthread_stop(ndev->priv->thr_ihc);
 	}
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
@@ -154,31 +153,6 @@ void pfeng_hif_chnl_drv_remove(struct pfeng_ndev *ndev)
 	chnl->priv = NULL;
 }
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-/* IHC kthread main loop */
-static int pfeng_ihc_process(void *data)
-{
-	struct pfeng_ndev *ndev = (struct pfeng_ndev *)data;
-
-	do {
-		if (wait_event_interruptible(ndev->priv->q_ihc, ndev->priv->q_elems > 0 || !ndev->eth->ihc))
-			/* ERESTARTSYS */
-			continue;
-
-		if (kthread_should_stop() || !ndev->eth->ihc)
-			return 0;
-
-		ndev->priv->q_elems--;
-
-		/* Process IHC callback */
-		pfe_hif_drv_ihc_do_cbk(ndev->chnl_sc.drv);
-
-	} while (1);
-
-	return 0;
-}
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
 int pfeng_hif_chnl_drv_create(struct pfeng_ndev *ndev)
 {
 	u32 hif_chnl = ndev->eth->hif_chnl_sc;
@@ -188,13 +162,13 @@ int pfeng_hif_chnl_drv_create(struct pfeng_ndev *ndev)
 	int ret;
 
 	if (hif_chnl >= ARRAY_SIZE(pfeng_chnl_ids)) {
-		dev_err(&ndev->priv->pdev->dev, "Invalid HIF instance number: %u\n", hif_chnl);
+		netdev_err(ndev->netdev, "Invalid HIF instance number: %u\n", hif_chnl);
 		return -ENODEV;
 	}
 
 	chnl->priv = pfe_hif_get_channel(ndev->priv->pfe->hif, pfeng_chnl_ids[hif_chnl]);
 	if (NULL == chnl->priv) {
-		dev_err(&ndev->priv->pdev->dev, "Can't get HIF%d channel instance\n", hif_chnl);
+		netdev_err(ndev->netdev, "Can't get HIF%d channel instance\n", hif_chnl);
 		return -ENODEV;
 	}
 
@@ -205,7 +179,7 @@ int pfeng_hif_chnl_drv_create(struct pfeng_ndev *ndev)
 	ret = request_irq(ndev->priv->cfg->irq_vector_hif_chnls[hif_chnl], pfeng_chnl_direct_isr,
 		0, kstrdup(irq_name, GFP_KERNEL), chnl->priv);
 	if (unlikely(ret < 0)) {
-		dev_err(&ndev->priv->pdev->dev, "Error allocating the IRQ %d for '%s', error %d\n",
+		netdev_err(ndev->netdev, "Error allocating the IRQ %d for '%s', error %d\n",
 			ndev->priv->cfg->irq_vector_hif_chnls[hif_chnl], irq_name, ret);
 		return ret;
 	}
@@ -214,43 +188,16 @@ int pfeng_hif_chnl_drv_create(struct pfeng_ndev *ndev)
 	/*	Create HIF driver for the channel */
 	chnl->drv = pfe_hif_drv_create(chnl->priv);
 	if (NULL == chnl->drv) {
-		dev_err(&ndev->priv->pdev->dev, "Could not get HIF%d driver instance\n", hif_chnl);
+		netdev_err(ndev->netdev, "Could not get HIF%d driver instance\n", hif_chnl);
 		ret = -ENODEV;
 		goto err;
 	}
 
 	if (EOK != pfe_hif_drv_init(chnl->drv)) {
-		dev_err(&ndev->priv->pdev->dev, "HIF%d drv init failed\n", hif_chnl);
+		netdev_err(ndev->netdev, "HIF%d drv init failed\n", hif_chnl);
 		ret = -ENODEV;
 		goto err;
 	}
-
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	if (ndev->eth->ihc) {
-		if (pfe_idex_init(chnl->drv, pfeng_hif_ids[ndev->priv->plat.ihc_master_chnl])) {
-			dev_err(&ndev->priv->pdev->dev, "Can't initialize IDEX, HIF IHC support disabled.\n");
-			ndev->eth->ihc = false;
-		} else {
-			if (EOK != pfe_idex_set_rpc_cbk(&pfe_platform_idex_rpc_cbk, ndev->priv->pfe)) {
-				dev_err(&ndev->priv->pdev->dev, "Unable to set IDEX RPC callback. HIF IHC support disabled\n");
-				ndev->eth->ihc = false;
-				pfe_idex_fini();
-			} else {
-				init_waitqueue_head(&ndev->priv->q_ihc);
-
-				/* Create IHC processor */
-				ndev->priv->thr_ihc = kthread_run(pfeng_ihc_process, (void *)ndev, "pfeng-ihc/hif%d", hif_chnl);
-				if (IS_ERR(ndev->priv->thr_ihc)) {
-					dev_err(&ndev->priv->pdev->dev, "Unable to spawn IHC thread. HIF IHC support disabled\n");
-					ndev->eth->ihc = false;
-				} else {
-					dev_info(&ndev->priv->pdev->dev, "IDEX RPC installed. HIF IHC support enabled\n");
-				}
-			}
-		}
-	} else
-		dev_info(&ndev->priv->pdev->dev, "HIF IHC not enabled\n");
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	return 0;
 

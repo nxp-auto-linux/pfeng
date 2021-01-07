@@ -1,7 +1,7 @@
 /* =========================================================================
- *
- *  Copyright (c) 2020 Imagination Technologies Limited
- *  Copyright 2020 NXP
+ *  
+ *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright 2019-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *

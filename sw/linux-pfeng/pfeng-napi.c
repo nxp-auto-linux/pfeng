@@ -1,11 +1,12 @@
 /*
- * Copyright 2020 NXP
+ * Copyright 2020-2021 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
  */
 
 #include <linux/phylink.h>
+#include <linux/net.h>
 
 #include "pfeng.h"
 
@@ -84,6 +85,7 @@ static int pfeng_hif_event_handler(pfe_hif_drv_client_t *client, void *data, uin
 			pfe_hif_chnl_rx_irq_mask(ndev->chnl_sc.priv);
 
 			__napi_schedule_irqoff(&ndev->napi);
+
 		} else
 			ndev->xstats.napi_poll_onrun++;
 	}
@@ -132,6 +134,24 @@ static int pfeng_hif_client_add(struct pfeng_ndev *ndev)
 		netdev_err(ndev->netdev, "Unable to register HIF client: %s\n", ndev->eth->name);
 		return -ENODEV;
 	}
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	if (ndev->eth->ihc) {
+		if (pfe_idex_init(ndev->chnl_sc.drv, pfeng_hif_ids[ndev->priv->plat.ihc_master_chnl])) {
+			netdev_err(ndev->netdev, "Can't initialize IDEX, HIF IHC support disabled.\n");
+			ndev->eth->ihc = false;
+		} else {
+			if (EOK != pfe_idex_set_rpc_cbk(&pfe_platform_idex_rpc_cbk, ndev->priv->pfe)) {
+				netdev_err(ndev->netdev, "Unable to set IDEX RPC callback. HIF IHC support disabled\n");
+				ndev->eth->ihc = false;
+				pfe_idex_fini();
+			} else {
+				netdev_info(ndev->netdev, "IDEX RPC installed. HIF IHC support enabled\n");
+			}
+		}
+	} else
+		netdev_info(ndev->netdev, "HIF IHC not enabled\n");
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 #ifdef PFE_CFG_PFE_SLAVE
 	/* start HIF channel driver */
@@ -392,15 +412,21 @@ static netdev_tx_t pfeng_logif_xmit(struct sk_buff *skb, struct net_device *netd
 	/* Check if fragmented skb fits in our SG_LIST */
 	if (unlikely(skb_shinfo(skb)->nr_frags > (HIF_MAX_SG_LIST_LENGTH - 2))) {
 		ret = skb_linearize(skb);
-		if (ret)
-			return ret;
+		if (ret) {
+			net_err_ratelimited("%s: Packet dropped. Error %d\n", netdev->name, ret);
+			netdev->stats.tx_dropped++;
+			return NET_XMIT_DROP;
+		}
         }
 
 	/* Check for space in TX ring */
 	if (unlikely(!pfeng_hif_chnl_txconf_check(ndev, skb_shinfo(skb)->nr_frags + 2))) {
 		ret = skb_linearize(skb);
-		if (ret)
-			return ret;
+		if (ret) {
+			net_err_ratelimited("%s: Packet dropped. Error %d\n", netdev->name, ret);
+			netdev->stats.tx_dropped++;
+			return NET_XMIT_DROP;
+		}
         }
 
 	nfrags = skb_shinfo(skb)->nr_frags;
@@ -408,8 +434,9 @@ static netdev_tx_t pfeng_logif_xmit(struct sk_buff *skb, struct net_device *netd
 	/* Fill first part of packet */
 	des = dma_map_single(ndev->dev, skb->data, plen, DMA_TO_DEVICE);
 	if (unlikely(dma_mapping_error(ndev->dev, des))) {
-		netdev_err(netdev, "No possible to map frame, dropped.\n");
-		goto pkt_drop;
+		net_err_ratelimited("%s: Frame mapping failed. Packet dropped.\n", netdev->name);
+		netdev->stats.tx_dropped++;
+		return NET_XMIT_DROP;
 	}
 	refid = pfeng_hif_chnl_txconf_put_map_frag(ndev, skb->data, des, plen, skb);
 	/* Increment to be able to pass number 0 */
@@ -428,15 +455,15 @@ static netdev_tx_t pfeng_logif_xmit(struct sk_buff *skb, struct net_device *netd
 		skb_frag_t *frag = &skb_shinfo(skb)->frags[f];
 
                 plen = skb_frag_size(frag);
-		if (!plen) {
-			printk("DEB: FRAG id %d ZERO!!!\n", f);
+		if (!plen)
 			continue;
-		}
 
 		des = skb_frag_dma_map(ndev->dev, frag, 0, plen, DMA_TO_DEVICE);
 		if (dma_mapping_error(ndev->dev, des)) {
-			netdev_err(netdev, "No possible to map frag, dropped.\n");
-			goto pkt_drop;
+			net_err_ratelimited("%s: Fragment mapping failed. Packet dropped. Error %d\n", netdev->name, dma_mapping_error(ndev->dev, des));
+			pfeng_hif_chnl_txconf_unroll_map_full(ndev, refid - 1, f);
+			netdev->stats.tx_dropped++;
+			return NET_XMIT_DROP;
 		}
 		sg_list.items[f + 1].data_pa = (void *)des;
 		sg_list.items[f + 1].data_va = frag;
@@ -455,7 +482,10 @@ static netdev_tx_t pfeng_logif_xmit(struct sk_buff *skb, struct net_device *netd
 	ret = pfe_hif_drv_client_xmit_sg_pkt(ndev->client, 0, &sg_list, (void *)(u64)refid);
 	if (unlikely(EOK != ret)) {
 		ndev->xstats.tx_busy++;
-		goto pkt_drop;
+		net_err_ratelimited("%s: Packet dropped. Error %d\n", netdev->name, ret);
+		pfeng_hif_chnl_txconf_unroll_map_full(ndev, refid - 1, nfrags);
+		netdev->stats.tx_dropped++;
+		return NET_XMIT_DROP;
 	}
 
 	netdev->stats.tx_packets++;
@@ -467,13 +497,80 @@ static netdev_tx_t pfeng_logif_xmit(struct sk_buff *skb, struct net_device *netd
 	}
 
 	return NETDEV_TX_OK;
+}
 
-pkt_drop:
-	netdev_info(netdev, "Packet dropped (skb len=0x%x)\n", skb->len);
-	pfeng_hif_chnl_txconf_free_map_full(ndev, refid - 1);
-	netdev->stats.tx_dropped++;
+/**
+ * @brief		Transmit IHC packet given as a SG list of buffers
+ * @param[in]	client Client instance
+ * @param[in]	dst Destination physical interface ID. Should by HIFs only.
+ * @param[in]	queue TX queue number
+ * @param[in]	sg_list Pointer to the SG list
+ * @param[in]	ref_ptr Reference pointer to be provided within TX confirmation.
+ * @return		EOK if success, error code otherwise.
+ */
+errno_t pfe_hif_drv_client_xmit_ihc_sg_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t dst, uint32_t queue, hif_drv_sg_list_t *sg_list, void *ref_ptr)
+{
+	struct sk_buff *skb;
+	dma_addr_t des = 0;
+	int refid = -1, ret;
+	hif_drv_sg_list_t sg_out = { 0 };
+	u32 plen = sg_list->items[0].len;
+	struct pfeng_ndev *ndev = pfe_hif_drv_client_get_priv(client);
 
-	return NET_XMIT_DROP;
+	/* Cleanup Tx ring first */
+	pfeng_napi_txack(ndev, 0 /* no NAPI */);
+
+	/* Copy sg_list buffer to skb to reuse txconf standard cleaning */
+	skb = netdev_alloc_skb(ndev->netdev, plen + 2);
+	if (!skb)
+		return ENOMEM;
+	/* Align IP on 16 byte boundaries */
+	skb_reserve(skb, 2);
+	skb_put_data(skb, sg_list->items[0].data_va, plen);
+
+	/* Remap skb */
+	des = dma_map_single(ndev->dev, skb->data, plen, DMA_TO_DEVICE);
+	if (unlikely(dma_mapping_error(ndev->dev, des))) {
+		netdev_err(ndev->netdev, "No possible to map frame, dropped.\n");
+		kfree_skb(skb);
+		return ENOMEM;
+	}
+	refid = pfeng_hif_chnl_txconf_put_map_frag(ndev, skb->data, des, plen, skb);
+	/* Increment to be able to pass number 0 */
+	refid++;
+
+	/* Free original sg_list */
+	oal_mm_free_contig(ref_ptr);
+
+	/* Build new sg_list */
+	sg_out.dst_phy = dst;
+	sg_out.items[0].data_pa = (void *)des;
+	sg_out.items[0].data_va = skb->data;
+	sg_out.items[0].len = plen;
+#ifdef PFE_CFG_HIF_TX_FIFO_FIX
+	sg_out.total_bytes += plen;
+#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
+	sg_out.size = 1;
+
+	ret = pfe_hif_drv_client_xmit_sg_pkt(client, queue, &sg_out, (void *)(u64)refid);
+	if (ret) {
+		pfeng_hif_chnl_txconf_free_map_full(ndev, refid - 1);
+		kfree_skb(skb);
+		return ret;
+	}
+
+	return 0;
+}
+
+/**
+ * @brief		Release packet
+ * @param[in]	pkt The packet instance
+ */
+void pfe_hif_pkt_free(pfe_hif_pkt_t *pkt)
+{
+	if (pkt->ref_ptr)
+		kfree_skb(pkt->ref_ptr);
+	oal_mm_free(pkt);
 }
 
 static int pfeng_napi_ioctl(struct net_device *netdev, struct ifreq *rq, int cmd)
@@ -532,6 +629,7 @@ static int pfeng_napi_change_mtu(struct net_device *netdev, int mtu)
 
 static void pfeng_logif_set_rx_mode(struct net_device *netdev)
 {
+#ifdef PFE_CFG_PFE_MASTER
 	struct pfeng_ndev *ndev = netdev_priv(netdev);
 
 	if (netdev->flags & IFF_PROMISC) {
@@ -543,6 +641,7 @@ static void pfeng_logif_set_rx_mode(struct net_device *netdev)
 		if (pfe_log_if_promisc_disable(ndev->logif_emac) == EOK)
 			netdev_dbg(netdev, "promisc disabled\n");
 	}
+#endif
 }
 
 static const struct net_device_ops pfeng_netdev_ops = {
@@ -578,10 +677,9 @@ static struct sk_buff *pfeng_hif_rx_get(struct pfeng_ndev *ndev, unsigned int *i
 		if (unlikely (hif_hdr->flags & HIF_RX_IHC)) {
 			(*ihc_processed)++;
 
-			/* IHC client, deffer work */
+			/* IHC client callback */
 			if (!pfe_hif_drv_ihc_put_pkt(ndev->chnl_sc.drv, skb->data, skb->len, skb)) {
-				ndev->priv->q_elems++;
-				wake_up_interruptible(&ndev->priv->q_ihc);
+				pfe_hif_drv_ihc_do_cbk(ndev->chnl_sc.drv);
 			} else {
 				netdev_err(ndev->netdev, "RX IHC queuing failed. Origin phyif %d\n", hif_hdr->i_phy_if);
 				kfree_skb(skb);
@@ -675,14 +773,8 @@ static int pfeng_napi_poll(struct napi_struct *napi, int budget)
 	if (done < budget && napi_complete_done(napi, done)) {
 		ndev->xstats.napi_poll_completed++;
 
-		if (done) {
-			/* We might have more RX packets in queue */
-			napi_reschedule(napi);
-			ndev->xstats.napi_poll_resched++;
-		} else {
-			/* Indicate end of RX event (required for SC mode, empty for MC) */
-			pfe_hif_drv_client_rx_done(ndev->client);
-		}
+		/* Enable RX interrupt */
+		pfe_hif_drv_client_rx_done(ndev->client);
 	}
 
 	return done;
