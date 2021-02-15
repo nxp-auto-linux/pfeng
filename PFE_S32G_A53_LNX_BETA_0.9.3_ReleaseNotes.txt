@@ -87,6 +87,9 @@ Compatible firmware: BLN_PFE-FW_S32G_BETA_0.9.3
 Known Issues
 ========================================================
 
+[AAVB-2073] - [DPAA_QNX] Crippled fragmented reply on first ping after MTU change
+[AAVB-2129] - [PFE_Linux] MTU runtime configuration
+[AAVB-2149] - [PFE_LINUX]Promiscuous mode not working
 [AAVB-2224] - [PFE_LINUX] named memory API cannot be divided
 [AAVB-2313] - [PFE_PLATFORM] pfe_class_create causes destruction of a mutex which does not exist
 [AAVB-2320] - [PFE_LINUX] pfeng: mtu setting doesn't work of value < 68
@@ -98,6 +101,7 @@ Known Issues
 [AAVB-2448] - Observed "Zero Throughput numbers" while measuring IPv4/IPv6 routing Bi-directional RAW/UDP traffic
 [AAVB-2468] - [S32G Linux] SW forwarding doesn't work well with IPv6
 [AAVB-2469] - [PFE_LINUX] pfeng: udp reassembling failure
+[AAVB-2514] = [PFE_PLATFORM] Traceability matrix + SW Requirements Specification necessary improvements
 [AAVB-2526] - [PFE_LINUX] pfeng: interface autonegotiation doesn't follow SGMII possibilities
 [AAVB-2538] - [PFE_DRV_LINUX] IPv6 fast-forward is not working
 [AAVB-2695] - [ALB 27.0] [Regression]: Observed "0" throughput number for IPv4 64B while measuring Slow path routing performance (Uni-directional)
@@ -105,6 +109,8 @@ Known Issues
 [AAVB-2720] - [PFE_LINUX] pfeng: kernel 4.19: driver backtrace when util fw version requested
 [AAVB-2914] - [PFE_LINUX] pfeng: insmod reports success ($? = 0) even driver probe failed
 [AAVB-2973] - [PFE_DRV_LINUX] Configured Bridge outputs periodic backtrace
+
+[AAVBT-10]  - Implement a new approach for test integrity mechanism
 
 ========================================================
 3rd Party Issues
