@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -147,11 +147,11 @@
 #define CSR_IGQOS_LRU_TIMER_LOAD_VALUE		0x244U
 #define IGQOS_ENTRY_TABLE_LEN				128U
 #define IGQOS_LRU_TABLE_LEN					128U
-#define CMDCNTRL_CMD_WRITE					0x1
-#define CMDCNTRL_CMD_READ					0x2
-#define CMDCNTRL_CMD_TAB_ADDR(x)			(((x) & 0x7fU) << 8)
-#define CMDCNTRL_CMD_TAB_SELECT_LRU			(1U << 16)
-#define CMDCNTRL_CMD_TAB_SELECT_ENTRY		(0U << 16)
+#define CMDCNTRL_CMD_WRITE					0x1U
+#define CMDCNTRL_CMD_READ					0x2U
+#define CMDCNTRL_CMD_TAB_ADDR(x)			((((uint32_t)x) & 0x7fU) << 8U)
+#define CMDCNTRL_CMD_TAB_SELECT_LRU			(1UL << 16U)
+#define CMDCNTRL_CMD_TAB_SELECT_ENTRY		(0UL << 16U)
 
 typedef struct {
 	uint32_t lmem_rtry_cnt;

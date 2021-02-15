@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2020-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -15,7 +15,7 @@
 #include "pfe_wdt.h"
 #include "pfe_wdt_csr.h"
 
-struct __pfe_wdt_tag
+struct pfe_wdt_tag
 {
 	void *cbus_base_va;
 	void *wdt_base_offset;
@@ -43,7 +43,7 @@ pfe_wdt_t *pfe_wdt_create(void *cbus_base_va, void *wdt_base)
 	}
 	else
 	{
-		memset(wdt, 0, sizeof(pfe_wdt_t));
+		(void)memset(wdt, 0, sizeof(pfe_wdt_t));
 		wdt->cbus_base_va = cbus_base_va;
 		wdt->wdt_base_offset = wdt_base;
 		wdt->wdt_base_va = (void *)((addr_t)wdt->cbus_base_va + (addr_t)wdt->wdt_base_offset);
@@ -112,13 +112,13 @@ void pfe_wdt_destroy(pfe_wdt_t *wdt)
  */
 errno_t pfe_wdt_isr(pfe_wdt_t *wdt)
 {
-	bool_t ret = FALSE;
+	errno_t ret = EINVAL;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == wdt))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
+		return EINVAL;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
@@ -131,7 +131,7 @@ errno_t pfe_wdt_isr(pfe_wdt_t *wdt)
 	if (EOK == pfe_wdt_cfg_isr(wdt->wdt_base_va, wdt->cbus_base_va))
 	{
 		/*	IRQ handled */
-		ret = TRUE;
+		ret = EOK;
 	}
 
 	if (EOK != oal_mutex_unlock(&wdt->lock))

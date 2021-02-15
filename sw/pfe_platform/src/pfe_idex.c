@@ -73,7 +73,7 @@ ct_assert(sizeof(pfe_idex_frame_type_t) == sizeof(uint8_t));
 typedef enum __attribute__((packed))
 {
 	/*	Master discovery. To find out where master is located. Non-blocking. */
-	IDEX_MASTER_DISCOVERY = 0,
+	IDEX_MASTER_DISCOVERY = 0U,
 	/*	RPC request. Blocking. */
 	IDEX_RPC
 } pfe_idex_request_type_t;
@@ -90,7 +90,7 @@ ct_assert(sizeof(pfe_idex_request_type_t) == sizeof(uint8_t));
 /**
  * @brief	IDEX Master Discovery Message header
  */
-typedef struct __attribute__((packed)) __pfe_idex_msg_master_discovery_tag
+typedef struct __attribute__((packed)) pfe_idex_msg_master_discovery_tag
 {
 	/*	Physical interface ID where master driver is located */
 	pfe_ct_phy_if_id_t phy_if_id;
@@ -101,7 +101,7 @@ ct_assert(sizeof(pfe_idex_msg_master_discovery_t) == sizeof(uint8_t));
 /**
  * @brief	IDEX RPC Message header
  */
-typedef struct __attribute__((packed)) __pfe_idex_rpc_tag
+typedef struct __attribute__((packed)) pfe_idex_rpc_tag
 {
 	/*	Custom RPC ID */
 	uint32_t rpc_id;
@@ -116,7 +116,7 @@ ct_assert(sizeof(errno_t) == sizeof(uint32_t));
 /**
  * @brief	IDEX Frame Header
  */
-typedef struct __attribute__((packed)) __pfe_idex_frame_header_tag
+typedef struct __attribute__((packed)) pfe_idex_frame_header_tag
 {
 	/*	Destination physical interface ID */
 	pfe_ct_phy_if_id_t dst_phy_if;
@@ -132,7 +132,7 @@ ct_assert(sizeof(pfe_idex_frame_header_t) == 2);
 typedef enum __attribute__((packed))
 {
 	/*	New request which is not active. Can't be destroyed or timed-out. */
-	IDEX_REQ_STATE_NEW = 0,
+	IDEX_REQ_STATE_NEW = 0U,
 	/*	Request committed for transmission. Can be timed-out. */
 	IDEX_REQ_STATE_COMMITTED,
 	/*	Transmitted request waiting for response. Can be timed-out. */
@@ -140,7 +140,7 @@ typedef enum __attribute__((packed))
 	/*	Finished request */
 	IDEX_REQ_STATE_COMPLETED,
 	/*	Invalid request. Will be destroyed be cleanup task. */
-	IDEX_REQ_STATE_INVALID = 0xff,
+	IDEX_REQ_STATE_INVALID = 0xffU,
 } pfe_idex_request_state_t;
 
 ct_assert(sizeof(pfe_idex_request_state_t) == sizeof(uint8_t));
@@ -156,7 +156,7 @@ ct_assert(sizeof(pfe_idex_request_state_t) == sizeof(uint8_t));
  * 			|	IDEX Request message (pfe_idex_msg_*_t)		   |
  * 			+--------------------------------------------------+
  */
-typedef struct __attribute__((packed)) __pfe_idex_request_tag
+typedef struct __attribute__((packed)) pfe_idex_request_tag
 {
 	/*	Unique sequence number */
 	pfe_idex_seqnum_t seqnum;
@@ -192,7 +192,7 @@ ct_assert(sizeof(pfe_idex_request_t) == 37);
  * 			|	IDEX Response message (pfe_idex_msg_*_t)	   |
  * 			+--------------------------------------------------+
  */
-typedef struct __attribute__((packed)) __pfe_idex_response_tag
+typedef struct __attribute__((packed)) pfe_idex_response_tag
 {
 	/*	Sequence number matching request which the response is dedicated for */
 	pfe_idex_seqnum_t seqnum;
@@ -222,7 +222,7 @@ typedef struct pfe_idex_tag
 } pfe_idex_t;
 
 /*	Local IDEX instance storage */
-static pfe_idex_t __idex = {0};
+static pfe_idex_t pfe_idex = {0};
 
 static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex);
 static void pfe_idex_do_tx(pfe_hif_drv_client_t *client, pfe_idex_t *idex);
@@ -250,14 +250,14 @@ static errno_t pfe_idex_ihc_handler(pfe_hif_drv_client_t *client, void *arg, uin
 		case EVENT_RX_PKT_IND:
 		{
 			/*	Run RX routine */
-			pfe_idex_do_rx(client, &__idex);
+			pfe_idex_do_rx(client, &pfe_idex);
 			break;
 		}
 
 		case EVENT_TXDONE_IND:
 		{
 			/*	Run TX routine */
-			pfe_idex_do_tx(client, &__idex);
+			pfe_idex_do_tx(client, &pfe_idex);
 			break;
 		}
 
@@ -433,7 +433,7 @@ static void pfe_idex_do_tx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 {
 	void *ref_ptr;
 	pfe_idex_frame_header_t *idex_header;
-    
+
     (void)idex;
 
 	while (TRUE)
@@ -510,7 +510,7 @@ static void pfe_idex_do_tx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
  */
 static pfe_idex_request_t *pfe_idex_request_get_by_id(pfe_idex_seqnum_t seqnum)
 {
-	pfe_idex_t *idex = (pfe_idex_t *)&__idex;
+	pfe_idex_t *idex = (pfe_idex_t *)&pfe_idex;
 	LLIST_t *item;
 	pfe_idex_request_t *req;
 
@@ -539,7 +539,7 @@ static pfe_idex_request_t *pfe_idex_request_get_by_id(pfe_idex_seqnum_t seqnum)
  */
 static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, pfe_idex_request_result_t res, void *resp_buf, uint16_t resp_len)
 {
-	pfe_idex_t *idex = (pfe_idex_t *)&__idex;
+	pfe_idex_t *idex = (pfe_idex_t *)&pfe_idex;
 	pfe_idex_request_t *req = NULL;
 	errno_t ret = EOK;
 
@@ -562,7 +562,7 @@ static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, pfe_idex_requ
 		{
 			if (resp_len <= req->resp_buf_len)
 			{
-				memcpy(req->resp_buf, resp_buf, resp_len);
+				(void)memcpy(req->resp_buf, resp_buf, resp_len);
 				req->resp_buf_len = resp_len;
 			}
 			else
@@ -593,7 +593,7 @@ static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, pfe_idex_requ
  */
 static errno_t pfe_idex_request_set_state(pfe_idex_seqnum_t seqnum, pfe_idex_request_state_t state)
 {
-	pfe_idex_t *idex = (pfe_idex_t *)&__idex;
+	pfe_idex_t *idex = (pfe_idex_t *)&pfe_idex;
 	pfe_idex_request_t *req = NULL;
 	errno_t ret = EOK;
 
@@ -639,7 +639,7 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
 	void *payload;
 
 	/*	Create the request buffer with room for request payload */
-	resp = oal_mm_malloc_contig_aligned_nocache(sizeof(pfe_idex_response_t) + data_len, 0U);
+	resp = oal_mm_malloc_contig_aligned_nocache((addr_t)(sizeof(pfe_idex_response_t)) + (addr_t)data_len, 0U);
 	if (NULL == resp)
 	{
 		NXP_LOG_ERROR("Memory allocation failed\n");
@@ -653,7 +653,7 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
 
 	/*	Add payload */
 	payload = (void *)((addr_t)resp + sizeof(pfe_idex_response_t));
-	memcpy(payload, data, data_len);
+	(void)memcpy(payload, data, data_len);
 
 #ifdef IDEX_CFG_VERBOSE
 	NXP_LOG_DEBUG("Sending response %d\n", oal_ntohl(seqnum));
@@ -693,17 +693,17 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
  */
 static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_request_type_t type, void *data, uint16_t data_len, void *resp, uint16_t resp_len)
 {
-	pfe_idex_t *idex = (pfe_idex_t *)&__idex;
+	pfe_idex_t *idex = (pfe_idex_t *)&pfe_idex;
 	pfe_idex_request_t *req;
 	errno_t ret;
 	void *payload;
 	pfe_idex_seqnum_t seqnum;
-	uint32_t timeout_us = 1500U * 1000;
+	uint32_t timeout_us = 1500U * 1000U;
 	/*	Wait 1ms */
-	const uint32_t timeout_step = 1000;
+	const uint32_t timeout_step = 1000U;
 
 	/*	1.) Create the request instance with room for request payload */
-	req = oal_mm_malloc_contig_aligned_nocache(sizeof(pfe_idex_request_t) + data_len, 0U);
+	req = oal_mm_malloc_contig_aligned_nocache((addr_t)(sizeof(pfe_idex_request_t)) + (addr_t)data_len, 0U);
 	if (NULL == req)
 	{
 		NXP_LOG_ERROR("Memory allocation failed\n");
@@ -712,7 +712,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	else
 	{
 		/*	Only initialize header, payload will be added below */
-		memset((void *)req, 0, sizeof(pfe_idex_request_t));
+		(void)memset((void *)req, 0, sizeof(pfe_idex_request_t));
 	}
 
 	/*	Assign sequence number, type, and destination PHY ID */
@@ -728,7 +728,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 
 	/*	Add payload */
 	payload = (void *)((addr_t)req + sizeof(pfe_idex_request_t));
-	memcpy(payload, data, data_len);
+	(void)memcpy(payload, data, data_len);
 
 	/*	2.) Save the request to internal storage */
 	if (EOK != oal_mutex_lock(&idex->req_list_lock))
@@ -853,7 +853,7 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 	hif_drv_sg_list_t sg_list = { 0U };
 
 	/*	Get IDX frame buffer */
-	idex_hdr = oal_mm_malloc_contig_aligned_nocache(sizeof(pfe_idex_frame_header_t) + data_len, 0U);
+	idex_hdr = oal_mm_malloc_contig_aligned_nocache((addr_t)(sizeof(pfe_idex_frame_header_t)) + (addr_t)data_len, 0U);
 	if (NULL == idex_hdr)
 	{
 		NXP_LOG_ERROR("Memory allocation failed\n");
@@ -874,22 +874,27 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 
 	/*	Add payload */
 	payload = (void *)((addr_t)idex_hdr + sizeof(pfe_idex_frame_header_t));
-	memcpy(payload, data, data_len);
+	(void)memcpy(payload, data, data_len);
 
 	/*	Build SG list
 	 	TODO: The SG list could be used as reference to all buffers and used to
 	 	release them within TX confirmation task when used as 'ref_ptr' argument of
 	 	..._ihc_sg_pkt() instead of idex_hdr. */
 	sg_list.size = 1U;
+	sg_list.dst_phy = dst_phy;
 	sg_list.items[0].data_va = idex_hdr;
 	sg_list.items[0].data_pa = idex_hdr_pa;
-	sg_list.items[0].len = sizeof(pfe_idex_frame_header_t) + data_len;
+	sg_list.items[0].len = (uint32_t)(sizeof(pfe_idex_frame_header_t)) + (uint32_t)data_len;
 
 	/*	Send it out */
-	ret = pfe_hif_drv_client_xmit_ihc_sg_pkt(__idex.ihc_client, dst_phy, 0U, &sg_list, (void *)idex_hdr);
+#ifndef PFE_CFG_TARGET_OS_LINUX
+	ret = pfe_hif_drv_client_xmit_sg_pkt(pfe_idex.ihc_client, 0U, &sg_list, (void *)idex_hdr);
+#else
+	ret = pfe_hif_drv_client_xmit_ihc_sg_pkt(pfe_idex.ihc_client, dst_phy, 0U, &sg_list, (void *)idex_hdr);
+#endif
 	if (EOK != ret)
 	{
-		NXP_LOG_ERROR("IDEX frame TX failed\n");
+		NXP_LOG_ERROR("IDEX frame TX failed. Err %u\n", ret);
 		oal_mm_free_contig(idex_hdr);
 	}
 	else
@@ -909,7 +914,7 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
  */
 errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master)
 {
-	pfe_idex_t *idex = &__idex;
+	pfe_idex_t *idex = &pfe_idex;
 	errno_t ret;
 
 	if (NULL == hif_drv)
@@ -918,7 +923,7 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master)
 		return EINVAL;
 	}
 
-	memset(idex, 0, sizeof(pfe_idex_t));
+	(void)memset(idex, 0, sizeof(pfe_idex_t));
 
 	idex->req_seq_num = oal_util_rand();
 
@@ -976,11 +981,11 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master)
  */
 void pfe_idex_fini(void)
 {
-	pfe_idex_t *idex = &__idex;
+	pfe_idex_t *idex = &pfe_idex;
 
 	if (NULL != idex->ihc_client)
 	{
-		pfe_hif_drv_ihc_client_unregister(idex->ihc_client);
+		pfe_hif_drv_client_unregister(idex->ihc_client);
 		idex->ihc_client = NULL;
 	}
 
@@ -1007,7 +1012,7 @@ void pfe_idex_fini(void)
 
 	if (TRUE == idex->req_list_lock_init)
 	{
-		oal_mutex_destroy(&idex->req_list_lock);
+		(void)oal_mutex_destroy(&idex->req_list_lock);
 		idex->req_list_lock_init = FALSE;
 	}
 }
@@ -1022,7 +1027,7 @@ void pfe_idex_fini(void)
  */
 errno_t pfe_idex_set_rpc_cbk(pfe_idex_rpc_cbk_t cbk, void *arg)
 {
-	pfe_idex_t *idex = &__idex;
+	pfe_idex_t *idex = &pfe_idex;
 
 	idex->rpc_cbk_arg = arg;
 	idex->rpc_cbk = cbk;
@@ -1044,7 +1049,7 @@ errno_t pfe_idex_set_rpc_cbk(pfe_idex_rpc_cbk_t cbk, void *arg)
  */
 errno_t pfe_idex_master_rpc(uint32_t id, void *buf, uint16_t buf_len, void *resp, uint16_t resp_len)
 {
-	pfe_idex_t *idex = &__idex;
+	pfe_idex_t *idex = &pfe_idex;
 
 	return pfe_idex_rpc(idex->master_phy_if, id, buf, buf_len, resp, resp_len);
 }
@@ -1065,20 +1070,22 @@ errno_t pfe_idex_master_rpc(uint32_t id, void *buf, uint16_t buf_len, void *resp
 errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, void *buf, uint16_t buf_len, void *resp, uint16_t resp_len)
 {
 	errno_t ret;
-	pfe_idex_msg_rpc_t *msg = oal_mm_malloc(sizeof(pfe_idex_msg_rpc_t) + buf_len);
+	pfe_idex_msg_rpc_t *msg = oal_mm_malloc((addr_t)(sizeof(pfe_idex_msg_rpc_t)) + (addr_t)buf_len);
 	uint8_t local_resp_buf[256] = { 0U };
 	uint16_t msg_plen;
 	void *payload;
 
 	if (NULL == msg)
+	{
 		return ENOMEM;
+	}
 
 	msg->rpc_id = oal_htonl(id);
 	msg->plen = oal_htons(buf_len);
 	msg->rpc_ret = oal_htonl(EOK);
 
 	payload = (void *)((addr_t)msg + sizeof(pfe_idex_msg_rpc_t));
-	memcpy(payload, buf, buf_len);
+	(void)memcpy(payload, buf, buf_len);
 
 	/*	This one is blocking */
 	ret = pfe_idex_request_send(dst_phy, IDEX_RPC, msg, sizeof(pfe_idex_msg_rpc_t) + buf_len, local_resp_buf, sizeof(local_resp_buf));
@@ -1125,7 +1132,7 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, void *buf, uint16_
 			else
 			{
 				payload = (void *)((addr_t)msg + sizeof(pfe_idex_msg_rpc_t));
-				memcpy(resp, payload, msg_plen);
+				(void)memcpy(resp, payload, msg_plen);
 
 #ifdef IDEX_CFG_VERBOSE
 				NXP_LOG_DEBUG("%d bytes of RPC response received\n", msg_plen);
@@ -1149,14 +1156,14 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, void *buf, uint16_
  */
 errno_t pfe_idex_set_rpc_ret_val(errno_t retval, void *resp, uint16_t resp_len)
 {
-	pfe_idex_t *idex = &__idex;
+	pfe_idex_t *idex = &pfe_idex;
 	pfe_idex_msg_rpc_t *rpc_resp;
 	pfe_idex_msg_rpc_t *rpc_req;
 	void *payload;
 	errno_t ret;
 
 	/*	Construct response message */
-	rpc_resp = oal_mm_malloc(sizeof(pfe_idex_msg_rpc_t) + resp_len);
+	rpc_resp = oal_mm_malloc((addr_t)(sizeof(pfe_idex_msg_rpc_t)) + (addr_t)resp_len);
 
 	rpc_req = (pfe_idex_msg_rpc_t *)((addr_t)idex->cur_req + sizeof(pfe_idex_request_t));
 
@@ -1165,7 +1172,7 @@ errno_t pfe_idex_set_rpc_ret_val(errno_t retval, void *resp, uint16_t resp_len)
 	rpc_resp->rpc_ret = oal_htonl(retval);
 
 	payload = (void *)((addr_t)rpc_resp + sizeof(pfe_idex_msg_rpc_t));
-	memcpy(payload, resp, resp_len);
+	(void)memcpy(payload, resp, resp_len);
 
 	/*	Send the response */
 	ret = pfe_idex_send_response(

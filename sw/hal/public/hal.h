@@ -20,8 +20,8 @@
  *
  */
 
-#ifndef _HAL_H_
-#define _HAL_H_
+#ifndef HAL_H_
+#define HAL_H_
 
 #if defined(__ghs__)
 	#define hal_nop()       __asm(" nop")
@@ -31,22 +31,24 @@
 	#define hal_nop()       asm volatile("nop" ::: "memory")
 #endif
 
+
+
 #if defined(PFE_CFG_TARGET_OS_LINUX)
 #include <linux/slab.h>
 #include <linux/io.h>
-#define _hal_write_w(width, val, addr)	\
+#define hal_write_w(width, val, addr)	\
 							do {	\
 								iowrite##width(val, (volatile void *)addr); \
-							} while (0)
+							} while (0!=0)
 
-#define hal_write32(val, addr)	_hal_write_w(32, val, addr)
-#define hal_write16(val, addr)	_hal_write_w(16, val, addr)
-#define hal_write8(val, addr)	_hal_write_w(8, val, addr)
-#define _hal_read_w(width, addr) \
+#define hal_write32(val, addr)	hal_write_w(32, val, addr)
+#define hal_write16(val, addr)	hal_write_w(16, val, addr)
+#define hal_write8(val, addr)	hal_write_w(8, val, addr)
+#define hal_read_w(width, addr) \
 								ioread##width((volatile void *)addr)
-#define hal_read32(addr)	_hal_read_w(32, addr)
-#define hal_read16(addr)	_hal_read_w(16, addr)
-#define hal_read8(addr)		_hal_read_w(8, addr)
+#define hal_read32(addr)	hal_read_w(32, addr)
+#define hal_read16(addr)	hal_read_w(16, addr)
+#define hal_read8(addr)		hal_read_w(8, addr)
 #else /* PFE_CFG_TARGET_OS_LINUX */
 /*	AXI writes immediately followed by an AXI read, cause writes to be lost,
 	as a workaround, add a hal_nop after each write */
@@ -54,19 +56,19 @@
 							do {	\
 								(*(volatile uint32_t *)(addr) = ((uint32_t)(val)));	\
 								hal_nop();	\
-							} while (0)
+							} while (0!=0)
 
 #define hal_write16(val, addr) \
 							do {	\
 									(*(volatile uint16_t *)(addr) = ((uint16_t)(val)));	\
 									hal_nop();	\
-							} while (0)
+							} while (0!=0)
 
 #define hal_write8(val, addr) \
 							do {	\
 									(*(volatile uint8_t *)(addr) = ((uint8_t)(val)));	\
 									hal_nop();	\
-							} while (0)
+							} while (0!=0)
 
 #define hal_read32(addr)	(*(volatile uint32_t *)(addr))
 #define hal_read16(addr)	(*(volatile uint16_t *)(addr))
@@ -120,6 +122,6 @@
  */
 #define	HAL_CACHE_LINE_SIZE	64U
 
-#endif /* _HAL_H_ */
+#endif /* HAL_H_ */
 
 /** @}*/

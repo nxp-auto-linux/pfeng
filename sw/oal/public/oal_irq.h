@@ -50,7 +50,7 @@
 #include "oal_irq_autosar.h"
 #endif
 
-typedef struct __oal_irq_tag oal_irq_t;
+typedef struct oal_irq_tag oal_irq_t;
 
 /**
  * @brief		The IRQ handler type
@@ -84,7 +84,7 @@ typedef enum
  * @param[in]	data A cookie passed back to the handler function
  * @return		The new IRQ instance or NULL if failed
  */
-oal_irq_t * oal_irq_create(int32_t id, oal_irq_flags_t flags, char_t *name);
+oal_irq_t * oal_irq_create(int32_t id, oal_irq_flags_t flags, const char_t *name);
 
 /**
  * @brief		Add handler for particular IRQ

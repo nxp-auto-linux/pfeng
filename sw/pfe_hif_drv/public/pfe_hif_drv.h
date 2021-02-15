@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -36,8 +36,8 @@
  *
  */
 
-#ifndef _PFE_HIF_DRV_H_
-#define _PFE_HIF_DRV_H_
+#ifndef PFE_HIF_DRV_H_
+#define PFE_HIF_DRV_H_
 
 #include "pfe_ct.h"
 #include "pfe_log_if.h"
@@ -141,9 +141,11 @@ enum
 
 /**
  * @brief	Maximum number of HIF clients. Right now it is set to cover all possible
- * 			physical interfaces.
+ * 			physical interfaces and two additional 'special' clients.
  */
-#define HIF_CLIENTS_MAX							(PFE_PHY_IF_ID_MAX + 1)
+#define HIF_CLIENTS_MAX							(((uint8_t)PFE_PHY_IF_ID_MAX + 1U) + 2U)
+#define HIF_CLIENTS_IHC_IDX						(((uint8_t)PFE_PHY_IF_ID_MAX + 1U) + 0U)
+#define HIF_CLIENTS_AUX_IDX						(((uint8_t)PFE_PHY_IF_ID_MAX + 1U) + 1U)
 
 #if ((FALSE == HIF_CFG_DETACH_TX_CONFIRMATION_JOB) && (TRUE == HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION))
 #error Impossible configuration
@@ -154,8 +156,8 @@ enum
  */
 typedef	enum
 {
-	HIF_FIRST_BUFFER = (1U << 0), /* First buffer (contains hif header) */
-	HIF_LAST_BUFFER = (1U << 1), /* Last buffer */
+	HIF_FIRST_BUFFER = (1U << 0U), /* First buffer (contains hif header) */
+	HIF_LAST_BUFFER = (1U << 1U), /* Last buffer */
 } pfe_hif_drv_common_flags_t;
 /**
  * @brief	HIF packet flags
@@ -170,7 +172,7 @@ typedef struct
 	};
 } pfe_hif_drv_flags_t;
 
-typedef struct __sg_list_tag
+typedef struct sg_list_tag
 {
 	uint32_t size;						/*	Number of valid 'items' entries */
 
@@ -188,6 +190,7 @@ typedef struct __sg_list_tag
 	/*	Internals */
 	pfe_hif_drv_flags_t flags;			/*	Flags */
 	pfe_ct_phy_if_id_t dst_phy;			/*	Destination physical interface */
+	uint16_t est_ref_num;				/*	EST reference number */
 } hif_drv_sg_list_t;
 
 enum
@@ -206,12 +209,12 @@ enum
 	HIF_EVENT_MAX
 };
 
-typedef struct __pfe_pfe_hif_drv_client_tag pfe_hif_drv_client_t;
+typedef struct pfe_pfe_hif_drv_client_tag pfe_hif_drv_client_t;
 
 /**
  * @brief	Packet representation struct
  */
-struct __attribute__((packed)) __pfe_hif_pkt_tag
+struct __attribute__((packed)) pfe_hif_pkt_tag
 {
 	/*	When every transmitted frame needs to contain customized HIF TX header then
 	 	multiple HIF TX header instances are needed. For this purpose the TX metadata
@@ -229,31 +232,34 @@ struct __attribute__((packed)) __pfe_hif_pkt_tag
 	void *ref_ptr; /* Reference pointer (keep the original mbuf pointer here) */
 };
 
-typedef struct __pfe_hif_drv_tag pfe_hif_drv_t;
-typedef struct __pfe_hif_pkt_tag pfe_hif_pkt_t;
+typedef struct pfe_hif_drv_tag pfe_hif_drv_t;
+typedef struct pfe_hif_pkt_tag pfe_hif_pkt_t;
 typedef errno_t (* pfe_hif_drv_client_event_handler)(pfe_hif_drv_client_t *client, void *arg, uint32_t event, uint32_t qno);
 
-void __hif_xmit_pkt(pfe_hif_drv_t *hif, uint32_t client_id, uint32_t q_no, void *data, uint32_t len, uint32_t flags);
+void hif_xmit_pkt__(pfe_hif_drv_t *hif, uint32_t client_id, uint32_t q_no, void *data, uint32_t len, uint32_t flags);
 errno_t hif_xmit_pkt(pfe_hif_drv_t *hif, uint32_t client_id, uint32_t q_no, void *data, uint32_t len);
 pfe_hif_drv_t *pfe_hif_drv_create(pfe_hif_chnl_t *channel);
-void pfe_hif_drv_destroy(pfe_hif_drv_t *hif);
-errno_t pfe_hif_drv_init(pfe_hif_drv_t *hif);
+void pfe_hif_drv_destroy(pfe_hif_drv_t *hif_drv);
+errno_t pfe_hif_drv_init(pfe_hif_drv_t *hif_drv);
 errno_t pfe_hif_drv_start(pfe_hif_drv_t *hif_drv);
 void pfe_hif_drv_tick(pfe_hif_drv_t *hif_drv);
-void pfe_hif_drv_stop(pfe_hif_drv_t *hif);
-void pfe_hif_drv_exit(pfe_hif_drv_t *hif);
+void pfe_hif_drv_stop(pfe_hif_drv_t *hif_drv);
+void pfe_hif_drv_exit(pfe_hif_drv_t *hif_drv);
 void pfe_hif_drv_show_ring_status(pfe_hif_drv_t *hif_drv, bool_t rx, bool_t tx);
 
 /*	IHC API */
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 pfe_hif_drv_client_t * pfe_hif_drv_ihc_client_register(pfe_hif_drv_t *hif_drv, pfe_hif_drv_client_event_handler handler, void *priv);
-void pfe_hif_drv_ihc_client_unregister(pfe_hif_drv_client_t *client);
+#ifdef PFE_CFG_TARGET_OS_LINUX
 errno_t pfe_hif_drv_client_xmit_ihc_sg_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t dst, uint32_t queue, hif_drv_sg_list_t *sg_list, void *ref_ptr);
-errno_t pfe_hif_drv_client_xmit_ihc_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t dst, uint32_t queue, void *data_pa, void *data_va, uint32_t len, void *ref_ptr);
+#endif
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
+/*	AUX API */
+pfe_hif_drv_client_t * pfe_hif_drv_aux_client_register(pfe_hif_drv_t *hif_drv, pfe_hif_drv_client_event_handler handler, void *priv);
+
 /*	HIF client */
-pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif, uint8_t phy_if_id, uint32_t txq_num, uint32_t rxq_num,
+pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t phy_if_id, uint32_t txq_num, uint32_t rxq_num,
 		uint32_t txq_depth, uint32_t rxq_depth, pfe_hif_drv_client_event_handler handler, void *priv);
 errno_t pfe_hif_drv_client_set_inject_if(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t phy_if_id);
 pfe_hif_drv_t *pfe_hif_drv_client_get_drv(pfe_hif_drv_client_t *client);
@@ -271,7 +277,7 @@ void * pfe_hif_drv_client_receive_tx_conf(pfe_hif_drv_client_t *client, uint32_t
 bool_t pfe_hif_drv_client_has_rx_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED) || defined(PFE_CFG_TARGET_OS_LINUX)
 pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
-void pfe_hif_pkt_free(pfe_hif_pkt_t *desc);
+void pfe_hif_pkt_free(pfe_hif_pkt_t *pkt);
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
 /*	PTP Timestamps */
@@ -474,6 +480,6 @@ static inline pfe_ct_phy_if_id_t pfe_hif_pkt_get_ingress_phy_id(pfe_hif_pkt_t *p
 	return pkt->i_phy_if;
 }
 
-#endif /* _PFE_HIF_DRV_H_ */
+#endif /* PFE_HIF_DRV_H_ */
 
 /** @}*/

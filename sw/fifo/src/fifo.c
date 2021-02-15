@@ -14,7 +14,7 @@
 #include "hal.h"
 #include "fifo.h"
 
-#define is_power_of_2(n) ((n) && !((n) & ((n) - 1)))
+#define is_power_of_2(n) ((n) && !((n) & ((n) - 1U)))
 
 __attribute__((hot)) errno_t fifo_get_fill_level(fifo_t *const fifo, uint32_t *fill_level)
 {

@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -10,7 +10,7 @@
 #ifndef SRC_PFE_UTIL_H_
 #define SRC_PFE_UTIL_H_
 
-typedef struct __pfe_util_tag pfe_util_t;
+typedef struct pfe_util_tag pfe_util_t;
 
 typedef struct
 {

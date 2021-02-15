@@ -27,7 +27,7 @@ do \
 { \
     (prList)->prNext = (prList); \
     (prList)->prPrev = (prList); \
-}while(0)
+}while(0!=0)
 
 /**
 * @def        LLIST_ForEach
@@ -120,7 +120,7 @@ do \
     (prNew)->prPrev = (prHead); \
     (prHead)->prNext->prPrev = (prNew); \
     (prHead)->prNext = (prNew); \
-}while(0)
+}while(0!=0)
 
 /**
 * @def   LLIST_AddAtEnd
@@ -133,7 +133,7 @@ do \
     (prNew)->prNext = (prHead); \
     (prHead)->prPrev->prNext = (prNew); \
     (prHead)->prPrev = (prNew); \
-}while(0)
+}while(0!=0)
 
 /**
 * @def       LLIST_Remove
@@ -148,7 +148,7 @@ do \
     (prEntry)->prNext->prPrev = (prEntry)->prPrev; \
     (prEntry)->prPrev = NULL; \
     (prEntry)->prNext = NULL; \
-}while(0)
+}while(0!=0)
 
 /**
 * @def   LLIST_IsEmpty
@@ -171,6 +171,6 @@ do \
     (prEntry)->prPrev->prNext = (prEntry); \
     (prPos)->prPrev = (prEntry); \
     (prEntry)->prNext = (prPos); \
-}while(0)
+}while(0!=0)
 
 #endif /* LINKED_LIST_H */

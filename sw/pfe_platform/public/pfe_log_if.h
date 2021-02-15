@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -21,7 +21,7 @@ typedef enum
 	LOG_IF_EVT_INVALID         	/*!< LOG_IF_EVT_INVALID */
 } pfe_log_if_event_t;
 
-typedef struct __pfe_log_if_tag pfe_log_if_t;
+typedef struct pfe_log_if_tag pfe_log_if_t;
 
 #include "pfe_phy_if.h"
 
@@ -44,8 +44,9 @@ errno_t pfe_log_if_set_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule
 errno_t pfe_log_if_get_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t *rules, pfe_ct_if_m_args_t *args);
 errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, void *arg, uint32_t arg_len);
 errno_t pfe_log_if_del_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule);
-errno_t pfe_log_if_set_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr);
+errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr, pfe_ct_phy_if_id_t owner);
 errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr);
+errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_flush_mode_t mode, pfe_ct_phy_if_id_t owner);
 errno_t pfe_log_if_get_egress_ifs(pfe_log_if_t *iface, uint32_t *egress);
 errno_t pfe_log_if_set_egress_ifs(pfe_log_if_t *iface, uint32_t egress);
 errno_t pfe_log_if_add_egress_if(pfe_log_if_t *iface, pfe_phy_if_t *phy_if);
@@ -56,8 +57,10 @@ errno_t pfe_log_if_disable(pfe_log_if_t *iface);
 bool_t pfe_log_if_is_enabled(pfe_log_if_t *iface) __attribute__((pure));
 errno_t pfe_log_if_promisc_enable(pfe_log_if_t *iface);
 errno_t pfe_log_if_promisc_disable(pfe_log_if_t *iface);
+errno_t pfe_log_if_allmulti_enable(pfe_log_if_t *iface);
+errno_t pfe_log_if_allmulti_disable(pfe_log_if_t *iface);
 bool_t pfe_log_if_is_promisc(pfe_log_if_t *iface) __attribute__((pure));
-char_t *pfe_log_if_get_name(pfe_log_if_t *iface) __attribute__((pure));
+const char_t *pfe_log_if_get_name(pfe_log_if_t *iface) __attribute__((pure));
 errno_t pfe_log_if_discard_enable(pfe_log_if_t *iface);
 errno_t pfe_log_if_discard_disable(pfe_log_if_t *iface);
 bool_t pfe_log_if_is_discard(pfe_log_if_t *iface);

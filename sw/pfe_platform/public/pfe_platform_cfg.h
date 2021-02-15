@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -170,14 +170,14 @@
 /* LMEM defines */
 #define PFE_CFG_LMEM_HDR_SIZE		0x0070U
 #define PFE_CFG_LMEM_BUF_SIZE_LN2	0x8U /* 256 */
-#define PFE_CFG_LMEM_BUF_SIZE		(1U << PFE_CFG_LMEM_BUF_SIZE_LN2)
+#define PFE_CFG_LMEM_BUF_SIZE		(1UL << PFE_CFG_LMEM_BUF_SIZE_LN2)
 
 /* DDR defines */
 #define PFE_CFG_DDR_HDR_SIZE		0x0200U 
 #define PFE_CFG_DDR_BUF_SIZE_LN2	0xbU /* 2048 */
-#define PFE_CFG_DDR_BUF_SIZE		(1U << PFE_CFG_DDR_BUF_SIZE_LN2)
+#define PFE_CFG_DDR_BUF_SIZE		(1UL << PFE_CFG_DDR_BUF_SIZE_LN2)
 
 /* RO defines */
-#define PFE_CFG_RO_HDR_SIZE			0x0010U
+#define PFE_CFG_RO_HDR_SIZE			0x0010UL
 
 #endif /* SRC_PFE_PLATFORM_CFG_H_ */

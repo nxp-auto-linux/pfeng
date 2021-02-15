@@ -94,8 +94,8 @@
 
 #include "oal_irq.h"
 
-typedef struct __oal_mbox_tag oal_mbox_t;
-typedef struct __oal_mbox_metadata_tag oal_mbox_metadata_t;
+typedef struct oal_mbox_tag oal_mbox_t;
+typedef struct oal_mbox_metadata_tag oal_mbox_metadata_t;
 
 typedef enum
 {
@@ -111,7 +111,7 @@ typedef enum
  * @note	This is general representation and it is the same for message as
  * 			well as signal type.
  */
-typedef struct __oal_mbox_msg_tag
+typedef struct oal_mbox_msg_tag
 {
 	struct
 	{

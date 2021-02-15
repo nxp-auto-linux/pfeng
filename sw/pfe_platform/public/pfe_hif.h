@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -48,9 +48,9 @@ static inline pfe_hif_chnl_id_t pfe_hif_chnl_from_phy_id(pfe_ct_phy_if_id_t phy)
 	}
 }
 
-typedef struct __pfe_hif_tag pfe_hif_t;
+typedef struct pfe_hif_tag pfe_hif_t;
 
-pfe_hif_t *pfe_hif_create(void *base_va, pfe_hif_chnl_id_t channels);
+pfe_hif_t *pfe_hif_create(void *cbus_base_va, pfe_hif_chnl_id_t channels_mask);
 pfe_hif_chnl_t *pfe_hif_get_channel(pfe_hif_t *hif, pfe_hif_chnl_id_t channel_id);
 void pfe_hif_destroy(pfe_hif_t *hif);
 

@@ -26,7 +26,7 @@
 #ifndef PUBLIC_OAL_JOB_H_
 #define PUBLIC_OAL_JOB_H_
 
-typedef struct __oal_job_tag oal_job_t;
+typedef struct oal_job_tag oal_job_t;
 typedef void (* oal_job_func)(void *arg);
 
 /**

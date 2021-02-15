@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -2389,7 +2389,7 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_dump_ring(pfe_hif_chnl_t *chnl, bool
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
+		return 0U;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 

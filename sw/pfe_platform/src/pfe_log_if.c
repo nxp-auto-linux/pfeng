@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -12,6 +12,7 @@
 
 #include "oal.h"
 #include "hal.h"
+#include "linked_list.h"
 
 #include "pfe_cbus.h"
 #include "pfe_ct.h"
@@ -21,21 +22,23 @@
 #include "blalloc.h" /* Block allocator to assign interface IDs */
 #include "pfe_platform_cfg.h"
 
-/*	External API */
-errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if);
-errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if);
-
-struct __pfe_log_if_tag
+struct pfe_log_if_tag
 {
 	pfe_phy_if_t *parent;			/*!< Parent physical interface */
 	pfe_class_t *class;				/*!< Classifier */
 	addr_t dmem_base;				/*!< Place in CLASS/DMEM where HW logical interface structure is stored */
 	char_t *name;					/*!< Interface name */
 	pfe_ct_log_if_t log_if_class;	/*!< Cached copy of the DMEM structure */
-	pfe_mac_addr_t mac_addr;		/*!< MAC address associated with interface */
-	bool_t mac_addr_valid;			/*!< MAC address is valid */
+	LLIST_t mac_addr_list;			/*!< List of all MAC addresses associated with logical interface */
 	oal_mutex_t lock;
 };
+
+typedef struct __pfe_log_if_mac_addr_list_entry_tag
+{
+	pfe_mac_addr_t addr;		/*	The MAC address */
+	LLIST_t iterator;			/*	List chain entry */
+	pfe_ct_phy_if_id_t owner;	/*	Identification of the driver that owns this entry */
+} pfe_log_if_mac_addr_list_entry_t;
 
 /**
  * @brief	Pool of logical interface IDs. Module-local singleton.
@@ -46,6 +49,7 @@ static errno_t pfe_log_if_read_from_class(pfe_log_if_t *iface, pfe_ct_log_if_t *
 static errno_t pfe_log_if_write_to_class_nostats(pfe_log_if_t *iface, pfe_ct_log_if_t *class_if);
 static errno_t pfe_log_if_write_to_class(pfe_log_if_t *iface, pfe_ct_log_if_t *class_if);
 static errno_t pfe_log_if_clear_mac_addr_nolock(pfe_log_if_t *iface);
+static pfe_log_if_mac_addr_list_entry_t *pfe_log_if_mac_addr_db_find_by_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr);
 
 /**
  * @brief		Read interface structure from classifier memory
@@ -164,7 +168,8 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, char_t *name)
 	}
 	else
 	{
-		memset(iface, 0, sizeof(pfe_log_if_t));
+		(void)memset(iface, 0, sizeof(pfe_log_if_t));
+		LLIST_Init(&iface->mac_addr_list);
 		iface->parent = parent;
 		iface->class = pfe_phy_if_get_class(parent);
 
@@ -179,13 +184,13 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, char_t *name)
 		if (NULL == iface->name)
 		{
 			NXP_LOG_ERROR("Malloc failed\n");
-			oal_mutex_destroy(&iface->lock);
+			(void)oal_mutex_destroy(&iface->lock);
 			oal_mm_free(iface);
 			return NULL;
 		}
 		else
 		{
-			strcpy(iface->name, name);
+			(void)strcpy(iface->name, name);
 		}
 
 		/* Get the DMEM for logical interface */
@@ -194,16 +199,16 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, char_t *name)
 		{
 			NXP_LOG_ERROR("No DMEM\n");
 			oal_mm_free(iface->name);
-			oal_mutex_destroy(&iface->lock);
+			(void)oal_mutex_destroy(&iface->lock);
 			oal_mm_free(iface);
 			return NULL;
 		}
 
 		/*	Initialize the local and CLASS logical interface structure */
-		memset(&iface->log_if_class, 0, sizeof(pfe_ct_log_if_t));
+		(void)memset(&iface->log_if_class, 0, sizeof(pfe_ct_log_if_t));
 		iface->log_if_class.next = 0;
-		iface->log_if_class.id = (uint8_t)(id & 0xff);
-		iface->log_if_class.m_rules = (pfe_ct_if_m_rules_t)0;
+		iface->log_if_class.id = (uint8_t)(id & 0xffU);
+		iface->log_if_class.m_rules = (pfe_ct_if_m_rules_t)IF_MATCH_NONE;
 
 		/* Be sure that statistics are zeroed (endianness doesn't mater for this) */
 		iface->log_if_class.class_stats.accepted  = 0;
@@ -222,7 +227,7 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, char_t *name)
 			}
 			pfe_class_dmem_heap_free(iface->class, iface->dmem_base);
 			oal_mm_free(iface->name);
-			oal_mutex_destroy(&iface->lock);
+			(void)oal_mutex_destroy(&iface->lock);
 			oal_mm_free(iface);
 			return NULL;
 		}
@@ -233,7 +238,7 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, char_t *name)
 			NXP_LOG_ERROR("Can't bind %s to %s\n", iface->name, pfe_phy_if_get_name(parent));
 			pfe_class_dmem_heap_free(iface->class, iface->dmem_base);
 			oal_mm_free(iface->name);
-			oal_mutex_destroy(&iface->lock);
+			(void)oal_mutex_destroy(&iface->lock);
 			oal_mm_free(iface);
 			return NULL;
 		}
@@ -411,7 +416,7 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 		/*	Release the interface ID */
 		blalloc_free_offs(pfe_log_if_id_pool, iface->log_if_class.id);
 
-		memset(&iface->log_if_class, 0, sizeof(pfe_ct_log_if_t));
+		(void)memset(&iface->log_if_class, 0, sizeof(pfe_ct_log_if_t));
 		if (EOK != pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class))
 		{
 			NXP_LOG_ERROR("Iface invalidation failed\n");
@@ -422,7 +427,7 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 			NXP_LOG_DEBUG("Could not destroy mutex\n");
 		}
 
-		if (0 != iface->dmem_base)
+		if (0U != iface->dmem_base)
 		{
 			pfe_class_dmem_heap_free(iface->class, iface->dmem_base);
 		}
@@ -456,7 +461,7 @@ bool_t pfe_log_if_is_match_or(pfe_log_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	ret = (IF_FL_MATCH_OR == (iface->log_if_class.flags & IF_FL_MATCH_OR));
+	ret = ((uint8_t)IF_FL_MATCH_OR == ((uint8_t)(iface->log_if_class.flags) & (uint8_t)IF_FL_MATCH_OR));
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -508,6 +513,7 @@ errno_t pfe_log_if_set_match_or(pfe_log_if_t *iface)
 
 	return ret;
 }
+
 /**
  * @brief		Set match type to AND match
  * @details		Logical interface rules will be matched with AND logic
@@ -534,7 +540,7 @@ errno_t pfe_log_if_set_match_and(pfe_log_if_t *iface)
 	}
 
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags &= ~IF_FL_MATCH_OR;
+	iface->log_if_class.flags &= (pfe_ct_if_flags_t)(~IF_FL_MATCH_OR);
 
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
@@ -550,7 +556,6 @@ errno_t pfe_log_if_set_match_and(pfe_log_if_t *iface)
 
 	return ret;
 }
-
 
 /**
  * @brief		Set match rules
@@ -587,7 +592,7 @@ errno_t pfe_log_if_set_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule
 	}
 
 	/*	Copy the argument */
-	memcpy(&iface->log_if_class.m_args, args, sizeof(pfe_ct_if_m_args_t));
+	(void)memcpy(&iface->log_if_class.m_args, args, sizeof(pfe_ct_if_m_args_t));
 
 	/*	Backup current rules to temporary variable */
 	tmp = iface->log_if_class.m_rules;
@@ -633,13 +638,13 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (0 == rule)
+	if (0U == (uint32_t)rule)
 	{
 		return EINVAL;
 	}
 
 	/*	Check if only single rule is requested */
-	if (0 != (rule & (rule-1)))
+	if (0U != ((uint32_t)rule & ((uint32_t)rule-1U)))
 	{
 		return EINVAL;
 	}
@@ -700,7 +705,7 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 		{
 			if (arg_len == sizeof(m_args.v6.sip))
 			{
-				memcpy(iface->log_if_class.m_args.v6.sip, arg, sizeof(m_args.v6.sip));
+				(void)memcpy((void*)(iface->log_if_class.m_args.v6.sip), (const void*)arg, sizeof(m_args.v6.sip));
 				ret = EOK;
 			}
 
@@ -711,7 +716,7 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 		{
 			if (arg_len == sizeof(m_args.v6.dip))
 			{
-				memcpy(iface->log_if_class.m_args.v6.dip, arg, sizeof(m_args.v6.dip));
+				(void)memcpy((void*)(iface->log_if_class.m_args.v6.dip), (const void*)arg, sizeof(m_args.v6.dip));
 				ret = EOK;
 			}
 
@@ -722,7 +727,7 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 		{
 			if (arg_len == sizeof(m_args.v4.sip))
 			{
-				memcpy(&iface->log_if_class.m_args.v4.sip, arg, sizeof(m_args.v4.sip));
+				(void)memcpy((void*)(&iface->log_if_class.m_args.v4.sip), (const void*)arg, sizeof(m_args.v4.sip));
 				ret = EOK;
 			}
 
@@ -733,7 +738,7 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 		{
 			if (arg_len == sizeof(m_args.v4.dip))
 			{
-				memcpy(&iface->log_if_class.m_args.v4.dip, arg, sizeof(m_args.v4.dip));
+				(void)memcpy((void*)(&iface->log_if_class.m_args.v4.dip), (const void*)arg, sizeof(m_args.v4.dip));
 				ret = EOK;
 			}
 
@@ -776,7 +781,7 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 		{
 			if (arg_len == sizeof(m_args.smac))
 			{
-				memcpy(iface->log_if_class.m_args.smac, arg, sizeof(m_args.smac));
+				(void)memcpy((void*)(iface->log_if_class.m_args.smac), (const void*)arg, sizeof(m_args.smac));
 				ret = EOK;
 			}
 
@@ -787,7 +792,7 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 		{
 			if (arg_len == sizeof(m_args.dmac))
 			{
-				memcpy(iface->log_if_class.m_args.dmac, arg, sizeof(m_args.dmac));
+				(void)memcpy((void*)(iface->log_if_class.m_args.dmac), (const void*)arg, sizeof(m_args.dmac));
 				ret = EOK;
 			}
 
@@ -804,6 +809,7 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 			{
 				ret = EOK;
 			}
+			break;
 		}
 	}
 
@@ -900,7 +906,7 @@ errno_t pfe_log_if_get_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t *rul
 
 	if (NULL != args)
 	{
-		memcpy(args, &iface->log_if_class.m_args, sizeof(pfe_ct_if_m_args_t));
+		(void)memcpy(args, &iface->log_if_class.m_args, sizeof(pfe_ct_if_m_args_t));
 	}
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
@@ -912,16 +918,18 @@ errno_t pfe_log_if_get_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t *rul
 }
 
 /**
- * @brief		Set MAC address
+ * @brief		Add new MAC address
  * @param[in]	iface The interface instance
  * @param[in]	addr The MAC address to add
+ * @param[in]	owner The identification of driver instance
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  * @retval		ENOEXEC Command failed
  */
-errno_t pfe_log_if_set_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
+errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr, pfe_ct_phy_if_id_t owner)
 {
 	errno_t ret = EOK;
+	pfe_log_if_mac_addr_list_entry_t *entry;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == addr)))
@@ -936,35 +944,41 @@ errno_t pfe_log_if_set_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	/*	Remove previous MAC address */
-	if (TRUE == iface->mac_addr_valid)
+	/* Check for MAC address duplicates */
+	entry = pfe_log_if_mac_addr_db_find_by_addr(iface, addr);
+	if (NULL != entry)
 	{
-		ret = pfe_log_if_clear_mac_addr_nolock(iface);
-		if (EOK != ret)
-		{
-			NXP_LOG_ERROR("Could not clear MAC address (%s): %d\n", iface->name, ret);
-
-			if (EOK != oal_mutex_unlock(&iface->lock))
-			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
-			}
-
-			return ENOEXEC;
-		}
-	}
-
-	/*	Remember the address */
-	memcpy(iface->mac_addr, addr, sizeof(pfe_mac_addr_t));
-
-	/*	Configure underlying physical interface */
-	if (EOK != pfe_phy_if_add_mac_addr(iface->parent, addr))
-	{
-		NXP_LOG_ERROR("Could not add MAC address (%s, parent: %s)\n", iface->name, pfe_phy_if_get_name(iface->parent));
-		ret = ENOEXEC;
+		NXP_LOG_WARNING("MAC address duplicate, not added(%s, parent: %s)\n", iface->name, pfe_phy_if_get_name(iface->parent));
 	}
 	else
 	{
-		iface->mac_addr_valid = TRUE;
+		/*	Configure underlying physical interface */
+		if (EOK != pfe_phy_if_add_mac_addr(iface->parent, addr, owner))
+		{
+			NXP_LOG_ERROR("Could not add MAC address (%s, parent: %s)\n", iface->name, pfe_phy_if_get_name(iface->parent));
+			ret = ENOEXEC;
+		}
+		else
+		{
+			/*	Add address to local list */
+			entry = oal_mm_malloc(sizeof(pfe_log_if_mac_addr_list_entry_t));
+			if (NULL == entry)
+			{
+				NXP_LOG_ERROR("Memory allocation failed\n");
+				/*	Delete MAC address from underlying physical interface */
+				if (EOK != pfe_phy_if_del_mac_addr(iface->parent, addr))
+				{
+					NXP_LOG_ERROR("Could not delete MAC address (%s, parent: %s)\n", iface->name, pfe_phy_if_get_name(iface->parent));
+				}
+				ret = ENOMEM;
+			}
+			else
+			{
+				(void)memcpy(entry->addr, addr, sizeof(pfe_mac_addr_t));
+				entry->owner = owner;
+				LLIST_AddAtEnd(&entry->iterator, &iface->mac_addr_list);
+			}
+		}
 	}
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
@@ -976,7 +990,7 @@ errno_t pfe_log_if_set_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
 }
 
 /**
- * @brief		Get associated MAC address
+ * @brief		Get associated MAC address (first in the list of MAC addresses)
  * @param[in]	iface The interface instance
  * @param[out]	addr Where to copy to address
  * @retval		EOK Success
@@ -986,6 +1000,7 @@ errno_t pfe_log_if_set_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
 errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
 {
 	errno_t ret = EOK;
+	pfe_log_if_mac_addr_list_entry_t *entry = NULL;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == addr)))
@@ -1000,13 +1015,80 @@ errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	if (TRUE == iface->mac_addr_valid)
+	if (TRUE == LLIST_IsEmpty(&iface->mac_addr_list))
 	{
-		memcpy(addr, iface->mac_addr, sizeof(pfe_mac_addr_t));
+		ret = ENOENT;
 	}
 	else
 	{
-		ret = ENOENT;
+		/* Get first item from the list */
+		entry = LLIST_Data(iface->mac_addr_list.prNext, pfe_log_if_mac_addr_list_entry_t, iterator);
+		if (entry != NULL)
+		{
+			(void)memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
+		}
+	}
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Delete MAC addresses added by owner with defined type
+ * @param[in]	iface The interface instance
+ * @param[in]	mode The flush mode (flush all or just certain type of MAC addresses)
+ * @param[in]	owner The identification of driver instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ * @retval		ENOEXEC Command failed
+ */
+errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_flush_mode_t mode, pfe_ct_phy_if_id_t owner)
+{
+	errno_t ret = EOK;
+	pfe_log_if_mac_addr_list_entry_t *entry;
+	LLIST_t *item, *tmp_item;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == iface) || (NULL == addr)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	/*	Send command to underlying physical interface */
+	if (EOK != pfe_phy_if_flush_mac_addrs(iface->parent, mode, owner))
+	{
+		NXP_LOG_ERROR("Could not flush MAC addresses (%s, parent: %s, owner ID: %d)\n", iface->name, pfe_phy_if_get_name(iface->parent), owner);
+		ret = ENOEXEC;
+	}
+	else
+	{
+		/*	Remove associated MAC addresses due to flush mode */
+		LLIST_ForEachRemovable(item, tmp_item, &iface->mac_addr_list)
+		{
+			entry = LLIST_Data(item, pfe_log_if_mac_addr_list_entry_t, iterator);
+			if ((NULL != entry) && (entry->owner == owner))
+			{
+				if ((mode == PFE_FLUSH_MODE_ALL) ||
+					((mode == PFE_FLUSH_MODE_MULTI) && (TRUE  == pfe_emac_is_multi(entry->addr))) ||
+					((mode == PFE_FLUSH_MODE_UNI)   && (FALSE == pfe_emac_is_multi(entry->addr))))
+				{
+					LLIST_Remove(&entry->iterator);
+					oal_mm_free(entry);
+					entry = NULL;
+				}
+			}
+		}
 	}
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
@@ -1024,7 +1106,6 @@ errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
  * 					egress |= 1 << phy_if_id (for each configured phy_if)
  * @retval			EOK Success
  */
-
 errno_t pfe_log_if_get_egress_ifs(pfe_log_if_t *iface, uint32_t *egress)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1063,7 +1144,7 @@ errno_t pfe_log_if_set_egress_ifs(pfe_log_if_t *iface, uint32_t egress)
 	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == iface) || (NULL == egress)))
+	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -1112,7 +1193,7 @@ errno_t pfe_log_if_set_egress_ifs(pfe_log_if_t *iface, uint32_t egress)
 errno_t pfe_log_if_add_egress_if(pfe_log_if_t *iface, pfe_phy_if_t *phy_if)
 {
 	errno_t ret = EOK;
-	uint16_t tmp;
+	uint32_t tmp;
 	pfe_ct_phy_if_id_t phy_if_id;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1137,7 +1218,7 @@ errno_t pfe_log_if_add_egress_if(pfe_log_if_t *iface, pfe_phy_if_t *phy_if)
 
 	tmp = oal_ntohl(iface->log_if_class.e_phy_ifs);
 
-	iface->log_if_class.e_phy_ifs = oal_htonl(tmp | (uint16_t)(1U << phy_if_id));
+	iface->log_if_class.e_phy_ifs = oal_htonl(tmp | (1UL << (uint8_t)phy_if_id));
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
 	{
@@ -1165,7 +1246,7 @@ errno_t pfe_log_if_add_egress_if(pfe_log_if_t *iface, pfe_phy_if_t *phy_if)
 errno_t pfe_log_if_del_egress_if(pfe_log_if_t *iface, pfe_phy_if_t *phy_if)
 {
 	errno_t ret = EOK;
-	uint16_t tmp;
+	uint32_t tmp;
 	pfe_ct_phy_if_id_t phy_if_id;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1190,7 +1271,7 @@ errno_t pfe_log_if_del_egress_if(pfe_log_if_t *iface, pfe_phy_if_t *phy_if)
 
 	tmp = oal_ntohl(iface->log_if_class.e_phy_ifs);
 
-	iface->log_if_class.e_phy_ifs = oal_htonl(tmp & (uint16_t)(~(1U << phy_if_id)));
+	iface->log_if_class.e_phy_ifs = oal_htonl(tmp & (uint32_t)(~(1UL << (uint8_t)phy_if_id)));
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
 	{
@@ -1206,9 +1287,43 @@ errno_t pfe_log_if_del_egress_if(pfe_log_if_t *iface, pfe_phy_if_t *phy_if)
 	return ret;
 }
 
+/**
+ * @brief		Search a MAC address within internal DB of registered addresses
+ * @details		Access to the shared resources => needs to be called within the critical section!
+ * @param[in]	iface The interface instance
+ * @param[in]	addr The MAC address to search
+ * @return		The DB entry if found or NULL if address is not present
+ */
+static pfe_log_if_mac_addr_list_entry_t *pfe_log_if_mac_addr_db_find_by_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
+{
+	pfe_log_if_mac_addr_list_entry_t *entry = NULL;
+	LLIST_t *item;
+	
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	LLIST_ForEach(item, &iface->mac_addr_list)
+	{
+		entry = LLIST_Data(item, pfe_log_if_mac_addr_list_entry_t, iterator);
+		if (0 == memcmp(addr, entry->addr, sizeof(pfe_mac_addr_t)))
+		{
+			return entry;
+		}
+	}
+	
+	return NULL;
+}
+
 static errno_t pfe_log_if_clear_mac_addr_nolock(pfe_log_if_t *iface)
 {
 	errno_t ret = EOK;
+	pfe_log_if_mac_addr_list_entry_t *entry;
+	LLIST_t *item, *tmp_item;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -1218,17 +1333,23 @@ static errno_t pfe_log_if_clear_mac_addr_nolock(pfe_log_if_t *iface)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (TRUE == iface->mac_addr_valid)
+	/*	Remove all associated MAC addresses */
+	LLIST_ForEachRemovable(item, tmp_item, &iface->mac_addr_list)
 	{
-		ret = pfe_phy_if_del_mac_addr(iface->parent, iface->mac_addr);
-		if (EOK != ret)
+		entry = LLIST_Data(item, pfe_log_if_mac_addr_list_entry_t, iterator);
+		if (NULL != entry)
 		{
-			NXP_LOG_WARNING("%s rejected MAC address removal request: %d\n", pfe_phy_if_get_name(iface->parent), ret);
-			return ENOEXEC;
-		}
-		else
-		{
-			iface->mac_addr_valid = FALSE;
+			ret = pfe_phy_if_del_mac_addr(iface->parent, entry->addr);
+			if (EOK != ret)
+			{
+				NXP_LOG_WARNING("%s rejected MAC address removal request: %d\n", pfe_phy_if_get_name(iface->parent), ret);
+			}
+			else
+			{
+				LLIST_Remove(&entry->iterator);
+				oal_mm_free(entry);
+				entry = NULL;
+			}
 		}
 	}
 
@@ -1286,6 +1407,8 @@ errno_t pfe_log_if_enable(pfe_log_if_t *iface)
 	{
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
+
+	NXP_LOG_DEBUG("Enabling %s\n", iface->name);
 
 	tmp = iface->log_if_class.flags;
 	iface->log_if_class.flags |= IF_FL_ENABLED;
@@ -1357,8 +1480,10 @@ errno_t pfe_log_if_disable(pfe_log_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
+	NXP_LOG_DEBUG("Disabling %s\n", iface->name);
+
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags &= ~IF_FL_ENABLED;
+	iface->log_if_class.flags &= (pfe_ct_if_flags_t)(~IF_FL_ENABLED);
 
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
@@ -1423,7 +1548,7 @@ __attribute__((pure)) bool_t pfe_log_if_is_enabled(pfe_log_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	ret = (0U != (iface->log_if_class.flags & IF_FL_ENABLED));
+	ret = (0U != ((uint8_t)(iface->log_if_class.flags) & (uint8_t)IF_FL_ENABLED));
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -1529,7 +1654,7 @@ errno_t pfe_log_if_promisc_disable(pfe_log_if_t *iface)
 	}
 
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags &= ~IF_FL_PROMISC;
+	iface->log_if_class.flags &= (pfe_ct_if_flags_t)(~IF_FL_PROMISC);
 
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
@@ -1594,7 +1719,7 @@ __attribute__((pure)) bool_t pfe_log_if_is_promisc(pfe_log_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	ret = (0U != (iface->log_if_class.flags & IF_FL_PROMISC));
+	ret = (0U != ((uint8_t)(iface->log_if_class.flags) & (uint8_t)IF_FL_PROMISC));
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -1604,6 +1729,64 @@ __attribute__((pure)) bool_t pfe_log_if_is_promisc(pfe_log_if_t *iface)
 	return ret;
 }
 
+/**
+ * @brief		Enable ALLMULTI mode
+ * @details		Function sets logical interface to ALLMULTI mode and
+ * 				also enables ALLMULTI mode on underlying physical
+ * 				interface.
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_log_if_allmulti_enable(pfe_log_if_t *iface)
+{
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/*	Propagate the mode to the underlying physical interface */
+	ret = pfe_phy_if_allmulti_enable(iface->parent);
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Could not enable the ALLMULTI mode\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Disable ALLMULTI mode
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_log_if_allmulti_disable(pfe_log_if_t *iface)
+{
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/*	Propagate the mode to the underlying physical interface */
+	ret = pfe_phy_if_allmulti_disable(iface->parent);
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Could not disable the ALLMULTI mode\n");
+	}
+
+	return ret;
+}
 
 /**
  * @brief		Enable discarding frames accepted by logical interface
@@ -1645,13 +1828,13 @@ errno_t pfe_log_if_discard_enable(pfe_log_if_t *iface)
 	{
 		NXP_LOG_DEBUG("mutex unlock failed\n");
 	}
-    
+
 	return ret;
 }
 
 /**
  * @brief		Disable discarding frames accepted by logical interface
- * @details		Function configures logical interface to stop to discard all accepted frames 
+ * @details		Function configures logical interface to stop to discard all accepted frames
  *              and to pass them to the configured egress interfaces.
  * @param[in]	iface The interface instance
  * @retval		EOK Success
@@ -1676,7 +1859,7 @@ errno_t pfe_log_if_discard_disable(pfe_log_if_t *iface)
 	}
 
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags &= ~IF_FL_DISCARD;
+	iface->log_if_class.flags &= (pfe_ct_if_flags_t)(~IF_FL_DISCARD);
 
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
@@ -1689,7 +1872,7 @@ errno_t pfe_log_if_discard_disable(pfe_log_if_t *iface)
 	{
 		NXP_LOG_DEBUG("mutex unlock failed\n");
 	}
-    
+
 	return ret;
 }
 
@@ -1715,7 +1898,7 @@ __attribute__((pure)) bool_t pfe_log_if_is_discard(pfe_log_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	ret = (0U != (iface->log_if_class.flags & IF_FL_DISCARD));
+	ret = (0U != ((uint8_t)(iface->log_if_class.flags) & (uint8_t)IF_FL_DISCARD));
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
@@ -1725,15 +1908,14 @@ __attribute__((pure)) bool_t pfe_log_if_is_discard(pfe_log_if_t *iface)
 	return ret;
 }
 
-
 /**
  * @brief		Get interface name
  * @param[in]	iface The interface instance
  * @return		Pointer to name string or NULL if failed/not found.
  */
-__attribute__((pure)) char_t *pfe_log_if_get_name(pfe_log_if_t *iface)
+__attribute__((pure)) const char_t *pfe_log_if_get_name(pfe_log_if_t *iface)
 {
-	static char_t *unknown = "(unknown)";
+	static const char_t *unknown = "(unknown)";
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -1762,7 +1944,7 @@ __attribute__((pure)) char_t *pfe_log_if_get_name(pfe_log_if_t *iface)
  */
 errno_t pfe_log_if_get_stats(pfe_log_if_t *iface, pfe_ct_class_algo_stats_t *stat)
 {
-	int i = 0;
+	uint32_t i = 0;
 	errno_t ret = EOK;
 	addr_t offset = 0;
 	uint32_t buff_len = 0;
@@ -1776,7 +1958,7 @@ errno_t pfe_log_if_get_stats(pfe_log_if_t *iface, pfe_ct_class_algo_stats_t *sta
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	memset(stat,0,sizeof(pfe_ct_class_algo_stats_t));
+	(void)memset(stat,0,sizeof(pfe_ct_class_algo_stats_t));
 
 	/* Store offset to stats */
 	offset = offsetof(pfe_ct_log_if_t,class_stats);

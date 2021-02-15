@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2020 NXP
+#  Copyright 2018-2021 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -98,8 +98,10 @@ SRCS =	src/pfe_bmu.c \
 		src/pfe_util.c \
 		src/pfe_fp.c \
 		src/pfe_flexible_filter.c \
+		src/pfe_fw_feature.c \
 		src/pfe_spd.c \
 		src/pfe_spd_acc.c
+
 ifeq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),1)
 SRCS += src/pfe_idex.c
 endif
@@ -168,7 +170,6 @@ ccflags-y += $(GLOBAL_CCFLAGS)
 
 ifeq ($(PFE_CFG_PFE_MASTER),0)
 pfe_platform-y := src/pfe_hif_chnl.o \
-		src/pfe_class.o \
 		src/pfe_hif_ring.o \
 		src/pfe_hif.o \
 		src/pfe_log_if_slave.o \
@@ -179,6 +180,7 @@ else
 pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_class.o \
 	src/pfe_flexible_filter.o \
+	src/pfe_fw_feature.o \
 	src/pfe_fp.o \
 	src/pfe_emac.o \
 	src/pfe_gpi.o \
@@ -194,6 +196,14 @@ pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_safety.o \
 	src/pfe_spd.o \
 	src/pfe_spd_acc.o
+
+ifeq ($(PFE_CFG_RTABLE_ENABLE),1)
+    pfe_platform-y += src/pfe_rtable.o
+endif
+ifeq ($(PFE_CFG_L2BRIDGE_ENABLE),1)
+    pfe_platform-y += src/pfe_l2br.o \
+        src/pfe_l2br_table.o
+endif
 endif
 
 
@@ -221,14 +231,6 @@ endif
 
 ifneq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),0)
 pfe_platform-y += src/pfe_idex.o
-endif
-
-ifeq ($(PFE_CFG_RTABLE_ENABLE),1)
-    pfe_platform-y += src/pfe_rtable.o
-endif
-ifeq ($(PFE_CFG_L2BRIDGE_ENABLE),1)
-    pfe_platform-y += src/pfe_l2br.o \
-        src/pfe_l2br_table.o
 endif
      
 obj-m += pfe_platform.o

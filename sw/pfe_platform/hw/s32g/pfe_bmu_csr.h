@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -80,15 +80,15 @@
 #define BMU_BUF_CNT_MEM_ACCESS2		0x110U
 #define BMU_BUF_CNT_MEM_ACCESS_ADDR	0x114U
 
-#define BMU_INT						(1U << 0)
-#define BMU_EMPTY_INT				(1U << 1)
-#define BMU_FULL_INT				(1U << 2)
-#define BMU_THRES_INT				(1U << 3)
-#define BMU_FREE_ERR_INT			(1U << 4)
-#define BMU_MCAST_EMPTY_INT			(1U << 5)
-#define BMU_MCAST_FULL_INT			(1U << 6)
-#define BMU_MCAST_THRES_INT			(1U << 7)
-#define BMU_MCAST_FREE_ERR_INT		(1U << 8)
+#define BMU_INT						(1UL << 0U)
+#define BMU_EMPTY_INT				(1UL << 1U)
+#define BMU_FULL_INT				(1UL << 2U)
+#define BMU_THRES_INT				(1UL << 3U)
+#define BMU_FREE_ERR_INT			(1UL << 4U)
+#define BMU_MCAST_EMPTY_INT			(1UL << 5U)
+#define BMU_MCAST_FULL_INT			(1UL << 6U)
+#define BMU_MCAST_THRES_INT			(1UL << 7U)
+#define BMU_MCAST_FREE_ERR_INT		(1UL << 8U)
 
 errno_t pfe_bmu_cfg_isr(void *base_va, void *cbus_base_va);
  void pfe_bmu_cfg_irq_mask(void *base_va);

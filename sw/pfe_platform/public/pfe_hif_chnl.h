@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -167,10 +167,10 @@
  */
 typedef enum
 {
-	HIF_CHNL_EVT_RX_IRQ = (1 << 0),	/*!< RX interrupt - packet received */
-	HIF_CHNL_EVT_TX_IRQ = (1 << 1),	/*!< TX interrupt - packet transmitted */
+	HIF_CHNL_EVT_RX_IRQ = (1U << 0U),	/*!< RX interrupt - packet received */
+	HIF_CHNL_EVT_TX_IRQ = (1U << 1U),	/*!< TX interrupt - packet transmitted */
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED)
-	HIF_CHNL_EVT_RX_OOB = (1 << 2)	/*!< Out of RX buffers */
+	HIF_CHNL_EVT_RX_OOB = (1U << 2U)	/*!< Out of RX buffers */
 #endif
 } pfe_hif_chnl_event_t;
 

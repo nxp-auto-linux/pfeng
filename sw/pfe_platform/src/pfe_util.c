@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -21,7 +21,7 @@
 	#error PE memory area exceeds LMEM capacity
 #endif
 
-struct __pfe_util_tag
+struct pfe_util_tag
 {
 	bool_t is_fw_loaded;	/*	Flag indicating that firmware has been loaded */
 	void *cbus_base_va;		/*	CBUS base virtual address */
@@ -78,7 +78,7 @@ pfe_util_t *pfe_util_create(void *cbus_base_va, uint32_t pe_num, pfe_util_cfg_t 
 	}
 	else
 	{
-		memset(util, 0, sizeof(pfe_util_t));
+		(void)memset(util, 0, sizeof(pfe_util_t));
 		util->cbus_base_va = cbus_base_va;
 	}
 	
@@ -95,7 +95,7 @@ pfe_util_t *pfe_util_create(void *cbus_base_va, uint32_t pe_num, pfe_util_cfg_t 
 		/*	Create PEs */
 		for (ii=0U; ii<pe_num; ii++)
 		{
-			pe = pfe_pe_create(cbus_base_va, PE_TYPE_UTIL, ii);
+			pe = pfe_pe_create(cbus_base_va, PE_TYPE_UTIL, (uint8_t)ii);
 			
 			if (NULL == pe)
 			{
@@ -267,7 +267,7 @@ errno_t pfe_util_isr(pfe_util_t *util)
 	/* Read the error record from each PE */
 	for (i = 0U; i < util->pe_num; i++)
 	{
-		pfe_pe_get_fw_errors(util->pe[i]);
+		(void)pfe_pe_get_fw_errors(util->pe[i]);
 	}
 
 	return EOK;
@@ -363,7 +363,7 @@ errno_t pfe_util_get_fw_version(pfe_util_t *util, pfe_ct_version_t *ver)
 		return EINVAL;
 	}
 
-	memcpy(ver, &pfe_pe_mmap.util_pe.common.version, sizeof(pfe_ct_version_t));
+	(void)memcpy(ver, &pfe_pe_mmap.util_pe.common.version, sizeof(pfe_ct_version_t));
 
 	return EOK;
 }

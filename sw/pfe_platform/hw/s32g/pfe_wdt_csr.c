@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -46,77 +46,77 @@ errno_t pfe_wdt_cfg_isr(void *base_va, void *cbus_base_va)
 	hal_write32(reg_src, base_va + WDT_INT_SRC);
 
 	/*	Process interrupts which are triggered AND enabled */
-	if ((reg_src & WDT_BMU1_WDT_INT) && (reg_en & WDT_BMU1_WDT_INT_EN_BIT))
+	if (((reg_src & WDT_BMU1_WDT_INT) != 0U) && ((reg_en & WDT_BMU1_WDT_INT_EN_BIT) != 0U))
 	{
 		NXP_LOG_INFO("WDT_BMU1_WDT_INT\n");
 		reg_reen |= WDT_BMU1_WDT_INT_EN_BIT;
 		ret = EOK;
 	}
 
-	if ((reg_src & WDT_BMU2_WDT_INT) && (reg_en & WDT_BMU2_WDT_INT_EN_BIT))
+	if (((reg_src & WDT_BMU2_WDT_INT) != 0U) && ((reg_en & WDT_BMU2_WDT_INT_EN_BIT) != 0U))
 	{
 		NXP_LOG_INFO("WDT_BMU2_WDT_INT\n");
 		reg_reen |= WDT_BMU2_WDT_INT_EN_BIT;
 		ret = EOK;
 	}
 
-	if ((reg_src & WDT_CLASS_WDT_INT) && (reg_en & WDT_CLASS_WDT_INT_EN_BIT))
+	if (((reg_src & WDT_CLASS_WDT_INT) != 0U) && ((reg_en & WDT_CLASS_WDT_INT_EN_BIT) != 0U))
 	{
 		NXP_LOG_INFO("WDT_CLASS_WDT_INT\n");
 		reg_reen |= WDT_CLASS_WDT_INT_EN_BIT;
 		ret = EOK;
 	}
 
-	if ((reg_src & WDT_EMAC0_GPI_WDT_INT) && (reg_en & WDT_EMAC0_GPI_WDT_INT_EN_BIT))
+	if (((reg_src & WDT_EMAC0_GPI_WDT_INT) != 0U) && ((reg_en & WDT_EMAC0_GPI_WDT_INT_EN_BIT) != 0U))
 	{
 		NXP_LOG_INFO("WDT_EMAC0_GPI_WDT_INT\n");
 		reg_reen |= WDT_EMAC0_GPI_WDT_INT_EN_BIT;
 		ret = EOK;
 	}
 
-	if ((reg_src & WDT_EMAC1_GPI_WDT_INT) && (reg_en & WDT_EMAC1_GPI_WDT_INT_EN_BIT))
+	if (((reg_src & WDT_EMAC1_GPI_WDT_INT) != 0U) && ((reg_en & WDT_EMAC1_GPI_WDT_INT_EN_BIT) != 0U))
 	{
 		NXP_LOG_INFO("WDT_EMAC1_GPI_WDT_INT\n");
 		reg_reen |= WDT_EMAC1_GPI_WDT_INT_EN_BIT;
 		ret = EOK;
 	}
 
-	if ((reg_src & WDT_EMAC2_GPI_WDT_INT) && (reg_en & WDT_EMAC2_GPI_WDT_INT_EN_BIT))
+	if (((reg_src & WDT_EMAC2_GPI_WDT_INT) != 0U) && ((reg_en & WDT_EMAC2_GPI_WDT_INT_EN_BIT) != 0U))
 	{
 		NXP_LOG_INFO("WDT_EMAC2_GPI_WDT_INT\n");
 		reg_reen |= WDT_EMAC2_GPI_WDT_INT_EN_BIT;
 		ret = EOK;
 	}
 
-	if ((reg_src & WDT_HIF_GPI_WDT_INT) && (reg_en & WDT_HIF_GPI_WDT_INT_EN_BIT))
+	if (((reg_src & WDT_HIF_GPI_WDT_INT) != 0U) && ((reg_en & WDT_HIF_GPI_WDT_INT_EN_BIT) != 0U))
 	{
 		NXP_LOG_INFO("WDT_HIF_GPI_WDT_INT\n");
 		reg_reen |= WDT_HIF_GPI_WDT_INT_EN_BIT;
 		ret = EOK;
 	}
 
-	if ((reg_src & WDT_HIF_NOCPY_WDT_INT) && (reg_en & WDT_HIF_NOCPY_WDT_INT_EN_BIT))
+	if (((reg_src & WDT_HIF_NOCPY_WDT_INT) != 0U) && ((reg_en & WDT_HIF_NOCPY_WDT_INT_EN_BIT) != 0U))
 	{
 		NXP_LOG_INFO("WDT_HIF_NOCPY_WDT_INT\n");
 		reg_reen |= WDT_HIF_NOCPY_WDT_INT_EN_BIT;
 		ret = EOK;
 	}
 
-	if ((reg_src & WDT_HIF_WDT_INT) && (reg_en & WDT_HIF_WDT_INT_EN_BIT))
+	if (((reg_src & WDT_HIF_WDT_INT) != 0U) && ((reg_en & WDT_HIF_WDT_INT_EN_BIT) != 0U))
 	{
 		NXP_LOG_INFO("WDT_HIF_WDT_INT\n");
 		reg_reen |= WDT_HIF_WDT_INT_EN_BIT;
 		ret = EOK;
 	}
 
-	if ((reg_src & WDT_TLITE_WDT_INT) && (reg_en & WDT_TLITE_WDT_INT_EN_BIT))
+	if (((reg_src & WDT_TLITE_WDT_INT) != 0U) && ((reg_en & WDT_TLITE_WDT_INT_EN_BIT) != 0U))
 	{
 		NXP_LOG_INFO("WDT_TLITE_WDT_INT\n");
 		reg_reen |= WDT_TLITE_WDT_INT_EN_BIT;
 		ret = EOK;
 	}
 
-	if ((reg_src & WDT_UTIL_WDT_INT) && (reg_en & WDT_UTIL_PE_WDT_INT_EN_BIT))
+	if (((reg_src & WDT_UTIL_WDT_INT) != 0U) && ((reg_en & WDT_UTIL_PE_WDT_INT_EN_BIT) != 0U))
 	{
 		NXP_LOG_INFO("WDT_UTIL_WDT_INT\n");
 		reg_reen |= WDT_UTIL_PE_WDT_INT_EN_BIT;

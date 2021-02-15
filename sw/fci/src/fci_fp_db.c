@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -66,7 +66,7 @@ typedef struct
 /**
 * @brief Flexible parser table representation
 */
-typedef struct fci_fp_table_tag
+struct fci_fp_table_tag
 {
     char_t *name;              /* Table identifier */
     uint8_t rule_count;        /* Number of rules in the table */
@@ -74,26 +74,7 @@ typedef struct fci_fp_table_tag
     pfe_class_t *class;
     LLIST_t db_entry;          /* Global database link */
     fci_fp_rule_db_t rules_db; /* Database of rules in the table */
-} fci_fp_table_t;
-
-/**
-* @brief Criterion for table database search
-*/
-typedef enum
-{
-    FP_TABLE_CRIT_ALL,
-    FP_TABLE_CRIT_NAME,
-    FP_TABLE_CRIT_ADDRESS
-} fci_fp_table_criterion_t;
-
-/**
-* @brief Argument (requested value) for table database
-*/
-typedef union
-{
-    char_t *name;
-    uint32_t address;
-} fci_fp_table_criterion_arg_t;
+};
 
 /**
 * @brief Database of flexible parser tables
@@ -1122,6 +1103,16 @@ errno_t fci_fp_db_get_table_from_addr(uint32_t addr, char_t **table_name)
     return EOK;
 }
 
+/**
+ * @brief		Get first DB entry (table) matching the criterion
+ * @param[in]	crit The criterion
+ * @parma[in]	arg The criterion argument
+ * @return		FP table instance or NULL if not found
+ */
+fci_fp_table_t *fci_fp_db_get_first(fci_fp_table_criterion_t crit, void *arg)
+{
+	return fci_fp_table_get_first(&fci_fp_table_db, crit, arg);
+}
 
 /**
 * @brief Returns parameters of the first rule in the database

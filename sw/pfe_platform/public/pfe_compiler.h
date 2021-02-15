@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020 NXP
+ *  Copyright 2020-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -69,6 +69,13 @@
 		#elif (defined(PFE_CFG_TARGET_ARCH_armv7le))
 			/* Compiling driver */
 			#define PFE_COMPILER_BITFIELD_BEHAVIOR PFE_COMPILER_BITFIELD_HIGH_LAST
+		#endif
+	#elif (defined (__KERNEL__))
+		/* Linux kernel compilation for not supported compiler */
+		#if (defined(PFE_CFG_TARGET_ARCH_aarch64))
+			/* Compiling driver */
+			#define PFE_COMPILER_BITFIELD_BEHAVIOR PFE_COMPILER_BITFIELD_HIGH_LAST
+			#define PFE_COMPILER_BEHAVIOR_GUESSED_ONLY
 		#endif
 	#endif
 #endif

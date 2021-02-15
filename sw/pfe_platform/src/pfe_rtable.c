@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -59,7 +59,7 @@ typedef union
 /**
  * @brief	Routing table representation
  */
-struct __pfe_rtable_tag
+struct pfe_rtable_tag
 {
 	void *htable_base_pa;					/*	Hash table: Base physical address */
 	void *htable_base_va;					/*	Hash table: Base virtual address */
@@ -94,14 +94,14 @@ struct __pfe_rtable_tag
  *			physical entry has assigned an API entry to keep additional, driver-related
  *			information.
  */
-struct __pfe_rtable_entry_tag
+struct pfe_rtable_entry_tag
 {
 	pfe_rtable_t *rtable;						/*	!< Reference to the parent table */
 	pfe_ct_rtable_entry_t *phys_entry;			/*	!< Pointer to the entry within the routing table */
 	pfe_ct_rtable_entry_t *temp_phys_entry;		/*	!< Temporary storage during entry creation process */
-	struct __pfe_rtable_entry_tag *next;		/*	!< Pointer to the next entry within the routing table */
-	struct __pfe_rtable_entry_tag *prev;		/*	!< Pointer to the previous entry within the routing table */
-	struct __pfe_rtable_entry_tag *child;		/*	!< Entry associated with this one (used to identify entries for 'reply' direction) */
+	struct pfe_rtable_entry_tag *next;		/*	!< Pointer to the next entry within the routing table */
+	struct pfe_rtable_entry_tag *prev;		/*	!< Pointer to the previous entry within the routing table */
+	struct pfe_rtable_entry_tag *child;		/*	!< Entry associated with this one (used to identify entries for 'reply' direction) */
 	uint32_t timeout;							/*	!< Timeout value in seconds */
 	uint32_t curr_timeout;						/*	!< Current timeout value */
 	uint32_t route_id;							/*	!< User-defined route ID */
@@ -953,7 +953,6 @@ errno_t pfe_rtable_entry_set_dstif(pfe_rtable_entry_t *entry, pfe_phy_if_t *ifac
 	if_id = pfe_phy_if_get_id(iface);
 
     return pfe_rtable_entry_set_dstif_id(entry, if_id);
-	 
 }
 
 
@@ -976,21 +975,23 @@ errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if ((IPV4 == entry->phys_entry->flag_ipv6) && (!output_sip->is_ipv4))
-	{
-		NXP_LOG_ERROR("IP version mismatch\n");
-		return EINVAL;
-	}
-	else if ((IPV6 == entry->phys_entry->flag_ipv6) || (!output_sip->is_ipv4))
-	{
-		NXP_LOG_ERROR("IPv6 not supported\n");
-		return EINVAL;
-	}
-	else
+	if ((IPV_INVALID != entry->phys_entry->flag_ipv6) && (output_sip->is_ipv4))
 	{
 		memcpy(&entry->phys_entry->args.v4.sip, &output_sip->v4, 4);
 		entry->phys_entry->flag_ipv6 = IPV4;
 	}
+	else if ((IPV_INVALID != entry->phys_entry->flag_ipv6) && (!output_sip->is_ipv4))
+	{
+		memcpy(&entry->phys_entry->args.v6.sip[0], &output_sip->v6, 16);
+		entry->phys_entry->flag_ipv6 = IPV6;
+	}
+	else
+	{
+		NXP_LOG_ERROR("IP version mismatch\n");
+		return EINVAL;
+	}
+
+	entry->phys_entry->actions = oal_htonl(RT_ACT_CHANGE_SIP_ADDR);
 
 	return EOK;
 }
@@ -1014,21 +1015,23 @@ errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if ((IPV4 == entry->phys_entry->flag_ipv6) && (!output_dip->is_ipv4))
-	{
-		NXP_LOG_ERROR("IP version mismatch\n");
-		return EINVAL;
-	}
-	else if ((IPV6 == entry->phys_entry->flag_ipv6) || (!output_dip->is_ipv4))
-	{
-		NXP_LOG_ERROR("IPv6 not supported\n");
-		return EINVAL;
-	}
-	else
+	if ((IPV_INVALID != entry->phys_entry->flag_ipv6) && (output_dip->is_ipv4))
 	{
 		memcpy(&entry->phys_entry->args.v4.dip, &output_dip->v4, 4);
 		entry->phys_entry->flag_ipv6 = IPV4;
 	}
+	else if ((IPV_INVALID != entry->phys_entry->flag_ipv6) && (!output_dip->is_ipv4))
+	{
+		memcpy(&entry->phys_entry->args.v6.dip[0], &output_dip->v6, 16);
+		entry->phys_entry->flag_ipv6 = IPV6;
+	}
+	else
+	{
+		NXP_LOG_ERROR("IP version mismatch\n");
+		return EINVAL;
+	}
+
+	entry->phys_entry->actions = oal_htonl(RT_ACT_CHANGE_DIP_ADDR);
 
 	return EOK;
 }
@@ -1053,6 +1056,7 @@ void pfe_rtable_entry_set_out_sport(pfe_rtable_entry_t *entry, uint16_t output_s
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->args.sport = oal_htons(output_sport);
+	entry->phys_entry->actions |= oal_htonl(RT_ACT_CHANGE_SPORT);
 }
 
 /**
@@ -1075,16 +1079,18 @@ void pfe_rtable_entry_set_out_dport(pfe_rtable_entry_t *entry, uint16_t output_d
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->args.dport = oal_htons(output_dport);
+	entry->phys_entry->actions |= oal_htonl(RT_ACT_CHANGE_DPORT);
 }
 
 /**
- * @brief		Set output source MAC address
- * @details		MAC address set using this call will be used to add/replace the original source MAC
+ * @brief		Set output source and destination MAC address
+ * @details		MAC address set using this call will be used to add/replace the original MAC
  * 				address if the RT_ACT_ADD_ETH_HDR action is set.
  * @param[in]	entry The routing table entry instance
- * @param[in]	mac The desired output source MAC address
+ * @param[in]	smac The desired output source MAC address
+ * @param[in]	dmac The desired output destination MAC address
  */
-void pfe_rtable_entry_set_out_smac(pfe_rtable_entry_t *entry, pfe_mac_addr_t mac)
+void pfe_rtable_entry_set_out_mac_addrs(pfe_rtable_entry_t *entry, pfe_mac_addr_t smac, pfe_mac_addr_t dmac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
@@ -1094,27 +1100,9 @@ void pfe_rtable_entry_set_out_smac(pfe_rtable_entry_t *entry, pfe_mac_addr_t mac
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	memcpy(entry->phys_entry->args.smac, mac, sizeof(pfe_mac_addr_t));
-}
-
-/**
- * @brief		Set output destination MAC address
- * @details		MAC address set using this call will be used to add/replace the original destination
- *				MAC address if the RT_ACT_ADD_ETH_HDR action is set.
- * @param[in]	entry The routing table entry instance
- * @param[in]	mac The desired output destination MAC address
- */
-void pfe_rtable_entry_set_out_dmac(pfe_rtable_entry_t *entry, pfe_mac_addr_t mac)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == entry))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	memcpy(entry->phys_entry->args.dmac, mac, sizeof(pfe_mac_addr_t));
+	memcpy(entry->phys_entry->args.smac, smac, sizeof(pfe_mac_addr_t));
+	memcpy(entry->phys_entry->args.dmac, dmac, sizeof(pfe_mac_addr_t));
+	entry->phys_entry->actions |= oal_htonl(RT_ACT_ADD_ETH_HDR);
 }
 
 /**
@@ -1135,6 +1123,37 @@ void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->args.vlan = oal_htons(vlan);
+	entry->phys_entry->actions |= oal_htonl(RT_ACT_ADD_VLAN_HDR);
+}
+
+/**
+ * @brief		Get output VLAN tag
+ * @details		If VLAN addition/replacement for the entry is requested via
+ * 				pfe_rtable_entry_set_out_vlan() then this function will return
+ * 				the VLAN tag. If no VLAN manipulation for the entry was has
+ * 				been requested then the return value is 0.
+ * @param[in]	entry The routing table entry instance
+ * return		Non-zero VLAN ID (host endian) if VLAN manipulation has been
+ *				requested, zero otherwise
+ */
+uint16_t pfe_rtable_entry_get_out_vlan(pfe_rtable_entry_t *entry)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0U;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (0U != (oal_ntohl(entry->phys_entry->actions) & RT_ACT_ADD_VLAN_HDR))
+	{
+		return oal_ntohs(entry->phys_entry->args.vlan);
+	}
+	else
+	{
+		return 0U;
+	}
 }
 
 /**
@@ -1155,6 +1174,7 @@ void pfe_rtable_entry_set_out_inner_vlan(pfe_rtable_entry_t *entry, uint16_t vla
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->args.vlan1 = oal_htons(vlan);
+	entry->phys_entry->actions |= oal_htonl(RT_ACT_ADD_VLAN1_HDR);
 }
 
 /**
@@ -1166,6 +1186,8 @@ void pfe_rtable_entry_set_out_inner_vlan(pfe_rtable_entry_t *entry, uint16_t vla
  */
 void pfe_rtable_entry_set_out_pppoe_sid(pfe_rtable_entry_t *entry, uint16_t sid)
 {
+	pfe_ct_route_actions_t flags;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
@@ -1174,158 +1196,22 @@ void pfe_rtable_entry_set_out_pppoe_sid(pfe_rtable_entry_t *entry, uint16_t sid)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	entry->phys_entry->args.pppoe_sid = oal_htons(sid);
-}
-
-/**
- * @brief		Set actions associated with routing entry
- * @details		Validate and set the action flags
- * @param[in]	entry The routing table entry instance
- * @param[in]	flags Value (bitwise OR) consisting of flags (pfe_ct_route_actions_t).
- * @retval		EOK Success
- * @retval		EINVAL Invalid combination of flags
- */
-errno_t pfe_rtable_entry_set_action_flags(pfe_rtable_entry_t *entry, pfe_ct_route_actions_t flags)
-{
-	static const uint8_t zero_mac[6] = {0};
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == entry))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (0 != (flags & RT_ACT_ADD_ETH_HDR))
-	{
-		if (0 == memcmp(entry->phys_entry->args.smac, zero_mac, 6))
-		{
-			NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_ETH_HDR) requires valid source MAC address assigned\n");
-			return EINVAL;
-		}
-
-		if (0 == memcmp(entry->phys_entry->args.dmac, zero_mac, 6))
-		{
-			NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_ETH_HDR) requires valid destination MAC address assigned\n");
-			return EINVAL;
-		}
-	}
-
-	if (0 != (flags & RT_ACT_ADD_VLAN_HDR))
-	{
-		if (0 == (flags & RT_ACT_ADD_ETH_HDR))
-		{
-			NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_ETH_HDR) requires also the PFE_RTABLE_ADD_ETH_HDR flag set\n");
-			return EINVAL;
-		}
-
-		if (0 == entry->phys_entry->args.vlan)
-		{
-			NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_VLAN_HDR) requires valid VLAN ID assigned\n");
-			return EINVAL;
-		}
-	}
-
-	if (0 != (flags & RT_ACT_ADD_PPPOE_HDR))
-	{
-		if (0 != (flags & RT_ACT_ADD_VLAN1_HDR))
-		{
-			NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_PPPOE_HDR) must no be combined with PFE_RTABLE_ADD_VLAN1_HDR\n");
-			return EINVAL;
-		}
-
-		if (0 == (flags & RT_ACT_ADD_ETH_HDR))
-		{
-			NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_PPPOE_HDR) requires also the PFE_RTABLE_ADD_ETH_HDR flag set\n");
-			return EINVAL;
-		}
-
-		if (0 == entry->phys_entry->args.pppoe_sid)
-		{
-			NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_PPPOE_HDR) requires valid PPPoE session ID assigned\n");
-			return EINVAL;
-		}
-	}
+	flags = oal_ntohl(entry->phys_entry->actions);
 
 	if (0 != (flags & RT_ACT_ADD_VLAN1_HDR))
 	{
-		if (0 == (flags & RT_ACT_ADD_ETH_HDR))
-		{
-			NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_VLAN1_HDR) requires also the PFE_RTABLE_ADD_ETH_HDR flag set\n");
-			return EINVAL;
-		}
-
-		if (0 == entry->phys_entry->args.vlan)
-		{
-			NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_VLAN1_HDR) requires valid VLAN ID assigned\n");
-			return EINVAL;
-		}
-
-		if (0 == entry->phys_entry->args.vlan1)
-		{
-			NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_VLAN1_HDR) requires valid VLAN ID1 assigned\n");
-			return EINVAL;
-		}
+		NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_PPPOE_HDR) must no be combined with PFE_RTABLE_ADD_VLAN1_HDR\n");
+		return;
 	}
 
-	if (0 != (flags & RT_ACT_CHANGE_SIP_ADDR))
+	if (0 == (flags & RT_ACT_ADD_ETH_HDR))
 	{
-		if (IPV4 == entry->phys_entry->flag_ipv6)
-		{
-			if (0 == entry->phys_entry->args.v4.sip)
-			{
-				NXP_LOG_ERROR("Action (PFE_RTABLE_CHANGE_SIP_ADDR) requires valid output source IP address assigned\n");
-				return EINVAL;
-			}
-		}
-
-		if (IPV6 == entry->phys_entry->flag_ipv6)
-		{
-			NXP_LOG_ERROR("PFE_RTABLE_CHANGE_SIP_ADDR not supported for IPv6\n");
-			return EINVAL;
-		}
+		NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_PPPOE_HDR) requires also the PFE_RTABLE_ADD_ETH_HDR flag set\n");
+		return;
 	}
 
-	if (0 != (flags & RT_ACT_CHANGE_DIP_ADDR))
-	{
-		if (IPV4 == entry->phys_entry->flag_ipv6)
-		{
-			if (0 == entry->phys_entry->args.v4.dip)
-			{
-				NXP_LOG_ERROR("Action (PFE_RTABLE_CHANGE_DIP_ADDR) requires valid output destination IP address assigned\n");
-				return EINVAL;
-			}
-		}
-
-		if (IPV6 == entry->phys_entry->flag_ipv6)
-		{
-			NXP_LOG_ERROR("PFE_RTABLE_CHANGE_DIP_ADDR not supported for IPv6\n");
-			return EINVAL;
-		}
-	}
-
-	if (0 != (flags & RT_ACT_CHANGE_SPORT))
-	{
-		if (0 == entry->phys_entry->args.sport)
-		{
-			NXP_LOG_ERROR("Action (PFE_RTABLE_CHANGE_SPORT) requires valid output source port assigned\n");
-			return EINVAL;
-		}
-	}
-
-	if (0 != (flags & RT_ACT_CHANGE_DPORT))
-	{
-		if (0 == entry->phys_entry->args.dport)
-		{
-			NXP_LOG_ERROR("Action (PFE_RTABLE_CHANGE_DPORT) requires valid output destination port assigned\n");
-			return EINVAL;
-		}
-	}
-
-	entry->phys_entry->actions = oal_htonl(flags);
-
-	return EOK;
+	entry->phys_entry->args.pppoe_sid = oal_htons(sid);
+	entry->phys_entry->actions |= oal_htonl(RT_ACT_ADD_PPPOE_HDR);
 }
 
 void pfe_rtable_entry_set_id5t(pfe_rtable_entry_t *entry, uint32_t id5t)
@@ -1786,6 +1672,8 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 	}
 
 	LLIST_AddAtEnd(&entry->list_entry, &rtable->active_entries);
+
+	NXP_LOG_INFO("RTable entry added, hash: 0x%x\n", hash);
 
 	entry->rtable = rtable;
 
@@ -2460,9 +2348,11 @@ errno_t pfe_rtable_entry_to_5t_out(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tup
 
 	if (IPV6 == entry->phys_entry->flag_ipv6)
 	{
-		/*	Changes not supported in IPv6. Output entry is
-		 	exactly the same as the original entry. */
-		return pfe_rtable_entry_to_5t(entry, tuple);
+		/*	SRC + DST IP */
+		memcpy(&tuple->src_ip.v6, &entry->phys_entry->args.v6.sip[0], 16);
+		memcpy(&tuple->dst_ip.v6, &entry->phys_entry->args.v6.dip[0], 16);
+		tuple->src_ip.is_ipv4 = FALSE;
+		tuple->dst_ip.is_ipv4 = FALSE;
 	}
 	else
 	{
@@ -2471,10 +2361,11 @@ errno_t pfe_rtable_entry_to_5t_out(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tup
 		memcpy(&tuple->dst_ip.v4, &entry->phys_entry->args.v4.dip, 4);
 		tuple->src_ip.is_ipv4 = TRUE;
 		tuple->dst_ip.is_ipv4 = TRUE;
-		tuple->sport = oal_ntohs(entry->phys_entry->args.sport);
-		tuple->dport = oal_ntohs(entry->phys_entry->args.dport);
-		tuple->proto = entry->phys_entry->proto;
 	}
+
+	tuple->sport = oal_ntohs(entry->phys_entry->args.sport);
+	tuple->dport = oal_ntohs(entry->phys_entry->args.dport);
+	tuple->proto = entry->phys_entry->proto;
 
 	return EOK;
 }

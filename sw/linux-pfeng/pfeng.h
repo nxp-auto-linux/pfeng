@@ -15,7 +15,10 @@
 #include <linux/phy.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/ptp_clock_kernel.h>
+#include <linux/net_tstamp.h>
 #include <linux/phylink.h>
+#include <linux/kfifo.h>
 
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -31,7 +34,8 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"1.0.0"
+
+#define PFENG_DRIVER_VERSION		"BETA 0.9.3"
 
 #define PFENG_MAX_RX_QUEUES		1
 #define PFENG_MAX_TX_QUEUES		1
@@ -105,6 +109,20 @@ struct pfeng_hif_chnl {
 	struct dentry			*dentry;
 };
 
+/* SKB waiting for time stamp */
+struct pfeng_ts_skb {
+	struct list_head list;
+	struct sk_buff *skb;
+	unsigned long jif_enlisted;
+	u16 ref_num;
+};
+
+/* Timestamp data */
+struct pfeng_tx_ts {
+	u16 ref_num;
+	struct skb_shared_hwtstamps ts;
+};
+
 /* net interface private data */
 struct pfeng_rx_chnl_pool;
 struct pfeng_tx_chnl_pool;
@@ -120,6 +138,16 @@ struct pfeng_ndev {
 	struct mii_bus			*mii_bus;
 	void				*emac_regs;
 	u32				emac_speed;
+
+	/* PTP/Time stamping*/
+	struct ptp_clock_info		ptp_ops;
+	struct ptp_clock		*ptp_clock;
+	struct hwtstamp_config		tshw_cfg;
+	DECLARE_KFIFO_PTR(ts_skb_fifo, struct pfeng_ts_skb);
+	DECLARE_KFIFO_PTR(ts_tx_fifo, struct pfeng_tx_ts);
+	struct work_struct		ts_tx_work;
+	struct list_head		ts_skb_list;
+	uint16_t			ts_ref_num;
 
 	struct pfeng_priv		*priv;
 	struct pfeng_eth		*eth;
@@ -158,9 +186,12 @@ struct pfeng_priv {
 	struct dentry			*dbgfs;
 	struct list_head		ndev_list;
 	struct clk			*sys_clk;
+	struct clk			*ptp_clk;
+	uint64_t			ptp_reference_clk;
 	struct pfeng_plat_cfg		plat;
 	u32				msg_enable;
 	u32				msg_verbosity;
+	u32				local_drv_id;
 
 	pfe_platform_config_t		*cfg;
 	const char			*fw_class_name;
@@ -214,5 +245,19 @@ int pfeng_phylink_connect_phy(struct pfeng_ndev *ndev);
 int pfeng_phylink_disconnect_phy(struct pfeng_ndev *ndev);
 int pfeng_phylink_stop(struct pfeng_ndev *ndev);
 int pfeng_phylink_destroy(struct pfeng_ndev *ndev);
+
+/* PTP */
+void pfeng_ptp_register(struct pfeng_ndev *ndev);
+void pfeng_ptp_unregister(struct pfeng_ndev *ndev);
+
+/* HW time stamp */
+int pfeng_hwts_init(struct pfeng_ndev *ndev);
+void pfeng_hwts_release(struct pfeng_ndev *ndev);
+void pfeng_hwts_skb_set_rx_ts(struct pfeng_ndev *ndev, struct sk_buff *skb);
+void pfeng_hwts_get_tx_ts(struct pfeng_ndev *ndev, struct sk_buff *skb);
+int pfeng_hwts_store_tx_ref(struct pfeng_ndev *ndev, struct sk_buff *skb);
+int pfeng_hwts_ioctl_set(struct pfeng_ndev *ndev, struct ifreq *rq);
+int pfeng_hwts_ioctl_get(struct pfeng_ndev *ndev, struct ifreq *rq);
+int pfeng_hwts_ethtool(struct pfeng_ndev *ndev, struct ethtool_ts_info *info);
 
 #endif

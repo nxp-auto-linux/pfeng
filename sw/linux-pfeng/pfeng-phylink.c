@@ -170,7 +170,9 @@ static void pfeng_mac_an_restart(struct net_device *netdev)
 static void s32g_set_tx_clock(struct pfeng_ndev *ndev, unsigned int speed)
 {
 	u32 emac_speed;
+	bool rgmii = phy_interface_mode_is_rgmii(ndev->eth->intf_mode);
 
+	/* Only RGMII TX clock switch is supported */
 	switch (speed) {
 	default:
 		netdev_dbg(ndev->netdev, "Skipped TX clock setting\n");
@@ -180,21 +182,21 @@ static void s32g_set_tx_clock(struct pfeng_ndev *ndev, unsigned int speed)
 		emac_speed = EMAC_SPEED_2500_MBPS;
 		break;
 	case SPEED_1000:
-		if (ndev->eth->tx_clk) {
+		if (ndev->eth->tx_clk && rgmii) {
 			netdev_info(ndev->netdev, "Set TX clock to 125M\n");
 			clk_set_rate(ndev->eth->tx_clk, EMAC_TX_RATE_125M);
 		}
 		emac_speed = EMAC_SPEED_1000_MBPS;
 		break;
 	case SPEED_100:
-		if (ndev->eth->tx_clk) {
+		if (ndev->eth->tx_clk && rgmii) {
 			netdev_info(ndev->netdev, "Set TX clock to 25M\n");
 			clk_set_rate(ndev->eth->tx_clk, EMAC_TX_RATE_25M);
 		}
 		emac_speed = EMAC_SPEED_100_MBPS;
 		break;
 	case SPEED_10:
-		if (ndev->eth->tx_clk) {
+		if (ndev->eth->tx_clk && rgmii) {
 			netdev_info(ndev->netdev, "Set TX clock to 2.5M\n");
 			clk_set_rate(ndev->eth->tx_clk, EMAC_TX_RATE_2M5);
 		}
@@ -217,10 +219,11 @@ static void pfeng_mac_config(struct net_device *netdev, unsigned int mode, const
 
 	switch (mode) {
 		case MLO_AN_FIXED:
-			if (state->speed == ndev->emac_speed)
-				break;
 			/* FALLTHRU */
 		case MLO_AN_PHY:
+			if (state->speed == ndev->emac_speed)
+				break;
+
 			s32g_set_tx_clock(ndev, state->speed);
 			ndev->emac_speed = state->speed;
 			break;

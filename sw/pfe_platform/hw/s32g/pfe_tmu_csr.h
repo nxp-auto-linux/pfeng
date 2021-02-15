@@ -1,14 +1,14 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
  * ========================================================================= */
 
-#ifndef _TMU_CSR_H_
-#define _TMU_CSR_H_
+#ifndef TMU_CSR_H_
+#define TMU_CSR_H_
 
 #include "pfe_tmu.h"
 
@@ -201,7 +201,7 @@
 #define TLITE_SCH_INVALID_INPUT 0xffU
 
 /*	Implementation of the pfe_tmu_phy_cfg_t */
-struct __pfe_tmu_phy_cfg_tag
+struct pfe_tmu_phy_cfg_tag
 {
 	pfe_ct_phy_if_id_t id;
 	uint8_t q_cnt;
@@ -253,4 +253,4 @@ void pfe_tmu_cfg_disable(void *cbus_base_va);
 void pfe_tmu_cfg_send_pkt(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, void *buf_pa, uint16_t len);
 uint32_t pfe_tmu_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
-#endif /* _TMU_CSR_H_ */
+#endif /* TMU_CSR_H_ */

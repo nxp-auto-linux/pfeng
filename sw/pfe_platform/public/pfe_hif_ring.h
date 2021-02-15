@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -14,7 +14,7 @@
 #include "pfe_ct.h" /* pfe_ct_phy_if_id_t */
 #endif /* PFE_CFG_HIF_NOCPY_DIRECT */
 
-typedef struct __pfe_hif_ring_tag pfe_hif_ring_t;
+typedef struct pfe_hif_ring_tag pfe_hif_ring_t;
 
 pfe_hif_ring_t *pfe_hif_ring_create(bool_t rx, uint16_t seqnum, bool_t nocpy) __attribute__((cold));
 uint32_t pfe_hif_ring_get_len(pfe_hif_ring_t *ring) __attribute__((pure, hot));

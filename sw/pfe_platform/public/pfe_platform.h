@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -74,6 +74,7 @@ typedef struct
 	uint32_t irq_vector_upe_gpt; /* UPE + GPT IRQ number */
 	uint32_t irq_vector_safety; /* Safety IRQ number */
 	bool_t enable_util;			/* Shall be UTIL enabled? */
+	pfe_ct_phy_if_id_t local_hif; /* ID of the local interface */
 } pfe_platform_config_t;
 
 typedef struct

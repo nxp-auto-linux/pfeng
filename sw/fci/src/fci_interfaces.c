@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -44,7 +44,7 @@ static errno_t fci_interfaces_get_arg_info(fpp_if_m_args_t *m_arg, fpp_if_m_rule
 	if (unlikely((NULL == m_arg) || (NULL == offset) || (NULL == size)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
+		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
@@ -810,6 +810,8 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 	pfe_phy_if_t *mirror_if = NULL;
 	pfe_ct_phy_if_id_t mirror_if_id = PFE_PHY_IF_ID_INVALID;
 	pfe_ct_phy_if_stats_t stats = {0};
+	uint32_t addr;
+	char_t *name;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -959,6 +961,56 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
 			}
 
+			/*	Flexible Filter */
+			if (0U != strlen((char_t *)if_cmd->ftable))
+			{
+				/*	Validate table */
+				if (NULL == fci_fp_db_get_first(FP_TABLE_CRIT_NAME, (void *)if_cmd->ftable))
+				{
+					/*	Table not found */
+					NXP_LOG_ERROR("%s: FP table %s not found\n",
+							pfe_phy_if_get_name(phy_if), if_cmd->ftable);
+				}
+				else
+				{
+					/*	If not already done, write the table to HW */
+					addr = fci_fp_db_get_table_dmem_addr((char_t *)if_cmd->ftable);
+					if (0U == addr)
+					{
+						ret = fci_fp_db_push_table_to_hw(context->class, (char_t *)if_cmd->ftable);
+						addr = fci_fp_db_get_table_dmem_addr((char_t *)if_cmd->ftable);
+					}
+
+					/*	Assign the table to the physical interface */
+					/*	TODO: Temporary way. Pass table instance or name but not the DMEM address :( */
+					ret = pfe_phy_if_set_ftable(phy_if, addr);
+					if (EOK != ret)
+					{
+						NXP_LOG_ERROR("%s: Could not set filter table: %d\n", pfe_phy_if_get_name(phy_if), ret);
+						*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
+					}
+				}
+			}
+			else
+			{
+				/*	Disable the filter. Get table entry from DB first. */
+				addr = pfe_phy_if_get_ftable(phy_if);
+				if (EOK == fci_fp_db_get_table_from_addr(addr, &name))
+				{
+					/* Delete the table from DMEM - no longer in use, copy is in database */
+					(void)fci_fp_db_pop_table_from_hw(name);
+				}
+
+				/*	Assign NULL-table to the physical interface */
+				/*	TODO: Temporary way. Pass table instance or name but not the DMEM address :( */
+				ret = pfe_phy_if_set_ftable(phy_if, 0U);
+				if (EOK != ret)
+				{
+					NXP_LOG_ERROR("%s: Could not set filter table: %d\n", pfe_phy_if_get_name(phy_if), ret);
+					*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
+				}
+			}
+
 			break;
 		}
 
@@ -1066,6 +1118,26 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			else
 			{
 				reply_buf->flags &= ~FPP_IF_MIRROR;
+			}
+
+			/*	Get filter info */
+			addr = pfe_phy_if_get_ftable(phy_if);
+			if (0U != addr)
+			{
+				ret = fci_fp_db_get_table_from_addr(addr, &name);
+				if (EOK == ret)
+				{
+					strncpy(reply_buf->ftable, name, sizeof(reply_buf->ftable));
+				}
+				else
+				{
+					NXP_LOG_ERROR("Can't get table name from DB: %d\n", ret);
+					*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
+				}
+			}
+			else
+			{
+				memset(reply_buf->ftable, 0, sizeof(reply_buf->ftable));
 			}
 
 			/* Set reply length end return OK */

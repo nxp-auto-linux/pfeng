@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -87,15 +87,11 @@ errno_t pfe_gpi_cfg_init(void *cbus_va, void *base_va, pfe_gpi_cfg_t *cfg)
 		case CBUS_EGPI1_BASE_ADDR:
 		case CBUS_EGPI2_BASE_ADDR:
 		case CBUS_EGPI3_BASE_ADDR:
-		{
 			pfe_gpi_cfg_init_inqos(base_va);
 			break;
-		}
-
 		default:
-		{
+			/*Do Nothing*/
 			break;
-		}
 	}
 
 	hal_write32(0x0U, base_va + GPI_EMAC_1588_TIMESTAMP_EN);
@@ -141,7 +137,8 @@ errno_t pfe_gpi_cfg_reset(void *base_va)
 	{
 		oal_time_usleep(100U);
 		reg = hal_read32(base_va + GPI_CTRL);
-	} while ((reg & 0x2U) && (--timeout > 0U));
+		--timeout;
+	} while (((reg & 0x2U) != 0U) && (timeout > 0U));
 
 	if (0U == timeout)
 	{

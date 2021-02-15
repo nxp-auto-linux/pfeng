@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
  *  Copyright 2017-2020 NXP
  *
@@ -8,8 +8,8 @@
  *
  * ========================================================================= */
 
-#ifndef _UTIL_CSR_H_
-#define _UTIL_CSR_H_
+#ifndef UTIL_CSR_H_
+#define UTIL_CSR_H_
 
 #include "pfe_util.h"
 
@@ -54,11 +54,11 @@
 
 #define UTIL_INQ_AFULL_THRES		(CBUS_UTIL_CSR_BASE_ADDR + 0x234U)
 
-#define UTIL_PE_IBUS_ACCESS_PMEM	(1U << 17)
-#define UTIL_PE_IBUS_ACCESS_DMEM	(1U << 18)
-#define UTIL_PE_IBUS_DMEM_BASE(i)	((((i) & 0x3) << 20) | UTIL_PE_IBUS_ACCESS_DMEM)
-#define UTIL_PE_IBUS_PMEM_BASE(i)	((((i) & 0x3) << 20) | UTIL_PE_IBUS_ACCESS_PMEM)
+#define UTIL_PE_IBUS_ACCESS_PMEM	(1UL << 17U)
+#define UTIL_PE_IBUS_ACCESS_DMEM	(1UL << 18U)
+#define UTIL_PE_IBUS_DMEM_BASE(i)	((((i) & 0x3) << 20U) | UTIL_PE_IBUS_ACCESS_DMEM)
+#define UTIL_PE_IBUS_PMEM_BASE(i)	((((i) & 0x3) << 20U) | UTIL_PE_IBUS_ACCESS_PMEM)
 
 uint32_t pfe_util_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
-#endif /* _UTIL_CSR_H_ */
+#endif /* UTIL_CSR_H_ */

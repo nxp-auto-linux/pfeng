@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -10,7 +10,7 @@
 #ifndef PUBLIC_PFE_GPI_H_
 #define PUBLIC_PFE_GPI_H_
 
-typedef struct __pfe_gpi_tag pfe_gpi_t;
+typedef struct pfe_gpi_tag pfe_gpi_t;
 
 typedef struct
 {

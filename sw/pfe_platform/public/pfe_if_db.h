@@ -22,7 +22,7 @@ typedef enum
 /**
  * @brief	Interface database entry type
  */
-typedef struct __pfe_if_db_entry_tag pfe_if_db_entry_t;
+typedef struct pfe_if_db_entry_tag pfe_if_db_entry_t;
 
 /**
  * @brief	Interface database select criteria type
@@ -39,7 +39,7 @@ typedef enum
 /**
  * @brief	Interface database instance representation type
  */
-typedef struct __pfe_if_db_tag pfe_if_db_t;
+typedef struct pfe_if_db_tag pfe_if_db_t;
 
 pfe_if_db_t * pfe_if_db_create(pfe_if_db_type_t type);
 void pfe_if_db_destroy(pfe_if_db_t *db);

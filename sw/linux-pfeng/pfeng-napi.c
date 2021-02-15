@@ -39,7 +39,7 @@ static int pfeng_logif_set_mac_address(struct net_device *netdev, void *p)
 	if (!ndata->logif_emac)
 		return 0;
 
-	ret = pfe_log_if_set_mac_addr(ndata->logif_emac, netdev->dev_addr);
+	ret = pfe_log_if_add_mac_addr(ndata->logif_emac, netdev->dev_addr, ndata->priv->local_drv_id);
 	if (!ret)
 		return 0;
 
@@ -152,6 +152,16 @@ static int pfeng_hif_client_add(struct pfeng_ndev *ndev)
 	} else
 		netdev_info(ndev->netdev, "HIF IHC not enabled\n");
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
+#ifndef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	/* Set local_drv_id to lowest managed HIF channel */
+	if (ndev->priv->local_drv_id > ndev->eth->hif_chnl_sc)
+		ndev->priv->local_drv_id = ndev->eth->hif_chnl_sc;
+#else
+	/* Set local_drv_id to IHC channel */
+	if (ndev->eth->ihc)
+		ndev->priv->local_drv_id = ndev->eth->hif_chnl_sc;
+#endif
 
 #ifdef PFE_CFG_PFE_SLAVE
 	/* start HIF channel driver */
@@ -404,7 +414,7 @@ static netdev_tx_t pfeng_logif_xmit(struct sk_buff *skb, struct net_device *netd
 	unsigned int plen = skb_headlen(skb);
 	u32 nfrags;
 	dma_addr_t des = 0;
-	int f, refid = -1;
+	int f, ref_num, refid = -1;
 
 	/* Cleanup Tx ring first */
 	pfeng_napi_txack(ndev, 0 /* no NAPI */);
@@ -454,7 +464,7 @@ static netdev_tx_t pfeng_logif_xmit(struct sk_buff *skb, struct net_device *netd
 	for (f = 0; f < nfrags; f++) {
 		skb_frag_t *frag = &skb_shinfo(skb)->frags[f];
 
-                plen = skb_frag_size(frag);
+		plen = skb_frag_size(frag);
 		if (!plen)
 			continue;
 
@@ -478,6 +488,24 @@ static netdev_tx_t pfeng_logif_xmit(struct sk_buff *skb, struct net_device *netd
 
 	if (likely(netdev->features & NETIF_F_IP_CSUM))
 		sg_list.flags.tx_flags |= HIF_TX_IP_CSUM | HIF_TX_TCP_CSUM | HIF_TX_UDP_CSUM;
+
+	if (unlikely((skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) &&
+		     (ndev->tshw_cfg.tx_type == HWTSTAMP_TX_ON))) {
+
+		ref_num = pfeng_hwts_store_tx_ref(ndev, skb);
+		if(likely(-ENOMEM != ref_num)) {
+			/* Tell stack to wait for hw timestamp */
+			skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+
+			/* Tell HW to make timestamp  with our ref_num */
+			sg_list.flags.tx_flags |= HIF_TX_ETS;
+			sg_list.est_ref_num = htons(ref_num);
+		}
+		/* In error case no warning is necessary, it will come later from the worker. */
+	}
+
+	/* Software tx time stamp */
+	skb_tx_timestamp(skb);
 
 	ret = pfe_hif_drv_client_xmit_sg_pkt(ndev->client, 0, &sg_list, (void *)(u64)refid);
 	if (unlikely(EOK != ret)) {
@@ -581,15 +609,23 @@ static int pfeng_napi_ioctl(struct net_device *netdev, struct ifreq *rq, int cmd
 	if (!netif_running(netdev))
 		return -EINVAL;
 
+#ifdef PFE_CFG_PFE_MASTER
 	switch (cmd) {
 	case SIOCGMIIPHY:
 	case SIOCGMIIREG:
 	case SIOCSMIIREG:
 		ret = phylink_mii_ioctl(ndev->phylink, rq, cmd);
 		break;
+	case SIOCSHWTSTAMP:
+		return pfeng_hwts_ioctl_set(ndev, rq);
+		break;
+	case SIOCGHWTSTAMP:
+		return pfeng_hwts_ioctl_get(ndev, rq);
+		break;
 	default:
 		break;
 	}
+#endif
 
 	return ret;
 }
@@ -631,15 +667,34 @@ static void pfeng_logif_set_rx_mode(struct net_device *netdev)
 {
 #ifdef PFE_CFG_PFE_MASTER
 	struct pfeng_ndev *ndev = netdev_priv(netdev);
+	pfe_ct_phy_if_id_t hif_id = ndev->priv->local_drv_id;
+
+	/* 	Since we don't know which addresses were removed, it's necessary
+		to flush all multicast addresses from the internal database and
+		then add only active addresses. */
+	if (pfe_log_if_flush_mac_addrs(ndev->logif_emac, PFE_FLUSH_MODE_MULTI, hif_id) == EOK)
+		netdev_dbg(netdev, "flushed multicast MAC addrs owned by ID %d\n", hif_id);
 
 	if (netdev->flags & IFF_PROMISC) {
 		/* Enable promiscuous mode */
 		if (pfe_log_if_promisc_enable(ndev->logif_emac) == EOK)
 			netdev_dbg(netdev, "promisc enabled\n");
+	} else if (netdev->flags & IFF_ALLMULTI) {
+		if (pfe_log_if_allmulti_enable(ndev->logif_emac) == EOK)
+			netdev_dbg(netdev, "allmulti enabled\n");
+	} else if (netdev->flags & IFF_MULTICAST) {
+		struct netdev_hw_addr *ha;
+		netdev_for_each_mc_addr(ha, netdev) {
+			if (pfe_log_if_add_mac_addr(ndev->logif_emac, ha->addr, hif_id) == EOK)
+				netdev_dbg(netdev, "added multicast MAC addr: %pM\n", ha->addr);
+		}
 	} else {
 		/* Disable promiscuous mode */
 		if (pfe_log_if_promisc_disable(ndev->logif_emac) == EOK)
 			netdev_dbg(netdev, "promisc disabled\n");
+		/* Disable allmulti mode */
+		if (pfe_log_if_allmulti_disable(ndev->logif_emac) == EOK)
+			netdev_dbg(netdev, "allmulti disabled\n");
 	}
 #endif
 }
@@ -671,6 +726,19 @@ static struct sk_buff *pfeng_hif_rx_get(struct pfeng_ndev *ndev, unsigned int *i
 
 		hif_hdr = (pfe_ct_hif_rx_hdr_t *)skb->data;
 		hif_hdr->flags = (pfe_ct_hif_rx_flags_t)oal_ntohs(hif_hdr->flags);
+
+		if (unlikely(hif_hdr->flags & HIF_RX_TS)) {
+			/* Get rx hw time stamp */
+			pfeng_hwts_skb_set_rx_ts(ndev, skb);
+		} else if(unlikely(hif_hdr->flags & HIF_RX_ETS)) {
+			/* Get tx hw time stamp */
+			pfeng_hwts_get_tx_ts(ndev, skb);
+			/* Skb has only time stamp report so consume it */
+			consume_skb(skb);
+			/* Refill buffer */
+			pfeng_hif_chnl_refill_rx_buffer(ndev, false);
+			continue;
+		}
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 		/* Check for IHC frame */
@@ -864,6 +932,13 @@ struct pfeng_ndev *pfeng_napi_if_create(struct pfeng_priv *priv, struct pfeng_et
 		goto err_ndev_reg;
 	}
 
+	/* Init hw timestamp */
+	ret = pfeng_hwts_init(ndev);
+	if (ret) {
+		netdev_err(netdev, "Cannot initialize timestamping: %d)\n", ret);
+		goto err_ndev_reg;
+	}
+
 	return ndev;
 
 err_ndev_reg:
@@ -882,6 +957,9 @@ void pfeng_napi_if_release(struct pfeng_ndev *ndev)
 
 	/* Remove HIF client */
 	pfeng_hif_client_remove(ndev);
+
+	/* Release timestamp memory */
+	pfeng_hwts_release(ndev);
 
 	/* Detach Bman */
 	if (ndev->bman.rx_pool) {

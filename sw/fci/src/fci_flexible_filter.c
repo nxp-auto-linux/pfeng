@@ -46,6 +46,18 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     fp_cmd = (fpp_flexible_filter_cmd_t *)(msg->msg_cmd.payload);
+    /* Important to initialize to avoid buffer overflows */    
+	if (*reply_len < sizeof(fpp_flexible_filter_cmd_t))
+	{
+		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_flexible_filter_cmd_t)\n");
+		return EINVAL;
+	}
+	else
+	{
+		/*	No data written to reply buffer (yet) */
+		*reply_len = 0U;
+	}     
+    
     switch (fp_cmd->action)
 	{
 		case FPP_ACTION_REGISTER:

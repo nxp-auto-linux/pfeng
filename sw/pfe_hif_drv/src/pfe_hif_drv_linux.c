@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -29,13 +29,13 @@
 
 #include <linux/skbuff.h>
 
-typedef struct __pfe_hif_pkt_tag pfe_hif_tx_meta_t;
-typedef struct __pfe_hif_pkt_tag pfe_hif_rx_meta_t;
+typedef struct pfe_hif_pkt_tag pfe_hif_tx_meta_t;
+typedef struct pfe_hif_pkt_tag pfe_hif_rx_meta_t;
 
 /**
  * @brief	The HIF driver client instance structure - single client
  */
-struct __attribute__((aligned(HAL_CACHE_LINE_SIZE), packed)) __pfe_pfe_hif_drv_client_tag
+struct __attribute__((aligned(HAL_CACHE_LINE_SIZE), packed)) pfe_pfe_hif_drv_client_tag
 {
 	pfe_ct_phy_if_id_t phy_if_id;
 	pfe_hif_drv_client_event_handler event_handler;
@@ -48,16 +48,12 @@ struct __attribute__((aligned(HAL_CACHE_LINE_SIZE), packed)) __pfe_pfe_hif_drv_c
 		uint32_t size;
 	} ihc;
 
-#ifdef PFE_CFG_IEEE1588_SUPPORT
-	/*	Storage for PTP timestamps */
-	pfe_hif_ptp_ts_db_t ptpdb;
-#endif /* PFE_CFG_IEEE1588_SUPPORT */
 };
 
 /**
  * @brief	The HIF driver instance structure
  */
-struct __attribute__((aligned(HAL_CACHE_LINE_SIZE), packed)) __pfe_hif_drv_tag
+struct __attribute__((aligned(HAL_CACHE_LINE_SIZE), packed)) pfe_hif_drv_tag
 {
 /*	Common */
 	pfe_hif_chnl_t *channel;
@@ -283,15 +279,6 @@ pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif_drv, pfe_c
 	client->event_handler = handler;
 	client->priv = priv;
 
-#ifdef PFE_CFG_IEEE1588_SUPPORT
-	/*	Initialize PTP timestamp database */
-	if (EOK != pfe_hif_ptp_ts_db_init(&client->ptpdb))
-	{
-		NXP_LOG_ERROR("PTP DB init failed\n");
-		goto unlock_and_fail;
-	}
-#endif /* PFE_CFG_IEEE1588_SUPPORT */
-
 	/*	Suspend HIF driver to get exclusive access to client table */
 	pfe_hif_drv_stop(hif_drv);
 
@@ -355,11 +342,6 @@ void pfe_hif_drv_client_unregister(pfe_hif_drv_client_t *client)
 
 		/*	Unregister from HIF. After this the HIF RX dispatcher will not fill client's RX queues. */
 		client->active = FALSE;
-
-#ifdef PFE_CFG_IEEE1588_SUPPORT
-		/*	Finalize the timestamp DB */
-		pfe_hif_ptp_ts_db_fini(&client->ptpdb);
-#endif /* PFE_CFG_IEEE1588_SUPPORT */
 
 		NXP_LOG_INFO("HIF client %d removed\n", client->phy_if_id);
 
@@ -706,6 +688,8 @@ errno_t pfe_hif_drv_client_xmit_sg_pkt(pfe_hif_drv_client_t *client, uint32_t qu
 
 	tx_hdr->flags = sg_list->flags.tx_flags;
 
+	tx_hdr->refnum = sg_list->est_ref_num;
+
 	/* 	Preprocess IHC message */
 	if (&client->hif_drv->ihc_client == client)
 	{
@@ -722,33 +706,6 @@ errno_t pfe_hif_drv_client_xmit_sg_pkt(pfe_hif_drv_client_t *client, uint32_t qu
 		tx_hdr->e_phy_ifs = oal_htonl(1U << client->phy_if_id);
 #endif /* PFE_CFG_ROUTE_HIF_TRAFFIC */
 	}
-
-#ifdef PFE_CFG_IEEE1588_SUPPORT
-	/*	Check if frame is a PTP message and need timestamp */
-	oal_util_ptp_header_t *ptph;
-	if (EOK == oal_util_parse_ptp(sg_list->items[0].data_va, sg_list->items[0].len, &ptph))
-	{
-		/*	Request TS */
-		tx_hdr->refnum = oal_util_get_unique_seqnum32() & 0xffff; /* Don't switch endian */
-		tx_hdr->flags |= HIF_TX_ETS;
-
-		/*	Store the TX frame to DB */
-		err = pfe_hif_ptp_ts_db_push_msg(&client->ptpdb, FALSE, tx_hdr->refnum, ptph->messageType,
-				oal_ntohs(ptph->sourcePortID), oal_ntohs(ptph->sequenceID));
-		if (EOK != err)
-		{
-			NXP_LOG_ERROR("Could not store PTP message: %d\n", err);
-			tx_hdr->flags &= ~HIF_TX_ETS;
-		}
-		else
-		{
-#ifdef PFE_CFG_DEBUG
-			NXP_LOG_DEBUG("New (TX) PTP frame: Type: 0x%x, Port: 0x%x, SeqID: 0x%x\n",
-					ptph->messageType, oal_ntohs(ptph->sourcePortID), oal_ntohs(ptph->sequenceID));
-#endif /* PFE_CFG_DEBUG */
-		}
-	}
-#endif /* PFE_CFG_IEEE1588_SUPPORT */
 
 	/*	Enqueue the HIF packet header */
 	err = pfe_hif_chnl_tx(	hif_drv->channel,
@@ -851,12 +808,9 @@ errno_t pfe_hif_drv_client_xmit_pkt(pfe_hif_drv_client_t *client, uint32_t queue
 errno_t pfe_hif_drv_client_get_ts(pfe_hif_drv_client_t *client, bool_t rx,
 		uint8_t type, uint16_t port, uint16_t seq_id, uint32_t *ts_sec, uint32_t *ts_nsec)
 {
-#ifdef PFE_CFG_IEEE1588_SUPPORT
-	return pfe_hif_ptp_ts_db_pop(&client->ptpdb, type, port, seq_id, ts_sec, ts_nsec, rx);
-#else
-	NXP_LOG_ERROR("PTP support not enabled\n");
-	return EINVAL;
-#endif /* */
+	NXP_LOG_ERROR("%s not supported\n", __func__);
+	return EOPNOTSUPP;
+
 }
 
 /**
@@ -899,7 +853,7 @@ pfe_hif_drv_t *pfe_hif_drv_create(pfe_hif_chnl_t *channel)
  */
 errno_t pfe_hif_drv_init(pfe_hif_drv_t *hif_drv)
 {
-	errno_t err;
+	errno_t ret;
 
 #ifdef PFE_CFG_NULL_ARG_CHECK
 	if (unlikely(NULL == hif_drv))
@@ -918,28 +872,28 @@ errno_t pfe_hif_drv_init(pfe_hif_drv_t *hif_drv)
 	/*	Initialize RX/TX resources */
 	hif_drv->started = FALSE;
 
-	err = pfe_hif_drv_create_data_channel(hif_drv);
-	if (EOK != err)
+	ret = pfe_hif_drv_create_data_channel(hif_drv);
+	if (EOK != ret)
 	{
-		NXP_LOG_ERROR("Could not initialize data channel: %d\n", err);
-		return err;
+		NXP_LOG_ERROR("Could not initialize data channel: %d\n", ret);
+		return ret;
 	}
 
 	/*	Attach channel RX ISR */
-	err = pfe_hif_chnl_set_event_cbk(hif_drv->channel, HIF_CHNL_EVT_RX_IRQ, &pfe_hif_drv_chnl_rx_isr, (void *)hif_drv);
-	if (EOK != err)
+	ret = pfe_hif_chnl_set_event_cbk(hif_drv->channel, HIF_CHNL_EVT_RX_IRQ, &pfe_hif_drv_chnl_rx_isr, (void *)hif_drv);
+	if (EOK != ret)
 	{
-		NXP_LOG_ERROR("Could not register RX ISR: %d\n", err);
+		NXP_LOG_ERROR("Could not register RX ISR: %d\n", ret);
 		pfe_hif_drv_destroy_data_channel(hif_drv);
-		return err;
+		return ret;
 	}
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	err = oal_mutex_init(&hif_drv->tx_lock);
-	if (EOK != err)
+	ret = oal_mutex_init(&hif_drv->tx_lock);
+	if (EOK != ret)
 	{
-		NXP_LOG_ERROR("Couldn't init mutex (tx_lock): %d\n", err);
-		return err;
+		NXP_LOG_ERROR("Couldn't init mutex (tx_lock): %d\n", ret);
+		return ret;
 	}
 #endif
 

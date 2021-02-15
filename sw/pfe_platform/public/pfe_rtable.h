@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -14,19 +14,19 @@
 #include "pfe_class.h"
 #include "pfe_phy_if.h" /* pfe_interface_t */
 
-typedef struct __pfe_rtable_tag pfe_rtable_t;
-typedef struct __pfe_rtable_entry_tag pfe_rtable_entry_t;
+typedef struct pfe_rtable_tag pfe_rtable_t;
+typedef struct pfe_rtable_entry_tag pfe_rtable_entry_t;
 
 typedef struct
 {
 	union
 	{
-		uint8_t _8[4];
+		uint8_t v4[4];
 	} v4;
 
 	union
 	{
-		uint16_t _8[16];
+		uint16_t v6[16];
 	} v6;
 
 	bool_t is_ipv4;
@@ -108,12 +108,11 @@ void pfe_rtable_entry_set_out_dport(pfe_rtable_entry_t *entry, uint16_t output_d
 void pfe_rtable_entry_set_proto(pfe_rtable_entry_t *entry, uint8_t proto);
 uint8_t pfe_rtable_entry_get_proto(pfe_rtable_entry_t *entry);
 errno_t pfe_rtable_entry_set_dstif(pfe_rtable_entry_t *entry, pfe_phy_if_t *iface);
-void pfe_rtable_entry_set_out_smac(pfe_rtable_entry_t *entry, pfe_mac_addr_t mac);
-void pfe_rtable_entry_set_out_dmac(pfe_rtable_entry_t *entry, pfe_mac_addr_t mac);
+void pfe_rtable_entry_set_out_mac_addrs(pfe_rtable_entry_t *entry, pfe_mac_addr_t smac, pfe_mac_addr_t dmac);
 void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan);
+uint16_t pfe_rtable_entry_get_out_vlan(pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_set_out_inner_vlan(pfe_rtable_entry_t *entry, uint16_t vlan);
 void pfe_rtable_entry_set_out_pppoe_sid(pfe_rtable_entry_t *entry, uint16_t sid);
-errno_t pfe_rtable_entry_set_action_flags(pfe_rtable_entry_t *entry, pfe_ct_route_actions_t flags);
 pfe_ct_route_actions_t pfe_rtable_entry_get_action_flags(pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_set_timeout(pfe_rtable_entry_t *entry, uint32_t timeout);
 void pfe_rtable_entry_set_route_id(pfe_rtable_entry_t *entry, uint32_t route_id);

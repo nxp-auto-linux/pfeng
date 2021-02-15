@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -72,7 +72,7 @@ enum Elf_Ident
     EI_MAG1         = 1, /* 'E' */
     EI_MAG2         = 2, /* 'L' */
     EI_MAG3         = 3, /* 'F' */
-    EI_CLASS        = 4, /* Architecture (32/64) */
+    EI_CLASS        = 4, /* Architecture 32-bit Architecture or 64-bit Architecture */
     EI_DATA         = 5, /* Byte Order */
     EI_VERSION      = 6, /* ELF Version */
     EI_OSABI        = 7, /* OS Specific */
@@ -83,13 +83,13 @@ enum Elf_Ident
 /* any section that is of type SHT_NOBITS and has the attribute SHF_ALLOC should be allocated */
 enum ShT_Types
 {
-    SHT_NULL      = 0,   /* Null section */
-    SHT_PROGBITS  = 1,   /* Program information */
-    SHT_SYMTAB    = 2,   /* Symbol table */
-    SHT_STRTAB    = 3,   /* String table */
-    SHT_RELA      = 4,   /* Relocation (w/ addend) */
-    SHT_NOBITS    = 8,   /* Not present in file */
-    SHT_REL       = 9,   /* Relocation (no addend) */
+    SHT_NULL      = 0U,   /* Null section */
+    SHT_PROGBITS  = 1U,   /* Program information */
+    SHT_SYMTAB    = 2U,   /* Symbol table */
+    SHT_STRTAB    = 3U,   /* String table */
+    SHT_RELA      = 4U,   /* Relocation with addend*/
+    SHT_NOBITS    = 8U,   /* Not present in file */
+    SHT_REL       = 9U,   /* Relocation (no addend) */
 };
 
 enum ShT_Attributes
@@ -353,11 +353,11 @@ static inline bool_t ELF_IsArchitecture(ELF_File_t *pElfFile, ELF_Arch_t eArch)
     bool_t bRetVal;
     if(TRUE == pElfFile->bIs64Bit)
     {
-        bRetVal = (eArch == pElfFile->Header.r64.e_machine) ? TRUE : FALSE;
+        bRetVal = ((uint16_t)eArch == pElfFile->Header.r64.e_machine) ? TRUE : FALSE;
     }
     else
     {
-        bRetVal = (eArch == pElfFile->Header.r32.e_machine) ? TRUE : FALSE;
+        bRetVal = ((uint16_t)eArch == pElfFile->Header.r32.e_machine) ? TRUE : FALSE;
     }
     return bRetVal;
 }

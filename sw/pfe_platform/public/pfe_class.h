@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -10,9 +10,10 @@
 #ifndef PFE_CLASS_H_
 #define PFE_CLASS_H_
 
- #include "pfe_ct.h"
+#include "pfe_ct.h"
+#include "pfe_fw_feature.h"
 
-typedef struct __pfe_classifier_tag pfe_class_t;
+typedef struct pfe_classifier_tag pfe_class_t;
 
 typedef struct
 {
@@ -38,8 +39,8 @@ void pfe_class_reset(pfe_class_t *class);
 void pfe_class_disable(pfe_class_t *class);
 errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf);
 errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_class_mmap_t *mmap);
-errno_t pfe_class_write_dmem(pfe_class_t *class, int32_t pe_idx, void *dst, void *src, uint32_t len);
-errno_t pfe_class_read_dmem(pfe_class_t *class, uint32_t pe_idx, void *dst, void *src, uint32_t len);
+errno_t pfe_class_write_dmem(void *class, int32_t pe_idx, void *dst, void *src, uint32_t len);
+errno_t pfe_class_read_dmem(void *class, int32_t pe_idx, void *dst, void *src, uint32_t len);
 errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst, void *src, uint32_t buffer_len, uint32_t read_len);
 errno_t pfe_class_read_pmem(pfe_class_t *class, uint32_t pe_idx, void *dst, void *src, uint32_t len);
 errno_t pfe_class_set_rtable(pfe_class_t *class, void *rtable_pa, uint32_t rtable_len, uint32_t entry_size);
@@ -51,6 +52,14 @@ addr_t pfe_class_dmem_heap_alloc(pfe_class_t *class, uint32_t size);
 void pfe_class_dmem_heap_free(pfe_class_t *class, addr_t addr);
 uint32_t pfe_class_put_data(pfe_class_t *class, pfe_ct_buffer_t *buf);
 errno_t pfe_class_set_flexible_filter(pfe_class_t *class, const uint32_t dmem_addr);
+errno_t pfe_class_set_fw_feature_state(pfe_class_t *class, const uint32_t position, const uint8_t enable);
+errno_t pfe_class_get_fw_feature_state(pfe_class_t *class, const uint32_t position, uint8_t *enable);
+errno_t pfe_class_get_fw_feature_entry(pfe_class_t *class, uint32_t position, pfe_ct_feature_desc_t **entry);
+char *pfe_class_get_fw_feature_string(pfe_class_t *class, uint32_t location);
 errno_t pfe_class_get_fw_version(pfe_class_t *class, pfe_ct_version_t *ver);
+
+errno_t pfe_class_get_feature_first(pfe_class_t *class, pfe_fw_feature_t **feature);
+errno_t pfe_class_get_feature_next(pfe_class_t *class, pfe_fw_feature_t **feature);
+errno_t pfe_class_get_feature(pfe_class_t *class, pfe_fw_feature_t **feature, const char *name);
 
 #endif /* PFE_CLASS_H_ */

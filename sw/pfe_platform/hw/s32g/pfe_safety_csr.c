@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2019-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -40,169 +40,169 @@ errno_t pfe_safety_cfg_isr(void *base_va)
 	hal_write32(reg_src, base_va + WSP_SAFETY_INT_SRC);
 
 	/* Process interrupts which are triggered AND enabled */
-	if (reg_src & reg_en & MASTER1_INT)
+	if ((reg_src & reg_en & MASTER1_INT) != 0U)
 	{
 		NXP_LOG_INFO("MASTER1_INT-Master1 Parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & MASTER2_INT)
+	if ((reg_src & reg_en & MASTER2_INT) != 0U)
 	{
 		NXP_LOG_INFO("MASTER2_INT-Master2 Parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & MASTER3_INT)
+	if ((reg_src & reg_en & MASTER3_INT) != 0U)
 	{
 		NXP_LOG_INFO("MASTER3_INT-Master3 Parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & MASTER4_INT)
+	if ((reg_src & reg_en & MASTER4_INT) != 0U)
 	{
 		NXP_LOG_INFO("MASTER4_INT-Master4 Parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & EMAC_CBUS_INT)
+	if ((reg_src & reg_en & EMAC_CBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("EMAC_CBUS_INT-EMACX cbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & EMAC_DBUS_INT)
+	if ((reg_src & reg_en & EMAC_DBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("EMAC_DBUS_INT-EMACX dbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & CLASS_CBUS_INT)
+	if ((reg_src & reg_en & CLASS_CBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("CLASS_CBUS_INT-Class cbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & CLASS_DBUS_INT)
+	if ((reg_src & reg_en & CLASS_DBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("CLASS_DBUS_INT-Class dbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & TMU_CBUS_INT)
+	if ((reg_src & reg_en & TMU_CBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("TMU_CBUS_INT-TMU cbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & TMU_DBUS_INT)
+	if ((reg_src & reg_en & TMU_DBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("TMU_DBUS_INT-TMU dbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & HIF_CBUS_INT)
+	if ((reg_src & reg_en & HIF_CBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("HIF_CBUS_INT-HGPI cbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & HIF_DBUS_INT)
+	if ((reg_src & reg_en & HIF_DBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("HIF_DBUS_INT-HGPI dbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & HIF_NOCPY_CBUS_INT)
+	if ((reg_src & reg_en & HIF_NOCPY_CBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("HIF_NOCPY_CBUS_INT-HIF_NOCPY cbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & HIF_NOCPY_DBUS_INT)
+	if ((reg_src & reg_en & HIF_NOCPY_DBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("HIF_NOCPY_DBUS_INT-HIF_NOCPY dbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & UPE_CBUS_INT)
+	if ((reg_src & reg_en & UPE_CBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("UPE_CBUS_INT-UTIL_PE cbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & UPE_DBUS_INT)
+	if ((reg_src & reg_en & UPE_DBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("UPE_DBUS_INT-UTIL_PE dbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & HRS_CBUS_INT)
+	if ((reg_src & reg_en & HRS_CBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("HRS_CBUS_INT-HRS cbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & BRIDGE_CBUS_INT)
+	if ((reg_src & reg_en & BRIDGE_CBUS_INT) != 0U)
 	{
 		NXP_LOG_INFO("BRIDGE_CBUS_INT-BRIDGE cbus parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & EMAC_SLV_INT)
+	if ((reg_src & reg_en & EMAC_SLV_INT) != 0U)
 	{
 		NXP_LOG_INFO("EMAC_SLV_INT-EMACX slave parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & BMU1_SLV_INT)
+	if ((reg_src & reg_en & BMU1_SLV_INT) != 0U)
 	{
 		NXP_LOG_INFO("BMU1_SLV_INT-BMU1 slave parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & BMU2_SLV_INT)
+	if ((reg_src & reg_en & BMU2_SLV_INT) != 0U)
 	{
 		NXP_LOG_INFO("BMU2_SLV_INT-BMU2 slave parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & CLASS_SLV_INT)
+	if ((reg_src & reg_en & CLASS_SLV_INT) != 0U)
 	{
 		NXP_LOG_INFO("CLASS_SLV_INT-CLASS slave parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & HIF_SLV_INT)
+	if ((reg_src & reg_en & HIF_SLV_INT) != 0U)
 	{
 		NXP_LOG_INFO("HIF_SLV_INT-HIF slave parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & HIF_NOCPY_SLV_INT)
+	if ((reg_src & reg_en & HIF_NOCPY_SLV_INT) != 0U)
 	{
 		NXP_LOG_INFO("HIF_NOCPY_SLV_INT-HIF_NOCPY slave parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & LMEM_SLV_INT)
+	if ((reg_src & reg_en & LMEM_SLV_INT) != 0U)
 	{
 		NXP_LOG_INFO("LMEM_SLV_INT-LMEM slave parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & TMU_SLV_INT)
+	if ((reg_src & reg_en & TMU_SLV_INT) != 0U)
 	{
 		NXP_LOG_INFO("TMU_SLV_INT-TMU slave parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & UPE_SLV_INT)
+	if ((reg_src & reg_en & UPE_SLV_INT) != 0U)
 	{
 		NXP_LOG_INFO("UPE_SLV_INT-UTIL_PE slave parity error\n");
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & WSP_GLOBAL_SLV_INT)
+	if ((reg_src & reg_en & WSP_GLOBAL_SLV_INT) != 0U)
 	{
 		NXP_LOG_INFO("WSP_GLOBAL_SLV_INT-WSP_GLOBAL slave parity error\n");
 		ret = EOK;

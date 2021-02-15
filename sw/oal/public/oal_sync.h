@@ -24,8 +24,8 @@
  *
  */
 
-#ifndef PUBLIC_OAL_SYNC_H_
-#define PUBLIC_OAL_SYNC_H_
+#ifndef OAL_SYNC_H_
+#define OAL_SYNC_H_
 
 /*
  * QNX
@@ -66,8 +66,6 @@
 #else
 #error "PFE_CFG_TARGET_OS_xx was not set!"
 #endif /* PFE_CFG_TARGET_OS_xx */
-
-#endif /* PUBLIC_OAL_SYNC_H_ */
 
 /**
  * @typedef oal_spinlock_t
@@ -143,3 +141,5 @@ static inline errno_t oal_mutex_unlock(oal_mutex_t *mutex);
 
 /** @}*/
 /** @}*/
+
+#endif /* OAL_SYNC_H_ */

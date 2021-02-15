@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -38,11 +38,11 @@ struct __fci_tag
 {
 	fci_core_t *core;
 
-    pfe_if_db_t *phy_if_db;         /* Pointer to platform driver phy_if DB */
-    bool_t phy_if_db_initialized;	/* Logical interface DB was initialized */
+	pfe_if_db_t *phy_if_db;			/* Pointer to platform driver phy_if DB */
+	bool_t phy_if_db_initialized;	/* Logical interface DB was initialized */
 
-    pfe_if_db_t *log_if_db;         /* Pointer to platform driver log_if DB */
-    bool_t log_if_db_initialized;	/* Logical interface DB was initialized */
+	pfe_if_db_t *log_if_db;			/* Pointer to platform driver log_if DB */
+	bool_t log_if_db_initialized;	/* Logical interface DB was initialized */
 
 	uint32_t if_session_id;			/* Holds session ID for interface session */
 
@@ -58,7 +58,7 @@ struct __fci_tag
 	oal_mutex_t db_mutex;
 	bool_t db_mutex_initialized;
 
-    pfe_class_t *class;
+	pfe_class_t *class;
 
 	struct
 	{
@@ -82,6 +82,7 @@ errno_t fci_connections_ipv4_ct_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_ct_cm
 errno_t fci_connections_ipv6_ct_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_ct6_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_connections_ipv4_timeout_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_timeout_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *reply_buf, uint32_t *reply_len);
+errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_static_ent_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_routes_drop_one(fci_rt_db_entry_t *route);
 void fci_routes_drop_all(void);
 void fci_routes_drop_all_ipv4(void);

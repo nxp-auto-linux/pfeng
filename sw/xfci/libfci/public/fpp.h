@@ -1,15 +1,15 @@
 /* =========================================================================
  *  Copyright (C) 2010 Mindspeed Technologies, Inc.
  *  Copyright 2014-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2020 NXP
+ *  Copyright 2017-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
  * ========================================================================= */
 
 
-#ifndef __FPP__
-#define __FPP__
+#ifndef FPP_H_
+#define FPP_H_
 
 /*	Compiler abstraction macros */
 #ifndef CAL_PACKED
@@ -257,13 +257,18 @@ typedef enum fpp_proto {
  *     // ID of route previously created with .FPP_CMD_IP_ROUTE command (network endian)
  *     .route_id = ...,
  *     // ID of reply route previously created with .FPP_CMD_IP_ROUTE command (network endian)
- *     .route_id_reply = ...
+ *     .route_id_reply = ...,
+ *     // VLAN tag in normal direction. If non-zero then it is added to routed traffic which
+ *     // is untagged. If the routed traffic is tagged, then the outer tag will be replaced.
+ *     .vlan = ...,
+ *     // VLAN tag in reply direction. Same meaning as .vlan.
+ *     .vlan_reply = ...
  *   };
  * @endcode
  * By default the connection is created as bi-directional. It means that two routing table entries
  * are created at once: one for standard flow given by .saddr, .daddr, .sport, .dport, and .protocol
  * and one for reverse flow defined by .saddr_reply, .daddr_reply, .sport_reply and .dport_reply. To
- * create single-directional connection, either:
+ * create uni-directional connection, either:
  * - set `.flags |= CTCMD_FLAGS_REP_DISABLED` and don't set @c route_id_reply, or
  * - set `.flags |= CTCMD_FLAGS_ORIG_DISABLED` and don't set @c route_id.
  *
@@ -282,6 +287,9 @@ typedef enum fpp_proto {
  * -# `sport_reply != dport`: Destination port of packets in original direction will be changed
  *    from @c dport to @c sport_reply. In case of bi-directional connection, source port of packets
  *    in reply direction will be changed from @c sport_reply to @c dport.
+ *
+ * To disable port numbers check, just set both `.sport` and `.dport` to zero. This allows routing
+ * using only IP addresses and protocol number.
  *
  * Action FPP_ACTION_DEREGISTER
  * ----------------------------
@@ -375,14 +383,19 @@ typedef enum fpp_proto {
  *     // ID of route previously created with .FPP_CMD_IP_ROUTE command (network endian)
  *     .route_id = ...,
  *     // ID of reply route previously created with .FPP_CMD_IP_ROUTE command (network endian)
- *     .route_id_reply = ...
+ *     .route_id_reply = ...,
+ *     // VLAN tag in normal direction. If non-zero then it is added to routed traffic which
+ *     // is untagged. If the routed traffic is tagged, then the outer tag will be replaced.
+ *     .vlan = ...,
+ *     // VLAN tag in reply direction. Same meaning as .vlan.
+ *     .vlan_reply = ...
  *   };
  * @endcode
  *
  * By default the connection is created as bi-directional. It means that two routing table entries
  * are created at once: one for standard flow given by .saddr, .daddr, .sport, .dport, and .protocol
  * and one for reverse flow defined by .saddr_reply, .daddr_reply, .sport_reply and .dport_reply. To
- * create single-directional connection, either:
+ * create uni-directional connection, either:
  * - set `.flags |= CTCMD_FLAGS_REP_DISABLED` and don't set @c route_id_reply, or
  * - set `.flags |= CTCMD_FLAGS_ORIG_DISABLED` and don't set @c route_id.
  *
@@ -401,6 +414,9 @@ typedef enum fpp_proto {
  * -# `sport_reply != dport`: Destination port of packets in original direction will be changed
  *    from @c dport to @c sport_reply. In case of bi-directional connection, source port of packets
  *    in reply direction will be changed from @c sport_reply to @c dport.
+ *
+ * To disable port numbers check, just set both `.sport` and `.dport` to zero. This allows routing
+ * using only IP addresses and protocol number.
  *
  * Action FPP_ACTION_DEREGISTER
  * ----------------------------
@@ -472,6 +488,8 @@ typedef struct CAL_PACKED {
 	uint32_t fwmark;
 	uint32_t route_id;			/**< Associated route ID. See @ref FPP_CMD_IP_ROUTE. */
 	uint32_t route_id_reply;	/**< Route for 'reply' direction. Applicable only for bi-directional connections. */
+	uint16_t vlan;				/**< VLAN tag. If non-zero, then it will be added to the routed packet. */
+	uint16_t vlan_reply;		/**< VLAN tag in reply direction. If non-zero, then it will be added to the routed packet. */
 } fpp_ct_cmd_t;
 
 typedef struct CAL_PACKED {
@@ -525,6 +543,8 @@ typedef struct CAL_PACKED {
 	uint32_t fwmark;
 	uint32_t route_id;			/**< Associated route ID. See @ref FPP_CMD_IP_ROUTE. */
 	uint32_t route_id_reply;	/**< Route for 'reply' direction. Applicable only for bi-directional connections. */
+	uint16_t vlan;				/**< VLAN tag. If non-zero, then it will be added to the routed packet. */
+	uint16_t vlan_reply;		/**< VLAN tag in reply direction. If non-zero, then it will be added to the routed packet. */
 } fpp_ct6_cmd_t;
 
 typedef struct CAL_PACKED {
@@ -1977,16 +1997,6 @@ typedef struct fpp_pktcap_query_cmd{
 	uint16_t	status;
 }__attribute__((__packed__)) fpp_pktcap_query_cmd_t;
 
-#if 0
-typedef struct fpp_pktcap_flf_cmd { /* First level filter */
-        uint16_t flen; /* filter length */
-        unsigned char  ifindex;
-        unsigned char  mfg; /*  The most significant bit tells fpp if more fragments are expected.
-                        The least significant 3 bits give the sequence no of the fragment.  */
-        struct bpf_insn filter[MAX_FLF_INSTRUCTIONS];
-}__attribute__((__packed__)) fpp_pktcap_flf_cmd_t;
-#endif /* 0 */
-
 /*----------------------------------------PKTCAP-------------------------------*/
 
 /* Port Update command - begin */
@@ -2119,4 +2129,4 @@ typedef struct fpp_l2tp_itf_add_cmd {
 typedef struct fpp_l2tp_itf_del_cmd {
 	char ifname[IFNAMSIZ];
 }__attribute__((__packed__)) fpp_l2tp_itf_del_cmd_t;
-#endif
+#endif /* FPP_H_ */

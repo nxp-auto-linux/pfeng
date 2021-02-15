@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
  *  Copyright 2017-2020 NXP
  *
@@ -107,7 +107,7 @@
 #define CLASS_BUS_ACCESS_RDATA		(CBUS_CLASS_CSR_BASE_ADDR + 0x230U)
 #define CLASS_ROUTE_HASH_ENTRY_SIZE	(CBUS_CLASS_CSR_BASE_ADDR + 0x234U)
 #define ROUTE_ENTRY_SIZE(size)		((size) & 0x3ffU)
-#define ROUTE_HASH_SIZE(hash_bits)	(((hash_bits) & 0xffU) << 16)
+#define ROUTE_HASH_SIZE(hash_bits)	(((uint32_t)(hash_bits) & 0xffUL) << 16U)
 #define CLASS_ROUTE_TABLE_BASE		(CBUS_CLASS_CSR_BASE_ADDR + 0x238U)
 #define CLASS_ROUTE_MULTI			(CBUS_CLASS_CSR_BASE_ADDR + 0x23cU)
 #define CLASS_SMEM_OFFSET			(CBUS_CLASS_CSR_BASE_ADDR + 0x240U)
@@ -288,10 +288,10 @@
 #define CLASS_PE_CONFIG					(CBUS_CLASS_CSR_BASE_ADDR + 0x510U)
 
 /* CLASS defines */
-#define CLASS_PBUF_SIZE				0x200U
-#define CLASS_PBUF_HEADER_OFFSET	0x00U
+#define CLASS_PBUF_SIZE				0x200UL
+#define CLASS_PBUF_HEADER_OFFSET	0x00UL
 
-#define CLASS_PBUF0_BASE_ADDR		0x000U
+#define CLASS_PBUF0_BASE_ADDR		0x000UL
 #define CLASS_PBUF1_BASE_ADDR		(CLASS_PBUF0_BASE_ADDR + CLASS_PBUF_SIZE)
 #define CLASS_PBUF2_BASE_ADDR		(CLASS_PBUF1_BASE_ADDR + CLASS_PBUF_SIZE)
 #define CLASS_PBUF3_BASE_ADDR		(CLASS_PBUF2_BASE_ADDR + CLASS_PBUF_SIZE)
@@ -301,40 +301,41 @@
 #define CLASS_PBUF2_HEADER_BASE_ADDR	(CLASS_PBUF2_BASE_ADDR + CLASS_PBUF_HEADER_OFFSET)
 #define CLASS_PBUF3_HEADER_BASE_ADDR	(CLASS_PBUF3_BASE_ADDR + CLASS_PBUF_HEADER_OFFSET)
 
-#define CLASS_PE0_RO_DM_ADDR0_VAL	((CLASS_PBUF1_BASE_ADDR << 16) | CLASS_PBUF0_BASE_ADDR)
-#define CLASS_PE0_RO_DM_ADDR1_VAL	((CLASS_PBUF3_BASE_ADDR << 16) | CLASS_PBUF2_BASE_ADDR)
+#define CLASS_PE0_RO_DM_ADDR0_VAL	((CLASS_PBUF1_BASE_ADDR << 16U) | CLASS_PBUF0_BASE_ADDR)
+#define CLASS_PE0_RO_DM_ADDR1_VAL	((CLASS_PBUF3_BASE_ADDR << 16U) | CLASS_PBUF2_BASE_ADDR)
 
-#define CLASS_PE0_QB_DM_ADDR0_VAL	((CLASS_PBUF1_HEADER_BASE_ADDR << 16) | CLASS_PBUF0_HEADER_BASE_ADDR)
-#define CLASS_PE0_QB_DM_ADDR1_VAL	((CLASS_PBUF3_HEADER_BASE_ADDR << 16) | CLASS_PBUF2_HEADER_BASE_ADDR)
+#define CLASS_PE0_QB_DM_ADDR0_VAL	((CLASS_PBUF1_HEADER_BASE_ADDR << 16U) | CLASS_PBUF0_HEADER_BASE_ADDR)
+#define CLASS_PE0_QB_DM_ADDR1_VAL	((CLASS_PBUF3_HEADER_BASE_ADDR << 16U) | CLASS_PBUF2_HEADER_BASE_ADDR)
 
-#define RT_TWO_LEVEL_REF(x)			((!!x) ? (1U << 0) : 0U)
-#define PHYNO_IN_HASH(x)			((!!x) ? (1U << 1) : 0U)
-#define PARSE_ROUTE_EN(x)			((!!x) ? (1U << 3) : 0U)
-#define VLAN_AWARE_BRIDGE(x)		((!!x) ? (1U << 4) : 0U)
-#define PARSE_BRIDGE_EN(x)			((!!x) ? (1U << 5) : 0U)
-#define IPALIGNED_PKT(x)			((!!x) ? (1U << 6) : 0U)
-#define ARC_HIT_CHECK_EN(x)			((!!x) ? (1U << 7) : 0U)
-#define VLAN_AWARE_BRIDGE_PHY1(x)	((!!x) ? (1U << 8) : 0U)
-#define VLAN_AWARE_BRIDGE_PHY2(x)	((!!x) ? (1U << 9) : 0U)
-#define VLAN_AWARE_BRIDGE_PHY3(x)	((!!x) ? (1U << 10) : 0U)
-#define CLASS_TOE(x)				((!!x) ? (1U << 11) : 0U)
-#define ASYM_HASH(x)				(((x) & 0x3U) << 12)
+#define RT_TWO_LEVEL_REF(x)			((!!x) ? (1UL << 0U) : 0U)
+#define PHYNO_IN_HASH(x)			((!!x) ? (1UL << 1U) : 0U)
+#define PARSE_ROUTE_EN(x)			((!!x) ? (1UL << 3U) : 0U)
+#define VLAN_AWARE_BRIDGE(x)		((!!x) ? (1UL << 4U) : 0U)
+#define PARSE_BRIDGE_EN(x)			((!!x) ? (1UL << 5U) : 0U)
+#define IPALIGNED_PKT(x)			((!!x) ? (1UL << 6U) : 0U)
+#define ARC_HIT_CHECK_EN(x)			((!!x) ? (1UL << 7U) : 0U)
+#define VLAN_AWARE_BRIDGE_PHY1(x)	((!!x) ? (1UL << 8U) : 0U)
+#define VLAN_AWARE_BRIDGE_PHY2(x)	((!!x) ? (1UL << 9U) : 0U)
+#define VLAN_AWARE_BRIDGE_PHY3(x)	((!!x) ? (1UL << 10U) : 0U)
+#define CLASS_TOE(x)				((!!x) ? (1UL << 11U) : 0U)
+#define ASYM_HASH(x)				((((uint32_t)(x)) & 0x3UL) << 12U)
 #define ASYM_HASH_NORMAL			0x0U
 #define ASYM_HASH_SPORT_CRC			0x1U
 #define ASYM_HASH_SIP_CRC			0x2U
 #define ASYM_HASH_SIP_SPORT_CRC		0x3U
-#define SYM_RTENTRY(x)				((!!x) ? (1U << 14) : 0U)
-#define QB2BUS_ENDIANESS(x)			((!!x) ? (1U << 15) : 0U)
-#define LEN_CHECK(x)				((!!x) ? (1U << 16) : 0U)
-#define USE_DEFAULT_VLANID(x)		((!!x) ? (1U << 0) : 0U)
-#define DEF_VLANID(x)				(((x) & 0xfffU) << 1)
-#define PE_IBUS_WRITE				(1U<<31)
-#define PE_IBUS_READ				(0U<<31)
-#define PE_IBUS_ACCESS_IMEM			(1U<<17)
-#define PE_IBUS_ACCESS_DMEM			(1U<<18)
-#define PE_IBUS_PE_ID(x)			(((x) & 0xfU) << 20)
-#define PE_IBUS_WREN(x)				(((x) & 0xfU) << 24)
-#define PE_IBUS_BYTES(x)			((1U << (x)) - 1U) << (4 - (x)) /* 0x1 = LSB, 0x8 = MSB (BE) */
+#define SYM_RTENTRY(x)				((!!x) ? (1UL << 14U) : 0U)
+#define QB2BUS_ENDIANESS(x)			((!!x) ? (1UL << 15U) : 0U)
+#define LEN_CHECK(x)				((!!x) ? (1UL << 16U) : 0U)
+#define USE_DEFAULT_VLANID(x)		((!!x) ? (1UL << 0U) : 0UL)
+#define DEF_VLANID(x)				((((uint32_t)(x)) & 0xfffUL) << 1U)
+#define PE_IBUS_WRITE				(1UL<<31U)
+#define PE_IBUS_READ				(0UL<<31U)
+#define PE_IBUS_ACCESS_IMEM			(1UL<<17U)
+#define PE_IBUS_ACCESS_DMEM			(1UL<<18U)
+#define PE_IBUS_PE_ID(x)			((((uint32_t)(x)) & 0xfUL) << 20U)
+#define PE_IBUS_WREN(x)				((((uint32_t)(x)) & 0xfUL) << 24U)
+#define PE_IBUS_BYTES(x)			((1UL << (x)) - 1U) << (4U - (x)) /* 0x1 = LSB, 0x8 = MSB (BE) */
+
 
 void pfe_class_cfg_set_config(void *base_va, pfe_class_cfg_t *cfg);
 void pfe_class_cfg_reset(void *base_va);

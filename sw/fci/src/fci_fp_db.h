@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -18,6 +18,27 @@
 * @brief Macro to define position in function pfe_fp_add_rule_to_table() as the first one
 */
 #define FCI_FP_RULE_POSITION_FIRST 0x0
+
+typedef struct fci_fp_table_tag fci_fp_table_t;
+
+/**
+* @brief Criterion for table database search
+*/
+typedef enum
+{
+    FP_TABLE_CRIT_ALL,
+    FP_TABLE_CRIT_NAME,
+    FP_TABLE_CRIT_ADDRESS
+} fci_fp_table_criterion_t;
+
+/**
+* @brief Argument (requested value) for table database
+*/
+typedef union
+{
+    char_t *name;
+    uint32_t address;
+} fci_fp_table_criterion_arg_t;
 
 /* Initialize the module */
 void fci_fp_db_init(void);
@@ -40,6 +61,9 @@ errno_t fci_fp_db_remove_rule_from_table(char_t *rule_name);
 errno_t fci_fp_db_destroy_table(char_t *name, bool_t force);
 /* Destroy the rule */
 errno_t fci_fp_db_destroy_rule(char_t *name);
+
+/* DB query functions */
+fci_fp_table_t *fci_fp_db_get_first(fci_fp_table_criterion_t crit, void *arg);
 
 /* Get the table from address */
 errno_t fci_fp_db_get_table_from_addr(uint32_t addr, char_t **table_name);

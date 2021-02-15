@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -133,7 +133,7 @@ errno_t pfe_hif_cfg_isr(void *base_va)
 	glob_src = hal_read32(base_va + HIF_INT_SRC);
 	if (unlikely(0U != glob_src))
 	{
-		if (glob_src & HIF_INT_SRC_HIF_ERR_INT)
+		if ((glob_src & HIF_INT_SRC_HIF_ERR_INT) != 0U)
 		{
 			/*	Get enabled interrupts */
 			reg_en = hal_read32(base_va + HIF_ERR_INT_EN);
@@ -147,7 +147,7 @@ errno_t pfe_hif_cfg_isr(void *base_va)
 			hal_write32((reg_en & ~reg_src), base_va + HIF_ERR_INT_EN);
 
 			/*	Process interrupts which are triggered AND enabled */
-			if (reg_src & reg_en & HIF_ERR_INT)
+			if ((reg_src & reg_en & HIF_ERR_INT) != 0U)
 			{
 				NXP_LOG_INFO("HIF_ERR_INT (0x%x)\n", reg_src);
 				ret = EOK;
@@ -158,7 +158,7 @@ errno_t pfe_hif_cfg_isr(void *base_va)
 			}
 		}
 
-		if (glob_src & HIF_INT_SRC_HIF_TX_FIFO_ERR_INT)
+		if ((glob_src & HIF_INT_SRC_HIF_TX_FIFO_ERR_INT) != 0U)
 		{
 			/*	Get enabled interrupts */
 			reg_en = hal_read32(base_va + HIF_TX_FIFO_ERR_INT_EN);
@@ -172,7 +172,7 @@ errno_t pfe_hif_cfg_isr(void *base_va)
 			hal_write32((reg_en & ~reg_src), base_va + HIF_TX_FIFO_ERR_INT_EN);
 
 			/*	Process interrupts which are triggered AND enabled */
-			if (reg_src & reg_en & HIF_TX_FIFO_ERR_INT)
+			if ((reg_src & reg_en & HIF_TX_FIFO_ERR_INT) != 0U)
 			{
 				NXP_LOG_INFO("HIF_TX_FIFO_ERR_INT (0x%x)\n", reg_src);
 				ret = EOK;
@@ -183,7 +183,7 @@ errno_t pfe_hif_cfg_isr(void *base_va)
 			}
 		}
 
-		if (glob_src & HIF_INT_SRC_HIF_RX_FIFO_ERR_INT)
+		if ((glob_src & HIF_INT_SRC_HIF_RX_FIFO_ERR_INT) != 0U)
 		{
 			/*	Get enabled interrupts */
 			reg_en = hal_read32(base_va + HIF_RX_FIFO_ERR_INT_EN);
@@ -197,7 +197,7 @@ errno_t pfe_hif_cfg_isr(void *base_va)
 			hal_write32((reg_en & ~reg_src), base_va + HIF_RX_FIFO_ERR_INT_EN);
 
 			/*	Process interrupts which are triggered AND enabled */
-			if (reg_src & reg_en & HIF_RX_FIFO_ERR_INT)
+			if ((reg_src & reg_en & HIF_RX_FIFO_ERR_INT) != 0U)
 			{
 				NXP_LOG_INFO("HIF_RX_FIFO_ERR_INT (0x%x)\n", reg_src);
 				ret = EOK;
@@ -288,14 +288,14 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 	hal_write32((reg_en & ~reg_src), base_va + HIF_CHn_INT_EN(channel_id));
 
 	/*	Process interrupts which are triggered AND enabled */
-	if (reg_src & reg_en & (BDP_CSR_RX_PKT_CH_INT|BDP_CSR_RX_CBD_CH_INT))
+	if ((reg_src & reg_en & (BDP_CSR_RX_PKT_CH_INT|BDP_CSR_RX_CBD_CH_INT)) != 0U)
 	{
 		*events |= HIF_CHNL_EVT_RX_IRQ;
 		ret = EOK;
 	}
 
 	/*	Process interrupts which are triggered AND enabled */
-	if (reg_src & reg_en & (BDP_CSR_TX_PKT_CH_INT|BDP_CSR_TX_CBD_CH_INT))
+	if ((reg_src & reg_en & (BDP_CSR_TX_PKT_CH_INT|BDP_CSR_TX_CBD_CH_INT)) != 0U)
 	{
 		*events |= HIF_CHNL_EVT_TX_IRQ;
 		ret = EOK;
@@ -306,7 +306,7 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 				| BDP_RD_CSR_TX_TIMEOUT_CH_INT|BDP_WR_CSR_TX_TIMEOUT_CH_INT
 				| DXR_CSR_RX_TIMEOUT_CH_INT|DXR_CSR_TX_TIMEOUT_CH_INT)))
 	{
-		if (reg_src & reg_en & BDP_RD_CSR_RX_TIMEOUT_CH_INT)
+		if ((reg_src & reg_en & BDP_RD_CSR_RX_TIMEOUT_CH_INT) != 0U)
 		{
 #if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
 	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
@@ -318,7 +318,7 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 #endif /* PFE_CFG_IP_VERSION */
 		}
 
-		if (reg_src & reg_en & BDP_WR_CSR_RX_TIMEOUT_CH_INT)
+		if ((reg_src & reg_en & BDP_WR_CSR_RX_TIMEOUT_CH_INT) != 0U)
 		{
 #if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
 	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
@@ -330,7 +330,7 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 #endif /* PFE_CFG_IP_VERSION */
 		}
 
-		if (reg_src & reg_en & BDP_RD_CSR_TX_TIMEOUT_CH_INT)
+		if ((reg_src & reg_en & BDP_RD_CSR_TX_TIMEOUT_CH_INT) != 0U)
 		{
 #if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
 	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
@@ -342,7 +342,7 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 #endif /* PFE_CFG_IP_VERSION */
 		}
 
-		if (reg_src & reg_en & BDP_WR_CSR_TX_TIMEOUT_CH_INT)
+		if ((reg_src & reg_en & BDP_WR_CSR_TX_TIMEOUT_CH_INT) != 0U)
 		{
 #if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
 	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
@@ -354,7 +354,7 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 #endif /* PFE_CFG_IP_VERSION */
 		}
 
-		if (reg_src & reg_en & DXR_CSR_RX_TIMEOUT_CH_INT)
+		if ((reg_src & reg_en & DXR_CSR_RX_TIMEOUT_CH_INT) != 0U)
 		{
 #if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
 	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
@@ -366,7 +366,7 @@ errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_ev
 #endif /* PFE_CFG_IP_VERSION */
 		}
 
-		if (reg_src & reg_en & DXR_CSR_TX_TIMEOUT_CH_INT)
+		if ((reg_src & reg_en & DXR_CSR_TX_TIMEOUT_CH_INT) != 0U)
 		{
 #if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
 	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
@@ -476,7 +476,7 @@ errno_t pfe_hif_cfg_init(void *base_va)
 
 	/*	SOFT RESET */
 	hal_write32(0xfu, base_va + HIF_SOFT_RESET);
-	while (hal_read32(base_va + HIF_SOFT_RESET))
+	while (hal_read32(base_va + HIF_SOFT_RESET) != 0U)
 	{
 		if (++ii > 1000u)
 		{
@@ -489,8 +489,8 @@ errno_t pfe_hif_cfg_init(void *base_va)
 	}
 
 #if (TRUE == PFE_HIF_CFG_USE_BD_POLLING)
-	hal_write32((0xff << 16) | (0xff), base_va + HIF_TX_POLL_CTRL);
-	hal_write32((0xff << 16) | (0xff), base_va + HIF_RX_POLL_CTRL);
+	hal_write32((0xffUL << 16U) | (0xffUL), base_va + HIF_TX_POLL_CTRL);
+	hal_write32((0xffUL << 16U) | (0xffUL), base_va + HIF_RX_POLL_CTRL);
 #endif /* PFE_HIF_CFG_USE_BD_POLLING */
 
 	/*	MICS */
@@ -503,7 +503,7 @@ errno_t pfe_hif_cfg_init(void *base_va)
 				/* | RXDXR_AXI_WRITE_DONE */
 				/* | TXDXR_AXI_WRITE_DONE */
 				| HIF_TIMEOUT_EN
-				| BD_START_SEQ_NUM(0x0)
+				| BD_START_SEQ_NUM(0x0U)
 				, base_va + HIF_MISC);
 
 	hal_write32(100000000U, base_va + HIF_TIMEOUT_REG);
@@ -590,7 +590,7 @@ void pfe_hif_chnl_cfg_tx_disable(void *base_va, uint32_t channel_id)
 	}
 
 	reg = hal_read32(base_va + HIF_CTRL_CHn(channel_id));
-	reg &= ~((uint32_t)TX_DMA_ENABLE|TX_BDP_POLL_CNTR_EN);
+	reg &= ~(TX_DMA_ENABLE|TX_BDP_POLL_CNTR_EN);
 	hal_write32(reg, base_va + HIF_CTRL_CHn(channel_id));
 
 	/*	Disable TX IRQ */
@@ -644,7 +644,7 @@ void pfe_hif_chnl_cfg_rx_disable(void *base_va, uint32_t channel_id)
 	}
 
 	reg = hal_read32(base_va + HIF_CTRL_CHn(channel_id));
-	reg &= ~((uint32_t)RX_DMA_ENABLE|RX_BDP_POLL_CNTR_EN);
+	reg &= ~(RX_DMA_ENABLE|RX_BDP_POLL_CNTR_EN);
 	hal_write32(reg, base_va + HIF_CTRL_CHn(channel_id));
 
 	pfe_hif_chnl_cfg_rx_irq_mask(base_va, channel_id);
@@ -815,7 +815,7 @@ void pfe_hif_chnl_cfg_set_rx_wb_table(void *base_va, uint32_t channel_id, void *
 		return;
 	}
 
-	if (tbl_len > 0xffff)
+	if (tbl_len > 0xffffU)
 	{
 		NXP_LOG_ERROR("Unsupported WB table size: %d\n", tbl_len);
 		return;
@@ -932,7 +932,7 @@ uint16_t pfe_hif_chnl_cfg_get_rx_seqnum(void *base_va, uint32_t channel_id)
 	}
 	else
 	{
-		return ((hal_read32(base_va + HIF_RX_STATUS_0_CHn(channel_id)) + 1U) & 0xffffU);
+		return (uint16_t)((hal_read32(base_va + HIF_RX_STATUS_0_CHn(channel_id)) + 1U) & 0xffffU);
 	}
 }
 
@@ -950,7 +950,7 @@ uint16_t pfe_hif_chnl_cfg_get_tx_seqnum(void *base_va, uint32_t channel_id)
 	}
 	else
 	{
-		return ((hal_read32(base_va + HIF_TX_STATUS_1_CHn(channel_id)) + 1U) & 0xffffU);
+		return (uint16_t)((hal_read32(base_va + HIF_TX_STATUS_1_CHn(channel_id)) + 1U) & 0xffffU);
 	}
 }
 
@@ -1062,9 +1062,9 @@ uint32_t pfe_hif_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, ui
 	{
 		/*	Get version */
 		reg = hal_read32(base_va + HIF_VERSION);
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Revision                  : 0x%x\n", (reg >> 24) & 0xff);
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Version                   : 0x%x\n", (reg >> 16) & 0xff);
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "ID                        : 0x%x\n", reg & 0xffff);
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Revision                  : 0x%x\n", (reg >> 24U) & 0xffU);
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Version                   : 0x%x\n", (reg >> 16U) & 0xffU);
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "ID                        : 0x%x\n", reg & 0xffffU);
 	}
 
 	reg = hal_read32(base_va + HIF_RX_STATE);

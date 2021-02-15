@@ -81,6 +81,23 @@ static int pfeng_ethtool_nway_reset(struct net_device *netdev)
 	return phylink_ethtool_nway_reset(ndev->phylink);
 }
 
+static int pfeng_ethtool_get_ts_info(struct net_device *netdev, struct ethtool_ts_info *info)
+{
+	struct pfeng_ndev *ndev = netdev_priv(netdev);
+
+	ethtool_op_get_ts_info(netdev, info);
+
+	pfeng_hwts_ethtool(ndev, info);
+
+	if (ndev->ptp_clock) {
+		info->phc_index = ptp_clock_index(ndev->ptp_clock);
+	} else {
+		netdev_err(ndev->netdev, "No PTP clock available\n");
+	}
+
+	return 0;
+}
+
 static const struct ethtool_ops pfeng_ethtool_ops = {
 	.get_drvinfo = pfeng_ethtool_getdrvinfo,
 	.get_link = ethtool_op_get_link,
@@ -89,6 +106,7 @@ static const struct ethtool_ops pfeng_ethtool_ops = {
 	.set_pauseparam = pfeng_ethtool_set_pauseparam,
 	.get_link_ksettings = pfeng_ethtool_get_link_ksettings,
 	.set_link_ksettings = pfeng_ethtool_set_link_ksettings,
+	.get_ts_info = pfeng_ethtool_get_ts_info,
 };
 
 void pfeng_ethtool_init(struct net_device *netdev)

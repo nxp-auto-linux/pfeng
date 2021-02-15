@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -25,17 +25,25 @@
 #include "hal.h"
 
 #include "pfe_ct.h"
+#include "linked_list.h"
 #include "pfe_log_if.h"
 #include "pfe_idex.h" /* The RPC provider */
 #include "pfe_platform_rpc.h" /* The RPC codes and data structures */
 
-struct __pfe_log_if_tag
+struct pfe_log_if_tag
 {
 	pfe_phy_if_t *parent;			/*!< Parent physical interface */
 	char_t *name;					/*!< Interface name */
 	uint8_t id;						/*!< Interface ID */
+	LLIST_t mac_addr_list;			/*!< Useful for the future function "get_all_mac_addrs" */
 	oal_mutex_t lock;
 };
+
+typedef struct __pfe_mac_addr_entry_tag
+{
+	pfe_mac_addr_t addr;	/*	The MAC address */
+	LLIST_t iterator;		/*	List chain entry */
+} pfe_mac_addr_list_entry_t;
 
 static errno_t pfe_log_if_db_lock(void)
 {
@@ -108,6 +116,7 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, char_t *name)
 	else
 	{
 		memset(iface, 0, sizeof(pfe_log_if_t));
+		LLIST_Init(&iface->mac_addr_list);
 		iface->parent = parent;
 		iface->id = rpc_ret.log_if_id;
 
@@ -179,6 +188,8 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 {
 	pfe_platform_rpc_pfe_log_if_destroy_arg_t req = {0U};
 	errno_t ret;
+	LLIST_t *item, *tmp_item;
+	pfe_mac_addr_list_entry_t *entry;
 
 	if (NULL != iface)
 	{
@@ -190,6 +201,32 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 		if (EOK != ret)
 		{
 			NXP_LOG_DEBUG("Can't destroy remote instance: %d\n", ret);
+		}
+		else
+		{
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+			if (EOK != oal_mutex_lock(&iface->lock))
+			{
+				NXP_LOG_DEBUG("mutex lock failed\n");
+			}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+			/*	Remove MAC addresses also from local list */
+			LLIST_ForEachRemovable(item, tmp_item, &iface->mac_addr_list)
+			{
+				entry = LLIST_Data(item, pfe_mac_addr_list_entry_t, iterator);
+				if (NULL != entry)
+				{
+					LLIST_Remove(&entry->iterator);
+					oal_mm_free(entry);
+					entry = NULL;
+				}
+			}	
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+			if (EOK != oal_mutex_unlock(&iface->lock))
+			{
+				NXP_LOG_DEBUG("mutex unlock failed\n");
+			}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 		}
 
 		if (NULL != iface->name)
@@ -519,17 +556,20 @@ errno_t pfe_log_if_get_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t *rul
 }
 
 /**
- * @brief		Set MAC address
+ * @brief		Add new MAC address
  * @param[in]	iface The interface instance
  * @param[in]	addr The MAC address to add
+ * @param[in]	owner The identification of driver instance
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  * @retval		ENOEXEC Command failed
  */
-errno_t pfe_log_if_set_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
+errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr, pfe_ct_phy_if_id_t owner)
 {
-	pfe_platform_rpc_pfe_log_if_set_mac_addr_arg_t req = {0};
+	pfe_platform_rpc_pfe_log_if_add_mac_addr_arg_t req = {0};
 	errno_t ret = EOK;
+	pfe_mac_addr_list_entry_t *entry;
+	(void)owner; /* Owner will be added directly to the RPC */
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == addr)))
@@ -546,18 +586,34 @@ errno_t pfe_log_if_set_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
 	}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	/*	Set new MAC address */
-	req.log_if_id = iface->id;
-	ct_assert(sizeof(req.addr) == sizeof(pfe_mac_addr_t));
-	memcpy(req.addr, addr, sizeof(pfe_mac_addr_t));
-
 	(void)pfe_log_if_db_lock();
 
-	/*	Request the change */
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_SET_MAC_ADDR, &req, sizeof(req), NULL, 0U);
-	if (EOK != ret)
+	/*	Add address to local list */
+	entry = oal_mm_malloc(sizeof(pfe_mac_addr_list_entry_t));
+	if (NULL == entry)
 	{
-		NXP_LOG_DEBUG("Can't set MAC address: %d\n", ret);
+		NXP_LOG_ERROR("Memory allocation failed\n");
+		ret = ENOMEM;
+	}
+	else
+	{
+		memcpy(entry->addr, addr, sizeof(pfe_mac_addr_t));
+		LLIST_AddAtEnd(&entry->iterator, &iface->mac_addr_list);
+
+		/*	Ask the master driver to add the MAC address */
+		req.log_if_id = iface->id;
+		ct_assert(sizeof(req.addr) == sizeof(pfe_mac_addr_t));
+		memcpy(req.addr, addr, sizeof(pfe_mac_addr_t));
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_ADD_MAC_ADDR, &req, sizeof(req), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("Can't set MAC address: %d\n", ret);
+
+			/*	Remove the address from local list */
+			LLIST_Remove(&entry->iterator);
+			oal_mm_free(entry);
+			entry = NULL;
+		}
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -580,9 +636,8 @@ errno_t pfe_log_if_set_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
  */
 errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
 {
-	pfe_platform_rpc_pfe_log_if_get_mac_addr_arg_t req = {0};
-	pfe_platform_rpc_pfe_log_if_get_mac_addr_ret_t rpc_ret = {0};
 	errno_t ret = EOK;
+	pfe_mac_addr_list_entry_t *entry;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == addr)))
@@ -592,26 +647,112 @@ errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	req.log_if_id = iface->id;
-
-	(void)pfe_log_if_db_lock();
-
-	/*	Execute query */
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_GET_MAC_ADDR, &req, sizeof(req), &rpc_ret, sizeof(rpc_ret));
-	if (EOK != ret)
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("Can't get MAC address: %d\n", ret);
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+	if (FALSE == LLIST_IsEmpty(&iface->mac_addr_list))
+	{
+		/*	Get first address from the list */
+		entry = (pfe_mac_addr_list_entry_t *)LLIST_Data(iface->mac_addr_list.prNext, pfe_mac_addr_list_entry_t, iterator);
+
+		/*	Provide the MAC address */
+		memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
+		ret = EOK;
 	}
 	else
 	{
-		ct_assert(sizeof(rpc_ret.addr) == sizeof(pfe_mac_addr_t));
-		memcpy(addr, rpc_ret.addr, sizeof(pfe_mac_addr_t));
+		/*	No address assigned */
+		ret = ENOENT;
 	}
 
-	(void)pfe_log_if_db_unlock();
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 	return ret;
 }
+
+/**
+* @brief		Delete MAC addresses added by owner with defined type
+ * @param[in]	iface The interface instance
+ * @param[in]	mode The flush mode (flush all or just certain type of MAC addresses)
+ * @param[in]	owner The identification of driver instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ * @retval		ENOEXEC Command failed
+ */
+errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_flush_mode_t mode, pfe_ct_phy_if_id_t owner)
+{
+	pfe_platform_rpc_pfe_log_if_flush_mac_addrs_arg_t req = {0};
+	errno_t ret = EOK;
+	pfe_mac_addr_list_entry_t *entry;
+	LLIST_t *item, *tmp_item;
+	(void)owner; /* Owner will be added directly to the RPC */
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == iface) || (NULL == addr)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+	/*	Pass parameters */
+	req.log_if_id = iface->id;
+	req.mode = mode;
+
+	(void)pfe_log_if_db_lock();
+
+	/*	Request the change */
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_FLUSH_MAC_ADDRS, &req, sizeof(req), NULL, 0U);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("Can't flush multicast MAC addresses: %d\n", ret);
+	}
+	else
+	{
+		/*	Remove MAC addresses also from local list */
+		LLIST_ForEachRemovable(item, tmp_item, &iface->mac_addr_list)
+		{
+			entry = LLIST_Data(item, pfe_mac_addr_list_entry_t, iterator);
+			if (NULL != entry)
+			{
+				if ((mode == PFE_FLUSH_MODE_ALL) ||
+					((mode == PFE_FLUSH_MODE_MULTI) && (TRUE  == pfe_emac_is_multi(entry->addr))) ||
+					((mode == PFE_FLUSH_MODE_UNI)   && (FALSE == pfe_emac_is_multi(entry->addr))))
+				{
+					LLIST_Remove(&entry->iterator);
+					oal_mm_free(entry);
+					entry = NULL;
+				}
+			}
+		}	
+	}
+
+	(void)pfe_log_if_db_unlock();
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	return ret;
+}
+
 /**
  * @brief			Get mask of egress interfaces
  * @param[in]		iface The interface instance
@@ -748,8 +889,17 @@ errno_t pfe_log_if_clear_mac_addr(pfe_log_if_t *iface)
 {
 	pfe_platform_rpc_pfe_log_if_clear_mac_addr_arg_t req = {0};
 	errno_t ret;
+	LLIST_t *item, *tmp_item;
+	pfe_mac_addr_list_entry_t *entry;
 
 	req.log_if_id = iface->id;
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 	(void)pfe_log_if_db_lock();
 
@@ -759,8 +909,30 @@ errno_t pfe_log_if_clear_mac_addr(pfe_log_if_t *iface)
 	{
 		NXP_LOG_DEBUG("Can't clear MAC address: %d\n", ret);
 	}
+	else
+	{
+		
+		/*	Remove MAC addresses also from local list */
+		LLIST_ForEachRemovable(item, tmp_item, &iface->mac_addr_list)
+		{
+			entry = LLIST_Data(item, pfe_mac_addr_list_entry_t, iterator);
+			if (NULL != entry)
+			{
+				LLIST_Remove(&entry->iterator);
+				oal_mm_free(entry);
+				entry = NULL;
+			}
+		}	
+	}
 
 	(void)pfe_log_if_db_unlock();
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 	return ret;
 }
@@ -991,13 +1163,86 @@ __attribute__((pure)) bool_t pfe_log_if_is_promisc(pfe_log_if_t *iface)
 }
 
 /**
+ * @brief		Enable ALLMULTI mode
+ * @details		Function sets logical interface to ALLMULTI mode and
+ * 				also enables ALLMULTI mode on underlying physical
+ * 				interface.
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_log_if_allmulti_enable(pfe_log_if_t *iface)
+{
+	pfe_platform_rpc_pfe_log_if_allmulti_enable_arg_t req = {0};
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	req.log_if_id = iface->id;
+
+	(void)pfe_log_if_db_lock();
+
+	/*	Enable allmulti mode */
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_ALLMULTI_ENABLE, &req, sizeof(req), NULL, 0U);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("Can't enable allmulti mode: %d\n", ret);
+	}
+
+	(void)pfe_log_if_db_unlock();
+
+	return ret;
+}
+
+/**
+ * @brief		Disable ALLMULTI mode
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_log_if_allmulti_disable(pfe_log_if_t *iface)
+{
+	pfe_platform_rpc_pfe_log_if_allmulti_disable_arg_t req = {0};
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	req.log_if_id = iface->id;
+
+	(void)pfe_log_if_db_lock();
+
+	/*	Disable allmulti mode */
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_ALLMULTI_DISABLE, &req, sizeof(req), NULL, 0U);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("Can't disable allmulti mode: %d\n", ret);
+	}
+
+	(void)pfe_log_if_db_unlock();
+
+	return ret;
+}
+
+/**
  * @brief		Get interface name
  * @param[in]	iface The interface instance
  * @return		Pointer to name string or NULL if failed/not found.
  */
-__attribute__((pure)) char_t *pfe_log_if_get_name(pfe_log_if_t *iface)
+__attribute__((pure)) const char_t *pfe_log_if_get_name(pfe_log_if_t *iface)
 {
-	static char_t *unknown = "(unknown)";
+	static const char_t *unknown = "(unknown)";
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))

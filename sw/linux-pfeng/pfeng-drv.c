@@ -223,6 +223,7 @@ int pfeng_drv_remove(struct pfeng_priv *priv)
 	if (!list_empty(&priv->ndev_list)) {
 		list_for_each_entry(ndev, &priv->ndev_list, lnode) {
 #ifdef PFE_CFG_PFE_MASTER
+			pfeng_ptp_unregister(ndev);
 			pfeng_mdio_unregister(ndev);
 #endif
 			pfeng_napi_if_release(ndev);
@@ -308,6 +309,20 @@ int pfeng_drv_probe(struct pfeng_priv *priv)
 	ret = pfeng_fw_load(priv, priv->fw_class_name, priv->fw_util_name);
 	if (ret)
 		goto err;
+
+	priv->ptp_reference_clk = 0U;
+	priv->ptp_clk = devm_clk_get(dev, "pfe_ts");
+	if (IS_ERR(priv->ptp_clk)) {
+		dev_warn(dev, "Failed to get pfe_ts clock. PTP will be disabled.\n");
+		priv->ptp_clk = NULL;
+	} else {
+		ret = clk_prepare_enable(priv->ptp_clk);
+		if (ret) {
+			priv->ptp_clk = NULL;
+			dev_err(dev, "Failed to enable clock pfe_ts: %d\n", ret);
+		} else
+			priv->ptp_reference_clk = clk_get_rate(priv->ptp_clk);
+	}
 #endif
 
 	/* Start PFE Platform */
@@ -330,12 +345,14 @@ int pfeng_drv_probe(struct pfeng_priv *priv)
 		ndev = pfeng_napi_if_create(priv, eth);
 		if (!ndev)
 			goto err;
-
 #ifdef PFE_CFG_PFE_MASTER
+		pfeng_ptp_register(ndev);
 		pfeng_mdio_register(ndev);
 #endif
 		list_add_tail(&ndev->lnode, &priv->ndev_list);
 	}
+
+	dev_info(dev, "driver id: %u\n", priv->local_drv_id);
 
 	return 0;
 

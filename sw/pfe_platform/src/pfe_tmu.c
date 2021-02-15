@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -16,20 +16,20 @@
 #include "pfe_pe.h"
 #include "pfe_tmu.h"
 
-struct __pfe_tmu_tag
+struct pfe_tmu_tag
 {
 	void *cbus_base_va;
 };
 
 /*	Scheduler instance */
-struct __pfe_tmu_sch_tag
+struct pfe_tmu_sch_tag
 {
 	void *cbus_base_va;			/*	CBUS base virtual address */
 	void *sch_base_va;			/*	Scheduler base address */
 };
 
 /*	Shaper instance */
-struct __pfe_tmu_shp_tag
+struct pfe_tmu_shp_tag
 {
 	void *cbus_base_va;			/*	CBUS base virtual address */
 	void *shp_base_va;			/*	Shaper base address */
@@ -90,7 +90,7 @@ pfe_tmu_t *pfe_tmu_create(void *cbus_base_va, uint32_t pe_num, pfe_tmu_cfg_t *cf
 	}
 	else
 	{
-		memset(tmu, 0, sizeof(pfe_tmu_t));
+		(void)memset(tmu, 0, sizeof(pfe_tmu_t));
 		tmu->cbus_base_va = cbus_base_va;
 	}
 	
@@ -402,13 +402,13 @@ errno_t pfe_tmu_queue_set_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t q
 		{
 			case TMU_Q_MODE_TAIL_DROP:
 			{
-				ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, max);
+				ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, (uint16_t)max);
 				break;
 			}
 
 			case TMU_Q_MODE_WRED:
 			{
-				ret_val = pfe_tmu_q_mode_set_wred(tmu->cbus_base_va, phy, queue, min, max);
+				ret_val = pfe_tmu_q_mode_set_wred(tmu->cbus_base_va, phy, queue, (uint16_t)min, (uint16_t)max);
 				break;
 			}
 

@@ -31,8 +31,8 @@
  *
  */
 
-#ifndef __OAL__
-#define __OAL__
+#ifndef OAL_H_
+#define OAL_H_
 
 #ifndef PFE_CFG_H
 	#error Please include the pfe_cfg.h first.
@@ -48,6 +48,6 @@
 #include "oal_util.h"
 #include "oal_job.h"
 
-#endif /* __OAL__ */
+#endif /* OAL_H_ */
 
 /** @}*/

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  Copyright (C) 2007 Mindspeed Technologies, Inc.
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2020 NXP
+ *  Copyright 2017-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -50,7 +50,7 @@
  *                 function @ref fci_catch() returns.
  *              -# User calls fci_close() to finalize the @ref FCI_CLIENT instance.
  * @endif
- * 
+ *
  * @section a_and_d Acronyms and Definitions
  *              - <b>Physical Interface:</b> Interface physically able to send and receive data
  *                (EMAC, HIF). Physical interfaces are pre-defined and can't be added or removed in
@@ -73,7 +73,7 @@
  *                to an IP connection (TCP, UDP, other). Term is equal to 'routing table entry'.
  *                Conntracks contain reference to routes which shall be used in case when a packet
  *                is matching the conntrack properties.
- * 
+ *
  * @section lfs Functions Summary
  *              - @ref fci_open() <br>
  *                <i>Connect to endpoint and create client instance.</i>
@@ -89,7 +89,7 @@
  *                <i>Poll for and process received asynchronous messages.</i>
  *              - @ref fci_register_cb() <br>
  *                <i>Register callback to be called in case of received message.</i>
- * 
+ *
  * @section fci_cs Commands Summary
  *              - @ref FPP_CMD_PHY_IF <br>
  *                <i>Management of physical interfaces.</i>
@@ -139,7 +139,7 @@
  * @endif
  *              - @ref FPP_CMD_DATA_BUF_AVAIL <br>
  *                <i>Network accelerator sends a data buffer to host.</i>
- * 
+ *
  * @section if_mgmt Interface Management
  *              Physical Interface
  *              ------------------
@@ -153,15 +153,15 @@
  *              it is placed at head position of the list so the default one remains on tail. User
  *              can change the used classification algorithm via update option of the
  *              @ref FPP_CMD_PHY_IF command.
- * 
+ *
  *              Here are supported operations related to physical interfaces:
- * 
+ *
  *              To @b list available physical interfaces:
  *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
  *              -# Read first interface via @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_QUERY.
  *              -# Read next interface(s) via @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_QUERY_CONT.
  *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
- * 
+ *
  *              To @b modify a physical interface (read-modify-write):
  *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
  *              -# Read interface properties via @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_QUERY +
@@ -169,7 +169,7 @@
  *              -# Modify desired properties.
  *              -# Write modifications using @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
  *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
- * 
+ *
  *              Logical Interface
  *              -----------------
  *              Logical interfaces specify traffic endpoints. They are connected to respective
@@ -179,12 +179,12 @@
  *              logical interfaces associated with an EMAC1, one accepting traffic with VLAN ID = 10
  *              and the second one accepting all remaining traffic. First one can be configured to
  *              forward the matching traffic to EMAC1 and the second one to drop the rest.
- * 
+ *
  *              Logical interfaces can be created and destroyed in runtime using actions related
  *              to the @ref FPP_CMD_LOG_IF command. Note that first created logical interface
  *              on a physical interface becomes the default one (tail). All subsequent logical
  *              interfaces are added at head position of list of interfaces.
- * 
+ *
  *              \image latex flexible_router.eps "Configuration Example" width=7cm
  *              The example shows scenario when physical interface EMAC1 is configured in
  *              @ref FPP_IF_OP_FLEXIBLE_ROUTER operation mode:
@@ -204,20 +204,20 @@
  *              -# Packet is physically transmitted via dedicated interfaces. Packet replica sent
  *                 to HIF carries metadata describing the matching Logical and Physical interface
  *                 so the host driver can easily dispatch the traffic.
- * 
+ *
  *              Here are supported operations related to logical interfaces:
- * 
+ *
  *              To @b create new logical interface:
  *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
  *              -# Create logical interface via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_REGISTER.
  *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
- * 
+ *
  *              To @b list available logical interfaces:
  *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
  *              -# Read first interface via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_QUERY.
  *              -# Read next interface(s) via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_QUERY_CONT.
  *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
- * 
+ *
  *              To @b modify an interface (read-modify-write):
  *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
  *              -# Read interface properties via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_QUERY +
@@ -225,12 +225,12 @@
  *              -# Modify desired properties.
  *              -# Write modifications using @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_UPDATE.
  *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
- * 
+ *
  *              To @b remove logical interface:
  *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
  *              -# Remove logical interface via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_DEREGISTER.
  *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
- * 
+ *
  * @section feature Features
  * @subsection l3_router IPv4/IPv6 Router (TCP/UDP)
  *              Introduction
@@ -245,7 +245,7 @@
  *              destination node. The PFE can be configured to identify flows which do not need to enter
  *              the host CPU using its internal routing table, and to ensure that the right packets are
  *              forwarded to the right destination interfaces.
- * 
+ *
  *              Configuration
  *              -------------
  *              The FCI contains mechanisms to setup particular Physical Interfaces to start classifying
@@ -266,27 +266,27 @@
  *              -# Enable physical interface(s) by setting the @ref FPP_IF_ENABLED flag via the
  *                 @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
  *              -# Optionally change MAC address(es) via @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
- * 
+ *
  *              From this point the traffic matching created conntracks is processed according to
  *              conntrack properties (e.g. NAT) and fast-forwarded to configured physical interfaces.
  *              Conntracks are subject of aging. When no traffic has been seen for specified time
  *              period (see @ref FPP_CMD_IPV4_SET_TIMEOUT) the conntracks are removed.
- * 
+ *
  *              Routes and conntracks can be listed using query commands:
  *              - @ref FPP_CMD_IP_ROUTE + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
  *              - @ref FPP_CMD_IPV4_CONNTRACK + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
  *              - @ref FPP_CMD_IPV6_CONNTRACK + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
- * 
+ *
  *              When conntrack or route are no more required, they can be deleted via corresponding
  *              command:
  *              - @ref FPP_CMD_IP_ROUTE + @ref FPP_ACTION_DEREGISTER,
  *              - @ref FPP_CMD_IPV4_CONNTRACK + @ref FPP_ACTION_DEREGISTER, and
  *              - @ref FPP_CMD_IPV6_CONNTRACK + @ref FPP_ACTION_DEREGISTER.
- * 
+ *
  *              Deleting route causes deleting all associated conntracks. When the latest route on
  *              an interface is deleted, the interface is put to default operation mode
  *              @ref FPP_IF_OP_DEFAULT.
- * 
+ *
  * @subsection l2_bridge L2 Bridge (Switch)
  *              Introduction
  *              ------------
@@ -317,7 +317,7 @@
  *                utilizes PFE HW accelerators to perform MAC and VLAN table lookup thus this operation
  *                is highly optimized. Host CPU SW is only responsible for correct bridge configuration
  *                using the dedicated API.
- * 
+ *
  *              L2 Bridge VLAN Awareness and Domains
  *              --------------------------
  *              The VLAN awareness is based on entities called Bridge Domains (BD) which are visible to
@@ -328,7 +328,7 @@
  *              - Information about which of the member interfaces are ’tagged’ or ’untagged’.
  *              - Instruction how to process matching uni-cast packets (forward, flood, discard, ...).
  *              - Instruction how to process matching multi-cast packets.
- * 
+ *
  *              The L2 Bridge then consists of multiple BD types:
  *              - <b>The Default BD:</b>
  *                Default domain is used by the classification process when a packet has been received
@@ -342,7 +342,7 @@
  *              - <b>Set of particular Standard BDs:</b>
  *                Standard domain. Specifies what to do when packet with VLAN ID matching the Standard
  *                BD is received.
- * 
+ *
  *              Configuration
  *              -------------
  *              Here are steps needed to configure VLAN-aware switch:
@@ -361,7 +361,7 @@
  *              -# Set promiscuous mode and enable physical interface(s) by setting the
  *                 @ref FPP_IF_ENABLED and @ref FPP_IF_PROMISC flags via the @ref FPP_CMD_PHY_IF +
  *                 @ref FPP_ACTION_UPDATE.
- * 
+ *
  *              For simple, non-VLAN aware switch do:
  *              -# Optionally get list of available physical interfaces and their IDs. See the
  *                 @ref if_mgmt.
@@ -375,19 +375,40 @@
  *              -# Set promiscuous mode and enable physical interface(s) by setting the
  *                 @ref FPP_IF_ENABLED and @ref FPP_IF_PROMISC flags via the @ref FPP_CMD_PHY_IF +
  *                 @ref FPP_ACTION_UPDATE.
- * 
+ *
  *              Once interfaces are in bridge domain, all ingress traffic is processed according
  *              to bridge domain setup. Unknown source MAC addresses are being learned and after
  *              specified time period without traffic are being aged.
- * 
+ *
  *              An interface can be added to or removed from BD at any time via
  *              @ref FPP_CMD_L2_BD + @ref FPP_ACTION_UPDATE. When interface is removed
  *              from all bridge domains (is not associated with any BD), its operation mode is
  *              automatically switched to @ref FPP_IF_OP_DEFAULT and MAC promiscuous mode is disabled.
- * 
+ *
  *              List of available bridge domains with their properties can be retrieved using
  *              @ref FPP_CMD_L2_BD + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
- * 
+ *
+ * @subsection l2l3_bridge L2L3 Bridge
+ *             Introduction
+ *             ------------
+ *             The L2L3 Bridge is an extension of the available L2 bridge and IPv4/IPv6 Router algorithms.
+ *             It requires both algorithms to be configured and (at least one) static entry with local
+ *             MAC address flag being set, which denotes that the MAC address belongs to the IP Router.
+ *
+ *             Whenever a frame arrives it is checked against the local MAC addresses and it is passed
+ *             to the IP Router algorithm when the frame destination address equals to one of local MAC
+ *             addresses. Otherwise, it is passed to the L2 bridge.
+ *
+ *             Note that static entry forward list is ignored when the frame is passed to the IP router.
+ *
+ *             Configuration
+ *             -------------
+ *             To run the L2L3 Bridge mode
+ *             -# Configure L2 Bridge and IP Router algorithms as described in respective sections.
+ *             -# Create at least one static entry with local address flag being set.
+ *             -# Set physical interface(s) to L2L3 Bridge mode using
+ *                 @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
+ *
  * @subsection flex_parser Flexible Parser
  *             Introduction
  *             ------------
@@ -401,12 +422,12 @@
  *                be used to perform the comparison.
  *             - 16-bit Configuration field specifying rule properties including the offset to the frame
  *               data which shall be compared.
- * 
+ *
  *             The number of entries within the table is configurable by user. The table is processed
  *             sequentially starting from entry index 0 until the last one is reached or classification
  *             is terminated by a rule configuration. When none of rules has decided that the packet
  *             shall be accepted or rejected the default result is REJECT.
- * 
+ *
  *             Example
  *             -------
  *             This is example of how Flexible Parser table can be configured. Every row contains single
@@ -414,7 +435,7 @@
  *             terminated with given result, CONTINUE means that next rule (sequentially) will be
  *             evaluated. CONTINUE with N says that next rule to be evaluated is N. Evaluation of the
  *             latest rule not resulting in ACCEPT or REJECT results in REJECT.
- * 
+ *
  *             Rule|Flags                         |Mask |Next|Condition
  *             ----|------------------------------|-----|----|-----------------------------------------
  *             0   |FP_FL_INVERT<br>FP_FL_REJECT  |!= 0 |n/a |if ((PacketData&Mask) != (RuleData&Mask))<br> then REJECT<br> else CONTINUE
@@ -425,23 +446,23 @@
  *             5   |FP_FL_ACCEPT                  |= 0  |n/a |ACCEPT
  *             6   |FP_FL_INVERT<br>FP_FL_ACCEPT  |!= 0 |n/a |if ((PacketData&Mask) != (RuleData&Mask))<br> then ACCEPT<br> else CONTINUE
  *             7   |FP_FL_REJECT                  |= 0  |n/a |REJECT
- * 
+ *
  *             Configuration
  *             -------------
  *             -# Create a Flexible Parser table using @ref FPP_CMD_FP_TABLE + @ref FPP_ACTION_REGISTER.
  *             -# Create one or multiple rules with @ref FPP_CMD_FP_RULE + @ref FPP_ACTION_REGISTER.
  *             -# Assing rules to tables via @ref FPP_CMD_FP_TABLE + @ref FPP_ACTION_USE_RULE.
  *                Rules can be removed from table with @ref FPP_ACTION_UNUSE_RULE.
- * 
+ *
  *             Created table can be used for instance as argument of @ref flex_router. When not needed
  *             the table can be deleted with @ref FPP_CMD_FP_TABLE + @ref FPP_ACTION_DEREGISTER
  *             and particular rules with @ref FPP_CMD_FP_RULE + @ref FPP_ACTION_DEREGISTER. This
  *             cleanup should be always considered since tables and rules are stored in limited PFE
  *             internal memory.
- * 
+ *
  *             Flexible parser classification introduces performance penalty which is proportional
  *             to number of rules and complexity of the table.
- * 
+ *
  * @subsection flex_router Flexible Router
  *             Introduction
  *             ------------
@@ -458,7 +479,7 @@
  *             interface(s), dropped, sent to host, ...). In case when more rules are specified, the
  *             logical interface can be configured to apply logical AND or OR to get the match result.
  *             Please see the example within @ref if_mgmt.
- * 
+ *
  *             Configuration
  *             -------------
  *             -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
@@ -471,7 +492,7 @@
  *             -# Configure existing logical interface(s) (set match rules and arguments) via
  *                @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_UPDATE.
  *             -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
- * 
+ *
  *             Note that Flexible Router can be used to implement certain form of @ref l3_router as
  *             well as @ref l2_bridge. Such usage is of course not recommended since both mentioned
  *             features exist as fully optimized implementation and usage of Flexible Router this way
@@ -483,11 +504,11 @@
  *             The IPsec offload feature is a premium one and requires a special premium firmware version
  *             to be available for use. It allows the chosen IP frames to be transparently encoded by the IPsec and
  *             IPsec frames to be transparently decoded without the CPU intervention using just the PFE and HSE engines.
- *             
- *             The SPD database needs to be established on an interface which contains entries describing frame 
+ *
+ *             The SPD database needs to be established on an interface which contains entries describing frame
  *             match criteria together with the SA ID reference to the SA established within the HSE describing
  *             the IPsec processing criteria. Frames matching the criteria are then processed by the HSE according
- *             to the chosen SA and returned for the classification via physical interface of UTIL PE. Normal 
+ *             to the chosen SA and returned for the classification via physical interface of UTIL PE. Normal
  *             classification follows the IPsec processing thus the decrypted packets can be e.g. routed.
  *
  *             Configuration
@@ -595,7 +616,7 @@
                   @endverbatim
  *                -# Please see the @ref FPP_CMD_QOS_SCHEDULER for full C example
  *                (@ref fpp_cmd_qos_scheduler.c).
- *                
+ *
  *                To <b> add traffic shapers </b>:
  *                @verbatim
                            SCH0
@@ -668,7 +689,7 @@
  *                 Where @c reply_struct_t is the structure type depending on command being called.
  *              -# In legacy API, macros @ref FPP_CMD_IPV4_CONNTRACK_CHANGE and @ref FPP_CMD_IPV6_CONNTRACK_CHANGE are
  *                 defined in application files. In current API they are defined here in @ref libfci.h.
- * 
+ *
  * @warning     It is not recommended to enable this feature.
  *
  * @hideinitializer
@@ -889,7 +910,7 @@ int fci_write(FCI_CLIENT *client, unsigned short fcode, unsigned short cmd_len, 
 
 /**
  * @brief       Register event callback function
- * @details     FCI endpoint can send various asynchronous messages to the FCI client. In such case, 
+ * @details     FCI endpoint can send various asynchronous messages to the FCI client. In such case,
  *              a callback registered via this function is executed if @ref fci_catch() is running.
  * @param[in]   client The FCI client instance
  * @param[in]   event_cb The callback function to be executed. When called then @c fcode specifies event

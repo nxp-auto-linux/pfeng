@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -19,7 +19,7 @@ typedef struct
 	uint32_t nothing; /* Some compilers don't support empty structs */
 } pfe_hif_nocpy_cfg_t;
 
-typedef struct __pfe_hif_nocpy_tag pfe_hif_nocpy_t;
+typedef struct pfe_hif_nocpy_tag pfe_hif_nocpy_t;
 
 pfe_hif_nocpy_t *pfe_hif_nocpy_create(void *base_va, pfe_bmu_t *bmu);
 pfe_hif_chnl_t *pfe_hif_nocpy_get_channel(pfe_hif_nocpy_t *hif, uint32_t channel_id);

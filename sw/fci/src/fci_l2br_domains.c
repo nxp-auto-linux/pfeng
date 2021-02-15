@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -27,6 +27,7 @@
 
 static errno_t fci_l2br_domain_remove(pfe_l2br_domain_t *domain);
 static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *phy_if);
+uint32_t fci_l2br_static_entry_get_valid_fw_list(void);
 
 /**
  * @brief			Process FPP_CMD_L2_BD commands
@@ -235,54 +236,8 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						}
 						else
 						{
-							/*	Added. Enable promiscuous mode. */
-							NXP_LOG_INFO("Domain %d: Interface %d added, enabling promiscuous mode\n", oal_ntohs(bd_cmd->vlan), ii);
-							ret = pfe_phy_if_promisc_enable(phy_if);
-							if (EOK != ret)
-							{
-								NXP_LOG_ERROR("Could not set promiscuous mode: %d\n", ret);
-
-								/*	Remove interface from the domain */
-								if (EOK != fci_l2br_domain_remove_if(domain, phy_if))
-								{
-									NXP_LOG_ERROR("Interface removal failed\n");
-								}
-
-								*fci_ret = FPP_ERR_INTERNAL_FAILURE;
-								break; /* break the 'for' loop */
-							}
-
-							/*	Set the interface to be in BRIDGE mode */
-							ret = pfe_phy_if_set_op_mode(phy_if, IF_OP_VLAN_BRIDGE);
-							if (EOK != ret)
-							{
-								NXP_LOG_ERROR("Interface could not be configured for BRIDGE mode: %d\n", ret);
-
-								/*	Remove interface from the domain (revert) */
-								if (EOK != fci_l2br_domain_remove_if(domain, phy_if))
-								{
-									NXP_LOG_ERROR("Interface removal failed\n");
-								}
-
-								*fci_ret = FPP_ERR_INTERNAL_FAILURE;
-								break; /* break the 'for' loop */
-							}
-
-							/*	Enable the interface */
-							ret = fci_enable_if(phy_if);
-							if (EOK != ret)
-							{
-								NXP_LOG_ERROR("Unable to enable interface (%s): %d\n", pfe_phy_if_get_name(phy_if), ret);
-								*fci_ret = FPP_ERR_OK;
-
-								/*	Remove interface from the domain (revert) */
-								if (EOK != fci_l2br_domain_remove_if(domain, phy_if))
-								{
-									NXP_LOG_ERROR("Interface removal failed\n");
-								}
-
-								break; /* break the 'for' loop */
-							}
+							/*	Added */
+							NXP_LOG_INFO("Domain %d: Interface %d added\n", oal_ntohs(bd_cmd->vlan), ii);
 						}
 					}
 					else
@@ -464,6 +419,230 @@ finalize_domain_registration:
 	}
 
 	return ret;
+}
+
+/**
+ * @brief			Process FPP_CMD_L2_STATIC_ENT commands
+ * @param[in]		msg FCI message containing the FPP_CMD_L2_STATIC_ENT command
+ * @param[out]		fci_ret FCI command return value
+ * @param[out]		reply_buf Pointer to a buffer where function will construct command reply (fpp_l2_static_ent_cmd_t)
+ * @param[in,out]	reply_len Maximum reply buffer size on input, real reply size on output (in bytes)
+ * @return			EOK if success, error code otherwise
+ * @note			Function is only called within the FCI worker thread context.
+ */
+errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_static_ent_cmd_t *reply_buf, uint32_t *reply_len)
+{
+	fci_t *context = (fci_t *)&__context;
+	errno_t ret = EOK;
+	fpp_l2_static_ent_cmd_t *br_ent_cmd;
+	pfe_l2br_static_entry_t *entry = NULL;
+	pfe_mac_addr_t mac = { 0 };
+	uint32_t valid_if_list = 0;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+
+    if (unlikely(FALSE == context->fci_initialized))
+	{
+    	NXP_LOG_ERROR("Context not initialized\n");
+		return EPERM;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (*reply_len < sizeof(fpp_l2_static_ent_cmd_t))
+	{
+		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_l2_static_ent_cmd_t)\n");
+		return EINVAL;
+	}
+	else
+	{
+		/*	No data written to reply buffer (yet) */
+		*reply_len = 0U;
+	}
+
+	br_ent_cmd = (fpp_l2_static_ent_cmd_t *)(msg->msg_cmd.payload);
+
+	/*	Initialize the reply buffer */
+	memset(reply_buf, 0, sizeof(fpp_l2_static_ent_cmd_t));
+
+	switch (br_ent_cmd->action)
+	{
+		case FPP_ACTION_REGISTER:
+		{
+			valid_if_list = fci_l2br_static_entry_get_valid_fw_list();
+			/* Check if valid logical interfaces are requested */
+			if (oal_ntohl(br_ent_cmd->forward_list) != (oal_ntohl(br_ent_cmd->forward_list) & valid_if_list))
+			{
+				NXP_LOG_ERROR("Invalid interfaces in forward list\n");
+				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+				return EOK;
+			}
+
+			memcpy(mac, br_ent_cmd->mac, sizeof(pfe_mac_addr_t));
+			ret = pfe_l2br_static_entry_create(context->l2_bridge, oal_ntohs(br_ent_cmd->vlan), mac, oal_ntohl(br_ent_cmd->forward_list));
+			if (EOK == ret) {
+				NXP_LOG_DEBUG("Static entry %02x:%02x:%02x:%02x:%02x:%02x added to vlan %d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], oal_ntohs(br_ent_cmd->vlan));
+				*fci_ret = FPP_ERR_OK;
+			}
+			else if (EPERM == ret)
+			{
+				NXP_LOG_WARNING("Duplicit static entry %02x:%02x:%02x:%02x:%02x:%02x wasn't added to vlan %d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], oal_ntohs(br_ent_cmd->vlan));
+				*fci_ret = FPP_ERR_L2_STATIC_ENT_ALREADY_REGISTERED;
+			}
+			else
+			{
+				NXP_LOG_ERROR("Static entry %02x:%02x:%02x:%02x:%02x:%02x wasn't added to vlan %d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], oal_ntohs(br_ent_cmd->vlan));
+				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+			}
+			break;
+		}
+		case FPP_ACTION_UPDATE:
+		{
+			valid_if_list = fci_l2br_static_entry_get_valid_fw_list();
+			/* Check if valid logical interfaces are requested */
+			if (oal_ntohl(br_ent_cmd->forward_list) != (oal_ntohl(br_ent_cmd->forward_list) & valid_if_list))
+			{
+				NXP_LOG_ERROR("Invalid interfaces in forward list\n");
+				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+				return EOK;
+			}
+
+			/* search for entry update fw list */
+			entry = pfe_l2br_static_entry_get_first(context->l2_bridge, L2SENT_CRIT_BY_MAC_VLAN, (void*)(addr_t)oal_ntohs(br_ent_cmd->vlan), (void*)br_ent_cmd->mac);
+			if (NULL == entry)
+			{
+				*fci_ret = FPP_ERR_L2_STATIC_EN_NOT_FOUND;
+			}
+			else
+			{
+				*fci_ret = FPP_ERR_OK;
+
+				if (EOK != pfe_l2br_static_entry_replace_fw_list(context->l2_bridge, entry,  oal_ntohl(br_ent_cmd->forward_list)))
+				{
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+				}
+				if (EOK != pfe_l2br_static_entry_set_local_flag(context->l2_bridge, entry, br_ent_cmd->local))
+				{
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+				}
+			}
+			break;
+		}
+		case FPP_ACTION_DEREGISTER:
+		{
+			/* search for entry and delete if the entery exists */
+			entry = pfe_l2br_static_entry_get_first(context->l2_bridge, L2SENT_CRIT_BY_MAC_VLAN, (void*)(addr_t)oal_ntohs(br_ent_cmd->vlan), (void*)br_ent_cmd->mac);
+			if (NULL == entry)
+			{
+				*fci_ret = FPP_ERR_L2_STATIC_EN_NOT_FOUND;
+			}
+			else
+			{
+				*fci_ret = FPP_ERR_OK;
+
+				if (EOK != pfe_l2br_static_entry_destroy(context->l2_bridge, entry))
+				{
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+				}
+			}
+			break;
+		}
+		case FPP_ACTION_QUERY:
+		{
+			entry = pfe_l2br_static_entry_get_first(context->l2_bridge, L2SENT_CRIT_ALL, NULL, NULL);
+			if (NULL == entry)
+			{
+				ret = EOK;
+				*fci_ret = FPP_ERR_L2_STATIC_EN_NOT_FOUND;
+				break;
+			}
+		}
+		/* FALLTHRU */
+		case FPP_ACTION_QUERY_CONT:
+		{
+			if (NULL == entry)
+			{
+				entry = pfe_l2br_static_entry_get_next(context->l2_bridge);
+				if (NULL == entry)
+				{
+					ret = EOK;
+					*fci_ret = FPP_ERR_L2_STATIC_EN_NOT_FOUND;
+					break;
+				}
+			}
+
+			/*	Write the reply buffer */
+			br_ent_cmd = reply_buf;
+			*reply_len = sizeof(fpp_l2_static_ent_cmd_t);
+
+			/*	Build reply structure */
+			/* VLAN */
+			br_ent_cmd->vlan = pfe_l2br_static_entry_get_vlan(entry);
+			br_ent_cmd->vlan = oal_htons(br_ent_cmd->vlan);
+			/* MAC */
+			pfe_l2br_static_entry_get_mac(entry, br_ent_cmd->mac);
+			/* FW list */
+			br_ent_cmd->forward_list =  oal_htonl(pfe_l2br_static_entry_get_fw_list(entry));
+			(void)pfe_l2br_static_entry_get_local_flag(context->l2_bridge, entry, (bool_t *)&br_ent_cmd->local);
+			*fci_ret = FPP_ERR_OK;
+			break;
+		}
+		default:
+		{
+			NXP_LOG_ERROR("FPP_CMD_L2_STATIC_ENT: Unknown action received: 0x%x\n", br_ent_cmd->action);
+			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
+			break;
+		}
+	}
+	return ret;
+}
+
+/**
+ * @brief		Get valid inteface list
+ * @retval		valid interface list
+ */
+uint32_t fci_l2br_static_entry_get_valid_fw_list(void)
+{
+	uint32_t ii;
+	uint32_t session_id, valid_if_list;
+	errno_t ret = EOK;
+	fci_t *context = (fci_t *)&__context;
+	pfe_if_db_entry_t *if_db_entry = NULL;
+
+	ret = pfe_if_db_lock(&session_id);
+	if(EOK != ret)
+	{
+		NXP_LOG_DEBUG("DB lock failed\n");
+		return 0;
+	}
+
+	for (ii=0U; ((ii < (8U * sizeof(uint32_t))) && (ii <= PFE_PHY_IF_ID_MAX)); ii++)
+	{
+			/*	Only add interfaces which are known to platform interface database */
+			if_db_entry = NULL;
+			ret = pfe_if_db_get_first(context->phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)ii, &if_db_entry);
+			if (EOK != ret)
+			{
+				valid_if_list = 0;
+				break;
+			}
+			if (NULL != if_db_entry)
+			{
+				valid_if_list |= 1U << ii;
+			}
+	}
+
+	if (EOK != pfe_if_db_unlock(session_id))
+	{
+		NXP_LOG_DEBUG("DB unlock failed\n");
+		return 0;
+	}
+
+	return valid_if_list;
 }
 
 /**

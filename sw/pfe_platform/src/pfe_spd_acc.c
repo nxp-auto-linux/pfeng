@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2020-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -95,7 +95,7 @@ static inline errno_t pfe_spd_acc_convert_to_rt_entry(pfe_ct_spd_entry_t *entry,
     if(unlikely((NULL == entry) || (NULL == rt_entry)))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return;
+        return EINVAL;
     }
 #endif
     /* Set the 5-tuple values */
@@ -136,8 +136,6 @@ static inline errno_t pfe_spd_acc_convert_to_rt_entry(pfe_ct_spd_entry_t *entry,
     pfe_rtable_entry_set_sport(rt_entry, entry->sport);
     pfe_rtable_entry_set_dport(rt_entry, entry->dport);
     pfe_rtable_entry_set_proto(rt_entry, entry->proto);
-    /* Clear action flags - no action supported */
-    pfe_rtable_entry_set_action_flags(rt_entry, 0);
     /* Set the destination interface to UTIL to keep database correct */
     pfe_rtable_entry_set_dstif_id(rt_entry, PFE_PHY_IF_ID_UTIL);
     return ret;
@@ -168,7 +166,7 @@ errno_t pfe_spd_acc_add_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd
     if((NULL == phy_if) || (NULL == entry))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return;
+        return EINVAL;
     }
 #endif
 #if 0 //todo AAVB-2539
@@ -279,7 +277,7 @@ errno_t pfe_spd_acc_remove_rule(pfe_phy_if_t * phy_if, uint16_t position)
     if(unlikely(NULL == phy_if))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return;
+        return EINVAL;
     }
 #endif
 #if 0 //todo AAVB-2539

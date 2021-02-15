@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -8,7 +8,7 @@
 /**
  * @addtogroup dxgr_ELF
  * @{
- * 
+ *
  * @file			elf.c
  * @version			0.0.0.0
  *
@@ -26,8 +26,8 @@
 * @page misra_violations MISRA-C:2004 violations
 *
 * @section elf_c_REF_1
-* Violates MISRA 2004 TODO Rule TODO, 
-* 
+* Violates MISRA 2004 TODO Rule TODO,
+*
 *
 */
 
@@ -60,14 +60,14 @@
 #define SHN_UNDEF       0U    /* Undefined/Not present */
 
 /* Macros for change of endianness */
-#define ENDIAN_SW_2B(VAR) ( (((VAR)&0xFF00)>>8) | (((VAR)&0x00FF)<<8) )
-#define ENDIAN_SW_4B(VAR) ( (((VAR)&0xFF000000)>>24) | (((VAR)&0x000000FF)<<24) \
-                          | (((VAR)&0x00FF0000)>>8 ) | (((VAR)&0x0000FF00)<<8 ) \
+#define ENDIAN_SW_2B(VAL) ( (((VAL)&0xFF00U)>>8U) | (((VAL)&0x00FFU)<<8U) )
+#define ENDIAN_SW_4B(VAL) ( (((VAL)&0xFF000000U)>>24U) | (((VAL)&0x000000FFU)<<24U) \
+                          | (((VAL)&0x00FF0000U)>>8U) | (((VAL)&0x0000FF00U)<<8U) \
                           )
-#define ENDIAN_SW_8B(VAR) ( (((VAR)&0xFF00000000000000)>>56) | (((VAR)&0x00000000000000FF)<<56) \
-                          | (((VAR)&0x00FF000000000000)>>40) | (((VAR)&0x000000000000FF00)<<40) \
-                          | (((VAR)&0x0000FF0000000000)>>24) | (((VAR)&0x0000000000FF0000)<<24) \
-                          | (((VAR)&0x000000FF00000000)>>8 ) | (((VAR)&0x00000000FF000000)<<8 ) \
+#define ENDIAN_SW_8B(VAL) ( (((VAL)&0xFF00000000000000U)>>56U) | (((VAL)&0x00000000000000FFU)<<56U) \
+                          | (((VAL)&0x00FF000000000000U)>>40U) | (((VAL)&0x000000000000FF00U)<<40U) \
+                          | (((VAL)&0x0000FF0000000000U)>>24U) | (((VAL)&0x0000000000FF0000U)<<24U) \
+                          | (((VAL)&0x000000FF00000000U)>>8U ) | (((VAL)&0x00000000FF000000U)<<8U ) \
                           )
 
 /*==================================================================================================
@@ -89,16 +89,16 @@ enum ELF_Type
 
 enum PhT_Types
 {
-    PT_NULL      = 0,
-    PT_LOAD      = 1, /* Loadable segment */
-    PT_DYNAMIC   = 2,
-    PT_INTERP    = 3,
-    PT_NOTE      = 4,
-    PT_SHLIB     = 5,
-    PT_PHDR      = 6,
-    PT_LOPROC    = 7,
-    PT_HIPROC    = 8,
-    PT_GNU_STACK = 9,
+    PT_NULL      = 0U,
+    PT_LOAD      = 1U, /* Loadable segment */
+    PT_DYNAMIC   = 2U,
+    PT_INTERP    = 3U,
+    PT_NOTE      = 4U,
+    PT_SHLIB     = 5U,
+    PT_PHDR      = 6U,
+    PT_LOPROC    = 7U,
+    PT_HIPROC    = 8U,
+    PT_GNU_STACK = 9U,
 };
 
 /*==================================================================================================
@@ -140,20 +140,20 @@ enum PhT_Types
         char_t   *szString;
     } ShT_Flags_Strings[] =
     {
-        {0x1,       "WRITE"},
-        {0x2,       "ALLOC"},
-        {0x4,       "EXECINSTR"},
-        {0x10,      "MERGE"},
-        {0x20,      "STRINGS"},
-        {0x40,      "INFO_LINK"},
-        {0x80,      "LINK_ORDER"},
-        {0x100,     "OS_NONCONFORMING"},
-        {0x200,     "GROUP"},
-        {0x400,     "TLS"},
-        {0x0ff00000,"MASKOS"},
-        {0xf0000000,"MASKPROC"},
-        {0x4000000, "ORDERED"},
-        {0x8000000, "EXCLUDE"},
+        {0x1U,       "WRITE"},
+        {0x2U,       "ALLOC"},
+        {0x4U,       "EXECINSTR"},
+        {0x10U,      "MERGE"},
+        {0x20U,      "STRINGS"},
+        {0x40U,      "INFO_LINK"},
+        {0x80U,      "LINK_ORDER"},
+        {0x100U,     "OS_NONCONFORMING"},
+        {0x200U,     "GROUP"},
+        {0x400U,     "TLS"},
+        {0x0ff00000U,"MASKOS"},
+        {0xf0000000U,"MASKPROC"},
+        {0x4000000U, "ORDERED"},
+        {0x8000000U, "EXCLUDE"},
     };
     const uint32_t u32ShT_Flags_Strings_Count = sizeof(ShT_Flags_Strings) / sizeof(struct shf_flags_strings);
   #endif /* ELF_CFG_SECTION_TABLE_USED */
@@ -313,7 +313,7 @@ static bool_t ELF32_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
 {
     bool_t bProgStatus = TRUE;
     bool_t bSectStatus = FALSE;
-    
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pElfFile))
 	{
@@ -332,7 +332,7 @@ static bool_t ELF32_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
     }
 
     /* Check the size */
-    if ((pElfFile->Header.r32.e_phoff + (pElfFile->Header.r32.e_phentsize * pElfFile->Header.r32.e_phnum)) > pElfFile->u32FileSize)
+    if ((pElfFile->Header.r32.e_phoff + ((uint32_t)pElfFile->Header.r32.e_phentsize * (uint32_t)pElfFile->Header.r32.e_phnum)) > pElfFile->u32FileSize)
     {
         NXP_LOG_ERROR("ELF32_LoadTables: Requested data block exceeds size of the file\n");
         NXP_LOG_INFO("\n");
@@ -365,12 +365,12 @@ static bool_t ELF32_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
     {
         NXP_LOG_ERROR("ELF32_LoadTables: Unexpected section header entry size\n");
     }
-    else if ((pElfFile->Header.r32.e_shoff + (pElfFile->Header.r32.e_shentsize * pElfFile->Header.r32.e_shnum)) > pElfFile->u32FileSize) 
+    else if ((pElfFile->Header.r32.e_shoff + ((uint32_t)pElfFile->Header.r32.e_shentsize * (uint32_t)pElfFile->Header.r32.e_shnum)) > pElfFile->u32FileSize) 
     {
         NXP_LOG_ERROR("ELF32_LoadTables: Requested data block exceeds size of the file\n");
     }
     else /* All checkes passed */
-    {   
+    {
         /* Save the pointer */
         pElfFile->arSectHead32 = (Elf32_Shdr *)(((uint8_t*)pElfFile->pvData) + pElfFile->Header.r32.e_shoff);
         /* Now handle endianness */
@@ -442,7 +442,7 @@ static void ELF32_ProgTabSwitchEndianness(Elf32_Phdr *arProgHead32, uint32_t u32
 static void ELF32_SectTabSwitchEndianness(Elf32_Shdr *arSectHead32, uint32_t u32NumItems)
 {
     uint32_t u32Idx;
-    
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == arSectHead32))
 	{
@@ -486,8 +486,8 @@ static bool_t ELF32_ProgSectFindNext( ELF_File_t *pElfFile, uint32_t *pu32ProgId
         /* Find a record having RAM area */
         while (pElfFile->u32ProgScanIdx < pElfFile->Header.r32.e_phnum)
         {
-            if ((PT_LOAD == pElfFile->arProgHead32[pElfFile->u32ProgScanIdx].p_type) /* Has RAM area */
-                && (0 != pElfFile->arProgHead32[pElfFile->u32ProgScanIdx].p_memsz)      /* Size != 0 */
+            if (((uint32_t)PT_LOAD == pElfFile->arProgHead32[pElfFile->u32ProgScanIdx].p_type) /* Has RAM area */
+                && (0U != pElfFile->arProgHead32[pElfFile->u32ProgScanIdx].p_memsz)      /* Size != 0 */
                 )
             {   /* Match found */
                 /* Set returned values */
@@ -540,7 +540,7 @@ static bool_t ELF32_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx,
     {
         NXP_LOG_ERROR("ELF32_ProgSectLoad: Invalid program index: %u\n", u32ProgIdx);
     }
-    else if (PT_LOAD != pElfFile->arProgHead32[u32ProgIdx].p_type)
+    else if ((uint32_t)PT_LOAD != pElfFile->arProgHead32[u32ProgIdx].p_type)
     {
         NXP_LOG_ERROR("ELF32_ProgSectLoad: This section has no associated RAM area\n");
     }
@@ -584,7 +584,7 @@ static bool_t ELF32_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx,
          && (pElfFile->arProgHead32[u32ProgIdx].p_memsz > pElfFile->arProgHead32[u32ProgIdx].p_filesz)
             )
         {
-            memset((void *)(AccessAddr + pElfFile->arProgHead32[u32ProgIdx].p_filesz),
+            (void)memset((void *)(AccessAddr + pElfFile->arProgHead32[u32ProgIdx].p_filesz),
                     0,
                     pElfFile->arProgHead32[u32ProgIdx].p_memsz - pElfFile->arProgHead32[u32ProgIdx].p_filesz
                   );
@@ -603,7 +603,7 @@ static bool_t ELF32_SectFindName( const ELF_File_t *pElfFile, const char_t *szSe
 {
     bool_t bRetVal = FALSE;
     bool_t bFound = FALSE;
-    int32_t SectIdx;
+    uint32_t SectIdx;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     /* Check prerequisites */
@@ -615,7 +615,7 @@ static bool_t ELF32_SectFindName( const ELF_File_t *pElfFile, const char_t *szSe
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     {
         /* Search section table */
-        for (SectIdx = 0; SectIdx < pElfFile->Header.r32.e_shnum; SectIdx++)
+        for (SectIdx = 0U; SectIdx < pElfFile->Header.r32.e_shnum; SectIdx++)
         {
             if (0 == strcmp((char_t *)(pElfFile->acSectNames + pElfFile->arSectHead32[SectIdx].sh_name), szSectionName))
             {   /* Found */
@@ -669,9 +669,9 @@ static bool_t ELF32_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t A
     /* LOAD */
     else
     {   /* All OK */
-        if (SHT_NOBITS == pElfFile->arSectHead32[u32SectIdx].sh_type)
+        if ((uint32_t)SHT_NOBITS == pElfFile->arSectHead32[u32SectIdx].sh_type)
         {   /* Fill with zeros */
-            memset((void *)AccessAddr, 0, pElfFile->arSectHead32[u32SectIdx].sh_size);
+            (void)memset((void *)AccessAddr, 0, pElfFile->arSectHead32[u32SectIdx].sh_size);
             bSuccess = TRUE;
         }
         else
@@ -699,8 +699,9 @@ static bool_t ELF32_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t A
 /*================================================================================================*/
 static void ELF32_PrintSections(ELF_File_t *pElfFile)
 {
-    int32_t SectIdx;
-    int32_t ProgIdx;
+#ifdef NXP_LOG_ENABLED /*  Debug message support */
+    uint32_t SectIdx;
+    uint32_t ProgIdx;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     /* Check prerequisities */
@@ -724,7 +725,7 @@ static void ELF32_PrintSections(ELF_File_t *pElfFile)
         NXP_LOG_INFO("\n");
         NXP_LOG_INFO("File contains %hu sections:\n", pElfFile->Header.r32.e_shnum);
         NXP_LOG_INFO("     SectionName    Type        FileOffset    FileSize      LoadAddress   Flags\n");
-        for (SectIdx = 0; SectIdx < pElfFile->Header.r32.e_shnum; SectIdx++)
+        for (SectIdx = 0U; SectIdx < pElfFile->Header.r32.e_shnum; SectIdx++)
         {
             uint32_t u32Type = pElfFile->arSectHead32[SectIdx].sh_type;
             uint32_t u32FlagIdx;
@@ -758,7 +759,7 @@ static void ELF32_PrintSections(ELF_File_t *pElfFile)
         NXP_LOG_INFO("Idx Type        FileOffset         FileSize           "
                    "LoadVirtAddress    LoadPhysAddress    MemorySize         \n"
                   );
-        for (ProgIdx = 0; ProgIdx < pElfFile->Header.r32.e_phnum; ProgIdx++)
+        for (ProgIdx = 0U; ProgIdx < pElfFile->Header.r32.e_phnum; ProgIdx++)
         {
             /* Try to find the name of the section in section header */
             uint32_t u32Type = pElfFile->arProgHead32[ProgIdx].p_type;
@@ -780,9 +781,14 @@ static void ELF32_PrintSections(ELF_File_t *pElfFile)
                       );
             NXP_LOG_INFO("\n");
         }
-  #endif /* ELF_CFG_PROGRAM_TABLE_USED */
+#endif /* ELF_CFG_PROGRAM_TABLE_USED */
         NXP_LOG_INFO("\n");
     }
+#else
+    /* Do nothing */
+    (void)pElfFile;
+#endif /* NXP_LOG_ENABLED */
+
 }
   #endif /* ELF_CFG_SECTION_PRINT_ENABLED */
 #endif /* ELF_CFG_ELF32_SUPPORTED */
@@ -793,7 +799,7 @@ static bool_t ELF64_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
 {
     bool_t bProgStatus = TRUE;
     bool_t bSectStatus = FALSE;
-    
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pElfFile))
 	{
@@ -810,12 +816,12 @@ static bool_t ELF64_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
     {
         NXP_LOG_ERROR("ELF64_LoadTables: Unexpected program header entry size\n");
     }
-    else if ((pElfFile->Header.r64.e_phoff + (pElfFile->Header.r64.e_phentsize * pElfFile->Header.r64.e_phnum)) > pElfFile->u32FileSize)
+    else if ((pElfFile->Header.r64.e_phoff + ((uint64_t)pElfFile->Header.r64.e_phentsize * (uint64_t)pElfFile->Header.r64.e_phnum)) > (uint64_t)(pElfFile->u32FileSize))
     {
         NXP_LOG_ERROR("ELF64_LoadTables: Requested data block exceeds size of the file\n");
     }
     else /* All checks passed */
-    {  
+    {
         /* Save the pointer */
         pElfFile->arProgHead64 = (Elf64_Phdr *)(((uint8_t*)pElfFile->pvData) + pElfFile->Header.r64.e_phoff);
         /* Now handle endianness */
@@ -837,7 +843,7 @@ static bool_t ELF64_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
     {
         NXP_LOG_ERROR("ELF64_LoadTables: Unexpected section header entry size\n");
     }
-    else if ((pElfFile->Header.r64.e_shoff + (pElfFile->Header.r64.e_shentsize * pElfFile->Header.r64.e_shnum)) > pElfFile->u32FileSize)
+    else if ((pElfFile->Header.r64.e_shoff + ((uint64_t)pElfFile->Header.r64.e_shentsize * (uint64_t)pElfFile->Header.r64.e_shnum)) > (uint64_t)(pElfFile->u32FileSize))
     {
         NXP_LOG_ERROR("ELF64_LoadTables: Requested data block exceeds size of the file\n");
     }
@@ -888,7 +894,7 @@ static void ELF64_HeaderSwitchEndianness(Elf64_Ehdr *prElf64Header)
 static void ELF64_ProgTabSwitchEndianness(Elf64_Phdr *arProgHead64, uint32_t u32NumItems)
 {
     uint32_t u32Idx;
-    
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == arProgHead64))
 	{
@@ -914,7 +920,7 @@ static void ELF64_ProgTabSwitchEndianness(Elf64_Phdr *arProgHead64, uint32_t u32
 static void ELF64_SectTabSwitchEndianness(Elf64_Shdr *arSectHead64, uint32_t u32NumItems)
 {
     uint32_t u32Idx;
-    
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == arSectHead64))
 	{
@@ -958,8 +964,8 @@ static bool_t ELF64_ProgSectFindNext( ELF_File_t *pElfFile, uint32_t *pu32ProgId
         /* Find a record having RAM area */
         while (pElfFile->u32ProgScanIdx < pElfFile->Header.r64.e_phnum)
         {
-            if ((PT_LOAD == pElfFile->arProgHead64[pElfFile->u32ProgScanIdx].p_type) /* Has RAM area */
-                 && (0 != pElfFile->arProgHead64[pElfFile->u32ProgScanIdx].p_memsz)      /* Size != 0 */
+            if (((uint32_t)PT_LOAD == pElfFile->arProgHead64[pElfFile->u32ProgScanIdx].p_type) /* Has RAM area */
+                 && (0U != pElfFile->arProgHead64[pElfFile->u32ProgScanIdx].p_memsz)      /* Size != 0 */
                 )
             {   /* Match found */
                 /* Set returned values */
@@ -1012,7 +1018,7 @@ static bool_t ELF64_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx,
     {
         NXP_LOG_ERROR("ELF64_ProgSectLoad: Invalid program index: %u\n", u32ProgIdx);
     }
-    else if (PT_LOAD != pElfFile->arProgHead64[u32ProgIdx].p_type)
+    else if ((uint32_t)PT_LOAD != pElfFile->arProgHead64[u32ProgIdx].p_type)
     {
         NXP_LOG_ERROR("ELF64_ProgSectLoad: This section has no associated RAM area\n");
     }
@@ -1033,8 +1039,8 @@ static bool_t ELF64_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx,
         if (0U != pElfFile->arProgHead64[u32ProgIdx].p_filesz)
         {   /* Read from file */
             if (FALSE == LoadFileData(pElfFile, /* pElfFile, */
-                pElfFile->arProgHead64[u32ProgIdx].p_offset, /* u32Offset, */
-                pElfFile->arProgHead64[u32ProgIdx].p_filesz, /* u32Size, */
+                (uint32_t)pElfFile->arProgHead64[u32ProgIdx].p_offset, /* u32Offset, */
+                (uint32_t)pElfFile->arProgHead64[u32ProgIdx].p_filesz, /* u32Size, */
                 (void *)AccessAddr /* pvDestMem */
                                       )
                 )
@@ -1061,9 +1067,9 @@ static bool_t ELF64_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx,
                     NXP_LOG_WARNING("ELF64_ProgSectLoad: addr_t size is not sufficient (%u < %u)", (uint32_t)sizeof(addr_t), (uint32_t)sizeof(uint64_t));
             }
 
-            memset((void *)(AccessAddr + (addr_t)pElfFile->arProgHead64[u32ProgIdx].p_filesz),
+            (void)memset((void *)(AccessAddr + (addr_t)pElfFile->arProgHead64[u32ProgIdx].p_filesz),
                 0,
-                pElfFile->arProgHead64[u32ProgIdx].p_memsz - pElfFile->arProgHead64[u32ProgIdx].p_filesz
+                (uint32_t)pElfFile->arProgHead64[u32ProgIdx].p_memsz - (uint32_t)pElfFile->arProgHead64[u32ProgIdx].p_filesz
             );
         }
     }
@@ -1079,7 +1085,7 @@ static bool_t ELF64_SectFindName(const ELF_File_t *pElfFile, const char_t *szSec
 {
     bool_t bRetVal = FALSE;
     bool_t bFound = FALSE;
-    int32_t SectIdx;
+    uint32_t SectIdx;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     /* Check prerequisites */
@@ -1091,7 +1097,7 @@ static bool_t ELF64_SectFindName(const ELF_File_t *pElfFile, const char_t *szSec
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     {
         /* Search section table */
-        for (SectIdx = 0; SectIdx < pElfFile->Header.r64.e_shnum; SectIdx++)
+        for (SectIdx = 0U; SectIdx < pElfFile->Header.r64.e_shnum; SectIdx++)
         {
             if (0 == strcmp((char_t *)(pElfFile->acSectNames + pElfFile->arSectHead64[SectIdx].sh_name), szSectionName))
             {   /* Found */
@@ -1145,16 +1151,16 @@ static bool_t ELF64_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t A
     /* LOAD */
     else
     {   /* All OK */
-        if (SHT_NOBITS == pElfFile->arSectHead64[u32SectIdx].sh_type)
+        if ((uint32_t)SHT_NOBITS == pElfFile->arSectHead64[u32SectIdx].sh_type)
         {   /* Fill with zeros */
-            memset((void *)AccessAddr, 0, pElfFile->arSectHead64[u32SectIdx].sh_size);
+            (void)memset((void *)AccessAddr, 0, (uint32_t)pElfFile->arSectHead64[u32SectIdx].sh_size);
             bSuccess = TRUE;
         }
         else
         {   /* Copy from file */
             if (FALSE == LoadFileData(pElfFile, /* pElfFile, */
-                                       pElfFile->arSectHead64[u32SectIdx].sh_offset, /* u32Offset, */
-                                       pElfFile->arSectHead64[u32SectIdx].sh_size, /* u32Size, */
+                                       (uint32_t)pElfFile->arSectHead64[u32SectIdx].sh_offset, /* u32Offset, */
+                                       (uint32_t)pElfFile->arSectHead64[u32SectIdx].sh_size, /* u32Size, */
                                        (void *)AccessAddr /* pvDestMem */
                                       )
                 )
@@ -1175,8 +1181,9 @@ static bool_t ELF64_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t A
 /*================================================================================================*/
 static void ELF64_PrintSections(ELF_File_t *pElfFile)
 {
-    int32_t SectIdx;
-    int32_t ProgIdx;
+#ifdef NXP_LOG_ENABLED /*  Debug message support */
+    uint32_t SectIdx;
+    uint32_t ProgIdx;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     /* Check prerequisites */
@@ -1200,7 +1207,7 @@ static void ELF64_PrintSections(ELF_File_t *pElfFile)
         NXP_LOG_INFO("\n");
         NXP_LOG_INFO("File contains %hu sections:\n", pElfFile->Header.r64.e_shnum);
         NXP_LOG_INFO("     SectionName Type     FileOffset         FileSize           LoadAddress        Flags\n");
-        for (SectIdx = 0; SectIdx < pElfFile->Header.r64.e_shnum; SectIdx++)
+        for (SectIdx = 0U; SectIdx < pElfFile->Header.r64.e_shnum; SectIdx++)
         {
             uint32_t u32Type = pElfFile->arSectHead64[SectIdx].sh_type;
             uint32_t u32FlagIdx;
@@ -1234,7 +1241,7 @@ static void ELF64_PrintSections(ELF_File_t *pElfFile)
         NXP_LOG_INFO("Idx Type      FileOffset         FileSize           "
                    "LoadVirtAddress    LoadPhysAddress    MemorySize         \n"
         );
-        for (ProgIdx = 0; ProgIdx < pElfFile->Header.r64.e_phnum; ProgIdx++)
+        for (ProgIdx = 0U; ProgIdx < pElfFile->Header.r64.e_phnum; ProgIdx++)
         {
             /* Try to find the name of the section in section header */
             uint32_t u32Type = pElfFile->arProgHead64[ProgIdx].p_type;
@@ -1256,9 +1263,14 @@ static void ELF64_PrintSections(ELF_File_t *pElfFile)
                       );
             NXP_LOG_INFO("\n");
         }
-  #endif /* ELF_CFG_PROGRAM_TABLE_USED */
+#endif /* ELF_CFG_PROGRAM_TABLE_USED */
         NXP_LOG_INFO("\n");
     }
+#else
+    /* Do nothing */
+    (void)pElfFile;
+#endif /* NXP_LOG_ENABLED */
+
 }
 #endif /* ELF_CFG_SECTION_PRINT_ENABLED */
 #endif /* ELF_CFG_ELF64_SUPPORTED */
@@ -1366,7 +1378,7 @@ bool_t ELF_Open(ELF_File_t *pElfFile, void *pvFile, uint32_t u32FileSize)
             {
                 ELF64_HeaderSwitchEndianness(&(pElfFile->Header.r64));
             }
-            if (ELF_Type_Executable != pElfFile->Header.r64.e_type)
+            if ((uint16_t)ELF_Type_Executable != pElfFile->Header.r64.e_type)
             {
                 NXP_LOG_ERROR("ELF_Open: Only executable ELFs are supported\n");
             }
@@ -1386,8 +1398,8 @@ bool_t ELF_Open(ELF_File_t *pElfFile, void *pvFile, uint32_t u32FileSize)
             }
             else
             {
-                u32NamesSectionOffset = pElfFile->arSectHead64[pElfFile->Header.r64.e_shstrndx].sh_offset;
-                u32NamesSectionSize = pElfFile->arSectHead64[pElfFile->Header.r64.e_shstrndx].sh_size;
+                u32NamesSectionOffset = (uint32_t)pElfFile->arSectHead64[pElfFile->Header.r64.e_shstrndx].sh_offset;
+                u32NamesSectionSize = (uint32_t)pElfFile->arSectHead64[pElfFile->Header.r64.e_shstrndx].sh_size;
                 bRetVal = TRUE;
             }
         #else  /* ELF_CFG_SECTION_TABLE_USED */
@@ -1407,7 +1419,7 @@ bool_t ELF_Open(ELF_File_t *pElfFile, void *pvFile, uint32_t u32FileSize)
             {
                 ELF32_HeaderSwitchEndianness(&(pElfFile->Header.r32));
             }
-            if (ELF_Type_Executable != pElfFile->Header.r32.e_type)
+            if ((uint16_t)ELF_Type_Executable != pElfFile->Header.r32.e_type)
             {
                 NXP_LOG_ERROR("ELF_Open: Only executable ELFs are supported\n");
             }
@@ -1665,13 +1677,6 @@ bool_t ELF_SectFindName(const ELF_File_t *pElfFile, const char_t *szSectionName,
         bRetVal = ELF32_SectFindName(pElfFile, szSectionName, pu32SectIdx, pu64LoadAddr, pu64Length);
         #endif /* ELF_CFG_ELF32_SUPPORTED */
     }
-#if 0
-    /* Set the highest bit in the index to make sure that this index is not used in wrong load function */
-    if (NULL != pu32SectIdx)
-    {
-        *pu32SectIdx |= ELF_NAMED_SECT_IDX_FLAG; /* Safe since the ELF index is 16-bit only */
-    }
-#endif /* 0 */
 
     return bRetVal;
 }

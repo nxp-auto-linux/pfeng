@@ -5,8 +5,8 @@
  *
  * ========================================================================= */
 
-#ifndef _FCI_H_
-#define _FCI_H_
+#ifndef FCI_H_
+#define FCI_H_
 
 #include "oal.h"
 #include "pfe_emac.h" /* pfe_mac_addr_t */
@@ -39,4 +39,4 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier);
 void fci_fini(void);
 errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep);
 
-#endif /* _FCI_H_ */
+#endif /* FCI_H_ */

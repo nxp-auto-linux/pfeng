@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -62,6 +62,7 @@ struct __pfe_l2br_tag
 	pfe_l2br_domain_t *default_domain;
 	pfe_l2br_domain_t *fallback_domain;
 	LLIST_t domains;							/*!< List of standard domains */
+	LLIST_t static_entries;						/*!< List of static entries */
 	uint16_t def_vlan;							/*!< Default VLAN */
 	uint32_t dmem_fb_bd_base;					/*!< Address within classifier memory where the fall-back bridge domain structure is located */
 	uint32_t dmem_def_bd_base;					/*!< Address within classifier memory where the default bridge domain structure is located */
@@ -69,12 +70,19 @@ struct __pfe_l2br_tag
 	oal_mbox_t *mbox;							/*!< Message box to communicate with the worker thread */
 	oal_mutex_t *mutex;							/*!< Mutex protecting shared resources */
 	pfe_l2br_domain_get_crit_t cur_crit;		/*!< Current 'get' criterion (to get domains) */
-	LLIST_t *cur_item;							/*!< The current domain list item */
+	pfe_l2br_static_ent_get_crit_t cur_crit_ent;/*!< Current 'get' criterion (to get static entry) */
+	LLIST_t *curr_domain;						/*!< The current domain list item */
+	LLIST_t *curr_static_ent;					/*!< The current static entry list item */
 	union
 	{
 		uint16_t vlan;
 		pfe_phy_if_t *phy_if;
-	} cur_crit_arg;								/*!< Current criterion argument */
+	} cur_domain_crit_arg;								/*!< Current domain criterion argument */
+	struct
+	{
+		uint16_t vlan;
+		pfe_mac_addr_t mac;
+	} cur_static_ent_crit_arg;							/*!< Current static entry argument */
 };
 
 /**
@@ -105,6 +113,21 @@ struct __pfe_l2br_domain_tag
 	LLIST_t list_entry;							/*!< Entry for linked-list purposes */
 };
 
+struct __pfe_l2br_static_entry_tag
+{
+	union
+	{
+		pfe_ct_mac_table_result_t action_data;
+		uint64_t action_data_u64val;
+	};
+	uint16_t vlan;
+	pfe_mac_addr_t mac;						/*!< Mac address to be matched */
+	uint32_t fw_list;						/*!< Fw list in bit format */
+	pfe_l2br_table_entry_t *entry;			/*!< This is entry within MAC table representing the static entry */
+	pfe_l2br_t *bridge;
+	LLIST_t list_entry;						/*!< Entry for linked-list purposes */
+};
+
 /**
  * @brief	Internal linked-list element
  */
@@ -133,6 +156,7 @@ static void *pfe_l2br_worker_func(void *arg);
 static void pfe_l2br_do_timeouts(pfe_l2br_t *bridge);
 static bool_t pfe_l2br_domain_match_if_criterion(pfe_l2br_domain_t *domain, pfe_phy_if_t *iface);
 static bool_t pfe_l2br_domain_match_criterion(pfe_l2br_t *bridge, pfe_l2br_domain_t *domain);
+static bool_t pfe_l2br_static_entry_match_criterion(pfe_l2br_t *bridge, pfe_l2br_static_entry_t *static_ent);
 
 /**
  * @brief		Write bridge domain structure to classifier memory
@@ -232,12 +256,12 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 	}
 	else
 	{
-        /*	In case of fall-back domain the classifier memory must be updated too */
-        if (TRUE == domain->is_default)
-        {
-            /*	Update classifier memory (all PEs) */
-            pfe_l2br_update_hw_ll_entry(domain, domain->bridge->dmem_def_bd_base );
-        }
+		/*	In case of fall-back domain the classifier memory must be updated too */
+		if (TRUE == domain->is_default)
+		{
+			/*	Update classifier memory (all PEs) */
+			pfe_l2br_update_hw_ll_entry(domain, domain->bridge->dmem_def_bd_base );
+		}
 		/*	Update standard or default domain entry */
 		ret = pfe_l2br_table_entry_set_action_data(domain->vlan_entry, domain->action_data_u64val);
 		if (EOK != ret)
@@ -459,11 +483,11 @@ errno_t pfe_l2br_domain_destroy(pfe_l2br_domain_t *domain)
 		pfe_l2br_domain_create() failure, just skip this step */
 	if ((NULL != domain->list_entry.prPrev) && (NULL != domain->list_entry.prNext))
 	{
-		if (&domain->list_entry == domain->bridge->cur_item)
+		if (&domain->list_entry == domain->bridge->curr_domain)
 		{
 			/*	Remember the change so we can call destroy() between get_first()
 				and get_next() calls. */
-			domain->bridge->cur_item = domain->bridge->cur_item->prNext;
+			domain->bridge->curr_domain = domain->bridge->curr_domain->prNext;
 		}
 
 		LLIST_Remove(&domain->list_entry);
@@ -1177,6 +1201,523 @@ __attribute__((pure)) bool_t pfe_l2br_domain_is_fallback(pfe_l2br_domain_t *doma
 }
 
 /**
+ * @brief		Create L2 bridge static entry
+ * @param[in]	vlan VLAN ID to identify the bridge domain
+ * @param[in]	mac Static entry MAC address
+ * @param[in]	new_fw_list forward list of static entry
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ * @retval		ENOMEM Failure when allocating memory
+ * @retval		ETIMEDOUT Timed out
+ * @retval		EPERM Operation not permitted (static entry already created)
+ */
+errno_t pfe_l2br_static_entry_create(pfe_l2br_t *bridge, uint16_t vlan, pfe_mac_addr_t mac, uint32_t new_fw_list)
+{
+	pfe_l2br_static_entry_t *static_entry, *static_ent_tmp;
+	bool_t match = FALSE;
+	LLIST_t *item;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == bridge))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	static_entry = oal_mm_malloc(sizeof(pfe_l2br_static_entry_t));
+
+	if (NULL == static_entry)
+	{
+		NXP_LOG_ERROR("malloc() failed\n");
+		return ENOMEM;
+	}
+	else
+	{
+		memset(static_entry, 0, sizeof(pfe_l2br_static_entry_t));
+		static_entry->vlan = vlan;
+		static_entry->fw_list = new_fw_list;
+		memcpy(static_entry->mac, mac, sizeof(pfe_mac_addr_t));
+
+		if (EOK != oal_mutex_lock(bridge->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
+		{
+			/*	Get first matching entry */
+			LLIST_ForEach(item, &bridge->static_entries)
+			{
+				/*	Get data */
+				static_ent_tmp = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
+
+				/*	Remember current item to know where to start later */
+				bridge->curr_static_ent = item->prNext;
+				if ((static_ent_tmp->vlan == vlan) && (0 == memcmp(static_ent_tmp->mac, mac, sizeof(pfe_mac_addr_t))))
+				{
+					match = TRUE;
+					break;
+				}
+			}
+		}
+
+		if (EOK != oal_mutex_unlock(bridge->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
+
+		if (TRUE == match)
+		{
+			NXP_LOG_ERROR("Duplicit entry\n");
+			/* Entry is duplicit */
+			oal_mm_free(static_entry);
+			return EPERM;
+		}
+
+		static_entry->entry = pfe_l2br_table_entry_create(bridge->mac_table);
+
+		if (NULL == static_entry->entry)
+		{
+			NXP_LOG_ERROR("malloc() failed\n");
+			return ENOMEM;
+		}
+
+		/* Configure action data */
+		static_entry->action_data.val = 0;
+		static_entry->action_data.static_flag = 1;
+		static_entry->action_data.fresh_flag = 1;
+        static_entry->action_data.local_l3 = 0U;
+		static_entry->action_data.forward_list = static_entry->fw_list;
+
+		if (EOK != pfe_l2br_table_entry_set_vlan(static_entry->entry, vlan))
+		{
+			NXP_LOG_ERROR("Couldn't set vlan\n");
+			goto table_err;
+		}
+
+		if (EOK != pfe_l2br_table_entry_set_mac_addr(static_entry->entry, mac))
+		{
+			NXP_LOG_ERROR("Couldn't set mac address\n");
+			goto table_err;
+		}
+
+		if (EOK != pfe_l2br_table_entry_set_action_data(static_entry->entry, static_entry->action_data_u64val))
+		{
+			NXP_LOG_ERROR("Couldn't set action data\n");
+			goto table_err;
+		}
+
+		if (EOK != pfe_l2br_table_add_entry(bridge->mac_table, static_entry->entry))
+		{
+			NXP_LOG_ERROR("Couldn't set action data\n");
+			goto table_err;
+		}
+
+		if (EOK != oal_mutex_lock(bridge->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		LLIST_AddAtEnd(&static_entry->list_entry, &bridge->static_entries);
+
+		if (EOK != oal_mutex_unlock(bridge->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
+	}
+
+	return EOK;
+table_err:
+	oal_mm_free(static_entry);
+	static_entry = NULL;
+	return EINVAL;
+}
+
+/**
+ * @brief		Destroy L2 bridge static entry
+ * @param[in]	bridge Bridge instance
+ * @param[in]	static_ent Static entry to be deleted
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ * @retval		ETIMEDOUT Timed out
+ */
+errno_t pfe_l2br_static_entry_destroy(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent)
+{
+	errno_t ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == bridge) || (NULL == static_ent)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	LLIST_Remove(&static_ent->list_entry);
+
+	if (EOK != oal_mutex_unlock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+	ret = pfe_l2br_table_del_entry(bridge->mac_table, static_ent->entry);
+
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Static entry couldn't be deleted from HW table (errno %d)\n", ret);
+	}
+
+	oal_mm_free(static_ent);
+
+	return ret;
+}
+
+/**
+ * @brief		Change L2 static entry forward list
+ * @param[in]	bridge Bridge instance
+ * @param[in]	static_ent Static entry to change forward list
+ * @param[in]	new_fw_list New forward list
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ * @retval		ENOENT Entry couldn't be updated
+ */
+errno_t pfe_l2br_static_entry_replace_fw_list(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, uint32_t new_fw_list)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == bridge) || (NULL == static_ent)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	static_ent->fw_list = new_fw_list;
+
+	if (EOK != pfe_l2br_table_entry_set_action_data(static_ent->entry, static_ent->action_data_u64val))
+	{
+		NXP_LOG_ERROR("Couldn't set action data\n");
+		return EINVAL;
+	}
+
+	if (EOK != pfe_l2br_table_update_entry(bridge->mac_table, static_ent->entry))
+	{
+		NXP_LOG_ERROR("Couldn't update entry\n");
+		return ENOENT;
+	}
+
+	return EOK;
+}
+
+/**
+ * @brief Sets the local L3 flag (marks/unmarks the MAC address as local one)
+ * @param[in]	bridge Bridge instance
+ * @param[in]	static_ent Static entry to change forward list
+ * @param[in]	local Value to be set
+ * @retval EOK		Success
+ * @retval EINVAL	Invalid or missing argument
+ * @retval			ENOENT Entry couldn't be updated
+ */
+errno_t pfe_l2br_static_entry_set_local_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t local)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == bridge) || (NULL == static_ent)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	/* Make changes */
+	static_ent->action_data.local_l3 = ((FALSE != local)? 1U : 0U);
+	/* Propagate changes to l2br table */
+	if (EOK != pfe_l2br_table_entry_set_action_data(static_ent->entry, static_ent->action_data_u64val))
+	{
+		NXP_LOG_ERROR("Couldn't set action data\n");
+		return EINVAL;
+	}
+	/* Write to the HW */
+	if (EOK != pfe_l2br_table_update_entry(bridge->mac_table, static_ent->entry))
+	{
+		NXP_LOG_ERROR("Couldn't update entry\n");
+		return ENOENT;
+	}
+	return EOK;
+}
+
+/**
+ * @brief Reads the state of local L3 flag
+ * @param[in]	bridge Bridge instance
+ * @param[in]	static_ent Static entry to change forward list
+ * @param[out]	local State of the local L3 flag
+ * @retval EOK		Success
+ * @retval EINVAL	Invalid or missing argument
+ */
+errno_t pfe_l2br_static_entry_get_local_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t *local)
+{
+	#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == bridge) || (NULL == static_ent)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+	#endif /* PFE_CFG_NULL_ARG_CHECK */
+	*local = ((0U != static_ent->action_data.local_l3)? TRUE : FALSE);
+	return EOK;
+}
+
+/**
+ * @brief		Get forward list from L2 static entry
+ * @param[in]	static_ent Static entry
+ * @return		Forward list of static entry
+ */
+__attribute__((pure)) uint32_t pfe_l2br_static_entry_get_fw_list(pfe_l2br_static_entry_t* static_ent)
+{
+	return static_ent->fw_list;
+}
+
+/**
+ * @brief		Get vlan from L2 static entry
+ * @param[in]	static_ent Static entry
+ * @return		Vlan of static entry
+ */
+__attribute__((pure)) uint16_t pfe_l2br_static_entry_get_vlan(pfe_l2br_static_entry_t *static_ent)
+{
+	return static_ent->vlan;
+}
+
+/**
+ * @brief		Get MAC from L2 static entry
+ * @param[in]	static_ent Static entry
+ * @return		Mac of static entry
+ */
+void pfe_l2br_static_entry_get_mac(pfe_l2br_static_entry_t *static_ent, pfe_mac_addr_t mac)
+{
+	memcpy(mac, static_ent->mac, sizeof(pfe_mac_addr_t));
+}
+
+/**
+ * @brief		Get first L2 static entry based on criterion
+ * @param[in]	bridge Bridge instance
+ * @param[in]	crit Static entry to change forward list
+ * @param[in]	arg1 Argument for criterion
+ * @param[in]	arg2 Argument for criterion
+ * @return		Static entry on success or NULL on failure
+ */
+pfe_l2br_static_entry_t *pfe_l2br_static_entry_get_first(pfe_l2br_t *bridge, pfe_l2br_static_ent_get_crit_t crit, void* arg1, void *arg2)
+{
+	bool_t match = FALSE;
+	LLIST_t *item;
+	pfe_l2br_static_entry_t *static_ent;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == bridge))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	bridge->cur_crit_ent = crit;
+
+	switch (bridge->cur_crit_ent)
+	{
+		case L2SENT_CRIT_ALL:
+		{
+			break;
+		}
+		case L2SENT_CRIT_BY_MAC:
+		{
+			memcpy(bridge->cur_static_ent_crit_arg.mac, arg2, sizeof(pfe_mac_addr_t));
+			break;
+		}
+		case L2SENT_CRIT_BY_VLAN:
+		{
+			bridge->cur_static_ent_crit_arg.vlan = (uint16_t)((addr_t)arg1);
+			break;
+		}
+		case L2SENT_CRIT_BY_MAC_VLAN:
+		{
+			bridge->cur_static_ent_crit_arg.vlan = (uint16_t)((addr_t)arg1);
+			memcpy(bridge->cur_static_ent_crit_arg.mac, arg2, sizeof(pfe_mac_addr_t));
+			break;
+		}
+	}
+
+	if (EOK != oal_mutex_lock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
+	{
+		/*	Get first matching entry */
+		LLIST_ForEach(item, &bridge->static_entries)
+		{
+			/*	Get data */
+			static_ent = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
+
+			/*	Remember current item to know where to start later */
+			bridge->curr_static_ent = item->prNext;
+			if (TRUE == pfe_l2br_static_entry_match_criterion(bridge, static_ent))
+			{
+				match = TRUE;
+				break;
+			}
+		}
+	}
+
+	if (EOK != oal_mutex_unlock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+	if (TRUE == match)
+	{
+		return static_ent;
+	}
+	else
+	{
+		return NULL;
+	}
+}
+/**
+ * @brief		Get next L2 static entry
+ * @param[in]	bridge Bridge instance
+ * @return		Static entry on success or NULL on failure
+ * @warning		Intended to be called after pfe_l2br_static_entry_get_first.
+ */
+pfe_l2br_static_entry_t *pfe_l2br_static_entry_get_next(pfe_l2br_t *bridge)
+{
+	pfe_l2br_static_entry_t *static_ent;
+	bool_t match = FALSE;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == bridge))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	if (bridge->curr_static_ent == &bridge->static_entries)
+	{
+		/*	No more entries */
+		static_ent = NULL;
+	}
+	else
+	{
+		while (bridge->curr_static_ent != &bridge->static_entries)
+		{
+			/*	Get data */
+			static_ent = LLIST_Data(bridge->curr_static_ent, pfe_l2br_static_entry_t, list_entry);
+
+			/*	Remember current item to know where to start later */
+			bridge->curr_static_ent = bridge->curr_static_ent->prNext;
+
+			if (NULL != static_ent)
+			{
+				if (true == pfe_l2br_static_entry_match_criterion(bridge, static_ent))
+				{
+					match = TRUE;
+					break;
+				}
+			}
+		}
+	}
+
+	if (EOK != oal_mutex_unlock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+
+	if (TRUE == match)
+	{
+		return static_ent;
+	}
+	else
+	{
+		return NULL;
+	}
+
+	return EOK;
+}
+
+/**
+ * @brief		Match static entry
+ * @param[in]	bridge The bridge instance
+ * @param[in]	static_ent Static entry to be matched to criterion parameters
+ */
+static bool_t pfe_l2br_static_entry_match_criterion(pfe_l2br_t *bridge, pfe_l2br_static_entry_t *static_ent)
+{
+	bool_t match = FALSE;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == bridge) || (NULL == static_ent)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	switch (bridge->cur_crit_ent)
+	{
+		case L2SENT_CRIT_ALL:
+		{
+			match = TRUE;
+			break;
+		}
+
+		case L2SENT_CRIT_BY_MAC:
+		{
+			if (0 == memcmp(static_ent->mac, bridge->cur_static_ent_crit_arg.mac, sizeof(pfe_mac_addr_t)))
+			{
+				match = TRUE;
+			}
+			break;
+		}
+
+		case L2SENT_CRIT_BY_VLAN:
+		{
+			match = (static_ent->vlan == bridge->cur_static_ent_crit_arg.vlan);
+			break;
+		}
+		case L2SENT_CRIT_BY_MAC_VLAN:
+		{
+			match = (static_ent->vlan == bridge->cur_static_ent_crit_arg.vlan);
+			if (TRUE == match) {
+				if (0 == memcmp(static_ent->mac, bridge->cur_static_ent_crit_arg.mac, sizeof(pfe_mac_addr_t)))
+				{
+					match = TRUE;
+				}
+				else
+				{
+					match = FALSE;
+				}
+			}
+			break;
+		}
+
+		default:
+		{
+			NXP_LOG_ERROR("Unknown criterion\n");
+			match = FALSE;
+		}
+	}
+
+	return match;
+}
+
+/**
  * @brief		Worker function running within internal thread
  */
 static void *pfe_l2br_worker_func(void *arg)
@@ -1233,6 +1774,7 @@ static void pfe_l2br_do_timeouts(pfe_l2br_t *bridge)
 {
 	errno_t ret;
 	pfe_l2br_table_entry_t *entry;
+	pfe_l2br_table_iterator_t* l2t_iter;
 	char_t text_buf[256];
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1246,8 +1788,9 @@ static void pfe_l2br_do_timeouts(pfe_l2br_t *bridge)
 	/*	Create entry storage */
 	entry = pfe_l2br_table_entry_create(bridge->mac_table);
 
+	l2t_iter = pfe_l2br_iterator_create();
 	/*	Go through all entries */
-	ret = pfe_l2br_table_get_first(bridge->mac_table, L2BR_TABLE_CRIT_VALID, entry);
+	ret = pfe_l2br_table_get_first(bridge->mac_table, l2t_iter, L2BR_TABLE_CRIT_VALID, entry);
 	while (EOK == ret)
 	{
 		if (FALSE == pfe_l2br_table_entry_is_static(entry))
@@ -1283,11 +1826,13 @@ static void pfe_l2br_do_timeouts(pfe_l2br_t *bridge)
 			}
 		}
 
-		ret = pfe_l2br_table_get_next(bridge->mac_table, entry);
+		ret = pfe_l2br_table_get_next(bridge->mac_table, l2t_iter, entry);
 	}
 
 	/*	Release entry storage */
 	(void)pfe_l2br_table_entry_destroy(entry);
+	/*  Release iterator */
+	pfe_l2br_iterator_destroy(l2t_iter);
 }
 
 /**
@@ -1324,6 +1869,7 @@ pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, pfe_l2br_tabl
 		bridge->vlan_table = vlan_table;
 		bridge->def_vlan = def_vlan;
 		LLIST_Init(&bridge->domains);
+		LLIST_Init(&bridge->static_entries);
 
 		bridge->mutex = oal_mm_malloc(sizeof(oal_mutex_t));
 		if (NULL == bridge->mutex)
@@ -1547,7 +2093,7 @@ static bool_t pfe_l2br_domain_match_criterion(pfe_l2br_t *bridge, pfe_l2br_domai
 
 		case L2BD_CRIT_BY_VLAN:
 		{
-			match = (domain->vlan == bridge->cur_crit_arg.vlan);
+			match = (domain->vlan == bridge->cur_domain_crit_arg.vlan);
 			break;
 		}
 
@@ -1559,7 +2105,7 @@ static bool_t pfe_l2br_domain_match_criterion(pfe_l2br_t *bridge, pfe_l2br_domai
 				LLIST_ForEach(item, &domain->ifaces)
 				{
 					entry = LLIST_Data(item, pfe_l2br_list_entry_t, list_entry);
-					match = (((pfe_phy_if_t *)entry->ptr) == bridge->cur_crit_arg.phy_if);
+					match = (((pfe_phy_if_t *)entry->ptr) == bridge->cur_domain_crit_arg.phy_if);
 					if (TRUE == match)
 					{
 						break;
@@ -1612,13 +2158,13 @@ pfe_l2br_domain_t *pfe_l2br_get_first_domain(pfe_l2br_t *bridge, pfe_l2br_domain
 
 		case L2BD_CRIT_BY_VLAN:
 		{
-			bridge->cur_crit_arg.vlan = (uint16_t)((addr_t)arg & 0xffffU);
+			bridge->cur_domain_crit_arg.vlan = (uint16_t)((addr_t)arg & 0xffffU);
 			break;
 		}
 
 		case L2BD_BY_PHY_IF:
 		{
-			bridge->cur_crit_arg.phy_if = (pfe_phy_if_t *)arg;
+			bridge->cur_domain_crit_arg.phy_if = (pfe_phy_if_t *)arg;
 			break;
 		}
 
@@ -1638,7 +2184,7 @@ pfe_l2br_domain_t *pfe_l2br_get_first_domain(pfe_l2br_t *bridge, pfe_l2br_domain
 			domain = LLIST_Data(item, pfe_l2br_domain_t, list_entry);
 
 			/*	Remember current item to know where to start later */
-			bridge->cur_item = item->prNext;
+			bridge->curr_domain = item->prNext;
 			if (TRUE == pfe_l2br_domain_match_criterion(bridge, domain))
 			{
 				match = TRUE;
@@ -1677,20 +2223,20 @@ pfe_l2br_domain_t *pfe_l2br_get_next_domain(pfe_l2br_t *bridge)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (bridge->cur_item == &bridge->domains)
+	if (bridge->curr_domain == &bridge->domains)
 	{
 		/*	No more entries */
 		domain = NULL;
 	}
 	else
 	{
-		while (bridge->cur_item != &bridge->domains)
+		while (bridge->curr_domain != &bridge->domains)
 		{
 			/*	Get data */
-			domain = LLIST_Data(bridge->cur_item, pfe_l2br_domain_t, list_entry);
+			domain = LLIST_Data(bridge->curr_domain, pfe_l2br_domain_t, list_entry);
 
 			/*	Remember current item to know where to start later */
-			bridge->cur_item = bridge->cur_item->prNext;
+			bridge->curr_domain = bridge->curr_domain->prNext;
 
 			if (NULL != domain)
 			{
@@ -1726,23 +2272,27 @@ uint32_t pfe_l2br_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t 
 {
 	uint32_t len = 0U;
     pfe_l2br_table_entry_t *entry;
+    pfe_l2br_table_iterator_t* l2t_iter;
     errno_t ret;
     uint32_t count = 0U;
 
     /* Get memory */
     entry = pfe_l2br_table_entry_create(bridge->mac_table);
     /* Get the first entry */
-    ret = pfe_l2br_table_get_first(bridge->mac_table, L2BR_TABLE_CRIT_VALID, entry);
+    l2t_iter = pfe_l2br_iterator_create();
+
+    ret = pfe_l2br_table_get_first(bridge->mac_table, l2t_iter, L2BR_TABLE_CRIT_VALID, entry);
     while (EOK == ret)
     {
         /* Print out the entry */
         len += pfe_l2br_table_entry_to_str(entry, buf + len, buf_len - len);
         count++;
         /* Get the next entry */
-        ret = pfe_l2br_table_get_next(bridge->mac_table, entry);
+        ret = pfe_l2br_table_get_next(bridge->mac_table, l2t_iter, entry);
     }
     len += oal_util_snprintf(buf + len, buf_len - len, "\nEntries count: %u\n", count);
     /* Free memory */
     (void)pfe_l2br_table_entry_destroy(entry);
+    pfe_l2br_iterator_destroy(l2t_iter);
     return len;
 }

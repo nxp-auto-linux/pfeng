@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -9,6 +9,8 @@
 
 #ifndef PUBLIC_PFE_EMAC_H_
 #define PUBLIC_PFE_EMAC_H_
+
+#include "pfe_ct.h"
 
 typedef enum
 {
@@ -43,7 +45,14 @@ typedef enum
 	EMAC_LINK_SPEED_125_MHZ
 } pfe_emac_link_speed_t;
 
-typedef struct __pfe_emac_tag pfe_emac_t;
+typedef enum
+{
+	PFE_FLUSH_MODE_ALL,
+	PFE_FLUSH_MODE_UNI,
+	PFE_FLUSH_MODE_MULTI
+} pfe_flush_mode_t;
+
+typedef struct pfe_emac_tag pfe_emac_t;
 
 /**
  * @brief	The MAC address type
@@ -64,6 +73,42 @@ typedef struct __pfe_emac_tag pfe_emac_t;
  */
 typedef uint8_t pfe_mac_addr_t[6];
 
+/**
+ * @brief		Check if given MAC address is broadcast
+ * @param[in]	addr The address to check
+ * @return		TRUE if the input address is broadcast
+ */
+static inline bool_t pfe_emac_is_broad(pfe_mac_addr_t addr)
+{
+	static const pfe_mac_addr_t bc = {0xffU, 0xffU, 0xffU, 0xffU, 0xffU, 0xffU};
+
+	if (0 == memcmp(addr, bc, sizeof(pfe_mac_addr_t)))
+	{
+		return TRUE;
+	}
+	else
+	{
+		return FALSE;
+	}
+}
+
+/**
+ * @brief		Check if given MAC address is multicast
+ * @param[in]	addr The address to check
+ * @return		TRUE if the input address is multicast
+ */
+static inline bool_t pfe_emac_is_multi(pfe_mac_addr_t addr)
+{
+	if ((FALSE == pfe_emac_is_broad(addr)) && (0 != (addr[0] & 0x1U)))
+	{
+		return TRUE;
+	}
+	else
+	{
+		return FALSE;
+	}
+}
+
 pfe_emac_t *pfe_emac_create(void *cbus_base_va, void *emac_base, pfe_emac_mii_mode_t mode, pfe_emac_speed_t speed, pfe_emac_duplex_t duplex);
 void pfe_emac_enable(pfe_emac_t *emac);
 void pfe_emac_disable(pfe_emac_t *emac);
@@ -77,6 +122,8 @@ void pfe_emac_enable_loopback(pfe_emac_t *emac);
 void pfe_emac_disable_loopback(pfe_emac_t *emac);
 void pfe_emac_enable_promisc_mode(pfe_emac_t *emac);
 void pfe_emac_disable_promisc_mode(pfe_emac_t *emac);
+void pfe_emac_enable_allmulti_mode(pfe_emac_t *emac);
+void pfe_emac_disable_allmulti_mode(pfe_emac_t *emac);
 void pfe_emac_enable_broadcast(pfe_emac_t *emac);
 void pfe_emac_disable_broadcast(pfe_emac_t *emac);
 void pfe_emac_enable_flow_control(pfe_emac_t *emac);
@@ -91,8 +138,8 @@ errno_t pfe_emac_mdio_read22(pfe_emac_t *emac, uint8_t pa, uint8_t ra, uint16_t 
 errno_t pfe_emac_mdio_write22(pfe_emac_t *emac, uint8_t pa, uint8_t ra, uint16_t val, uint32_t key);
 errno_t pfe_emac_mdio_read45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t *val, uint32_t key);
 errno_t pfe_emac_mdio_write45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t val, uint32_t key);
-errno_t pfe_emac_add_addr(pfe_emac_t *emac, pfe_mac_addr_t addr);
-errno_t pfe_emac_add_addr_to_hash_group(pfe_emac_t *emac, pfe_mac_addr_t addr);
+errno_t pfe_emac_add_addr(pfe_emac_t *emac, pfe_mac_addr_t addr, pfe_ct_phy_if_id_t owner);
+errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_flush_mode_t mode, pfe_ct_phy_if_id_t owner);
 errno_t pfe_emac_get_addr(pfe_emac_t *emac, pfe_mac_addr_t addr);
 errno_t pfe_emac_del_addr(pfe_emac_t *emac, pfe_mac_addr_t addr);
 void pfe_emac_destroy(pfe_emac_t *emac);

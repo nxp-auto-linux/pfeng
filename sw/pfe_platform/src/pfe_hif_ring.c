@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -120,7 +120,7 @@
  * @warning	Do not touch the structure (even types) unless you know
  * 			what you're doing.
  */
-typedef struct __attribute__((packed)) __pfe_hif_bd_tag
+typedef struct __attribute__((packed)) pfe_hif_bd_tag
 {
 	volatile uint32_t ctrl_seqnum_w0;
 	volatile uint32_t rsvd_buflen_w1;
@@ -139,7 +139,7 @@ typedef struct __attribute__((packed)) __pfe_hif_bd_tag
  * @warning	Do not touch the structure (even types) unless you know
  * 			what you're doing.
  */
-typedef struct __attribute__((packed)) __pfe_hif_nocpy_bd_tag
+typedef struct __attribute__((packed)) pfe_hif_nocpy_bd_tag
 {
 	union
 	{
@@ -211,7 +211,7 @@ typedef struct __attribute__((packed)) __pfe_hif_nocpy_bd_tag
  * @warning	Do not touch the structure (even types) unless you know
  * 			what you're doing.
  */
-typedef struct __attribute__((packed)) __pfe_hif_wb_bd_tag
+typedef struct __attribute__((packed)) pfe_hif_wb_bd_tag
 {
 	volatile uint32_t rsvd_ctrl_w0;
 	volatile uint32_t seqnum_buflen_w1;
@@ -223,7 +223,7 @@ typedef struct __attribute__((packed)) __pfe_hif_wb_bd_tag
  * 			when instance will be created automatically without dynamic memory
  * 			allocation.
  */
-struct __attribute__((aligned (HAL_CACHE_LINE_SIZE), packed)) __pfe_hif_ring_tag
+struct __attribute__((aligned (HAL_CACHE_LINE_SIZE), packed)) pfe_hif_ring_tag
 {
 	/*	Put often used data from beginning to improve cache locality */
 

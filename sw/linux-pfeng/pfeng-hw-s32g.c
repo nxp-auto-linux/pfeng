@@ -158,6 +158,14 @@ static int release_config(struct pfeng_priv *priv)
 	return 0;
 }
 
+static void remove_rgmii_suffix_str(char *clk_name)
+{
+	char *pos = strrchr(clk_name, '-');
+
+	if (pos)
+		*pos = '\0';
+}
+
 static int create_config_from_dt(struct pfeng_priv *priv)
 {
 	struct platform_device *pdev = priv->pdev;
@@ -168,6 +176,7 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 	struct device_node *child = NULL;
 	int i, irq, ret = 0;
 	u32 propval;
+	char clk_name[32];
 
 	/* Get the base address of device */
 	res = platform_get_resource(priv->pdev, IORESOURCE_MEM, 0);
@@ -405,33 +414,39 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 		dev_info(&pdev->dev, "%s linked to EMAC %d", eth->name, eth->emac_id);
 
 		/* optional: tx,rx clocks */
-		eth->tx_clk = devm_get_clk_from_child(&pdev->dev, child, "tx");
+		scnprintf(clk_name, sizeof(clk_name), "tx_%s", phy_modes(eth->intf_mode));;
+		if (!phy_interface_mode_is_rgmii(eth->intf_mode) && (eth->intf_mode != PHY_INTERFACE_MODE_RMII))
+			remove_rgmii_suffix_str(clk_name);
+		eth->tx_clk = devm_get_clk_from_child(&pdev->dev, child, clk_name);
 		if (IS_ERR(eth->tx_clk)) {
 			eth->tx_clk = NULL;
-			dev_dbg(&pdev->dev, "No TX clocks declared for interface %s\n", eth->name);
+			dev_dbg(&pdev->dev, "No TX clock (%s) declared for %s\n", clk_name, eth->name);
 		} else {
 			ret = clk_prepare_enable(eth->tx_clk);
 			if (ret) {
-				dev_err(&pdev->dev, "TX clocks for interface %s failed: %d\n", eth->name, ret);
+				dev_err(&pdev->dev, "TX clock %s for interface %s failed: %d\n", clk_name, eth->name, ret);
 				ret = 0;
 				devm_clk_put(&pdev->dev, eth->tx_clk);
 				eth->tx_clk = NULL;
 			} else
-				dev_info(&pdev->dev, "TX clocks for interface %s installed\n", eth->name);
+				dev_info(&pdev->dev, "TX clock %s for %s installed\n", clk_name, eth->name);
 		}
-		eth->rx_clk = devm_get_clk_from_child(&pdev->dev, child, "rx");
+		scnprintf(clk_name, sizeof(clk_name), "rx_%s", phy_modes(eth->intf_mode));;
+		if (!phy_interface_mode_is_rgmii(eth->intf_mode) && (eth->intf_mode != PHY_INTERFACE_MODE_RMII))
+			remove_rgmii_suffix_str(clk_name);
+		eth->rx_clk = devm_get_clk_from_child(&pdev->dev, child, clk_name);
 		if (IS_ERR(eth->rx_clk)) {
 			eth->rx_clk = NULL;
-			dev_dbg(&pdev->dev, "No RX clocks declared for interface %s\n", eth->name);
+			dev_dbg(&pdev->dev, "No RX clock (%s) declared for interface %s\n", clk_name, eth->name);
 		} else {
 			ret = clk_prepare_enable(eth->rx_clk);
 			if (ret) {
-				dev_err(&pdev->dev, "RX clocks for interface %s failed: %d\n", eth->name, ret);
+				dev_err(&pdev->dev, "RX clock %s for %s failed: %d\n", clk_name, eth->name, ret);
 				ret = 0;
 				devm_clk_put(&pdev->dev, eth->rx_clk);
 				eth->rx_clk = NULL;
 			} else
-				dev_info(&pdev->dev, "RX clocks for interface %s installed\n", eth->name);
+				dev_info(&pdev->dev, "RX clock %s for %s installed\n", clk_name, eth->name);
 		}
 
 		eth->dn = of_node_get(child);
@@ -473,21 +488,29 @@ static int pfeng_s32g_probe(struct platform_device *pdev)
 	if (!of_match_device(pfeng_id_table, &pdev->dev))
 		return -ENODEV;
 
-	dev_info(&pdev->dev, "%s, ethernet driver loading ...\n", PFENG_DRIVER_NAME);
+	dev_info(&pdev->dev, "pfeng, ethernet driver loading ...\n");
+	dev_info(&pdev->dev, "Version: %s\n", PFENG_DRIVER_VERSION);
+
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 #ifdef PFE_CFG_PFE_MASTER
-	dev_info(&pdev->dev, "%s, MASTER INSTANCE\n", PFENG_DRIVER_NAME);
+	dev_info(&pdev->dev, "MASTER INSTANCE\n");
 #elif PFE_CFG_PFE_SLAVE
-	dev_info(&pdev->dev, "%s, SLAVE INSTANCE\n", PFENG_DRIVER_NAME);
+	dev_info(&pdev->dev, "SLAVE INSTANCE\n");
 #else
 #error MULTI_INSTANCE_SUPPORT requires PFE_MASTER or PFE_SLAVE defined!
 #endif
 #else
-	dev_info(&pdev->dev, "%s, MULTI-INSTANCE disabled\n", PFENG_DRIVER_NAME);
+	dev_info(&pdev->dev, "MULTI-INSTANCE disabled\n");
 #endif
 
+	dev_info(&pdev->dev, "Compiled by: %s\n", __VERSION__);
+#if defined(PFE_COMPILER_BEHAVIOR_GUESSED_ONLY)
+	dev_warn(&pdev->dev, "WARNING: Unsupported compiler version\n", __VERSION__);
+#endif
+
+	/* Describe silicon cut version compatibility */
 #if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14)
-	dev_info(&pdev->dev, "%s, s32g2 cut 1.1 errata activated\n", PFENG_DRIVER_NAME);
+	dev_info(&pdev->dev, "S32G2 cut 1.1 errata activated\n");
 #endif
 #if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)

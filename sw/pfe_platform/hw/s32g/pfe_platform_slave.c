@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -391,26 +391,6 @@ errno_t pfe_platform_init(pfe_platform_config_t *config)
 	{
 		NXP_LOG_INFO("PFE CBUS p0x%p mapped @ v0x%p\n", (void *)config->cbus_base, pfe.cbus_baseaddr);
 	}
-
-#if 0
-	/*	Create interrupt polling thread and associated stuff */
-	mbox = oal_mbox_create();
-	if (NULL == mbox)
-	{
-		goto exit;
-	}
-
-	worker = oal_thread_create(&worker_func, &pfe, "IRQ Poll Thread", 0);
-	if (NULL == worker)
-	{
-		goto exit;
-	}
-
-	if (EOK != oal_mbox_attach_timer(mbox, 100, IRQ_WORKER_POLL))
-	{
-		goto exit;
-	}
-#endif
 
 	ret = pfe_platform_create_hif(&pfe, config);
 	if (EOK != ret)

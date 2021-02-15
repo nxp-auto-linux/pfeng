@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -62,6 +62,9 @@ errno_t pfe_bmu_cfg_isr(void *base_va, void *cbus_base_va)
 	uint32_t reg_src, reg_en, reg, reg_reen = 0U;
 	errno_t ret = ENOENT;
 	addr_t bmu_offset = (addr_t)base_va - (addr_t)cbus_base_va;
+#ifndef NXP_LOG_ENABLED
+	(void)bmu_offset;
+#endif /* NXP_LOG_ENABLED */
 
 	/*	Get enabled interrupts */
 	reg_en = hal_read32(base_va + BMU_INT_ENABLE);
@@ -75,7 +78,7 @@ errno_t pfe_bmu_cfg_isr(void *base_va, void *cbus_base_va)
 	hal_write32((reg_en & ~reg_src)|BMU_FREE_ERR_INT, base_va + BMU_INT_ENABLE);
 
 	/*	Process interrupts which are triggered AND enabled */
-	if (reg_src & reg_en & BMU_EMPTY_INT)
+	if ((reg_src & reg_en & BMU_EMPTY_INT) != 0U)
 	{
 		/*	This means that zero buffers are allocated from the BMU pool,
 			i.e. all buffers are free, i.e. number of allocated buffers is
@@ -87,7 +90,7 @@ errno_t pfe_bmu_cfg_isr(void *base_va, void *cbus_base_va)
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & BMU_FULL_INT)
+	if ((reg_src & reg_en & BMU_FULL_INT) != 0U)
 	{
 		/*	All BMU buffers are allocated, i.e. no new buffer can be allocated. */
 		NXP_LOG_INFO("BMU_FULL_INT (BMU @ p0x%p). Pool depleted.\n", (void *)bmu_offset);
@@ -97,7 +100,7 @@ errno_t pfe_bmu_cfg_isr(void *base_va, void *cbus_base_va)
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & BMU_THRES_INT)
+	if ((reg_src & reg_en & BMU_THRES_INT) != 0U)
 	{
 		/*	More (or equal) than "threshold" number of buffers have been
 			allocated. Read and print the threshold value. Stay disabled. */
@@ -109,14 +112,14 @@ errno_t pfe_bmu_cfg_isr(void *base_va, void *cbus_base_va)
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & BMU_FREE_ERR_INT)
+	if ((reg_src & reg_en & BMU_FREE_ERR_INT) != 0U)
 	{
 		/*	Free error interrupt. Keep this one always enabled */
 		NXP_LOG_INFO("BMU_FREE_ERR_INT (BMU @ p0x%p) address 0x%x\n", (void *)bmu_offset, hal_read32(base_va + BMU_FREE_ERROR_ADDR));
 		ret = EOK;
 	}
 
-	if (reg_src & reg_en & (BMU_MCAST_EMPTY_INT|BMU_MCAST_FULL_INT|BMU_MCAST_THRES_INT|BMU_MCAST_FREE_ERR_INT))
+	if ((reg_src & reg_en & (BMU_MCAST_EMPTY_INT|BMU_MCAST_FULL_INT|BMU_MCAST_THRES_INT|BMU_MCAST_FREE_ERR_INT)) != 0U)
 	{
 		/*	This should never happen. TRM says that all BMU_MCAST_* flags are reserved and always 0 */
 		NXP_LOG_INFO("BMU_MCAST_EMTPY_INT or BMU_MCAST_FULL_INT or BMU_MCAST_THRES_INT or BMU_MCAST_FREE_ERR_INT (BMU @ p0x%p)\n", (void *)bmu_offset);
@@ -207,7 +210,7 @@ errno_t pfe_bmu_cfg_reset(void *base_va)
 	uint32_t ii = 0U;
 
 	hal_write32(0x2U, base_va + BMU_CTRL);
-	while (hal_read32(base_va + BMU_CTRL) & 0x2U)
+	while ((hal_read32(base_va + BMU_CTRL) & 0x2U) != 0U)
 	{
 		if (++ii > 1000U)
 		{

@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -54,8 +54,8 @@ typedef enum __attribute__((packed))
 	TMU_Q_MODE_INVALID
 } pfe_tmu_queue_mode_t;
 
-typedef struct __pfe_tmu_tag pfe_tmu_t;
-typedef struct __pfe_tmu_phy_cfg_tag pfe_tmu_phy_cfg_t;
+typedef struct pfe_tmu_tag pfe_tmu_t;
+typedef struct pfe_tmu_phy_cfg_tag pfe_tmu_phy_cfg_t;
 
 typedef struct
 {
@@ -96,11 +96,11 @@ errno_t pfe_tmu_sch_bind_sch_output(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint
 uint8_t pfe_tmu_sch_get_bound_sch_output(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
 
 pfe_tmu_t *pfe_tmu_create(void *cbus_base_va, uint32_t pe_num, pfe_tmu_cfg_t *cfg);
-void pfe_tmu_enable(pfe_tmu_t *class);
-void pfe_tmu_reset(pfe_tmu_t *class);
-void pfe_tmu_disable(pfe_tmu_t *class);
+void pfe_tmu_enable(pfe_tmu_t *tmu);
+void pfe_tmu_reset(pfe_tmu_t *tmu);
+void pfe_tmu_disable(pfe_tmu_t *tmu);
 void pfe_tmu_send(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, void *buf_pa, uint16_t len);
 uint32_t pfe_tmu_get_text_statistics(pfe_tmu_t *tmu, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-void pfe_tmu_destroy(pfe_tmu_t *class);
+void pfe_tmu_destroy(pfe_tmu_t *tmu);
 
 #endif /* PFE_TMU_H_ */

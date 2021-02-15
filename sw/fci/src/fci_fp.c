@@ -104,7 +104,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
 		return EPERM;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
+    /* Important to initialize to avoid buffer overflows */    
 	if (*reply_len < sizeof(fpp_fp_table_cmd_t))
 	{
 		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fp_table_cmd_t)\n");

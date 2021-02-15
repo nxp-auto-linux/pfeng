@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -45,9 +45,14 @@ struct __pfe_l2br_table_tag
 {
 	void *cbus_base_va;							/*!< CBUS base virtual address					*/
 	pfe_l2br_table_type_t type;					/*!< Table type									*/
+	oal_mutex_t reg_lock;						/*!< Lock to protect registers					*/
 	pfe_mac_table_regs_t regs;					/*!< Registers (VA)								*/
 	uint16_t hash_space_depth;					/*!< Hash space depth in number of entries		*/
 	uint16_t coll_space_depth;					/*!< Collision space depth in number of entries */
+};
+
+struct __pfe_l2br_table_iterator_tag
+{
 	pfe_l2br_table_get_criterion_t cur_crit;	/*!< Current criterion							*/
 	uint32_t cur_hash_addr;						/*!< Current address within hash space			*/
 	uint32_t cur_coll_addr;						/*!< Current address within collision space		*/
@@ -154,7 +159,7 @@ static errno_t pfe_l2br_table_read_cmd(pfe_l2br_table_t *l2br, uint16_t addr, pf
 static errno_t pfe_l2br_wait_for_cmd_done(pfe_l2br_table_t *l2br, uint32_t *status_val);
 static errno_t pfe_l2br_entry_to_cmd_args(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry);
 static uint32_t pfe_l2br_table_get_col_ptr(pfe_l2br_table_entry_t *entry);
-static bool_t pfe_l2br_table_entry_match_criterion(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry);
+static bool_t pfe_l2br_table_entry_match_criterion(pfe_l2br_table_t *l2br, pfe_l2br_table_iterator_t *l2t_iter, pfe_l2br_table_entry_t *entry);
 
 /**
  * @brief		Match entry with latest criterion provided via pfe_l2br_table_get_first()
@@ -163,7 +168,7 @@ static bool_t pfe_l2br_table_entry_match_criterion(pfe_l2br_table_t *l2br, pfe_l
  * @retval		True Entry matches the criterion
  * @retval		False Entry does not match the criterion
  */
-static bool_t pfe_l2br_table_entry_match_criterion(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
+static bool_t pfe_l2br_table_entry_match_criterion(pfe_l2br_table_t *l2br, pfe_l2br_table_iterator_t *l2t_iter, pfe_l2br_table_entry_t *entry)
 {
 	bool_t match = FALSE;
 
@@ -175,7 +180,7 @@ static bool_t pfe_l2br_table_entry_match_criterion(pfe_l2br_table_t *l2br, pfe_l
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	switch (l2br->cur_crit)
+	switch (l2t_iter->cur_crit)
 	{
 		case L2BR_TABLE_CRIT_ALL:
 		{
@@ -318,17 +323,10 @@ static errno_t pfe_l2br_entry_to_cmd_args(pfe_l2br_table_t *l2br, pfe_l2br_table
 }
 
 /**
- * @brief		Update table entry
- * @details		Associates new action data with the entry.
- * @param[in]	l2br The L2 Bridge Table instance
- * @param[in]	entry Entry to be updated
- * @retval		EOK Success
- * @retval		EINVAL Invalid/missing argument
- * @retval		ENOENT Entry not found
- * @retval		ENOEXEC Command failed
- * @retval		ETIMEDOUT Command timed-out
+ * @brief		Update entry in table
+ * @warning		This function shouldn't be called directly. Call equivalent function with register lock.
  */
-errno_t pfe_l2br_table_update_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
+static errno_t pfe_l2br_table_do_update_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
 {
 	uint32_t status, cmd;
 	errno_t ret;
@@ -402,15 +400,9 @@ errno_t pfe_l2br_table_update_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry
 
 /**
  * @brief		Delete entry from table
- * @details		Entry is removed from table if exists. If does not exist, the call
- *				returns success (EOK).
- * @param[in]	l2br The L2 Bridge Table instance
- * @param[in]	data Entry to be deleted
- * @retval		EOK Success
- * @retval		EINVAL Invalid/missing argument
- * @retval		ETIMEDOUT Command timed-out
+ * @warning		This function shouldn't be called directly. Call equivalent function with register lock.
  */
-errno_t pfe_l2br_table_del_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
+static errno_t pfe_l2br_table_do_del_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
 {
 	uint32_t status, cmd;
 	errno_t ret;
@@ -477,14 +469,9 @@ errno_t pfe_l2br_table_del_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t 
 
 /**
  * @brief		Add entry to table
- * @param[in]	l2br The L2 Bridge Table instance
- * @param[in]	data Entry to be added
- * @retval		EOK Success
- * @retval		EINVAL Invalid/missing argument
- * @retval		ENOEXEC Command failed
- * @retval		ETIMEDOUT Command timed-out
+ * @warning		This function shouldn't be called directly. Call equivalent function with register lock.
  */
-errno_t pfe_l2br_table_add_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
+static errno_t pfe_l2br_table_do_add_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
 {
 	uint32_t status, cmd;
 	errno_t ret;
@@ -552,16 +539,10 @@ errno_t pfe_l2br_table_add_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t 
 }
 
 /**
- * @brief			Search entry in table
- * @param[in]		l2br The L2 Bridge Table instance
- * @param[in,out]	data Reference entry to be used for lookup. This entry will be updated by
- * 						 values read from the table.
- * @retval			EOK Success
- * @retval			EINVAL Invalid/missing argument
- * @retval			ENOENT Entry not found
- * @retval			ETIMEDOUT Command timed-out
+ * @brief		Search for entry in table
+ * @warning		This function shouldn't be called directly. Call equivalent function with register lock.
  */
-errno_t pfe_l2br_table_search_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
+static errno_t pfe_l2br_table_do_search_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
 {
 	uint32_t status, cmd;
 	errno_t ret;
@@ -647,7 +628,153 @@ errno_t pfe_l2br_table_search_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry
 	{
 		;
 	}
+	return EOK;
+}
 
+
+/**
+ * @brief		Update table entry
+ * @details		Associates new action data with the entry.
+ * @param[in]	l2br The L2 Bridge Table instance
+ * @param[in]	entry Entry to be updated
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid/missing argument
+ * @retval		ENOENT Entry not found
+ * @retval		ENOEXEC Command failed
+ * @retval		ETIMEDOUT Command timed-out
+ */
+errno_t pfe_l2br_table_update_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
+{
+	errno_t ret = EOK;
+
+	if (EOK != oal_mutex_lock(&l2br->reg_lock))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	ret = pfe_l2br_table_do_update_entry_nolock(l2br, entry);
+
+	if (EOK != oal_mutex_unlock(&l2br->reg_lock))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Delete entry from table
+ * @details		Entry is removed from table if exists. If does not exist, the call
+ *				returns success (EOK).
+ * @param[in]	l2br The L2 Bridge Table instance
+ * @param[in]	data Entry to be deleted
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid/missing argument
+ * @retval		ETIMEDOUT Command timed-out
+ */
+errno_t pfe_l2br_table_del_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
+{
+	errno_t ret = EOK;
+
+	if (EOK != oal_mutex_lock(&l2br->reg_lock))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	ret = pfe_l2br_table_do_del_entry_nolock(l2br, entry);
+
+	if (EOK != oal_mutex_unlock(&l2br->reg_lock))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Add entry to table
+ * @param[in]	l2br The L2 Bridge Table instance
+ * @param[in]	data Entry to be added
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid/missing argument
+ * @retval		ENOEXEC Command failed
+ * @retval		ETIMEDOUT Command timed-out
+ */
+errno_t pfe_l2br_table_add_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
+{
+	errno_t ret = EOK;
+
+	if (EOK != oal_mutex_lock(&l2br->reg_lock))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	ret = pfe_l2br_table_do_add_entry_nolock(l2br, entry);
+
+	if (EOK != oal_mutex_unlock(&l2br->reg_lock))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief			Search entry in table
+ * @param[in]		l2br The L2 Bridge Table instance
+ * @param[in,out]	data Reference entry to be used for lookup. This entry will be updated by
+ * 						 values read from the table.
+ * @retval			EOK Success
+ * @retval			EINVAL Invalid/missing argument
+ * @retval			ENOENT Entry not found
+ * @retval			ETIMEDOUT Command timed-out
+ */
+errno_t pfe_l2br_table_search_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
+{
+	errno_t ret = EOK;
+
+	if (EOK != oal_mutex_lock(&l2br->reg_lock))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	ret = pfe_l2br_table_do_search_entry_nolock(l2br, entry);
+
+	if (EOK != oal_mutex_unlock(&l2br->reg_lock))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief			Create iterator instance to go through the table
+ * @return			iterator on success, NULL on failure
+ */
+pfe_l2br_table_iterator_t *pfe_l2br_iterator_create(void)
+{
+	pfe_l2br_table_iterator_t *loop_inst = oal_mm_malloc(sizeof(pfe_l2br_table_iterator_t));
+
+	if (NULL == loop_inst) {
+		return NULL;
+	}
+
+	loop_inst->cur_hash_addr = 0;
+	loop_inst->cur_coll_addr = 0;
+	loop_inst->cur_crit = 0;
+
+	return loop_inst;
+}
+
+/**
+ * @brief			Destroy table iterator
+ * @param[in]		inst Iterator instance to be destroyed
+ * @retval			EOK on success
+ */
+errno_t pfe_l2br_iterator_destroy(pfe_l2br_table_iterator_t *inst)
+{
+	oal_mm_free(inst);
 	return EOK;
 }
 
@@ -661,7 +788,7 @@ errno_t pfe_l2br_table_search_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry
  * @retval			ENOENT Entry not found
  * @retval			ETIMEDOUT Command timed-out
  */
-errno_t pfe_l2br_table_get_first(pfe_l2br_table_t *l2br, pfe_l2br_table_get_criterion_t crit, pfe_l2br_table_entry_t *entry)
+errno_t pfe_l2br_table_get_first(pfe_l2br_table_t *l2br, pfe_l2br_table_iterator_t *l2t_iter, pfe_l2br_table_get_criterion_t crit, pfe_l2br_table_entry_t *entry)
 {
 	errno_t ret = ENOENT;
 
@@ -674,23 +801,23 @@ errno_t pfe_l2br_table_get_first(pfe_l2br_table_t *l2br, pfe_l2br_table_get_crit
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Remember criterion and argument for possible subsequent pfe_l2br_table_get_next() calls */
-	l2br->cur_crit = crit;
+	l2t_iter->cur_crit = crit;
 
 	/*	Get entries from address 0x0 */
-	for (l2br->cur_hash_addr=0U, l2br->cur_coll_addr=0U; l2br->cur_hash_addr<l2br->hash_space_depth; l2br->cur_hash_addr++)
+	for (l2t_iter->cur_hash_addr=0U, l2t_iter->cur_coll_addr=0U; l2t_iter->cur_hash_addr<l2br->hash_space_depth; l2t_iter->cur_hash_addr++)
 	{
-		ret = pfe_l2br_table_read_cmd(l2br, l2br->cur_hash_addr, entry);
+		ret = pfe_l2br_table_read_cmd(l2br, l2t_iter->cur_hash_addr, entry);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("Can not read table entry from location %d\n", l2br->cur_hash_addr);
+			NXP_LOG_DEBUG("Can not read table entry from location %d\n", l2t_iter->cur_hash_addr);
 			break;
 		}
 		else
 		{
-			if (TRUE == pfe_l2br_table_entry_match_criterion(l2br, entry))
+			if (TRUE == pfe_l2br_table_entry_match_criterion(l2br, l2t_iter, entry))
 			{
 				/*	Remember entry to be processed next */
-				l2br->cur_coll_addr = pfe_l2br_table_get_col_ptr(entry);
+				l2t_iter->cur_coll_addr = pfe_l2br_table_get_col_ptr(entry);
 				return EOK;
 			}
 		}
@@ -709,7 +836,7 @@ errno_t pfe_l2br_table_get_first(pfe_l2br_table_t *l2br, pfe_l2br_table_get_crit
  * @retval			ENOENT Entry not found
  * @retval			ETIMEDOUT Command timed-out
  */
-errno_t pfe_l2br_table_get_next(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry)
+errno_t pfe_l2br_table_get_next(pfe_l2br_table_t *l2br, pfe_l2br_table_iterator_t *l2t_iter, pfe_l2br_table_entry_t *entry)
 {
 	uint32_t ret;
 
@@ -722,16 +849,16 @@ errno_t pfe_l2br_table_get_next(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Get entries from last address */
-	while (l2br->cur_hash_addr < l2br->hash_space_depth)
+	while (l2t_iter->cur_hash_addr < l2br->hash_space_depth)
 	{
-		if (0U == l2br->cur_coll_addr)
+		if (0U == l2t_iter->cur_coll_addr)
 		{
-			l2br->cur_hash_addr++;
-			ret = pfe_l2br_table_read_cmd(l2br, l2br->cur_hash_addr, entry);
+			l2t_iter->cur_hash_addr++;
+			ret = pfe_l2br_table_read_cmd(l2br, l2t_iter->cur_hash_addr, entry);
 		}
 		else
 		{
-			ret = pfe_l2br_table_read_cmd(l2br, l2br->cur_coll_addr, entry);
+			ret = pfe_l2br_table_read_cmd(l2br, l2t_iter->cur_coll_addr, entry);
 		}
 
 		if (EOK != ret)
@@ -741,9 +868,9 @@ errno_t pfe_l2br_table_get_next(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *
 		}
 		else
 		{
-			if (TRUE == pfe_l2br_table_entry_match_criterion(l2br, entry))
+			if (TRUE == pfe_l2br_table_entry_match_criterion(l2br, l2t_iter, entry))
 			{
-				l2br->cur_coll_addr = pfe_l2br_table_get_col_ptr(entry);
+				l2t_iter->cur_coll_addr = pfe_l2br_table_get_col_ptr(entry);
 				return EOK;
 			}
 		}
@@ -1043,6 +1170,14 @@ pfe_l2br_table_t *pfe_l2br_table_create(void *cbus_base_va, pfe_l2br_table_type_
 		memset(l2br, 0, sizeof(pfe_l2br_table_t));
 		l2br->cbus_base_va = cbus_base_va;
 		l2br->type = type;
+	}
+
+	if (EOK != oal_mutex_init(&l2br->reg_lock))
+	{
+			NXP_LOG_ERROR("Mutex initialization failed.\n");
+			oal_mm_free(l2br);
+			l2br = NULL;
+			return l2br;
 	}
 
 	switch (type)

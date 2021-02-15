@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2019-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -16,7 +16,7 @@
 #include "pfe_safety_csr.h"
 
 
-struct __pfe_safety_tag
+struct pfe_safety_tag
 {
 	void *cbus_base_va;
 	void *safety_base_offset;
@@ -52,7 +52,7 @@ pfe_safety_t *pfe_safety_create(void *cbus_base_va, void *safety_base)
 	}
 	else
 	{
-		memset(safety, 0, sizeof(pfe_safety_t));
+		(void)memset(safety, 0, sizeof(pfe_safety_t));
 		safety->cbus_base_va = cbus_base_va;
 		safety->safety_base_offset = safety_base;
 		safety->safety_base_va = (void *)((addr_t)safety->cbus_base_va + (addr_t)safety->safety_base_offset);
@@ -92,15 +92,14 @@ void pfe_safety_destroy(pfe_safety_t *safety)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	/* Mask safety interrupts */
-	(void)oal_mutex_lock(safety->lock);
-	pfe_safety_cfg_irq_mask(safety->safety_base_va);
-	(void)oal_mutex_unlock(safety->lock);
-
 	if (NULL != safety)
 	{
 		if (NULL != safety->lock)
 		{
+			/* Mask safety interrupts */
+			(void)oal_mutex_lock(safety->lock);
+			pfe_safety_cfg_irq_mask(safety->safety_base_va);
+			(void)oal_mutex_unlock(safety->lock);
 			(void)oal_mutex_destroy(safety->lock);
 			(void)oal_mm_free(safety->lock);
 			safety->lock = NULL;

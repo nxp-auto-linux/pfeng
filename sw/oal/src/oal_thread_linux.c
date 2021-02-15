@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -134,6 +134,13 @@ errno_t oal_thread_join(oal_thread_t *thread, void **retval)
 	oal_mm_free(thread);
 	
 	return err;
+}
+
+errno_t oal_thread_cancel(oal_thread_t *thread) {
+	(void)thread;
+
+	/* No cancellation in Linux */
+	return EOK;
 }
 
 

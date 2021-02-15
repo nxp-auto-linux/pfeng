@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -13,7 +13,7 @@
 #include "pfe_ct.h"
 
 
-typedef struct __pfe_pe_tag pfe_pe_t;
+typedef struct pfe_pe_tag pfe_pe_t;
 
 pfe_pe_t * pfe_pe_create(void *cbus_base_va, pfe_ct_pe_type_t type, uint8_t id);
 void pfe_pe_set_dmem(pfe_pe_t *pe, addr_t elf_base, addr_t len);
@@ -26,9 +26,14 @@ errno_t pfe_pe_get_mmap(pfe_pe_t *pe, pfe_ct_pe_mmap_t *mmap);
 void pfe_pe_memcpy_from_host_to_dmem_32(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len);
 void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst, addr_t src, uint32_t len);
 errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_count, void *dst, addr_t src, uint32_t buffer_len, uint32_t read_len);
+void pfe_pe_memcpy_from_host_to_imem_32(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len);
 void pfe_pe_memcpy_from_imem_to_host_32(pfe_pe_t *pe, void *dst, addr_t src, uint32_t len);
 void pfe_pe_dmem_memset(pfe_pe_t *pe, uint8_t val, addr_t addr, uint32_t len);
 void pfe_pe_imem_memset(pfe_pe_t *pe, uint8_t val, addr_t addr, uint32_t len);
+errno_t pfe_pe_get_fw_feature_entry(pfe_pe_t *pe, uint32_t id, pfe_ct_feature_desc_t **entry);
+errno_t pfe_pe_get_fw_feature_state(pfe_pe_t *pe, uint32_t position, uint8_t *enable);
+errno_t pfe_pe_set_fw_feature_state(pfe_pe_t *pe, const uint32_t position, const uint8_t enable);
+char *pfe_pe_get_fw_feature_string(pfe_pe_t *pe, uint32_t location);
 errno_t pfe_pe_get_pe_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_pe_stats_t *stats);
 errno_t pfe_pe_get_classify_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_classify_stats_t *stats);
 errno_t pfe_pe_get_class_algo_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_class_algo_stats_t *stats);
@@ -45,6 +50,7 @@ errno_t pfe_pe_lock(pfe_pe_t *pe);
 void pfe_pe_memcpy_from_dmem_to_host_32_nolock(pfe_pe_t *pe, void *dst, addr_t src, uint32_t len);
 void pfe_pe_memcpy_from_host_to_dmem_32_nolock(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len);
 errno_t pfe_pe_unlock(pfe_pe_t *pe);
+char *pfe_pe_get_fw_feature_str_base(pfe_pe_t *pe);
 
 
 #endif /* PFE_PE_H_ */

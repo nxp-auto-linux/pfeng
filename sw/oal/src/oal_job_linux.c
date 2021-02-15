@@ -28,7 +28,7 @@
 #include "oal_mm.h"
 #include "oal_job.h"
 
-struct __oal_job_tag
+struct oal_job_tag
 {
 	struct workqueue_struct *queue;
 	struct work_struct work;

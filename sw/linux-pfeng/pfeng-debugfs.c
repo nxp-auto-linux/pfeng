@@ -1,5 +1,5 @@
 /*
- * Copyright 2018,2020 NXP
+ * Copyright 2018, 2020-2021 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -63,6 +63,7 @@ CREATE_DEBUGFS_ENTRY_TYPE(bmu);
 CREATE_DEBUGFS_ENTRY_TYPE(gpi);
 CREATE_DEBUGFS_ENTRY_TYPE(tmu);
 CREATE_DEBUGFS_ENTRY_TYPE(util);
+CREATE_DEBUGFS_ENTRY_TYPE(l2br);
 #endif
 CREATE_DEBUGFS_ENTRY_TYPE(hif_chnl);
 
@@ -107,6 +108,7 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 
 #ifdef PFE_CFG_PFE_MASTER
 	ADD_DEBUGFS_ENTRY("class", class, priv->dbgfs, priv->pfe->classifier, &dsav);
+	ADD_DEBUGFS_ENTRY("l2br", l2br, priv->dbgfs, priv->pfe->l2_bridge, &dsav);
 	ADD_DEBUGFS_ENTRY("hif", hif, priv->dbgfs, priv->pfe->hif, &dsav);
 	ADD_DEBUGFS_ENTRY("bmu1", bmu, priv->dbgfs, priv->pfe->bmu[0], &dsav);
 	ADD_DEBUGFS_ENTRY("bmu2", bmu, priv->dbgfs, priv->pfe->bmu[1], &dsav);

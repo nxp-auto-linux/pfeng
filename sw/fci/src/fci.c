@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2020 NXP
+ *  Copyright 2017-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -11,7 +11,9 @@
 #include "fci_fp.h"
 #include "fci_fp_db.h"
 #include "fci_flexible_filter.h"
+#include "fci_fw_features.h"
 #include "fci_spd.h"
+
  /* Global variable used across all fci files */
 fci_t __context = {0};
 
@@ -200,24 +202,38 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					break;
 				}
 
+				case FPP_CMD_L2_STATIC_ENT:
+				{
+					/*	Manage L2 bridge domains */
+					ret = fci_l2br_static_entry_cmd(msg, &fci_ret, (fpp_l2_static_ent_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+
+					break;
+				}
+
                 case FPP_CMD_FP_TABLE:
-                {
-                    ret = fci_fp_table_cmd(msg, &fci_ret, (fpp_fp_table_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-                    break;
-                }
+				{
+					ret = fci_fp_table_cmd(msg, &fci_ret, (fpp_fp_table_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
 
-                case FPP_CMD_FP_RULE:
-                {
-                    ret = fci_fp_rule_cmd(msg, &fci_ret, (fpp_fp_rule_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-                    break;
-                }
+				case FPP_CMD_FP_RULE:
+				{
+					ret = fci_fp_rule_cmd(msg, &fci_ret, (fpp_fp_rule_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
 
-                case FPP_CMD_FP_FLEXIBLE_FILTER:
-                {
-                    /* Configure Flexible filter */
-                    ret = fci_flexible_filter_cmd(msg, &fci_ret, (fpp_flexible_filter_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-                    break;
-                }
+				case FPP_CMD_FP_FLEXIBLE_FILTER:
+				{
+					/* Configure Flexible filter */
+					ret = fci_flexible_filter_cmd(msg, &fci_ret, (fpp_flexible_filter_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
+
+				case FPP_CMD_FW_FEATURE:
+				{
+					ret = fci_fw_features_cmd(msg, &fci_ret, (fpp_fw_features_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
 
                 case FPP_CMD_SPD:
                 {

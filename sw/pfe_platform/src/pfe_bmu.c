@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -20,7 +20,7 @@
 	#error BMU1 buffers exceed LMEM capacity
 #endif
 
-struct __pfe_bmu_tag
+struct pfe_bmu_tag
 {
 	void *cbus_base_va;		/*	CBUS base virtual address */
 	void *bmu_base_va;		/*	BMU base address (virtual) */
@@ -153,15 +153,15 @@ __attribute__((cold)) pfe_bmu_t *pfe_bmu_create(void *cbus_base_va, void *bmu_ba
 	}
 	else
 	{
-		memset(bmu, 0, sizeof(pfe_bmu_t));
+		(void)memset(bmu, 0, sizeof(pfe_bmu_t));
 		bmu->cbus_base_va = cbus_base_va;
 		bmu->bmu_base_offset = bmu_base;
 		bmu->bmu_base_va = (void *)((addr_t)bmu->cbus_base_va + (addr_t)bmu->bmu_base_offset);
 		bmu->pool_base_pa = cfg->pool_pa;
 		bmu->pool_base_va = cfg->pool_va;
 		bmu->pool_va_offset = (addr_t)bmu->pool_base_va - (addr_t)bmu->pool_base_pa;
-		bmu->pool_size = (1U << cfg->buf_size) * cfg->max_buf_cnt;
-		bmu->buf_size = (1U << cfg->buf_size);
+		bmu->pool_size = ((uint32_t)1U << cfg->buf_size) * cfg->max_buf_cnt;
+		bmu->buf_size = ((uint32_t)1U << cfg->buf_size);
 
 #ifdef PFE_CFG_PARANOID_IRQ
 		/*	Resource protection */
@@ -230,6 +230,7 @@ __attribute__((cold)) void pfe_bmu_reset(pfe_bmu_t *bmu)
 	}
 	else
 	{
+		/*Do Nothing*/
 		;
 	}
 

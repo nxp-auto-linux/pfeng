@@ -65,13 +65,13 @@
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
-#define _ASSERT_CONCAT_(a, b) a##b
-#define _ASSERT_CONCAT(a, b) _ASSERT_CONCAT_(a, b)
+#define ASSERT_CONCAT_(a, b) a##b
+#define ASSERT_CONCAT(a, b) ASSERT_CONCAT_(a, b)
 
 #ifdef __ghs__ /* AAVB-2386 */
 #define ct_assert(e) 
 #else
-#define ct_assert(e) enum { _ASSERT_CONCAT(precompile_assert_, __COUNTER__) = 1/(!!(e)) }
+#define ct_assert(e) enum { ASSERT_CONCAT(precompile_assert_, __COUNTER__) = 1/(!!(e)) }
 #endif
 
 /**

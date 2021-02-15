@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -30,6 +30,7 @@
 #define CAL_PACKED_ALIGNED(n)	__attribute__((packed, aligned(n)))
 #endif /* CAL_PACKED_ALIGNED */
 
+#define FPP_ERR_ENTRY_NOT_FOUND                 0xf104
 #define FPP_ERR_INTERNAL_FAILURE				0xffff
 
 /**
@@ -55,7 +56,7 @@
  * to name of the desired interface to be updated. Rest of the fpp_phy_if_cmd_t members will be considered
  * to be used as the new interface properties. It is recommended to use read-modify-write approach in
  * combination with @ref FPP_ACTION_QUERY and @ref FPP_ACTION_QUERY_CONT.
- * 
+ *
  * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
  * -------------------------------------------------
  * Get interface properties. Set fpp_phy_if_cmd_t.action to @ref FPP_ACTION_QUERY to get first interface from
@@ -63,13 +64,13 @@
  * type for query commands is of type @ref fpp_phy_if_cmd_t.
  *
  * For operation modes see @ref fpp_phy_if_op_mode_t. For operation flags see @ref fpp_if_flags_t.
- * 
+ *
  * Possible command return values are:
  *     - @c FPP_ERR_OK: Success.
  *     - @c FPP_ERR_IF_ENTRY_NOT_FOUND: Last entry in the query session.
  *     - @c FPP_ERR_IF_WRONG_SESSION_ID: Someone else is already working with the interfaces.
  *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
- * 
+ *
  * @hideinitializer
  */
 #define FPP_CMD_PHY_IF					0xf100
@@ -88,7 +89,7 @@
  *          - @c FPP_ACTION_QUERY_CONT: Gets next item from list of existing logical interfaces. Shall
  *            be called after @ref FPP_ACTION_QUERY was called. On each call it replies with properties
  *            of the next interface.
- * 
+ *
  * Precondition to use the query is to atomic lock the access with @ref FPP_CMD_IF_LOCK_SESSION.
  *
  * Command Argument Type: @ref fpp_log_if_cmd_t
@@ -151,7 +152,7 @@
  *     - @c FPP_ERR_IF_EGRESS_DOESNT_EXIST: Egress interface provided in command doesn't exist.
  *     - @c FPP_ERR_IF_OP_FLAGS_UPDATE_FAILED: Operation flags update has failed (PROMISC/ENABLE/MATCH).
  *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
- * 
+ *
  * @hideinitializer
  */
 #define FPP_CMD_LOG_IF					0xf101
@@ -220,7 +221,7 @@
  * Possible command return values are:
  *     -  FPP_ERR_OK: Lock successful
  *     -  FPP_ERR_IF_RESOURCE_ALREADY_LOCKED: Database was already locked by someone else
- * 
+ *
  * @hideinitializer
  */
 #define FPP_CMD_IF_LOCK_SESSION					0x0015
@@ -263,7 +264,9 @@ typedef enum CAL_PACKED
 	FPP_IF_OP_BRIDGE = 2,			/*!< L2 bridge */
 	FPP_IF_OP_ROUTER = 3,			/*!< L3 router */
 	FPP_IF_OP_VLAN_BRIDGE = 4,		/*!< L2 bridge with VLAN */
-	FPP_IF_OP_FLEXIBLE_ROUTER = 5	/*!< Flexible router */
+	FPP_IF_OP_FLEXIBLE_ROUTER = 5,	/*!< Flexible router */
+	FPP_IF_OP_L2L3_BRIDGE = 6,		/*!< L2 bridge and L3 router combination*/
+	FPP_IF_OP_L2L3_VLAN_BRIDGE = 7,	/*!< L2 Vlan bridge and L3 router combination*/
 } fpp_phy_if_op_mode_t;
 
 /**
@@ -404,6 +407,10 @@ typedef struct CAL_PACKED
 	fpp_phy_if_block_state_t block_state;	/**< Phy if block state */
 	uint8_t mac_addr[6];		/**< Phy if MAC (network endian) */
 	char mirror[IFNAMSIZ];		/**< Name of interface to mirror the traffic to */
+	/**	Table to be used to filter ingress traffic. See @ref FPP_CMD_FP_TABLE. If
+	 	here is non-empty string then the filter is enabled. Empty string disables
+	 	the filter. */
+	char ftable[16];
 	fpp_phy_if_stats_t	stats;	/**< Physical interface statistics */
 } fpp_phy_if_cmd_t;
 
@@ -635,6 +642,164 @@ typedef struct CAL_PACKED fpp_l2_bridge_domain_control_cmd
 } fpp_l2_bd_cmd_t;
 
 /**
+ * @def FPP_CMD_L2_STATIC_ENT
+ * @brief VLAN-based L2 bridge static entry management
+ * @note When using this command MAC entry learning should be disabled.
+ * @details Command can be used with various `.action` values:
+ *          - @c FPP_ACTION_REGISTER: Create a new static entry.
+ *          - @c FPP_ACTION_DEREGISTER: Delete static entry.
+ *          - @c FPP_ACTION_UPDATE: Update static entry. It is possible to update forward list only.
+ *          - @c FPP_ACTION_QUERY: Gets head of list of registered static entries.
+ *          - @c FPP_ACTION_QUERY_CONT: Get next item from list of static entries. Shall be called after
+ *               @c FPP_ACTION_QUERY was called. On each call it replies with parameters of next domain.
+ *               It returns @c FPP_ERR_RT_ENTRY_NOT_FOUND when no more entries exist.
+ *
+ * Command Argument Type: @ref fpp_l2_static_ent_cmd_t
+ *
+ * Action FPP_ACTION_REGISTER
+ * --------------------------
+ * Items to be set in command argument structure:
+ * @code{.c}
+ *   fpp_l2_static_ent_cmd_t cmd_data =
+ *   {
+ *     // Register new static entry
+ *     .action = FPP_ACTION_REGISTER,
+ *     // VLAN ID associated with the domain (network endian)
+ *     .vlan = ...,
+ *     // MAC address
+ *     .mac = {...} ;
+ *     //Forward list (network endian). Bitmask where traffic matching source MAC will be forwarded to.
+ *     //The bitmask itself is constructed by setting bit corresponding to the egress ID of physical.
+ *     // For instance bit (1 « 3), if set, says that all traffic matching configured source MAC
+ *     //will be transmitted to physical interface ID=3. If flag is set, given physical interface will be used to
+ *     //transmit matching traffic. If flag is cleared and interface has been previously added, all new matching traffic will not
+ *     //be transmitted to this interface. The IDs are given by the related FCI endpoint and related networking HW.
+ *     //Interface IDs can be obtained via FPP_CMD_PHY_IF.
+ *     .forward_list = ..,
+ *     // Configure the static entry as Local MAC address for L2L3 Bridge mode
+ *     .local = 1
+ *   };
+ * @endcode
+ *
+ * Possible command return values are:
+ *     - @c FPP_ERR_OK: Static entry added.
+ *     - @c FPP_ERR_L2_STATIC_ENT_ALREADY_REGISTERED: Given static entry already registered.
+ *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ *
+ *
+ * Action FPP_ACTION_DEREGISTER
+ * --------------------------
+ * Items to be set in command argument structure:
+ * @code{.c}
+ *   fpp_l2_static_ent_cmd_t cmd_data =
+ *   {
+ *     // Delete bridge domain
+ *     .action = FPP_ACTION_DEREGISTER,
+ *     // VLAN ID associated with the domain (network endian)
+ *     .vlan = ...,
+ *     // MAC address
+ *     .mac = {...} ;
+ *   };
+ * @endcode
+ *
+ * Possible command return values are:
+ *     - @c FPP_ERR_OK: Static entry removed.
+ *     - @c FPP_ERR_L2_STATIC_EN_NOT_FOUND: Given  static entry not found.
+ *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ *
+ * Action FPP_ACTION_UPDATE
+ * --------------------------
+ * Items to be set in command argument structure:
+ * @code{.c}
+ *   fpp_l2_static_ent_cmd_t cmd_data =
+ *   {
+ *     // Register new static entry
+ *     .action = FPP_ACTION_REGISTER,
+ *     // VLAN ID associated with the domain (network endian). This VLAN+MAC have to be already registered for update.
+ *     .vlan = ...,
+ *     // MAC address. This VLAN+MAC have to be already registered for update.
+ *     .mac = {...},
+ *     //Forward list (network endian). Bitmask where traffic matching source MAC will be forwarded to.
+ *     //The bitmask itself is constructed by setting bit corresponding to the egress ID of physical.
+ *     // For instance bit (1 « 3), if set, says that all traffic matching configured source MAC
+ *     //will be transmitted to physical interface ID=3. If flag is set, given physical interface will be used to
+ *     //transmit matching traffic. If flag is cleared and interface has been previously added, all new matching traffic will not
+ *     //be transmitted to this interface. The IDs are given by the related FCI endpoint and related networking HW.
+ *     //Interface IDs can be obtained via FPP_CMD_PHY_IF.
+ *     .forward_list = ..,
+ *     // Configure the static entry as Local MAC address for L2L3 Bridge mode
+ *     .local = 1
+ *   };
+ * @endcode
+ *
+ * Possible command return values are:
+ *     - @c FPP_ERR_OK: Static entry updated.
+ *     - @c FPP_ERR_L2_STATIC_EN_NOT_FOUND: Given static entry not found.
+ *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ *
+ * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * -------------------------------------------------
+ * Items to be set in command argument structure:
+ * @code{.c}
+ *   fpp_l2_static_ent_cmd_t cmd_data =
+ *   {
+ *     .action = ...    // Either FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT
+ *   };
+ * @endcode
+ *
+ * Response data type for queries: @ref fpp_l2_static_ent_cmd_t
+ *
+ * Response data provided (all values in network byte order):
+ * @code{.c}
+ *     // Register new static entry
+ *     .action = FPP_ACTION_REGISTER,
+ *     // VLAN ID associated with the domain (network endian)
+ *     .vlan = ...,
+ *     // MAC address
+ *     .mac = {...} ;
+ *     //Forward list (network endian).
+ *     .forward_list = ..;
+  *     // Is the static entry used as Local MAC address for L2L3 Bridge mode
+ *     .local = ... ; //1 = yes, 0 = no
+
+ * @endcode
+ *
+ * Possible command return values are:
+ *     - @c FPP_ERR_OK: Response buffer written.
+ *     - @c FPP_ERR_L2_STATIC_EN_NOT_FOUND: No more entries.
+ *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ *
+ * @hideinitializer
+ */
+
+#define FPP_CMD_L2_STATIC_ENT						0xf340
+#define FPP_ERR_L2_STATIC_ENT_ALREADY_REGISTERED	0xf341
+#define FPP_ERR_L2_STATIC_EN_NOT_FOUND				0xf342
+
+typedef struct CAL_PACKED fpp_l2_bridge_static_entry_cmd
+{
+	/**	Action to be executed (register, unregister, query, ...) */
+	uint16_t action;
+	/**	VLAN ID associated with the mac address (network endian). If the vlan shouldn't be matched
+	    this field should be configured to default vlan.*/
+	uint16_t vlan;
+	/** MAC Address */
+	uint8_t mac[6];
+	/** Forward list (network endian). Bitmask where traffic matching source MAC will be forwarded to.
+	    The bitmask itself is constructed by setting bit corresponding to the egress ID of physical.
+	    For instance bit (1 « 3), if set, says that all traffic matching configured source MAC
+	    will be transmitted to physical interface ID=3. If flag is set, given physical interface will be used to
+	    transmit matching traffic. If flag is cleared and interface has been previously added, all new matching traffic will not
+	    be transmitted to this interface. The IDs are given by the related FCI endpoint and related networking HW.
+	    Interface IDs can be obtained via FPP_CMD_PHY_IF. */
+	uint32_t forward_list;
+	/** Local MAC address (1 = true, 0 = false). The forward list is ignored and the frames with corresponding destination
+        MAC address are passed to the IP router algorithm when the value is 1 and the ingress physical interface is configured
+        into the L2L3 bridge mode. Other traffic is handle by L2 bridge algorithm. */
+	uint8_t local;
+} fpp_l2_static_ent_cmd_t;
+
+/**
  * @def FPP_CMD_FP_TABLE
  * @brief Administers the Flexible Parser tables
  * @details The Flexible Parser table is an ordered set of Flexible Parser rules which
@@ -689,6 +854,7 @@ typedef struct CAL_PACKED fpp_l2_bridge_domain_control_cmd
  *      .action = FPP_ACTION_USE_RULE,    // Add existing rule into specified table
  *      .t.table_name = "table_name",     // Identifier of the table to add the rule
  *      .t.rule_name = "rule_name",       // Identifier of the rule to be added into the table
+ *      .t.position = ...                 // Desired position of the rule within the table
  *   };
  * @endcode
  * @note Single rule can be member of only one table.
@@ -699,7 +865,7 @@ typedef struct CAL_PACKED fpp_l2_bridge_domain_control_cmd
  * @code{.c}
  *   fpp_flexible_parser_table_cmd cmd_data =
  *   {
- *      .action = FPP_ACTION_UNUSE_RULE,  // Remove an existing table
+ *      .action = FPP_ACTION_UNUSE_RULE,  // Remove an existing rule from a table
  *      .t.rule_name = "rule_name",       // Identifier of the rule to be removed from the table
  *   };
  * @endcode
@@ -716,7 +882,7 @@ typedef struct CAL_PACKED fpp_l2_bridge_domain_control_cmd
  * @endcode
  *
  * Response data type for queries: @ref fpp_fp_rule_cmd_t
- * 
+ *
  * Response data provided:
  * @code{.c}
  *   rsp_data.r.name;             // Name of the rule
@@ -741,7 +907,7 @@ typedef struct CAL_PACKED fpp_l2_bridge_domain_control_cmd
  * @endcode
  *
  * Response data is provided in the same form as for FPP_ACTION_QUERY action.
- * 
+ *
  * @hideinitializer
  */
 #define FPP_CMD_FP_TABLE                    0xf220
@@ -813,7 +979,7 @@ typedef struct CAL_PACKED fpp_l2_bridge_domain_control_cmd
  * @endcode
  *
  * Response data type for queries: @ref fpp_fp_rule_cmd_t
- * 
+ *
  * Response data provided:
  * @code{.c}
  *   rsp_data.r.name;             // Name of the rule
@@ -837,7 +1003,7 @@ typedef struct CAL_PACKED fpp_l2_bridge_domain_control_cmd
  * @endcode
  *
  * Response data is provided in the same form as for FPP_ACTION_QUERY action.
- * 
+ *
  * @hideinitializer
  */
 #define FPP_CMD_FP_RULE                     0xf221
@@ -1038,7 +1204,7 @@ typedef struct CAL_PACKED fpp_flexible_filter_cmd
 
 /**
  * @def FPP_CMD_ENDPOINT_SHUTDOWN
- * @brief Notify client about endpoint shutdown event. 
+ * @brief Notify client about endpoint shutdown event.
  */
 #define FPP_CMD_ENDPOINT_SHUTDOWN	0xf303
 
@@ -1197,7 +1363,7 @@ typedef struct CAL_PACKED
  *
  * Action FPP_ACTION_UPDATE
  * ------------------------
- * To update queue properties just set 
+ * To update queue properties just set
  *   - `fpp_qos_queue_cmd_t.action` to @ref FPP_ACTION_QUERY
  *   - `fpp_qos_queue_cmd_t.if_name` to name of the physical interface and
  *   - `fpp_qos_queue_cmd_t.id` to the queue ID.
@@ -1205,7 +1371,7 @@ typedef struct CAL_PACKED
  * Rest of the fpp_qos_queue_cmd_t structure members will be considered to be used as the new
  * queue properties. It is recommended to use read-modify-write approach in combination with
  * @ref FPP_ACTION_QUERY.
- * 
+ *
  * Action FPP_ACTION_QUERY
  * -----------------------
  * Get current queue properties. Set
@@ -1284,7 +1450,7 @@ typedef struct CAL_PACKED fpp_qos_queue_cmd
  *
  * Action FPP_ACTION_UPDATE
  * ------------------------
- * To update scheduler properties just set 
+ * To update scheduler properties just set
  *   - `fpp_qos_scheduler_cmd_t.action` to @ref FPP_ACTION_QUERY
  *   - `fpp_qos_scheduler_cmd_t.if_name` to name of the physical interface and
  *   - `fpp_qos_scheduler_cmd_t.id` to the scheduler ID.
@@ -1367,7 +1533,7 @@ typedef struct CAL_PACKED fpp_qos_scheduler_cmd
  *
  * Action FPP_ACTION_UPDATE
  * ------------------------
- * To update scheduler properties just set 
+ * To update scheduler properties just set
  *   - `fpp_qos_shaper_cmd_t.action` to @ref FPP_ACTION_QUERY
  *   - `fpp_qos_shaper_cmd_t.if_name` to name of the physical interface and
  *   - `fpp_qos_shaper_cmd_t.id` to the shaper ID.
@@ -1375,7 +1541,7 @@ typedef struct CAL_PACKED fpp_qos_scheduler_cmd
  * Rest of the fpp_qos_shaper_cmd_t structure members will be considered to be used as the new
  * shaper properties. It is recommended to use read-modify-write approach in combination with
  * @ref FPP_ACTION_QUERY.
- * 
+ *
  * Action FPP_ACTION_QUERY
  * -----------------------
  * Get current scheduler properties. Set
@@ -1429,6 +1595,57 @@ typedef struct CAL_PACKED fpp_qos_shaper_cmd
 	/**	Min credit (network endian) */
 	int32_t min_credit;
 } fpp_qos_shaper_cmd_t;
+
+
+/**
+ * @def FPP_CMD_FW_FEATURE
+ * @brief Management of configurable firmware features
+ * @details Command can be used with following `.action` values:
+ *          - @c FPP_ACTION_UPDATE: Enable or disable the firmware feature
+ *          - @c FPP_ACTION_QUERY: Get information about available features
+ *
+ * Command Argument Type: @ref fpp_fw_features_cmd_t
+ *
+ * Action FPP_ACTION_UPDATE
+ * ------------------------
+ * To enable/disable the selected feature set
+ *   - `fpp_fw_features_cmd_t.action` to @ref FPP_ACTION_UPDATE
+ *   - `fpp_fw_features_cmd_t.name` to name of the selected feature
+ *   - `fpp_fw_features_cmd_t.val` to 0 to disable or 1 to enable the feature.
+ *
+ * Rest of the fpp_fw_features_cmd_t structure members will be ignored.
+ *
+ * Action FPP_ACTION_QUERY
+ * -----------------------
+ * To get information about features set:
+ *   - `fpp_fw_features_cmd_t.action` to @ref FPP_ACTION_QUERY or @ref FPP_ACTION_QUERY_CONT
+ * Response data type for the query command is fpp_fw_features_cmd_t.
+ *
+ * Possible command return values are:
+ *     - @c FPP_ERR_OK: Success.
+ *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Invalid argument/value.
+ *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ *     - @c FPP_ERR_ENTRY_NOT_FOUND: No more entries.
+ *
+ * @hideinitializer
+ */
+#define FPP_CMD_FW_FEATURE 0xf227
+#define FPP_FEATURE_NAME_SIZE 16
+#define FPP_FEATURE_DESC_SIZE 128
+
+/**
+ * @brief Argument of the @ref FPP_CMD_FW_FEATURE command.
+ */
+typedef struct CAL_PACKED
+{
+    uint16_t action;                       /**< Action to be done */
+    char name[FPP_FEATURE_NAME_SIZE + 1];  /**< Feature name (only queries, cannot be modified) */
+    char desc[FPP_FEATURE_DESC_SIZE + 1];  /**< Feature description (only queries, cannot be modified) */
+    uint8_t val;                           /**< Value update: to be set / query: which is currently set for the feature */
+    uint8_t variant;                       /**< Feature configuration variant 0=always disabled, 1=always enabled, 2=configurable */
+    uint8_t def_val;                       /**< Default value for configurable variant */
+    uint8_t reserved;                      /**< Reserved value */
+} fpp_fw_features_cmd_t;
 
 #endif /* FPP_EXT_H_ */
 

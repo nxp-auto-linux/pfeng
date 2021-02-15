@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2020 NXP
+ *  Copyright 2017-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -20,7 +20,7 @@
  * 		- Size of every descriptor is padded to integer multiple of cache line size.
  */
 
-#define is_power_of_2(n) ((n) && !((n) & ((n) - 1)))
+#define is_power_of_2(n) ((n) && !((n) & ((n) - 1U)))
 
 /**
  * @brief		Destroy pool and release all allocated memory
@@ -38,32 +38,21 @@ __attribute__((cold)) errno_t bpool_destroy(bpool_t * pool)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if 0
-	/*	Sanity check */
-	if ((fifo_t *)(pool->free_fifo)->level != pool->buffer_num)
-	{
-		NXP_LOG_ERROR("Some entries have not been returned to the pool. Expected %d but got %d.\n",
-				pool->buffer_num,
-				(fifo_t *)(pool->free_fifo)->level);
-	}
-#endif /* 0 */
-
 	/*	Release FIFO */
 	fifo_destroy((fifo_t *)(pool->free_fifo));
 	pool->free_fifo = NULL;
 
 	/*	Release mutex */
-	oal_mutex_destroy(&pool->fifo_lock);
+	(void)oal_mutex_destroy(&pool->fifo_lock);
 
 	/*	Release buffer memory block */
-	oal_mm_free_contig(pool->block_origin_va);
+	(void)oal_mm_free_contig(pool->block_origin_va);
 	pool->block_origin_pa = NULL;
 	pool->block_origin_va = NULL;
 	pool->block_size = 0;
 
 	/*	Release the pool itself */
-		oal_mm_free_contig(pool);
-	pool = NULL;
+	oal_mm_free_contig(pool);
 
 	return EOK;
 }
@@ -126,7 +115,7 @@ __attribute__((pure, hot)) uint32_t bpool_get_depth(bpool_t *pool)
  */
 __attribute__((hot)) void * bpool_get(bpool_t *pool)
 {
-	bpool_rx_buf_t *item;
+	bpool_rx_buf_t *curItem;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
@@ -141,16 +130,16 @@ __attribute__((hot)) void * bpool_get(bpool_t *pool)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-	item = fifo_get((fifo_t *)(pool->free_fifo));
+	curItem = fifo_get((fifo_t *)(pool->free_fifo));
 
 	if (unlikely(EOK != oal_mutex_unlock(&pool->fifo_lock)))
 	{
 		NXP_LOG_DEBUG("Mutex unlock failed\n");
 	}
 
-	if (likely(NULL != item))
+	if (likely(NULL != curItem))
 	{
-		return item->vaddr;
+		return curItem->vaddr;
 	}
 	else
 	{
@@ -169,8 +158,8 @@ __attribute__((hot)) void bpool_put(bpool_t *pool, void *va)
 #if defined (PFE_CFG_GET_ALL_ERRORS)
 	errno_t ret;
 #endif /* PFE_CFG_GET_ALL_ERRORS */
-	bpool_rx_buf_t *item;
-	
+	bpool_rx_buf_t *curItem;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
 	{
@@ -179,10 +168,10 @@ __attribute__((hot)) void bpool_put(bpool_t *pool, void *va)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	item = bpool_get_bd(pool, va);
+	curItem = bpool_get_bd(pool, va);
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == item))
+	if (unlikely(NULL == curItem))
 	{
 		NXP_LOG_ERROR("bpool_put: Failed to get bp\n");
 		return;
@@ -190,7 +179,7 @@ __attribute__((hot)) void bpool_put(bpool_t *pool, void *va)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #ifdef BPOOL_CFG_MEM_BUF_WATCH
-	if (NXP_MAGICINT != item->magicword)
+	if (NXP_MAGICINT != curItem->magicword)
 		NXP_LOG_ERROR("%s: Memory region check failure\n", __func__);
 #endif /* BPOOL_CFG_MEM_BUF_WATCH */
 
@@ -200,13 +189,13 @@ __attribute__((hot)) void bpool_put(bpool_t *pool, void *va)
 	}
 
 #if defined (PFE_CFG_GET_ALL_ERRORS)
-	if (unlikely(EOK != fifo_put((fifo_t *)(pool->free_fifo), item)))
+	if (unlikely(EOK != fifo_put((fifo_t *)(pool->free_fifo), curItem)))
 	{
 		/*	Somehow we got more released buffers than is the FIFO capacity... */
 		NXP_LOG_ERROR("Buffer pool overflow or FIFO does not exist\n");
 	}
 #else
-	(void)fifo_put((fifo_t *)(pool->free_fifo), item);
+	(void)fifo_put((fifo_t *)(pool->free_fifo), curItem);
 #endif /* PFE_CFG_GET_ALL_ERRORS */
 
 	if (unlikely(EOK != oal_mutex_unlock(&pool->fifo_lock)))
@@ -239,7 +228,7 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 	uint32_t real_buf_size;
 	addr_t bd_addr;
 
-	if (sizeof(bpool_rx_buf_t) % HAL_CACHE_LINE_SIZE)
+	if ((sizeof(bpool_rx_buf_t) % HAL_CACHE_LINE_SIZE) != 0U)
 	{
 		NXP_LOG_DEBUG("Sub-optimal structure size: buffer\n");
 	}
@@ -278,17 +267,27 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 		* Bigger buffers must not be used!!
 	*/
 	if (buf_size > 2048U)
+	{
 		/*	Maximal allowed size */
 		aligned_buf_size = 4096U;
+	}
 	else if(buf_size > 1024U)
+	{
 		aligned_buf_size = 2048U;
+	}
 	else if(buf_size > 512U)
+	{
 		aligned_buf_size = 1024U;
+	}
 	else if(buf_size > 256U)
+	{
 		aligned_buf_size = 512U;
+	}
 	else
+	{
 		aligned_buf_size = 256U;
-	
+	}
+
 	/*	Beginning of each buffer is aligned to either 4096, 2048, 1024, 512, or 256
 		=> it is practical to use those values also as buffer sizes. */
 
@@ -311,7 +310,7 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 		return NULL;
 	}
 
-	if ((addr_t)the_pool % HAL_CACHE_LINE_SIZE)
+	if (((addr_t)the_pool % HAL_CACHE_LINE_SIZE) != 0U)
 	{
 		NXP_LOG_DEBUG("Sub-optimal structure alignment: bpool instance\n");
 	}
@@ -340,7 +339,7 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 	{
 		vaddr = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_RX_MEM, block_size, aligned_buf_size);
 	}
-	if (!vaddr)
+	if (NULL == vaddr)
 	{
 		NXP_LOG_ERROR("Unable to get aligned memory block\n");
 		goto release_mutex_and_fail;
@@ -348,12 +347,12 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 
 	/*	Get physical address */
 	paddr = oal_mm_virt_to_phys_contig(vaddr);
-	if (!paddr)
+	if (NULL == paddr)
 	{
 		NXP_LOG_ERROR("Unable to get physical address\n");
 		goto release_block_and_fail;
 	}
-	
+
 	/*	Check alignment of physical address */
 	if((addr_t)paddr != ((addr_t)paddr & ~((addr_t)aligned_buf_size-1U)))
 	{
@@ -368,27 +367,27 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 	the_pool->buffer_raw_size = real_buf_size;
 	the_pool->block_size = block_size;
 	the_pool->block_pa_offset = (addr_t)vaddr - (addr_t)paddr;
-	
+
 	/*	Pre-compute addresses and offsets */
-	
+
 	/*	Buffer space */
 	the_pool->buffer_pa_start = (addr_t)the_pool->block_origin_pa;
 	the_pool->buffer_va_start = (addr_t)the_pool->block_origin_va;
-	the_pool->buffer_pa_end = (the_pool->buffer_pa_start + (aligned_buf_size*depth) - 1);
-	the_pool->buffer_va_end = (the_pool->buffer_va_start + (aligned_buf_size*depth) - 1);
-	
+	the_pool->buffer_pa_end = (the_pool->buffer_pa_start + (aligned_buf_size*depth) - 1U);
+	the_pool->buffer_va_end = (the_pool->buffer_va_start + (aligned_buf_size*depth) - 1U);
+
 	/*	Descriptor space */
-	the_pool->bd_pa_start = the_pool->buffer_pa_end + 1;
-	the_pool->bd_va_start = the_pool->buffer_va_end + 1;
-	the_pool->bd_pa_end = (the_pool->bd_pa_start + (sizeof(bpool_rx_buf_t) * depth) - 1);
-	the_pool->bd_va_end = (the_pool->bd_va_start + (sizeof(bpool_rx_buf_t) * depth) - 1);
+	the_pool->bd_pa_start = the_pool->buffer_pa_end + 1U;
+	the_pool->bd_va_start = the_pool->buffer_va_end + 1U;
+	the_pool->bd_pa_end = (the_pool->bd_pa_start + (sizeof(bpool_rx_buf_t) * depth) - 1U);
+	the_pool->bd_va_end = (the_pool->bd_va_start + (sizeof(bpool_rx_buf_t) * depth) - 1U);
 
 	buf_paddr = (addr_t)paddr;
 	buf_vaddr = (addr_t)vaddr;
-	
+
 	/*	Descriptors follows the buffers */
 	bd_addr = the_pool->bd_va_start;
-	
+
 	/*	Fill the pool */
 	for (i = 0U; i < depth; i++)
 	{
@@ -397,12 +396,12 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 		fifo_item->len = aligned_buf_size;
 		fifo_item->paddr = (void *)buf_paddr;
 		fifo_item->vaddr = (void *)buf_vaddr;
-		
+
 #ifdef BPOOL_CFG_MEM_BUF_WATCH
 		fifo_item->magicword = NXP_MAGICINT;
 #endif /* BPOOL_CFG_MEM_BUF_WATCH */
 
-		if (fifo_put((fifo_t *)(the_pool->free_fifo), fifo_item))
+		if (fifo_put((fifo_t *)(the_pool->free_fifo), fifo_item) != 0)
 		{
 			NXP_LOG_ERROR("Could not add buffer into the pool\n");
 			goto release_block_and_fail;
@@ -425,7 +424,7 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 release_block_and_fail:
 	oal_mm_free_contig(vaddr);
 release_mutex_and_fail:
-	oal_mutex_destroy(&the_pool->fifo_lock);
+	(void)oal_mutex_destroy(&the_pool->fifo_lock);
 release_fifo_and_fail:
 	fifo_destroy((fifo_t *)(the_pool->free_fifo));
 	the_pool->free_fifo = NULL;

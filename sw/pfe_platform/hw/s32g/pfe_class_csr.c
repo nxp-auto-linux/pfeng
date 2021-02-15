@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -131,14 +131,14 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
 
 	for (ii=0U; ii<(sizeof(rtable_len) * 8U); ii++)
 	{
-		if (0U != (rtable_len & (1 << ii)))
+		if (0U != (rtable_len & (1UL << ii)))
 		{
-			if (0U != (rtable_len & ~(1U << ii)))
+			if (0U != (rtable_len & ~(1UL << ii)))
 			{
 				NXP_LOG_WARNING("Routing table length is not a power of 2\n");
 			}
 
-			if ((ii < 6) || (ii > 20))
+			if ((ii < 6U) || (ii > 20U))
 			{
 				NXP_LOG_WARNING("Table length out of boundaries\n");
 			}
@@ -148,7 +148,7 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
 	}
 
 	hal_write32((uint32_t)((addr_t)rtable_pa & 0xffffffffU), base_va + CLASS_ROUTE_TABLE_BASE);
-	hal_write32(0U
+	hal_write32(0UL
 				| ROUTE_HASH_SIZE(ii)
 				| ROUTE_ENTRY_SIZE(entry_size)
 				, base_va + CLASS_ROUTE_HASH_ENTRY_SIZE);
@@ -166,9 +166,9 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
  */
 void pfe_class_cfg_set_def_vlan(void *base_va, uint16_t vlan)
 {
-	hal_write32(0U
+	hal_write32(0UL
 			| USE_DEFAULT_VLANID(TRUE)
-			| DEF_VLANID(vlan & 0xfffU)
+			| DEF_VLANID((uint32_t)vlan & (uint32_t)0xfffU)
 			, base_va + CLASS_VLAN_ID);
 }
 
@@ -274,9 +274,9 @@ uint32_t pfe_class_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, 
 	{
 		/*	Get version */
 		reg = hal_read32(base_va + CLASS_VERSION);
-		len += oal_util_snprintf(buf + len, size - len, "Revision\t0x%x\n", (reg >> 24) & 0xff);
-		len += oal_util_snprintf(buf + len, size - len, "Version \t0x%x\n", (reg >> 16) & 0xff);
-		len += oal_util_snprintf(buf + len, size - len, "ID      \t0x%x\n", reg & 0xffff);
+		len += oal_util_snprintf(buf + len, size - len, "Revision\t0x%x\n", (reg >> 24U) & 0xffU);
+		len += oal_util_snprintf(buf + len, size - len, "Version \t0x%x\n", (reg >> 16U) & 0xffU);
+		len += oal_util_snprintf(buf + len, size - len, "ID      \t0x%x\n", reg & 0xffffU);
 	}
 		/*	CLASS_ROUTE_MULTI */
 		reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
@@ -293,21 +293,21 @@ uint32_t pfe_class_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, 
 		len += oal_util_snprintf(buf + len, size - len, "CLASS_RO_BUF_AVAIL\t0x%x\n", reg);
 
 		reg = hal_read32(base_va + CLASS_PE0_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE0 PC\t0x%x\n", reg & 0xffff);
+		len += oal_util_snprintf(buf + len, size - len, "PE0 PC\t0x%x\n", reg & 0xffffU);
 		reg = hal_read32(base_va + CLASS_PE1_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE1 PC\t0x%x\n", reg & 0xffff);
+		len += oal_util_snprintf(buf + len, size - len, "PE1 PC\t0x%x\n", reg & 0xffffU);
 		reg = hal_read32(base_va + CLASS_PE2_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE2 PC\t0x%x\n", reg & 0xffff);
+		len += oal_util_snprintf(buf + len, size - len, "PE2 PC\t0x%x\n", reg & 0xffffU);
 		reg = hal_read32(base_va + CLASS_PE3_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE3 PC\t0x%x\n", reg & 0xffff);
+		len += oal_util_snprintf(buf + len, size - len, "PE3 PC\t0x%x\n", reg & 0xffffU);
 		reg = hal_read32(base_va + CLASS_PE4_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE4 PC\t0x%x\n", reg & 0xffff);
+		len += oal_util_snprintf(buf + len, size - len, "PE4 PC\t0x%x\n", reg & 0xffffU);
 		reg = hal_read32(base_va + CLASS_PE5_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE5 PC\t0x%x\n", reg & 0xffff);
+		len += oal_util_snprintf(buf + len, size - len, "PE5 PC\t0x%x\n", reg & 0xffffU);
 		reg = hal_read32(base_va + CLASS_PE6_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE6 PC\t0x%x\n", reg & 0xffff);
+		len += oal_util_snprintf(buf + len, size - len, "PE6 PC\t0x%x\n", reg & 0xffffU);
 		reg = hal_read32(base_va + CLASS_PE7_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE7 PC\t0x%x\n", reg & 0xffff);
+		len += oal_util_snprintf(buf + len, size - len, "PE7 PC\t0x%x\n", reg & 0xffffU);
 
 		/*	Get info per PHY */
 		len += oal_util_snprintf(buf + len, size - len, "[PHY1]\n");

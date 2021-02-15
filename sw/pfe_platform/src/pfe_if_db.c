@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2020 NXP
+ *  Copyright 2017-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -28,7 +28,7 @@ typedef	union
     pfe_ct_phy_if_id_t owner;
 } crit_arg_t;	/*	Current criterion argument */
 
-struct __pfe_if_db_tag
+struct pfe_if_db_tag
 {
 	pfe_if_db_type_t type;
 	LLIST_t theList;
@@ -37,7 +37,7 @@ struct __pfe_if_db_tag
 	crit_arg_t cur_crit_arg;	/*	Current criterion argument */
 };
 
-struct __pfe_if_db_entry_tag
+struct pfe_if_db_entry_tag
 {
 	pfe_ct_phy_if_id_t owner;
 
@@ -52,7 +52,7 @@ struct __pfe_if_db_entry_tag
 	LLIST_t list_member;
 };
 
-typedef struct __if_db_context
+typedef struct if_db_context_tag
 {
 	uint32_t session_id;
 	uint32_t seed;
@@ -73,7 +73,7 @@ static if_db_context_t if_db_context;
 
 
 static bool_t pfe_if_db_match_criterion(pfe_if_db_t *db, pfe_if_db_get_criterion_t crit, crit_arg_t *arg, pfe_if_db_entry_t *entry);
-static errno_t pfe_if_db_check_precondition(if_db_context_t *if_db_context, uint32_t session_id);
+static errno_t pfe_if_db_check_precondition(if_db_context_t *pr_if_db_context, uint32_t session_id);
 #if defined(PFE_CFG_IF_DB_WORKER)
 static void * pfe_if_db_worker(void *arg);
 #endif /* PFE_CFG_IF_DB_WORKER */
@@ -81,7 +81,7 @@ static void * pfe_if_db_worker(void *arg);
 #if defined(PFE_CFG_IF_DB_WORKER)
 /**
  * @brief		Measure time until lock timeout
- * @param[in]	arg Instance of __if_db_context
+ * @param[in]	arg Instance of if_db_context
  * @retval		NULL
  */
 static void * pfe_if_db_worker(void *arg)
@@ -154,24 +154,29 @@ static void * pfe_if_db_worker(void *arg)
 
 /**
  * @brief		Check preconditions before performing operation
- * @param[in]	context
+ * @param[in]	pr_if_db_context
  * @retval		EOK Preconditions are fulfilled
  * @retval		PERM Preconditions are not fulfilled
  * @warning		context should be locked before call
  */
-static errno_t pfe_if_db_check_precondition(if_db_context_t *context, uint32_t session_id)
+static errno_t pfe_if_db_check_precondition(if_db_context_t *pr_if_db_context, uint32_t session_id)
 {
 	errno_t ret = EOK;
 
-	if(FALSE == context->is_locked)
+	if(FALSE == pr_if_db_context->is_locked)
 	{
 		ret = EPERM;
         NXP_LOG_DEBUG("DB access not permitted\n");
 	}
-	else if(session_id != context->session_id)
+	else if(session_id != pr_if_db_context->session_id)
 	{
 		NXP_LOG_DEBUG("Incorrect session ID\n");
 		ret = EPERM;
+	}
+	else
+	{
+		/*Do Nothing*/
+		;
 	}
 	return ret;
 }
@@ -249,6 +254,7 @@ static bool_t pfe_if_db_match_criterion(pfe_if_db_t *db, pfe_if_db_get_criterion
 		{
 			NXP_LOG_ERROR("Unknown criterion\n");
 			match = FALSE;
+			break;
 		}
 	}
 
@@ -276,7 +282,7 @@ pfe_if_db_t * pfe_if_db_create(pfe_if_db_type_t type)
 	}
 	else
 	{
-		memset(db, 0, sizeof(pfe_if_db_t));
+		(void)memset(db, 0, sizeof(pfe_if_db_t));
 	}
 
 	LLIST_Init(&db->theList);
@@ -530,7 +536,7 @@ errno_t pfe_if_db_add(pfe_if_db_t *db, uint32_t session_id, void *iface, pfe_ct_
 		}
 		else
 		{
-			memset(new_entry, 0, sizeof(pfe_if_db_entry_t));
+			(void)memset(new_entry, 0, sizeof(pfe_if_db_entry_t));
 		}
 	}
 	else
@@ -539,12 +545,15 @@ errno_t pfe_if_db_add(pfe_if_db_t *db, uint32_t session_id, void *iface, pfe_ct_
 		ret = EPERM;
 	}
 
-	/*	Store values */
-	new_entry->iface = iface;
-	new_entry->owner = owner;
+	if (NULL != new_entry)
+	{
+		/*	Store values */
+		new_entry->iface = iface;
+		new_entry->owner = owner;
 
-	/*	Put to DB */
-	LLIST_AddAtEnd(&(new_entry->list_member), &db->theList);
+		/*	Put to DB */
+		LLIST_AddAtEnd(&(new_entry->list_member), &db->theList);
+	}
 
 	if(EOK != oal_mutex_unlock(&if_db_context.mutex))
 	{
@@ -619,9 +628,10 @@ errno_t pfe_if_db_remove(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry_t
  */
 errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_criterion_t crit, void *arg, pfe_if_db_entry_t **db_entry)
 {
-	LLIST_t *item;
+	LLIST_t *curItem;
 	bool_t match = FALSE;
 	pfe_if_db_entry_t *entry = NULL;
+	errno_t ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == db) || (NULL == db_entry)))
@@ -657,7 +667,7 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
 
 		case IF_DB_CRIT_BY_ID:
 		{
-			db->cur_crit_arg.if_id = (uint8_t)((addr_t)arg & 0xff);
+			db->cur_crit_arg.if_id = (uint8_t)((addr_t)arg & 0xffU);
 			break;
 		}
 
@@ -693,7 +703,7 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
 
 		case IF_DB_CRIT_BY_OWNER:
 		{
-			db->cur_crit_arg.owner = (pfe_ct_phy_if_id_t)((addr_t)arg & 0xff);
+			db->cur_crit_arg.owner = (pfe_ct_phy_if_id_t)((addr_t)arg & 0xffU);
 			break;
 		}
 
@@ -701,44 +711,49 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
 		{
 			NXP_LOG_ERROR("Unknown criterion\n");
 			entry = NULL;
-			return EPERM;
+			ret = EPERM;
+			break;
 		}
 	}
 
-	if (FALSE == LLIST_IsEmpty(&db->theList))
+	if(ret == EOK)
 	{
-		/*	Get first matching entry */
-		LLIST_ForEach(item, &db->theList)
+		if (FALSE == LLIST_IsEmpty(&db->theList))
 		{
-			/*	Get data */
-			entry = LLIST_Data(item, pfe_if_db_entry_t, list_member);
-
-			/*	Remember current item to know where to start later */
-			db->cur_item = item->prNext;
-			if (NULL != entry)
+			/*	Get first matching entry */
+			LLIST_ForEach(curItem, &db->theList)
 			{
-				if (TRUE == pfe_if_db_match_criterion(db, db->cur_crit, &db->cur_crit_arg, entry))
+				/*	Get data */
+				entry = LLIST_Data(curItem, pfe_if_db_entry_t, list_member);
+
+				/*	Remember current item to know where to start later */
+				db->cur_item = curItem->prNext;
+				if (NULL != entry)
 				{
-					match = TRUE;
-					break;
+					if (TRUE == pfe_if_db_match_criterion(db, db->cur_crit, &db->cur_crit_arg, entry))
+					{
+						match = TRUE;
+						break;
+					}
 				}
 			}
 		}
+
+		if(EOK != oal_mutex_unlock(&if_db_context.mutex))
+		{
+			NXP_LOG_DEBUG("DB mutex unlock failed\n");
+		}
+
+		*db_entry = entry;
+
+		if (FALSE == match)
+		{
+			/* No match found */
+			*db_entry = NULL;
+		}
 	}
 
-	if(EOK != oal_mutex_unlock(&if_db_context.mutex))
-	{
-		NXP_LOG_DEBUG("DB mutex unlock failed\n");
-	}
-
-	*db_entry = entry;
-
-	if (FALSE == match)
-	{
-		/* No match found */
-		*db_entry = NULL;
-	}
-	return EOK;
+	return ret;
 }
 
 
@@ -761,10 +776,11 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
  */
 errno_t pfe_if_db_get_single(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_criterion_t crit, void *arg, pfe_if_db_entry_t **db_entry)
 {
-	LLIST_t *item;
+	LLIST_t *curItem;
 	bool_t match = FALSE;
 	pfe_if_db_entry_t *entry = NULL;
 	crit_arg_t argument;
+	errno_t ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == db) || (NULL == db_entry)))
@@ -784,7 +800,7 @@ errno_t pfe_if_db_get_single(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get
 
 		case IF_DB_CRIT_BY_ID:
 		{
-			argument.if_id = (uint8_t)((addr_t)arg & 0xff);
+			argument.if_id = (uint8_t)((addr_t)arg & 0xffU);
 			break;
 		}
 
@@ -820,7 +836,7 @@ errno_t pfe_if_db_get_single(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get
 
 		case IF_DB_CRIT_BY_OWNER:
 		{
-			argument.owner = (pfe_ct_phy_if_id_t)((addr_t)arg & 0xff);
+			argument.owner = (pfe_ct_phy_if_id_t)((addr_t)arg & 0xffU);
 			break;
 		}
 
@@ -828,58 +844,64 @@ errno_t pfe_if_db_get_single(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get
 		{
 			NXP_LOG_ERROR("Unknown criterion\n");
 			entry = NULL;
-			return EPERM;
+			ret = EPERM;
+			break;
 		}
 	}
-
-	if(EOK != oal_mutex_lock(&if_db_context.mutex))
+	if(ret == EOK)
 	{
-		NXP_LOG_DEBUG("DB mutex lock failed\n");
-	}
-
-	/* Check condition if operation on DB is allowed */
-	if(EOK != pfe_if_db_check_precondition(&if_db_context, session_id))
-	{
-		if(EOK != oal_mutex_unlock(&if_db_context.mutex))
+		if(EOK != oal_mutex_lock(&if_db_context.mutex))
 		{
-			NXP_LOG_DEBUG("DB mutex unlock failed\n");
+			NXP_LOG_DEBUG("DB mutex lock failed\n");
 		}
-		return EPERM;
-	}
 
-	if (FALSE == LLIST_IsEmpty(&db->theList))
-	{
-		/*	Get first matching entry */
-		LLIST_ForEach(item, &db->theList)
+		/* Check condition if operation on DB is allowed */
+		if(EOK != pfe_if_db_check_precondition(&if_db_context, session_id))
 		{
-			/*	Get data */
-			entry = LLIST_Data(item, pfe_if_db_entry_t, list_member);
-
-			/*	Remember current item to know where to start later */
-			if (NULL != entry)
+			if(EOK != oal_mutex_unlock(&if_db_context.mutex))
 			{
-				if (TRUE == pfe_if_db_match_criterion(db, crit, &argument, entry))
+				NXP_LOG_DEBUG("DB mutex unlock failed\n");
+			}
+			ret = EPERM;
+		}
+		if(ret != EPERM)
+		{
+			if (FALSE == LLIST_IsEmpty(&db->theList))
+			{
+				/*	Get first matching entry */
+				LLIST_ForEach(curItem, &db->theList)
 				{
-					match = TRUE;
-					break;
+					/*	Get data */
+					entry = LLIST_Data(curItem, pfe_if_db_entry_t, list_member);
+
+					/*	Remember current item to know where to start later */
+					if (NULL != entry)
+					{
+						if (TRUE == pfe_if_db_match_criterion(db, crit, &argument, entry))
+						{
+							match = TRUE;
+							break;
+						}
+					}
 				}
+			}
+
+			if(EOK != oal_mutex_unlock(&if_db_context.mutex))
+			{
+				NXP_LOG_DEBUG("DB mutex unlock failed\n");
+			}
+
+			*db_entry = entry;
+
+			if (FALSE == match)
+			{
+				/* No match found */
+				*db_entry = NULL;
 			}
 		}
 	}
 
-	if(EOK != oal_mutex_unlock(&if_db_context.mutex))
-	{
-		NXP_LOG_DEBUG("DB mutex unlock failed\n");
-	}
-
-	*db_entry = entry;
-
-	if (FALSE == match)
-	{
-		/* No match found */
-		*db_entry = NULL;
-	}
-	return EOK;
+	return ret;
 }
 
 /**
@@ -968,7 +990,7 @@ errno_t pfe_if_db_get_next(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry
  */
 errno_t pfe_log_if_db_drop_all(pfe_if_db_t *db, uint32_t session_id)
 {
-	LLIST_t *item, *aux;
+	LLIST_t *curItem, *aux;
 	pfe_if_db_entry_t *entry;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -994,11 +1016,11 @@ errno_t pfe_log_if_db_drop_all(pfe_if_db_t *db, uint32_t session_id)
 		return EPERM;
 	}
 
-	LLIST_ForEachRemovable(item, aux, &db->theList)
+	LLIST_ForEachRemovable(curItem, aux, &db->theList)
 	{
-		entry = LLIST_Data(item, pfe_if_db_entry_t, list_member);
+		entry = LLIST_Data(curItem, pfe_if_db_entry_t, list_member);
 
-		LLIST_Remove(item);
+		LLIST_Remove(curItem);
 
 		oal_mm_free(entry);
 	}

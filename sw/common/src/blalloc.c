@@ -79,11 +79,11 @@ static void clear_bits(uint8_t *bytes, size_t offset, size_t count);
 /*==================================================================================================
 									   LOCAL FUNCTIONS
 ==================================================================================================*/
-/* 
+/*
 * @brief Marks the given count ouf chunks as used, marks the last one as the last one
 * @param[in] bytes Array containing the chunk information
 * @param[in] offset Index of the first chunk to mark as used
-* @param[in] count Number of chunks to mark as used 
+* @param[in] count Number of chunks to mark as used
 */
 static void set_bits(uint8_t *bytes, size_t offset, size_t count)
 {
@@ -93,25 +93,25 @@ static void set_bits(uint8_t *bytes, size_t offset, size_t count)
 	uint_t last_chunk = offset + count - 1U;
 	uint_t last_byte = last_chunk / CHUNKS_IN_BYTE;
 	uint_t i;
-	
+
 	for(i = first_byte; i <= last_byte; i++)
 	{
 		uint8_t mask = 0xFFU;
-		
+
 		if(i == first_byte)
 		{   /* Some bits in the first byte (before the first chunk) shall not be affected */
 			/* Do not modify bits before the first chunk - set their mask to 0 */
 			mask &= 0xFFU >> ((first_chunk % CHUNKS_IN_BYTE) * CHUNK_BITS_COUNT);
 		}
-			
+
 		if(i == last_byte)
 		{
-			if(0 != ((offset + count) % CHUNKS_IN_BYTE))
-			{   /* Some bits in last byte (after last chunk) shall not be affected */				
+			if(0U != ((offset + count) % CHUNKS_IN_BYTE))
+			{   /* Some bits in last byte (after last chunk) shall not be affected */
 				uint_t shift = ((CHUNKS_IN_BYTE - ((count + offset) % CHUNKS_IN_BYTE)) * CHUNK_BITS_COUNT);
 				mask &= 0xFFU << shift;
 				bytes[i] |= LAST_USED_CHUNK << shift;
-				
+
 			}
 			else
 			{   /* All bits shall be affected - the last chunk is the last one in the last byte */
@@ -119,16 +119,16 @@ static void set_bits(uint8_t *bytes, size_t offset, size_t count)
 				bytes[i] |= LAST_USED_CHUNK;
 			}
 
-		}		
+		}
 		bytes[i] |= ALL_CHUNKS_USED & mask;
 	}
 }
 
-/* 
+/*
 * @brief Marks given count of chunks as unused (inverse function to set_bits())
 * @param[in] bytes Array containing the chunk information
 * @param[in] offset Index of the first chunk to mark as unused
-* @param[in] count Number of chunks to mark as unused 
+* @param[in] count Number of chunks to mark as unused
 */
 static void clear_bits(uint8_t *bytes, size_t offset, size_t count)
 {
@@ -137,29 +137,29 @@ static void clear_bits(uint8_t *bytes, size_t offset, size_t count)
 	uint_t last_chunk = offset + count - 1U;
 	uint_t last_byte = last_chunk / CHUNKS_IN_BYTE;
 	uint_t i;
-	
+
 	/* The algorithm is the same as in set_bits() with two modifications:
 	   1, we do not mark the last chunk
-	   2, the mask is at the end inverted and ANDed to the byte instead of ORing it 
+	   2, the mask is at the end inverted and ANDed to the byte instead of ORing it
 	*/
-	
+
 	for(i = first_byte; i <= last_byte; i++)
 	{
 		uint8_t mask = 0xFFU;
-		
+
 		if(i == first_byte)
 		{   /* Some bits in the first byte (before the first chunk) shall not be affected */
 			/* Do not modify bits before the first chunk - set their mask to 0 */
 			mask &= 0xFFU >> ((first_chunk % CHUNKS_IN_BYTE) * CHUNK_BITS_COUNT);
 		}
-			
+
 		if(i == last_byte)
 		{
-			if(0 != ((offset + count) % CHUNKS_IN_BYTE))
-			{   /* Some bits in last byte (after last chunk) shall not be affected */				
+			if(0U != ((offset + count) % CHUNKS_IN_BYTE))
+			{   /* Some bits in last byte (after last chunk) shall not be affected */
 				uint_t shift = ((CHUNKS_IN_BYTE - ((count + offset) % CHUNKS_IN_BYTE)) * CHUNK_BITS_COUNT);
 				mask &= 0xFFU << shift;
-				
+
 			}
 			else
 			{   /* All bits shall be affected - the last chunk is the last one in the last byte */
@@ -167,8 +167,8 @@ static void clear_bits(uint8_t *bytes, size_t offset, size_t count)
 
 			}
 
-		}		
-		bytes[i] &= ~mask;		
+		}
+		bytes[i] &= ~mask;
 	}
 }
 
@@ -184,7 +184,7 @@ static void clear_bits(uint8_t *bytes, size_t offset, size_t count)
 blalloc_t *blalloc_create(size_t size, size_t chunk_size)
 {
 	blalloc_t *ctx;
-	/* Number of bytes needed to store information about all chunks 
+	/* Number of bytes needed to store information about all chunks
 	   Round up to the nearest multiple of N and then divide by N is achieved by ((x + (N-1)) / N) */
 	uint_t chunkinfo_size = ((size >> chunk_size) + CHUNKS_IN_BYTE - 1U) / CHUNKS_IN_BYTE;
 
@@ -205,7 +205,7 @@ blalloc_t *blalloc_create(size_t size, size_t chunk_size)
 	}
 
 	/* Clear the whole context */
-	memset(ctx, 0U, sizeof(blalloc_t));
+	(void)memset(ctx, 0, sizeof(blalloc_t));
 
 	/* Remember the input data */
 	ctx->size = size;
@@ -265,7 +265,7 @@ errno_t blalloc_init(blalloc_t *ctx)
 	}
 
 	/* Clear the chunkinfo storage */
-	memset(ctx->chunkinfo, 0U, chunkinfo_size);
+	(void)memset(ctx->chunkinfo, 0, chunkinfo_size);
 
 	ret = oal_spinlock_init(&ctx->spinlock);
 	if(EOK != ret)
@@ -280,7 +280,7 @@ errno_t blalloc_init(blalloc_t *ctx)
 	if(0U != ((ctx->size >> ctx->chunk_size) % CHUNKS_IN_BYTE))
 	{
 		/* Calculate the remainder after division by CHUNKS_IN_BYTE which are used chunks in the byte
-		   shift ALL_CHUNKS_USED_LAST to right by the calculated number of used chunks so their positions 
+		   shift ALL_CHUNKS_USED_LAST to right by the calculated number of used chunks so their positions
 		   will be replaced by 0s leaving the value only in unused positions */
 		ctx->chunkinfo[chunkinfo_size - 1U] |= ALL_CHUNKS_USED_LAST >> (((ctx->size >> ctx->chunk_size) % CHUNKS_IN_BYTE) * CHUNK_BITS_COUNT);
 	}
@@ -294,7 +294,7 @@ errno_t blalloc_init(blalloc_t *ctx)
  */
 void blalloc_fini(blalloc_t *ctx)
 {
-	oal_spinlock_destroy(&ctx->spinlock);
+	(void)oal_spinlock_destroy(&ctx->spinlock);
 	ctx->status = BL_INVALID;
 }
 
@@ -302,8 +302,8 @@ void blalloc_fini(blalloc_t *ctx)
  * @brief     Allocates the memory
  * @param[in] ctx Context
  * @param[in] size Size of the memory to be allocated.
- * @param[in] align Required memory alignment; values are rounded toward nearest upper multiple of the chunk size. 
- *                  It is expected that only multiples of chunk size are used - rounding is a side effect of 
+ * @param[in] align Required memory alignment; values are rounded toward nearest upper multiple of the chunk size.
+ *                  It is expected that only multiples of chunk size are used - rounding is a side effect of
  *                  used algorithm.
  * @param[out] addr Allocated memory offset from the memory base
  * @return EOK on success or ENOMEM on failure.
@@ -315,23 +315,25 @@ errno_t blalloc_alloc_offs(blalloc_t *ctx, size_t size, size_t align, addr_t *ad
 	size_t found;  /* Number of unused chunks in the examined area including the starting one */
 	size_t offset; /* Starting chunk of the examined area */
 	size_t size_rounded;
+	size_t align_temp = align;
+
 	/* How many chunks do we need? */
 	/* Round size toward the nearest multiple of chunk size
 	   - causes sizes less than a chunk to allocate one chunk (value 0 is not considered as it is stupid)  */
-	size_rounded = (size + ((1U << ctx->chunk_size) - 1U)) & ~((1U << ctx->chunk_size) - 1U);
+	size_rounded = (size + (((size_t)1U << ctx->chunk_size) - (size_t)1U)) & ~(((size_t)1U << ctx->chunk_size) - (size_t)1U);
 	/* Translate size to chunks count */
 	needed = size_rounded >> ctx->chunk_size;
-	align = (align + (1U << ctx->chunk_size) - 1U) >> ctx->chunk_size;
-	if(0U == align)
+	align_temp = (align + ((size_t)1U << ctx->chunk_size) - (size_t)1U) >> ctx->chunk_size;
+	if(0U == align_temp)
 	{   /* Prevent division by 0 in case of align = 0 and chunk_size = 0 (1 byte) */
-		align = 1U;
+		align_temp = 1U;
 	}
 
 	found = 0U;
 	/* Set initial search position */
 	offset = ctx->start_srch;
 	offset -= (offset % CHUNKS_IN_BYTE); /* Start search at byte boundary to simplify next code */
-	oal_spinlock_lock(&ctx->spinlock);
+	(void)oal_spinlock_lock(&ctx->spinlock);
     /* Go through all bytes in ctx->chunkinfo starting from the one containing first known chunk */
 	for(i = (ctx->start_srch / CHUNKS_IN_BYTE); i < (((ctx->size >> ctx->chunk_size) + CHUNKS_IN_BYTE - 1U) / CHUNKS_IN_BYTE); i++)
 	{
@@ -343,7 +345,7 @@ errno_t blalloc_alloc_offs(blalloc_t *ctx, size_t size, size_t align, addr_t *ad
 			if(0U == (bits & CHUNK_TEST_MASK))
 			{   /* Not in use */
 				/* Check alignment if it can be the starting chunk */
-				if(0 != (offset % align))
+				if(0U != (offset % align_temp))
 				{   /* This offset would not lead to a needed alignment */
 
 					/* We increment the offset to try the next one if it is not properly
@@ -384,7 +386,7 @@ errno_t blalloc_alloc_offs(blalloc_t *ctx, size_t size, size_t align, addr_t *ad
 				ctx->allocated += needed << ctx->chunk_size;
 				ctx->requested += size;
 				/* Do not forget to unlock spinlock */
-				oal_spinlock_unlock(&ctx->spinlock);
+				(void)oal_spinlock_unlock(&ctx->spinlock);
 				/* Return the chunk offset */
 				*addr = offset << ctx->chunk_size;
 				return EOK;
@@ -394,8 +396,8 @@ errno_t blalloc_alloc_offs(blalloc_t *ctx, size_t size, size_t align, addr_t *ad
 		}
 	}
 	/* Failed */
-	oal_spinlock_unlock(&ctx->spinlock);
-	NXP_LOG_ERROR("Allocation of %u bytes aligned at %u chunks failed\n",(uint_t)size,(uint_t)align);
+	(void)oal_spinlock_unlock(&ctx->spinlock);
+	NXP_LOG_ERROR("Allocation of %u bytes aligned at %u chunks failed\n",(uint_t)size,(uint_t)align_temp);
 	return ENOMEM;
 }
 
@@ -407,13 +409,13 @@ errno_t blalloc_alloc_offs(blalloc_t *ctx, size_t size, size_t align, addr_t *ad
 */
 void blalloc_free_offs_size(blalloc_t *ctx, addr_t offset, size_t size)
 {
-	oal_spinlock_lock(&ctx->spinlock);
-    clear_bits(ctx->chunkinfo, offset >> ctx->chunk_size, (size + ((1U << ctx->chunk_size) - 1U)) >> ctx->chunk_size);
+	(void)oal_spinlock_lock(&ctx->spinlock);
+    clear_bits(ctx->chunkinfo, offset >> ctx->chunk_size, (size + (((size_t)1U << ctx->chunk_size) - (size_t)1U)) >> ctx->chunk_size);
 	if((ctx->start_srch) > (offset >> ctx->chunk_size))
 	{   /* We have new first known empty chunk, remember it */
 		ctx->start_srch = offset >> ctx->chunk_size;
 	}
-	oal_spinlock_unlock(&ctx->spinlock);
+	(void)oal_spinlock_unlock(&ctx->spinlock);
 }
 
 /**
@@ -432,19 +434,19 @@ void blalloc_free_offs(blalloc_t *ctx, addr_t offset)
 	uint8_t byte;
 	uint8_t chunk;
 	uint_t i,j;
-	
+
 	if((ctx->start_srch) > first_chunk)
 	{   /* We have new first known empty chunk, remember it */
 		ctx->start_srch = first_chunk;
-	}	
-	
+	}
+
 	for(i = first_byte; i < max_byte; i++)
 	{
 		byte = ctx->chunkinfo[i];
 		for(j = first_shift; j < CHUNKS_IN_BYTE; j++)
 		{
 			/* Count the chunks tested */
-			count++; 
+			count++;
 			/* Get the chunk bits to the position for testing (most left) */
 			chunk = (byte << (j * CHUNK_BITS_COUNT)) & CHUNK_TEST_MASK;
 			/* Test the chunk bits */
@@ -455,14 +457,14 @@ void blalloc_free_offs(blalloc_t *ctx, addr_t offset)
 			}
 			/* If needed we could add some checks here */
 		}
-		
-		/* From the 1st iteration we do not need initial shift - 
+
+		/* From the 1st iteration we do not need initial shift -
 		   it may be valid only for the first byte */
 		first_shift = 0U;
 	}
 	/* We should never get here */
 	NXP_LOG_ERROR("Internal memory corrupted\n");
-	
+
 }
 
 
@@ -492,7 +494,7 @@ uint32_t blalloc_get_text_statistics(blalloc_t *ctx, char_t *buf, uint32_t buf_l
 		if(verb_level > 0U)
 		{   /* Detailed information requested */
 			/* After each 32 bytes (and at start) print out a new line and address */
-			if(0 == (i % 32U))
+			if(0U == (i % 32U))
 			{
 				len += oal_util_snprintf(buf + len, buf_len - len, "\n0x%05x: ", i * 4U * (1U << ctx->chunk_size));
 			}
@@ -506,7 +508,7 @@ uint32_t blalloc_get_text_statistics(blalloc_t *ctx, char_t *buf, uint32_t buf_l
 			if(0U == (bits & CHUNK_TEST_MASK))
 			{   /* Chunk not in use */
 				unused_chunks++;
-				if(prev)
+				if(prev != 0U)
 				{   /* Previous chunk was in use */
 					fragments++; /* Increment number of holes between chunks */
 				}
@@ -523,8 +525,8 @@ uint32_t blalloc_get_text_statistics(blalloc_t *ctx, char_t *buf, uint32_t buf_l
 	}
 	/* Print out the information */
 	len += oal_util_snprintf(buf + len, buf_len - len, "\n"); /* End previous output */
-	len += oal_util_snprintf(buf + len, buf_len - len, "Free  memory %u bytes (%u chunks)\n", unused_chunks * (1U << ctx->chunk_size), unused_chunks);
-	len += oal_util_snprintf(buf + len, buf_len - len, "Used  memory %u bytes (%u chunks)\n", used_chunks * (1U << ctx->chunk_size), used_chunks);
+	len += oal_util_snprintf(buf + len, buf_len - len, "Free  memory %u bytes (%u chunks)\n", unused_chunks * ((uint_t)1U << ctx->chunk_size), unused_chunks);
+	len += oal_util_snprintf(buf + len, buf_len - len, "Used  memory %u bytes (%u chunks)\n", used_chunks * ((uint_t)1U << ctx->chunk_size), used_chunks);
 	len += oal_util_snprintf(buf + len, buf_len - len, "Total memory %u bytes (%u chunks)\n", ctx->size, byte_count * CHUNKS_IN_BYTE);
 	len += oal_util_snprintf(buf + len, buf_len - len, "Chunk size   %u bytes\n", (1U << ctx->chunk_size));
 	len += oal_util_snprintf(buf + len, buf_len - len, "Fragments    %u\n", fragments);

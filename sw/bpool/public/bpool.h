@@ -54,8 +54,6 @@
 #define SRC_BPOOL_H_
 
 /* Just for debugging */
-#undef BPOOL_CFG_MEM_BUF_WATCH
-#undef BPOOL_CFG_MEM_REGION_WATCH
 #define NXP_MAGICINT 0x4e58505f /* NXP_ */
 #define BPOOL_CFG_METADATA_LENGTH	64U
 
@@ -94,7 +92,7 @@ typedef struct
 	addr_t ustorage1;
 } bpool_complex_storage_t;
 
-typedef struct __attribute__((aligned(HAL_CACHE_LINE_SIZE))) 
+typedef struct __attribute__((aligned(HAL_CACHE_LINE_SIZE)))
 {
 	void *vaddr;									/*	Buffer address (virtual) */
 	void *paddr; 									/*	Buffer address (physical) */
@@ -121,7 +119,7 @@ __attribute__((pure, hot)) static inline int32_t bpool_get_buf_len(const bpool_t
 		return -1;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	return pool->buffer_raw_size;
+	return (int32_t)pool->buffer_raw_size;
 }
 
 /**

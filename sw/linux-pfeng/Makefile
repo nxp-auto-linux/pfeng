@@ -1,5 +1,5 @@
 #
-# Copyright 2018-2020 NXP
+# Copyright 2018-2021 NXP
 #
 # SPDX-License-Identifier: GPL-2.0
 #
@@ -18,6 +18,7 @@ PFE_CFG_SC_HIF=1
 # Unsupported config options
 # * PFE_CFG_CSUM_ALL_FRAMES	: dynamically managable in driver
 # * PFE_CFG_MC_HIF		: only one client per channel
+# * PFE_CFG_IEEE1588_SUPPORT : dynamicly managed in driver
 
 PLAT_DEFINES = KBUILD_MODPOST_WARN=1 TARGET_OS=$(TARGET_OS) KERNELDIR=$(KERNELDIR) PLATFORM=$(PLATFORM) ARCH=$(ARCH) CROSS_COMPILE=$(PLATFORM)-
 
@@ -58,10 +59,10 @@ pfeng-slave-objs += ../fci/fci.o
 endif
 
 ifneq ($(PFE_CFG_PFE_MASTER),0)
-pfeng-objs += pfeng-drv.o pfeng-hw-s32g.o pfeng-fw.o pfeng-debugfs.o pfeng-napi.o pfeng-ethtool.o pfeng-mdio.o pfeng-phylink.o pfeng-hif.o
+pfeng-objs += pfeng-drv.o pfeng-hw-s32g.o pfeng-fw.o pfeng-debugfs.o pfeng-napi.o pfeng-ethtool.o pfeng-mdio.o pfeng-phylink.o pfeng-hif.o pfeng-ptp.o pfeng-hwts.o
 obj-m += pfeng.o
 else
-pfeng-slave-objs += pfeng-drv.o pfeng-hw-s32g.o pfeng-fw.o pfeng-debugfs.o pfeng-napi.o pfeng-ethtool.o pfeng-hif.o
+pfeng-slave-objs += pfeng-drv.o pfeng-hw-s32g.o pfeng-fw.o pfeng-debugfs.o pfeng-napi.o pfeng-ethtool.o pfeng-hif.o pfeng-hwts.o
 obj-m += pfeng-slave.o
 endif
 

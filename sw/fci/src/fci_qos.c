@@ -91,7 +91,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 		return EINVAL;
 	}
 
-	if (unlikely(FALSE == context->fci_initialized))
+	if (unlikely(FALSE == __context.fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -338,7 +338,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 		return EINVAL;
 	}
 
-	if (unlikely(FALSE == context->fci_initialized))
+	if (unlikely(FALSE == __context.fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -627,7 +627,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 		return EINVAL;
 	}
 
-	if (unlikely(FALSE == context->fci_initialized))
+	if (unlikely(FALSE == __context.fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;

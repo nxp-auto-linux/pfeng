@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -15,7 +15,7 @@
 #include "pfe_cbus.h"
 #include "pfe_gpi.h"
 
-struct __pfe_gpi_tag
+struct pfe_gpi_tag
 {
 	void *cbus_base_va;		/*	CBUS base virtual address */
 	void *gpi_base_offset;	/*	GPI base offset within CBUS space */
@@ -67,7 +67,7 @@ pfe_gpi_t *pfe_gpi_create(void *cbus_base_va, void *gpi_base, pfe_gpi_cfg_t *cfg
 	}
 	else
 	{
-		memset(gpi, 0, sizeof(pfe_gpi_t));
+		(void)memset(gpi, 0, sizeof(pfe_gpi_t));
 		gpi->cbus_base_va = cbus_base_va;
 		gpi->gpi_base_offset = gpi_base;
 		gpi->gpi_base_va = (void *)((addr_t)gpi->cbus_base_va + (addr_t)gpi->gpi_base_offset);

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -67,18 +67,18 @@
 typedef enum __attribute__((packed))
 {
 	/*	HW interfaces */
-	PFE_PHY_IF_ID_EMAC0 = 0,
-	PFE_PHY_IF_ID_EMAC1 = 1,
-	PFE_PHY_IF_ID_EMAC2 = 2,
-	PFE_PHY_IF_ID_HIF = 3,
-	PFE_PHY_IF_ID_HIF_NOCPY = 4,
+	PFE_PHY_IF_ID_EMAC0 = 0U,
+	PFE_PHY_IF_ID_EMAC1 = 1U,
+	PFE_PHY_IF_ID_EMAC2 = 2U,
+	PFE_PHY_IF_ID_HIF = 3U,
+	PFE_PHY_IF_ID_HIF_NOCPY = 4U,
 	/*	UTIL PE - FW internal use */
-	PFE_PHY_IF_ID_UTIL = 5,
+	PFE_PHY_IF_ID_UTIL = 5U,
 	/*	Synthetic interfaces */
-	PFE_PHY_IF_ID_HIF0 = 6,
-	PFE_PHY_IF_ID_HIF1 = 7,
-	PFE_PHY_IF_ID_HIF2 = 8,
-	PFE_PHY_IF_ID_HIF3 = 9,
+	PFE_PHY_IF_ID_HIF0 = 6U,
+	PFE_PHY_IF_ID_HIF1 = 7U,
+	PFE_PHY_IF_ID_HIF2 = 8U,
+	PFE_PHY_IF_ID_HIF3 = 9U,
 	/*	Internals */
 	PFE_PHY_IF_ID_MAX = PFE_PHY_IF_ID_HIF3,
 	PFE_PHY_IF_ID_INVALID
@@ -99,38 +99,39 @@ ct_assert(sizeof(pfe_ct_phy_if_id_t) == sizeof(uint8_t));
 typedef enum __attribute__((packed))
 {
 	/* HW Accelerated Rules */
-	IF_MATCH_TYPE_ETH = (1U << 0),		/*!< Match ETH Packets */
-	IF_MATCH_TYPE_VLAN = (1U << 1),		/*!< Match VLAN Tagged Packets */
-	IF_MATCH_TYPE_PPPOE = (1U << 2),		/*!< Match PPPoE Packets */
-	IF_MATCH_TYPE_ARP = (1U << 3),		/*!< Match ARP Packets */
-	IF_MATCH_TYPE_MCAST = (1U << 4),		/*!< Match Multicast (L2) Packets */
-	IF_MATCH_TYPE_IPV4 = (1U << 5),		/*!< Match IPv4 Packets */
-	IF_MATCH_TYPE_IPV6 = (1U << 6),		/*!< Match IPv6 Packets */
-	IF_MATCH_RESERVED7 = (1U << 7),		/*!< Reserved */
-	IF_MATCH_RESERVED8 = (1U << 8),		/*!< Reserved */
-	IF_MATCH_TYPE_IPX = (1U << 9),		/*!< Match IPX Packets */
-	IF_MATCH_TYPE_BCAST = (1U << 10),	/*!< Match Broadcast (L2) Packets */
-	IF_MATCH_TYPE_UDP = (1U << 11),		/*!< Match UDP Packets */
-	IF_MATCH_TYPE_TCP = (1U << 12),		/*!< Match TCP Packets */
-	IF_MATCH_TYPE_ICMP = (1U << 13),		/*!< Match ICMP Packets */
-	IF_MATCH_TYPE_IGMP = (1U << 14),		/*!< Match IGMP Packets */
-	IF_MATCH_VLAN = (1U << 15),			/*!< Match VLAN ID */
-	IF_MATCH_PROTO = (1U << 16),			/*!< Match IP Protocol */
-	IF_MATCH_SPORT = (1U << 20),			/*!< Match L4 Source Port */
-	IF_MATCH_DPORT = (1U << 21),			/*!< Match L4 Destination Port */
+    IF_MATCH_NONE = 0U,                     /*!< No match rule used */
+	IF_MATCH_TYPE_ETH = (1U << 0U),        /*!< Match ETH Packets */
+    IF_MATCH_TYPE_VLAN = (1U << 1U),        /*!< Match VLAN Tagged Packets */
+    IF_MATCH_TYPE_PPPOE = (1U << 2U),        /*!< Match PPPoE Packets */
+    IF_MATCH_TYPE_ARP = (1U << 3U),        /*!< Match ARP Packets */
+    IF_MATCH_TYPE_MCAST = (1U << 4U),        /*!< Match Multicast (L2) Packets */
+    IF_MATCH_TYPE_IPV4 = (1U << 5U),        /*!< Match IPv4 Packets */
+    IF_MATCH_TYPE_IPV6 = (1U << 6U),        /*!< Match IPv6 Packets */
+    IF_MATCH_RESERVED7 = (1U << 7U),        /*!< Reserved */
+    IF_MATCH_RESERVED8 = (1U << 8U),        /*!< Reserved */
+    IF_MATCH_TYPE_IPX = (1U << 9U),        /*!< Match IPX Packets */
+    IF_MATCH_TYPE_BCAST = (1U << 10U),    /*!< Match Broadcast (L2) Packets */
+    IF_MATCH_TYPE_UDP = (1U << 11U),        /*!< Match UDP Packets */
+    IF_MATCH_TYPE_TCP = (1U << 12U),        /*!< Match TCP Packets */
+    IF_MATCH_TYPE_ICMP = (1U << 13U),        /*!< Match ICMP Packets */
+    IF_MATCH_TYPE_IGMP = (1U << 14U),        /*!< Match IGMP Packets */
+    IF_MATCH_VLAN = (1U << 15U),            /*!< Match VLAN ID */
+    IF_MATCH_PROTO = (1U << 16U),            /*!< Match IP Protocol */
+    IF_MATCH_SPORT = (1U << 20U),            /*!< Match L4 Source Port */
+    IF_MATCH_DPORT = (1U << 21U),            /*!< Match L4 Destination Port */
 	/* Pure SW */
-	IF_MATCH_SIP6 = (1U << 22),			/*!< Match Source IPv6 Address */
-	IF_MATCH_DIP6 = (1U << 23),			/*!< Match Destination IPv6 Address */
-	IF_MATCH_SIP = (1U << 24),			/*!< Match Source IPv4 Address */
-	IF_MATCH_DIP = (1U << 25),			/*!< Match Destination IPv4 Address */
-	IF_MATCH_ETHTYPE = (1U << 26),		/*!< Match EtherType */
-	IF_MATCH_FP0 = (1U << 27),			/*!< Match Packets Accepted by Flexible Parser 0 */
-	IF_MATCH_FP1 = (1U << 28),			/*!< Match Packets Accepted by Flexible Parser 1 */
-	IF_MATCH_SMAC = (1U << 29),			/*!< Match Source MAC Address */
-	IF_MATCH_DMAC = (1U << 30),			/*!< Match Destination MAC Address */
-	IF_MATCH_HIF_COOKIE = (1U << 31),	/*!< Match HIF header cookie value */
+	IF_MATCH_SIP6 = (1U << 22U),			/*!< Match Source IPv6 Address */
+	IF_MATCH_DIP6 = (1U << 23U),			/*!< Match Destination IPv6 Address */
+	IF_MATCH_SIP = (1U << 24U),			/*!< Match Source IPv4 Address */
+	IF_MATCH_DIP = (1U << 25U),			/*!< Match Destination IPv4 Address */
+	IF_MATCH_ETHTYPE = (1U << 26U),		/*!< Match EtherType */
+	IF_MATCH_FP0 = (1U << 27U),			/*!< Match Packets Accepted by Flexible Parser 0 */
+	IF_MATCH_FP1 = (1U << 28U),			/*!< Match Packets Accepted by Flexible Parser 1 */
+	IF_MATCH_SMAC = (1U << 29U),			/*!< Match Source MAC Address */
+	IF_MATCH_DMAC = (1U << 30U),			/*!< Match Destination MAC Address */
+	IF_MATCH_HIF_COOKIE = (1U << 31U),	/*!< Match HIF header cookie value */
 	/* Ensure proper size */
-	IF_MATCH_MAX = (1U << 31)
+	IF_MATCH_MAX = (1U << 31U)
 } pfe_ct_if_m_rules_t;
 
 /*	We expect given pfe_ct_if_m_rules_t size due to byte order compatibility. */
@@ -138,18 +139,20 @@ ct_assert(sizeof(pfe_ct_if_m_rules_t) == sizeof(uint32_t));
 
 typedef enum __attribute__((packed))
 {
+	/* No flag set */
+	FP_FL_NONE = 0U,
 	/* Invert match result */
-	FP_FL_INVERT = (1U << 0),
+	FP_FL_INVERT = (1U << 0U),
 	/* Reject packet in case of match */
-	FP_FL_REJECT = (1U << 1),
+	FP_FL_REJECT = (1U << 1U),
 	/* Accept packet in case of match */
-	FP_FL_ACCEPT = (1U << 2),
+	FP_FL_ACCEPT = (1U << 2U),
 	/* Data offset is relative from start of L3 header */
-	FP_FL_L3_OFFSET = (1U << 3),
+	FP_FL_L3_OFFSET = (1U << 3U),
 	/* Data offset is relative from start of L4 header */
-	FP_FL_L4_OFFSET = (1U << 4),
+	FP_FL_L4_OFFSET = (1U << 4U),
 	/* Just to ensure correct size */
-	FP_FL_MAX = (1U << 7)
+	FP_FL_MAX = (1U << 7U)
 } pfe_ct_fp_flags_t;
 
 ct_assert(sizeof(pfe_ct_fp_flags_t) == sizeof(uint8_t));
@@ -186,7 +189,7 @@ typedef struct __attribute__((packed, aligned(4)))
 {
 	/* Number of rules in the table */
 	uint8_t count;
-	/* Reserved (to keep "rules" aligned ) */
+	/* Reserved variables to keep "rules" aligned */
 	uint8_t reserved8;
 	uint16_t reserved16;
 	/* Pointer to the array of "count" rules */
@@ -203,7 +206,7 @@ typedef struct __attribute__((packed, aligned(4)))
 {
 	/* VLAN ID (IF_MATCH_VLAN) */
 	uint16_t vlan;
-	/* EtherType (IF_MATCH_ETHTYPE) */
+	/* Ether Type (IF_MATCH_ETHTYPE) */
 	uint16_t ethtype;
 	/* L4 source port number (IF_MATCH_SPORT) */
 	uint16_t sport;
@@ -222,8 +225,8 @@ typedef struct __attribute__((packed, aligned(4)))
 		/*	IPv6 (for IF_MATCH_SIP6, IF_MATCH_DIP6) */
 		struct
 		{
-			uint32_t sip[4];
-			uint32_t dip[4];
+			uint32_t sip[4U];
+			uint32_t dip[4U];
 		} v6;
 	};
 	/* Flexible Parser 0 table (IF_MATCH_FP0) */
@@ -233,13 +236,13 @@ typedef struct __attribute__((packed, aligned(4)))
 	/* HIF header cookie (IF_MATCH_HIF_COOKIE) */
 	uint32_t hif_cookie;
 	/* Source MAC Address (IF_MATCH_SMAC) */
-	uint8_t __attribute__((aligned(4))) smac[6]; /* Must be aligned at 4 bytes */
+	uint8_t __attribute__((aligned(4))) smac[6U]; /* Must be aligned at 4 bytes */
 	/* IP protocol (IF_MATCH_PROTO) */
 	uint8_t proto;
 	/* Reserved */
 	uint8_t reserved;
 	/* Destination MAC Address (IF_MATCH_DMAC) */
-	uint8_t __attribute__((aligned(4))) dmac[6]; /* Must be aligned at 4 bytes */
+	uint8_t __attribute__((aligned(4))) dmac[6U]; /* Must be aligned at 4 bytes */
 } pfe_ct_if_m_args_t;
 
 /*
@@ -295,12 +298,14 @@ typedef struct __attribute__((packed, aligned(4)))
  */
 typedef enum __attribute__((packed))
 {
-	IF_OP_DISABLED = 0,		/*!< Disabled */
-	IF_OP_DEFAULT = 1,		/*!< Default operational mode */
-	IF_OP_BRIDGE = 2,		/*!< L2 bridge */
-	IF_OP_ROUTER = 3,		/*!< L3 router */
-	IF_OP_VLAN_BRIDGE = 4,	/*!< L2 bridge with VLAN */
-	IF_OP_FLEX_ROUTER = 5	/*!< Flexible router */
+	IF_OP_DISABLED = 0U,			/*!< Disabled */
+	IF_OP_DEFAULT = 1U,				/*!< Default operational mode */
+	IF_OP_BRIDGE = 2U,				/*!< L2 bridge */
+	IF_OP_ROUTER = 3U,				/*!< L3 router */
+	IF_OP_VLAN_BRIDGE = 4U,			/*!< L2 bridge with VLAN */
+	IF_OP_FLEX_ROUTER = 5U,			/*!< Flexible router */
+	IF_OP_L2L3_BRIDGE = 6U,			/*!< L2-L3 bridge */
+	IF_OP_L2L3_VLAN_BRIDGE = 7U,	/*!< L2-L3 bridge with VLAN */
 } pfe_ct_if_op_mode_t;
 
 /*	We expect given pfe_ct_if_op_mode_t size due to byte order compatibility. */
@@ -308,11 +313,13 @@ ct_assert(sizeof(pfe_ct_if_op_mode_t) == sizeof(uint8_t));
 
 typedef enum __attribute__((packed))
 {
-	IF_FL_ENABLED = (1U << 0),		/*!< If set, interface is enabled */
-	IF_FL_PROMISC = (1U << 1),		/*!< If set, interface is promiscuous */
-	IF_FL_FF_ALL_TCP = (1U << 2),	/*!< Enable fast-forwarding of ingress TCP SYN|FIN|RST packets */
-	IF_FL_MATCH_OR = (1U << 3),		/*!< Result of match is logical OR of rules, else AND */
-	IF_FL_DISCARD = (1U << 4)		/*!< Discard packets on rules match */
+	IF_FL_NONE = 0U,				/*!< No flag set */
+	IF_FL_ENABLED = (1U << 0U),		/*!< If set, interface is enabled */
+	IF_FL_PROMISC = (1U << 1U),		/*!< If set, interface is promiscuous */
+	IF_FL_FF_ALL_TCP = (1U << 2U),	/*!< Enable fast-forwarding of ingress TCP SYN|FIN|RST packets */
+	IF_FL_MATCH_OR = (1U << 3U),		/*!< Result of match is logical OR of rules, else AND */
+	IF_FL_DISCARD = (1U << 4U),		/*!< Discard packets on rules match */
+	IF_FL_LOAD_BALANCE = (1U << 6U)	/*!< HIF channel participates in load balancing */
 } pfe_ct_if_flags_t;
 
 /*	We expect given pfe_ct_if_flags_t size due to byte order compatibility. */
@@ -323,9 +330,9 @@ ct_assert(sizeof(pfe_ct_if_flags_t) == sizeof(uint8_t));
  */
 typedef enum  __attribute__((packed))
 {
-	IF_AFT_ANY_TAGGING = 0,
-	IF_AFT_TAGGED_ONLY = 1,
-	IF_AFT_UNTAGGED_ONLY = 2
+	IF_AFT_ANY_TAGGING = 0U,
+	IF_AFT_TAGGED_ONLY = 1U,
+	IF_AFT_UNTAGGED_ONLY = 2U
 } pfe_ct_if_aft_t;
 
 /*	We expect given pfe_ct_if_aft_t size due to byte order compatibility. */
@@ -336,10 +343,10 @@ ct_assert(sizeof(pfe_ct_if_aft_t) == sizeof(uint8_t));
  */
 typedef enum __attribute__((packed))
 {
-	IF_BS_FORWARDING = 0,	/*!< Learning and forwarding enabled */
-	IF_BS_BLOCKED = 1,		/*!< Learning and forwarding disabled */
-	IF_BS_LEARN_ONLY = 2,	/*!< Learning enabled, forwarding disabled */
-	IF_BS_FORWARD_ONLY = 3	/*!< Learning disabled, forwarding enabled */
+	IF_BS_FORWARDING = 0U,	/*!< Learning and forwarding enabled */
+	IF_BS_BLOCKED = 1U,		/*!< Learning and forwarding disabled */
+	IF_BS_LEARN_ONLY = 2U,	/*!< Learning enabled, forwarding disabled */
+	IF_BS_FORWARD_ONLY = 3U	/*!< Learning disabled, forwarding enabled */
 } pfe_ct_block_state_t;
 
 /*	We expect given pfe_ct_block_state_t size due to byte order compatibility. */
@@ -351,10 +358,10 @@ ct_assert(sizeof(pfe_ct_block_state_t) == sizeof(uint8_t));
  * 			the logical interface as it is stored in the DMEM.
  * @warning	Do not modify this structure unless synchronization with firmware is ensured.
  */
-typedef struct __attribute__((packed, aligned(4))) __pfe_ct_log_if_tag
+typedef struct __attribute__((packed, aligned(4))) pfe_ct_log_if_tag
 {
 	/*	Pointer to next logical interface in the list (DMEM) */
-	PFE_PTR(struct __pfe_ct_log_if_tag) next;
+	PFE_PTR(struct pfe_ct_log_if_tag) next;
 	/*	List of egress physical interfaces. Bit positions correspond
 		to pfe_ct_phy_if_id_t values (1U << pfe_ct_phy_if_id_t). */
 	uint32_t e_phy_ifs;
@@ -385,6 +392,7 @@ ct_assert(sizeof(pfe_ct_spd_entry_action_t) == sizeof(uint8_t));
 
 typedef enum __attribute__((packed))
 {
+	SPD_FLAG_NONE = 0U,					/* No flag set */
 	SPD_FLAG_5T = (1U << 0U),			/* 5-tuple acceleration by HW, if not set the id5t shall be 0 */
 	SPD_FLAG_IPv6 = (1U << 1U),			/* IPv4 if not set, IPv6 if set */
 	SPD_FLAG_SPORT_OPAQUE = (1U << 2U),	/* Do not match Source PORT */
@@ -414,8 +422,8 @@ typedef struct __attribute__((packed, aligned(4)))
 
 		struct
 		{
-			uint32_t sip[4];
-			uint32_t dip[4];
+			uint32_t sip[4U];
+			uint32_t dip[4U];
 		} v6;
 	} u;
 	uint32_t id5t;	/* 5-tuple ID to speed search, 0 = invalid ID */
@@ -423,7 +431,7 @@ typedef struct __attribute__((packed, aligned(4)))
 	/* --- Action --- */
 	uint32_t sad_entry; /* How to process IPsec */
 	pfe_ct_spd_entry_action_t action; /* What to do on match */
-	uint8_t pad8[3];
+	uint8_t pad8[3U];
 } pfe_ct_spd_entry_t;
 
 typedef struct __attribute__((packed, aligned(4)))
@@ -457,9 +465,11 @@ typedef struct __attribute__((packed, aligned(4)))
 	/*	Mirroring to given port */
 	pfe_ct_phy_if_id_t mirror;
 	/*	Reserved */
-	uint8_t reserved[3];
+	uint8_t reserved[3U];
 	/*	SPD for IPsec */
 	PFE_PTR(pfe_ct_ipsec_spd_t) ipsec_spd;
+	/*	Flexible Filter */
+	PFE_PTR(pfe_ct_fp_table_t) filter;
 	/*	Gathered statistics */
 	pfe_ct_phy_if_stats_t __attribute__((aligned(4))) phy_stats; /* Must be aligned to 4 bytes */
 } pfe_ct_phy_if_t;
@@ -469,10 +479,10 @@ typedef struct __attribute__((packed, aligned(4)))
  */
 typedef enum __attribute__((packed))
 {
-	L2BR_ACT_FORWARD = 0,   /*!< Forward normally */
-	L2BR_ACT_FLOOD = 1,     /*!< Flood */
-	L2BR_ACT_PUNT = 2,      /*!< Punt */
-	L2BR_ACT_DISCARD = 3,   /*!< Discard */
+	L2BR_ACT_FORWARD = 0U,   /*!< Forward normally */
+	L2BR_ACT_FLOOD = 1U,     /*!< Flood */
+	L2BR_ACT_PUNT = 2U,      /*!< Punt */
+	L2BR_ACT_DISCARD = 3U,   /*!< Discard */
 } pfe_ct_l2br_action_t;
 
 #if PFE_COMPILER_BITFIELD_BEHAVIOR == PFE_COMPILER_BITFIELD_HIGH_LAST
@@ -487,8 +497,10 @@ typedef struct __attribute__((packed))
 		{
 			/* [19:0] Forward port list */
 			uint32_t forward_list : 20;
-			/* [28:20] Reserved */
-			uint32_t reserved : 9;
+			/* [27:20] Reserved */
+			uint32_t reserved : 8;
+			/* [28] Local L3 */
+			uint32_t local_l3 : 1;
 			/* [29] Fresh */
 			uint32_t fresh_flag : 1;
 			/* [30] Static */
@@ -547,8 +559,10 @@ typedef struct __attribute__((packed))
 			uint32_t static_flag : 1;
 			/* [29] Fresh */
 			uint32_t fresh_flag : 1;
-			/* [28:20] Reserved */
-			uint32_t reserved : 9;
+			/* [28] Local L3 */
+			uint32_t local_l3 : 1;
+			/* [27:20] Reserved */
+			uint32_t reserved : 8;
 			/* [19:0] Forward port list */
 			uint32_t forward_list : 20;
 		};
@@ -600,7 +614,7 @@ ct_assert(sizeof(pfe_ct_vlan_table_result_t) == sizeof(uint64_t));
 typedef pfe_ct_vlan_table_result_t pfe_ct_bd_entry_t;
 
 /*	Date string type */
-typedef uint8_t pfe_date_str_t[16];
+typedef uint8_t pfe_date_str_t[16U];
 
 /*	We expect given pfe_date_str_t size. */
 ct_assert(sizeof(pfe_date_str_t) > sizeof(__DATE__));
@@ -608,7 +622,7 @@ ct_assert(sizeof(pfe_date_str_t) > sizeof(__DATE__));
 /**
  * @brief Time string type
  */
-typedef uint8_t pfe_time_str_t[16];
+typedef uint8_t pfe_time_str_t[16U];
 
 /*	We expect given pfe_time_str_t size. */
 ct_assert(sizeof(pfe_time_str_t) > sizeof(__TIME__));
@@ -616,12 +630,12 @@ ct_assert(sizeof(pfe_time_str_t) > sizeof(__TIME__));
 /**
  * @brief Version control identifier string type
  */
-typedef uint8_t pfe_vctrl_str_t[16];
+typedef uint8_t pfe_vctrl_str_t[16U];
 
 /**
  * @brief This header version MD5 checksum string type
  */
-typedef char_t pfe_cthdr_str_t[36]; /* 32 Characters + NULL + 3 padding */
+typedef char_t pfe_cthdr_str_t[36U]; /* 32 Characters + NULL + 3 padding */
 
 /**
 * @brief Identification of PE type the FW is used for
@@ -634,7 +648,22 @@ typedef enum __attribute__((packed))
 	PE_TYPE_UTIL,
 	PE_TYPE_MAX
 } pfe_ct_pe_type_t;
-ct_assert(sizeof(pfe_ct_pe_type_t) == 1);
+ct_assert(sizeof(pfe_ct_pe_type_t) == 1U);
+
+/**
+* @brief Storage for firmware features description
+*/
+typedef struct __attribute__((packed,aligned(4)))
+{
+	PFE_PTR(const char)name;          /* Feature name */
+	PFE_PTR(const char)description;   /* Feature description */
+	PFE_PTR(uint8_t) position;        /* Position of the run-time enable byte */
+	const uint8_t variant;            /* Configuration variant: 0 = disabled, 1 = enabled, 2 = runtime configured */
+	const uint8_t def_val;            /* Enable/disable default value used for runtime configuration */
+	const uint8_t reserved[2];        /* Pad */
+} pfe_ct_feature_desc_t;
+
+ct_assert(sizeof(pfe_ct_feature_desc_t) == 16);
 
 /**
  * @brief Firmware version information
@@ -647,8 +676,8 @@ typedef struct __attribute__((packed))
 	uint8_t major;
 	uint8_t minor;
 	uint8_t patch;
-	/*  PE type */
-    pfe_ct_pe_type_t pe_type;
+	/*	PE type */
+	pfe_ct_pe_type_t pe_type;
 	/*	Firmware properties */
 	uint32_t flags;
 	/*	Build date and time */
@@ -656,8 +685,12 @@ typedef struct __attribute__((packed))
 	pfe_time_str_t build_time;
 	/*	Version control ID (e.g. GIT commit) */
 	pfe_vctrl_str_t vctrl;
-	/*  This header version */
+	/*	This header version */
 	pfe_cthdr_str_t cthdr;
+	/*	Feature descriptions */
+	PFE_PTR(pfe_ct_feature_desc_t) features;
+	/*	Features count - number of items in features */
+	uint32_t features_count;
 } pfe_ct_version_t;
 
 /**
@@ -698,7 +731,7 @@ typedef struct __attribute__((packed, aligned(4)))
  * @brief Number of FW error reports which can be stored in pfe_ct_error_record_t
  * @details The value must be power of 2.
  */
-#define FP_ERROR_RECORD_SIZE 64
+#define FP_ERROR_RECORD_SIZE 64U
 
 /**
  * @brief Reported error storage
@@ -736,7 +769,7 @@ typedef struct __attribute__((packed, aligned(4)))
  */
 typedef enum __attribute__((packed))
 {
-	PFE_FW_STATE_UNINIT = 0,        /* FW not started */
+	PFE_FW_STATE_UNINIT = 0U,        /* FW not started */
 	PFE_FW_STATE_INIT,              /* FW passed initialization */
 	PFE_FW_STATE_FRAMEWAIT,         /* FW waiting for a new frame arrival */
 	PFE_FW_STATE_FRAMEPARSE,        /* FW started parsing a new frame */
@@ -759,10 +792,10 @@ typedef struct __attribute__((packed, aligned(4)))
 {
 	uint32_t counter;               /* Incremented with each state change */
 	pfe_ct_pe_sw_state_t state;     /* Reflect the current FW state */
-	uint8_t reserved[3];            /* To make size multiple of 4 bytes */
+	uint8_t reserved[3U];            /* To make size multiple of 4 bytes */
 } pfe_ct_pe_sw_state_monitor_t;
 
-ct_assert(sizeof(pfe_ct_pe_sw_state_monitor_t) == 8);
+ct_assert(sizeof(pfe_ct_pe_sw_state_monitor_t) == 8U);
 
 
 /**
@@ -832,7 +865,7 @@ typedef struct __attribute__((packed, aligned(4)))
  */
 typedef struct __attribute__((packed, aligned(4)))
 {
-	/*  Common part for all PE types - must be 1st in the structure */
+	/*	Common part for all PE types - must be 1st in the structure */
 	pfe_ct_common_mmap_t common;
 	/*	Pointer to DMEM heap */
 	PFE_PTR(void) dmem_heap_base;
@@ -864,7 +897,7 @@ typedef struct __attribute__((packed, aligned(4)))
  */
 typedef struct __attribute__((packed, aligned(4)))
 {
-	/*  Common part for all PE types - must be 1st in the structure */
+	/*	Common part for all PE types - must be 1st in the structure */
 	pfe_ct_common_mmap_t common;
 } pfe_ct_util_mmap_t;
 
@@ -877,10 +910,12 @@ typedef union __attribute__((packed, aligned(4)))
 
 typedef enum __attribute__((packed))
 {
+	/*	Invalid reason */
+	PUNT_INVALID = 0U,
 	/*	Punt by snooping feature */
-	PUNT_SNOOP = (1U << 0),
+	PUNT_SNOOP = (1U << 0U),
 	/*	Ensure proper size */
-	PUNT_MAX = (1U << 15)
+	PUNT_MAX = (1U << 15U)
 } pfe_ct_punt_reasons_t;
 
 /*	We expect given pfe_ct_punt_reasons_t size due to byte order compatibility. */
@@ -889,27 +924,27 @@ ct_assert(sizeof(pfe_ct_punt_reasons_t) == sizeof(uint16_t));
 typedef enum __attribute__((packed))
 {
 	/*	No flag being set */
-	HIF_RX_NO_FLAG = 0,
+	HIF_RX_NO_FLAG = 0U,
 	/*	IP checksum valid */
-	HIF_RX_IPV4_CSUM = (1U << 0),
+	HIF_RX_IPV4_CSUM = (1U << 0U),
 	/*	TCP of IPv4 checksum valid */
-	HIF_RX_TCPV4_CSUM = (1U << 1),
+	HIF_RX_TCPV4_CSUM = (1U << 1U),
 	/*	TCP of IPv6 checksum valid */
-	HIF_RX_TCPV6_CSUM = (1U << 2),
+	HIF_RX_TCPV6_CSUM = (1U << 2U),
 	/*	UDP of IPv4 checksum valid */
-	HIF_RX_UDPV4_CSUM = (1U << 3),
+	HIF_RX_UDPV4_CSUM = (1U << 3U),
 	/*	UDP of IPv6 checksum valid */
-	HIF_RX_UDPV6_CSUM = (1U << 4),
+	HIF_RX_UDPV6_CSUM = (1U << 4U),
 	/*	PTP packet */
-	HIF_RX_PTP = (1U << 5),
+	HIF_RX_PTP = (1U << 5U),
 	/*	Punt flag. If set then punt reason is valid. */
-	HIF_RX_PUNT = (1U << 6),
+	HIF_RX_PUNT = (1U << 6U),
 	/*	Timestamp flag. When set, timestamp is valid. */
-	HIF_RX_TS = (1U << 7),
+	HIF_RX_TS = (1U << 7U),
 	/*	Inter - HIF communication frame */
-	HIF_RX_IHC = (1U << 8),
+	HIF_RX_IHC = (1U << 8U),
 	/*	Frame is Egress Timestamp Report */
-	HIF_RX_ETS = (1U << 9)
+	HIF_RX_ETS = (1U << 9U)
 } pfe_ct_hif_rx_flags_t;
 
 /*	We expect given pfe_ct_hif_rx_flags_t size due to byte order compatibility. */
@@ -937,32 +972,32 @@ typedef struct __attribute__((packed))
 	uint32_t rx_timestamp_s;
 } pfe_ct_hif_rx_hdr_t;
 
-ct_assert(sizeof(pfe_ct_hif_rx_hdr_t) == 16);
+ct_assert(sizeof(pfe_ct_hif_rx_hdr_t) == 16U);
 
 typedef enum __attribute__((packed))
 {
 	/*	No flag being set */
-	HIF_TX_NO_FLAG = 0,
-	HIF_TX_RESERVED0 = (1U << 0),
-	HIF_TX_RESERVED1 = (1U << 1),
+	HIF_TX_NO_FLAG = 0U,
+	HIF_TX_RESERVED0 = (1U << 0U),
+	HIF_TX_RESERVED1 = (1U << 1U),
 	/*	Generate egress timestamp */
-	HIF_TX_ETS = (1U << 2),
+	HIF_TX_ETS = (1U << 2U),
 	/*	IP checksum offload. If set then PFE will calculate and
 		insert IP header checksum. */
-	HIF_TX_IP_CSUM = (1U << 3),
+	HIF_TX_IP_CSUM = (1U << 3U),
 	/*	TCP checksum offload. If set then PFE will calculate and
 		insert TCP header checksum. */
-	HIF_TX_TCP_CSUM = (1U << 4),
+	HIF_TX_TCP_CSUM = (1U << 4U),
 	/*	UDP checksum offload. If set then PFE will calculate and
 		insert UDP header checksum. */
-	HIF_TX_UDP_CSUM = (1U << 5),
+	HIF_TX_UDP_CSUM = (1U << 5U),
 	/*	Transmit Inject Flag. If not set the packet will be processed
 		according to Physical Interface configuration. If set then
 		e_phy_ifs is valid and packet will be transmitted via physical
 		interfaces given by the list. */
-	HIF_TX_INJECT = (1U << 6),
+	HIF_TX_INJECT = (1U << 6U),
 	/*	Inter-HIF communication frame */
-	HIF_TX_IHC = (1U << 7)
+	HIF_TX_IHC = (1U << 7U)
 } pfe_ct_hif_tx_flags_t;
 
 /*	We expect given pfe_ct_hif_rx_flags_t size due to byte order compatibility. */
@@ -985,7 +1020,7 @@ typedef struct __attribute__((aligned))
 	uint8_t reserved1;
 	uint16_t reserved2;
 	/*	Reference number to match transmitted frame and related egress timestamp
-	 	report. */
+	 	report. Up-most 4 bits must stay 0s. */
 	uint16_t refnum;
 	/*	List of egress physical interfaces to be used for injection. Bit positions
 		correspond to pfe_ct_phy_if_id_t values (1U << pfe_ct_phy_if_id_t). */
@@ -995,17 +1030,17 @@ typedef struct __attribute__((aligned))
 	uint32_t cookie;
 } pfe_ct_hif_tx_hdr_t;
 
-ct_assert(sizeof(pfe_ct_hif_tx_hdr_t) == 16);
+ct_assert(sizeof(pfe_ct_hif_tx_hdr_t) == 16U);
 
 /*	We expect given pfe_ct_hif_tx_hdr_t size due to byte order compatibility. */
-ct_assert(0 == (sizeof(pfe_ct_hif_tx_hdr_t) % sizeof(uint32_t)));
+ct_assert(0U == (sizeof(pfe_ct_hif_tx_hdr_t) % sizeof(uint32_t)));
 
 /**
  * @brief	Egress Timestamp Report
  */
 typedef struct __attribute__((packed))
 {
-	uint8_t reserved[3];
+	uint8_t reserved[3U];
 	uint8_t ctrl;
 	uint32_t reserved1;
 	uint32_t ts_nsec;
@@ -1020,7 +1055,7 @@ typedef struct __attribute__((packed))
  */
 typedef struct __attribute__((packed))
 {
-	uint8_t reserved[24];
+	uint8_t reserved[24U];
 } pfe_ct_post_cls_hdr_t;
 
 /**
@@ -1031,17 +1066,18 @@ typedef struct __attribute__((packed))
  */
 typedef enum __attribute__((packed))
 {
-	RT_ACT_ADD_ETH_HDR = (1U << 0),		/*!< Construct/Update Ethernet Header */
-	RT_ACT_ADD_VLAN_HDR = (1U << 1),		/*!< Construct/Update outer VLAN Header */
-	RT_ACT_ADD_PPPOE_HDR = (1U << 2),	/*!< Construct/Update PPPOE Header */
-	RT_ACT_DEC_TTL = (1U << 7),			/*!< Decrement TTL */
-	RT_ACT_ADD_VLAN1_HDR = (1U << 11),	/*!< Construct/Update inner VLAN Header */
-	RT_ACT_CHANGE_SIP_ADDR = (1U << 17),	/*!< Change Source IP Address */
-	RT_ACT_CHANGE_SPORT = (1U << 18),	/*!< Change Source Port */
-	RT_ACT_CHANGE_DIP_ADDR = (1U << 19),	/*!< Change Destination IP Address */
-	RT_ACT_CHANGE_DPORT = (1U << 20),	/*!< Change Destination Port */
-	RT_ACT_DEL_VLAN_HDR = (1U << 21),	/*!< Delete outer VLAN Header */
-	RT_ACT_INVALID = (1U << 31)			/*!< Invalid value */
+	RT_ACT_NONE = 0U,					/*!< No action set */
+	RT_ACT_ADD_ETH_HDR = (1U << 0U),		/*!< Construct/Update Ethernet Header */
+	RT_ACT_ADD_VLAN_HDR = (1U << 1U),		/*!< Construct/Update outer VLAN Header */
+	RT_ACT_ADD_PPPOE_HDR = (1U << 2U),	/*!< Construct/Update PPPOE Header */
+	RT_ACT_DEC_TTL = (1U << 7U),			/*!< Decrement TTL */
+	RT_ACT_ADD_VLAN1_HDR = (1U << 11U),	/*!< Construct/Update inner VLAN Header */
+	RT_ACT_CHANGE_SIP_ADDR = (1U << 17U),	/*!< Change Source IP Address */
+	RT_ACT_CHANGE_SPORT = (1U << 18U),	/*!< Change Source Port */
+	RT_ACT_CHANGE_DIP_ADDR = (1U << 19U),	/*!< Change Destination IP Address */
+	RT_ACT_CHANGE_DPORT = (1U << 20U),	/*!< Change Destination Port */
+	RT_ACT_DEL_VLAN_HDR = (1U << 21U),	/*!< Delete outer VLAN Header */
+	RT_ACT_INVALID = (1U << 31U)			/*!< Invalid value */
 } pfe_ct_route_actions_t;
 
 /*	We expect given pfe_ct_route_actions_t size due to byte order compatibility. */
@@ -1053,9 +1089,9 @@ ct_assert(sizeof(pfe_ct_route_actions_t) == sizeof(uint32_t));
 typedef struct __attribute__((packed))
 {
 	/*	Source MAC address (RT_ACT_ADD_ETH_HDR) */
-	uint8_t smac[6];
+	uint8_t smac[6U];
 	/*	Destination MAC address (RT_ACT_ADD_ETH_HDR) */
-	uint8_t dmac[6];
+	uint8_t dmac[6U];
 	/*	PPPOE session ID (RT_ACT_ADD_PPPOE_HDR) */
 	uint16_t pppoe_sid;
 	/*	VLAN ID (RT_ACT_ADD_VLAN_HDR) */
@@ -1076,8 +1112,8 @@ typedef struct __attribute__((packed))
 
 		struct
 		{
-			uint32_t	sip[4];
-			uint32_t	dip[4];
+			uint32_t	sip[4U];
+			uint32_t	dip[4U];
 		} v6;
 	};
 
@@ -1093,9 +1129,10 @@ typedef struct __attribute__((packed))
  */
 typedef enum __attribute__((packed))
 {
-	RT_FL_VALID = (1U << 0),	/*!< Entry is valid */
-	RT_FL_IPV6 = (1U << 1),	/*!< If set entry is IPv6 else it is IPv4 */
-	RT_FL_MAX = (1U << 31)	/* Ensure proper size */
+	RT_FL_NONE = 0U,			/*!< No flag set */
+	RT_FL_VALID = (1U << 0U),	/*!< Entry is valid */
+	RT_FL_IPV6 = (1U << 1U),	/*!< If set entry is IPv6 else it is IPv4 */
+	RT_FL_MAX = (1U << 31U)	/* Ensure proper size */
 } pfe_ct_rtable_flags_t;
 
 /*	We expect given pfe_ct_rtable_flags_t size due to byte order compatibility. */
@@ -1106,7 +1143,8 @@ ct_assert(sizeof(pfe_ct_rtable_flags_t) == sizeof(uint32_t));
  */
 typedef enum __attribute__((packed))
 {
-	RT_STATUS_ACTIVE = (1U << 0)	/*!< If set, entry has been matched
+	RT_STATUS_NONE = 0U,			/*!< No bit set */
+	RT_STATUS_ACTIVE = (1U << 0U)	/*!< If set, entry has been matched
 								     by routing table lookup algorithm */
 } pfe_rtable_entry_status_t;
 
@@ -1125,10 +1163,10 @@ ct_assert(sizeof(pfe_rtable_entry_status_t) == sizeof(uint8_t));
  *
  * @warning	Do not modify this structure unless synchronization with firmware is ensured.
  */
-typedef struct __attribute__((packed, aligned(4))) __pfe_ct_rtable_entry_tag
+typedef struct __attribute__((packed, aligned(4))) pfe_ct_rtable_entry_tag
 {
 	/*	Pointer to next entry in a hash bucket */
-	PFE_PTR(struct __pfe_ct_rtable_entry_tag) next;
+	PFE_PTR(struct pfe_ct_rtable_entry_tag) next;
 	/*	Flags */
 	pfe_ct_rtable_flags_t flags;
 	/*	L4 source port number */
@@ -1152,8 +1190,8 @@ typedef struct __attribute__((packed, aligned(4))) __pfe_ct_rtable_entry_tag
 
 		struct
 		{
-			uint32_t	sip[4];
-			uint32_t	dip[4];
+			uint32_t	sip[4U];
+			uint32_t	dip[4U];
 		} v6;
 	} u;
 
@@ -1177,7 +1215,7 @@ typedef struct __attribute__((packed, aligned(4))) __pfe_ct_rtable_entry_tag
 } pfe_ct_rtable_entry_t;
 
 /*	We expect given pfe_ct_rtable_entry_t size due to HW requirement. */
-ct_assert(sizeof(pfe_ct_rtable_entry_t) == 128);
+ct_assert(sizeof(pfe_ct_rtable_entry_t) == 128U);
 
 #endif /* HW_S32G_PFE_CT_H_ */
 /** @} */

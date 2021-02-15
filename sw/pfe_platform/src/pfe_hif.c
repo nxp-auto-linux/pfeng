@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -15,7 +15,7 @@
 #include "pfe_hif.h"
 #include "pfe_platform_cfg.h"
 
-struct __pfe_hif_tag
+struct pfe_hif_tag
 {
 	void *cbus_base_va;			/*	CBUS base virtual address */
 	pfe_hif_chnl_t **channels;

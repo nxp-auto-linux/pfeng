@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -24,7 +24,7 @@
 #define MAC_WATCHDOG_TIMEOUT					0x000cU
 #define MAC_HASH_TABLE_REG0						0x0010U
 #define MAC_HASH_TABLE_REG1						0x0014U
-#define MAC_HASH_TABLE_REG(n)					(MAC_HASH_TABLE_REG0 + ((n) * 4))
+#define MAC_HASH_TABLE_REG(n)					((addr_t)MAC_HASH_TABLE_REG0 + ((addr_t)(n) * (addr_t)4U))
 #define MAC_VLAN_TAG_CTRL						0x0050U
 #define MAC_VLAN_TAG_DATA						0x0054U
 #define MAC_VLAN_INCL							0x0060U
@@ -81,8 +81,8 @@
 #define MAC_ADDRESS6_LOW						0x0334U
 #define MAC_ADDRESS7_HIGH						0x0338U
 #define MAC_ADDRESS7_LOW						0x033cU
-#define MAC_ADDRESS_HIGH(n)						(MAC_ADDRESS0_HIGH + ((n) * 8U))
-#define MAC_ADDRESS_LOW(n)						(MAC_ADDRESS0_LOW + ((n) * 8U))
+#define MAC_ADDRESS_HIGH(n)						((addr_t)MAC_ADDRESS0_HIGH + ((addr_t)(n) * (addr_t)8U))
+#define MAC_ADDRESS_LOW(n)						((addr_t)MAC_ADDRESS0_LOW + ((addr_t)(n) * (addr_t)8U))
 
 #define MMC_CONTROL								0x0700U
 #define MMC_RX_INTERRUPT						0x0704U
@@ -156,74 +156,74 @@
 #define MTL_TXQ0_OPERATION_MODE					0x0d00U
 #define MTL_RXQ0_OPERATION_MODE					0x0d30U
 
-#define DROP_NON_TCP_UDP(x)				((!!x) ? (1U << 21) : 0U)	/* DNTU */
-#define L3_L4_FILTER_ENABLE(x)			((!!x) ? (1U << 20) : 0U)	/* IPFE */
-#define VLAN_TAG_FILTER_ENABLE(x)		((!!x) ? (1U << 16) : 0U)	/* VTFE */
-#define HASH_OR_PERFECT_FILTER(x)		((!!x) ? (1U << 10) : 0U)	/* HPF  */
-#define SA_FILTER(x)					((!!x) ? (1U << 9) : 0U)	/* SAF  */
-#define SA_INVERSE_FILTER(x)			((!!x) ? (1U << 8) : 0U)	/* SAIF  */
-#define PASS_CONTROL_PACKETS(x)			(((x) & 3U) << 6)			/* PCF  */
+#define DROP_NON_TCP_UDP(x)				((!!(x)) ? (1UL << 21U) : 0U)	/* DNTU */
+#define L3_L4_FILTER_ENABLE(x)			((!!(x)) ? (1UL << 20U) : 0U)	/* IPFE */
+#define VLAN_TAG_FILTER_ENABLE(x)		((!!(x)) ? (1UL << 16U) : 0U)	/* VTFE */
+#define HASH_OR_PERFECT_FILTER(x)		((!!(x)) ? (1UL << 10U) : 0U)	/* HPF  */
+#define SA_FILTER(x)					((!!(x)) ? (1UL << 9U) : 0U)	/* SAF  */
+#define SA_INVERSE_FILTER(x)			((!!(x)) ? (1UL << 8U) : 0U)	/* SAIF  */
+#define PASS_CONTROL_PACKETS(x)			(((uint32_t)(x) & 3UL) << 6U)			/* PCF  */
 #define BLOCK_ALL						0x0U
 #define	FORWARD_ALL_EXCEPT_PAUSE		0x1U
 #define FORWARD_ALL						0x2U
 #define FORWARD_ADDRESS_FILTERED		0x3U
-#define DISABLE_BROADCAST_PACKETS(x)	((!!x) ? (1U << 5) : 0U)	/* DBF  */
-#define PASS_ALL_MULTICAST(x)			((!!x) ? (1U << 4) : 0U)	/* PM  */
-#define DA_INVERSE_FILTER(x)			((!!x) ? (1U << 3) : 0U)	/* DAIF  */
-#define HASH_MULTICAST(x)				((!!x) ? (1U << 2) : 0U)	/* HMC  */
-#define HASH_UNICAST(x)					((!!x) ? (1U << 1) : 0U)	/* HUC  */
-#define PROMISCUOUS_MODE(x)				((!!x) ? (1U << 0) : 0U)	/* PR  */
-#define ARP_OFFLOAD_ENABLE(x)			((!!x) ? (1U << 31) : 0U)	/* ARPEN  */
-#define SA_INSERT_REPLACE_CONTROL(x)	(((x) & 0x7U) << 28)	/* SARC   */
+#define DISABLE_BROADCAST_PACKETS(x)	((!!(x)) ? (1UL << 5U) : 0U)	/* DBF  */
+#define PASS_ALL_MULTICAST(x)			((!!(x)) ? (1UL << 4U) : 0U)	/* PM  */
+#define DA_INVERSE_FILTER(x)			((!!(x)) ? (1UL << 3U) : 0U)	/* DAIF  */
+#define HASH_MULTICAST(x)				((!!(x)) ? (1UL << 2U) : 0U)	/* HMC  */
+#define HASH_UNICAST(x)					((!!(x)) ? (1UL << 1U) : 0U)	/* HUC  */
+#define PROMISCUOUS_MODE(x)				((!!(x)) ? (1UL << 0U) : 0U)	/* PR  */
+#define ARP_OFFLOAD_ENABLE(x)			((!!(x)) ? (1UL << 31U) : 0U)	/* ARPEN  */
+#define SA_INSERT_REPLACE_CONTROL(x)	(((uint32_t)(x) & 0x7UL) << 28U)	/* SARC   */
 #define CTRL_BY_SIGNALS					0x0U
 #define INSERT_MAC0						0x2U
 #define INSERT_MAC1						0x6U
 #define REPLACE_BY_MAC0					0x3U
 #define	REPLACE_BY_MAC1					0x7U
-#define CHECKSUM_OFFLOAD(x)				((!!x) ? (1U << 27) : 0U)	/* IPC    */
-#define INTER_PACKET_GAP(x)				(((x) & 0x7U) << 24)		/* IPG	  */
-#define GIANT_PACKET_LIMIT_CONTROL(x)	((!!x) ? (1U << 23) : 0U)	/* GPSLCE */
-#define SUPPORT_2K_PACKETS(x)			((!!x) ? (1U << 22) : 0U)	/* S2KP   */
-#define CRC_STRIPPING_FOR_TYPE(x)		((!!x) ? (1U << 21) : 0U)	/* CST    */
-#define	AUTO_PAD_OR_CRC_STRIPPING(x)	((!!x) ? (1U << 20) : 0U)	/* ACS    */
-#define	WATCHDOG_DISABLE(x)				((!!x) ? (1U << 19) : 0U)	/* WD     */
-#define	PACKET_BURST_ENABLE(x)			((!!x) ? (1U << 18) : 0U)	/* BE     */
-#define	JABBER_DISABLE(x)				((!!x) ? (1U << 17) : 0U)	/* JD     */
-#define	JUMBO_PACKET_ENABLE(x)			((!!x) ? (1U << 16) : 0U)	/* JE     */
-#define PORT_SELECT(x)					((!!x) ? (1U << 15) : 0U)	/* PS     */
-#define SPEED(x)						((!!x) ? (1U << 14) : 0U)	/* FES    */
-#define GET_LINE_SPEED(x)				(((x) >> 14) & 3U)			/* FES+PS */
-#define DUPLEX_MODE(x)					((!!x) ? (1U << 13) : 0U)	/* DM     */
-#define GET_DUPLEX_MODE(x)				(((x) >> 13) & 1U)			/* DM     */
-#define LOOPBACK_MODE(x)				((!!x) ? (1U << 12) : 0U)	/* LM     */
-#define CARRIER_SENSE_BEFORE_TX(x)		((!!x) ? (1U << 11) : 0U)	/* ECRSFD */
-#define DISABLE_RECEIVE_OWN(x)			((!!x) ? (1U << 10) : 0U)	/* DO     */
-#define DISABLE_CARRIER_SENSE_TX(x)		((!!x) ? (1U << 9) : 0U)	/* DCRS   */
-#define DISABLE_RETRY(x)				((!!x) ? (1U << 8) : 0U)	/* DR     */
-#define BACK_OFF_LIMIT(x)				(((x) & 3U) << 5)			/* BL     */
+#define CHECKSUM_OFFLOAD(x)				((!!(x)) ? (1UL << 27U) : 0U)	/* IPC    */
+#define INTER_PACKET_GAP(x)				((((uint32_t)(x)) & 0x7UL) << 24U)		/* IPG	  */
+#define GIANT_PACKET_LIMIT_CONTROL(x)	((!!(x)) ? (1UL << 23U) : 0U)	/* GPSLCE */
+#define SUPPORT_2K_PACKETS(x)			((!!(x)) ? (1UL << 22U) : 0U)	/* S2KP   */
+#define CRC_STRIPPING_FOR_TYPE(x)		((!!(x)) ? (1UL << 21U) : 0U)	/* CST    */
+#define	AUTO_PAD_OR_CRC_STRIPPING(x)	((!!(x)) ? (1UL << 20U) : 0U)	/* ACS    */
+#define	WATCHDOG_DISABLE(x)				((!!(x)) ? (1UL << 19U) : 0U)	/* WD     */
+#define	PACKET_BURST_ENABLE(x)			((!!(x)) ? (1UL << 18U) : 0U)	/* BE     */
+#define	JABBER_DISABLE(x)				((!!(x)) ? (1UL << 17U) : 0U)	/* JD     */
+#define	JUMBO_PACKET_ENABLE(x)			((!!(x)) ? (1UL << 16U) : 0U)	/* JE     */
+#define PORT_SELECT(x)					((!!(x)) ? (1UL << 15U) : 0U)	/* PS     */
+#define SPEED(x)						((!!(x)) ? (1UL << 14U) : 0U)	/* FES    */
+#define GET_LINE_SPEED(x)				(((x) >> 14U) & 3U)			/* FES+PS */
+#define DUPLEX_MODE(x)					((!!(x)) ? (1UL << 13U) : 0U)	/* DM     */
+#define GET_DUPLEX_MODE(x)				(((x) >> 13U) & 1U)			/* DM     */
+#define LOOPBACK_MODE(x)				((!!(x)) ? (1UL << 12U) : 0U)	/* LM     */
+#define CARRIER_SENSE_BEFORE_TX(x)		((!!(x)) ? (1UL << 11U) : 0U)	/* ECRSFD */
+#define DISABLE_RECEIVE_OWN(x)			((!!(x)) ? (1UL << 10U) : 0U)	/* DO     */
+#define DISABLE_CARRIER_SENSE_TX(x)		((!!(x)) ? (1UL << 9U) : 0U)	/* DCRS   */
+#define DISABLE_RETRY(x)				((!!(x)) ? (1UL << 8U) : 0U)	/* DR     */
+#define BACK_OFF_LIMIT(x)				((((uint32_t)(x)) & 3UL) << 5U)			/* BL     */
 #define MIN_N_10						0x0U
 #define MIN_N_8							0x1U
 #define MIN_N_4							0x2U
 #define MIN_N_1							0x3U
-#define DEFERRAL_CHECK(x)				((!!x) ? (1U << 4) : 0U)	/* DC     */
-#define PREAMBLE_LENGTH_TX(x)			(((x) & 3U) << 2)			/* PRELEN */
+#define DEFERRAL_CHECK(x)				((!!(x)) ? (1UL << 4U) : 0U)	/* DC     */
+#define PREAMBLE_LENGTH_TX(x)			(((uint32_t)(x) & 3UL) << 2U)			/* PRELEN */
 #define PREAMBLE_7B						0x0U
 #define PREAMBLE_5B						0x1U
 #define PREAMBLE_3B						0x2U
-#define TRANSMITTER_ENABLE(x)			((!!x) ? (1U << 1) : 0U)	/* TE     */
-#define RECEIVER_ENABLE(x)				((!!x) ? (1U << 0) : 0U)	/* RE     */
-#define ENABLE_DOUBLE_VLAN(x)			((!!x) ? (1U << 26) : 0U)	/* EDVLP  */
-#define GIANT_PACKET_SIZE_LIMIT(x)		(((x) & 0x3fffU) << 0)		/* GPSL   */
-#define TX_FLOW_CONTROL_ENABLE(x)		((!!x) ? (1U << 1) : 0U)	/* TFE    */
-#define BUSY_OR_BACKPRESSURE_ACTIVE(x)	((!!x) ? (1U << 0) : 0U)	/* FCB_BPA */
-#define GMII_BUSY(x)					((!!x) ? (1U << 0) : 0U)	/* GB     */
-#define CLAUSE45_ENABLE(x)				((!!x) ? (1U << 1) : 0U)	/* C45E   */
-#define GMII_OPERATION_CMD(x)			(((x) & 0x3U) << 2)
+#define TRANSMITTER_ENABLE(x)			((!!(x)) ? (1UL << 1U) : 0UL)	/* TE     */
+#define RECEIVER_ENABLE(x)				((!!(x)) ? (1UL << 0U) : 0UL)	/* RE     */
+#define ENABLE_DOUBLE_VLAN(x)			((!!(x)) ? (1UL << 26U) : 0U)	/* EDVLP  */
+#define GIANT_PACKET_SIZE_LIMIT(x)		(((uint32_t)(x) & 0x3fffUL) << 0U)		/* GPSL   */
+#define TX_FLOW_CONTROL_ENABLE(x)		((!!(x)) ? (1UL << 1U) : 0U)	/* TFE    */
+#define BUSY_OR_BACKPRESSURE_ACTIVE(x)	((!!(x)) ? (1UL << 0U) : 0U)	/* FCB_BPA */
+#define GMII_BUSY(x)					((!!(x)) ? (1UL << 0U) : 0UL)	/* GB     */
+#define CLAUSE45_ENABLE(x)				((!!(x)) ? (1UL << 1U) : 0UL)	/* C45E   */
+#define GMII_OPERATION_CMD(x)			(((uint32_t)(x) & 0x3UL) << 2U)
 #define GMII_WRITE						0x1U
 #define GMII_POST_INC_ADDR_CLAUSE45		0x2U
 #define GMII_READ						0x3U
-#define SKIP_ADDRESS_PACKET(x)			((!!x) ? (1U << 4) : 0U)	/* SKAP   */
-#define CSR_CLOCK_RANGE(x)				(((x) & 0xfU) << 8)			/* CR     */
+#define SKIP_ADDRESS_PACKET(x)			((!!(x)) ? (1UL << 4U) : 0UL)	/* SKAP   */
+#define CSR_CLOCK_RANGE(x)				(((uint32_t)(x) & 0xfUL) << 8U)			/* CR     */
 #define CSR_CLK_60_100_MHZ_MDC_CSR_DIV_42		0x0U
 #define CSR_CLK_100_150_MHZ_MDC_CSR_DIV_62		0x1U
 #define CSR_CLK_20_35_MHZ_MDC_CSR_DIV_16		0x2U
@@ -240,33 +240,32 @@
 #define CSR_DIV_14						0xdU
 #define CSR_DIV_16						0xeU
 #define CSR_DIV_18						0xfU
-#define NUM_OF_TRAILING_CLOCKS(x)		(((x) & 0x7U) << 12)		/* NTC    */
-#define REG_DEV_ADDR(x)					(((x) & 0x1fU) << 16)		/* RDA    */
-#define PHYS_LAYER_ADDR(x)				(((x) & 0x1fU) << 21)		/* PA     */
-#define BACK_TO_BACK(x)					((!!x) ? (1U << 26) : 0U)	/* BTB    */
-#define PREAMBLE_SUPPRESSION(x)			((!!x) ? (1U << 27) : 0U)	/* PSE    */
-#define GMII_DATA(x)					((x) & 0xffffU)
-#define GMII_REGISTER_ADDRESS(x)		(((x) & 0xffffU) << 16)
-#define FINE_UPDATE(x)					((!!x) ? (1U << 1) : 0U)	/* TSCFUPDT   */
-#define UPDATE_TIMESTAMP(x)				((!!x) ? (1U << 3) : 0U)	/* TSUPDT     */
-#define FORWARD_ERROR_PACKETS(x)		((!!x) ? (1U << 4) : 0U)	/* FEP        */
-#define UPDATE_ADDEND(x)				((!!x) ? (1U << 5) : 0U)	/* TSADDREG   */
-#define ENABLE_TIMESTAMP(x)				((!!x) ? (1U << 0) : 0U)	/* TSENA      */
-#define INITIALIZE_TIMESTAMP(x)			((!!x) ? (1U << 2) : 0U)	/* TSINIT     */
-#define ENABLE_TIMESTAMP_FOR_All(x)		((!!x) ? (1U << 8) : 0U)	/* TSENALL    */
-#define DIGITAL_ROLLOVER(x)				((!!x) ? (1U << 9) : 0U)	/* TSCTRLSSR  */
-#define ENABLE_PTP_PROCESSING(x)		((!!x) ? (1U << 11) : 0U)	/* TSIPENA    */
-#define PTP_OVER_IPV4(x)				((!!x) ? (1U << 13) : 0U)	/* TSIPV4ENA  */
-#define PTP_OVER_IPV6(x)				((!!x) ? (1U << 12) : 0U)	/* TSIPV6ENA  */
-#define PTP_OVER_ETH(x)					((!!x) ? (1U << 11) : 0U)	/* TSIPENA    */
-#define PTPV2(x)						((!!x) ? (1U << 10) : 0U)	/* TSVER2ENA  */
-#define SELECT_PTP_PACKETS(x)			(((x) & 0x3U) << 16)		/* SNAPTYPSEL */
-#define EXTERNAL_TIME(x)				((!!x) ? (1U << 20) : 0U)	/* ESTI */
-#define LNKSTS(x)						(((x) >> 19) & 0x1U)
-#define LNKSPEED(x)						(((x) >> 17) & 0x3U)
-#define LNKMOD(x)						(((x) >> 16) & 0x1U)
-#define ADDSUB(x)						((!!x) ? (1U << 31) : 0U)
-
+#define NUM_OF_TRAILING_CLOCKS(x)		(((uint32_t)(x) & 0x7UL) << 12U)		/* NTC    */
+#define REG_DEV_ADDR(x)					(((uint32_t)(x) & 0x1fUL) << 16L)		/* RDA    */
+#define PHYS_LAYER_ADDR(x)				(((uint32_t)(x) & 0x1fUL) << 21L)		/* PA     */
+#define BACK_TO_BACK(x)					((!!(x)) ? (1UL << 26U) : 0UL)	/* BTB    */
+#define PREAMBLE_SUPPRESSION(x)			((!!(x)) ? (1UL << 27U) : 0UL)	/* PSE    */
+#define GMII_DATA(x)					((uint32_t)(x) & 0xffffUL)
+#define GMII_REGISTER_ADDRESS(x)		(((uint32_t)(x) & 0xffffUL) << 16U)
+#define FINE_UPDATE(x)					((!!(x)) ? (1UL << 1U) : 0U)	/* TSCFUPDT   */
+#define UPDATE_TIMESTAMP(x)				((!!(x)) ? (1UL << 3U) : 0U)	/* TSUPDT     */
+#define FORWARD_ERROR_PACKETS(x)		((!!(x)) ? (1UL << 4U) : 0UL)	/* FEP        */
+#define UPDATE_ADDEND(x)				((!!(x)) ? (1UL << 5U) : 0U)	/* TSADDREG   */
+#define ENABLE_TIMESTAMP(x)				((!!(x)) ? (1UL << 0U) : 0U)	/* TSENA      */
+#define INITIALIZE_TIMESTAMP(x)			((!!(x)) ? (1UL << 2U) : 0U)	/* TSINIT     */
+#define ENABLE_TIMESTAMP_FOR_All(x)		((!!(x)) ? (1UL << 8U) : 0U)	/* TSENALL    */
+#define DIGITAL_ROLLOVER(x)				((!!(x)) ? (1UL << 9U) : 0U)	/* TSCTRLSSR  */
+#define ENABLE_PTP_PROCESSING(x)		((!!(x)) ? (1UL << 11U) : 0U)	/* TSIPENA    */
+#define PTP_OVER_IPV4(x)				((!!(x)) ? (1UL << 13U) : 0U)	/* TSIPV4ENA  */
+#define PTP_OVER_IPV6(x)				((!!(x)) ? (1UL << 12U) : 0U)	/* TSIPV6ENA  */
+#define PTP_OVER_ETH(x)					((!!(x)) ? (1UL << 11U) : 0U)	/* TSIPENA    */
+#define PTPV2(x)						((!!(x)) ? (1UL << 10U) : 0U)	/* TSVER2ENA  */
+#define SELECT_PTP_PACKETS(x)			(((uint32_t)(x) & 0x3UL) << 16U)		/* SNAPTYPSEL */
+#define EXTERNAL_TIME(x)				((!!(x)) ? (1UL << 20U) : 0U)	/* ESTI */
+#define LNKSTS(x)						(((x) >> 19U) & 0x1U)
+#define LNKSPEED(x)						(((x) >> 17U) & 0x3U)
+#define LNKMOD(x)						(((x) >> 16U) & 0x1U)
+#define ADDSUB(x)						((!!(x)) ? (1UL << 31U) : 0U)
 /**
  * @brief	Number of HW slots able to hold individual MAC addresses
  * @details	The HW can have multiple individual MAC addresses assigned at
@@ -282,6 +281,7 @@ errno_t pfe_emac_cfg_adjust_ts_freq(void *base_va, uint32_t i_clk_hz, uint32_t o
 void pfe_emac_cfg_get_ts_time(void *base_va, uint32_t *sec, uint32_t *nsec);
 errno_t pfe_emac_cfg_set_ts_time(void *base_va, uint32_t sec, uint32_t nsec);
 errno_t pfe_emac_cfg_adjust_ts_time(void *base_va, uint32_t sec, uint32_t nsec, bool_t sgn);
+void pfe_emac_cfg_tx_disable(void *base_va);
 errno_t pfe_emac_cfg_set_duplex(void *base_va, pfe_emac_duplex_t duplex);
 errno_t pfe_emac_cfg_set_mii_mode(void *base_va, pfe_emac_mii_mode_t mode);
 errno_t pfe_emac_cfg_set_speed(void *base_va, pfe_emac_speed_t speed);
@@ -290,10 +290,11 @@ errno_t pfe_emac_cfg_get_link_config(void *base_va, pfe_emac_speed_t *speed, pfe
 errno_t pfe_emac_cfg_get_link_status(void *base_va, pfe_emac_link_speed_t *link_speed, pfe_emac_duplex_t *duplex, bool_t *link);
 void pfe_emac_cfg_write_addr_slot(void *base_va, pfe_mac_addr_t addr, uint8_t slot);
 uint32_t pfe_emac_cfg_get_hash(void *base_va, pfe_mac_addr_t addr);
-void pfe_emac_cfg_set_uni_group(void *base_va, int32_t hash, bool_t en);
-void pfe_emac_cfg_set_multi_group(void *base_va, int32_t hash, bool_t en);
+void pfe_emac_cfg_set_uni_group(void *base_va, uint32_t hash, bool_t en);
+void pfe_emac_cfg_set_multi_group(void *base_va, uint32_t hash, bool_t en);
 void pfe_emac_cfg_set_loopback(void *base_va, bool_t en);
 void pfe_emac_cfg_set_promisc_mode(void *base_va, bool_t en);
+void pfe_emac_cfg_set_allmulti_mode(void *base_va, bool_t en);
 void pfe_emac_cfg_set_broadcast(void *base_va, bool_t en);
 void pfe_emac_cfg_set_enable(void *base_va, bool_t en);
 void pfe_emac_cfg_set_flow_control(void *base_va, bool_t en);

@@ -1,6 +1,6 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
+ *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2020 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
@@ -14,7 +14,7 @@
 #include "pfe_cbus.h"
 #include "pfe_hif_nocpy.h"
 
-struct __pfe_hif_nocpy_tag
+struct pfe_hif_nocpy_tag
 {
 	void *base_va;						/*	CBUS base virtual address */
 	pfe_hif_chnl_t *channel;			/*	Associated channel instance */
@@ -48,7 +48,7 @@ pfe_hif_nocpy_t *pfe_hif_nocpy_create(void *base_va, pfe_bmu_t *bmu)
 	}
 	else
 	{
-		memset(hif, 0, sizeof(pfe_hif_nocpy_t));
+		(void)memset(hif, 0, sizeof(pfe_hif_nocpy_t));
 		hif->base_va = base_va;
 	}
 

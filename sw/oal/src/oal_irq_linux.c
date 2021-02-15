@@ -33,7 +33,7 @@
 /**
  * @brief	The IRQ instance representation
  */
-struct __oal_irq_tag
+struct oal_irq_tag
 {
 	int32_t id;					/* The logical IRQ ID as seen by OS */
 	oal_irq_flags_t flags;		/* Interrupt type flags */
@@ -88,7 +88,7 @@ static irqreturn_t linux_irq_handler(int32_t id, void *ctx)
 	return IRQ_HANDLED;
 }
 
-oal_irq_t * oal_irq_create(int32_t id, oal_irq_flags_t flags, char_t *name)
+oal_irq_t * oal_irq_create(int32_t id, oal_irq_flags_t flags, const char_t *name)
 {
 	oal_irq_t *irq;
 	errno_t ret;

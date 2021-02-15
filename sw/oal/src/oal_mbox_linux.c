@@ -60,7 +60,7 @@
 /**
  * @brief	The mbox instance representation
  */
-struct __oal_mbox_tag
+struct oal_mbox_tag
 {
 	uint32_t id;
 	struct mutex lock;

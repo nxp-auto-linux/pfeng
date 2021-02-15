@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -72,7 +72,7 @@ static inline void * fifo_get(fifo_t * const fifo)
 
 	fill_level = (fifo->write - fifo->read);
 
-	if (likely(fill_level > 0))
+	if (likely(fill_level > 0U))
 	{
 		ret = fifo->data[fifo->read & fifo->depth_mask];
 		fifo->read++;

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -400,7 +400,6 @@ static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route
 															pfe_5_tuple_t *tuple, pfe_5_tuple_t *tuple_rep)
 {
 	pfe_rtable_entry_t *new_entry;
-	pfe_ct_route_actions_t actions;
 	pfe_mac_addr_t mac_addr;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -435,9 +434,7 @@ static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route
 
 	/*	Change MAC addresses */
 	pfe_phy_if_get_mac_addr(route->iface, mac_addr);
-	pfe_rtable_entry_set_out_smac(new_entry, mac_addr);
-	pfe_rtable_entry_set_out_dmac(new_entry, route->dst_mac);
-	actions = RT_ACT_ADD_ETH_HDR;
+	pfe_rtable_entry_set_out_mac_addrs(new_entry, mac_addr, route->dst_mac);
 
 	if (NULL != tuple_rep)
 	{
@@ -451,8 +448,6 @@ static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route
 				pfe_rtable_entry_free(new_entry);
 				return NULL;
 			}
-
-			actions |= RT_ACT_CHANGE_SIP_ADDR;
 		}
 
 		/*	Check if DST IP NAT is requested */
@@ -465,8 +460,6 @@ static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route
 				pfe_rtable_entry_free(new_entry);
 				return NULL;
 			}
-
-			actions |= RT_ACT_CHANGE_DIP_ADDR;
 		}
 
 		/*	Check if SRC PORT translation is requested */
@@ -474,7 +467,6 @@ static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route
 		{
 			/*	SPORT need to be changed to DPORT_REPLY */
 			pfe_rtable_entry_set_out_sport(new_entry, tuple_rep->dport);
-			actions |= RT_ACT_CHANGE_SPORT;
 		}
 
 		/*	Check if DST PORT translation is requested */
@@ -482,20 +474,12 @@ static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route
 		{
 			/*	DPORT need to be changed to SPORT_REPLY */
 			pfe_rtable_entry_set_out_dport(new_entry, tuple_rep->sport);
-			actions |= RT_ACT_CHANGE_DPORT;
 		}
 	}
 	else
 	{
 		/*	No reply direction defined = no NAT */
 		;
-	}
-
-	if (EOK != pfe_rtable_entry_set_action_flags(new_entry, actions))
-	{
-		NXP_LOG_ERROR("Could not set action flags\n");
-		pfe_rtable_entry_free(new_entry);
-		return NULL;
 	}
 
 	return new_entry;
@@ -556,6 +540,11 @@ static errno_t fci_connections_ipv4_cmd_to_entry(fpp_ct_cmd_t *ct_cmd, pfe_rtabl
 	{
 		NXP_LOG_ERROR("Couldn't create routing rule\n");
 		return EINVAL;
+	}
+
+	if (0U != ct_cmd->vlan)
+	{
+		pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct_cmd->vlan));
 	}
 
 	/*	Return interface */
@@ -623,6 +612,11 @@ static errno_t fci_connections_ipv4_cmd_to_rep_entry(fpp_ct_cmd_t *ct_cmd, pfe_r
 		return EINVAL;
 	}
 
+	if (0U != ct_cmd->vlan_reply)
+	{
+		pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct_cmd->vlan_reply));
+	}
+
 	/*	Return interface */
 	*iface = route->iface;
 
@@ -677,25 +671,17 @@ static errno_t fci_connections_ipv6_cmd_to_entry(fpp_ct6_cmd_t *ct6_cmd, pfe_rta
 	fci_connections_ipv6_cmd_to_5t(ct6_cmd, tuple);
 	fci_connections_ipv6_cmd_to_5t_rep(ct6_cmd, tuple_rep);
 
-	/*	Check if we can setup such connection */
-	if (NULL != tuple_rep)
-	{
-		if ((tuple->sport != tuple_rep->dport)
-			|| (tuple->dport != tuple_rep->sport)
-			|| (0 != memcmp(&tuple->src_ip, &tuple_rep->dst_ip, sizeof(pfe_ip_addr_t)))
-			|| (0 != memcmp(&tuple->dst_ip, &tuple_rep->src_ip, sizeof(pfe_ip_addr_t))))
-		{
-			NXP_LOG_ERROR("IP address and port replacement is currently not supported for IPv6\n");
-			return EINVAL;
-		}
-	}
-
 	/*	Create new entry for flow given by the 'tuple' */
 	*entry = fci_connections_create_entry(route, tuple, tuple_rep);
 	if (NULL == *entry)
 	{
 		NXP_LOG_ERROR("Couldn't create routing rule\n");
 		return EINVAL;
+	}
+
+	if (0U != ct6_cmd->vlan)
+	{
+		pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct6_cmd->vlan));
 	}
 
 	/*	Return interface */
@@ -761,6 +747,11 @@ static errno_t fci_connections_ipv6_cmd_to_rep_entry(fpp_ct6_cmd_t *ct6_cmd, pfe
 	{
 		NXP_LOG_ERROR("Couldn't create 'reply' routing rule\n");
 		return EINVAL;
+	}
+
+	if (0U != ct6_cmd->vlan_reply)
+	{
+		pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct6_cmd->vlan_reply));
 	}
 
 	/*	Return interface */
@@ -1225,6 +1216,7 @@ free_and_fail:
 				memcpy(ct6_reply->daddr, &dip.v6, 16);
 				ct6_reply->sport = oal_htons(pfe_rtable_entry_get_sport(entry));
 				ct6_reply->dport = oal_htons(pfe_rtable_entry_get_dport(entry));
+				ct6_reply->vlan = oal_htons(pfe_rtable_entry_get_out_vlan(entry));
 				memcpy(ct6_reply->saddr_reply, ct6_reply->daddr, 16);
 				memcpy(ct6_reply->daddr_reply, ct6_reply->saddr, 16);
 				ct6_reply->sport_reply = ct6_reply->dport;
@@ -1239,6 +1231,7 @@ free_and_fail:
 				memcpy(&ct_reply->daddr, &dip.v4, 4);
 				ct_reply->sport = oal_htons(pfe_rtable_entry_get_sport(entry));
 				ct_reply->dport = oal_htons(pfe_rtable_entry_get_dport(entry));
+				ct_reply->vlan = oal_htons(pfe_rtable_entry_get_out_vlan(entry));
 				memcpy(&ct_reply->saddr_reply, &ct_reply->daddr, 4);
 				memcpy(&ct_reply->daddr_reply, &ct_reply->saddr, 4);
 				ct_reply->sport_reply = ct_reply->dport;
@@ -1249,7 +1242,8 @@ free_and_fail:
 			}
 
 			/*	Check if reply direction does exist */
-			if (NULL == pfe_rtable_entry_get_child(entry))
+			rep_entry =  pfe_rtable_entry_get_child(entry);
+			if (NULL == rep_entry)
 			{
 				/*	This means that entry in 'reply' direction has not been requested
 				 	so the appropriate flag shall be set to indicate that. */
@@ -1260,6 +1254,18 @@ free_and_fail:
 				else
 				{
 					ct_reply->flags |= oal_htons(CTCMD_FLAGS_REP_DISABLED);
+				}
+			}
+			else
+			{
+				/*	Associated entry for reply direction does exist */
+				if (TRUE == ipv6)
+				{
+					ct6_reply->vlan_reply = oal_htons(pfe_rtable_entry_get_out_vlan(rep_entry));
+				}
+				else
+				{
+					ct_reply->vlan = oal_htons(pfe_rtable_entry_get_out_vlan(rep_entry));
 				}
 			}
 

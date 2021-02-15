@@ -112,6 +112,22 @@ endif
 #traffic will be directly injected to specified list of interfaces.
 export PFE_CFG_ROUTE_HIF_TRAFFIC?=0
 
+#When enabled then the driver runs in 'HIF Bridge Mode' meaning that only
+#a single common interface is exposed to the OS and behaves as bridged
+#interface.
+export PFE_CFG_BRIDGE_MODE?=0
+ifneq ($(PFE_CFG_BRIDGE_MODE),0)
+  PFE_CFG_AUX_INTERFACE=1
+endif
+
+#When enabled the driver instantiates auxiliary interface called 'pfex' which
+#can be used to transmit and receive traffic not belonging to any other 'pfeN'
+#interface (for instance HIF-to-HIF or bridge traffic). The interface accepts
+#all traffic not accepted by any other pfeN interface (regardless they exist
+#or not) and traffic transmitted via this interface is always routed according
+#to the current configuration of the PFE traffic distribution rules.
+export PFE_CFG_AUX_INTERFACE?=0
+
 ifneq ($(PFE_CFG_MC_HIF),0)
   ifneq ($(PFE_CFG_SC_HIF),0)
     $(error Impossible configuration)
@@ -235,6 +251,14 @@ endif
 
 ifneq ($(PFE_CFG_ROUTE_HIF_TRAFFIC),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_ROUTE_HIF_TRAFFIC
+endif
+
+ifneq ($(PFE_CFG_BRIDGE_MODE),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_BRIDGE_MODE
+endif
+
+ifneq ($(PFE_CFG_AUX_INTERFACE),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_AUX_INTERFACE
 endif
 
 ifneq ($(PFE_CFG_HIF_TX_FIFO_FIX),0)

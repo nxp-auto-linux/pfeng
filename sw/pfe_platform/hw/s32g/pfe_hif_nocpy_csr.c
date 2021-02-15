@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
- *  Copyright (c) 2021 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -70,7 +70,7 @@ errno_t pfe_hif_nocpy_cfg_isr(void *base_va)
 	hal_write32((reg_en & ~reg_src), base_va + HIF_NOCPY_INT_EN);
 
 	/*	Process interrupts which are triggered AND enabled */
-	if (reg_src & reg_en & (BDP_CSR_RX_PKT_INT|BDP_CSR_RX_CBD_INT))
+	if ((reg_src & reg_en & (BDP_CSR_RX_PKT_INT|BDP_CSR_RX_CBD_INT)) != 0U)
 	{
 		if (likely(NULL != nocpy_rx_cbk.cbk))
 		{
@@ -86,7 +86,7 @@ errno_t pfe_hif_nocpy_cfg_isr(void *base_va)
 	}
 
 	/*	Process interrupts which are triggered AND enabled */
-	if (reg_src & reg_en & (BDP_CSR_TX_PKT_INT|BDP_CSR_TX_CBD_INT))
+	if ((reg_src & reg_en & (BDP_CSR_TX_PKT_INT|BDP_CSR_TX_CBD_INT)) != 0U)
 	{
 		if (likely(NULL != nocpy_tx_cbk.cbk))
 		{
@@ -142,6 +142,7 @@ void pfe_hif_nocpy_cfg_irq_unmask(void *base_va)
  */
 errno_t pfe_hif_nocpy_cfg_set_cbk(pfe_hif_chnl_event_t event, pfe_hif_chnl_cbk_t cbk, void *arg)
 {
+	errno_t ret = EOK;
 	switch (event)
 	{
 		case HIF_CHNL_EVT_RX_IRQ:
@@ -163,11 +164,12 @@ errno_t pfe_hif_nocpy_cfg_set_cbk(pfe_hif_chnl_event_t event, pfe_hif_chnl_cbk_t
 		default:
 		{
 			NXP_LOG_ERROR("Given event not supported: 0x%x\n", event);
-			return EINVAL;
+			ret = EINVAL;
+			break;
 		}
 	}
 
-	return EOK;
+	return ret;
 }
 
 /**
@@ -189,7 +191,7 @@ errno_t pfe_hif_nocpy_cfg_init(void *base_va)
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_BMU1_BASE_ADDR + BMU_ALLOC_CTRL, base_va + HIF_NOCPY_LMEM_ALLOC_ADDR);
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CLASS_INQ_PKTPTR, base_va + HIF_NOCPY_CLASS_ADDR);
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + TMU_PHY_INQ_PKTPTR, base_va + HIF_NOCPY_TMU_PORT0_ADDR);
-	hal_write32((HIF_RX_POLL_CTRL_CYCLE << 16) | HIF_TX_POLL_CTRL_CYCLE, base_va + HIF_NOCPY_POLL_CTRL);
+	hal_write32((HIF_RX_POLL_CTRL_CYCLE << 16U) | HIF_TX_POLL_CTRL_CYCLE, base_va + HIF_NOCPY_POLL_CTRL);
 
 #if (TRUE == PFE_HIF_NOCPY_CFG_USE_BD_POLLING)
 	hal_write32(HIF_CTRL_BDP_POLL_CTRL_EN, base_va + HIF_NOCPY_RX_CTRL);
@@ -276,10 +278,7 @@ void pfe_hif_nocpy_cfg_rx_enable(void *base_va)
  */
 void pfe_hif_nocpy_cfg_rx_disable(void *base_va)
 {
-	uint32_t regval;
 
-	regval = hal_read32(base_va + HIF_NOCPY_RX_CTRL);
-	regval &= ~((uint32_t)HIF_CTRL_DMA_EN);
 	hal_write32(0U, base_va + HIF_NOCPY_RX_CTRL);
 
 	pfe_hif_nocpy_cfg_rx_irq_mask(base_va);
@@ -415,7 +414,7 @@ bool_t pfe_hif_nocpy_cfg_is_rx_dma_active(void *base_va)
 
 	reg = hal_read32(base_va + HIF_NOCPY_RX_STATUS);
 
-	if (0U != (reg & (0xfU << 18)))
+	if (0U != (reg & (0xfUL << 18U)))
 	{
 		return TRUE;
 	}
@@ -437,7 +436,7 @@ bool_t pfe_hif_nocpy_cfg_is_tx_dma_active(void *base_va)
 
 	reg = hal_read32(base_va + HIF_NOCPY_TX_STATUS);
 
-	if (0U != (reg & (0xfU << 18)))
+	if (0U != (reg & (0xfUL << 18U)))
 	{
 		return TRUE;
 	}
@@ -491,9 +490,9 @@ uint32_t pfe_hif_nocpy_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t si
 	if(verb_level >= 9U)
 	{
 		reg = hal_read32(base_va + HIF_NOCPY_VERSION);
-		len += oal_util_snprintf(buf + len, size - len, "Revision             : 0x%x\n", (reg >> 24) & 0xff);
-		len += oal_util_snprintf(buf + len, size - len, "Version              : 0x%x\n", (reg >> 16) & 0xff);
-		len += oal_util_snprintf(buf + len, size - len, "ID                   : 0x%x\n", reg & 0xffff);
+		len += oal_util_snprintf(buf + len, size - len, "Revision             : 0x%x\n", (reg >> 24U) & 0xffU);
+		len += oal_util_snprintf(buf + len, size - len, "Version              : 0x%x\n", (reg >> 16U) & 0xffU);
+		len += oal_util_snprintf(buf + len, size - len, "ID                   : 0x%x\n", reg & 0xffffU);
 	}
 
 	len += oal_util_snprintf(buf + len, size - len, "TX Current BD Addr   : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_TX_CURR_BD_ADDR));
