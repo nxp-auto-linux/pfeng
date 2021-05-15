@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2020 NXP
+#  Copyright 2018-2021 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -29,6 +29,10 @@ INCLUDES += -I$(INC_PREFIX)src \
 			-I$(INC_PREFIX)../fifo/public \
 			-I$(INC_PREFIX)..
 
+ifeq ($(TARGET_OS),LINUX)
+INCLUDES += -I$(INC_PREFIX)../linux-pfeng
+endif
+
 #Dependencies
 DEPENDENCIES = $(subst -L,,$(subst $(EMPTY) $(EMPTY)-l:,/,$(LIBS)))
 
@@ -43,7 +47,7 @@ LIBS_profile += -lprofilingS
 CCFLAGS_pfe += -D$(PFE_CFG_TARGET_ARCH_DEF) -D$(PFE_CFG_TARGET_OS_DEF) -D$(PFE_CFG_BUILD_PROFILE_DEF)
 
 #Generic compiler flags (which include build type flags)
-CCFLAGS_all += -Wall -fmessage-length=0
+CCFLAGS_all += -Wall -fmessage-length=0 -fvisibility=hidden
 CCFLAGS_all += $(CCFLAGS_$(BUILD_PROFILE))
 CCFLAGS_all += $(CCFLAGS_pfe)
 #Shared library has to be compiled with -fPIC

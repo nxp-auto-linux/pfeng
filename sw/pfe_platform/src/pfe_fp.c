@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -49,7 +49,8 @@ uint32_t pfe_fp_create_table(pfe_class_t *class, uint8_t rules_count)
     /* Write the table header */
     temp.count = rules_count;
     temp.rules = oal_htonl(addr + sizeof(pfe_ct_fp_table_t));
-    res = pfe_class_write_dmem(class, -1, (void *)addr, &temp, sizeof(pfe_ct_fp_table_t));
+    memset(&temp.fp_stats, 0, sizeof(pfe_ct_class_flexi_parser_stats_t));
+    res = pfe_class_write_dmem(class, -1, addr, (void *)&temp, sizeof(pfe_ct_fp_table_t));
     if(EOK != res)
     {
         NXP_LOG_ERROR("Cannot write to DMEM\n");
@@ -84,7 +85,7 @@ uint32_t pfe_fp_table_write_rule(pfe_class_t *class, uint32_t table_address, pfe
     /* Calculate position in the DMEM */
     addr = table_address + sizeof(pfe_ct_fp_table_t) + (position * sizeof(pfe_ct_fp_rule_t));
     /* Write into the DMEM */
-    res = pfe_class_write_dmem(class, -1, (void *)addr, &temp, sizeof(pfe_ct_fp_rule_t));
+    res = pfe_class_write_dmem(class, -1, addr, (void *)&temp, sizeof(pfe_ct_fp_rule_t));
     if(EOK != res)
     {
         NXP_LOG_ERROR("Cannot write to DMEM\n");
@@ -102,4 +103,22 @@ void pfe_fp_destroy_table(pfe_class_t *class, uint32_t table_address)
 {
     /* Just free the memory */
     pfe_class_dmem_heap_free(class, table_address);
+}
+
+errno_t pfe_fp_table_get_statistics(pfe_class_t *class, uint32_t pe_idx, uint32_t table_address, pfe_ct_class_flexi_parser_stats_t *stats)
+{
+    pfe_ct_fp_table_t temp;
+    errno_t res;
+    addr_t addr;
+
+    addr = table_address;
+    res = pfe_class_read_dmem(class, pe_idx, (void *)&temp, addr, sizeof(pfe_ct_fp_table_t));
+    if(EOK != res)
+    {
+        NXP_LOG_ERROR("Cannot read from DMEM\n");
+	return res;
+    }
+
+    memcpy(stats, &temp.fp_stats, sizeof(pfe_ct_class_flexi_parser_stats_t));
+    return res;
 }

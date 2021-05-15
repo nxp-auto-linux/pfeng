@@ -18,18 +18,17 @@
 #include "pfe_pe.h"
 
 #define BYTES_TO_4B_ALIGNMENT(x)	(4U - ((x) & 0x3U))
-#define INVALID_FEATURES_BASE 0xFFFFFFFF
+#define INVALID_FEATURES_BASE 		0xFFFFFFFFU
 /**
  * @brief	Mutex protecting access to common mem_access_* registers
  */
 static oal_mutex_t mem_access_lock;
-static bool_t mem_access_lock_init = FALSE;
 
 /*	Processing Engine representation */
 struct pfe_pe_tag
 {
 	pfe_ct_pe_type_t type;				/* PE type */
-	void *cbus_base_va;					/* CBUS base (virtual) */
+	addr_t cbus_base_va;					/* CBUS base (virtual) */
 	uint8_t id;							/* PE HW ID (0..N) */
 
 	/*	DMEM */
@@ -45,14 +44,14 @@ struct pfe_pe_tag
 	addr_t lmem_size;					/* PE's LMEM size */
 
 	/*	DDR */
-	void *ddr_base_addr_pa;				/* PE's DDR base address (physical, as seen by host) */
-	void *ddr_base_addr_va;				/* PE's DDR base address (virtual) */
+	addr_t ddr_base_addr_pa;				/* PE's DDR base address (physical, as seen by host) */
+	addr_t ddr_base_addr_va;				/* PE's DDR base address (virtual) */
 	addr_t ddr_size;					/* PE's DDR size */
 
 	/*	Indirect Access */
-	void *mem_access_wdata;				/* PE's _MEM_ACCESS_WDATA register address (virtual) */
-	void *mem_access_addr;				/* PE's _MEM_ACCESS_ADDR register address (virtual) */
-	void *mem_access_rdata;				/* PE's _MEM_ACCESS_RDATA register address (virtual) */
+	addr_t mem_access_wdata;				/* PE's _MEM_ACCESS_WDATA register address (virtual) */
+	addr_t mem_access_addr;				/* PE's _MEM_ACCESS_ADDR register address (virtual) */
+	addr_t mem_access_rdata;				/* PE's _MEM_ACCESS_RDATA register address (virtual) */
 
 	/* FW Errors*/
 	uint32_t error_record_addr;			/* Error record storage address in DMEM */
@@ -77,9 +76,9 @@ typedef enum
 	PFE_PE_IMEM
 } pfe_pe_mem_t;
 
-static void pfe_pe_memcpy_from_host_to_imem_32_nolock(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len);
+static void pfe_pe_memcpy_from_host_to_imem_32_nolock(pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len);
 static bool_t pfe_pe_is_active(pfe_pe_t *pe);
-static void pfe_pe_memcpy_from_imem_to_host_32_nolock(pfe_pe_t *pe, void *dst, addr_t src, uint32_t len);
+static void pfe_pe_memcpy_from_imem_to_host_32_nolock(pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len);
 static void pfe_pe_mem_memset_nolock(pfe_pe_t *pe, pfe_pe_mem_t mem, uint8_t val, addr_t addr, uint32_t len);
 static errno_t pfe_pe_set_number(pfe_pe_t *pe);
 
@@ -543,17 +542,17 @@ void pfe_pe_imem_memset(pfe_pe_t *pe, uint8_t val, addr_t addr, uint32_t len)
  * @brief		Write 'len' bytes to DMEM
  * @note		Function expects the source data to be in host endian format.
  * @param[in]	pe The PE instance
- * @param[in]	src Buffer source address (virtual)
- * @param[in]	dst DMEM destination address (must be 32-bit aligned)
+ * @param[in]	src_ptr Buffer source address (virtual)
+ * @param[in]	dst_addr DMEM destination address (must be 32-bit aligned)
  * @param[in]	len Number of bytes to read
  */
-void pfe_pe_memcpy_from_host_to_dmem_32_nolock(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len)
+void pfe_pe_memcpy_from_host_to_dmem_32_nolock(pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len)
 {
 	uint32_t val;
 	uint32_t offset;
 	/* Avoid void pointer arithmetics */
-	const uint8_t *src_byteptr = src;
-	addr_t dst_temp = dst;
+	const uint8_t *src_byteptr = src_ptr;
+	addr_t dst_temp = dst_addr;
 	uint32_t len_temp = len;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -572,7 +571,7 @@ void pfe_pe_memcpy_from_host_to_dmem_32_nolock(pfe_pe_t *pe, addr_t dst, const v
 		val = *(uint32_t *)src_byteptr;
 		pfe_pe_mem_write(pe, PFE_PE_DMEM, val, dst_temp, (uint8_t)offset);
 		src_byteptr += offset;
-		dst_temp = dst + offset;
+		dst_temp = dst_addr + offset;
 		len_temp = (len >= offset) ? (len - offset) : 0U;
 	}
 
@@ -598,11 +597,11 @@ void pfe_pe_memcpy_from_host_to_dmem_32_nolock(pfe_pe_t *pe, addr_t dst, const v
  * @brief		Write 'len' bytes to DMEM
  * @note		Function expects the source data to be in host endian format.
  * @param[in]	pe The PE instance
- * @param[in]	src Buffer source address (virtual)
- * @param[in]	dst DMEM destination address (must be 32-bit aligned)
+ * @param[in]	src_ptr Buffer source address (virtual)
+ * @param[in]	dst_addr DMEM destination address (must be 32-bit aligned)
  * @param[in]	len Number of bytes to read
  */
-void pfe_pe_memcpy_from_host_to_dmem_32(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len)
+void pfe_pe_memcpy_from_host_to_dmem_32(pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len)
 {
 	if (EOK != pfe_pe_mem_lock(pe))
 	{
@@ -610,7 +609,7 @@ void pfe_pe_memcpy_from_host_to_dmem_32(pfe_pe_t *pe, addr_t dst, const void *sr
 		return;
 	}
 
-	pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, dst, src, len);
+	pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, dst_addr, src_ptr, len);
 
 	if (EOK != pfe_pe_mem_unlock(pe))
 	{
@@ -621,18 +620,18 @@ void pfe_pe_memcpy_from_host_to_dmem_32(pfe_pe_t *pe, addr_t dst, const void *sr
 /**
  * @brief		Read 'len' bytes from DMEM
  * @param[in]	pe The PE instance
- * @param[in]	src DMEM source address (must be 32-bit aligned)
- * @param[in]	dst Destination address (virtual)
+ * @param[in]	src_addr DMEM source address (must be 32-bit aligned)
+ * @param[in]	dst_ptr Destination address (virtual)
  * @param[in]	len Number of bytes to read
  *
  */
-void pfe_pe_memcpy_from_dmem_to_host_32_nolock(pfe_pe_t *pe, void *dst, addr_t src, uint32_t len)
+void pfe_pe_memcpy_from_dmem_to_host_32_nolock(pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len)
 {
 	uint32_t val;
 	uint32_t offset;
 	/* Avoid void pointer arithmetics */
-	uint8_t *dst_byteptr = dst;
-	addr_t src_temp = src;
+	uint8_t *dst_byteptr = dst_ptr;
+	addr_t src_temp = src_addr;
 	uint32_t len_temp = len;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -651,7 +650,7 @@ void pfe_pe_memcpy_from_dmem_to_host_32_nolock(pfe_pe_t *pe, void *dst, addr_t s
 		val = pfe_pe_mem_read(pe, PFE_PE_DMEM, (uint32_t)src_temp, (uint8_t)offset);
 		(void)memcpy((void*)dst_byteptr, (const void*)&val, offset);
 		dst_byteptr += offset;
-		src_temp = src + offset;
+		src_temp = src_addr + offset;
 		len_temp = (len >= offset) ? (len - offset) : 0U;
 	}
 
@@ -676,12 +675,12 @@ void pfe_pe_memcpy_from_dmem_to_host_32_nolock(pfe_pe_t *pe, void *dst, addr_t s
 /**
  * @brief		Read 'len' bytes from DMEM
  * @param[in]	pe The PE instance
- * @param[in]	src DMEM source address (must be 32-bit aligned)
- * @param[in]	dst Destination address (virtual)
+ * @param[in]	src_addr DMEM source address (must be 32-bit aligned)
+ * @param[in]	dst_ptr Destination address (virtual)
  * @param[in]	len Number of bytes to read
  *
  */
-void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst, addr_t src, uint32_t len)
+void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len)
 {
 	if (EOK != pfe_pe_mem_lock(pe))
 	{
@@ -689,7 +688,7 @@ void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst, addr_t src, uin
 		return;
 	}
 
-	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, dst, src, len);
+	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, dst_ptr, src_addr, len);
 
 	if (EOK != pfe_pe_mem_unlock(pe))
 	{
@@ -703,13 +702,13 @@ void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst, addr_t src, uin
  *				access registers. The result from each PE are stored consecutively in memory
  *				pointed by dst.
  * @param[in]	pe Array of the PE instances
- * @param[in]	src DMEM source address (physical within PE, must be 32bit aligned)
- * @param[in]	dst Destination address (virtual) the size required to store the data is pe_count*len
+ * @param[in]	src_addr DMEM source address (physical within PE, must be 32bit aligned)
+ * @param[in]	dst_ptr Destination address (virtual) the size required to store the data is pe_count*len
  * @param[in]	buffer_len Destination buffer length
  * @param[in]	read_len Number of bytes to read (from one PE)
  *
  */
-errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_count, void *dst, addr_t src, uint32_t buffer_len, uint32_t read_len)
+errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_count, void *dst_ptr, addr_t src_addr, uint32_t buffer_len, uint32_t read_len)
 {
 	int32_t ii = 0U;
 	errno_t ret = EOK;
@@ -737,7 +736,7 @@ errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_coun
 		/* Check if there is still memory  */
 		if(buffer_len >= ((read_len * (uint32_t)ii) + read_len))
 		{
-			pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe[ii], (void *)((uint8_t*)dst + (read_len * (uint32_t)ii)), src, read_len);
+			pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe[ii], (void *)((uint8_t*)dst_ptr + (read_len * (uint32_t)ii)), src_addr, read_len);
 		}
 		else
 		{
@@ -769,17 +768,17 @@ errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_coun
  * @brief		Write 'len'bytes to IMEM
  * @note		Function expects the source data to be in host endian format.
  * @param[in]	pe The PE instance
- * @param[in]	src Buffer source address (host, virtual)
- * @param[in]	dst IMEM destination address (must be 32-bit aligned)
+ * @param[in]	src_ptr Buffer source address (host, virtual)
+ * @param[in]	dst_addr IMEM destination address (must be 32-bit aligned)
  * @param[in]	len Number of bytes to copy
  */
-static void pfe_pe_memcpy_from_host_to_imem_32_nolock(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len)
+static void pfe_pe_memcpy_from_host_to_imem_32_nolock(pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len)
 {
 	uint32_t val;
 	uint32_t offset;
-	addr_t dst_temp = dst;
+	addr_t dst_temp = dst_addr;
 	/* Avoid void pointer arithmetics */
-	const uint8_t *src_byteptr = src;
+	const uint8_t *src_byteptr = src_ptr;
 	uint32_t len_temp = len;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -798,7 +797,7 @@ static void pfe_pe_memcpy_from_host_to_imem_32_nolock(pfe_pe_t *pe, addr_t dst, 
 		val = *(uint32_t *)src_byteptr;
 		pfe_pe_mem_write(pe, PFE_PE_IMEM, val, dst_temp, (uint8_t)offset);
 		src_byteptr += offset;
-		dst_temp = dst + offset;
+		dst_temp = dst_addr + offset;
 		len_temp = (len >= offset) ? (len - offset) : 0U;
 	}
 
@@ -824,11 +823,11 @@ static void pfe_pe_memcpy_from_host_to_imem_32_nolock(pfe_pe_t *pe, addr_t dst, 
  * @brief		Write 'len'bytes to IMEM
  * @note		Function expects the source data to be in host endian format.
  * @param[in]	pe The PE instance
- * @param[in]	src Buffer source address (host, virtual)
- * @param[in]	dst IMEM destination address (must be 32-bit aligned)
+ * @param[in]	src_ptr Buffer source address (host, virtual)
+ * @param[in]	dst_addr IMEM destination address (must be 32-bit aligned)
  * @param[in]	len Number of bytes to copy
  */
-void pfe_pe_memcpy_from_host_to_imem_32(pfe_pe_t *pe, addr_t dst, const void *src, uint32_t len)
+void pfe_pe_memcpy_from_host_to_imem_32(pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len)
 {
 	if (EOK != pfe_pe_mem_lock(pe))
 	{
@@ -836,7 +835,7 @@ void pfe_pe_memcpy_from_host_to_imem_32(pfe_pe_t *pe, addr_t dst, const void *sr
 		return;
 	}
 
-	pfe_pe_memcpy_from_host_to_imem_32_nolock(pe, dst, src, len);
+	pfe_pe_memcpy_from_host_to_imem_32_nolock(pe, dst_addr, src_ptr, len);
 
 	if (EOK != pfe_pe_mem_unlock(pe))
 	{
@@ -847,18 +846,18 @@ void pfe_pe_memcpy_from_host_to_imem_32(pfe_pe_t *pe, addr_t dst, const void *sr
 /**
  * @brief		Read 'len' bytes from IMEM
  * @param[in]	pe The PE instance
- * @param[in]	src IMEM source address (physical within PE, must be 32-bit aligned)
- * @param[in]	dst Destination address (host, virtual)
+ * @param[in]	src_addr IMEM source address (physical within PE, must be 32-bit aligned)
+ * @param[in]	dst_ptr Destination address (host, virtual)
  * @param[in]	len Number of bytes to read
  *
  */
-static void pfe_pe_memcpy_from_imem_to_host_32_nolock(pfe_pe_t *pe, void *dst, addr_t src, uint32_t len)
+static void pfe_pe_memcpy_from_imem_to_host_32_nolock(pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len)
 {
 	uint32_t val;
 	uint32_t offset;
 	/* Avoid void pointer arithmetics */
-	uint8_t *dst_byteptr = dst;
-	addr_t src_temp = src;
+	uint8_t *dst_byteptr = dst_ptr;
+	addr_t src_temp = src_addr;
 	uint32_t len_temp = len;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -877,7 +876,7 @@ static void pfe_pe_memcpy_from_imem_to_host_32_nolock(pfe_pe_t *pe, void *dst, a
 		val = pfe_pe_mem_read(pe, PFE_PE_IMEM, (uint32_t)src_temp, (uint8_t)offset);
 		(void)memcpy((void*)dst_byteptr, (const void*)&val, offset);
 		dst_byteptr += offset;
-		src_temp = src + offset;
+		src_temp = src_addr + offset;
 		len_temp = (len >= offset) ? (len - offset) : 0U;
 	}
 
@@ -902,12 +901,12 @@ static void pfe_pe_memcpy_from_imem_to_host_32_nolock(pfe_pe_t *pe, void *dst, a
 /**
  * @brief		Read 'len' bytes from IMEM
  * @param[in]	pe The PE instance
- * @param[in]	src IMEM source address (physical within PE, must be 32-bit aligned)
- * @param[in]	dst Destination address (host, virtual)
+ * @param[in]	src_addr IMEM source address (physical within PE, must be 32-bit aligned)
+ * @param[in]	dst_ptr Destination address (host, virtual)
  * @param[in]	len Number of bytes to read
  *
  */
-void pfe_pe_memcpy_from_imem_to_host_32(pfe_pe_t *pe, void *dst, addr_t src, uint32_t len)
+void pfe_pe_memcpy_from_imem_to_host_32(pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len)
 {
 	if (EOK != pfe_pe_mem_lock(pe))
 	{
@@ -915,7 +914,7 @@ void pfe_pe_memcpy_from_imem_to_host_32(pfe_pe_t *pe, void *dst, addr_t src, uin
 		return;
 	}
 
-	pfe_pe_memcpy_from_imem_to_host_32_nolock(pe, dst, src, len);
+	pfe_pe_memcpy_from_imem_to_host_32_nolock(pe, dst_ptr, src_addr, len);
 
 	if (EOK != pfe_pe_mem_unlock(pe))
 	{
@@ -934,7 +933,7 @@ void pfe_pe_memcpy_from_imem_to_host_32(pfe_pe_t *pe, void *dst, addr_t src, uin
  * @retval		EOK Success
  * @retval		EINVAL Unsupported section type or wrong input address alignment
  */
-static errno_t pfe_pe_load_dmem_section(pfe_pe_t *pe, void *sdata, addr_t addr, addr_t size, uint32_t type)
+static errno_t pfe_pe_load_dmem_section(pfe_pe_t *pe, const void *sdata, addr_t addr, addr_t size, uint32_t type)
 {
 	errno_t ret = EOK;
 
@@ -996,7 +995,7 @@ static errno_t pfe_pe_load_dmem_section(pfe_pe_t *pe, void *sdata, addr_t addr, 
 
 		default:
 		{
-			NXP_LOG_ERROR("Unsupported section type: 0x%x\n", type);
+			NXP_LOG_ERROR("Unsupported section type: 0x%x\n", (uint_t)type);
 			ret = EINVAL;
 			break;
 		}
@@ -1081,7 +1080,7 @@ static errno_t pfe_pe_load_imem_section(pfe_pe_t *pe, const void *data, addr_t a
 
 		default:
 		{
-			NXP_LOG_ERROR("Unsupported section type: 0x%x\n", type);
+			NXP_LOG_ERROR("Unsupported section type: 0x%x\n", (uint_t)type);
 			ret = EINVAL;
 			break;
 		}
@@ -1097,7 +1096,7 @@ static errno_t pfe_pe_load_imem_section(pfe_pe_t *pe, const void *data, addr_t a
  * @param[in]	size Length of the region to be checked
  * @return		TRUE if given range belongs to DMEM
  */
-static bool_t pfe_pe_is_dmem(pfe_pe_t *pe, addr_t addr, uint32_t size)
+static bool_t pfe_pe_is_dmem(const pfe_pe_t *pe, addr_t addr, uint32_t size)
 {
 	addr_t reg_end;
 
@@ -1128,7 +1127,7 @@ static bool_t pfe_pe_is_dmem(pfe_pe_t *pe, addr_t addr, uint32_t size)
  * @param[in]	size Length of the region to be checked
  * @return		TRUE if given range belongs to IMEM
  */
-static bool_t pfe_pe_is_imem(pfe_pe_t *pe, addr_t addr, uint32_t size)
+static bool_t pfe_pe_is_imem(const pfe_pe_t *pe, addr_t addr, uint32_t size)
 {
 	addr_t reg_end;
 
@@ -1159,7 +1158,7 @@ static bool_t pfe_pe_is_imem(pfe_pe_t *pe, addr_t addr, uint32_t size)
  * @param[in]	size Length of the region to be checked
  * @return		TRUE if given range belongs to LMEM
  */
-static bool_t pfe_pe_is_lmem(pfe_pe_t *pe, addr_t addr, uint32_t size)
+static bool_t pfe_pe_is_lmem(const pfe_pe_t *pe, addr_t addr, uint32_t size)
 {
 	addr_t reg_end;
 
@@ -1192,7 +1191,7 @@ static bool_t pfe_pe_is_lmem(pfe_pe_t *pe, addr_t addr, uint32_t size)
  * @param[in]	size Size of the section to load
  * @param[in]	type Type of the section to load
  */
-static errno_t pfe_pe_load_elf_section(pfe_pe_t *pe, void *sdata, addr_t load_addr, addr_t size, uint32_t type)
+static errno_t pfe_pe_load_elf_section(pfe_pe_t *pe, const void *sdata, addr_t load_addr, addr_t size, uint32_t type)
 {
 	errno_t ret_val;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1239,12 +1238,12 @@ static errno_t pfe_pe_load_elf_section(pfe_pe_t *pe, void *sdata, addr_t load_ad
  *          load address are equal.
  * @return Load address of the given section or 0 on failure.
  */
-static addr_t pfe_pe_get_elf_sect_load_addr(ELF_File_t *elf_file, Elf32_Shdr *shdr)
+static addr_t pfe_pe_get_elf_sect_load_addr(const ELF_File_t *elf_file, const Elf32_Shdr *shdr)
 {
 	addr_t virt_addr = shdr->sh_addr;
 	addr_t load_addr;
 	addr_t offset;
-	Elf32_Phdr *phdr;
+	const Elf32_Phdr *phdr;
 	uint_t ii;
 
 	/* Go through all program headers to find one containing the section */
@@ -1274,12 +1273,13 @@ static addr_t pfe_pe_get_elf_sect_load_addr(ELF_File_t *elf_file, Elf32_Shdr *sh
  * @param[in]	id PE ID
  * @return		The PE instance or NULL if failed
  */
-pfe_pe_t * pfe_pe_create(void *cbus_base_va, pfe_ct_pe_type_t type, uint8_t id)
+pfe_pe_t * pfe_pe_create(addr_t cbus_base_va, pfe_ct_pe_type_t type, uint8_t id)
 {
+	static bool_t mem_access_lock_init = FALSE;
 	pfe_pe_t *pe = NULL;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == cbus_base_va))
+	if (unlikely(NULL_ADDR == cbus_base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -1399,7 +1399,7 @@ void pfe_pe_set_lmem(pfe_pe_t *pe, addr_t elf_base, addr_t len)
  * @param[in]	base_va DDR base virtual address
  * @param[in]	len DDR region length
  */
-void pfe_pe_set_ddr(pfe_pe_t *pe, void *base_pa, void *base_va, addr_t len)
+void pfe_pe_set_ddr(pfe_pe_t *pe, addr_t base_pa, addr_t base_va, addr_t len)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
@@ -1431,9 +1431,9 @@ void pfe_pe_set_iaccess(pfe_pe_t *pe, uint32_t wdata_reg, uint32_t rdata_reg, ui
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	pe->mem_access_addr = (void *)((addr_t)pe->cbus_base_va + addr_reg);
-	pe->mem_access_rdata = (void *)((addr_t)pe->cbus_base_va + rdata_reg);
-	pe->mem_access_wdata = (void *)((addr_t)pe->cbus_base_va + wdata_reg);
+	pe->mem_access_addr = (pe->cbus_base_va + addr_reg);
+	pe->mem_access_rdata = (pe->cbus_base_va + rdata_reg);
+	pe->mem_access_wdata = (pe->cbus_base_va + wdata_reg);
 }
 
 /**
@@ -1441,7 +1441,7 @@ void pfe_pe_set_iaccess(pfe_pe_t *pe, uint32_t wdata_reg, uint32_t rdata_reg, ui
  * @param[in] pe The PE which ID shall be set in the FW
  * @return EOK if success, error code otherwise
  */
-errno_t pfe_pe_set_number(pfe_pe_t *pe)
+static errno_t pfe_pe_set_number(pfe_pe_t *pe)
 {
 	if(NULL == pe->mmap_data)
 	{
@@ -1454,7 +1454,7 @@ errno_t pfe_pe_set_number(pfe_pe_t *pe)
 	return EOK;
 }
 
-static void print_fw_issue(pfe_ct_pe_mmap_t *fw_mmap)
+static void print_fw_issue(const pfe_ct_pe_mmap_t *fw_mmap)
 {
 #ifdef NXP_LOG_ENABLED 
 	NXP_LOG_ERROR("Unsupported firmware detected: Found revision %d.%d.%d (fwAPI:%s), required fwAPI %s\n",
@@ -1478,8 +1478,9 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 	void *buf;
 	errno_t ret;
 	uint32_t section_idx;
-	ELF_File_t *elf_file = (ELF_File_t *)elf;
-	Elf32_Shdr *shdr = NULL;
+	uint32_t mask_sectIdx;
+	const ELF_File_t *elf_file = (ELF_File_t *)elf;
+	const Elf32_Shdr *shdr = NULL;
 	static pfe_ct_pe_mmap_t *tmp_mmap = NULL;
     uint32_t mmap_size;
 
@@ -1494,10 +1495,13 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 	/*	Attempt to get section containing firmware memory map data */
 	if (TRUE == ELF_SectFindName(elf_file, ".pfe_pe_mmap", &section_idx, NULL, NULL))
 	{
+		/* Mask out the flag to get section id */
+		mask_sectIdx = (~(ELF_NAMED_SECT_IDX_FLAG) & section_idx);
+
 		/*	Load section to RAM */
-		shdr = &elf_file->arSectHead32[section_idx];
+		shdr = &elf_file->arSectHead32[mask_sectIdx];
         /* Get the mmap size */
-        (void)memcpy((void*)&mmap_size, (const void*)(elf_file->pvData + shdr->sh_offset), sizeof(uint32_t));
+        (void)memcpy((void*)&mmap_size, (const void*)((addr_t)elf_file->pvData + shdr->sh_offset), sizeof(uint32_t));
         /* Convert mmap size endian ! */
         mmap_size = oal_ntohl(mmap_size);
         tmp_mmap = (pfe_ct_pe_mmap_t *)oal_mm_malloc(mmap_size);
@@ -1510,7 +1514,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 		{
 			/*  Firmware version check */
 			static const char_t mmap_version_str[] = TOSTRING(PFE_CFG_PFE_CT_H_MD5);
-			(void)memcpy((void*)tmp_mmap, (const void*)(elf_file->pvData + shdr->sh_offset), mmap_size);
+			(void)memcpy((void*)tmp_mmap, (const void*)((addr_t)elf_file->pvData + shdr->sh_offset), mmap_size);
 			if(0 != strcmp(mmap_version_str, tmp_mmap->common.version.cthdr))
 			{
 				ret = EINVAL;
@@ -1530,8 +1534,11 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 	/*	Attempt to get section containing firmware diagnostic data */
 	if (TRUE == ELF_SectFindName(elf_file, ".errors", &section_idx, NULL, NULL))
 	{
+		/* Mask out the flag to get section id */
+		mask_sectIdx = (~(ELF_NAMED_SECT_IDX_FLAG) & section_idx);
+
 		/*	Load section to RAM */
-		shdr = &elf_file->arSectHead32[section_idx];
+		shdr = &elf_file->arSectHead32[mask_sectIdx];
 		buf = oal_mm_malloc(shdr->sh_size);
 		if (NULL == buf)
 		{
@@ -1540,7 +1547,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 		}
 		else
 		{
-			(void)memcpy(buf, elf_file->pvData + shdr->sh_offset, shdr->sh_size);
+			(void)memcpy(buf, (const void *)((uint8_t *)elf_file->pvData + shdr->sh_offset), shdr->sh_size);
 			pe->fw_err_section_size = shdr->sh_size;
 			/*	Indicate that fw_err_section is available */
 			pe->fw_err_section = buf;
@@ -1555,8 +1562,11 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 	/*	Attempt to get section containing firmware supported features */
 	if (TRUE == ELF_SectFindName(elf_file, ".features", &section_idx, NULL, NULL))
 	{
+		/* Mask out the flag to get section id */
+		mask_sectIdx = (~(ELF_NAMED_SECT_IDX_FLAG) & section_idx);
+
 		/*	Load section to RAM */
-		shdr = &elf_file->arSectHead32[section_idx];
+		shdr = &elf_file->arSectHead32[mask_sectIdx];
 		buf = oal_mm_malloc(shdr->sh_size);
 		if (NULL == buf)
 		{
@@ -1565,7 +1575,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 		}
 		else
 		{
-			memcpy(buf, elf_file->pvData + shdr->sh_offset, shdr->sh_size);
+			(void)memcpy(buf, (const void *)((addr_t)elf_file->pvData + shdr->sh_offset), shdr->sh_size);
 			pe->fw_feature_section_size = shdr->sh_size;
 			/*	Indicate that fw_feature_section is available */
 			pe->fw_feature_section = buf;
@@ -1594,7 +1604,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 			continue;
 		}
 
-		buf = elf_file->pvData + elf_file->arSectHead32[ii].sh_offset;
+		buf = (void*)((addr_t)elf_file->pvData + elf_file->arSectHead32[ii].sh_offset);
 		/* Translate elf virtual address to load address */
 		load_addr = pfe_pe_get_elf_sect_load_addr(elf_file, &elf_file->arSectHead32[ii]);
 		if(0U == load_addr)
@@ -1607,10 +1617,10 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 		ret = pfe_pe_load_elf_section(pe, buf, load_addr, elf_file->arSectHead32[ii].sh_size, elf_file->arSectHead32[ii].sh_type);
 		if (EOK != ret)
 		{
-			NXP_LOG_ERROR("Couldn't upload firmware section %s, %d bytes @ 0x%08x. Reason: %d\n",
+			NXP_LOG_ERROR("Couldn't upload firmware section %s, %u bytes @ 0x%08x. Reason: %d\n",
 							elf_file->acSectNames+elf_file->arSectHead32[ii].sh_name,
-							elf_file->arSectHead32[ii].sh_size,
-							elf_file->arSectHead32[ii].sh_addr, ret);
+							(uint_t)elf_file->arSectHead32[ii].sh_size,
+							(uint_t)elf_file->arSectHead32[ii].sh_addr, ret);
 			goto free_and_fail;
 		}
 	}
@@ -1655,7 +1665,7 @@ free_and_fail:
  * @retval		EINVAL Invalid or missing argument
  * @retval		ENOENT Requested data not available
  */
-errno_t pfe_pe_get_mmap(pfe_pe_t *pe, pfe_ct_pe_mmap_t *mmap)
+errno_t pfe_pe_get_mmap(const pfe_pe_t *pe, pfe_ct_pe_mmap_t *mmap)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == mmap)))
@@ -1667,7 +1677,7 @@ errno_t pfe_pe_get_mmap(pfe_pe_t *pe, pfe_ct_pe_mmap_t *mmap)
 
 	if (NULL != pe->mmap_data)
 	{
-		(void)memcpy(mmap, pe->mmap_data, sizeof(pfe_ct_pe_mmap_t));
+		(void)memcpy(mmap, (const void *)pe->mmap_data, sizeof(pfe_ct_pe_mmap_t));
 		return EOK;
 	}
 	else
@@ -1714,7 +1724,7 @@ void pfe_pe_destroy(pfe_pe_t *pe)
 * @param[in] pe PE to be used
 * @return Either the string base or NULL.
 */
-char *pfe_pe_get_fw_feature_str_base(pfe_pe_t *pe)
+char *pfe_pe_get_fw_feature_str_base(const pfe_pe_t *pe)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
@@ -1770,7 +1780,7 @@ errno_t pfe_pe_get_fw_feature_entry(pfe_pe_t *pe, uint32_t id, pfe_ct_feature_de
 		pe->fw_features_base = oal_ntohl(pfe_pe_mmap.common.version.features);
 		if(pe->fw_features_base > pe->fw_feature_section_size)
 		{
-			NXP_LOG_ERROR("Invalid address of features record 0x%x\n", pe->fw_features_base);
+			NXP_LOG_ERROR("Invalid address of features record 0x%x\n", (uint_t)pe->fw_features_base);
 			pe->fw_features_base = INVALID_FEATURES_BASE;
 			return EIO;
 		}
@@ -1794,6 +1804,7 @@ errno_t pfe_pe_get_fw_feature_entry(pfe_pe_t *pe, uint32_t id, pfe_ct_feature_de
  */
 errno_t pfe_pe_get_fw_errors(pfe_pe_t *pe)
 {
+#ifdef NXP_LOG_ENABLED
 	pfe_ct_error_record_t error_record; /* Copy of the PE error record */
 	uint32_t read_start;                /* Starting position in error record to read */
 	uint32_t i;
@@ -1829,7 +1840,7 @@ errno_t pfe_pe_get_fw_errors(pfe_pe_t *pe)
 	{   /* New errors reported - go through them */
 		if(errors_count > FP_ERROR_RECORD_SIZE)
 		{
-			NXP_LOG_WARNING("FW error log overflow by %u\n", errors_count - FP_ERROR_RECORD_SIZE + 1U);
+			NXP_LOG_WARNING("FW error log overflow by %u\n", (uint_t)errors_count - FP_ERROR_RECORD_SIZE + 1U);
 			/* Overflow has occurred - the write_index contains oldest record */
 			read_start = oal_ntohl(error_record.write_index);
 			errors_count = FP_ERROR_RECORD_SIZE;
@@ -1839,37 +1850,39 @@ errno_t pfe_pe_get_fw_errors(pfe_pe_t *pe)
 		{
 			uint32_t error_addr;
 			uint32_t error_line;
-			pfe_ct_error_t *error_ptr;
-			char_t *error_str;
-			char_t *error_file;
+			const pfe_ct_error_t *error_ptr;
+			const char_t *error_str;
+			const char_t *error_file;
 			 uint32_t error_val;
 
 			error_addr = oal_ntohl(error_record.errors[(read_start + i) & (FP_ERROR_RECORD_SIZE - 1U)]);
 			error_val = oal_ntohl(error_record.values[(read_start + i) & (FP_ERROR_RECORD_SIZE - 1U)]);
 			if(error_addr > pe->fw_err_section_size)
 			{
-				NXP_LOG_ERROR("Invalid error address from FW 0x%x\n", error_addr);
+				NXP_LOG_ERROR("Invalid error address from FW 0x%x\n", (uint_t)error_addr);
 				break;
 			}
 			/* Get to the error message through the .errors section */
-			error_ptr = pe->fw_err_section + error_addr;
+			error_ptr = (pfe_ct_error_t *)((addr_t)pe->fw_err_section + error_addr);
 			if(oal_ntohl(error_ptr->message) > pe->fw_err_section_size)
 			{
-				NXP_LOG_ERROR("Invalid error message from FW 0x%x", oal_ntohl(error_ptr->message));
+				NXP_LOG_ERROR("Invalid error message from FW 0x%x", (uint_t)oal_ntohl(error_ptr->message));
 				break;
 			}
-			error_str = pe->fw_err_section + oal_ntohl(error_ptr->message);
+			error_str = (char_t *)((addr_t)pe->fw_err_section + oal_ntohl(error_ptr->message));
 			if(oal_ntohl(error_ptr->file) > pe->fw_err_section_size)
 			{
-				NXP_LOG_ERROR("Invalid file name from FW 0x%x", oal_ntohl(error_ptr->file));
+				NXP_LOG_ERROR("Invalid file name from FW 0x%x", (uint_t)oal_ntohl(error_ptr->file));
 				break;
 			}
-			error_file =  pe->fw_err_section + oal_ntohl(error_ptr->file);
+			error_file =  (char_t *)((addr_t)pe->fw_err_section + oal_ntohl(error_ptr->file));
 			error_line = oal_ntohl(error_ptr->line);
-			NXP_LOG_ERROR("PE%d: %s line %u: %s (0x%x)\n", pe->id, error_file, error_line, error_str, error_val);
+			NXP_LOG_ERROR("PE%d: %s line %u: %s (0x%x)\n", pe->id, error_file, (uint_t)error_line, error_str, (uint_t)error_val);
 		}
 	}
-
+#else
+    (void)pe;
+#endif /* NXP_LOG_ENABLED */
 	return EOK;
 }
 
@@ -1877,7 +1890,7 @@ errno_t pfe_pe_get_fw_errors(pfe_pe_t *pe)
  * @brief Reads and validates PE mmap
  * @param[in] pe The PE instance
  */
-errno_t pfe_pe_check_mmap(pfe_pe_t *pe)
+errno_t pfe_pe_check_mmap(const pfe_pe_t *pe)
 {
 	pfe_ct_pe_mmap_t pfe_pe_mmap;
 
@@ -1895,7 +1908,7 @@ errno_t pfe_pe_check_mmap(pfe_pe_t *pe)
 			(char_t *)pfe_pe_mmap.common.version.build_date,
 			(char_t *)pfe_pe_mmap.common.version.build_time,
 			(char_t *)pfe_pe_mmap.common.version.vctrl,
-			pfe_pe_mmap.common.version.id);
+			(uint_t)pfe_pe_mmap.common.version.id);
 
 	return EOK;
 }
@@ -1986,7 +1999,7 @@ errno_t pfe_pe_get_class_algo_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_class_al
  * @param[in]	verb_level	Verbosity level
  * @return		Number of bytes written into the output buffer
  */
-uint32_t pfe_pe_stat_to_str(pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_pe_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 

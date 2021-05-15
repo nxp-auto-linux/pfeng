@@ -101,6 +101,12 @@
  *                <i>Cancel exclusive access to interfaces.</i>
  *              - @ref FPP_CMD_L2_BD <br>
  *                <i>L2 bridge domains management.</i>
+ *              - @ref FPP_CMD_L2_FLUSH_LEARNED <br>
+ *                <i>Remove all learned MAC table entries.</i>
+ *              - @ref FPP_CMD_L2_FLUSH_STATIC <br>
+ *                <i>Remove all static MAC table entries.</i>
+ *              - @ref FPP_CMD_L2_FLUSH_ALL <br>
+ *                <i>Remove all MAC table entries.</i>
  *              - @ref FPP_CMD_FP_TABLE <br>
  *                <i>Administration of @ref flex_parser tables.</i>
  *              - @ref FPP_CMD_FP_RULE <br>
@@ -286,6 +292,11 @@
  *              Deleting route causes deleting all associated conntracks. When the latest route on
  *              an interface is deleted, the interface is put to default operation mode
  *              @ref FPP_IF_OP_DEFAULT.
+ *
+ *              The conntracks are created default with TTL decrement option. That option can be 
+ *              changed using update command:
+ *              - @ref FPP_CMD_IPV4_CONNTRACK + @ref FPP_ACTION_UPDATE, and
+ *              - @ref FPP_CMD_IPV6_CONNTRACK + @ref FPP_ACTION_UPDATE.
  *
  * @subsection l2_bridge L2 Bridge (Switch)
  *              Introduction
@@ -651,6 +662,8 @@
  * @example fpp_cmd_qos_queue.c
  * @example fpp_cmd_qos_scheduler.c
  * @example fpp_cmd_qos_shaper.c
+ * @example fpp_cmd_l2_bd.c
+ * @example fpp_cmd_fp_table.c
  */
 
 /**
@@ -745,6 +758,15 @@
  * @hideinitializer
  */
 #define CTCMD_FLAGS_REP_DISABLED            (1U << 1)
+
+/**
+ * @def         CTCMD_FLAGS_TTL_DECREMENT
+ * @brief       Enable TTL decrement
+ * @details     Used to decrement TTL field when the pkt is routed
+ * @hideinitializer
+ */
+#define CTCMD_FLAGS_TTL_DECREMENT            (1U << 2)
+
 
 /**
  * @struct      FCI_CLIENT

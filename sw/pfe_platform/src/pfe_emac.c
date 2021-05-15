@@ -19,9 +19,9 @@
 
 struct pfe_emac_tag
 {
-	void *cbus_base_va;			/*	CBUS base virtual address */
-	void *emac_base_offset;		/*	MAC base offset within CBUS space */
-	void *emac_base_va;			/*	MAC base address (virtual) */
+	addr_t cbus_base_va;			/*	CBUS base virtual address */
+	addr_t emac_base_offset;		/*	MAC base offset within CBUS space */
+	addr_t emac_base_va;			/*	MAC base address (virtual) */
 	LLIST_t mac_addr_list;		/*	List of all registered MAC addresses within the EMAC */
 	uint8_t mac_addr_slots;		/*	Bitmask representing local address slots where '1' means 'slot is used' */
 	pfe_emac_mii_mode_t mode;	/*	Current MII mode */
@@ -37,7 +37,7 @@ struct pfe_emac_tag
 	bool_t adj_sign;			/*	IEEE1588 frequency adjustment sign (TRUE - positive, FALSE - negative) */
 };
 
-typedef struct pfe_mac_addr_entry_tag
+typedef struct
 {
 	pfe_mac_addr_t addr;		/*	The MAC address */
 	uint32_t hash;				/*	Associated hash value (valid if in_hash_grp is TRUE) */
@@ -45,16 +45,72 @@ typedef struct pfe_mac_addr_entry_tag
 	uint8_t addr_slot_idx;		/*	If 'in_hash_grp' is FALSE then this value specifies index of
 									individual address slot the address is stored in */
 	LLIST_t iterator;			/*	List chain entry */
-	pfe_ct_phy_if_id_t owner;	/*	Identification of the driver that owns this entry */
+	pfe_drv_id_t owner;	/*	Identification of the driver that owns this entry */
 } pfe_mac_addr_db_entry_t;
 
+static bool_t pfe_emac_flush_criterion_eval(const pfe_mac_addr_db_entry_t *entry, pfe_emac_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
 static void pfe_emac_addr_db_init(pfe_emac_t *emac);
-static errno_t pfe_emac_addr_db_add(pfe_emac_t *emac, pfe_mac_addr_t addr, bool_t in_hash_grp, uint32_t data, pfe_ct_phy_if_id_t owner);
-static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(pfe_emac_t *emac, uint32_t hash);
-static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(pfe_emac_t *emac, pfe_mac_addr_t addr);
-static errno_t pfe_emac_addr_db_del_entry(pfe_emac_t *emac, pfe_mac_addr_db_entry_t *entry);
-static void pfe_emac_addr_db_drop_all(pfe_emac_t *emac);
-static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, pfe_mac_addr_t addr);
+static errno_t pfe_emac_addr_db_add(pfe_emac_t *emac, const pfe_mac_addr_t addr, bool_t in_hash_grp, uint32_t data, pfe_drv_id_t owner);
+static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(const pfe_emac_t *emac, uint32_t hash);
+static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(const pfe_emac_t *emac, const pfe_mac_addr_t addr);
+static errno_t pfe_emac_addr_db_del_entry(const pfe_emac_t *emac, pfe_mac_addr_db_entry_t *entry);
+static void pfe_emac_addr_db_drop_all(const pfe_emac_t *emac);
+static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, const pfe_mac_addr_t addr);
+
+/**
+ * @brief		Evaluate given DB entry against specified criterion
+ * @param[in]	entry DB entry to evaluate
+ * @param[in]	crit All, Owner, Type or Owner&Type criterion
+ * @param[in]	type Required type of MAC address (Broadcast, Multicast, Unicast, ANY) criterion
+ * @param[in]	owner Required owner of MAC address
+ * @return		TRUE if entry does match with criterion, FALSE otherwise
+ */
+static bool_t pfe_emac_flush_criterion_eval(const pfe_mac_addr_db_entry_t *entry, pfe_emac_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner)
+{
+	bool_t ret = FALSE;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (crit == EMAC_CRIT_BY_OWNER)
+	{
+		/* Return the first address where owner match */
+		if (entry->owner == owner)
+		{
+			/* Break if entry match with the rule */
+			ret = TRUE;
+		}
+	}
+	else if (crit == EMAC_CRIT_BY_TYPE)
+	{
+		/* Break if entry match with the rule */
+		ret = pfe_emac_check_crit_by_type(entry->addr, type);
+	}
+	else if (crit == EMAC_CRIT_BY_OWNER_AND_TYPE)
+	{
+		if (entry->owner == owner)
+		{
+			/* Break if entry match with the rule */
+			ret = pfe_emac_check_crit_by_type(entry->addr, type);
+		}
+	}
+	else if (crit == EMAC_CRIT_ALL)
+	{
+		/* Break if entry match with the rule */
+		ret = TRUE;
+	}
+	else
+	{
+		NXP_LOG_WARNING("Unknown criterion\n");
+	}
+
+	return ret;
+}
 
 /**
  * @brief		Initialize the internal MAC address DB
@@ -82,7 +138,7 @@ static void pfe_emac_addr_db_init(pfe_emac_t *emac)
  * @param[in]	data Address slot index associated with the new entry. Only valid when in_hash_grp==FALSE.
  * 					 When in_hash_grp==TRUE this is the hash value.
  */
-static errno_t pfe_emac_addr_db_add(pfe_emac_t *emac, pfe_mac_addr_t addr, bool_t in_hash_grp, uint32_t data, pfe_ct_phy_if_id_t owner)
+static errno_t pfe_emac_addr_db_add(pfe_emac_t *emac, const pfe_mac_addr_t addr, bool_t in_hash_grp, uint32_t data, pfe_drv_id_t owner)
 {
 	pfe_mac_addr_db_entry_t *entry;
 
@@ -117,7 +173,7 @@ static errno_t pfe_emac_addr_db_add(pfe_emac_t *emac, pfe_mac_addr_t addr, bool_
 
 	/*	Add entry to the list */
 	(void)memcpy(entry->addr, addr, sizeof(pfe_mac_addr_t));
-	
+
 	LLIST_AddAtEnd(&entry->iterator, &emac->mac_addr_list);
 
 	return EOK;
@@ -131,7 +187,7 @@ static errno_t pfe_emac_addr_db_add(pfe_emac_t *emac, pfe_mac_addr_t addr, bool_
  * @retval		EOK Success
  * @retval		EINVAL Entry is NULL
  */
-static errno_t pfe_emac_addr_db_del_entry(pfe_emac_t *emac, pfe_mac_addr_db_entry_t *entry)
+static errno_t pfe_emac_addr_db_del_entry(const pfe_emac_t *emac, pfe_mac_addr_db_entry_t *entry)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == emac) || (NULL == entry)))
@@ -152,7 +208,7 @@ static errno_t pfe_emac_addr_db_del_entry(pfe_emac_t *emac, pfe_mac_addr_db_entr
  * @details		Access to the shared resources => needs to be called within the critical section!
  * @param[in]	emac The EMAC instance
  */
-static void pfe_emac_addr_db_drop_all(pfe_emac_t *emac)
+static void pfe_emac_addr_db_drop_all(const pfe_emac_t *emac)
 {
 	pfe_mac_addr_db_entry_t *entry;
 	LLIST_t *curItem, *tmp_item;
@@ -181,7 +237,7 @@ static void pfe_emac_addr_db_drop_all(pfe_emac_t *emac)
  * @param[in]	addr The MAC address to search
  * @return		The DB entry if found or NULL if address is not present
  */
-static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(pfe_emac_t *emac, pfe_mac_addr_t addr)
+static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(const pfe_emac_t *emac, const pfe_mac_addr_t addr)
 {
 	pfe_mac_addr_db_entry_t *entry = NULL;
 	LLIST_t *curItem;
@@ -212,7 +268,7 @@ static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(pfe_emac_t *emac, 
  * @param[in]	emac The EMAC instance
  * @return		The DB entry if found or NULL if address is not present
  */
-static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_get_first(pfe_emac_t *emac)
+static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_get_first(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -239,7 +295,7 @@ static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_get_first(pfe_emac_t *emac)
  * @param[in]	hash The hash to search
  * @return		The DB entry if found or NULL if address is not present
  */
-static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(pfe_emac_t *emac, uint32_t hash)
+static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(const pfe_emac_t *emac, uint32_t hash)
 {
 	pfe_mac_addr_db_entry_t *entry = NULL;
 	LLIST_t *curItem;
@@ -267,11 +323,11 @@ static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(pfe_emac_t *emac, 
 /**
  * @brief		Search a MAC address within internal DB of registered addresses based on slot index
  * @details		Access to the shared resources => needs to be called within the critical section!
- * @param[in]	emac The EMAC instance
+* @param[in]	emac The EMAC instance
  * @param[in]	slot The slot index to search
  * @return		The DB entry if found or NULL if address is not present
  */
-static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_slot(pfe_emac_t *emac, uint8_t slot)
+static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_slot(const pfe_emac_t *emac, uint8_t slot)
 {
 	pfe_mac_addr_db_entry_t *entry = NULL;
 	LLIST_t *curItem;
@@ -306,12 +362,12 @@ static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_slot(pfe_emac_t *emac, 
  * @param[in]	duplex The duplex type @see pfe_emac_duplex_t
  * @return		The EMAC instance or NULL if failed
  */
-pfe_emac_t *pfe_emac_create(void *cbus_base_va, void *emac_base, pfe_emac_mii_mode_t mode, pfe_emac_speed_t speed, pfe_emac_duplex_t duplex)
+pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_mode_t mode, pfe_emac_speed_t speed, pfe_emac_duplex_t duplex)
 {
 	pfe_emac_t *emac;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == cbus_base_va))
+	if (unlikely(NULL_ADDR == cbus_base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -329,7 +385,7 @@ pfe_emac_t *pfe_emac_create(void *cbus_base_va, void *emac_base, pfe_emac_mii_mo
 		(void)memset(emac, 0, sizeof(pfe_emac_t));
 		emac->cbus_base_va = cbus_base_va;
 		emac->emac_base_offset = emac_base;
-		emac->emac_base_va = (void *)((addr_t)emac->cbus_base_va + (addr_t)emac->emac_base_offset);
+		emac->emac_base_va = (emac->cbus_base_va + emac->emac_base_offset);
 		emac->mode = EMAC_MODE_INVALID;
 		emac->speed = EMAC_SPEED_INVALID;
 		emac->duplex = EMAC_DUPLEX_INVALID;
@@ -409,7 +465,7 @@ pfe_emac_t *pfe_emac_create(void *cbus_base_va, void *emac_base, pfe_emac_mii_mo
  * @details		Data transmission/reception is possible after this call
  * @param[in]	emac The EMAC instance
  */
-void pfe_emac_enable(pfe_emac_t *emac)
+void pfe_emac_enable(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -427,7 +483,7 @@ void pfe_emac_enable(pfe_emac_t *emac)
  * @details		No data transmission/reception is possible after this call
  * @param[in]	emac The EMAC instance
  */
-void pfe_emac_disable(pfe_emac_t *emac)
+void pfe_emac_disable(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -639,7 +695,7 @@ errno_t pfe_emac_set_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec)
  * @details		This function controls the EMAC internal loop-back mode
  * @param[in]	emac The EMAC instance
  */
-void pfe_emac_enable_loopback(pfe_emac_t *emac)
+void pfe_emac_enable_loopback(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -656,7 +712,7 @@ void pfe_emac_enable_loopback(pfe_emac_t *emac)
  * @brief		Disable loop-back mode
  * @param[in]	emac The EMAC instance
  */
-void pfe_emac_disable_loopback(pfe_emac_t *emac)
+void pfe_emac_disable_loopback(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -673,7 +729,7 @@ void pfe_emac_disable_loopback(pfe_emac_t *emac)
  * @brief		Enable promiscuous mode
  * @param[in]	emac The EMAC instance
  */
-void pfe_emac_enable_promisc_mode(pfe_emac_t *emac)
+void pfe_emac_enable_promisc_mode(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -690,7 +746,7 @@ void pfe_emac_enable_promisc_mode(pfe_emac_t *emac)
  * @brief		Disable promiscuous mode
  * @param[in]	emac The EMAC instance
  */
-void pfe_emac_disable_promisc_mode(pfe_emac_t *emac)
+void pfe_emac_disable_promisc_mode(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -707,7 +763,7 @@ void pfe_emac_disable_promisc_mode(pfe_emac_t *emac)
  * @brief		Enable ALLMULTI mode
  * @param[in]	emac The EMAC instance
  */
-void pfe_emac_enable_allmulti_mode(pfe_emac_t *emac)
+void pfe_emac_enable_allmulti_mode(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -724,7 +780,7 @@ void pfe_emac_enable_allmulti_mode(pfe_emac_t *emac)
  * @brief		Disable ALLMULTI mode
  * @param[in]	emac The EMAC instance
  */
-void pfe_emac_disable_allmulti_mode(pfe_emac_t *emac)
+void pfe_emac_disable_allmulti_mode(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -741,7 +797,7 @@ void pfe_emac_disable_allmulti_mode(pfe_emac_t *emac)
  * @brief		Enable broadcast reception
  * @param[in]	emac The EMAC instance
  */
-void pfe_emac_enable_broadcast(pfe_emac_t *emac)
+void pfe_emac_enable_broadcast(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -758,7 +814,7 @@ void pfe_emac_enable_broadcast(pfe_emac_t *emac)
  * @brief		Disable broadcast reception
  * @param[in]	emac The EMAC instance
  */
-void pfe_emac_disable_broadcast(pfe_emac_t *emac)
+void pfe_emac_disable_broadcast(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -771,12 +827,26 @@ void pfe_emac_disable_broadcast(pfe_emac_t *emac)
 	pfe_emac_cfg_set_broadcast(emac->emac_base_va, FALSE);
 }
 
+void pfe_emac_get_flow_control(const pfe_emac_t *emac, bool_t *tx_enable, bool_t *rx_enable)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac) || unlikely(NULL == tx_enable) ||
+		unlikely(NULL == rx_enable))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	pfe_emac_cfg_get_tx_flow_control(emac->emac_base_va,tx_enable);
+	pfe_emac_cfg_get_rx_flow_control(emac->emac_base_va,rx_enable);
+}
+
 /**
- * @brief		Enable flow control
+ * @brief		Enable tx flow control
  * @details		Enables PAUSE frames processing
  * @param		emac The EMAC instance
  */
-void pfe_emac_enable_flow_control(pfe_emac_t *emac)
+void pfe_emac_enable_tx_flow_control(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -786,15 +856,15 @@ void pfe_emac_enable_flow_control(pfe_emac_t *emac)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	pfe_emac_cfg_set_flow_control(emac->emac_base_va, TRUE);
+	pfe_emac_cfg_set_tx_flow_control(emac->emac_base_va, TRUE);
 }
 
 /**
- * @brief		Disable flow control
+ * @brief		Disable tx flow control
  * @details		Disables PAUSE frames processing
  * @param		emac The EMAC instance
  */
-void pfe_emac_disable_flow_control(pfe_emac_t *emac)
+void pfe_emac_disable_tx_flow_control(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -804,8 +874,45 @@ void pfe_emac_disable_flow_control(pfe_emac_t *emac)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	pfe_emac_cfg_set_flow_control(emac->emac_base_va, FALSE);
+	pfe_emac_cfg_set_tx_flow_control(emac->emac_base_va, FALSE);
 }
+
+/**
+ * @brief               Enable rx flow control
+ * @details             Enables PAUSE frames processing
+ * @param               emac The EMAC instance
+ */
+void pfe_emac_enable_rx_flow_control(const pfe_emac_t *emac)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+        if (unlikely(NULL == emac))
+        {
+                NXP_LOG_ERROR("NULL argument received\n");
+                return;
+        }
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+        pfe_emac_cfg_set_rx_flow_control(emac->emac_base_va, TRUE);
+}
+
+/**
+ * @brief               Disable rx flow control
+ * @details             Disables PAUSE frames processing
+ * @param               emac The EMAC instance
+ */
+void pfe_emac_disable_rx_flow_control(const pfe_emac_t *emac)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+        if (unlikely(NULL == emac))
+        {
+                NXP_LOG_ERROR("NULL argument received\n");
+                return;
+        }
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+        pfe_emac_cfg_set_rx_flow_control(emac->emac_base_va, FALSE);
+}
+
 
 /**
  * @brief		Set maximum frame length
@@ -813,7 +920,7 @@ void pfe_emac_disable_flow_control(pfe_emac_t *emac)
  * @param		len New frame length
  * @return		EOK if success errno otherwise
  */
-errno_t pfe_emac_set_max_frame_length(pfe_emac_t *emac, uint32_t len)
+errno_t pfe_emac_set_max_frame_length(const pfe_emac_t *emac, uint32_t len)
 {
 	errno_t ret;
 
@@ -839,7 +946,7 @@ errno_t pfe_emac_set_max_frame_length(pfe_emac_t *emac, uint32_t len)
  * @param[in]	emac The EMAC instance
  * @return		Currently configured MII mode @see pfe_emac_mii_mode_t
  */
-pfe_emac_mii_mode_t pfe_emac_get_mii_mode(pfe_emac_t *emac)
+pfe_emac_mii_mode_t pfe_emac_get_mii_mode(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -859,7 +966,7 @@ pfe_emac_mii_mode_t pfe_emac_get_mii_mode(pfe_emac_t *emac)
  * @param[out]	duplex The EMAC duplex configuration @see pfe_emac_duplex_t
  * @return		EOK if success
  */
-errno_t pfe_emac_get_link_config(pfe_emac_t *emac, pfe_emac_speed_t *speed, pfe_emac_duplex_t *duplex)
+errno_t pfe_emac_get_link_config(const pfe_emac_t *emac, pfe_emac_speed_t *speed, pfe_emac_duplex_t *duplex)
 {
 	errno_t ret;
 
@@ -884,7 +991,7 @@ errno_t pfe_emac_get_link_config(pfe_emac_t *emac, pfe_emac_speed_t *speed, pfe_
  * @param[out]	link The EMAC link status
  * @return		EOK if success
  */
-errno_t pfe_emac_get_link_status(pfe_emac_t *emac, pfe_emac_link_speed_t *link_speed, pfe_emac_duplex_t *duplex, bool_t *link)
+errno_t pfe_emac_get_link_status(const pfe_emac_t *emac, pfe_emac_link_speed_t *link_speed, pfe_emac_duplex_t *duplex, bool_t *link)
 {
 	errno_t ret;
 
@@ -902,17 +1009,66 @@ errno_t pfe_emac_get_link_status(pfe_emac_t *emac, pfe_emac_link_speed_t *link_s
 }
 
 /**
+ * @brief		Set the EMAC link speed
+ * @param[in]	emac The EMAC instance
+ * @param[in]	link_speed The EMAC link speed @see pfe_emac_link_speed_t
+ * @return		EOK if success
+ * @details		This function can be used for runtime changes of speed (eg. after auto-negotiation).
+ */
+errno_t pfe_emac_set_link_speed(const pfe_emac_t *emac, pfe_emac_speed_t link_speed)
+{
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	ret = pfe_emac_cfg_set_speed(emac->emac_base_va, link_speed);
+
+	return ret;
+}
+
+/**
+ * @brief		Set the EMAC link duplex
+ * @param[in]	emac The EMAC instance
+ * @param[in]	duplex The EMAC duplex @see pfe_emac_duplex_t
+ * @return		EOK if success
+ * @details		This function can be used for runtime changes of duplex (eg. after auto-negotiation).
+ */
+errno_t pfe_emac_set_link_duplex(const pfe_emac_t *emac, pfe_emac_duplex_t duplex)
+{
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	ret = pfe_emac_cfg_set_duplex(emac->emac_base_va, duplex);
+
+	return ret;
+}
+
+/**
  * @brief		Delete MAC addresses added by owner with defined type
  * @param[in]	emac The EMAC instance
- * @param[in]	mode The flush mode (flush all or just certain type of MAC addresses)
+ * @param[in]	crit All, Owner, Type or Owner&Type criterion
+ * @param[in]	type Required type of MAC address (Broadcast, Multicast, Unicast, ANY) criterion
  * @param[in]	owner The identification of driver instance
  * @return		EOK if success
  * @return		EINVAL Requested address is broadcast
  * @note		Must not be preempted by: pfe_emac_del_addr(), pfe_emac_add_addr(), pfe_emac_destroy()
  */
-errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_flush_mode_t mode, pfe_ct_phy_if_id_t owner)
+errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_emac_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner)
 {
-	pfe_mac_addr_db_entry_t *entry = NULL;
+	const pfe_mac_addr_db_entry_t *entry = NULL;
 	LLIST_t *item, *tmp_item;
 	errno_t ret;
 	pfe_mac_addr_t addr;
@@ -935,10 +1091,7 @@ errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_flush_mode_t mode, pfe_ct
 		if ((NULL != entry) && (entry->owner == owner))
 		{
 			(void)memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
-			
-			if ((mode == PFE_FLUSH_MODE_ALL) ||
-				((mode == PFE_FLUSH_MODE_MULTI) && (TRUE  == pfe_emac_is_multi(entry->addr))) ||
-				((mode == PFE_FLUSH_MODE_UNI)   && (FALSE == pfe_emac_is_multi(entry->addr))))
+			if (TRUE == pfe_emac_flush_criterion_eval(entry, crit, type, owner))
 			{
 				ret = pfe_emac_del_addr_nolock(emac, entry->addr);
 				if (EOK != ret)
@@ -952,12 +1105,8 @@ errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_flush_mode_t mode, pfe_ct
 				}
 				else
 				{
-					NXP_LOG_INFO("Address %02x:%02x:%02x:%02x:%02x:%02x removed from owner ID %d\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], owner);
+					NXP_LOG_DEBUG("Address %02x:%02x:%02x:%02x:%02x:%02x removed from owner ID %d\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], owner);
 				}
-			}
-			else
-			{
-				;
 			}
 		}
 		else
@@ -983,7 +1132,7 @@ errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_flush_mode_t mode, pfe_ct
  * @retval		ENOENT Address not found
  * @note		Must not be preempted by: pfe_emac_add_addr(), pfe_emac_destroy()
  */
-errno_t pfe_emac_del_addr(pfe_emac_t *emac, pfe_mac_addr_t addr)
+errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr)
 {
 	errno_t ret;
 	
@@ -1018,7 +1167,7 @@ errno_t pfe_emac_del_addr(pfe_emac_t *emac, pfe_mac_addr_t addr)
  * @retval		ENOENT Address not found
  * @note		Must not be preempted by: pfe_emac_add_addr(), pfe_emac_destroy()
  */
-static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, pfe_mac_addr_t addr)
+static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, const pfe_mac_addr_t addr)
 {
 	pfe_mac_addr_db_entry_t *entry, local_entry;
 	errno_t ret;
@@ -1085,7 +1234,7 @@ static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, pfe_mac_addr_t addr)
 
 		/*	Prepare zero-filled address */
 		(void)memset(zero_addr, 0, sizeof(pfe_mac_addr_t));
-		
+
 		/*	Clear the specific slot */
 		pfe_emac_cfg_write_addr_slot(emac->emac_base_va, zero_addr, local_entry.addr_slot_idx);
 
@@ -1106,11 +1255,11 @@ static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, pfe_mac_addr_t addr)
  * @retval		EEXIST Address already added
  * @note		Must not be preempted by: pfe_emac_del_addr(), pfe_emac_destroy()
  */
-errno_t pfe_emac_add_addr(pfe_emac_t *emac, pfe_mac_addr_t addr, pfe_ct_phy_if_id_t owner)
+errno_t pfe_emac_add_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
 {
 	uint32_t slot;
 	errno_t ret;
-	pfe_mac_addr_db_entry_t *entry;
+	const pfe_mac_addr_db_entry_t *entry;
 	int32_t hash;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1166,8 +1315,16 @@ errno_t pfe_emac_add_addr(pfe_emac_t *emac, pfe_mac_addr_t addr, pfe_ct_phy_if_i
 		hash = pfe_emac_cfg_get_hash(emac->emac_base_va, addr);
 		
 		/*	Store address into EMAC's internal DB together with 'in_hash_grp' flag and hash */
-		pfe_emac_addr_db_add(emac, addr, TRUE, hash, owner);
-		
+		ret = pfe_emac_addr_db_add(emac, addr, TRUE, hash, owner);
+		if (EOK != ret)
+		{
+			if (EOK != oal_mutex_unlock(&emac->mutex))
+			{
+				NXP_LOG_DEBUG("Mutex unlock failed\n");
+			}
+			return ret;
+		}
+
 		/*	Configure the HW */
 		if (pfe_emac_is_multi(addr))
 		{
@@ -1218,7 +1375,7 @@ errno_t pfe_emac_add_addr(pfe_emac_t *emac, pfe_mac_addr_t addr, pfe_ct_phy_if_i
  */
 errno_t pfe_emac_get_addr(pfe_emac_t *emac, pfe_mac_addr_t addr)
 {
-	pfe_mac_addr_db_entry_t *entry;
+	const pfe_mac_addr_db_entry_t *entry;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
@@ -1266,11 +1423,11 @@ void pfe_emac_destroy(pfe_emac_t *emac)
 {
 	pfe_mac_addr_t zero_addr;
 	LLIST_t *curItem, *tmp_item;
-	pfe_mac_addr_db_entry_t *entry;
+	const pfe_mac_addr_db_entry_t *entry;
 
 	/*	Prepare zero-filled address */
 	(void)memset(zero_addr, 0, sizeof(pfe_mac_addr_t));
-	
+
 	if (NULL != emac)
 	{
 		if (EOK != oal_mutex_lock(&emac->mutex))
@@ -1305,7 +1462,7 @@ void pfe_emac_destroy(pfe_emac_t *emac)
 		/*	Destroy mutex */
 		(void)oal_mutex_destroy(&emac->mutex);
 		(void)oal_mutex_destroy(&emac->ts_mutex);
-		
+
 		/*	Release the EMAC instance */
 		oal_mm_free(emac);
 	}
@@ -1619,6 +1776,42 @@ errno_t pfe_emac_mdio_write45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_
 }
 
 /**
+ * @brief		Get number of received packets
+ * @param[in]	emac The EMAC instance
+ * @return		Number of received packets
+ */
+uint32_t pfe_emac_get_rx_cnt(const pfe_emac_t *emac)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0xffffffffU;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pfe_emac_cfg_get_rx_cnt(emac->emac_base_va);
+}
+
+/**
+ * @brief		Get number of transmitted packets
+ * @param[in]	emac The EMAC instance
+ * @return		Number of transmitted packets
+ */
+uint32_t pfe_emac_get_tx_cnt(const pfe_emac_t *emac)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0xffffffffU;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pfe_emac_cfg_get_tx_cnt(emac->emac_base_va);
+}
+
+/**
  * @brief		Return EMAC runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	gpi 		The EMAC instance
@@ -1627,7 +1820,7 @@ errno_t pfe_emac_mdio_write45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_emac_get_text_statistics(pfe_emac_t *emac, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 

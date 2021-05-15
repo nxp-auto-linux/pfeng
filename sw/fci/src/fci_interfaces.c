@@ -80,29 +80,29 @@ static errno_t fci_interfaces_get_arg_info(fpp_if_m_args_t *m_arg, fpp_if_m_rule
 
 		case IF_MATCH_SIP6:
 		{
-			*size = sizeof(m_arg->v6.sip);
-			*offset = &m_arg->v6.sip;
+			*size = sizeof(m_arg->ipv.v6.sip);
+			*offset = &m_arg->ipv.v6.sip;
 			break;
 		}
 
 		case IF_MATCH_DIP6:
 		{
-			*size = sizeof(m_arg->v6.dip);
-			*offset = &m_arg->v6.dip;
+			*size = sizeof(m_arg->ipv.v6.dip);
+			*offset = &m_arg->ipv.v6.dip;
 			break;
 		}
 
 		case IF_MATCH_SIP:
 		{
-			*size = sizeof(m_arg->v4.sip);
-			*offset = &m_arg->v4.sip;
+			*size = sizeof(m_arg->ipv.v4.sip);
+			*offset = &m_arg->ipv.v4.sip;
 			break;
 		}
 
 		case IF_MATCH_DIP:
 		{
-			*size = sizeof(m_arg->v4.dip);
-			*offset = &m_arg->v4.dip;
+			*size = sizeof(m_arg->ipv.v4.dip);
+			*offset = &m_arg->ipv.v4.dip;
 			break;
 		}
 
@@ -167,6 +167,44 @@ static errno_t fci_interfaces_get_arg_info(fpp_if_m_args_t *m_arg, fpp_if_m_rule
 		}
 	}
 	return retval;
+}
+
+/**
+ * @brief			Destroy FP tables if they are used.
+ * 					Auxiliary function for logical interface processing.
+ * @param[in]		match	Match rules of a logical interface.
+ * @param[in]		args	Match rule arguments of a logical interface.
+ * @return			EOK if success, error code otherwise
+ */
+static errno_t fci_interfaces_destroy_fptables(const fpp_if_m_rules_t match, const pfe_ct_if_m_args_t* args)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == args)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	char_t *table_name;
+	if(FPP_IF_MATCH_FP0 == (match & FPP_IF_MATCH_FP0))
+	{	/* A flexible parser table was dropped - it needs to be destroyed if it existed */
+		if(0 != args->fp0_table)
+		{	/* Table existed */
+			fci_fp_db_get_table_from_addr(args->fp0_table, &table_name);
+			fci_fp_db_pop_table_from_hw(table_name);
+		}
+	}
+	if(FPP_IF_MATCH_FP1 == (match & FPP_IF_MATCH_FP1))
+	{	/* A flexible parser table was dropped - it needs to be destroyed if it existed */
+		if(0 != args->fp1_table)
+		{	/* Table existed */
+			fci_fp_db_get_table_from_addr(args->fp1_table, &table_name);
+			fci_fp_db_pop_table_from_hw(table_name);
+		}
+	}
+
+	return EOK;
 }
 
 /**
@@ -333,7 +371,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 				log_if = pfe_if_db_entry_get_log_if(entry);
 			}
 
-			/* Check if the entry exits*/
+			/* Check if the entry exists */
 			if((NULL == entry) || (NULL == log_if))
 			{
 				/* Interface doesn't exist or couldn't be extracted from the entry */
@@ -341,6 +379,17 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 				ret = ENOENT;
 				break;
 			} 
+
+			/* Destroy FP tables if they were used by this interface. */
+			if(EOK == pfe_log_if_get_match_rules(log_if, &rules, &args))
+			{
+				/* Fix endians of FP tables */
+				args.fp0_table = oal_ntohl(args.fp0_table);
+				args.fp1_table = oal_ntohl(args.fp1_table);
+
+				/* Destroy FP tables */
+				fci_interfaces_destroy_fptables(rules, &args);
+			}
 
 			/* Remove interface from the database */
 			pfe_if_db_remove(context->log_if_db, context->if_session_id, entry);
@@ -369,7 +418,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 				log_if = pfe_if_db_entry_get_log_if(entry);
 			}
 
-			/* Check if the entry exits*/
+			/* Check if the entry exists */
 			if((NULL == entry) || (NULL == log_if))
 			{
 				/* Interface doesn't exist or couldn't be extracted from the entry */
@@ -389,24 +438,11 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			args.fp0_table = oal_ntohl(args.fp0_table);
 			args.fp1_table = oal_ntohl(args.fp1_table);
 
-			/* Drop all unset rules if any */
+			/* Drop all unset rules (if any) */
 			ret = pfe_log_if_del_match_rule(log_if, ~oal_ntohl(if_cmd->match));
-			if(FPP_IF_MATCH_FP0 == ((~oal_ntohl(if_cmd->match)) & FPP_IF_MATCH_FP0))
-			{   /* A flexible parser table was dropped - it needs to be destroyed if it existed */
-				if(0 != args.fp0_table)
-				{   /* Table existed */
-					fci_fp_db_get_table_from_addr(args.fp0_table, &table_name);
-					fci_fp_db_pop_table_from_hw(table_name);
-				}
-			}
-			if(FPP_IF_MATCH_FP1 == ((~oal_ntohl(if_cmd->match)) & FPP_IF_MATCH_FP1))
-			{   /* A flexible parser table was dropped - it needs to be destroyed */
-				if(0 != args.fp1_table)
-				{   /* Table existed */
-					fci_fp_db_get_table_from_addr(args.fp1_table, &table_name);
-					fci_fp_db_pop_table_from_hw(table_name);
-				}
-			}
+
+			/* Destroy FP tables if they are not used by new rules */
+			fci_interfaces_destroy_fptables(~oal_ntohl(if_cmd->match), &args);
 
 			if(EOK == ret)
 			{
@@ -459,10 +495,10 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			if(FPP_IF_MATCH_FP1 == (oal_ntohl(if_cmd->match) & FPP_IF_MATCH_FP1))
 			{
 				/* Get the newly configured table address */
-				fp_table_addr = fci_fp_db_get_table_dmem_addr(if_cmd->arguments.fp_table0);
+				fp_table_addr = fci_fp_db_get_table_dmem_addr(if_cmd->arguments.fp_table1);
 				if(0 == fp_table_addr)
 				{   /* Table has not been created yet */
-					ret = fci_fp_db_push_table_to_hw(context->class, if_cmd->arguments.fp_table0);
+					ret = fci_fp_db_push_table_to_hw(context->class, if_cmd->arguments.fp_table1);
 					if(EOK != ret)
 					{   /* Failed to write */
 						*fci_ret = FPP_ERR_IF_MATCH_UPDATE_FAILED;
@@ -588,7 +624,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 
 			/* AND/OR rules */
-			if(0U != (if_cmd->flags & FPP_IF_MATCH_OR))
+			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_MATCH_OR))
 			{
 				ret = pfe_log_if_set_match_or(log_if);
 			}
@@ -603,8 +639,8 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 				*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
 			}
 
-			/* enable/disable*/
-			if(0U != (if_cmd->flags & FPP_IF_ENABLED))
+			/* enable/disable */
+			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_ENABLED))
 			{
 				ret = pfe_log_if_enable(log_if);
 			}
@@ -619,8 +655,24 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 				*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
 			}
 
+			/* loopback */
+			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_LOOPBACK))
+			{
+				ret = pfe_log_if_loopback_enable(log_if);
+			}
+			else
+			{
+				ret = pfe_log_if_loopback_disable(log_if);
+			}
+
+			if(EOK != ret)
+			{
+				NXP_LOG_ERROR("ENABLE flag wasn't updated correctly on %s\n",  pfe_log_if_get_name(log_if));
+				*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
+			}
+
 			/* promisc */
-			if(0U != (if_cmd->flags & FPP_IF_PROMISC))
+			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_PROMISC))
 			{
 				ret = pfe_log_if_promisc_enable(log_if);
 			}
@@ -636,7 +688,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 
 			/* discard */
-			if(0U != (if_cmd->flags & FPP_IF_DISCARD))
+			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_DISCARD))
 			{
 				ret = pfe_log_if_discard_enable(log_if);
 			}
@@ -719,22 +771,27 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			reply_buf->flags = 0U;
 			if(pfe_log_if_is_enabled(log_if))
 			{
-				reply_buf->flags |= FPP_IF_ENABLED;
+				reply_buf->flags |= oal_htonl(FPP_IF_ENABLED);
+			}
+
+			if(pfe_log_if_is_loopback(log_if))
+			{
+				reply_buf->flags |= oal_htonl(FPP_IF_LOOPBACK);
 			}
 
 			if(pfe_log_if_is_promisc(log_if))
 			{
-				reply_buf->flags |= FPP_IF_PROMISC;
+				reply_buf->flags |= oal_htonl(FPP_IF_PROMISC);
 			}
 
 			if(pfe_log_if_is_discard(log_if))
 			{
-				reply_buf->flags |= FPP_IF_DISCARD;
+				reply_buf->flags |= oal_htonl(FPP_IF_DISCARD);
 			}
 
 			if(pfe_log_if_is_match_or(log_if))
 			{
-				reply_buf->flags |= FPP_IF_MATCH_OR;
+				reply_buf->flags |= oal_htonl(FPP_IF_MATCH_OR);
 			}
 
 			/* Store egress interfaces */
@@ -744,7 +801,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 			reply_buf->egress = oal_htonl(egress);
 
-			/* Store rules for FCI*/
+			/* Store rules for FCI */
 			if(EOK != pfe_log_if_get_match_rules(log_if, &rules, &args))
 			{
 				NXP_LOG_DEBUG("Was not possible to get match rules and arguments\n");
@@ -755,22 +812,25 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			args.fp1_table = oal_ntohl(args.fp1_table);
 			reply_buf->match = oal_htonl(rules);
 
-			/* Store arguments for FCI*/
-			memcpy(&reply_buf->arguments, &args, sizeof(args));
-			/* Correct flexible parser table names by translating address to string */
-			if(EOK != fci_fp_db_get_table_from_addr(args.fp0_table, &table_name))
-			{
-				strcpy(reply_buf->arguments.fp_table0, "UNKNOWN");
-			}
-			else
+			/* Store match rule arguments for FCI */
+			reply_buf->arguments.vlan = args.vlan;
+			reply_buf->arguments.ethtype = args.ethtype;
+			reply_buf->arguments.sport = args.sport;
+			reply_buf->arguments.dport = args.dport;
+			reply_buf->arguments.proto = args.proto;
+			reply_buf->arguments.hif_cookie = args.hif_cookie;
+			memcpy(&reply_buf->arguments.ipv, &args.ipv, sizeof(reply_buf->arguments.ipv));
+			memcpy(reply_buf->arguments.smac, args.smac, 6U);
+			memcpy(reply_buf->arguments.dmac, args.dmac, 6U);
+
+			/* Translate names of flexible parser tables from addresses to strings. */
+			memset(reply_buf->arguments.fp_table0, 0, IFNAMSIZ);
+			memset(reply_buf->arguments.fp_table1, 0, IFNAMSIZ);
+			if(EOK == fci_fp_db_get_table_from_addr(args.fp0_table, &table_name))
 			{
 				strcpy(reply_buf->arguments.fp_table0, table_name);
 			}
-			if(EOK != fci_fp_db_get_table_from_addr(args.fp1_table, &table_name))
-			{
-				strcpy(reply_buf->arguments.fp_table1, "UNKNOWN");
-			}
-			else
+			if(EOK == fci_fp_db_get_table_from_addr(args.fp1_table, &table_name))
 			{
 				strcpy(reply_buf->arguments.fp_table1, table_name);
 			}
@@ -888,7 +948,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				break;
 			}
 
-			if(FPP_IF_MIRROR == (if_cmd->flags & FPP_IF_MIRROR))
+			if(FPP_IF_MIRROR == (oal_ntohl(if_cmd->flags) & FPP_IF_MIRROR))
 			{
 				/* Get the requested interface */
 				ret = pfe_if_db_get_first(context->phy_if_db, context->if_session_id, IF_DB_CRIT_BY_NAME, if_cmd->mirror, &entry2);
@@ -930,7 +990,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			}
 
 			/*	Enable/Disable */
-			if(0U != (if_cmd->flags & FPP_IF_ENABLED))
+			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_ENABLED))
 			{
 				ret = pfe_phy_if_enable(phy_if);
 			}
@@ -946,13 +1006,53 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			}
 
 			/* promisc */
-			if(0U != (if_cmd->flags & FPP_IF_PROMISC))
+			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_PROMISC))
 			{
 				ret = pfe_phy_if_promisc_enable(phy_if);
 			}
 			else
 			{
 				ret = pfe_phy_if_promisc_disable(phy_if);
+			}
+
+			/*	VLAN conformance check */
+			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_VLAN_CONF_CHECK))
+			{
+				ret = pfe_phy_if_set_flag(phy_if, IF_FL_VLAN_CONF_CHECK);
+			}
+			else
+			{
+				ret = pfe_phy_if_clear_flag(phy_if, IF_FL_VLAN_CONF_CHECK);
+			}
+
+			/*	PTP conformance check */
+			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_PTP_CONF_CHECK))
+			{
+				ret = pfe_phy_if_set_flag(phy_if, IF_FL_PTP_CONF_CHECK);
+			}
+			else
+			{
+				ret = pfe_phy_if_clear_flag(phy_if, IF_FL_PTP_CONF_CHECK);
+			}
+
+			/*	PTP promiscuous mode */
+			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_PTP_PROMISC))
+			{
+				ret = pfe_phy_if_set_flag(phy_if, IF_FL_PTP_PROMISC);
+			}
+			else
+			{
+				ret = pfe_phy_if_clear_flag(phy_if, IF_FL_PTP_PROMISC);
+			}
+
+			/*	QinQ support control */
+			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_ALLOW_Q_IN_Q))
+			{
+				ret = pfe_phy_if_set_flag(phy_if, IF_FL_ALLOW_Q_IN_Q);
+			}
+			else
+			{
+				ret = pfe_phy_if_clear_flag(phy_if, IF_FL_ALLOW_Q_IN_Q);
 			}
 
 			if(EOK != ret)
@@ -1080,8 +1180,12 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			/* Store phy_if id */
 			reply_buf->id = oal_htonl(pfe_phy_if_get_id(phy_if));
 
-			reply_buf->flags |= (TRUE == pfe_phy_if_is_promisc(phy_if)) ? FPP_IF_PROMISC : 0;
-			reply_buf->flags |= (TRUE == pfe_phy_if_is_enabled(phy_if)) ? FPP_IF_ENABLED : 0;
+			reply_buf->flags |= (TRUE == pfe_phy_if_is_promisc(phy_if)) ? oal_htonl(FPP_IF_PROMISC) : 0;
+			reply_buf->flags |= (TRUE == pfe_phy_if_is_enabled(phy_if)) ? oal_htonl(FPP_IF_ENABLED) : 0;
+			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_VLAN_CONF_CHECK)) ? oal_htonl(FPP_IF_VLAN_CONF_CHECK) : 0;
+			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_PTP_CONF_CHECK)) ? oal_htonl(FPP_IF_PTP_CONF_CHECK) : 0;
+			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_PTP_PROMISC)) ? oal_htonl(FPP_IF_PTP_PROMISC) : 0;
+			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_ALLOW_Q_IN_Q)) ? oal_htonl(FPP_IF_ALLOW_Q_IN_Q) : 0;
 
 			/* Get the mode - use the fact enums have same values */
 			reply_buf->mode = (fpp_phy_if_op_mode_t) pfe_phy_if_get_op_mode(phy_if);
@@ -1102,14 +1206,14 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				if (NULL != entry)
 				{
 					mirror_if = pfe_if_db_entry_get_phy_if(entry);
-					reply_buf->flags |= FPP_IF_MIRROR;
+					reply_buf->flags |= oal_htonl(FPP_IF_MIRROR);
 					strncpy(reply_buf->mirror, pfe_phy_if_get_name(mirror_if), IFNAMSIZ-1);
 				}
 				else
 				{
 					NXP_LOG_ERROR("Failed to obtain interface for ID %u\n", mirror_if_id);
 
-					reply_buf->flags |= FPP_IF_MIRROR;
+					reply_buf->flags |= oal_htonl(FPP_IF_MIRROR);
 					/* Fallback solution - we cannot query for the mirror interface because it
 					   would cancel the outgoing query for physical interfaces */
 					snprintf(reply_buf->mirror, IFNAMSIZ-1, "IF ID: %u", mirror_if_id);
@@ -1117,7 +1221,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			}
 			else
 			{
-				reply_buf->flags &= ~FPP_IF_MIRROR;
+				reply_buf->flags &= oal_htonl(~FPP_IF_MIRROR);
 			}
 
 			/*	Get filter info */

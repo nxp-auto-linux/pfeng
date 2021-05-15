@@ -95,7 +95,6 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				case FPP_CMD_IF_UNLOCK_SESSION:
 				{
 					ret = fci_interfaces_session_cmd(msg->msg_cmd.code, &fci_ret);
-
 					break;
 				}
 
@@ -103,7 +102,6 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				{
 					/*	Process 'interface' commands (add/del/update/query/...) */
 					ret = fci_interfaces_log_cmd(msg, &fci_ret, (fpp_log_if_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-
 					break;
 				}
 
@@ -111,7 +109,6 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				{
 					/*	Process 'interface' commands (add/del/update/query/...) */
 					ret = fci_interfaces_phy_cmd(msg, &fci_ret, (fpp_phy_if_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-
 					break;
 				}
 
@@ -198,7 +195,6 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				{
 					/*	Manage L2 bridge domains */
 					ret = fci_l2br_domain_cmd(msg, &fci_ret, (fpp_l2_bd_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-
 					break;
 				}
 
@@ -206,11 +202,10 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				{
 					/*	Manage L2 bridge domains */
 					ret = fci_l2br_static_entry_cmd(msg, &fci_ret, (fpp_l2_static_ent_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-
 					break;
 				}
 
-                case FPP_CMD_FP_TABLE:
+				case FPP_CMD_FP_TABLE:
 				{
 					ret = fci_fp_table_cmd(msg, &fci_ret, (fpp_fp_table_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
 					break;
@@ -235,11 +230,11 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					break;
 				}
 
-                case FPP_CMD_SPD:
-                {
-                    ret = fci_spd_cmd(msg, &fci_ret, (fpp_spd_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-                    break;
-                }
+				case FPP_CMD_SPD:
+				{
+					ret = fci_spd_cmd(msg, &fci_ret, (fpp_spd_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
 
 				case FPP_CMD_QOS_QUEUE:
 				{
@@ -256,6 +251,14 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				case FPP_CMD_QOS_SHAPER:
 				{
 					ret = fci_qos_shaper_cmd(msg, &fci_ret, (fpp_qos_shaper_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
+
+				case FPP_CMD_L2_FLUSH_ALL:
+				case FPP_CMD_L2_FLUSH_LEARNED:
+				case FPP_CMD_L2_FLUSH_STATIC:
+				{
+					ret = fci_l2br_flush_cmd(msg->msg_cmd.code, &fci_ret);
 					break;
 				}
 

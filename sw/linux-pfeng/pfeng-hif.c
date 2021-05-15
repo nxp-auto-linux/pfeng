@@ -1,414 +1,488 @@
 /*
- * Copyright 2020 NXP
+ * Copyright 2020-2021 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
  */
 
-#include <linux/prefetch.h>
+#include <linux/net.h>
 
 #include "pfe_cfg.h"
+#include "oal.h"
+#include "pfe_platform.h"
+#include "pfe_hif_drv.h"
+
 #include "pfeng.h"
 
-#define SKB_VA_SIZE (sizeof(void *))
-#define RX_BUF_SIZE (2048 - SKB_VA_SIZE)
-
-/*
-			BMan
-
-	Bman covers buffer managemment for pfe_hid_drv in mode, when
-	pfe_hif_chnl is used without internal buffering support.
-
-	It is necessary for supporting zero-copy data passing
-	between RX DMA channel and Linux stack.
-
-	The core idea is to use prebuilt skbuf which data buffer
-	is fed into channel RX ring, so we got native skbuf
-	of packet arrival.
-
-	To optimize additional processing, the skbuf is prebuilt
-	with extra area in head of data buffer where the skbuf
-	pointer is saved.
-
-	Here is the simple map of prepended data:
-
-	skb ptr prepends BD buff:
-
-		[*skb][ BUFF ]
-*/
-
-struct pfeng_rx_chnl_pool {
-	pfe_hif_chnl_t	*chnl;
-	struct device	*dev;
-	struct napi_struct		*napi;
-	u32				id;
-	u32				depth;
-	u32				avail;
-	u32				buf_size;
-
-	/* skb VA table for hif_drv rx ring */
-	void				**rx_tbl;
-	u32				rd_idx;
-	u32				wr_idx;
-	u32				idx_mask;
-};
-
-struct pfeng_tx_map {
-
-	void				*va_addr;
-	addr_t				pa_addr;
-	u32				size;
-	bool				pages;
-	struct sk_buff			*skb;
-};
-
-struct pfeng_tx_chnl_pool {
-	u32				depth;
-
-	/* mappings for hif_drv tx ring */
-	struct pfeng_tx_map		*tx_tbl;
-	u32				rd_idx;
-	u32				wr_idx;
-	u32				idx_mask;
-};
-
-#define HEADROOM (NET_SKB_PAD + NET_IP_ALIGN)
-
-static struct sk_buff *pfeng_bman_build_skb(struct pfeng_rx_chnl_pool *pool, bool preempt)
+int pfeng_hif_chnl_stop(struct pfeng_hif_chnl *chnl)
 {
-	const u32 truesize = SKB_DATA_ALIGN(sizeof(struct skb_shared_info)) +
-		SKB_DATA_ALIGN(NET_SKB_PAD + NET_IP_ALIGN + RX_BUF_SIZE + SKB_VA_SIZE);
+	/* Disable channel interrupt */
+	pfe_hif_chnl_irq_mask(chnl->priv);
+
+	/* Disable the channel RX interrupts */
+	pfe_hif_chnl_rx_irq_mask(chnl->priv);
+
+	/* Disable RX */
+	pfe_hif_chnl_rx_disable(chnl->priv);
+
+	/* Disable TX */
+	pfe_hif_chnl_tx_disable(chnl->priv);
+
+	dev_info(chnl->dev, "HIF%d stopped\n", chnl->idx);
+
+	return 0;
+}
+
+int pfeng_hif_chnl_start(struct pfeng_hif_chnl *chnl)
+{
+	if (chnl->status == PFENG_HIF_STATUS_RUNNING)
+		return 0;
+
+	if (chnl->status != PFENG_HIF_STATUS_ENABLED)
+		return -EINVAL;
+
+	/* Enable channel interrupt */
+	pfe_hif_chnl_irq_unmask(chnl->priv);
+
+	/* Enable RX */
+	if (pfe_hif_chnl_rx_enable(chnl->priv) != EOK) {
+		dev_err(chnl->dev, "Couldn't enable RX irq\n");
+		return -EINVAL;
+	}
+
+	/* Enable TX */
+	if (pfe_hif_chnl_tx_enable(chnl->priv) != EOK) {
+		dev_err(chnl->dev, "Couldn't enable TX\n");
+		return -EINVAL;
+	}
+
+	/* Enable the channel RX interrupts */
+	pfe_hif_chnl_rx_irq_unmask(chnl->priv);
+
+	chnl->status = PFENG_HIF_STATUS_RUNNING;
+
+	dev_info(chnl->dev, "HIF%d started\n", chnl->idx);
+
+	return 0;
+}
+
+/**
+ * @brief		HIF channel RX ISR
+ * @details		Will be called by HIF channel instance when RX event has occurred
+ * @note		To see which context the ISR is running in please see the
+ * 				pfe_hif_chnl module implementation.
+ */
+static void pfeng_hif_drv_chnl_rx_isr(void *arg)
+{
+        struct pfeng_hif_chnl *chnl = (struct pfeng_hif_chnl *)arg;
+
+	if(napi_schedule_prep(&chnl->napi)) {
+
+		pfe_hif_chnl_rx_irq_mask(chnl->priv);
+
+		__napi_schedule_irqoff(&chnl->napi);
+	}
+}
+
+/**
+ * @brief		Common HIF channel interrupt service routine
+ * @details		Manage common HIF channel interrupt
+ * @details		See the oal_irq_handler_t
+ */
+static irqreturn_t pfeng_hif_chnl_direct_isr(int irq, void *arg)
+{
+	pfe_hif_chnl_t *chnl = (pfe_hif_chnl_t *)arg;
+
+	/* Disable HIF channel interrupts */
+	pfe_hif_chnl_irq_mask(chnl);
+
+	/* Call HIF channel ISR */
+	pfe_hif_chnl_isr(chnl);
+
+	/* Enable HIF channel interrupts */
+	pfe_hif_chnl_irq_unmask(chnl);
+
+	return IRQ_HANDLED;
+}
+
+/**
+ * @brief	Process HIF channel receive
+ * @details	Read HIF channel data
+ * @param[in]	chnl The HIF channel
+ * @param[in]	limit The recieve process limit
+ * @return	Number of received frames
+ */
+static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
+{
+	pfe_ct_hif_rx_hdr_t *hif_hdr;
 	struct sk_buff *skb;
+	struct net_device *netdev;
+	struct pfeng_netif *netif;
+	int done = 0;
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	int ihcs = 0;
+#endif
 
-	/* Request skb from DMA safe region */
-	if (likely(preempt))
-		preempt_disable();
-	skb = __napi_alloc_skb(pool->napi, truesize, GFP_DMA32 | GFP_ATOMIC);
-	if (likely(preempt))
-		preempt_enable();
-	if (!skb) {
-		dev_err(pool->dev, "chnl%d: No skb created\n", pool->id);
-		return NULL;
-	}
+	while (1) {
 
-	/* embed skb pointer */
-	*(struct sk_buff **)(skb->data) = skb;
-	/* forward skb->data to save skb ptr */
-	skb_put(skb, SKB_VA_SIZE);
-	skb_pull(skb, SKB_VA_SIZE);
+		skb = pfeng_hif_chnl_receive_pkt(chnl, 0);
+		if (unlikely(!skb))
+			/* no more packets */
+			break;
 
-	return skb;
-}
+		hif_hdr = (pfe_ct_hif_rx_hdr_t *)skb->data;
+		hif_hdr->flags = (pfe_ct_hif_rx_flags_t)oal_ntohs(hif_hdr->flags);
 
-void pfeng_bman_pool_destroy(struct pfeng_ndev *ndev)
-{
-	struct pfeng_rx_chnl_pool *rx_pool = (struct pfeng_rx_chnl_pool *)ndev->bman.rx_pool;
-	struct pfeng_tx_chnl_pool *tx_pool = (struct pfeng_tx_chnl_pool *)ndev->bman.tx_pool;
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+		/* Check for IHC frame */
+		if (unlikely (hif_hdr->flags & HIF_RX_IHC)) {
+			pfe_hif_drv_client_t *client = &chnl->ihc_client;
 
-	if (rx_pool) {
-		if(rx_pool->rx_tbl) {
-			kfree(rx_pool->rx_tbl);
-			rx_pool->rx_tbl = NULL;
+			ihcs++;
+			/* IHC client callback */
+			if (!pfe_hif_drv_ihc_put_pkt(client, skb->data, skb->len, skb)) {
+
+				/* Call IHC RX callback */
+				client->event_handler(client, client->priv, EVENT_RX_PKT_IND, 0);
+			} else {
+				dev_err(chnl->dev, "RX IHC queuing failed. Origin PhyIf %d\n", hif_hdr->i_phy_if);
+				kfree_skb(skb);
+			}
+
+			continue;
+		}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
+		/* Find appropriate netif */
+		netif = chnl->netifs[hif_hdr->i_phy_if];
+		if (!netif) {
+			dev_err(chnl->dev, "Packet for unconfigured PhyIf %d\n", hif_hdr->i_phy_if);
+			consume_skb(skb);
+			continue;
+		}
+		netdev = netif->netdev;
+		skb->dev = netdev;
+
+		if (unlikely(hif_hdr->flags & HIF_RX_TS)) {
+
+			/* Get rx hw time stamp */
+			pfeng_hwts_skb_set_rx_ts(netif, skb);
+
+		} else if(unlikely(hif_hdr->flags & HIF_RX_ETS)) {
+
+			/* Get tx hw time stamp */
+			pfeng_hwts_get_tx_ts(netif, skb);
+			/* Skb has only time stamp report so consume it */
+			consume_skb(skb);
+
+			continue;
 		}
 
-		kfree(rx_pool);
-	}
-
-	if (tx_pool) {
-		if(tx_pool->tx_tbl) {
-			kfree(tx_pool->tx_tbl);
-			tx_pool->tx_tbl = NULL;
+		/* Cksumming support */
+		if (likely(netdev->features & NETIF_F_RXCSUM)) {
+			/* we have only OK info, signal it */
+			skb->ip_summed = CHECKSUM_UNNECESSARY;
+			/* one level csumming support */
+			skb->csum_level = 0;
 		}
 
-		kfree(tx_pool);
+		/* Pass to upper layer */
+
+		/* Skip HIF header */
+		skb_pull(skb, PFENG_TX_PKT_HEADER_SIZE);
+
+		skb->protocol = eth_type_trans(skb, netdev);
+
+		if (unlikely(skb->ip_summed == CHECKSUM_NONE))
+			netif_receive_skb(skb);
+		else
+			napi_gro_receive(&chnl->napi, skb);
+
+		netdev->stats.rx_packets++;
+		netdev->stats.rx_bytes += skb_headlen(skb);
+
+		done++;
+		if(unlikely(done == limit))
+			break;
 	}
 
-	return;
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	return done + ihcs;
+#else
+	return done;
+#endif
 }
 
-int pfeng_bman_pool_create(struct pfeng_ndev *ndev)
+static int pfeng_hif_chnl_rx_poll(struct napi_struct *napi, int budget)
 {
-	pfe_hif_chnl_t *chnl = ndev->chnl_sc.priv;
-	struct pfeng_rx_chnl_pool *rx_pool;
-	struct pfeng_tx_chnl_pool *tx_pool;
+	struct pfeng_hif_chnl *chnl = container_of(napi, struct pfeng_hif_chnl, napi);
+	int done = 0;
 
-	/* RX pool */
-	rx_pool = kzalloc(sizeof(*rx_pool), GFP_KERNEL);
-	if (!rx_pool) {
-		dev_err(ndev->dev, "chnl%d: No mem for bman rx_pool\n", pfe_hif_chnl_get_id(chnl));
-		return -ENOMEM;
+	/* Consume RX pkt(s) */
+	done = pfeng_hif_chnl_rx(chnl, budget);
+
+	if (done < budget && napi_complete_done(napi, done)) {
+
+		/* Enable RX interrupt */
+		pfe_hif_chnl_rx_irq_unmask(chnl->priv);
+
+		/* Trigger the RX DMA */
+		pfe_hif_chnl_rx_dma_start(chnl->priv);
 	}
 
-	rx_pool->id = pfe_hif_chnl_get_id(chnl);
-	rx_pool->depth = pfe_hif_chnl_get_rx_fifo_depth(chnl);
-	rx_pool->avail = rx_pool->depth;
-	rx_pool->chnl = chnl;
-	rx_pool->dev = ndev->dev;
-	rx_pool->napi = &ndev->napi;
-	rx_pool->buf_size = RX_BUF_SIZE;
+	return done;
+}
 
-	rx_pool->rx_tbl = kzalloc(sizeof(void *) * rx_pool->depth, GFP_KERNEL);
-	if (!rx_pool->rx_tbl) {
-		dev_err(ndev->dev, "chnl%d: failed. No mem\n", rx_pool->id);
-		goto err;
+static int pfeng_hif_chnl_drv_remove(struct pfeng_priv *priv, u32 idx)
+{
+	struct device *dev = &priv->pdev->dev;
+	struct pfeng_hif_chnl *chnl;
+	int ret = 0;
+
+	if (idx >= PFENG_PFE_HIF_CHANNELS) {
+		dev_err(dev, "Invalid HIF instance number: %u\n", idx);
+		return -ENODEV;
 	}
-	rx_pool->rd_idx = 0;
-	rx_pool->wr_idx = 0;
-	rx_pool->idx_mask = pfe_hif_chnl_get_rx_fifo_depth(chnl) - 1;
+	chnl = &priv->hif_chnl[idx];
 
-	ndev->bman.rx_pool = rx_pool;
+	/* Stop channel interrupt */
+	pfeng_hif_chnl_stop(chnl);
 
-	/* TX pool */
-	tx_pool = kzalloc(sizeof(*tx_pool), GFP_KERNEL);
-	if (!rx_pool) {
-		dev_err(ndev->dev, "chnl%d: No mem for bman tx_pool\n", pfe_hif_chnl_get_id(chnl));
-		goto err;
+	/* Stop NAPI */
+	if (chnl->status == PFENG_HIF_STATUS_RUNNING) {
+		napi_disable(&chnl->napi);
+		netif_napi_del(&chnl->napi);
+	}
+	/* Prepare for startup state (in case of STR use) */
+	chnl->status = PFENG_HIF_STATUS_REQUESTED;
+
+	/* Release IRQ line */
+	devm_free_irq(dev, priv->pfe_cfg->irq_vector_hif_chnls[idx], chnl->priv);
+
+	/* Release attached RX/TX pools */
+	pfeng_bman_pool_destroy(chnl);
+
+	if (priv->pfe_cfg->irq_vector_hif_chnls[idx]) {
+		disable_irq(priv->pfe_cfg->irq_vector_hif_chnls[idx]);
 	}
 
-	tx_pool->depth = pfe_hif_chnl_get_tx_fifo_depth(chnl);
-	tx_pool->tx_tbl = kzalloc(sizeof(struct pfeng_tx_map) * tx_pool->depth, GFP_KERNEL);
-	if (!tx_pool->tx_tbl) {
-		dev_err(ndev->dev, "chnl%d: failed. No mem\n", rx_pool->id);
-		goto err;
-	}
-	tx_pool->rd_idx = 0;
-	tx_pool->wr_idx = 0;
-	tx_pool->idx_mask = pfe_hif_chnl_get_tx_fifo_depth(chnl) - 1;
+	/* Forget HIF channel data */
+	chnl->priv = NULL;
 
-	ndev->bman.tx_pool = tx_pool;
+	dev_info(dev, "HIF%d disabled\n", idx);
+
+	return ret;
+}
+
+static char *get_hif_chnl_mode_str(struct pfeng_hif_chnl *chnl)
+{
+	switch (chnl->cl_mode) {
+	case PFENG_HIF_MODE_EXCLUSIVE:
+		return "excl";
+	case PFENG_HIF_MODE_SHARED:
+		return "share";
+	default:
+		return "invalid";
+	}
+}
+
+static int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 idx)
+{
+	struct device *dev = &priv->pdev->dev;
+	struct pfeng_hif_chnl *chnl;
+	int ret = 0;
+	char irq_name[20];
+
+	if (idx >= PFENG_PFE_HIF_CHANNELS) {
+		dev_err(dev, "Invalid HIF instance number: %u\n", idx);
+		return -ENODEV;
+	}
+	chnl = &priv->hif_chnl[idx];
+
+	chnl->priv = pfe_hif_get_channel(priv->pfe_platform->hif, pfeng_chnl_ids[idx]);
+	if (NULL == chnl->priv) {
+		dev_err(dev, "Can't get HIF%d channel instance\n", idx);
+		return -ENODEV;
+	}
+	chnl->dev = dev;
+	chnl->idx = idx;
+#ifndef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	if (unlikely(chnl->cl_mode == PFENG_HIF_MODE_SHARED))
+#else
+	if (unlikely((chnl->cl_mode == PFENG_HIF_MODE_SHARED) || chnl->ihc))
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+#ifdef LOCK_TX_SPINLOCK
+		spin_lock_init(&chnl->lock_tx);
+#else
+		mutex_init(&chnl->lock_tx);
+#endif
+
+	/* Register HIF channel RX callback */
+	pfe_hif_chnl_set_event_cbk(chnl->priv, HIF_CHNL_EVT_RX_IRQ, &pfeng_hif_drv_chnl_rx_isr, (void *)chnl);
+
+	/* Create interrupt name */
+	scnprintf(irq_name, sizeof(irq_name), "pfe-hif-%d:%s", idx, get_hif_chnl_mode_str(chnl));
+
+	/* HIF channel IRQ */
+	ret = devm_request_irq(dev, priv->pfe_cfg->irq_vector_hif_chnls[idx], pfeng_hif_chnl_direct_isr,
+		0, kstrdup(irq_name, GFP_KERNEL), chnl->priv);
+	if (ret < 0) {
+		dev_err(dev, "Error allocating the IRQ %d for '%s', error %d\n",
+			priv->pfe_cfg->irq_vector_hif_chnls[idx], irq_name, ret);
+		return ret;
+	}
+
+	/* Create bman for channel */
+	if (!chnl->bman.rx_pool) {
+		ret = pfeng_bman_pool_create(chnl);
+		if (ret) {
+			dev_err(dev, "Unable to attach bman to HIF%d\n", idx);
+			goto err;
+		}
+		/* Fill pool of pages for rx buffers */
+		pfeng_hif_chnl_fill_rx_buffers(chnl);
+	}
+
+	pfeng_debugfs_add_hif_chnl(priv, idx);
+
+	/* Create dummy netdev required for independent HIF channel support */
+	init_dummy_netdev(&chnl->dummy_netdev);
+
+	chnl->status = PFENG_HIF_STATUS_ENABLED;
+	netif_napi_add(&chnl->dummy_netdev, &chnl->napi, pfeng_hif_chnl_rx_poll, NAPI_POLL_WEIGHT);
+	napi_enable(&chnl->napi);
+
+	dev_info(dev, "HIF%d enabled\n", idx);
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	/* IHC HIF channel must be enabled */
+	if (chnl->ihc)
+		pfeng_hif_chnl_start(chnl);
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	return 0;
 
 err:
-	pfeng_bman_pool_destroy(ndev);
-	return -ENOMEM;
+	pfeng_hif_chnl_drv_remove(priv, idx);
+	return ret;
 }
 
-static inline addr_t pfeng_bman_buf_map(void *ctx, void *paddr)
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+/* Release IDEX object */
+static void pfeng_hif_idex_release(struct pfeng_priv *priv)
 {
-	struct pfeng_rx_chnl_pool *pool = (struct pfeng_rx_chnl_pool *)ctx;
+	struct pfeng_hif_chnl *chnl = priv->ihc_chnl;
 
-	return dma_map_single_attrs(pool->dev, paddr, RX_BUF_SIZE, DMA_FROM_DEVICE, 0);
-}
+	if (!priv->ihc_enabled)
+		return;
 
-static inline void *pfeng_bman_buf_alloc_and_map(void *ctx, addr_t *paddr, bool preempt)
-{
-	struct pfeng_rx_chnl_pool *pool = (struct pfeng_rx_chnl_pool *)ctx;
-	struct sk_buff *skb;
-	addr_t map;
+	priv->ihc_enabled = false;
 
-	skb = pfeng_bman_build_skb(pool, preempt);
-	if (!skb)
-		return NULL;
-
-	/* do dma map */
-	map = dma_map_single(pool->dev, skb->data, RX_BUF_SIZE, DMA_FROM_DEVICE);
-	if (dma_mapping_error(pool->dev, map)) {
-		kfree_skb(skb);
-		dev_err(pool->dev, "chnl%d: dma map error\n", pool->id);
-		return NULL;
+	if (chnl->ihc) {
+		chnl->ihc = false;
+		priv->ihc_chnl = NULL;
+		pfe_idex_set_rpc_cbk(NULL, priv->pfe_platform);
+		pfe_idex_fini();
+		dev_info(&priv->pdev->dev, "IDEX RPC released. HIF IHC support disabled\n");
 	}
-	*paddr = map;
-
-	return skb->data;
 }
 
-static inline void pfeng_bman_buf_unmap(void *ctx, addr_t paddr)
+/* Create IDEX object */
+static int pfeng_hif_idex_create(struct pfeng_priv *priv, int idx)
 {
-	struct pfeng_rx_chnl_pool *pool = (struct pfeng_rx_chnl_pool *)ctx;
+	struct pfeng_hif_chnl *ihc_chnl = &priv->hif_chnl[idx];
+	struct device *dev = &priv->pdev->dev;
 
-	dma_unmap_single(pool->dev, paddr, RX_BUF_SIZE, DMA_FROM_DEVICE);
-}
-
-static inline void *pfeng_bman_buf_pull_va(void *ctx)
-{
-	struct pfeng_rx_chnl_pool *pool = (struct pfeng_rx_chnl_pool *)ctx;
-
-	return pool->rx_tbl[pool->rd_idx++ & pool->idx_mask];
-}
-
-static inline int pfeng_bman_buf_push_va(void *ctx, void *vaddr)
-{
-	struct pfeng_rx_chnl_pool *pool = (struct pfeng_rx_chnl_pool *)ctx;
-
-	pool->rx_tbl[pool->wr_idx++ & pool->idx_mask] = vaddr;
-	return 0;
-}
-
-static inline void pfeng_bman_buf_free(void *ctx, void *vaddr)
-{
-	/* FIXME: recycle back to fifo pool */
-}
-
-static inline u32 pfeng_bman_buf_size(void *ctx)
-{
-	struct pfeng_rx_chnl_pool *pool = (struct pfeng_rx_chnl_pool *)ctx;
-
-	return pool->buf_size;
-}
-
-bool pfeng_hif_chnl_txconf_check(struct pfeng_ndev *ndev, u32 elems)
-{
-	struct pfeng_tx_chnl_pool *pool = ndev->bman.tx_pool;
-	u32 idx = pool->wr_idx;
-
-	if(unlikely(elems >= pool->depth))
-		return false;
-
-	/* Check if last element is free */
-	idx = (pool->wr_idx + elems) & pool->idx_mask;
-	return !pool->tx_tbl[idx].size;
-}
-
-int pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_ndev *ndev, void *va_addr, addr_t pa_addr, u32 size, struct sk_buff *skb)
-{
-	struct pfeng_tx_chnl_pool *pool = ndev->bman.tx_pool;
-	u32 idx = pool->wr_idx;
-
-	pool->tx_tbl[idx].va_addr = va_addr;
-	pool->tx_tbl[idx].pa_addr = pa_addr;
-	pool->tx_tbl[idx].size = size;
-	pool->tx_tbl[idx].skb = skb;
-
-	pool->wr_idx = (pool->wr_idx + 1) & pool->idx_mask;
-
-	return idx;
-}
-
-int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_ndev *ndev, u32 idx)
-{
-	struct pfeng_tx_chnl_pool *pool = ndev->bman.tx_pool;
-	struct sk_buff *skb = pool->tx_tbl[idx].skb;
-	u32 nfrags;
-
-	BUG_ON(!skb);
-	BUG_ON(idx != pool->rd_idx);
-
-	nfrags = skb_shinfo(skb)->nr_frags;
-
-	/* Unmap linear part */
-	dma_unmap_single_attrs(ndev->dev, pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].size, DMA_TO_DEVICE, 0);
-	pool->tx_tbl[idx].size = 0;
-
-	idx = pool->rd_idx = (pool->rd_idx + 1 ) & pool->idx_mask;
-
-	/* Unmap frags */
-	while (nfrags--) {
-		dma_unmap_page(ndev->dev, pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].size, DMA_TO_DEVICE);
-		pool->tx_tbl[idx].size = 0;
-
-		idx = pool->rd_idx = (pool->rd_idx + 1 ) & pool->idx_mask;
+	/* Install IDEX support */
+	if (pfe_idex_init(&ihc_chnl->hif_drv, pfeng_hif_ids[priv->ihc_master_chnl])) {
+		dev_err(dev, "Can't initialize IDEX, HIF IHC support disabled.\n");
+		ihc_chnl->ihc = false;
+		priv->ihc_enabled = false;
+	} else {
+		if (EOK != pfe_idex_set_rpc_cbk(&pfe_platform_idex_rpc_cbk, priv->pfe_platform)) {
+			dev_err(dev, "Unable to set IDEX RPC callback. HIF IHC support disabled\n");
+			ihc_chnl->ihc = false;
+			priv->ihc_enabled = false;
+			pfe_idex_fini();
+		} else {
+			priv->ihc_enabled = true;
+			priv->ihc_chnl = ihc_chnl;
+			dev_info(dev, "IDEX RPC installed\n");
+		}
 	}
-
-	dev_consume_skb_any(skb);
 
 	return 0;
 }
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
-int pfeng_hif_chnl_txconf_unroll_map_full(struct pfeng_ndev *ndev, u32 idx, u32 nfrags)
+/**
+ * @brief	Create HIF channels
+ * @details	Creates and initializes the HIF channels
+ * @param[in]	priv The driver main structure
+ * @return	> 0 if OK, negative error number if failed
+ */
+int pfeng_hif_create(struct pfeng_priv *priv)
 {
-	struct pfeng_tx_chnl_pool *pool = ndev->bman.tx_pool;
-	struct sk_buff *skb = pool->tx_tbl[idx].skb;
+	struct device *dev = &priv->pdev->dev;
+	int idx, ret;
 
-	BUG_ON(!skb);
-	BUG_ON(idx != ((pool->wr_idx - 1) & pool->idx_mask));
+	ret = 0;
 
-	/* Unmap frags */
-	while (nfrags--) {
-		dma_unmap_page(ndev->dev, pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].size, DMA_TO_DEVICE);
-		pool->tx_tbl[idx].size = 0;
+	for (idx = 0; idx < PFENG_PFE_HIF_CHANNELS; idx++) {
 
-		idx = pool->wr_idx = (pool->wr_idx - 1 ) & pool->idx_mask;
+		if (priv->hif_chnl[idx].status != PFENG_HIF_STATUS_REQUESTED) {
+			dev_info(dev, "HIF%d not configured, skipped\n", idx);
+			continue;
+		}
+
+		ret = pfeng_hif_chnl_drv_create(priv, idx);
+		if (ret) {
+			dev_err(dev, "HIF %d can't be created\n", idx);
+			return -EIO;
+		}
+
+		/* Set local driver_id */
+#ifndef PFE_CFG_MULTI_INSTANCE_SUPPORT
+		/* Use lowest managed HIF channel */
+		if (priv->local_drv_id > idx)
+			priv->local_drv_id = idx;
+#else
+		/* Use IHC channel */
+		if (priv->hif_chnl[idx].ihc) {
+			priv->local_drv_id = idx;
+			pfeng_hif_idex_create(priv, idx);
+		}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
 	}
 
-	/* Unmap linear part */
-	dma_unmap_single_attrs(ndev->dev, pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].size, DMA_TO_DEVICE, 0);
-	pool->tx_tbl[idx].size = 0;
-
-	idx = pool->wr_idx = (pool->wr_idx - 1 ) & pool->idx_mask;
-
-	dev_consume_skb_any(skb);
-
-	return 0;
+	return ret;
 }
 
-/*
-
-	The following library is pfeng driver re-implementation
-	of pfe_hif_drv RX calls, with support of bman.
-
-*/
-
-struct sk_buff *pfeng_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uint32_t queue)
+/**
+ * @brief	Destroy the HIF channels
+ * @details	Unregister and destroy the HIF channels
+ * @param[in]	priv The driver main structure
+ */
+void pfeng_hif_remove(struct pfeng_priv *priv)
 {
-	void *buf_pa, *buf_va;
-	uint32_t rx_len;
-	bool_t lifm;
-	struct sk_buff *skb;
-	struct pfeng_ndev *ndev = (struct pfeng_ndev *)pfe_hif_drv_client_get_priv(client);
+	struct device *dev = &priv->pdev->dev;
+	int idx;
 
-	/*	Get RX buffer */
-	if (EOK != pfe_hif_chnl_rx(ndev->chnl_sc.priv, &buf_pa, &rx_len, &lifm))
-	{
-		return NULL;
+	if (!priv)
+		return;
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	pfeng_hif_idex_release(priv);
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
+	for (idx = (PFENG_PFE_HIF_CHANNELS - 1); idx >= 0; idx--) {
+
+		if (priv->hif_chnl[idx].status < PFENG_HIF_STATUS_ENABLED) {
+			dev_info(dev, "HIF%d not enabled, skipped\n", idx);
+			continue;
+		}
+
+		pfeng_hif_chnl_drv_remove(priv, idx);
 	}
-
-	/*  Get buffer VA */
-	buf_va = pfeng_bman_buf_pull_va(ndev->bman.rx_pool);
-	if (unlikely(!buf_va)) {
-		netdev_err(ndev->netdev, "chnl%d: pull VA failed\n", pfe_hif_chnl_get_id(ndev->chnl_sc.priv));
-		pfeng_bman_buf_unmap(ndev->bman.rx_pool, (addr_t)buf_pa);
-		return NULL;
-	}
-	prefetch(buf_va - SKB_VA_SIZE);
-
-	/*  Unmap DMAed area */
-	pfeng_bman_buf_unmap(ndev->bman.rx_pool, (addr_t)buf_pa);
-
-	/* Retrieve saved skb address */
-	skb = *((struct sk_buff **)(buf_va - SKB_VA_SIZE));
-	__skb_put(skb, rx_len);
-
-	return skb;
-}
-
-int pfeng_hif_chnl_refill_rx_buffer(struct pfeng_ndev *ndev, bool preempt)
-{
-	pfe_hif_chnl_t *chnl = ndev->chnl_sc.priv;
-	void *buf_va;
-	addr_t buf_pa = 0;
-	errno_t ret;
-
-	/*	Ask for new buffer */
-	buf_va = pfeng_bman_buf_alloc_and_map(ndev->bman.rx_pool, &buf_pa, preempt);
-	if (unlikely((NULL == buf_va) || (NULL == (void *)buf_pa))) {
-		netdev_err(ndev->netdev, "No skb buffer available to fetch\n");
-		return -ENOMEM;
-	}
-
-	/*	Add new buffer to ring */
-	ret = pfe_hif_chnl_supply_rx_buf(chnl, (void *)buf_pa, pfeng_bman_buf_size(ndev->bman.rx_pool));
-	if (unlikely(ret)) {
-		pfeng_bman_buf_unmap(ndev->bman.rx_pool, buf_pa);
-		netdev_err(ndev->netdev, "chnl%d: Impossible to feed new buffer to the ring\n", pfe_hif_chnl_get_id(chnl));
-		return -ret;
-	}
-	pfeng_bman_buf_push_va(ndev->bman.rx_pool, buf_va);
-
-	return 0;
-}
-
-int pfeng_hif_chnl_fill_rx_buffers(struct pfeng_ndev *ndev)
-{
-	errno_t ret;
-	int cnt = 0;
-
-	while (pfe_hif_chnl_can_accept_rx_buf(ndev->chnl_sc.priv)) {
-		ret = pfeng_hif_chnl_refill_rx_buffer(ndev, true);
-		if (ret)
-			break;
-		cnt++;
-	}
-
-	return cnt;
 }

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2020 NXP
+ *  Copyright 2020-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -19,6 +19,8 @@
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
 
+#define WDT_INT_SRC_NUMBER 11U
+
 /**
  * @brief		WDT ISR
  * @details		MASK, ACK, and process triggered interrupts.
@@ -29,10 +31,32 @@
  * @return		EOK if interrupt has been handled, error code otherwise
  * @note		Make sure the call is protected by some per-BMU mutex
  */
-errno_t pfe_wdt_cfg_isr(void *base_va, void *cbus_base_va)
+errno_t pfe_wdt_cfg_isr(addr_t base_va, addr_t cbus_base_va)
 {
+	uint8_t index = 0U;
 	uint32_t reg_en, reg_src, reg_reen = 0U;
 	errno_t ret = ENOENT;
+	const uint32_t wdt_int_src_arr[WDT_INT_SRC_NUMBER] = 
+	{
+		WDT_BMU1_WDT_INT, WDT_BMU2_WDT_INT, WDT_CLASS_WDT_INT, WDT_EMAC0_GPI_WDT_INT, 
+		WDT_EMAC1_GPI_WDT_INT, WDT_EMAC2_GPI_WDT_INT, WDT_HIF_GPI_WDT_INT,
+		WDT_HIF_NOCPY_WDT_INT, WDT_HIF_WDT_INT, WDT_TLITE_WDT_INT, WDT_UTIL_WDT_INT
+	};
+	const uint32_t wdt_int_en_arr[WDT_INT_SRC_NUMBER]  = 
+	{
+		WDT_BMU1_WDT_INT_EN_BIT, WDT_BMU2_WDT_INT_EN_BIT, WDT_CLASS_WDT_INT_EN_BIT, 
+		WDT_EMAC0_GPI_WDT_INT_EN_BIT, WDT_EMAC1_GPI_WDT_INT_EN_BIT, WDT_EMAC2_GPI_WDT_INT_EN_BIT, 
+		WDT_HIF_GPI_WDT_INT_EN_BIT, WDT_HIF_NOCPY_WDT_INT_EN_BIT, WDT_HIF_WDT_INT_EN_BIT, 
+		WDT_TLITE_WDT_INT_EN_BIT, WDT_UTIL_PE_WDT_INT_EN_BIT
+	};
+#ifdef NXP_LOG_ENABLED
+	const char_t * const wdt_int_src_text[WDT_INT_SRC_NUMBER] = 
+	{
+		"WDT_BMU1_WDT_INT", "WDT_BMU2_WDT_INT", "WDT_CLASS_WDT_INT", "WDT_EMAC0_GPI_WDT_INT", 
+		"WDT_EMAC1_GPI_WDT_INT", "WDT_EMAC2_GPI_WDT_INT", "WDT_HIF_GPI_WDT_INT",
+		"WDT_HIF_NOCPY_WDT_INT", "WDT_HIF_WDT_INT", "WDT_TLITE_WDT_INT", "WDT_UTIL_WDT_INT"
+	};
+#endif /* NXP_LOG_ENABLED */
 
 	(void)cbus_base_va;
 
@@ -46,81 +70,16 @@ errno_t pfe_wdt_cfg_isr(void *base_va, void *cbus_base_va)
 	hal_write32(reg_src, base_va + WDT_INT_SRC);
 
 	/*	Process interrupts which are triggered AND enabled */
-	if (((reg_src & WDT_BMU1_WDT_INT) != 0U) && ((reg_en & WDT_BMU1_WDT_INT_EN_BIT) != 0U))
+	for(index = 0U; index < WDT_INT_SRC_NUMBER; index++)
 	{
-		NXP_LOG_INFO("WDT_BMU1_WDT_INT\n");
-		reg_reen |= WDT_BMU1_WDT_INT_EN_BIT;
-		ret = EOK;
-	}
-
-	if (((reg_src & WDT_BMU2_WDT_INT) != 0U) && ((reg_en & WDT_BMU2_WDT_INT_EN_BIT) != 0U))
-	{
-		NXP_LOG_INFO("WDT_BMU2_WDT_INT\n");
-		reg_reen |= WDT_BMU2_WDT_INT_EN_BIT;
-		ret = EOK;
-	}
-
-	if (((reg_src & WDT_CLASS_WDT_INT) != 0U) && ((reg_en & WDT_CLASS_WDT_INT_EN_BIT) != 0U))
-	{
-		NXP_LOG_INFO("WDT_CLASS_WDT_INT\n");
-		reg_reen |= WDT_CLASS_WDT_INT_EN_BIT;
-		ret = EOK;
-	}
-
-	if (((reg_src & WDT_EMAC0_GPI_WDT_INT) != 0U) && ((reg_en & WDT_EMAC0_GPI_WDT_INT_EN_BIT) != 0U))
-	{
-		NXP_LOG_INFO("WDT_EMAC0_GPI_WDT_INT\n");
-		reg_reen |= WDT_EMAC0_GPI_WDT_INT_EN_BIT;
-		ret = EOK;
-	}
-
-	if (((reg_src & WDT_EMAC1_GPI_WDT_INT) != 0U) && ((reg_en & WDT_EMAC1_GPI_WDT_INT_EN_BIT) != 0U))
-	{
-		NXP_LOG_INFO("WDT_EMAC1_GPI_WDT_INT\n");
-		reg_reen |= WDT_EMAC1_GPI_WDT_INT_EN_BIT;
-		ret = EOK;
-	}
-
-	if (((reg_src & WDT_EMAC2_GPI_WDT_INT) != 0U) && ((reg_en & WDT_EMAC2_GPI_WDT_INT_EN_BIT) != 0U))
-	{
-		NXP_LOG_INFO("WDT_EMAC2_GPI_WDT_INT\n");
-		reg_reen |= WDT_EMAC2_GPI_WDT_INT_EN_BIT;
-		ret = EOK;
-	}
-
-	if (((reg_src & WDT_HIF_GPI_WDT_INT) != 0U) && ((reg_en & WDT_HIF_GPI_WDT_INT_EN_BIT) != 0U))
-	{
-		NXP_LOG_INFO("WDT_HIF_GPI_WDT_INT\n");
-		reg_reen |= WDT_HIF_GPI_WDT_INT_EN_BIT;
-		ret = EOK;
-	}
-
-	if (((reg_src & WDT_HIF_NOCPY_WDT_INT) != 0U) && ((reg_en & WDT_HIF_NOCPY_WDT_INT_EN_BIT) != 0U))
-	{
-		NXP_LOG_INFO("WDT_HIF_NOCPY_WDT_INT\n");
-		reg_reen |= WDT_HIF_NOCPY_WDT_INT_EN_BIT;
-		ret = EOK;
-	}
-
-	if (((reg_src & WDT_HIF_WDT_INT) != 0U) && ((reg_en & WDT_HIF_WDT_INT_EN_BIT) != 0U))
-	{
-		NXP_LOG_INFO("WDT_HIF_WDT_INT\n");
-		reg_reen |= WDT_HIF_WDT_INT_EN_BIT;
-		ret = EOK;
-	}
-
-	if (((reg_src & WDT_TLITE_WDT_INT) != 0U) && ((reg_en & WDT_TLITE_WDT_INT_EN_BIT) != 0U))
-	{
-		NXP_LOG_INFO("WDT_TLITE_WDT_INT\n");
-		reg_reen |= WDT_TLITE_WDT_INT_EN_BIT;
-		ret = EOK;
-	}
-
-	if (((reg_src & WDT_UTIL_WDT_INT) != 0U) && ((reg_en & WDT_UTIL_PE_WDT_INT_EN_BIT) != 0U))
-	{
-		NXP_LOG_INFO("WDT_UTIL_WDT_INT\n");
-		reg_reen |= WDT_UTIL_PE_WDT_INT_EN_BIT;
-		ret = EOK;
+		if (((reg_src & wdt_int_src_arr[index]) != 0U) && ((reg_en & wdt_int_en_arr[index]) != 0U))
+		{
+#ifdef NXP_LOG_ENABLED
+			NXP_LOG_INFO("%s\n", wdt_int_src_text[index]);
+#endif /* NXP_LOG_ENABLED */
+			reg_reen |= wdt_int_en_arr[index];
+			ret = EOK;
+		}
 	}
 
 	/*	Don't re-enable triggered ones since they can't be cleared until PFE
@@ -135,7 +94,7 @@ errno_t pfe_wdt_cfg_isr(void *base_va, void *cbus_base_va)
  * @brief		Mask WDT interrupts
  * @param[in]	base_va Base address of the WDT register space
  */
-void pfe_wdt_cfg_irq_mask(void *base_va)
+void pfe_wdt_cfg_irq_mask(addr_t base_va)
 {
 	uint32_t reg;
 
@@ -147,7 +106,7 @@ void pfe_wdt_cfg_irq_mask(void *base_va)
  * @brief		Unmask WDT interrupts
  * @param[in]	base_va Base address of the WDT register space
  */
-void pfe_wdt_cfg_irq_unmask(void *base_va)
+void pfe_wdt_cfg_irq_unmask(addr_t base_va)
 {
 	uint32_t reg;
 
@@ -159,7 +118,7 @@ void pfe_wdt_cfg_irq_unmask(void *base_va)
  * @brief		init WDT interrupts
  * @param[in]	base_va Base address of the wsp register space
  */
-void pfe_wdt_cfg_init(void *base_va)
+void pfe_wdt_cfg_init(addr_t base_va)
 {
 	uint32_t reg;
 
@@ -199,7 +158,7 @@ void pfe_wdt_cfg_init(void *base_va)
  * @brief		Clear the WDT interrupt control and status registers
  * @param[in]	base_va Base address of HIF register space (virtual)
  */
-void pfe_wdt_cfg_fini(void *base_va)
+void pfe_wdt_cfg_fini(addr_t base_va)
 {
 	uint32_t reg;
 
@@ -219,12 +178,12 @@ void pfe_wdt_cfg_fini(void *base_va)
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_wdt_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level)
+uint32_t pfe_wdt_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == base_va) || (NULL == char_t))
+	if (unlikely(NULL_ADDR == base_va) || (NULL == char_t))
 	{
 		NXP_LOG_ERROR("NULL argument received (pfe_wdt_cfg_get_text_stat)\n");
 		return 0U;

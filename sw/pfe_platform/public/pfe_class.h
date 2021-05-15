@@ -30,36 +30,35 @@ typedef struct
 	uint32_t ddr_size;				/*	Size of the DDR region */
 } pfe_class_cfg_t;
 
-pfe_class_t *pfe_class_create(void *cbus_base_va, uint32_t pe_num, pfe_class_cfg_t *cfg);
-errno_t pfe_class_isr(pfe_class_t *class);
-void pfe_class_irq_mask(pfe_class_t *class);
-void pfe_class_irq_unmask(pfe_class_t *class);
+pfe_class_t *pfe_class_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_class_cfg_t *cfg);
+errno_t pfe_class_isr(const pfe_class_t *class);
+void pfe_class_irq_mask(const pfe_class_t *class);
+void pfe_class_irq_unmask(const pfe_class_t *class);
 void pfe_class_enable(pfe_class_t *class);
 void pfe_class_reset(pfe_class_t *class);
 void pfe_class_disable(pfe_class_t *class);
 errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf);
 errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_class_mmap_t *mmap);
-errno_t pfe_class_write_dmem(void *class, int32_t pe_idx, void *dst, void *src, uint32_t len);
-errno_t pfe_class_read_dmem(void *class, int32_t pe_idx, void *dst, void *src, uint32_t len);
-errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst, void *src, uint32_t buffer_len, uint32_t read_len);
-errno_t pfe_class_read_pmem(pfe_class_t *class, uint32_t pe_idx, void *dst, void *src, uint32_t len);
-errno_t pfe_class_set_rtable(pfe_class_t *class, void *rtable_pa, uint32_t rtable_len, uint32_t entry_size);
-errno_t pfe_class_set_default_vlan(pfe_class_t *class, uint16_t vlan);
-uint32_t pfe_class_get_num_of_pes(pfe_class_t *class);
+errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, addr_t dst_addr, void *src_ptr, uint32_t len);
+errno_t pfe_class_read_dmem(void *class_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len);
+errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst_ptr, addr_t src_addr, uint32_t buffer_len, uint32_t read_len);
+errno_t pfe_class_read_pmem(pfe_class_t *class, uint32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len);
+errno_t pfe_class_set_rtable(pfe_class_t *class, addr_t rtable_pa, uint32_t rtable_len, uint32_t entry_size);
+errno_t pfe_class_set_default_vlan(const pfe_class_t *class, uint16_t vlan);
+uint32_t pfe_class_get_num_of_pes(const pfe_class_t *class);
 uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 void pfe_class_destroy(pfe_class_t *class);
-addr_t pfe_class_dmem_heap_alloc(pfe_class_t *class, uint32_t size);
-void pfe_class_dmem_heap_free(pfe_class_t *class, addr_t addr);
-uint32_t pfe_class_put_data(pfe_class_t *class, pfe_ct_buffer_t *buf);
-errno_t pfe_class_set_flexible_filter(pfe_class_t *class, const uint32_t dmem_addr);
-errno_t pfe_class_set_fw_feature_state(pfe_class_t *class, const uint32_t position, const uint8_t enable);
-errno_t pfe_class_get_fw_feature_state(pfe_class_t *class, const uint32_t position, uint8_t *enable);
-errno_t pfe_class_get_fw_feature_entry(pfe_class_t *class, uint32_t position, pfe_ct_feature_desc_t **entry);
-char *pfe_class_get_fw_feature_string(pfe_class_t *class, uint32_t location);
-errno_t pfe_class_get_fw_version(pfe_class_t *class, pfe_ct_version_t *ver);
+addr_t pfe_class_dmem_heap_alloc(const pfe_class_t *class, uint32_t size);
+void pfe_class_dmem_heap_free(const pfe_class_t *class, addr_t addr);
+uint32_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf);
+errno_t pfe_class_get_fw_version(const pfe_class_t *class, pfe_ct_version_t *ver);
 
 errno_t pfe_class_get_feature_first(pfe_class_t *class, pfe_fw_feature_t **feature);
 errno_t pfe_class_get_feature_next(pfe_class_t *class, pfe_fw_feature_t **feature);
-errno_t pfe_class_get_feature(pfe_class_t *class, pfe_fw_feature_t **feature, const char *name);
+errno_t pfe_class_get_feature(const pfe_class_t *class, pfe_fw_feature_t **feature, const char *name);
+
+void pfe_class_flexi_parser_stats_endian(pfe_ct_class_flexi_parser_stats_t *stats);
+void pfe_class_sum_flexi_parser_stats(pfe_ct_class_flexi_parser_stats_t *sum, const pfe_ct_class_flexi_parser_stats_t *val);
+uint32_t pfe_class_fp_stat_to_str(const pfe_ct_class_flexi_parser_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
 
 #endif /* PFE_CLASS_H_ */

@@ -75,12 +75,14 @@ typedef struct
 	uint32_t irq_vector_safety; /* Safety IRQ number */
 	bool_t enable_util;			/* Shall be UTIL enabled? */
 	pfe_ct_phy_if_id_t local_hif; /* ID of the local interface */
+	uint32_t rtable_hash_size;	/* Size (number of entries) of hash area within routing table */
+	uint32_t rtable_collision_size;	/* Size (number of entries) of collision area within routing table */
 } pfe_platform_config_t;
 
 typedef struct
 {
 	volatile bool_t probed;
-	void *cbus_baseaddr;
+	addr_t cbus_baseaddr;
 	void *bmu_buffers_va;
 	addr_t bmu_buffers_size;
 	void *rtable_va;
@@ -130,20 +132,19 @@ typedef struct
 } pfe_platform_t;
 
 pfe_fw_t *pfe_fw_load(char_t *class_fw_name, char_t *util_fw_name);
-errno_t pfe_platform_init(pfe_platform_config_t *config);
+errno_t pfe_platform_init(const pfe_platform_config_t *config);
 errno_t pfe_platform_create_ifaces(pfe_platform_t *platform);
-errno_t pfe_platform_soft_reset(pfe_platform_t *platform);
+errno_t pfe_platform_soft_reset(const pfe_platform_t *platform);
 errno_t pfe_platform_remove(void);
-void pfe_platform_print_versions(pfe_platform_t *platform);
 pfe_platform_t *pfe_platform_get_instance(void);
-errno_t pfe_platform_register_log_if(pfe_platform_t *platform, pfe_log_if_t *log_if);
-errno_t pfe_platform_unregister_log_if(pfe_platform_t *platform, pfe_log_if_t *log_if);
-pfe_log_if_t *pfe_platform_get_log_if_by_id(pfe_platform_t *platform, uint8_t id);
-pfe_log_if_t *pfe_platform_get_log_if_by_name(pfe_platform_t *platform, char_t *name);
-pfe_phy_if_t *pfe_platform_get_phy_if_by_id(pfe_platform_t *platform, pfe_ct_phy_if_id_t id);
+errno_t pfe_platform_register_log_if(const pfe_platform_t *platform, pfe_log_if_t *log_if);
+errno_t pfe_platform_unregister_log_if(const pfe_platform_t *platform, pfe_log_if_t *log_if);
+pfe_log_if_t *pfe_platform_get_log_if_by_id(const pfe_platform_t *platform, uint8_t id);
+pfe_log_if_t *pfe_platform_get_log_if_by_name(const pfe_platform_t *platform, char_t *name);
+pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_ct_phy_if_id_t id);
 #if defined(PFE_CFG_MULTI_INSTANCE_SUPPORT)
 void pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg);
 #endif
-errno_t pfe_platform_get_fw_versions(pfe_platform_t *platform, pfe_ct_version_t *class_fw, pfe_ct_version_t *util_fw);
+errno_t pfe_platform_get_fw_versions(const pfe_platform_t *platform, pfe_ct_version_t *class_fw, pfe_ct_version_t *util_fw);
 
 #endif /* SRC_PFE_PLATFORM_H_ */

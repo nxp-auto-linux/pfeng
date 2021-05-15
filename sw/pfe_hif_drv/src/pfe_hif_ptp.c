@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2020 NXP
+ *  Copyright 2020-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -20,6 +20,9 @@
 
 /*	Entry timeout in number of ticks */
 #define PFE_HIF_PTP_DB_TIMEOUT				1
+
+#define PFE_PTP_WORKER_SHUTDOWN		(1)
+#define PFE_PTP_WORKER_TICK			(2)
 
 typedef struct
 {
@@ -44,40 +47,54 @@ static void *pfe_hif_ptp_ts_db_tick(void *arg)
 	pfe_hif_ptp_ts_db_t *db = (pfe_hif_ptp_ts_db_t *)arg;
 	LLIST_t *item, *aux;
 	pfe_hif_ptp_ts_db_entry_t *entry;
+	oal_mbox_msg_t msg;
 
 	while (1)
 	{
-		if (EOK != oal_mutex_lock(db->lock))
+		if (EOK == oal_mbox_receive(db->mbox, &msg))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
-		}
-
-		/*	Release aged entries */
-		LLIST_ForEachRemovable(item, aux, &db->entries)
-		{
-			entry = LLIST_Data(item, pfe_hif_ptp_ts_db_entry_t, lm);
-			if ((NULL != entry) && (entry->ticks <= 0U))
+			if (PFE_PTP_WORKER_SHUTDOWN == msg.payload.code)
 			{
-				NXP_LOG_INFO("Removing aged TS DB entry (Type: 0x%x, Port: 0x%x, SeqID: 0x%x)\n",
-						entry->type, entry->port, entry->seq_id);
-				LLIST_Remove(item);
-				oal_mm_free(entry);
-				db->count--;
+				break;
 			}
 			else
 			{
-				entry->ticks--;
+				if (EOK != oal_mutex_lock(db->lock))
+				{
+					NXP_LOG_DEBUG("Mutex lock failed\n");
+				}
+
+				/*	Release aged entries */
+				LLIST_ForEachRemovable(item, aux, &db->entries)
+				{
+					entry = LLIST_Data(item, pfe_hif_ptp_ts_db_entry_t, lm);
+					if ((NULL != entry) && (entry->ticks <= 0U))
+					{
+						NXP_LOG_INFO("Removing aged TS DB entry (Type: 0x%x, Port: 0x%x, SeqID: 0x%x)\n",
+								entry->type, entry->port, entry->seq_id);
+						LLIST_Remove(item);
+						oal_mm_free(entry);
+						db->count--;
+					}
+					else
+					{
+						entry->ticks--;
+					}
+				}
+
+				if (EOK != oal_mutex_unlock(db->lock))
+				{
+					NXP_LOG_DEBUG("Mutex unlock failed\n");
+				}
 			}
 		}
-
-		if (EOK != oal_mutex_unlock(db->lock))
+		else
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_WARNING("mbox_receive() failed\n");
 		}
-
-		/*	Tick = 1s */
-		oal_time_mdelay(10000);
 	}
+
+	NXP_LOG_INFO("TS DB worker shutting down\n");
 
 	return NULL;
 }
@@ -100,9 +117,27 @@ errno_t pfe_hif_ptp_ts_db_init(pfe_hif_ptp_ts_db_t *db)
 
 	LLIST_Init(&db->entries);
 
+	db->mbox = oal_mbox_create();
+	if (NULL == db->mbox)
+	{
+		NXP_LOG_ERROR("Can't create mbox\n");
+		oal_mm_free(db->lock);
+		return ENOEXEC;
+	}
+
+	if (EOK != oal_mbox_attach_timer(db->mbox, 1000U, PFE_PTP_WORKER_TICK))
+	{
+		NXP_LOG_ERROR("Could not attach timer\n");
+		oal_mbox_destroy(db->mbox);
+		oal_mm_free(db->lock);
+		return ENOEXEC;
+	}
+
 	db->worker = oal_thread_create(&pfe_hif_ptp_ts_db_tick, db, "TS DB worker", 0);
 	if (NULL == db->worker)
 	{
+		oal_mbox_detach_timer(db->mbox);
+		oal_mbox_destroy(db->mbox);
 		oal_mm_free(db->lock);
 		return ENOMEM;
 	}
@@ -117,6 +152,26 @@ void pfe_hif_ptp_ts_db_fini(pfe_hif_ptp_ts_db_t *db)
 {
 	LLIST_t *item, *aux;
 	pfe_hif_ptp_ts_db_entry_t *entry;
+
+	if (NULL != db->worker)
+	{
+		NXP_LOG_INFO("Stopping TS DB worker\n");
+
+		if (EOK != oal_mbox_send_signal(db->mbox, PFE_PTP_WORKER_SHUTDOWN))
+		{
+			NXP_LOG_ERROR("Could not send shutdown signal\n");
+		}
+
+		if (EOK != oal_thread_join(db->worker, NULL))
+		{
+			NXP_LOG_ERROR("Can't join TS DB worker thread\n");
+		}
+		else
+		{
+			NXP_LOG_INFO("TS DB worker stopped\n");
+			db->worker = NULL;
+		}
+	}
 
 	if (NULL != db->lock)
 	{
@@ -141,23 +196,10 @@ void pfe_hif_ptp_ts_db_fini(pfe_hif_ptp_ts_db_t *db)
 			NXP_LOG_DEBUG("Mutex unlock failed\n");
 		}
 
+		oal_mbox_destroy(db->mbox);
 		oal_mutex_destroy(db->lock);
 		oal_mm_free(db->lock);
 		db->lock = NULL;
-	}
-
-	if (NULL != db->worker)
-	{
-		(void)oal_thread_cancel(db->worker);
-
-		if (EOK != oal_thread_join(db->worker, NULL))
-		{
-			NXP_LOG_ERROR("Can't join TS DB worker thread\n");
-		}
-		else
-		{
-			NXP_LOG_INFO("TS DB worker stopped\n");
-		}
 	}
 }
 

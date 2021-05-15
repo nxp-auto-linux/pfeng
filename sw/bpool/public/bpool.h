@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2020 NXP
+ *  Copyright 2017-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -128,7 +128,7 @@ __attribute__((pure, hot)) static inline int32_t bpool_get_buf_len(const bpool_t
  * @param[in]	va Virtual address of a buffer from a pool
  * @retval		Pointer to bd of the buffer if found or NULL when not found
  */
-__attribute__((pure, hot)) static inline bpool_rx_buf_t *bpool_get_bd(const bpool_t *const pool, void *const va)
+__attribute__((pure, hot)) static inline bpool_rx_buf_t *bpool_get_bd(const bpool_t *const pool, const void *const va)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
@@ -171,7 +171,7 @@ __attribute__((pure, hot)) static inline bpool_rx_buf_t *bpool_get_bd(const bpoo
  * @param[in]	va Virtual address of a buffer from the pool which storage will be returned
  * @return		Pointer to the storage (virtual) or NULL if failed
  */
-__attribute__((pure, hot)) static inline uint32_t * bpool_get_unsigned_storage(const bpool_t *const pool, void *va)
+__attribute__((pure, hot)) static inline uint32_t * bpool_get_unsigned_storage(const bpool_t *const pool, const void *va)
 {
 	bpool_rx_buf_t *bd;
 
@@ -206,7 +206,7 @@ __attribute__((pure, hot)) static inline uint32_t * bpool_get_unsigned_storage(c
  * @param[in]	va Virtual address of a buffer from the pool which storage will be returned
  * @return		Pointer to the storage (virtual) or NULL if failed
  */
-__attribute__((pure, hot)) static inline bpool_complex_storage_t * bpool_get_complex_storage(const bpool_t *const pool, void *va)
+__attribute__((pure, hot)) static inline bpool_complex_storage_t * bpool_get_complex_storage(const bpool_t *const pool, const void *va)
 {
 	bpool_rx_buf_t *bd;
 
@@ -241,7 +241,7 @@ __attribute__((pure, hot)) static inline bpool_complex_storage_t * bpool_get_com
  * @param[in]	va Virtual address of a buffer from the pool which storage will be returned
  * @return		Pointer to the storage (virtual) or NULL if failed
  */
-__attribute__((pure, hot)) static inline void * bpool_get_meta_storage(const bpool_t *const pool, void *va)
+__attribute__((pure, hot)) static inline void * bpool_get_meta_storage(const bpool_t *const pool, const void *va)
 {
 	bpool_rx_buf_t *bd;
 
@@ -339,9 +339,9 @@ __attribute__((pure, hot)) static inline void * bpool_get_pa(const bpool_t *cons
 
 bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, uint32_t align, bool_t cached) __attribute__((cold));
 void * bpool_get(bpool_t *pool) __attribute__((hot));
-void bpool_put(bpool_t *pool, void *va) __attribute__((hot));
+void bpool_put(bpool_t *pool, const void *va) __attribute__((hot));
 errno_t bpool_get_fill_level(bpool_t *pool, uint32_t *fill_level) __attribute__((hot));
-uint32_t bpool_get_depth(bpool_t *pool) __attribute__((pure, hot));
+uint32_t bpool_get_depth(const bpool_t *pool) __attribute__((pure, hot));
 errno_t bpool_destroy(bpool_t * pool) __attribute__((cold));
 
 #endif /* SRC_BPOOL_H_ */

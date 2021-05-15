@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2020 NXP
+#  Copyright 2018-2021 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -42,10 +42,12 @@ export PFE_CFG_PARANOID_IRQ?=0
 export PFE_CFG_DEBUG?=0
 #HIF driver mode. 0 - SC, 1 - MC
 export PFE_CFG_HIF_DRV_MODE?=0
+#Control the DMA buffer descriptor fetch. 0 - polling, 1 - triggering
+export PFE_CFG_HIF_USE_BD_TRIGGER?=0
 #Host interfaces to be used by particular driver interfaces (see pfe_ct_phy_if_id_t)
-export PFE_CFG_PFE0_IF=6
-export PFE_CFG_PFE1_IF=7
-export PFE_CFG_PFE2_IF=8
+export PFE_CFG_PFE0_IF?=6
+export PFE_CFG_PFE1_IF?=7
+export PFE_CFG_PFE2_IF?=8
 #Multi-instance driver support (includes IHC API). 1 - enable, 0 - disable.
 export PFE_CFG_MULTI_INSTANCE_SUPPORT?=0
 #Master/Slave variant switch
@@ -64,6 +66,8 @@ export PFE_CFG_CSUM_ALL_FRAMES?=0
 export PFE_CFG_HIF_SEQNUM_CHECK?=0
 #IP version
 export PFE_CFG_IP_VERSION?=PFE_CFG_IP_VERSION_NPU_7_14a
+#QNX only: When enabled cache maintenence is not performed on buffers.
+export PFE_CFG_BUFFERS_COHERENT?=1
 #Build of rtable feature. 1 - enable, 0 - disable
 export PFE_CFG_RTABLE_ENABLE?=1
 #Build of l2bridge feature. 1 - enable, 0 - disable
@@ -79,21 +83,27 @@ export PFE_CFG_IF_DB_WORKER?=0
 #Enable IEEE1588 timestamping support
 export PFE_CFG_IEEE1588_SUPPORT?=0
 #Input clock frequency for the IEEE1588 timestamping unit (EMAC)
-export PFE_CFG_IEEE1588_I_CLK_HZ=0
+export PFE_CFG_IEEE1588_I_CLK_HZ?=0
 #Output clock to be used to drive the IEEE1588 system time counter
-export PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ=0
-export PFE_CFG_IEEE1588_EMAC1_O_CLK_HZ=0
-export PFE_CFG_IEEE1588_EMAC2_O_CLK_HZ=0
+export PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ?=0
+export PFE_CFG_IEEE1588_EMAC1_O_CLK_HZ?=0
+export PFE_CFG_IEEE1588_EMAC2_O_CLK_HZ?=0
 #PFE system buffers location
-export PFE_CFG_SYS_MEM="pfe_ddr"
+export PFE_CFG_SYS_MEM?="pfe_ddr"
 #Buffer descriptors location
-export PFE_CFG_BD_MEM="pfe_ddr"
+export PFE_CFG_BD_MEM?="pfe_ddr"
 #RX buffers location
-export PFE_CFG_RX_MEM="pfe_ddr"
+export PFE_CFG_RX_MEM?="pfe_ddr"
 #Routing table location
-export PFE_CFG_RT_MEM="pfe_ddr"
+export PFE_CFG_RT_MEM?="pfe_ddr"
+#Routing table hash size (number of entries)
+export PFE_CFG_RT_HASH_SIZE?=256
+#Routing table collision size (number of entries)
+export PFE_CFG_RT_COLLISION_SIZE?=256
 #Enable firmware-based priority control for HIF traffic
 export PFE_CFG_HIF_PRIO_CTRL=1
+#Enable safe interrupt handling
+export PFE_CFG_SAFE_IRQ?=1
 
 ifeq ($(PFE_CFG_HIF_DRV_MODE),0)
   #Use multi-client HIF driver. Required when multiple logical interfaces need to
@@ -150,9 +160,9 @@ endif
 
 #Include HIF TX FIFO fix. This is SW workaround for HIF stall issue.
 ifeq ($(PFE_CFG_IP_VERSION),PFE_CFG_IP_VERSION_NPU_7_14)
-export PFE_CFG_HIF_TX_FIFO_FIX=1
+  export PFE_CFG_HIF_TX_FIFO_FIX=1
 else
-export PFE_CFG_HIF_TX_FIFO_FIX=0
+  export PFE_CFG_HIF_TX_FIFO_FIX=0
 endif
 #Set default verbosity level for sysfs. Valid values are from 1 to 10.
 export PFE_CFG_VERBOSITY_LEVEL?=4
@@ -203,6 +213,10 @@ ifneq ($(PFE_CFG_HIF_NOCPY_DIRECT),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_NOCPY_DIRECT
 endif
 
+ifneq ($(PFE_CFG_HIF_USE_BD_TRIGGER),0)
+    GLOBAL_CCFLAGS+= -DPFE_CFG_HIF_USE_BD_TRIGGER
+endif
+
 ifneq ($(PFE_CFG_CSUM_ALL_FRAMES),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_CSUM_ALL_FRAMES
 endif
@@ -215,6 +229,10 @@ ifneq ($(PFE_CFG_IP_VERSION),)
 GLOBAL_CCFLAGS+=-DPFE_CFG_IP_VERSION=$(PFE_CFG_IP_VERSION)
 else
 $(error IP version must be set)
+endif
+
+ifneq ($(PFE_CFG_BUFFERS_COHERENT),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_BUFFERS_COHERENT
 endif
 
 ifneq ($(PFE_CFG_RTABLE_ENABLE),0)
@@ -312,8 +330,20 @@ ifneq ($(PFE_CFG_RT_MEM),0)
   endif
 endif
 
+ifneq ($(PFE_CFG_RT_HASH_SIZE),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_RT_HASH_SIZE=$(PFE_CFG_RT_HASH_SIZE)
+endif
+
+ifneq ($(PFE_CFG_RT_COLLISION_SIZE),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_RT_COLLISION_SIZE=$(PFE_CFG_RT_COLLISION_SIZE)
+endif
+
 ifneq ($(PFE_CFG_HIF_PRIO_CTRL),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_PRIO_CTRL
+endif
+
+ifneq ($(PFE_CFG_SAFE_IRQ),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_SAFE_IRQ
 endif
 
 # This variable will be propagated to every Makefile in the project

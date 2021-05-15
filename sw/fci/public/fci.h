@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2020 NXP
+ *  Copyright 2017-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -21,7 +21,7 @@
  * @brief	Information passed into the fci_init() function
  * @note	For future use
  */
-typedef struct fci_init_info_tag
+typedef struct
 {
 	pfe_rtable_t *rtable;	/* The routing table object */
 	pfe_l2br_t *l2_bridge;	/* The L2 bridge instance */
@@ -38,5 +38,12 @@ typedef struct __fci_tag fci_t;
 errno_t fci_init(fci_init_info_t *info, const char_t *const identifier);
 void fci_fini(void);
 errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep);
+
+typedef struct 
+{
+	uint32_t stats;
+} pfe_fp_t;
+
+uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 
 #endif /* FCI_H_ */

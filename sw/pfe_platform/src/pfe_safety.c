@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -18,9 +18,9 @@
 
 struct pfe_safety_tag
 {
-	void *cbus_base_va;
-	void *safety_base_offset;
-	void *safety_base_va;
+	addr_t cbus_base_va;
+	addr_t safety_base_offset;
+	addr_t safety_base_va;
 	oal_mutex_t *lock;
 };
 
@@ -32,12 +32,12 @@ struct pfe_safety_tag
  * @return		EOK if interrupt has been handled, error code otherwise
  * @note		Interrupt which were triggered are masked here, it is periodically unmasked again in safety thread
  */
-pfe_safety_t *pfe_safety_create(void *cbus_base_va, void *safety_base)
+pfe_safety_t *pfe_safety_create(addr_t cbus_base_va, addr_t safety_base)
 {
 	pfe_safety_t *safety;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == cbus_base_va))
+	if (unlikely(NULL_ADDR == cbus_base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -55,7 +55,7 @@ pfe_safety_t *pfe_safety_create(void *cbus_base_va, void *safety_base)
 		(void)memset(safety, 0, sizeof(pfe_safety_t));
 		safety->cbus_base_va = cbus_base_va;
 		safety->safety_base_offset = safety_base;
-		safety->safety_base_va = (void *)((addr_t)safety->cbus_base_va + (addr_t)safety->safety_base_offset);
+		safety->safety_base_va = (safety->cbus_base_va + safety->safety_base_offset);
 
 		/*	Create mutex */
 		safety->lock = (oal_mutex_t *)oal_mm_malloc(sizeof(oal_mutex_t));
@@ -115,7 +115,7 @@ void pfe_safety_destroy(pfe_safety_t *safety)
  * @param[in]	safety The SAFETY instance
  * @return		EOK if interrupt has been handled
  */
-errno_t pfe_safety_isr(pfe_safety_t *safety)
+errno_t pfe_safety_isr(const pfe_safety_t *safety)
 {
 	errno_t ret = ENOENT;
 
@@ -139,7 +139,7 @@ errno_t pfe_safety_isr(pfe_safety_t *safety)
  * @brief		Mask SAFETY interrupts
  * @param[in]	safety The SAFETY instance
  */
-void pfe_safety_irq_mask(pfe_safety_t *safety)
+void pfe_safety_irq_mask(const pfe_safety_t *safety)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == safety))
@@ -158,7 +158,7 @@ void pfe_safety_irq_mask(pfe_safety_t *safety)
  * @brief		Unmask SAFETY interrupts
  * @param[in]	safety The SAFETY instance
  */
-void pfe_safety_irq_unmask(pfe_safety_t *safety)
+void pfe_safety_irq_unmask(const pfe_safety_t *safety)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == safety))

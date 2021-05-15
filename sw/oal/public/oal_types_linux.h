@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -14,6 +14,8 @@
 
 #define __STR_HELPER(x) #x
 #define __STR(x) __STR_HELPER(x)
+
+#define NXP_LOG_ENABLED
 
 #define NXP_LOG_WARNING(...) printk(KERN_WARNING "["__FILE__":"__STR(__LINE__)"] WRN: " __VA_ARGS__)
 #define NXP_LOG_ERROR(...) printk(KERN_ERR "["__FILE__":"__STR(__LINE__)"] ERR: " __VA_ARGS__)
@@ -33,14 +35,14 @@
 #if defined(PFE_CFG_TARGET_ARCH_i386)
 typedef unsigned int addr_t;
 #define PRINT64 "l"
-#define PRINTADDR_T "u"
+#define PRINTADDR_T "x"
 #elif defined(PFE_CFG_TARGET_ARCH_x86_64) || defined(PFE_CFG_TARGET_ARCH_aarch64)
 
 #define MAX_ADDR_T_VAL UINT_MAX
 
 typedef unsigned long long addr_t;
 #define PRINT64 "ll"
-#define PRINTADDR_T "llu"
+#define PRINTADDR_T "llx"
 #else
 #error Unsupported or no platform defined
 #endif
@@ -61,6 +63,10 @@ typedef unsigned int uint_t; /* For use within printf like functions */
 #ifndef FALSE
 #define FALSE 0
 #endif /* FALSE */
+
+#ifndef NULL_ADDR
+#define NULL_ADDR ((addr_t)0U)
+#endif /* NULL_ADDR */
 
 #define oal_htons(x)	htons(x)
 #define oal_ntohs(x)	ntohs(x)

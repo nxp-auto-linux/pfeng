@@ -23,7 +23,7 @@
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
 
-static void pfe_bmu_cfg_clear_buf_cnt_memory(void *base_va, uint32_t cnt)
+static void pfe_bmu_cfg_clear_buf_cnt_memory(addr_t base_va, uint32_t cnt)
 {
 	uint32_t ii;
 
@@ -35,7 +35,7 @@ static void pfe_bmu_cfg_clear_buf_cnt_memory(void *base_va, uint32_t cnt)
 	}
 }
 
-static void pfe_bmu_cfg_clear_internal_memory(void *base_va, uint32_t cnt)
+static void pfe_bmu_cfg_clear_internal_memory(addr_t base_va, uint32_t cnt)
 {
 	uint32_t ii;
 
@@ -57,11 +57,11 @@ static void pfe_bmu_cfg_clear_internal_memory(void *base_va, uint32_t cnt)
  * @return		EOK if interrupt has been handled, error code otherwise
  * @note		Make sure the call is protected by some per-BMU mutex
  */
-errno_t pfe_bmu_cfg_isr(void *base_va, void *cbus_base_va)
+errno_t pfe_bmu_cfg_isr(addr_t base_va, addr_t cbus_base_va)
 {
 	uint32_t reg_src, reg_en, reg, reg_reen = 0U;
 	errno_t ret = ENOENT;
-	addr_t bmu_offset = (addr_t)base_va - (addr_t)cbus_base_va;
+	addr_t bmu_offset = base_va - cbus_base_va;
 #ifndef NXP_LOG_ENABLED
 	(void)bmu_offset;
 #endif /* NXP_LOG_ENABLED */
@@ -105,7 +105,7 @@ errno_t pfe_bmu_cfg_isr(void *base_va, void *cbus_base_va)
 		/*	More (or equal) than "threshold" number of buffers have been
 			allocated. Read and print the threshold value. Stay disabled. */
 		reg = hal_read32(base_va + BMU_THRES);
-		NXP_LOG_INFO("BMU_THRES_INT (BMU @ p0x%p). Pool being depleted. Threshold: %d.\n", (void *)bmu_offset, (reg & 0xffffU));
+		NXP_LOG_INFO("BMU_THRES_INT (BMU @ p0x%p). Pool being depleted. Threshold: %u.\n", (void *)bmu_offset, ((uint_t)reg & 0xffffU));
 
 		/*	Stay disabled but re-enable the "empty" interrupt */
 		reg_reen |= BMU_EMPTY_INT;
@@ -115,7 +115,7 @@ errno_t pfe_bmu_cfg_isr(void *base_va, void *cbus_base_va)
 	if ((reg_src & reg_en & BMU_FREE_ERR_INT) != 0U)
 	{
 		/*	Free error interrupt. Keep this one always enabled */
-		NXP_LOG_INFO("BMU_FREE_ERR_INT (BMU @ p0x%p) address 0x%x\n", (void *)bmu_offset, hal_read32(base_va + BMU_FREE_ERROR_ADDR));
+		NXP_LOG_INFO("BMU_FREE_ERR_INT (BMU @ p0x%p) address 0x%x\n", (void *)bmu_offset, (uint_t)hal_read32(base_va + BMU_FREE_ERROR_ADDR));
 		ret = EOK;
 	}
 
@@ -141,7 +141,7 @@ errno_t pfe_bmu_cfg_isr(void *base_va, void *cbus_base_va)
  * @param[in]	base_va Base address of the BMU register space (virtual)
  * @note		Make sure the call is protected by some per-BMU mutex
  */
-void pfe_bmu_cfg_irq_mask(void *base_va)
+void pfe_bmu_cfg_irq_mask(addr_t base_va)
 {
 	uint32_t reg;
 
@@ -155,7 +155,7 @@ void pfe_bmu_cfg_irq_mask(void *base_va)
  * @param[in]	base_va Base address of the BMU register space (virtual)
  * @note		Make sure the call is protected by some per-BMU mutex
  */
-void pfe_bmu_cfg_irq_unmask(void *base_va)
+void pfe_bmu_cfg_irq_unmask(addr_t base_va)
 {
 	uint32_t reg;
 
@@ -169,18 +169,23 @@ void pfe_bmu_cfg_irq_unmask(void *base_va)
  * @param[in]	base_va Base address of the BMU register space (virtual)
  * @param[in]	cfg Pointer to the configuration structure
  */
-void pfe_bmu_cfg_init(void *base_va, pfe_bmu_cfg_t *cfg)
+void pfe_bmu_cfg_init(addr_t base_va, const pfe_bmu_cfg_t *cfg)
 {
 	hal_write32(0U, base_va + BMU_CTRL);
 	hal_write32(0x0U, base_va + BMU_INT_ENABLE);
 	hal_write32(0xffffffffU, base_va + BMU_INT_SRC);
 
-	hal_write32((uint32_t)((addr_t)cfg->pool_pa & 0xffffffffU), base_va + BMU_UCAST_BASEADDR);
+	hal_write32((uint32_t)(cfg->pool_pa & 0xffffffffU), base_va + BMU_UCAST_BASEADDR);
 	hal_write32(cfg->max_buf_cnt & 0xffffU, base_va + BMU_UCAST_CONFIG);
 	hal_write32(cfg->buf_size & 0xffffU, base_va + BMU_BUF_SIZE);
 
 	/*	Thresholds. 75% of maximum number of available buffers. */
 	hal_write32((cfg->max_buf_cnt * 75U) / 100U, base_va + BMU_THRES);
+
+	/*	Low Watermark for pause frame generation start 5% of free buffers. */
+	hal_write32((cfg->max_buf_cnt * 5U) / 100U, base_va + BMU_LOW_WATERMARK);
+	/*	High Watermark for pause frame generation stop 10% of free buffers. */
+	hal_write32((cfg->max_buf_cnt * 10U) / 100U, base_va + BMU_HIGH_WATERMARK);
 
 	pfe_bmu_cfg_clear_internal_memory(base_va, cfg->int_mem_loc_cnt);
 	pfe_bmu_cfg_clear_buf_cnt_memory(base_va, cfg->buf_mem_loc_cnt);
@@ -193,7 +198,7 @@ void pfe_bmu_cfg_init(void *base_va, pfe_bmu_cfg_t *cfg)
  * @brief		Finalize the BMU
  * @param[in]	base_va Base address of HIF register space (virtual)
  */
-void pfe_bmu_cfg_fini(void *base_va)
+void pfe_bmu_cfg_fini(addr_t base_va)
 {
 	hal_write32(0U, base_va + BMU_CTRL);
 	hal_write32(0x0U, base_va + BMU_INT_ENABLE);
@@ -205,7 +210,7 @@ void pfe_bmu_cfg_fini(void *base_va)
  * @param[in]	base_va Base address of the BMU register space (virtual)
  * @return		EOK if success or error code otherwise
  */
-errno_t pfe_bmu_cfg_reset(void *base_va)
+errno_t pfe_bmu_cfg_reset(addr_t base_va)
 {
 	uint32_t ii = 0U;
 
@@ -229,7 +234,7 @@ errno_t pfe_bmu_cfg_reset(void *base_va)
  * @brief		Enable the BMU block
  * @param[in]	base_va Base address of the BMU register space (virtual)
  */
-void pfe_bmu_cfg_enable(void *base_va)
+void pfe_bmu_cfg_enable(addr_t base_va)
 {
 	hal_write32(0x1U, base_va + BMU_CTRL);
 }
@@ -238,7 +243,7 @@ void pfe_bmu_cfg_enable(void *base_va)
  * @brief		Disable the BMU block
  * @param[in]	base_va Base address of the BMU register space (virtual)
  */
-void pfe_bmu_cfg_disable(void *base_va)
+void pfe_bmu_cfg_disable(addr_t base_va)
 {
 	hal_write32(0x0U, base_va + BMU_CTRL);
 }
@@ -248,7 +253,7 @@ void pfe_bmu_cfg_disable(void *base_va)
  * @param[in]	base_va Base address of the BMU register space (virtual)
  * @return		Pointer to the allocated buffer
  */
-void * pfe_bmu_cfg_alloc_buf(void *base_va)
+void * pfe_bmu_cfg_alloc_buf(addr_t base_va)
 {
 	return (void *)(addr_t)hal_read32(base_va + BMU_ALLOC_CTRL);
 }
@@ -258,9 +263,9 @@ void * pfe_bmu_cfg_alloc_buf(void *base_va)
  * @param[in]	base_va Base address of the BMU register space (virtual)
  * @param[in]	buffer Pointer to the buffer to be released
  */
-void pfe_bmu_cfg_free_buf(void *base_va, void *buffer)
+void pfe_bmu_cfg_free_buf(addr_t base_va, addr_t buffer)
 {
-	hal_write32((uint32_t)((addr_t)buffer & 0xffffffffU), base_va + BMU_FREE_CTRL);
+	hal_write32((uint32_t)(buffer & 0xffffffffU), base_va + BMU_FREE_CTRL);
 }
 
 /**
@@ -273,13 +278,13 @@ void pfe_bmu_cfg_free_buf(void *base_va, void *buffer)
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_bmu_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level)
+uint32_t pfe_bmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 	uint32_t reg, ii;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == base_va))
+	if (unlikely(NULL_ADDR == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received (pfe_bmu_cfg_get_text_stat)\n");
 		return 0U;

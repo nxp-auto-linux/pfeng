@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -16,7 +16,7 @@
 
 struct pfe_hif_nocpy_tag
 {
-	void *base_va;						/*	CBUS base virtual address */
+	addr_t base_va;						/*	CBUS base virtual address */
 	pfe_hif_chnl_t *channel;			/*	Associated channel instance */
 };
 
@@ -27,13 +27,13 @@ struct pfe_hif_nocpy_tag
  * @param[in]	bmu BMU providing buffers for HIF NOCPY operation
  * @return		The HIF_NOCPY instance or NULL if failed
  */
-pfe_hif_nocpy_t *pfe_hif_nocpy_create(void *base_va, pfe_bmu_t *bmu)
+pfe_hif_nocpy_t *pfe_hif_nocpy_create(addr_t base_va, const pfe_bmu_t *bmu)
 {
 	pfe_hif_nocpy_t *hif;
 	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == base_va) || (NULL == bmu)))
+	if (unlikely((NULL_ADDR == base_va) || (NULL == bmu)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -77,7 +77,7 @@ pfe_hif_nocpy_t *pfe_hif_nocpy_create(void *base_va, pfe_bmu_t *bmu)
  * @param[in]	channel_id The channel ID. Currently only PFE_HIF_CHNL_NOCPY_ID is supported.
  * @return		The HIF channel instance or NULL if failed
  */
-pfe_hif_chnl_t *pfe_hif_nocpy_get_channel(pfe_hif_nocpy_t *hif, uint32_t channel_id)
+pfe_hif_chnl_t *pfe_hif_nocpy_get_channel(const pfe_hif_nocpy_t *hif, uint32_t channel_id)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == hif))
@@ -99,7 +99,7 @@ pfe_hif_chnl_t *pfe_hif_nocpy_get_channel(pfe_hif_nocpy_t *hif, uint32_t channel
  * @brief		Destroy HIF_NOCPY instance
  * @param[in]	hif The HIF_NOCPY instance
  */
-void pfe_hif_nocpy_destroy(pfe_hif_nocpy_t *hif)
+void pfe_hif_nocpy_destroy(const pfe_hif_nocpy_t *hif)
 {
 	if (NULL != hif)
 	{
@@ -117,7 +117,7 @@ void pfe_hif_nocpy_destroy(pfe_hif_nocpy_t *hif)
  * @param[in]	verb_level 	Verbosity level, number of data written to the buffer
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_hif_nocpy_get_text_statistics(pfe_hif_nocpy_t *hif, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_hif_nocpy_get_text_statistics(const pfe_hif_nocpy_t *hif, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 

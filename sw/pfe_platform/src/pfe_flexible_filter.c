@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -50,7 +50,7 @@ errno_t pfe_flexible_filter_set(pfe_class_t *class, const uint32_t dmem_addr)
         /* Get the flexible filter address */
         ff_addr = oal_ntohl(mmap.flexible_filter);
         /* Write new address of flexible filter */
-        ret = pfe_class_write_dmem(class, -1, (void *)(addr_t)ff_addr, &ff, sizeof(pfe_ct_flexible_filter_t));
+        ret = pfe_class_write_dmem(class, -1, (addr_t)ff_addr, (void *)&ff, sizeof(pfe_ct_flexible_filter_t));
     }
     return ret;
 }

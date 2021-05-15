@@ -22,6 +22,70 @@
 
 #define is_power_of_2(n) ((n) && !((n) & ((n) - 1U)))
 
+static errno_t bpool_create_check_buffer_size_and_align(uint32_t buf_size, uint32_t align);
+static uint32_t bpool_create_calculate_aligned_buf_size(uint32_t buf_size);
+
+static errno_t bpool_create_check_buffer_size_and_align(uint32_t buf_size, uint32_t align)
+{
+	errno_t ret;
+
+	if (align < HAL_CACHE_LINE_SIZE)
+	{
+		NXP_LOG_ERROR("Minimum buffer pool alignment is %d bytes\n", HAL_CACHE_LINE_SIZE);
+		ret = EINVAL;
+	}
+	else if (FALSE == is_power_of_2(align))
+	{
+		NXP_LOG_ERROR("Buffer pool alignment must be power of 2\n");
+		ret = EINVAL;
+	}
+	else if ((buf_size < 256U) || (buf_size > 4096U))
+	{
+		NXP_LOG_ERROR("Buffer size must be more than 256 and less than 4096 bytes\n");
+		ret = EINVAL;
+	}
+	else if (FALSE == is_power_of_2(buf_size))
+	{
+		NXP_LOG_ERROR("Buffer size must be power of 2\n");
+		ret = EINVAL;
+	}
+	else
+	{
+		ret = EOK;
+	}
+
+	return ret;
+}
+
+static uint32_t bpool_create_calculate_aligned_buf_size(uint32_t buf_size)
+{
+	uint32_t aligned_buf_size;
+
+	if (buf_size > 2048U)
+	{
+		/*	Maximal allowed size */
+		aligned_buf_size = 4096U;
+	}
+	else if(buf_size > 1024U)
+	{
+		aligned_buf_size = 2048U;
+	}
+	else if(buf_size > 512U)
+	{
+		aligned_buf_size = 1024U;
+	}
+	else if(buf_size > 256U)
+	{
+		aligned_buf_size = 512U;
+	}
+	else
+	{
+		aligned_buf_size = 256U;
+	}
+
+	return aligned_buf_size;
+}
+
 /**
  * @brief		Destroy pool and release all allocated memory
  * @param[in]	pool The bpool instance
@@ -94,7 +158,7 @@ __attribute__((hot)) errno_t bpool_get_fill_level(bpool_t *pool, uint32_t *fill_
  * @param[in]	pool The bpool instance
  * @return		Pool depth in number of entries
  */
-__attribute__((pure, hot)) uint32_t bpool_get_depth(bpool_t *pool)
+__attribute__((pure, hot)) uint32_t bpool_get_depth(const bpool_t *pool)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
@@ -115,7 +179,7 @@ __attribute__((pure, hot)) uint32_t bpool_get_depth(bpool_t *pool)
  */
 __attribute__((hot)) void * bpool_get(bpool_t *pool)
 {
-	bpool_rx_buf_t *curItem;
+	const bpool_rx_buf_t *curItem;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
@@ -153,11 +217,8 @@ __attribute__((hot)) void * bpool_get(bpool_t *pool)
  * @param[in]	va Virtual address of the buffer to put
  * @note		Is reentrant
  */
-__attribute__((hot)) void bpool_put(bpool_t *pool, void *va)
+__attribute__((hot)) void bpool_put(bpool_t *pool, const void *va)
 {
-#if defined (PFE_CFG_GET_ALL_ERRORS)
-	errno_t ret;
-#endif /* PFE_CFG_GET_ALL_ERRORS */
 	bpool_rx_buf_t *curItem;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -227,33 +288,15 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 	uint32_t aligned_buf_size;
 	uint32_t real_buf_size;
 	addr_t bd_addr;
+	errno_t ret;
 
 	if ((sizeof(bpool_rx_buf_t) % HAL_CACHE_LINE_SIZE) != 0U)
 	{
 		NXP_LOG_DEBUG("Sub-optimal structure size: buffer\n");
 	}
 
-	if (align < HAL_CACHE_LINE_SIZE)
+	if(EOK != bpool_create_check_buffer_size_and_align(buf_size, align))
 	{
-		NXP_LOG_ERROR("Minimum buffer pool alignment is %d bytes\n", HAL_CACHE_LINE_SIZE);
-		return NULL;
-	}
-
-	if (FALSE == is_power_of_2(align))
-	{
-		NXP_LOG_ERROR("Buffer pool alignment must be power of 2\n");
-		return NULL;
-	}
-
-	if ((buf_size < 256U) || (buf_size > 4096U))
-	{
-		NXP_LOG_ERROR("Buffer size must be more than 256 and less than 4096 bytes\n");
-		return NULL;
-	}
-
-	if (FALSE == is_power_of_2(buf_size))
-	{
-		NXP_LOG_ERROR("Buffer size must be power of 2\n");
 		return NULL;
 	}
 
@@ -266,34 +309,14 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 		* 4096 byte buffers aligned to 4096
 		* Bigger buffers must not be used!!
 	*/
-	if (buf_size > 2048U)
-	{
-		/*	Maximal allowed size */
-		aligned_buf_size = 4096U;
-	}
-	else if(buf_size > 1024U)
-	{
-		aligned_buf_size = 2048U;
-	}
-	else if(buf_size > 512U)
-	{
-		aligned_buf_size = 1024U;
-	}
-	else if(buf_size > 256U)
-	{
-		aligned_buf_size = 512U;
-	}
-	else
-	{
-		aligned_buf_size = 256U;
-	}
+	aligned_buf_size = bpool_create_calculate_aligned_buf_size(buf_size);
 
 	/*	Beginning of each buffer is aligned to either 4096, 2048, 1024, 512, or 256
 		=> it is practical to use those values also as buffer sizes. */
 
 	if (0U != (aligned_buf_size % align))
 	{
-		NXP_LOG_ERROR("Failed to satisfy requested minimal alignment %u\n", align);
+		NXP_LOG_ERROR("Failed to satisfy requested minimal alignment %u\n", (uint_t)align);
 		return NULL;
 	}
 	real_buf_size = buf_size;
@@ -356,7 +379,7 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 	/*	Check alignment of physical address */
 	if((addr_t)paddr != ((addr_t)paddr & ~((addr_t)aligned_buf_size-1U)))
 	{
-		NXP_LOG_ERROR("The physical address p0x%p is not properly aligned to buffer size %u\n", paddr, aligned_buf_size);
+		NXP_LOG_ERROR("The physical address p0x%p is not properly aligned to buffer size %u\n", paddr, (uint_t)aligned_buf_size);
 		goto release_block_and_fail;
 	}
 
@@ -401,7 +424,8 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 		fifo_item->magicword = NXP_MAGICINT;
 #endif /* BPOOL_CFG_MEM_BUF_WATCH */
 
-		if (fifo_put((fifo_t *)(the_pool->free_fifo), fifo_item) != 0)
+		ret = fifo_put((fifo_t *)(the_pool->free_fifo), fifo_item);
+		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("Could not add buffer into the pool\n");
 			goto release_block_and_fail;
@@ -413,9 +437,9 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 		bd_addr   += sizeof(bpool_rx_buf_t);
 	}
 
-	NXP_LOG_DEBUG("Buffer pool (%d buffers, %d bytes each) created @ p0x%p/v0x%p\n",
-					the_pool->buffer_num,
-					aligned_buf_size,
+	NXP_LOG_DEBUG("Buffer pool (%u buffers, %u bytes each) created @ p0x%p/v0x%p\n",
+					(uint_t)the_pool->buffer_num,
+					(uint_t)aligned_buf_size,
 					(void *)the_pool->buffer_pa_start,
 					(void *)the_pool->buffer_va_start);
 

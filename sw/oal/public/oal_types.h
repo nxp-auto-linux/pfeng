@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -8,15 +8,15 @@
 /**
  * @addtogroup	dxgrOAL
  * @{
- * 
+ *
  * @defgroup    dxgr_OAL_TYPES TYPES
  * @brief		Standard types
- * @details		
- * 	
- * 	
+ * @details
+ *
+ *
  * @addtogroup	dxgr_OAL_TYPES
  * @{
- * 
+ *
  * @file		oal_types.h
  * @brief		Header for standard types
  * @details		TODO
@@ -49,7 +49,7 @@
 
 /*
  * BARE METAL
- * 
+ *
  */
 #elif defined(PFE_CFG_TARGET_OS_BARE)
 #include "oal_types_bare.h"
@@ -62,17 +62,7 @@
 #error "PFE_CFG_TARGET_OS_xx was not set!"
 #endif /* PFE_CFG_TARGET_OS_xx */
 
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
-
-#define ASSERT_CONCAT_(a, b) a##b
-#define ASSERT_CONCAT(a, b) ASSERT_CONCAT_(a, b)
-
-#ifdef __ghs__ /* AAVB-2386 */
-#define ct_assert(e) 
-#else
-#define ct_assert(e) enum { ASSERT_CONCAT(precompile_assert_, __COUNTER__) = 1/(!!(e)) }
-#endif
+#include "ct_assert.h"
 
 /**
  * @brief		Swap byte order in a buffer

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -22,16 +22,16 @@
 
 struct pfe_bmu_tag
 {
-	void *cbus_base_va;		/*	CBUS base virtual address */
-	void *bmu_base_va;		/*	BMU base address (virtual) */
+	addr_t cbus_base_va;		/*	CBUS base virtual address */
+	addr_t bmu_base_va;		/*	BMU base address (virtual) */
 	addr_t pool_va_offset;	/*	Pre-calculated VA-PA conversion offset */
-	void *pool_base_va;
-	void *pool_base_pa;
+	addr_t pool_base_va;
+	addr_t pool_base_pa;
 	addr_t pool_size;
 #ifdef PFE_CFG_PARANOID_IRQ
 	oal_mutex_t lock;
 #endif /* PFE_CFG_PARANOID_IRQ */
-	void *bmu_base_offset;	/*	BMU base offset within CBUS space */
+	addr_t bmu_base_offset;	/*	BMU base offset within CBUS space */
 	uint32_t buf_size;
 };
 
@@ -40,7 +40,7 @@ struct pfe_bmu_tag
  * @param[in]	bmu The BMU instance
  * @return		EOK if interrupt has been handled
  */
-__attribute__((cold)) errno_t pfe_bmu_isr(pfe_bmu_t *bmu)
+__attribute__((cold)) errno_t pfe_bmu_isr(const pfe_bmu_t *bmu)
 {
 	errno_t ret = ENOENT;
 
@@ -76,7 +76,7 @@ __attribute__((cold)) errno_t pfe_bmu_isr(pfe_bmu_t *bmu)
  * @brief		Mask BMU interrupts
  * @param[in]	bmu The BMU instance
  */
-void pfe_bmu_irq_mask(pfe_bmu_t *bmu)
+void pfe_bmu_irq_mask(const pfe_bmu_t *bmu)
 {
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&bmu->lock))
@@ -99,7 +99,7 @@ void pfe_bmu_irq_mask(pfe_bmu_t *bmu)
  * @brief		Unmask BMU interrupts
  * @param[in]	hif The BMU instance
  */
-void pfe_bmu_irq_unmask(pfe_bmu_t *bmu)
+void pfe_bmu_irq_unmask(const pfe_bmu_t *bmu)
 {
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&bmu->lock))
@@ -127,18 +127,18 @@ void pfe_bmu_irq_unmask(pfe_bmu_t *bmu)
  * @param[in]	cfg The BMU block configuration
  * @return		The BMU instance or NULL if failed
  */
-__attribute__((cold)) pfe_bmu_t *pfe_bmu_create(void *cbus_base_va, void *bmu_base, pfe_bmu_cfg_t *cfg)
+__attribute__((cold)) pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_base, const pfe_bmu_cfg_t *cfg)
 {
 	pfe_bmu_t *bmu;
-	
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == cfg) || (NULL == cbus_base_va)))
+	if (unlikely((NULL == cfg) || (NULL_ADDR == cbus_base_va)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
 
-	if (unlikely(NULL == cfg->pool_pa))
+	if (unlikely(NULL_ADDR == cfg->pool_pa))
 	{
 		NXP_LOG_ERROR("Buffer pool base is NULL\n");
 		return NULL;
@@ -156,10 +156,10 @@ __attribute__((cold)) pfe_bmu_t *pfe_bmu_create(void *cbus_base_va, void *bmu_ba
 		(void)memset(bmu, 0, sizeof(pfe_bmu_t));
 		bmu->cbus_base_va = cbus_base_va;
 		bmu->bmu_base_offset = bmu_base;
-		bmu->bmu_base_va = (void *)((addr_t)bmu->cbus_base_va + (addr_t)bmu->bmu_base_offset);
+		bmu->bmu_base_va = (bmu->cbus_base_va + bmu->bmu_base_offset);
 		bmu->pool_base_pa = cfg->pool_pa;
 		bmu->pool_base_va = cfg->pool_va;
-		bmu->pool_va_offset = (addr_t)bmu->pool_base_va - (addr_t)bmu->pool_base_pa;
+		bmu->pool_va_offset = bmu->pool_base_va - bmu->pool_base_pa;
 		bmu->pool_size = ((uint32_t)1U << cfg->buf_size) * cfg->max_buf_cnt;
 		bmu->buf_size = ((uint32_t)1U << cfg->buf_size);
 
@@ -173,7 +173,7 @@ __attribute__((cold)) pfe_bmu_t *pfe_bmu_create(void *cbus_base_va, void *bmu_ba
 		}
 #endif /* PFE_CFG_PARANOID_IRQ */
 	}
-	
+
 	pfe_bmu_reset(bmu);
 
 #ifdef PFE_CFG_PARANOID_IRQ
@@ -200,7 +200,7 @@ __attribute__((cold)) pfe_bmu_t *pfe_bmu_create(void *cbus_base_va, void *bmu_ba
  * @brief		Reset the BMU block
  * @param[in]	bmu The BMU instance
  */
-__attribute__((cold)) void pfe_bmu_reset(pfe_bmu_t *bmu)
+__attribute__((cold)) void pfe_bmu_reset(const pfe_bmu_t *bmu)
 {
 	errno_t ret;
 
@@ -246,7 +246,7 @@ __attribute__((cold)) void pfe_bmu_reset(pfe_bmu_t *bmu)
  * @brief		Enable the BMU block
  * @param[in]	bmu The BMU instance
  */
-__attribute__((cold)) void pfe_bmu_enable(pfe_bmu_t *bmu)
+__attribute__((cold)) void pfe_bmu_enable(const pfe_bmu_t *bmu)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
@@ -277,7 +277,7 @@ __attribute__((cold)) void pfe_bmu_enable(pfe_bmu_t *bmu)
  * @brief		Disable the BMU block
  * @param[in]	bmu The BMU instance
  */
-__attribute__((cold)) void pfe_bmu_disable(pfe_bmu_t *bmu)
+__attribute__((cold)) void pfe_bmu_disable(const pfe_bmu_t *bmu)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
@@ -310,7 +310,7 @@ __attribute__((cold)) void pfe_bmu_disable(pfe_bmu_t *bmu)
  * @return		Allocated buffer pointer (physical)
  * @note		Thread safe
  */
-__attribute__((hot)) void *pfe_bmu_alloc_buf(pfe_bmu_t *bmu)
+__attribute__((hot)) void *pfe_bmu_alloc_buf(const pfe_bmu_t *bmu)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
@@ -330,7 +330,7 @@ __attribute__((hot)) void *pfe_bmu_alloc_buf(pfe_bmu_t *bmu)
  * @param[in]	pa The address to be converted
  * @return		Associated virtual address or NULL if failed
  */
-__attribute__((hot, pure)) void *pfe_bmu_get_va(pfe_bmu_t *bmu, void *pa)
+__attribute__((hot, pure)) void *pfe_bmu_get_va(const pfe_bmu_t *bmu, addr_t pa)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
@@ -340,13 +340,13 @@ __attribute__((hot, pure)) void *pfe_bmu_get_va(pfe_bmu_t *bmu, void *pa)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (((addr_t)bmu->pool_base_pa + bmu->pool_size) < (addr_t)pa)
+	if ((bmu->pool_base_pa + bmu->pool_size) < pa)
 	{
 		/*	TODO: The condition is not sufficient and need to consider buffer size... */
 		NXP_LOG_DEBUG("PA out of range\n");
 	}
 
-	return (void *)((addr_t)pa + bmu->pool_va_offset);
+	return (void *)(pa + bmu->pool_va_offset);
 }
 
 /**
@@ -355,7 +355,7 @@ __attribute__((hot, pure)) void *pfe_bmu_get_va(pfe_bmu_t *bmu, void *pa)
  * @param[in]	pa The address to be converted
  * @return		Associated virtual address or NULL if failed
  */
-__attribute__((hot, pure)) void *pfe_bmu_get_pa(pfe_bmu_t *bmu, void *va)
+__attribute__((hot, pure)) void *pfe_bmu_get_pa(const pfe_bmu_t *bmu, addr_t va)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
@@ -365,13 +365,13 @@ __attribute__((hot, pure)) void *pfe_bmu_get_pa(pfe_bmu_t *bmu, void *va)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (((addr_t)bmu->pool_base_va + bmu->pool_size) < (addr_t)va)
+	if ((bmu->pool_base_va + bmu->pool_size) < va)
 	{
 		/*	TODO: The condition is not sufficient and need to consider buffer size... */
 		NXP_LOG_DEBUG("VA out of range\n");
 	}
 
-	return (void *)((addr_t)va - bmu->pool_va_offset);
+	return (void *)(va - bmu->pool_va_offset);
 }
 
 /**
@@ -379,7 +379,7 @@ __attribute__((hot, pure)) void *pfe_bmu_get_pa(pfe_bmu_t *bmu, void *va)
  * @param[in]	bmu The BMU instance
  * @return		Buffer size in number of bytes
  */
-__attribute__((cold, pure)) uint32_t pfe_bmu_get_buf_size(pfe_bmu_t *bmu)
+__attribute__((cold, pure)) uint32_t pfe_bmu_get_buf_size(const pfe_bmu_t *bmu)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
@@ -398,7 +398,7 @@ __attribute__((cold, pure)) uint32_t pfe_bmu_get_buf_size(pfe_bmu_t *bmu)
  * @param[in]	buffer Pointer (physical) to the buffer to be freed.
  * @note		Thread safe
  */
-__attribute__((hot)) void pfe_bmu_free_buf(pfe_bmu_t *bmu, void *buffer)
+__attribute__((hot)) void pfe_bmu_free_buf(const pfe_bmu_t *bmu, addr_t buffer)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == bmu) || (NULL == buffer)))
@@ -409,14 +409,14 @@ __attribute__((hot)) void pfe_bmu_free_buf(pfe_bmu_t *bmu, void *buffer)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	No resource protection here since it is done by register write */
-	pfe_bmu_cfg_free_buf(bmu->bmu_base_va, (void *)PFE_CFG_MEMORY_PHYS_TO_PFE(buffer));
+	pfe_bmu_cfg_free_buf(bmu->bmu_base_va, PFE_CFG_MEMORY_PHYS_TO_PFE(buffer));
 }
 
 /**
  * @brief		Destroy BMU instance
  * @param[in]	bmu The BMU instance
  */
-__attribute__((cold)) void pfe_bmu_destroy(pfe_bmu_t *bmu)
+__attribute__((cold)) void pfe_bmu_destroy(const pfe_bmu_t *bmu)
 {
 	if (NULL != bmu)
 	{
@@ -429,13 +429,13 @@ __attribute__((cold)) void pfe_bmu_destroy(pfe_bmu_t *bmu)
 
 		pfe_bmu_cfg_disable(bmu->bmu_base_va);
 		pfe_bmu_cfg_fini(bmu->bmu_base_va);
-		
+
 #ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_unlock(&bmu->lock))
 		{
 			NXP_LOG_DEBUG("Mutex unlock failed\n");
 		}
-		
+
 		if (EOK != oal_mutex_destroy(&bmu->lock))
 		{
 			NXP_LOG_DEBUG("Mutex destroy failed\n");
@@ -455,10 +455,10 @@ __attribute__((cold)) void pfe_bmu_destroy(pfe_bmu_t *bmu)
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-__attribute__((cold)) uint32_t pfe_bmu_get_text_statistics(pfe_bmu_t *bmu, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+__attribute__((cold)) uint32_t pfe_bmu_get_text_statistics(const pfe_bmu_t *bmu, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
-	
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
 	{

@@ -31,7 +31,7 @@ struct pfe_classifier_tag
 {
 	bool_t is_fw_loaded;					/*	Flag indicating that firmware has been loaded */
 	bool_t enabled;							/*	Flag indicating that classifier has been enabled */
-	void *cbus_base_va;						/*	CBUS base virtual address */
+	addr_t cbus_base_va;						/*	CBUS base virtual address */
 	uint32_t pe_num;						/*	Number of PEs */
 	pfe_pe_t **pe;							/*	List of particular PEs */
 	blalloc_t *heap_context;				/* Heap manager context */
@@ -44,6 +44,10 @@ struct pfe_classifier_tag
 
 static errno_t pfe_class_dmem_heap_init(pfe_class_t *class);
 static errno_t pfe_class_load_fw_features(pfe_class_t *class);
+static void pfe_class_alg_stats_endian(pfe_ct_class_algo_stats_t *stat);
+static void pfe_class_pe_stats_endian(pfe_ct_pe_stats_t *stat);
+static void pfe_class_sum_pe_algo_stats(pfe_ct_class_algo_stats_t *sum, const pfe_ct_class_algo_stats_t *val);
+static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
 
 /**
  * @brief		Read "put" buffer
@@ -58,7 +62,7 @@ errno_t pfe_pe_get_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
 	uint8_t flags;
 	errno_t ret = ENOENT;
 	pfe_ct_pe_mmap_t mmap_data;
-	pfe_ct_class_mmap_t *class_mmap_data;
+	const pfe_ct_class_mmap_t *class_mmap_data;
 
 	/*	Get mmap base from PE[0] since all PEs have the same memory map */
 	if (EOK != pfe_pe_get_mmap(pe, &mmap_data))
@@ -125,7 +129,7 @@ errno_t pfe_pe_put_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
 	uint8_t flags;
 	errno_t ret = ENOENT;
 	pfe_ct_pe_mmap_t mmap_data;
-	pfe_ct_class_mmap_t *class_mmap_data;
+	const pfe_ct_class_mmap_t *class_mmap_data;
 
 	if (EOK != pfe_pe_get_mmap(pe, &mmap_data))
 	{
@@ -175,7 +179,7 @@ errno_t pfe_pe_put_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
  * @details Checks all PEs whether they report a firmware error
  * @param[in] class The CLASS instance
  */
-errno_t pfe_class_isr(pfe_class_t *class)
+errno_t pfe_class_isr(const pfe_class_t *class)
 {
 	uint32_t i;
 	pfe_ct_buffer_t buf;
@@ -231,7 +235,7 @@ errno_t pfe_class_isr(pfe_class_t *class)
  * @brief		Mask CLASS interrupts
  * @param[in]	class The CLASS instance
  */
-void pfe_class_irq_mask(pfe_class_t *class)
+void pfe_class_irq_mask(const pfe_class_t *class)
 {
 #if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
 	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
@@ -247,7 +251,7 @@ void pfe_class_irq_mask(pfe_class_t *class)
  * @brief		Unmask CLASS interrupts
  * @param[in]	class The CLASS instance
  */
-void pfe_class_irq_unmask(pfe_class_t *class)
+void pfe_class_irq_unmask(const pfe_class_t *class)
 {
 #if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
 	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
@@ -266,14 +270,14 @@ void pfe_class_irq_unmask(pfe_class_t *class)
  * @param[in]	cfg The classifier block configuration
  * @return		The classifier instance or NULL if failed
  */
-pfe_class_t *pfe_class_create(void *cbus_base_va, uint32_t pe_num, pfe_class_cfg_t *cfg)
+pfe_class_t *pfe_class_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_class_cfg_t *cfg)
 {
 	pfe_class_t *class;
 	pfe_pe_t *pe;
 	uint32_t ii;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == cbus_base_va) || (NULL == cfg)))
+	if (unlikely((NULL_ADDR == cbus_base_va) || (NULL == cfg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -292,12 +296,19 @@ pfe_class_t *pfe_class_create(void *cbus_base_va, uint32_t pe_num, pfe_class_cfg
 		class->cbus_base_va = cbus_base_va;
 	}
 
+	if (EOK != oal_mutex_init(&class->mutex))
+	{
+		oal_mm_free(class);
+		return NULL;
+	}
+
 	if (pe_num > 0U)
 	{
 		class->pe = oal_mm_malloc(pe_num * sizeof(pfe_pe_t *));
 
 		if (NULL == class->pe)
 		{
+			(void)oal_mutex_destroy(&class->mutex);
 			oal_mm_free(class);
 			return NULL;
 		}
@@ -320,11 +331,6 @@ pfe_class_t *pfe_class_create(void *cbus_base_va, uint32_t pe_num, pfe_class_cfg
 				class->pe[ii] = pe;
 				class->pe_num++;
 			}
-		}
-
-		if (EOK != oal_mutex_init(&class->mutex))
-		{
-			goto free_and_fail;
 		}
 
 		/*	Issue block reset */
@@ -383,7 +389,7 @@ static errno_t pfe_class_dmem_heap_init(pfe_class_t *class)
  * @param[in]	size Requested memory size
  * @return		Address of the allocated memory or value 0 on failure.
  */
-addr_t pfe_class_dmem_heap_alloc(pfe_class_t *class, uint32_t size)
+addr_t pfe_class_dmem_heap_alloc(const pfe_class_t *class, uint32_t size)
 {
 	addr_t addr;
 	errno_t ret;
@@ -395,7 +401,7 @@ addr_t pfe_class_dmem_heap_alloc(pfe_class_t *class, uint32_t size)
 	}
 	else
 	{   /* Allocation failed - return "NULL" */
-		NXP_LOG_DEBUG("Failed to allocate memory (size %u)\n", size);
+		NXP_LOG_DEBUG("Failed to allocate memory (size %u)\n", (uint_t)size);
 		return 0U;
 	}
 }
@@ -405,7 +411,7 @@ addr_t pfe_class_dmem_heap_alloc(pfe_class_t *class, uint32_t size)
  * @param[in]	class The classifier instance
  * @param[in]	addr Address of the previously allocated memory by pfe_class_dmem_heap_alloc()
  */
-void pfe_class_dmem_heap_free(pfe_class_t *class, addr_t addr)
+void pfe_class_dmem_heap_free(const pfe_class_t *class, addr_t addr)
 {
 	if(0U == addr)
 	{   /* Ignore "NULL" */
@@ -414,7 +420,7 @@ void pfe_class_dmem_heap_free(pfe_class_t *class, addr_t addr)
 
 	if(addr < class->dmem_heap_base)
 	{
-		NXP_LOG_ERROR("Impossible address 0x%"PRINTADDR_T" (base is 0x%x)\n", addr, class->dmem_heap_base);
+		NXP_LOG_ERROR("Impossible address 0x%"PRINTADDR_T" (base is 0x%x)\n", addr, (uint_t)class->dmem_heap_base);
 		return;
 	}
 
@@ -544,7 +550,7 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
 
 		if (EOK != ret)
 		{
-			NXP_LOG_ERROR("Classifier firmware loading the PE %u failed: %d\n", ii, ret);
+			NXP_LOG_ERROR("Classifier firmware loading the PE %u failed: %d\n", (uint_t)ii, ret);
 			break;
 		}
 	}
@@ -613,7 +619,7 @@ static errno_t pfe_class_load_fw_features(pfe_class_t *class)
                     class->fw_features[i] = pfe_fw_feature_create();
                     if(NULL == class->fw_features[i])
                     {
-                        NXP_LOG_ERROR("Failed to create feature %u\n", i);
+                        NXP_LOG_ERROR("Failed to create feature %u\n", (uint_t)i);
                         /* Destroy previously created and return failure */
                         for(j = 0U; j < i; j++)
                         {
@@ -630,7 +636,7 @@ static errno_t pfe_class_load_fw_features(pfe_class_t *class)
                     ret = pfe_pe_get_fw_feature_entry(class->pe[0U], i, &entry);
                     if(EOK != ret)
                     {
-                         NXP_LOG_ERROR("Failed get ll data for feature %u\n", i);
+                         NXP_LOG_ERROR("Failed get ll data for feature %u\n", (uint_t)i);
                         /* Destroy previously created and return failure */
                         for(j = 0U; j < i; j++)
                         {
@@ -649,7 +655,7 @@ static errno_t pfe_class_load_fw_features(pfe_class_t *class)
                     ret = pfe_fw_feature_set_string_base(class->fw_features[i], pfe_pe_get_fw_feature_str_base(class->pe[0U]));
                     if(EOK != ret)
                     {
-                        NXP_LOG_ERROR("Failed to set string base for feature %u\n", i);
+                        NXP_LOG_ERROR("Failed to set string base for feature %u\n", (uint_t)i);
                         /* Destroy previously created and return failure */
                         for(j = 0U; j < i; j++)
                         {
@@ -663,7 +669,7 @@ static errno_t pfe_class_load_fw_features(pfe_class_t *class)
                         break;
                     }
                     /* Set functions to read/write DMEM and their data */
-                    pfe_fw_feature_set_dmem_funcs(class->fw_features[i], pfe_class_read_dmem, pfe_class_write_dmem, (void *)class);
+                    (void)pfe_fw_feature_set_dmem_funcs(class->fw_features[i], pfe_class_read_dmem, pfe_class_write_dmem, (void *)class);
                 }
             }
         } /* Else is OK too */
@@ -717,12 +723,12 @@ errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_class_mmap
  * @brief		Write data from host memory to DMEM
  * @param[in]	class_p The classifier instance
  * @param[in]	pe_idx PE index or -1 if all PEs shall be written
- * @param[in]	dst Destination address within DMEM (physical)
- * @param[in]	src Source address within host memory (virtual)
+ * @param[in]	dst_addr Destination address within DMEM (physical)
+ * @param[in]	src_ptr Pointer to data in host memory (virtual address)
  * @param[in]	len Number of bytes to be written
  * @return		EOK or error code in case of failure
  */
-errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, void *dst, void *src, uint32_t len)
+errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, addr_t dst_addr, void *src_ptr, uint32_t len)
 {
 	uint32_t ii;
     pfe_class_t *class = (pfe_class_t *)class_p;
@@ -748,14 +754,14 @@ errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, void *dst, void *src
 	if (pe_idx >= 0)
 	{
 		/*	Single PE */
-		pfe_pe_memcpy_from_host_to_dmem_32(class->pe[pe_idx], (addr_t)dst, src, len);
+		pfe_pe_memcpy_from_host_to_dmem_32(class->pe[pe_idx], dst_addr, src_ptr, len);
 	}
 	else
 	{
 		/*	All PEs */
 		for (ii=0U; ii<class->pe_num; ii++)
 		{
-			pfe_pe_memcpy_from_host_to_dmem_32(class->pe[ii], (addr_t)dst, src, len);
+			pfe_pe_memcpy_from_host_to_dmem_32(class->pe[ii], dst_addr, src_ptr, len);
 		}
 	}
 
@@ -771,23 +777,23 @@ errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, void *dst, void *src
  * @brief		Read data from DMEM to host memory
  * @param[in]	class_p The classifier instance
  * @param[in]	pe_idx PE index
- * @param[in]	dst Destination address within host memory (virtual)
- * @param[in]	src Source address within DMEM (physical)
+ * @param[in]	dst_ptr Destination address within host memory (virtual)
+ * @param[in]	src_addr Source address within DMEM (physical)
  * @param[in]	len Number of bytes to be read
  * @return		EOK or error code in case of failure
  */
-errno_t pfe_class_read_dmem(void *class_p, int32_t pe_idx, void *dst, void *src, uint32_t len)
+errno_t pfe_class_read_dmem(void *class_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len)
 {
     pfe_class_t *class = (pfe_class_t *)class_p;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class) || (NULL == dst)))
+	if (unlikely((NULL == class) || (NULL == dst_ptr)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (pe_idx >= class->pe_num)
+	if (pe_idx >= (int32_t)class->pe_num)
 	{
 		return EINVAL;
 	}
@@ -797,7 +803,7 @@ errno_t pfe_class_read_dmem(void *class_p, int32_t pe_idx, void *dst, void *src,
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	pfe_pe_memcpy_from_dmem_to_host_32(class->pe[pe_idx], dst, (addr_t)src, len);
+	pfe_pe_memcpy_from_dmem_to_host_32(class->pe[pe_idx], dst_ptr, src_addr, len);
 
 	if (EOK != oal_mutex_unlock(&class->mutex))
 	{
@@ -810,17 +816,17 @@ errno_t pfe_class_read_dmem(void *class_p, int32_t pe_idx, void *dst, void *src,
 /**
  * @brief		Read data from DMEM from all PEs atomically to host memory
  * @param[in]	class The classifier instance (All PEs from given class are read)
- * @param[in]	dst Destination address within host memory (virtual) available memory has to be pe_count * len
- * @param[in]	src Source address within DMEM (physical)
+ * @param[in]	dst_ptr Destination address within host memory (virtual) available memory has to be pe_count * len
+ * @param[in]	src_addr Source address within DMEM (physical)
  * @param[in]	buffer_len Destination buffer size
  * @param[in]	read_len Number of bytes to be read (From one PE)
  * @return		EOK or error code in case of failure
  */
-errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst, void *src, uint32_t buffer_len, uint32_t read_len)
+errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst_ptr, addr_t src_addr, uint32_t buffer_len, uint32_t read_len)
 {
 	errno_t ret = EOK;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class) || (NULL == dst)))
+	if (unlikely((NULL == class) || (NULL == dst_ptr)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -832,7 +838,7 @@ errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst, void *src, uin
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	ret = pfe_pe_gather_memcpy_from_dmem_to_host_32(class->pe, (int32_t)class->pe_num, dst, (addr_t)src, buffer_len, read_len);
+	ret = pfe_pe_gather_memcpy_from_dmem_to_host_32(class->pe, (int32_t)class->pe_num, dst_ptr, (addr_t)src_addr, buffer_len, read_len);
 
 	if (EOK != oal_mutex_unlock(&class->mutex))
 	{
@@ -846,15 +852,15 @@ errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst, void *src, uin
  * @brief		Read data from PMEM to host memory
  * @param[in]	class The classifier instance
  * @param[in]	pe_idx PE index
- * @param[in]	dst Destination address within host memory (virtual)
- * @param[in]	src Source address within PMEM (physical)
+ * @param[in]	dst_ptr Destination address within host memory (virtual)
+ * @param[in]	src_addr Source address within PMEM (physical)
  * @param[in]	len Number of bytes to be read
  * @return		EOK or error code in case of failure
  */
-errno_t pfe_class_read_pmem(pfe_class_t *class, uint32_t pe_idx, void *dst, void *src, uint32_t len)
+errno_t pfe_class_read_pmem(pfe_class_t *class, uint32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class) || (NULL == dst)))
+	if (unlikely((NULL == class) || (NULL == dst_ptr)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -871,7 +877,7 @@ errno_t pfe_class_read_pmem(pfe_class_t *class, uint32_t pe_idx, void *dst, void
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	pfe_pe_memcpy_from_imem_to_host_32(class->pe[pe_idx], dst, (addr_t)src, len);
+	pfe_pe_memcpy_from_imem_to_host_32(class->pe[pe_idx], dst_ptr, src_addr, len);
 
 	if (EOK != oal_mutex_unlock(&class->mutex))
 	{
@@ -921,7 +927,11 @@ void pfe_class_destroy(pfe_class_t *class)
 			class->heap_context = NULL;
 		}
 
-		(void)oal_mutex_destroy(&class->mutex);
+		if (EOK != oal_mutex_destroy(&class->mutex))
+		{
+			NXP_LOG_WARNING("Could not properly destroy mutex\n");
+		}
+
 		oal_mm_free(class);
 	}
 }
@@ -935,8 +945,9 @@ void pfe_class_destroy(pfe_class_t *class)
  * @return		EOK if success, error code otherwise
  * @note		Must be called before the classifier is enabled.
  */
-errno_t pfe_class_set_rtable(pfe_class_t *class, void *rtable_pa, uint32_t rtable_len, uint32_t entry_size)
+errno_t pfe_class_set_rtable(pfe_class_t *class, addr_t rtable_pa, uint32_t rtable_len, uint32_t entry_size)
 {
+	errno_t ret = EOK;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class) || (NULL == rtable_pa)))
 	{
@@ -956,7 +967,7 @@ errno_t pfe_class_set_rtable(pfe_class_t *class, void *rtable_pa, uint32_t rtabl
 			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
-		pfe_class_cfg_set_rtable(class->cbus_base_va, rtable_pa, rtable_len, entry_size);
+		ret = pfe_class_cfg_set_rtable(class->cbus_base_va, rtable_pa, rtable_len, entry_size);
 
 		if (EOK != oal_mutex_unlock(&class->mutex))
 		{
@@ -964,7 +975,7 @@ errno_t pfe_class_set_rtable(pfe_class_t *class, void *rtable_pa, uint32_t rtabl
 		}
 	}
 
-	return EOK;
+	return ret;
 }
 
 /**
@@ -975,7 +986,7 @@ errno_t pfe_class_set_rtable(pfe_class_t *class, void *rtable_pa, uint32_t rtabl
  * @param[in]	vlan The default VLAN ID (12bit)
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_class_set_default_vlan(pfe_class_t *class, uint16_t vlan)
+errno_t pfe_class_set_default_vlan(const pfe_class_t *class, uint16_t vlan)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == class))
@@ -995,7 +1006,7 @@ errno_t pfe_class_set_default_vlan(pfe_class_t *class, uint16_t vlan)
  * @return		Number of available PEs
  */
 
-uint32_t pfe_class_get_num_of_pes(pfe_class_t *class)
+uint32_t pfe_class_get_num_of_pes(const pfe_class_t *class)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == class))
@@ -1015,7 +1026,7 @@ uint32_t pfe_class_get_num_of_pes(pfe_class_t *class)
  * @param[in] name Name of the feature to be found
  * @return EOK when given entry is found, ENOENT when it is not found, error code otherwise
  */
-errno_t pfe_class_get_feature(pfe_class_t *class, pfe_fw_feature_t **feature, const char *name)
+errno_t pfe_class_get_feature(const pfe_class_t *class, pfe_fw_feature_t **feature, const char *name)
 {
     uint32_t i;
     const char *fname;
@@ -1116,6 +1127,32 @@ static void pfe_class_alg_stats_endian(pfe_ct_class_algo_stats_t *stat)
 	stat->discarded = oal_ntohl(stat->discarded);
 }
 
+void pfe_class_flexi_parser_stats_endian(pfe_ct_class_flexi_parser_stats_t *stats)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == stat))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif
+	stats->accepted = oal_ntohl(stats->accepted);
+	stats->rejected = oal_ntohl(stats->rejected);
+}
+
+void pfe_class_sum_flexi_parser_stats(pfe_ct_class_flexi_parser_stats_t *sum, const pfe_ct_class_flexi_parser_stats_t *val)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == sum) || (NULL == val)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif
+	sum->accepted += val->accepted;
+	sum->rejected += val->rejected;
+}
+
 /**
 * @brief Converts endiannes of the whole structure containing statistics
 * @param[in,out] stat Statistics which endiannes shall be converted
@@ -1144,7 +1181,7 @@ static void pfe_class_pe_stats_endian(pfe_ct_pe_stats_t *stat)
 * @param[in] sum Sum to add the value (results are in HOST endian)
 * @param[in] val Value to be added to the sum (it is in HOST endian)
 */
-static void pfe_class_sum_pe_algo_stats(pfe_ct_class_algo_stats_t *sum, pfe_ct_class_algo_stats_t *val)
+static void pfe_class_sum_pe_algo_stats(pfe_ct_class_algo_stats_t *sum, const pfe_ct_class_algo_stats_t *val)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == sum) || (NULL == val)))
@@ -1167,7 +1204,7 @@ static void pfe_class_sum_pe_algo_stats(pfe_ct_class_algo_stats_t *sum, pfe_ct_c
  * @param[in]	verb_level	Verbosity level
  * @return		Number of bytes written into the output buffer
  */
-uint32_t pfe_class_stat_to_str(pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
+static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 
@@ -1187,12 +1224,37 @@ uint32_t pfe_class_stat_to_str(pfe_ct_class_algo_stats_t *stat, char *buf, uint3
 }
 
 /**
+ * @brief               Converts statistics of a logical interface or classification algorithm into a text form
+ * @param[in]   stat            Statistics to convert - expected in HOST endian
+ * @param[out]  buf                     Buffer where to write the text
+ * @param[in]   buf_len         Buffer length
+ * @param[in]   verb_level      Verbosity level
+ * @return              Number of bytes written into the output buffer
+ */
+uint32_t pfe_class_fp_stat_to_str(const pfe_ct_class_flexi_parser_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
+{
+        uint32_t len = 0U;
+
+        (void)verb_level;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+        if (unlikely((NULL == stat) || (NULL == buf)))
+        {
+                NXP_LOG_ERROR("NULL argument received\n");
+                return 0U;
+        }
+#endif
+        len += oal_util_snprintf(buf + len, buf_len - len, "Frames accepted:  %u\n", stat->accepted);
+        len += oal_util_snprintf(buf + len, buf_len - len, "Frames rejected:  %u\n", stat->rejected);
+        return len;
+}
+
+/**
  * @brief		Send data buffer
  * @param[in]	class The CLASS instance
  * @param[in]	buf Buffer to be sent
  * @return		EOK success, error code otherwise
  */
-uint32_t pfe_class_put_data(pfe_class_t *class, pfe_ct_buffer_t *buf)
+uint32_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
 {
 	uint32_t ii, tries;
 	errno_t ret;
@@ -1212,7 +1274,7 @@ uint32_t pfe_class_put_data(pfe_class_t *class, pfe_ct_buffer_t *buf)
 
 		if (EOK != ret)
 		{
-			NXP_LOG_ERROR("Unable to update pe %d\n", ii);
+			NXP_LOG_ERROR("Unable to update pe %u\n", (uint_t)ii);
 			return EBUSY;
 		}
 	}
@@ -1300,7 +1362,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		ret = pfe_pe_mem_lock(class->pe[ii]);
 		if(EOK != ret)
 		{
-			NXP_LOG_ERROR("PE %u could not be locked\n", ii);
+			NXP_LOG_ERROR("PE %u could not be locked\n", (uint_t)ii);
 			len += oal_util_snprintf(buf + len, buf_len - len, "PE %u could not be locked - statistics are not coherent\n", ii);
 		}
 	}
@@ -1317,7 +1379,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		ret = pfe_pe_mem_unlock(class->pe[ii]);
 		if(EOK != ret)
 		{
-			NXP_LOG_ERROR("PE %u could not be unlocked\n", ii);
+			NXP_LOG_ERROR("PE %u could not be unlocked\n", (uint_t)ii);
 		}
 	}
 
@@ -1335,6 +1397,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		pfe_class_alg_stats_endian(&c_alg_stats[ii + 1U].vlan_bridge);
 		pfe_class_alg_stats_endian(&c_alg_stats[ii + 1U].log_if);
 		pfe_class_alg_stats_endian(&c_alg_stats[ii + 1U].hif_to_hif);
+		pfe_class_flexi_parser_stats_endian(&c_alg_stats[ii + 1U].flexible_filter);
 		pfe_class_pe_stats_endian(&pe_stats[ii + 1U]);
 		/* Calculate sums */
 		pe_stats[0].processed += pe_stats[ii + 1U].processed;
@@ -1350,6 +1413,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].vlan_bridge, &c_alg_stats[ii + 1U].vlan_bridge);
 		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].log_if, &c_alg_stats[ii + 1U].log_if);
 		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].hif_to_hif, &c_alg_stats[ii + 1U].hif_to_hif);
+		pfe_class_sum_flexi_parser_stats(&c_alg_stats[0U].flexible_filter, &c_alg_stats[ii + 1U].flexible_filter);
 	}
 
 	/* Print results */
@@ -1380,6 +1444,8 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	len += pfe_class_stat_to_str(&c_alg_stats[0U].log_if, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- InterHIF -\n");
 	len += pfe_class_stat_to_str(&c_alg_stats[0U].hif_to_hif, buf + len, buf_len - len, verb_level);
+	len += oal_util_snprintf(buf + len, buf_len - len, "- Global Flexible filter -\n");
+	len += pfe_class_fp_stat_to_str(&c_alg_stats[0U].flexible_filter, buf + len, buf_len - len, verb_level);
 
 	len += oal_util_snprintf(buf + len, buf_len - len, "\nDMEM heap\n---------\n");
 	len += blalloc_get_text_statistics(class->heap_context, buf + len, buf_len - len, verb_level);
@@ -1399,7 +1465,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
  * @param[in]	class The classifier instance
  * @return		ver Parsed firmware metadata
  */
-errno_t pfe_class_get_fw_version(pfe_class_t *class, pfe_ct_version_t *ver)
+errno_t pfe_class_get_fw_version(const pfe_class_t *class, pfe_ct_version_t *ver)
 {
 	pfe_ct_pe_mmap_t pfe_pe_mmap;
 

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -17,12 +17,12 @@
 
 struct pfe_gpi_tag
 {
-	void *cbus_base_va;		/*	CBUS base virtual address */
-	void *gpi_base_offset;	/*	GPI base offset within CBUS space */
-	void *gpi_base_va;		/*	GPI base address (virtual) */
+	addr_t cbus_base_va;		/*	CBUS base virtual address */
+	addr_t gpi_base_offset;	/*	GPI base offset within CBUS space */
+	addr_t gpi_base_va;		/*	GPI base address (virtual) */
 };
 
-static void pfe_gpi_set_config(pfe_gpi_t *gpi, pfe_gpi_cfg_t *cfg)
+static void pfe_gpi_set_config(const pfe_gpi_t *gpi, const pfe_gpi_cfg_t *cfg)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == gpi) || (NULL == cfg)))
@@ -47,12 +47,12 @@ static void pfe_gpi_set_config(pfe_gpi_t *gpi, pfe_gpi_cfg_t *cfg)
  * @param[in]	cfg The BMU block configuration
  * @return		The BMU instance or NULL if failed
  */
-pfe_gpi_t *pfe_gpi_create(void *cbus_base_va, void *gpi_base, pfe_gpi_cfg_t *cfg)
+pfe_gpi_t *pfe_gpi_create(addr_t cbus_base_va, addr_t gpi_base, const pfe_gpi_cfg_t *cfg)
 {
 	pfe_gpi_t *gpi;
-	
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == cbus_base_va) || (NULL == cfg)))
+	if (unlikely((NULL_ADDR == cbus_base_va) || (NULL == cfg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -60,7 +60,7 @@ pfe_gpi_t *pfe_gpi_create(void *cbus_base_va, void *gpi_base, pfe_gpi_cfg_t *cfg
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	gpi = oal_mm_malloc(sizeof(pfe_gpi_t));
-		
+
 	if (NULL == gpi)
 	{
 		return NULL;
@@ -70,15 +70,15 @@ pfe_gpi_t *pfe_gpi_create(void *cbus_base_va, void *gpi_base, pfe_gpi_cfg_t *cfg
 		(void)memset(gpi, 0, sizeof(pfe_gpi_t));
 		gpi->cbus_base_va = cbus_base_va;
 		gpi->gpi_base_offset = gpi_base;
-		gpi->gpi_base_va = (void *)((addr_t)gpi->cbus_base_va + (addr_t)gpi->gpi_base_offset);
+		gpi->gpi_base_va = (gpi->cbus_base_va + gpi->gpi_base_offset);
 	}
-	
+
 	pfe_gpi_reset(gpi);
-	
+
 	pfe_gpi_disable(gpi);
 
 	pfe_gpi_set_config(gpi, cfg);
-	
+
 	return gpi;
 }
 
@@ -86,7 +86,7 @@ pfe_gpi_t *pfe_gpi_create(void *cbus_base_va, void *gpi_base, pfe_gpi_cfg_t *cfg
  * @brief		Reset the GPI block
  * @param[in]	gpi The GPI instance
  */
-void pfe_gpi_reset(pfe_gpi_t *gpi)
+void pfe_gpi_reset(const pfe_gpi_t *gpi)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == gpi))
@@ -106,7 +106,7 @@ void pfe_gpi_reset(pfe_gpi_t *gpi)
  * @brief		Enable the GPI block
  * @param[in]	gpi The GPI instance
  */
-void pfe_gpi_enable(pfe_gpi_t *gpi)
+void pfe_gpi_enable(const pfe_gpi_t *gpi)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == gpi))
@@ -123,7 +123,7 @@ void pfe_gpi_enable(pfe_gpi_t *gpi)
  * @brief		Disable the GPI block
  * @param[in]	gpi The GPI instance
  */
-void pfe_gpi_disable(pfe_gpi_t *gpi)
+void pfe_gpi_disable(const pfe_gpi_t *gpi)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == gpi))
@@ -140,14 +140,14 @@ void pfe_gpi_disable(pfe_gpi_t *gpi)
  * @brief		Destroy GPI instance
  * @param[in]	gpi The GPI instance
  */
-void pfe_gpi_destroy(pfe_gpi_t *gpi)
+void pfe_gpi_destroy(const pfe_gpi_t *gpi)
 {
 	if (NULL != gpi)
 	{
 		pfe_gpi_disable(gpi);
-		
+
 		pfe_gpi_reset(gpi);
-		
+
 		oal_mm_free(gpi);
 	}
 }
@@ -161,10 +161,10 @@ void pfe_gpi_destroy(pfe_gpi_t *gpi)
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_gpi_get_text_statistics(pfe_gpi_t *gpi, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_gpi_get_text_statistics(const pfe_gpi_t *gpi, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
-	
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == gpi))
 	{
@@ -172,9 +172,9 @@ uint32_t pfe_gpi_get_text_statistics(pfe_gpi_t *gpi, char_t *buf, uint32_t buf_l
 		return 0U;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	
+
 	len += pfe_gpi_cfg_get_text_stat(gpi->gpi_base_va, buf, buf_len, verb_level);
-	
-	
+
+
 	return len;
 }

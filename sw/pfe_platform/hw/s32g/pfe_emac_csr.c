@@ -19,19 +19,6 @@
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
 
-/* Mode conversion table */
-static const char_t * phy_mode[] =
-{
-		"GMII_MII",
-		"RGMII",
-		"SGMII",
-		"TBI",
-		"RMII",
-		"RTBI",
-		"SMII",
-		"RevMII",
-		"INVALID",
-};
 
 static inline uint32_t crc32_reversed(const uint8_t *const data, const uint32_t len)
 {
@@ -68,6 +55,19 @@ static inline uint32_t crc32_reversed(const uint8_t *const data, const uint32_t 
  */
 static inline const char_t* phy_mode_to_str(uint32_t mode)
 {
+	/* Mode conversion table */
+	static const char_t * const phy_mode[] =
+	{
+			"GMII_MII",
+			"RGMII",
+			"SGMII",
+			"TBI",
+			"RMII",
+			"RTBI",
+			"SMII",
+			"RevMII",
+			"INVALID",
+	};
 	/* Initialize to invalid */
 	uint32_t index  = ((uint32_t)(sizeof(phy_mode))/(uint32_t)(sizeof(phy_mode[0]))) - 1UL;
 
@@ -118,13 +118,13 @@ static const char *emac_speed_to_str(pfe_emac_speed_t speed)
  * @param[in]	duplex Duplex type to be configured @see pfe_emac_duplex_t
  * @return		EOK if success, error code if invalid configuration is detected
  */
-errno_t pfe_emac_cfg_init(void *base_va, pfe_emac_mii_mode_t mode,  pfe_emac_speed_t speed, pfe_emac_duplex_t duplex)
+errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,  pfe_emac_speed_t speed, pfe_emac_duplex_t duplex)
 {
 	uint32_t reg;
 
-	hal_write32(0U, (addr_t)base_va + MAC_CONFIGURATION);
-	hal_write32(0x8000ffeeU, (addr_t)base_va + MAC_ADDRESS0_HIGH);
-	hal_write32(0xddccbbaaU, (addr_t)base_va + MAC_ADDRESS0_LOW);
+	hal_write32(0U, base_va + MAC_CONFIGURATION);
+	hal_write32(0x8000ffeeU, base_va + MAC_ADDRESS0_HIGH);
+	hal_write32(0xddccbbaaU, base_va + MAC_ADDRESS0_LOW);
 	hal_write32(0U
 			| DROP_NON_TCP_UDP(0U)
 			| L3_L4_FILTER_ENABLE(0U)
@@ -139,12 +139,13 @@ errno_t pfe_emac_cfg_init(void *base_va, pfe_emac_mii_mode_t mode,  pfe_emac_spe
 			| HASH_MULTICAST(1U)
 			| HASH_UNICAST(1U)
 			| PROMISCUOUS_MODE(0U)
-			, (addr_t)base_va + MAC_PACKET_FILTER);
+			, base_va + MAC_PACKET_FILTER);
 
-	reg = hal_read32((addr_t)base_va + MAC_Q0_TX_FLOW_CTRL);
+	hal_write32(0x1U, base_va + MTL_DPP_CONTROL);
+	reg = hal_read32(base_va + MAC_Q0_TX_FLOW_CTRL);
 	reg &= ~TX_FLOW_CONTROL_ENABLE(1U);
-	hal_write32(reg, (addr_t)base_va + MAC_Q0_TX_FLOW_CTRL);
-	hal_write32(0U, (addr_t)base_va + MAC_INTERRUPT_ENABLE);
+	hal_write32(reg, base_va + MAC_Q0_TX_FLOW_CTRL);
+	hal_write32(0U, base_va + MAC_INTERRUPT_ENABLE);
 	hal_write32(0U
 			| ARP_OFFLOAD_ENABLE(0U)
 			| SA_INSERT_REPLACE_CONTROL(CTRL_BY_SIGNALS)
@@ -171,18 +172,17 @@ errno_t pfe_emac_cfg_init(void *base_va, pfe_emac_mii_mode_t mode,  pfe_emac_spe
 			| PREAMBLE_LENGTH_TX(PREAMBLE_7B)
 			| TRANSMITTER_ENABLE(0U)
 			| RECEIVER_ENABLE(0U)
-			, (addr_t)base_va + MAC_CONFIGURATION);
+			, base_va + MAC_CONFIGURATION);
 
 	hal_write32((uint32_t)0U
 			| FORWARD_ERROR_PACKETS(1U)
-			, (addr_t)base_va + MTL_RXQ0_OPERATION_MODE);
+			, base_va + MTL_RXQ0_OPERATION_MODE);
 
-	hal_write32(0U, (addr_t)base_va + MTL_TXQ0_OPERATION_MODE);
-	hal_write32(GIANT_PACKET_SIZE_LIMIT(0x3000U), (addr_t)base_va + MAC_EXT_CONFIGURATION);
-	hal_write32(0x1U, (addr_t)base_va + MTL_DPP_CONTROL);
+	hal_write32(0U, base_va + MTL_TXQ0_OPERATION_MODE);
+	hal_write32(GIANT_PACKET_SIZE_LIMIT(1518U), base_va + MAC_EXT_CONFIGURATION);
 
-	hal_write32(0U, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
-	hal_write32(0U, (addr_t)base_va + MAC_SUB_SECOND_INCREMENT);
+	hal_write32(0U, base_va + MAC_TIMESTAMP_CONTROL);
+	hal_write32(0U, base_va + MAC_SUB_SECOND_INCREMENT);
 
 	/*	Set speed */
 	if (EOK != pfe_emac_cfg_set_speed(base_va, speed))
@@ -213,7 +213,7 @@ errno_t pfe_emac_cfg_init(void *base_va, pfe_emac_mii_mode_t mode,  pfe_emac_spe
  * @param[in]	o_clk_hz Requested nominal output frequency
  * @param[in]	en TRUE means ENABLE, FALSE means DISABLE
  */
-errno_t pfe_emac_cfg_enable_ts(void *base_va, bool_t eclk, uint32_t i_clk_hz, uint32_t o_clk_hz)
+errno_t pfe_emac_cfg_enable_ts(addr_t base_va, bool_t eclk, uint32_t i_clk_hz, uint32_t o_clk_hz)
 {
 	uint64_t val = 1000000000000ULL;
 	uint32_t ss = 0U, sns = 0U;
@@ -229,8 +229,8 @@ errno_t pfe_emac_cfg_enable_ts(void *base_va, bool_t eclk, uint32_t i_clk_hz, ui
 			| DIGITAL_ROLLOVER(1U)
 			| FINE_UPDATE(1U)
 			| ENABLE_TIMESTAMP(1U)
-			| ENABLE_TIMESTAMP_FOR_All(1U), (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
-	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+			| ENABLE_TIMESTAMP_FOR_All(1U), base_va + MAC_TIMESTAMP_CONTROL);
+	regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
 
 	if (eclk == TRUE)
 	{
@@ -244,7 +244,7 @@ errno_t pfe_emac_cfg_enable_ts(void *base_va, bool_t eclk, uint32_t i_clk_hz, ui
 	/*	Get sub-nanosecond part */
 	sns = (val / (uint64_t)o_clk_hz) - (((val / 1000ULL) / (uint64_t)o_clk_hz) * 1000ULL);
 
-	NXP_LOG_INFO("IEEE1588: Input Clock: %dHz, Output: %dHz, Accuracy: %d.%dns\n", i_clk_hz, o_clk_hz, ss, sns);
+	NXP_LOG_INFO("IEEE1588: Input Clock: %uHz, Output: %uHz, Accuracy: %u.%uns\n", (uint_t)i_clk_hz, (uint_t)o_clk_hz, (uint_t)ss, (uint_t)sns);
 
 	if (0U == (regval & DIGITAL_ROLLOVER(1)))
 	{
@@ -255,17 +255,17 @@ errno_t pfe_emac_cfg_enable_ts(void *base_va, bool_t eclk, uint32_t i_clk_hz, ui
 	sns = (sns * 256U) / 1000U;
 
 	/*	Set 'increment' values */
-	hal_write32(((uint32_t)ss << 16U) | ((uint32_t)sns << 8U), (addr_t)base_va + MAC_SUB_SECOND_INCREMENT);
+	hal_write32(((uint32_t)ss << 16U) | ((uint32_t)sns << 8U), base_va + MAC_SUB_SECOND_INCREMENT);
 
 	/*	Set initial 'addend' value */
-	hal_write32(((uint64_t)o_clk_hz << 32U) / (uint64_t)i_clk_hz, (addr_t)base_va + MAC_TIMESTAMP_ADDEND);
+	hal_write32(((uint64_t)o_clk_hz << 32U) / (uint64_t)i_clk_hz, base_va + MAC_TIMESTAMP_ADDEND);
 
-	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
-	hal_write32(regval | UPDATE_ADDEND(1), (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
+	hal_write32(regval | UPDATE_ADDEND(1), base_va + MAC_TIMESTAMP_CONTROL);
 	ii = 0U;
 	do
 	{
-		regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
 		oal_time_usleep(100U);
 		if (((regval & UPDATE_ADDEND(1)) != 0U) && (ii < 10U))
 		{
@@ -283,17 +283,17 @@ errno_t pfe_emac_cfg_enable_ts(void *base_va, bool_t eclk, uint32_t i_clk_hz, ui
 	}
 
 	/*	Set 'update' values */
-	hal_write32(0U, (addr_t)base_va + MAC_STSU);
-	hal_write32(0U, (addr_t)base_va + MAC_STNSU);
+	hal_write32(0U, base_va + MAC_STSU);
+	hal_write32(0U, base_va + MAC_STNSU);
 
-	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
 	regval |= INITIALIZE_TIMESTAMP(1);
-	hal_write32(regval, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	hal_write32(regval, base_va + MAC_TIMESTAMP_CONTROL);
 
 	ii = 0U;
 	do
 	{
-		regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
 		oal_time_usleep(100U);
 		if (((regval & INITIALIZE_TIMESTAMP(1)) != 0U) && (ii < 10U))
 		{
@@ -316,9 +316,9 @@ errno_t pfe_emac_cfg_enable_ts(void *base_va, bool_t eclk, uint32_t i_clk_hz, ui
 /**
  * @brief	Disable timestamping
  */
-void pfe_emac_cfg_disable_ts(void *base_va)
+void pfe_emac_cfg_disable_ts(addr_t base_va)
 {
-	hal_write32(0U, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	hal_write32(0U, base_va + MAC_TIMESTAMP_CONTROL);
 }
 
 /**
@@ -327,7 +327,7 @@ void pfe_emac_cfg_disable_ts(void *base_va)
  * @param[in]	ppb Frequency change in [ppb]
  * @param[in]	sgn If TRUE then 'ppb' is positive, else it is negative
  */
-errno_t pfe_emac_cfg_adjust_ts_freq(void *base_va, uint32_t i_clk_hz, uint32_t o_clk_hz, uint32_t ppb, bool_t sgn)
+errno_t pfe_emac_cfg_adjust_ts_freq(addr_t base_va, uint32_t i_clk_hz, uint32_t o_clk_hz, uint32_t ppb, bool_t sgn)
 {
 	uint32_t nil, delta, regval, ii;
 
@@ -364,7 +364,7 @@ errno_t pfe_emac_cfg_adjust_ts_freq(void *base_va, uint32_t i_clk_hz, uint32_t o
 	}
 
 	/*	Update the 'addend' value */
-	hal_write32(regval, (addr_t)base_va + MAC_TIMESTAMP_ADDEND);
+	hal_write32(regval, base_va + MAC_TIMESTAMP_ADDEND);
 
 	/*	Request update 'addend' value */
 	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
@@ -374,7 +374,7 @@ errno_t pfe_emac_cfg_adjust_ts_freq(void *base_va, uint32_t i_clk_hz, uint32_t o
 	ii = 0U;
 	do
 	{
-		regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
 		oal_time_usleep(100U);
 		if (((regval & UPDATE_ADDEND(1)) != 0U) && (ii < 10U))
 		{
@@ -400,10 +400,10 @@ errno_t pfe_emac_cfg_adjust_ts_freq(void *base_va, uint32_t i_clk_hz, uint32_t o
  * @param[in,out]	sec Seconds
  * @param[in,out]	nsec NanoSeconds
  */
-void pfe_emac_cfg_get_ts_time(void *base_va, uint32_t *sec, uint32_t *nsec)
+void pfe_emac_cfg_get_ts_time(addr_t base_va, uint32_t *sec, uint32_t *nsec)
 {
-	*sec = hal_read32((addr_t)base_va + MAC_SYSTEM_TIME_SECONDS);
-	*nsec = hal_read32((addr_t)base_va + MAC_SYSTEM_TIME_NANOSECONDS);
+	*sec = hal_read32(base_va + MAC_SYSTEM_TIME_SECONDS);
+	*nsec = hal_read32(base_va + MAC_SYSTEM_TIME_NANOSECONDS);
 }
 
 /**
@@ -413,7 +413,7 @@ void pfe_emac_cfg_get_ts_time(void *base_va, uint32_t *sec, uint32_t *nsec)
  * @param[in]	sec Seconds
  * @param[in]	nsec NanoSeconds
  */
-errno_t pfe_emac_cfg_set_ts_time(void *base_va, uint32_t sec, uint32_t nsec)
+errno_t pfe_emac_cfg_set_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec)
 {
 	uint32_t regval, ii;
 
@@ -422,19 +422,19 @@ errno_t pfe_emac_cfg_set_ts_time(void *base_va, uint32_t sec, uint32_t nsec)
 		return EINVAL;
 	}
 
-	hal_write32(sec, (addr_t)base_va + MAC_STSU);
-	hal_write32(nsec, (addr_t)base_va + MAC_STNSU);
+	hal_write32(sec, base_va + MAC_STSU);
+	hal_write32(nsec, base_va + MAC_STNSU);
 
 	/*	Initialize time */
-	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
 	regval |= INITIALIZE_TIMESTAMP(1);
-	hal_write32(regval, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	hal_write32(regval, base_va + MAC_TIMESTAMP_CONTROL);
 
 	/*	Wait for completion */
 	ii = 0U;
 	do
 	{
-		regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
 		oal_time_usleep(100U);
 		if (((regval & INITIALIZE_TIMESTAMP(1)) != 0U) && (ii < 10U))
 		{
@@ -461,7 +461,7 @@ errno_t pfe_emac_cfg_set_ts_time(void *base_va, uint32_t sec, uint32_t nsec)
  * @param[in]	nsec NanoSeconds
  * @param[in]	sgn Sing of the adjustment (TRUE - positive, FALSE - negative)
  */
-errno_t pfe_emac_cfg_adjust_ts_time(void *base_va, uint32_t sec, uint32_t nsec, bool_t sgn)
+errno_t pfe_emac_cfg_adjust_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec, bool_t sgn)
 {
 	uint32_t regval, ii;
 	uint32_t nsec_temp = nsec;
@@ -472,7 +472,7 @@ errno_t pfe_emac_cfg_adjust_ts_time(void *base_va, uint32_t sec, uint32_t nsec, 
 		return EINVAL;
 	}
 
-	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
 
 	if (!sgn)
 	{
@@ -496,19 +496,19 @@ errno_t pfe_emac_cfg_adjust_ts_time(void *base_va, uint32_t sec, uint32_t nsec, 
 		}
 	}
 
-	hal_write32(sec_temp, (addr_t)base_va + MAC_STSU);
-	hal_write32(ADDSUB(!sgn) | nsec_temp, (addr_t)base_va + MAC_STNSU);
+	hal_write32(sec_temp, base_va + MAC_STSU);
+	hal_write32(ADDSUB(!sgn) | nsec_temp, base_va + MAC_STNSU);
 
 	/*	Trigger the update */
-	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
 	regval |= UPDATE_TIMESTAMP(1);
-	hal_write32(regval, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	hal_write32(regval, base_va + MAC_TIMESTAMP_CONTROL);
 
 	/*	Wait for completion */
 	ii = 0U;
 	do
 	{
-		regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
 		oal_time_usleep(100U);
 		if (((regval & UPDATE_TIMESTAMP(1)) != 0U) && (ii < 10U))
 		{
@@ -528,9 +528,9 @@ errno_t pfe_emac_cfg_adjust_ts_time(void *base_va, uint32_t sec, uint32_t nsec, 
 	return EOK;
 }
 
-void pfe_emac_cfg_tx_disable(void *base_va)
+void pfe_emac_cfg_tx_disable(addr_t base_va)
 {
-	hal_write32(0U, (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	hal_write32(0U, base_va + MAC_TIMESTAMP_CONTROL);
 }
 
 /**
@@ -539,9 +539,9 @@ void pfe_emac_cfg_tx_disable(void *base_va)
  * @param[in]	duplex Duplex type to be configured @see pfe_emac_duplex_t
  * @return		EOK if success, error code when invalid configuration is requested
  */
-errno_t pfe_emac_cfg_set_duplex(void *base_va, pfe_emac_duplex_t duplex)
+errno_t pfe_emac_cfg_set_duplex(addr_t base_va, pfe_emac_duplex_t duplex)
 {
-	uint32_t reg = hal_read32((addr_t)base_va + MAC_CONFIGURATION) & ~(DUPLEX_MODE(1U));
+	uint32_t reg = hal_read32(base_va + MAC_CONFIGURATION) & ~(DUPLEX_MODE(1U));
 	errno_t ret = EOK;
 
 	switch (duplex)
@@ -564,7 +564,7 @@ errno_t pfe_emac_cfg_set_duplex(void *base_va, pfe_emac_duplex_t duplex)
 	}
 	if(ret == EOK)
 	{
-		hal_write32(reg, (addr_t)base_va + MAC_CONFIGURATION);
+		hal_write32(reg, base_va + MAC_CONFIGURATION);
 	}
 
 	return ret;
@@ -576,7 +576,7 @@ errno_t pfe_emac_cfg_set_duplex(void *base_va, pfe_emac_duplex_t duplex)
  * @param[in]	mode MII mode to be configured @see pfe_emac_mii_mode_t
  * @return		EOK if success, error code when invalid configuration is requested
  */
-errno_t pfe_emac_cfg_set_mii_mode(void *base_va, pfe_emac_mii_mode_t mode)
+errno_t pfe_emac_cfg_set_mii_mode(addr_t base_va, pfe_emac_mii_mode_t mode)
 {
 	/*
 		 The PHY mode selection is done using a HW interface. See the "phy_intf_sel" signal.
@@ -594,9 +594,9 @@ errno_t pfe_emac_cfg_set_mii_mode(void *base_va, pfe_emac_mii_mode_t mode)
  * @param[in]	speed Speed to be configured @see pfe_emac_speed_t
  * @return		EOK if success, error code when invalid configuration is requested
  */
-errno_t pfe_emac_cfg_set_speed(void *base_va, pfe_emac_speed_t speed)
+errno_t pfe_emac_cfg_set_speed(addr_t base_va, pfe_emac_speed_t speed)
 {
-	uint32_t reg = hal_read32((addr_t)base_va + MAC_CONFIGURATION) & ~(PORT_SELECT(1U) | SPEED(1U));
+	uint32_t reg = hal_read32(base_va + MAC_CONFIGURATION) & ~(PORT_SELECT(1U) | SPEED(1U));
 	errno_t ret = EOK;
 
 	switch (speed)
@@ -636,22 +636,19 @@ errno_t pfe_emac_cfg_set_speed(void *base_va, pfe_emac_speed_t speed)
 
 	if(ret == EOK)
 	{
-		hal_write32(reg, (addr_t)base_va + MAC_CONFIGURATION);
+		hal_write32(reg, base_va + MAC_CONFIGURATION);
 	}
 
 	return ret;
 }
 
-errno_t pfe_emac_cfg_get_link_config(void *base_va, pfe_emac_speed_t *speed, pfe_emac_duplex_t *duplex)
+errno_t pfe_emac_cfg_get_link_config(addr_t base_va, pfe_emac_speed_t *speed, pfe_emac_duplex_t *duplex)
 {
-	uint32_t reg = hal_read32((addr_t)base_va + MAC_CONFIGURATION);
+	uint32_t reg = hal_read32(base_va + MAC_CONFIGURATION);
 
 	/* speed */
 	switch (GET_LINE_SPEED(reg))
 	{
-		case 0x0U:
-			*speed = EMAC_SPEED_1000_MBPS;
-			break;
 		case 0x01U:
 			*speed = EMAC_SPEED_2500_MBPS;
 			break;
@@ -661,6 +658,7 @@ errno_t pfe_emac_cfg_get_link_config(void *base_va, pfe_emac_speed_t *speed, pfe
 		case 0x03U:
 			*speed = EMAC_SPEED_100_MBPS;
 			break;
+		case 0x0U:
 		default:
 			*speed = EMAC_SPEED_1000_MBPS;
 			break;
@@ -680,16 +678,13 @@ errno_t pfe_emac_cfg_get_link_config(void *base_va, pfe_emac_speed_t *speed, pfe
  * @param[out]	link Current link state
  * @return		EOK if success
  */
-errno_t pfe_emac_cfg_get_link_status(void *base_va, pfe_emac_link_speed_t *link_speed, pfe_emac_duplex_t *duplex, bool_t *link)
+errno_t pfe_emac_cfg_get_link_status(addr_t base_va, pfe_emac_link_speed_t *link_speed, pfe_emac_duplex_t *duplex, bool_t *link)
 {
-	uint32_t reg = hal_read32((addr_t)base_va + MAC_PHYIF_CONTROL_STATUS);
+	uint32_t reg = hal_read32(base_va + MAC_PHYIF_CONTROL_STATUS);
 
 	/* speed */
 	switch (LNKSPEED(reg))
 	{
-		case 0x0U:
-			*link_speed = EMAC_LINK_SPEED_2_5_MHZ;
-			break;
 		case 0x01U:
 			*link_speed = EMAC_LINK_SPEED_25_MHZ;
 			break;
@@ -699,6 +694,7 @@ errno_t pfe_emac_cfg_get_link_status(void *base_va, pfe_emac_link_speed_t *link_
 		case 0x03U:
 			*link_speed = EMAC_LINK_SPEED_INVALID;
 			break;
+		case 0x0U:
 		default:
 			*link_speed = EMAC_LINK_SPEED_2_5_MHZ;
 			break;
@@ -719,7 +715,7 @@ errno_t pfe_emac_cfg_get_link_status(void *base_va, pfe_emac_link_speed_t *link_
  * @param[in]	len The new maximum frame length
  * @return		EOK if success, error code if invalid value is requested
  */
-errno_t pfe_emac_cfg_set_max_frame_length(void *base_va, uint32_t len)
+errno_t pfe_emac_cfg_set_max_frame_length(addr_t base_va, uint32_t len)
 {
 	uint32_t reg, maxlen = 0U;
 	bool_t je, s2kp, gpslce, edvlp;
@@ -730,12 +726,12 @@ errno_t pfe_emac_cfg_set_max_frame_length(void *base_va, uint32_t len)
 		particular parameters (JE, S2KP, GPSLCE, DVLP, and GPSL must be changed).
 	*/
 
-	reg = hal_read32((addr_t)base_va + MAC_CONFIGURATION);
+	reg = hal_read32(base_va + MAC_CONFIGURATION);
 	je = !!(reg & JUMBO_PACKET_ENABLE(1U));
 	s2kp = !!(reg & SUPPORT_2K_PACKETS(1U));
 	gpslce = !!(reg & GIANT_PACKET_LIMIT_CONTROL(1U));
 
-	reg = hal_read32((addr_t)base_va + MAC_VLAN_TAG_CTRL);
+	reg = hal_read32(base_va + MAC_VLAN_TAG_CTRL);
 	edvlp = !!(reg & ENABLE_DOUBLE_VLAN(1U));
 
 	if (je && edvlp)
@@ -750,7 +746,7 @@ errno_t pfe_emac_cfg_set_max_frame_length(void *base_va, uint32_t len)
 
 	if (!je && !s2kp && gpslce && edvlp)
 	{
-		reg = hal_read32((addr_t)base_va + MAC_EXT_CONFIGURATION);
+		reg = hal_read32(base_va + MAC_EXT_CONFIGURATION);
 		maxlen = reg & GIANT_PACKET_SIZE_LIMIT((uint32_t)-1);
 		maxlen += 8U;
 	}
@@ -767,7 +763,7 @@ errno_t pfe_emac_cfg_set_max_frame_length(void *base_va, uint32_t len)
 
 	if (!je && !s2kp && gpslce && !edvlp)
 	{
-		reg = hal_read32((addr_t)base_va + MAC_EXT_CONFIGURATION);
+		reg = hal_read32(base_va + MAC_EXT_CONFIGURATION);
 		maxlen = reg & GIANT_PACKET_SIZE_LIMIT((uint32_t)-1);
 		maxlen += 4U;
 	}
@@ -792,7 +788,7 @@ errno_t pfe_emac_cfg_set_max_frame_length(void *base_va, uint32_t len)
  * @param[in]	slot Index of slot where the address shall be written
  * @note		Maximum number of slots is given by EMAC_CFG_INDIVIDUAL_ADDR_SLOTS_COUNT
  */
-void pfe_emac_cfg_write_addr_slot(void *base_va, pfe_mac_addr_t addr, uint8_t slot)
+void pfe_emac_cfg_write_addr_slot(addr_t base_va, const pfe_mac_addr_t addr, uint8_t slot)
 {
 	uint32_t bottom = ((uint32_t)addr[3] << 24U) | ((uint32_t)addr[2] << 16U) | ((uint32_t)addr[1] << 8U) | ((uint32_t)addr[0] << 0U);
 	uint32_t top = ((uint32_t)addr[5] << 8U) | ((uint32_t)addr[4] << 0U);
@@ -803,10 +799,10 @@ void pfe_emac_cfg_write_addr_slot(void *base_va, pfe_mac_addr_t addr, uint8_t sl
 		top |= 0x80000000U;
 	}
 
-	hal_write32(top, (addr_t)base_va + MAC_ADDRESS_HIGH(slot));
-	hal_write32(bottom, (addr_t)base_va + MAC_ADDRESS_LOW(slot));
+	hal_write32(top, base_va + MAC_ADDRESS_HIGH(slot));
+	hal_write32(bottom, base_va + MAC_ADDRESS_LOW(slot));
 	oal_time_usleep(10);
-	hal_write32(bottom, (addr_t)base_va + MAC_ADDRESS_LOW(slot));
+	hal_write32(bottom, base_va + MAC_ADDRESS_LOW(slot));
 }
 
 /**
@@ -815,7 +811,7 @@ void pfe_emac_cfg_write_addr_slot(void *base_va, pfe_mac_addr_t addr, uint8_t sl
  * @param[in]	addr The MAC address to compute the hash for
  * @retval		The hash value as represented/used by the HW
  */
-uint32_t pfe_emac_cfg_get_hash(void *base_va, pfe_mac_addr_t addr)
+uint32_t pfe_emac_cfg_get_hash(addr_t base_va, const pfe_mac_addr_t addr)
 {
 	(void)base_va;
 
@@ -828,14 +824,14 @@ uint32_t pfe_emac_cfg_get_hash(void *base_va, pfe_mac_addr_t addr)
  * @param[in]	hash The hash value
  * @param[in]	en TRUE means ENABLE, FALSE means DISABLE
  */
-void pfe_emac_cfg_set_uni_group(void *base_va, uint32_t hash, bool_t en)
+void pfe_emac_cfg_set_uni_group(addr_t base_va, uint32_t hash, bool_t en)
 {
 	uint32_t reg;
 	uint32_t val = (hash & 0xfc000000U) >> 26U;
 	uint8_t hash_table_idx = ((uint8_t)val & 0x40U) >> 6U;
 	uint8_t pos = ((uint8_t)val & 0x1fU);
 
-	reg = hal_read32((addr_t)base_va + MAC_HASH_TABLE_REG(hash_table_idx));
+	reg = hal_read32(base_va + MAC_HASH_TABLE_REG(hash_table_idx));
 
 	if (en)
 	{
@@ -846,10 +842,10 @@ void pfe_emac_cfg_set_uni_group(void *base_va, uint32_t hash, bool_t en)
 		reg &= ~((uint32_t)1U << pos);
 	}
 
-	hal_write32(reg, (addr_t)base_va + MAC_HASH_TABLE_REG(hash_table_idx));
+	hal_write32(reg, base_va + MAC_HASH_TABLE_REG(hash_table_idx));
 	/*	Wait at least 4 clock cycles ((G)MII) */
 	oal_time_usleep(10);
-	hal_write32(reg, (addr_t)base_va + MAC_HASH_TABLE_REG(hash_table_idx));
+	hal_write32(reg, base_va + MAC_HASH_TABLE_REG(hash_table_idx));
 }
 
 /**
@@ -858,7 +854,7 @@ void pfe_emac_cfg_set_uni_group(void *base_va, uint32_t hash, bool_t en)
  * @param[in]	hash The hash value
  * @param[in]	en TRUE means ENABLE, FALSE means DISABLE
  */
-void pfe_emac_cfg_set_multi_group(void *base_va, uint32_t hash, bool_t en)
+void pfe_emac_cfg_set_multi_group(addr_t base_va, uint32_t hash, bool_t en)
 {
 	pfe_emac_cfg_set_uni_group(base_va, hash, en);
 }
@@ -868,13 +864,13 @@ void pfe_emac_cfg_set_multi_group(void *base_va, uint32_t hash, bool_t en)
  * @param[in]	base_va Base address of MAC register space (virtual)
  * @param		en TRUE means ENABLE, FALSE means DISABLE
  */
-void pfe_emac_cfg_set_loopback(void *base_va, bool_t en)
+void pfe_emac_cfg_set_loopback(addr_t base_va, bool_t en)
 {
-	uint32_t reg = hal_read32((addr_t)base_va + MAC_CONFIGURATION) & ~(LOOPBACK_MODE(1));
+	uint32_t reg = hal_read32(base_va + MAC_CONFIGURATION) & ~(LOOPBACK_MODE(1));
 
 	reg |= LOOPBACK_MODE(en);
 
-	hal_write32(reg, (addr_t)base_va + MAC_CONFIGURATION);
+	hal_write32(reg, base_va + MAC_CONFIGURATION);
 }
 
 /**
@@ -882,13 +878,13 @@ void pfe_emac_cfg_set_loopback(void *base_va, bool_t en)
  * @param[in]	base_va Base address of MAC register space (virtual)
  * @param		en TRUE means ENABLE, FALSE means DISABLE
  */
-void pfe_emac_cfg_set_promisc_mode(void *base_va, bool_t en)
+void pfe_emac_cfg_set_promisc_mode(addr_t base_va, bool_t en)
 {
-	uint32_t reg = hal_read32((addr_t)base_va + MAC_PACKET_FILTER) & ~(PROMISCUOUS_MODE(1));
+	uint32_t reg = hal_read32(base_va + MAC_PACKET_FILTER) & ~(PROMISCUOUS_MODE(1));
 
 	reg |= PROMISCUOUS_MODE(en);
 
-	hal_write32(reg, (addr_t)base_va + MAC_PACKET_FILTER);
+	hal_write32(reg, base_va + MAC_PACKET_FILTER);
 }
 
 /**
@@ -896,13 +892,13 @@ void pfe_emac_cfg_set_promisc_mode(void *base_va, bool_t en)
  * @param[in]	base_va Base address of MAC register space (virtual)
  * @param		en TRUE means ENABLE, FALSE means DISABLE
  */
-void pfe_emac_cfg_set_allmulti_mode(void *base_va, bool_t en)
+void pfe_emac_cfg_set_allmulti_mode(addr_t base_va, bool_t en)
 {
-	uint32_t reg = hal_read32((addr_t)base_va + MAC_PACKET_FILTER) & ~(PASS_ALL_MULTICAST(1));
+	uint32_t reg = hal_read32(base_va + MAC_PACKET_FILTER) & ~(PASS_ALL_MULTICAST(1));
 
 	reg |= PASS_ALL_MULTICAST(en);
 
-	hal_write32(reg, (addr_t)base_va + MAC_PACKET_FILTER);
+	hal_write32(reg, base_va + MAC_PACKET_FILTER);
 }
 
 /**
@@ -910,13 +906,13 @@ void pfe_emac_cfg_set_allmulti_mode(void *base_va, bool_t en)
  * @param[in]	base_va Base address of MAC register space (virtual)
  * @param		en TRUE means ENABLE, FALSE means DISABLE
  */
-void pfe_emac_cfg_set_broadcast(void *base_va, bool_t en)
+void pfe_emac_cfg_set_broadcast(addr_t base_va, bool_t en)
 {
-	uint32_t reg = hal_read32((addr_t)base_va + MAC_PACKET_FILTER) & ~(DISABLE_BROADCAST_PACKETS(1));
+	uint32_t reg = hal_read32(base_va + MAC_PACKET_FILTER) & ~(DISABLE_BROADCAST_PACKETS(1));
 
 	reg |= DISABLE_BROADCAST_PACKETS(!en);
 
-	hal_write32(reg, (addr_t)base_va + MAC_PACKET_FILTER);
+	hal_write32(reg, base_va + MAC_PACKET_FILTER);
 }
 
 /**
@@ -924,29 +920,43 @@ void pfe_emac_cfg_set_broadcast(void *base_va, bool_t en)
  * @param[in]	base_va Base address of MAC register space (virtual)
  * @param		en TRUE means ENABLE, FALSE means DISABLE
  */
-void pfe_emac_cfg_set_enable(void *base_va, bool_t en)
+void pfe_emac_cfg_set_enable(addr_t base_va, bool_t en)
 {
-	uint32_t reg = hal_read32((addr_t)base_va + MAC_CONFIGURATION);
+	uint32_t reg = hal_read32(base_va + MAC_CONFIGURATION);
 
 	reg &= ~(TRANSMITTER_ENABLE(1) | RECEIVER_ENABLE(1));
 	reg |= TRANSMITTER_ENABLE(en) | RECEIVER_ENABLE(en);
 
-	hal_write32(reg, (addr_t)base_va + MAC_CONFIGURATION);
+	hal_write32(reg, base_va + MAC_CONFIGURATION);
+}
+
+void pfe_emac_cfg_get_tx_flow_control(addr_t base_va, bool_t* en)
+{
+	uint32_t reg = hal_read32(base_va + MAC_Q0_TX_FLOW_CTRL);
+
+	*en = reg & TX_FLOW_CONTROL_ENABLE(1);
+}
+
+void pfe_emac_cfg_get_rx_flow_control(addr_t base_va, bool_t* en)
+{
+	uint32_t reg = hal_read32(base_va + MAC_RX_FLOW_CTRL);
+
+	*en = reg & RX_FLOW_CONTROL_ENABLE(1);
 }
 
 /**
- * @brief		Enable/Disable the flow control
- * @details		Once enabled the MAC shall process PAUSE frames
+ * @brief		Enable/Disable the tx flow control
+ * @details		Once enabled the MAC shall send PAUSE frames
  * @param[in]	base_va Base address of MAC register space (virtual)
  * @param		en TRUE means ENABLE, FALSE means DISABLE
  */
-void pfe_emac_cfg_set_flow_control(void *base_va, bool_t en)
+void pfe_emac_cfg_set_tx_flow_control(addr_t base_va, bool_t en)
 {
 	uint32_t reg, ii=0U;
 
 	do
 	{
-		reg = hal_read32((addr_t)base_va + MAC_Q0_TX_FLOW_CTRL);
+		reg = hal_read32(base_va + MAC_Q0_TX_FLOW_CTRL);
 		oal_time_usleep(100U);
 		ii++;
 	} while ((reg & BUSY_OR_BACKPRESSURE_ACTIVE(1)) && (ii < 10U));
@@ -960,7 +970,26 @@ void pfe_emac_cfg_set_flow_control(void *base_va, bool_t en)
 	reg &= ~(TX_FLOW_CONTROL_ENABLE(1));
 	reg |= TX_FLOW_CONTROL_ENABLE(en);
 
-	hal_write32(reg, (addr_t)base_va + MAC_Q0_TX_FLOW_CTRL);
+	reg |= TX_PAUSE_TIME(DEFAULT_PAUSE_QUANTA);
+	reg |= TX_PAUSE_LOW_TRASHOLD(0x0);
+
+	hal_write32(reg, base_va + MAC_Q0_TX_FLOW_CTRL);
+}
+
+/**
+ * @brief               Enable/Disable the rx flow control
+ * @details             Once enabled the MAC shall process PAUSE frames
+ * @param[in]   base_va Base address of MAC register space (virtual)
+ * @param               en TRUE means ENABLE, FALSE means DISABLE
+ */
+void pfe_emac_cfg_set_rx_flow_control(addr_t base_va, bool_t en)
+{
+	int32_t reg =  hal_read32(base_va + MAC_RX_FLOW_CTRL);
+
+	reg &= ~(RX_FLOW_CONTROL_ENABLE(1));
+	reg |= RX_FLOW_CONTROL_ENABLE(en);
+
+	hal_write32(reg, base_va + MAC_RX_FLOW_CTRL);
 }
 
 /**
@@ -971,7 +1000,7 @@ void pfe_emac_cfg_set_flow_control(void *base_va, bool_t en)
  * @param[out]	val If success the the read value is written here (16 bit)
  * @retval		EOK Success
  */
-errno_t pfe_emac_cfg_mdio_read22(void *base_va, uint8_t pa, uint8_t ra, uint16_t *val)
+errno_t pfe_emac_cfg_mdio_read22(addr_t base_va, uint8_t pa, uint8_t ra, uint16_t *val)
 {
 	uint32_t reg;
 	uint32_t timeout = 500U;
@@ -1017,7 +1046,7 @@ errno_t pfe_emac_cfg_mdio_read22(void *base_va, uint8_t pa, uint8_t ra, uint16_t
  * @param[out]	val If success the the read value is written here (16-bit)
  * @retval		EOK Success
  */
-errno_t pfe_emac_cfg_mdio_read45(void *base_va, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t *val)
+errno_t pfe_emac_cfg_mdio_read45(addr_t base_va, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t *val)
 {
 	uint32_t reg;
 	uint32_t timeout = 500U;
@@ -1064,13 +1093,13 @@ errno_t pfe_emac_cfg_mdio_read45(void *base_va, uint8_t pa, uint8_t dev, uint16_
  * @param[in]	val Value to be written into the register (16 bit)
  * @retval		EOK Success
  */
-errno_t pfe_emac_cfg_mdio_write22(void *base_va, uint8_t pa, uint8_t ra, uint16_t val)
+errno_t pfe_emac_cfg_mdio_write22(addr_t base_va, uint8_t pa, uint8_t ra, uint16_t val)
 {
 	uint32_t reg;
 	uint32_t timeout = 500U;
 
 	reg = (uint32_t)GMII_DATA(val);
-	hal_write32(reg, (addr_t)base_va + MAC_MDIO_DATA);
+	hal_write32(reg, base_va + MAC_MDIO_DATA);
 
 	reg = GMII_BUSY(1U)
 				| CLAUSE45_ENABLE(0U)
@@ -1084,8 +1113,8 @@ errno_t pfe_emac_cfg_mdio_write22(void *base_va, uint8_t pa, uint8_t ra, uint16_
 				| BACK_TO_BACK(0U)
 				| PREAMBLE_SUPPRESSION(0U);
 
-	hal_write32(reg, (addr_t)base_va + MAC_MDIO_ADDRESS);
-	while(GMII_BUSY(1) == (hal_read32((addr_t)base_va + MAC_MDIO_ADDRESS) & GMII_BUSY(1)))
+	hal_write32(reg, base_va + MAC_MDIO_ADDRESS);
+	while(GMII_BUSY(1) == (hal_read32(base_va + MAC_MDIO_ADDRESS) & GMII_BUSY(1)))
 	{
 		if (timeout-- == 0U)
 		{
@@ -1106,7 +1135,7 @@ errno_t pfe_emac_cfg_mdio_write22(void *base_va, uint8_t pa, uint8_t ra, uint16_
  * @param[in]	val Value to be written (16-bit)
  * @retval		EOK Success
  */
-errno_t pfe_emac_cfg_mdio_write45(void *base_va, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t val)
+errno_t pfe_emac_cfg_mdio_write45(addr_t base_va, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t val)
 {
 	uint32_t reg;
 	uint32_t timeout = 500U;
@@ -1141,6 +1170,26 @@ errno_t pfe_emac_cfg_mdio_write45(void *base_va, uint8_t pa, uint8_t dev, uint16
 }
 
 /**
+ * @brief		Get number of transmitted packets
+ * @param[in]	base_va Base address of EMAC register space (virtual)
+ * @return		Number of transmitted packets
+ */
+uint32_t pfe_emac_cfg_get_tx_cnt(addr_t base_va)
+{
+	return hal_read32(base_va + TX_PACKET_COUNT_GOOD_BAD);
+}
+
+/**
+ * @brief		Get number of received packets
+ * @param[in]	base_va Base address of EMAC register space (virtual)
+ * @return		Number of received packets
+ */
+uint32_t pfe_emac_cfg_get_rx_cnt(addr_t base_va)
+{
+	return hal_read32(base_va + RX_PACKETS_COUNT_GOOD_BAD);
+}
+
+/**
  * @brief		Get EMAC statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
  * 				about the EMAC block.
@@ -1150,7 +1199,7 @@ errno_t pfe_emac_cfg_mdio_write45(void *base_va, uint8_t pa, uint8_t dev, uint16
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_emac_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level)
+uint32_t pfe_emac_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 	uint32_t reg;
@@ -1158,7 +1207,7 @@ uint32_t pfe_emac_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, u
 	pfe_emac_duplex_t duplex;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == base_va))
+	if (unlikely(NULL_ADDR == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
@@ -1167,151 +1216,151 @@ uint32_t pfe_emac_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, u
 
 
 	/*	Get version */
-	reg = hal_read32((addr_t)base_va + MAC_VERSION);
+	reg = hal_read32(base_va + MAC_VERSION);
 	len += oal_util_snprintf(buf + len, size - len, "SNPVER                    : 0x%x\n", reg & 0xffU);
 	len += oal_util_snprintf(buf + len, size - len, "USERVER                   : 0x%x\n", (reg >> 8) & 0xffU);
 
-	reg = hal_read32((addr_t)base_va + RX_PACKETS_COUNT_GOOD_BAD);
+	reg = hal_read32(base_va + RX_PACKETS_COUNT_GOOD_BAD);
 	len += oal_util_snprintf(buf + len, size - len, "RX_PACKETS_COUNT_GOOD_BAD : 0x%x\n", reg);
-	reg = hal_read32((addr_t)base_va + TX_PACKET_COUNT_GOOD_BAD);
+	reg = hal_read32(base_va + TX_PACKET_COUNT_GOOD_BAD);
 	len += oal_util_snprintf(buf + len, size - len, "TX_PACKET_COUNT_GOOD_BAD  : 0x%x\n", reg);
 
 	(void)pfe_emac_cfg_get_link_config(base_va, &speed, &duplex);
-	reg = hal_read32((addr_t)base_va + MAC_CONFIGURATION);
+	reg = hal_read32(base_va + MAC_CONFIGURATION);
 	len += oal_util_snprintf(buf + len, size - len, "MAC_CONFIGURATION         : 0x%x [speed: %s]\n", reg, emac_speed_to_str(speed));
 
-	reg = (hal_read32((addr_t)base_va + MAC_HW_FEATURE0) >> 28U) & 0x07U;
+	reg = (hal_read32(base_va + MAC_HW_FEATURE0) >> 28U) & 0x07U;
 	len += oal_util_snprintf(buf + len, size - len, "ACTPHYSEL(MAC_HW_FEATURE0): %s\n", phy_mode_to_str(reg));
 
 	/* Error debugging */
 	if(verb_level >= 8U)
 	{
-		reg = hal_read32((addr_t)base_va + TX_UNDERFLOW_ERROR_PACKETS);
+		reg = hal_read32(base_va + TX_UNDERFLOW_ERROR_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "TX_UNDERFLOW_ERROR_PACKETS        : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_SINGLE_COLLISION_GOOD_PACKETS);
+		reg = hal_read32(base_va + TX_SINGLE_COLLISION_GOOD_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "TX_SINGLE_COLLISION_GOOD_PACKETS  : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_MULTIPLE_COLLISION_GOOD_PACKETS);
+		reg = hal_read32(base_va + TX_MULTIPLE_COLLISION_GOOD_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "TX_MULTIPLE_COLLISION_GOOD_PACKETS: 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_DEFERRED_PACKETS);
+		reg = hal_read32(base_va + TX_DEFERRED_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "TX_DEFERRED_PACKETS               : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_LATE_COLLISION_PACKETS);
+		reg = hal_read32(base_va + TX_LATE_COLLISION_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "TX_LATE_COLLISION_PACKETS         : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_EXCESSIVE_COLLISION_PACKETS);
+		reg = hal_read32(base_va + TX_EXCESSIVE_COLLISION_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "TX_EXCESSIVE_COLLISION_PACKETS    : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_CARRIER_ERROR_PACKETS);
+		reg = hal_read32(base_va + TX_CARRIER_ERROR_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "TX_CARRIER_ERROR_PACKETS          : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_EXCESSIVE_DEFERRAL_ERROR);
+		reg = hal_read32(base_va + TX_EXCESSIVE_DEFERRAL_ERROR);
 		len += oal_util_snprintf(buf + len, size - len, "TX_EXCESSIVE_DEFERRAL_ERROR       : 0x%x\n", reg);
 
-		reg = hal_read32((addr_t)base_va + TX_OSIZE_PACKETS_GOOD);
+		reg = hal_read32(base_va + TX_OSIZE_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_OSIZE_PACKETS_GOOD             : 0x%x\n", reg);
 
-		reg = hal_read32((addr_t)base_va + RX_CRC_ERROR_PACKETS);
+		reg = hal_read32(base_va + RX_CRC_ERROR_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "RX_CRC_ERROR_PACKETS              : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_ALIGNMENT_ERROR_PACKETS);
+		reg = hal_read32(base_va + RX_ALIGNMENT_ERROR_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "RX_ALIGNMENT_ERROR_PACKETS        : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_RUNT_ERROR_PACKETS);
+		reg = hal_read32(base_va + RX_RUNT_ERROR_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "RX_RUNT_ERROR_PACKETS             : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_JABBER_ERROR_PACKETS);
+		reg = hal_read32(base_va + RX_JABBER_ERROR_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "RX_JABBER_ERROR_PACKETS           : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_LENGTH_ERROR_PACKETS);
+		reg = hal_read32(base_va + RX_LENGTH_ERROR_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "RX_LENGTH_ERROR_PACKETS           : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_OUT_OF_RANGE_TYPE_PACKETS);
+		reg = hal_read32(base_va + RX_OUT_OF_RANGE_TYPE_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "RX_OUT_OF_RANGE_TYPE_PACKETS      : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_FIFO_OVERFLOW_PACKETS);
+		reg = hal_read32(base_va + RX_FIFO_OVERFLOW_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "RX_FIFO_OVERFLOW_PACKETS          : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_RECEIVE_ERROR_PACKETS);
+		reg = hal_read32(base_va + RX_RECEIVE_ERROR_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "RX_RECEIVE_ERROR_PACKETS          : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_RECEIVE_ERROR_PACKETS);
+		reg = hal_read32(base_va + RX_RECEIVE_ERROR_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "RX_RECEIVE_ERROR_PACKETS          : 0x%x\n", reg);
 	}
 
 	/* Cast/vlan/flow control */
 	if(verb_level >= 3U)
 	{
-		reg = hal_read32((addr_t)base_va + TX_UNICAST_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + TX_UNICAST_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_UNICAST_PACKETS_GOOD_BAD       : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_BROADCAST_PACKETS_GOOD);
+		reg = hal_read32(base_va + TX_BROADCAST_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_BROADCAST_PACKETS_GOOD         : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_BROADCAST_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + TX_BROADCAST_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_BROADCAST_PACKETS_GOOD_BAD     : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_MULTICAST_PACKETS_GOOD);
+		reg = hal_read32(base_va + TX_MULTICAST_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_MULTICAST_PACKETS_GOOD         : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_MULTICAST_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + TX_MULTICAST_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_MULTICAST_PACKETS_GOOD_BAD     : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_VLAN_PACKETS_GOOD);
+		reg = hal_read32(base_va + TX_VLAN_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_VLAN_PACKETS_GOOD              : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_PAUSE_PACKETS);
+		reg = hal_read32(base_va + TX_PAUSE_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "TX_PAUSE_PACKETS                  : 0x%x\n", reg);
 	}
 
 	if(verb_level >= 4U)
 	{
-		reg = hal_read32((addr_t)base_va + RX_UNICAST_PACKETS_GOOD);
+		reg = hal_read32(base_va + RX_UNICAST_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_UNICAST_PACKETS_GOOD           : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_BROADCAST_PACKETS_GOOD);
+		reg = hal_read32(base_va + RX_BROADCAST_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_BROADCAST_PACKETS_GOOD         : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_MULTICAST_PACKETS_GOOD);
+		reg = hal_read32(base_va + RX_MULTICAST_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_MULTICAST_PACKETS_GOOD         : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_VLAN_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + RX_VLAN_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_VLAN_PACKETS_GOOD_BAD          : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_PAUSE_PACKETS);
+		reg = hal_read32(base_va + RX_PAUSE_PACKETS);
 		len += oal_util_snprintf(buf + len, size - len, "RX_PAUSE_PACKETS                  : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_CONTROL_PACKETS_GOOD);
+		reg = hal_read32(base_va + RX_CONTROL_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_CONTROL_PACKETS_GOOD           : 0x%x\n", reg);
 	}
 
 	if(verb_level >= 1U)
 	{
-		reg = hal_read32((addr_t)base_va + TX_OCTET_COUNT_GOOD);
+		reg = hal_read32(base_va + TX_OCTET_COUNT_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_OCTET_COUNT_GOOD                : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_OCTET_COUNT_GOOD_BAD);
+		reg = hal_read32(base_va + TX_OCTET_COUNT_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_OCTET_COUNT_GOOD_BAD            : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_64OCTETS_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + TX_64OCTETS_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_64OCTETS_PACKETS_GOOD_BAD       : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_65TO127OCTETS_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + TX_65TO127OCTETS_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_65TO127OCTETS_PACKETS_GOOD_BAD  : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_128TO255OCTETS_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + TX_128TO255OCTETS_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_128TO255OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_256TO511OCTETS_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + TX_256TO511OCTETS_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_256TO511OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_512TO1023OCTETS_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + TX_512TO1023OCTETS_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_512TO1023OCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + TX_1024TOMAXOCTETS_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + TX_1024TOMAXOCTETS_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_1024TOMAXOCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
 	}
 
 	if(verb_level >= 5U)
 	{
-		reg = hal_read32((addr_t)base_va + TX_OSIZE_PACKETS_GOOD);
+		reg = hal_read32(base_va + TX_OSIZE_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_OSIZE_PACKETS_GOOD              : 0x%x\n", reg);
 	}
 
 	if(verb_level >= 2U)
 	{
-		reg = hal_read32((addr_t)base_va + RX_OCTET_COUNT_GOOD);
+		reg = hal_read32(base_va + RX_OCTET_COUNT_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_OCTET_COUNT_GOOD                : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_OCTET_COUNT_GOOD_BAD);
+		reg = hal_read32(base_va + RX_OCTET_COUNT_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_OCTET_COUNT_GOOD_BAD            : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_64OCTETS_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + RX_64OCTETS_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_64OCTETS_PACKETS_GOOD_BAD       : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_65TO127OCTETS_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + RX_65TO127OCTETS_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_65TO127OCTETS_PACKETS_GOOD_BAD  : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_128TO255OCTETS_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + RX_128TO255OCTETS_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_128TO255OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_256TO511OCTETS_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + RX_256TO511OCTETS_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_256TO511OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_512TO1023OCTETS_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + RX_512TO1023OCTETS_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_512TO1023OCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_1024TOMAXOCTETS_PACKETS_GOOD_BAD);
+		reg = hal_read32(base_va + RX_1024TOMAXOCTETS_PACKETS_GOOD_BAD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_1024TOMAXOCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
 	}
 
 	if(verb_level >= 5U)
 	{
-		reg = hal_read32((addr_t)base_va + RX_OVERSIZE_PACKETS_GOOD);
+		reg = hal_read32(base_va + RX_OVERSIZE_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "TX_OSIZE_PACKETS_GOOD              : 0x%x\n", reg);
-		reg = hal_read32((addr_t)base_va + RX_UNDERSIZE_PACKETS_GOOD);
+		reg = hal_read32(base_va + RX_UNDERSIZE_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_UNDERSIZE_PACKETS_GOOD          : 0x%x\n", reg);
 	}
 

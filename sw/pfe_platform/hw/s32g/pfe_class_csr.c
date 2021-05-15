@@ -29,7 +29,7 @@
  * @param[in]	base_va Base address of CLASS register space (virtual)
  * @param[in]	cfg Pointer to the configuration structure
  */
-void pfe_class_cfg_set_config(void *base_va, pfe_class_cfg_t *cfg)
+void pfe_class_cfg_set_config(addr_t base_va, const pfe_class_cfg_t *cfg)
 {
 	(void)cfg;
 
@@ -47,6 +47,8 @@ void pfe_class_cfg_set_config(void *base_va, pfe_class_cfg_t *cfg)
 	hal_write32(0U, base_va + CLASS_L4_CHKSUM);
 	hal_write32((PFE_CFG_RO_HDR_SIZE << 16) | PFE_CFG_LMEM_HDR_SIZE, base_va + CLASS_HDR_SIZE);
 	hal_write32(PFE_CFG_LMEM_BUF_SIZE, base_va + CLASS_LMEM_BUF_SIZE);
+	hal_write32(CLASS_TPID0_TPID1_VAL, base_va + CLASS_TPID0_TPID1);
+	hal_write32(CLASS_TPID2_VAL, base_va + CLASS_TPID2);
 
 	hal_write32(0U
 			| RT_TWO_LEVEL_REF(FALSE)
@@ -71,7 +73,7 @@ void pfe_class_cfg_set_config(void *base_va, pfe_class_cfg_t *cfg)
  * @brief		Reset the classifier block
  * @param[in]	base_va Base address of CLASS register space (virtual)
  */
-void pfe_class_cfg_reset(void *base_va)
+void pfe_class_cfg_reset(addr_t base_va)
 {
 	hal_write32(PFE_CORE_SW_RESET, base_va + CLASS_TX_CTRL);
 }
@@ -81,7 +83,7 @@ void pfe_class_cfg_reset(void *base_va)
  * @details		Enable all classifier PEs
  * @param[in]	base_va Base address of CLASS register space (virtual)
  */
-void pfe_class_cfg_enable(void *base_va)
+void pfe_class_cfg_enable(addr_t base_va)
 {
 	hal_write32(PFE_CORE_ENABLE, base_va + CLASS_TX_CTRL);
 }
@@ -91,7 +93,7 @@ void pfe_class_cfg_enable(void *base_va)
  * @details		Disable all classifier PEs
  * @param[in]	base_va Base address of CLASS register space (virtual)
  */
-void pfe_class_cfg_disable(void *base_va)
+void pfe_class_cfg_disable(addr_t base_va)
 {
 	hal_write32(PFE_CORE_DISABLE, base_va + CLASS_TX_CTRL);
 }
@@ -102,22 +104,24 @@ void pfe_class_cfg_disable(void *base_va)
  * @param[in]	rtable_pa Physical address of the routing table space
  * @param[in]	rtable_len Number of entries in the table
  * @param[in]	entry_size Routing table entry size in number of bytes
+ * @return		Execution status, EOK if success, error code otherwise
  */
-void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_len, uint32_t entry_size)
+errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtable_len, uint32_t entry_size)
 {
 	uint8_t ii;
 	uint32_t reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
 
-	if (NULL == rtable_pa)
+	if (NULL_ADDR == rtable_pa)
 	{
 		hal_write32(reg & (~PARSE_ROUTE_EN(TRUE)), base_va + CLASS_ROUTE_MULTI);
-		return;
+		return EOK;
 	}
 
 	/* rtable not NULL, add it */
 	if (entry_size > ROUTE_ENTRY_SIZE(0xffffffffu))
 	{
 		NXP_LOG_ERROR("Entry size exceeds maximum value\n");
+		return EINVAL;
 	}
 
 	reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
@@ -126,6 +130,7 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
 		if (entry_size != 128U)
 		{
 			NXP_LOG_ERROR("FATAL: Route table entry length exceeds 128bytes\n");
+			return EINVAL;
 		}
 	}
 
@@ -135,19 +140,21 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
 		{
 			if (0U != (rtable_len & ~(1UL << ii)))
 			{
-				NXP_LOG_WARNING("Routing table length is not a power of 2\n");
+				NXP_LOG_ERROR("Routing table length is not a power of 2\n");
+				return EINVAL;
 			}
 
 			if ((ii < 6U) || (ii > 20U))
 			{
-				NXP_LOG_WARNING("Table length out of boundaries\n");
+				NXP_LOG_ERROR("Table length out of boundaries\n");
+				return EINVAL;
 			}
 
 			break;
 		}
 	}
 
-	hal_write32((uint32_t)((addr_t)rtable_pa & 0xffffffffU), base_va + CLASS_ROUTE_TABLE_BASE);
+	hal_write32((uint32_t)(rtable_pa & 0xffffffffU), base_va + CLASS_ROUTE_TABLE_BASE);
 	hal_write32(0UL
 				| ROUTE_HASH_SIZE(ii)
 				| ROUTE_ENTRY_SIZE(entry_size)
@@ -155,6 +162,8 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
 
 	reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
 	hal_write32(reg | PARSE_ROUTE_EN(TRUE), base_va + CLASS_ROUTE_MULTI);
+
+	return EOK;
 }
 
 /**
@@ -164,7 +173,7 @@ void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_le
  * @param[in]	base_va Base address of CLASS register space (virtual)
  * @param[in]	vlan The default VLAN ID (12bit)
  */
-void pfe_class_cfg_set_def_vlan(void *base_va, uint16_t vlan)
+void pfe_class_cfg_set_def_vlan(addr_t base_va, uint16_t vlan)
 {
 	hal_write32(0UL
 			| USE_DEFAULT_VLANID(TRUE)
@@ -182,13 +191,13 @@ void pfe_class_cfg_set_def_vlan(void *base_va, uint16_t vlan)
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_class_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level)
+uint32_t pfe_class_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 	uint32_t reg;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == base_va))
+	if (unlikely(NULL_ADDR == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;

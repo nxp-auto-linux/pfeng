@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020 NXP
+ *  Copyright 2020-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -228,7 +228,8 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 			/*	Copy original command properties into reply structure */
 			reply_buf->action = q->action;
 			reply_buf->id = q->id;
-			strncpy(reply_buf->if_name, q->if_name, sizeof(reply_buf->if_name)-1);
+			strncpy(reply_buf->if_name, q->if_name, sizeof(reply_buf->if_name));
+			reply_buf->if_name[sizeof(reply_buf->if_name) - 1] = '\0';
 
 			/*	Get queue mode */
 			switch (pfe_tmu_queue_get_mode(pfe->tmu, pfe_phy_if_get_id(phy_if),
@@ -515,7 +516,8 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 			/*	Copy original command properties into reply structure */
 			reply_buf->action = sch->action;
 			reply_buf->id = sch->id;
-			strncpy(reply_buf->if_name, sch->if_name, sizeof(reply_buf->if_name)-1);
+			strncpy(reply_buf->if_name, sch->if_name, sizeof(reply_buf->if_name));
+			reply_buf->if_name[sizeof(reply_buf->if_name) - 1] = '\0';
 
 			/*	Get scheduler mode */
 			switch (pfe_tmu_sch_get_rate_mode(pfe->tmu, pfe_phy_if_get_id(phy_if), sch->id))
@@ -779,7 +781,8 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 			/*	Copy original command properties into reply structure */
 			reply_buf->action = shp->action;
 			reply_buf->id = shp->id;
-			strncpy(reply_buf->if_name, shp->if_name, sizeof(reply_buf->if_name)-1);
+			strncpy(reply_buf->if_name, shp->if_name, sizeof(reply_buf->if_name));
+			reply_buf->if_name[sizeof(reply_buf->if_name) - 1] = '\0';
 
 			/*	Get shaper mode */
 			switch (pfe_tmu_shp_get_rate_mode(pfe->tmu, pfe_phy_if_get_id(phy_if), shp->id))

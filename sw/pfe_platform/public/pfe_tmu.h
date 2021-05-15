@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -62,45 +62,45 @@ typedef struct
 	uint32_t pe_sys_clk_ratio;		/*	Clock mode ratio for sys_clk and pe_clk */
 } pfe_tmu_cfg_t;
 
-errno_t pfe_tmu_queue_get_fill_level(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *level);
-errno_t pfe_tmu_queue_get_drop_count(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
-errno_t pfe_tmu_queue_get_tx_count(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
-errno_t pfe_tmu_queue_set_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, pfe_tmu_queue_mode_t mode, uint32_t min, uint32_t max);
-pfe_tmu_queue_mode_t pfe_tmu_queue_get_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *min, uint32_t *max);
-errno_t pfe_tmu_queue_set_wred_prob(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t prob);
-errno_t pfe_tmu_queue_get_wred_prob(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t *prob);
-uint8_t pfe_tmu_queue_get_wred_zones(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue);
-uint8_t pfe_tmu_queue_get_cnt(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy);
+errno_t pfe_tmu_queue_get_fill_level(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *level);
+errno_t pfe_tmu_queue_get_drop_count(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
+errno_t pfe_tmu_queue_get_tx_count(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
+errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, pfe_tmu_queue_mode_t mode, uint32_t min, uint32_t max);
+pfe_tmu_queue_mode_t pfe_tmu_queue_get_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *min, uint32_t *max);
+errno_t pfe_tmu_queue_set_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t prob);
+errno_t pfe_tmu_queue_get_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t *prob);
+uint8_t pfe_tmu_queue_get_wred_zones(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue);
+uint8_t pfe_tmu_queue_get_cnt(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy);
 
-errno_t pfe_tmu_shp_enable(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
-errno_t pfe_tmu_shp_disable(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
-errno_t pfe_tmu_shp_set_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, pfe_tmu_rate_mode_t mode);
-pfe_tmu_rate_mode_t pfe_tmu_shp_get_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
-errno_t pfe_tmu_shp_set_idle_slope(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint32_t isl);
-uint32_t pfe_tmu_shp_get_idle_slope(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
-errno_t pfe_tmu_shp_set_limits(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t max_credit, int32_t min_credit);
-errno_t pfe_tmu_shp_get_limits(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t *max_credit, int32_t *min_credit);
-errno_t pfe_tmu_shp_set_position(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint8_t pos);
-uint8_t pfe_tmu_shp_get_position(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_enable(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_disable(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_set_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, pfe_tmu_rate_mode_t mode);
+pfe_tmu_rate_mode_t pfe_tmu_shp_get_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_set_idle_slope(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint32_t isl);
+uint32_t pfe_tmu_shp_get_idle_slope(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_set_limits(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t max_credit, int32_t min_credit);
+errno_t pfe_tmu_shp_get_limits(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t *max_credit, int32_t *min_credit);
+errno_t pfe_tmu_shp_set_position(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint8_t pos);
+uint8_t pfe_tmu_shp_get_position(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
 
-errno_t pfe_tmu_sch_set_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, pfe_tmu_rate_mode_t mode);
-pfe_tmu_rate_mode_t pfe_tmu_sch_get_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch);
-errno_t pfe_tmu_sch_set_algo(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, pfe_tmu_sched_algo_t algo);
-pfe_tmu_sched_algo_t pfe_tmu_sch_get_algo(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch);
-uint8_t pfe_tmu_sch_get_input_cnt(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch);
-errno_t pfe_tmu_sch_set_input_weight(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input, uint32_t weight);
-uint32_t pfe_tmu_sch_get_input_weight(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
-errno_t pfe_tmu_sch_bind_queue(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input, uint8_t queue);
-uint8_t pfe_tmu_sch_get_bound_queue(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
-errno_t pfe_tmu_sch_bind_sch_output(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t src_sch, uint8_t dst_sch, uint8_t input);
-uint8_t pfe_tmu_sch_get_bound_sch_output(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
+errno_t pfe_tmu_sch_set_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, pfe_tmu_rate_mode_t mode);
+pfe_tmu_rate_mode_t pfe_tmu_sch_get_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch);
+errno_t pfe_tmu_sch_set_algo(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, pfe_tmu_sched_algo_t algo);
+pfe_tmu_sched_algo_t pfe_tmu_sch_get_algo(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch);
+uint8_t pfe_tmu_sch_get_input_cnt(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch);
+errno_t pfe_tmu_sch_set_input_weight(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input, uint32_t weight);
+uint32_t pfe_tmu_sch_get_input_weight(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
+errno_t pfe_tmu_sch_bind_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input, uint8_t queue);
+uint8_t pfe_tmu_sch_get_bound_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
+errno_t pfe_tmu_sch_bind_sch_output(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t src_sch, uint8_t dst_sch, uint8_t input);
+uint8_t pfe_tmu_sch_get_bound_sch_output(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
 
-pfe_tmu_t *pfe_tmu_create(void *cbus_base_va, uint32_t pe_num, pfe_tmu_cfg_t *cfg);
-void pfe_tmu_enable(pfe_tmu_t *tmu);
-void pfe_tmu_reset(pfe_tmu_t *tmu);
-void pfe_tmu_disable(pfe_tmu_t *tmu);
-void pfe_tmu_send(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, void *buf_pa, uint16_t len);
-uint32_t pfe_tmu_get_text_statistics(pfe_tmu_t *tmu, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-void pfe_tmu_destroy(pfe_tmu_t *tmu);
+pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cfg_t *cfg);
+void pfe_tmu_enable(const pfe_tmu_t *tmu);
+void pfe_tmu_reset(const pfe_tmu_t *tmu);
+void pfe_tmu_disable(const pfe_tmu_t *tmu);
+void pfe_tmu_send(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, const void *buf_pa, uint16_t len);
+uint32_t pfe_tmu_get_text_statistics(const pfe_tmu_t *tmu, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+void pfe_tmu_destroy(const pfe_tmu_t *tmu);
 
 #endif /* PFE_TMU_H_ */

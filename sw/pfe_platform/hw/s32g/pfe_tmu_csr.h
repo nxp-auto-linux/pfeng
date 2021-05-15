@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -209,48 +209,48 @@ struct pfe_tmu_phy_cfg_tag
 	uint8_t shp_cnt;
 };
 
-const pfe_tmu_phy_cfg_t *const pfe_tmu_cfg_get_phy_config(pfe_ct_phy_if_id_t phy);
+const pfe_tmu_phy_cfg_t* pfe_tmu_cfg_get_phy_config(pfe_ct_phy_if_id_t phy);
 
-errno_t pfe_tmu_q_cfg_get_fill_level(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *level);
-errno_t pfe_tmu_q_cfg_get_drop_count(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
-errno_t pfe_tmu_q_cfg_get_tx_count(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
-pfe_tmu_queue_mode_t pfe_tmu_q_get_mode(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *min, uint32_t *max);
-errno_t pfe_tmu_q_mode_set_default(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue);
-errno_t pfe_tmu_q_mode_set_tail_drop(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint16_t max);
-errno_t pfe_tmu_q_mode_set_wred(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint16_t min, uint16_t max);
-errno_t pfe_tmu_q_set_wred_probability(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t prob);
-errno_t pfe_tmu_q_get_wred_probability(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t *prob);
-uint8_t pfe_tmu_q_get_wred_zones(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue);
+errno_t pfe_tmu_q_cfg_get_fill_level(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *level);
+errno_t pfe_tmu_q_cfg_get_drop_count(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
+errno_t pfe_tmu_q_cfg_get_tx_count(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
+pfe_tmu_queue_mode_t pfe_tmu_q_get_mode(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *min, uint32_t *max);
+errno_t pfe_tmu_q_mode_set_default(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue);
+errno_t pfe_tmu_q_mode_set_tail_drop(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint16_t max);
+errno_t pfe_tmu_q_mode_set_wred(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint16_t min, uint16_t max);
+errno_t pfe_tmu_q_set_wred_probability(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t prob);
+errno_t pfe_tmu_q_get_wred_probability(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t *prob);
+uint8_t pfe_tmu_q_get_wred_zones(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue);
 
-void pfe_tmu_shp_cfg_init(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
-errno_t pfe_tmu_shp_cfg_enable(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
-errno_t pfe_tmu_shp_cfg_set_rate_mode(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, pfe_tmu_rate_mode_t mode);
-pfe_tmu_rate_mode_t pfe_tmu_shp_cfg_get_rate_mode(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
-errno_t pfe_tmu_shp_cfg_set_idle_slope(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, uint32_t isl);
-uint32_t pfe_tmu_shp_cfg_get_idle_slope(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
-errno_t pfe_tmu_shp_cfg_set_limits(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t max_credit, int32_t min_credit);
-errno_t pfe_tmu_shp_cfg_get_limits(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t *max_credit, int32_t *min_credit);
-errno_t pfe_tmu_shp_cfg_set_position(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, uint8_t pos);
-uint8_t pfe_tmu_shp_cfg_get_position(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
-void pfe_tmu_shp_cfg_disable(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
+void pfe_tmu_shp_cfg_init(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_cfg_enable(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_cfg_set_rate_mode(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, pfe_tmu_rate_mode_t mode);
+pfe_tmu_rate_mode_t pfe_tmu_shp_cfg_get_rate_mode(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_cfg_set_idle_slope(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, uint32_t isl);
+uint32_t pfe_tmu_shp_cfg_get_idle_slope(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
+errno_t pfe_tmu_shp_cfg_set_limits(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t max_credit, int32_t min_credit);
+errno_t pfe_tmu_shp_cfg_get_limits(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t *max_credit, int32_t *min_credit);
+errno_t pfe_tmu_shp_cfg_set_position(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp, uint8_t pos);
+uint8_t pfe_tmu_shp_cfg_get_position(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
+void pfe_tmu_shp_cfg_disable(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
 
-void pfe_tmu_sch_cfg_init(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch);
-errno_t pfe_tmu_sch_cfg_set_rate_mode(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, pfe_tmu_rate_mode_t mode);
-pfe_tmu_rate_mode_t pfe_tmu_sch_cfg_get_rate_mode(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch);
-errno_t pfe_tmu_sch_cfg_set_algo(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, pfe_tmu_sched_algo_t algo);
-pfe_tmu_sched_algo_t pfe_tmu_sch_cfg_get_algo(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch);
-errno_t pfe_tmu_sch_cfg_set_input_weight(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input, uint32_t weight);
-uint32_t pfe_tmu_sch_cfg_get_input_weight(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
-errno_t pfe_tmu_sch_cfg_bind_sched_output(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t src_sch, uint8_t dst_sch, uint8_t input);
-uint8_t pfe_tmu_sch_cfg_get_bound_sched_output(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
-errno_t pfe_tmu_sch_cfg_bind_queue(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input, uint8_t queue);
-uint8_t pfe_tmu_sch_cfg_get_bound_queue(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
+void pfe_tmu_sch_cfg_init(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch);
+errno_t pfe_tmu_sch_cfg_set_rate_mode(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, pfe_tmu_rate_mode_t mode);
+pfe_tmu_rate_mode_t pfe_tmu_sch_cfg_get_rate_mode(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch);
+errno_t pfe_tmu_sch_cfg_set_algo(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, pfe_tmu_sched_algo_t algo);
+pfe_tmu_sched_algo_t pfe_tmu_sch_cfg_get_algo(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch);
+errno_t pfe_tmu_sch_cfg_set_input_weight(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input, uint32_t weight);
+uint32_t pfe_tmu_sch_cfg_get_input_weight(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
+errno_t pfe_tmu_sch_cfg_bind_sched_output(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t src_sch, uint8_t dst_sch, uint8_t input);
+uint8_t pfe_tmu_sch_cfg_get_bound_sched_output(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
+errno_t pfe_tmu_sch_cfg_bind_queue(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input, uint8_t queue);
+uint8_t pfe_tmu_sch_cfg_get_bound_queue(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
 
-errno_t pfe_tmu_cfg_init(void *cbus_base_va, pfe_tmu_cfg_t *cfg);
-void pfe_tmu_cfg_reset(void *cbus_base_va);
-void pfe_tmu_cfg_enable(void *cbus_base_va);
-void pfe_tmu_cfg_disable(void *cbus_base_va);
-void pfe_tmu_cfg_send_pkt(void *cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, void *buf_pa, uint16_t len);
-uint32_t pfe_tmu_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg);
+void pfe_tmu_cfg_reset(addr_t cbus_base_va);
+void pfe_tmu_cfg_enable(addr_t cbus_base_va);
+void pfe_tmu_cfg_disable(addr_t cbus_base_va);
+void pfe_tmu_cfg_send_pkt(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, const void *buf_pa, uint16_t len);
+uint32_t pfe_tmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
 #endif /* TMU_CSR_H_ */

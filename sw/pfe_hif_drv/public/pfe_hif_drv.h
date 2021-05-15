@@ -102,7 +102,7 @@ enum
 	#define HIF_CFG_USE_DYNAMIC_TX_HEADERS
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 #ifndef PFE_CFG_CSUM_ALL_FRAMES
-/*	Enable dynamic tx headers for individual CSUM 
+/*	Enable dynamic tx headers for individual CSUM
 	(on demand) calculation if it is not already enabled */
 	#ifndef HIF_CFG_USE_DYNAMIC_TX_HEADERS
 		#define HIF_CFG_USE_DYNAMIC_TX_HEADERS
@@ -118,7 +118,7 @@ enum
     #define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		TRUE
 #else
     #define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		FALSE
-#endif    
+#endif
 
 /**
  * @def	    HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION
@@ -152,7 +152,7 @@ enum
 #endif
 
 /**
- * @brief	HIF common RX/TX packet flags 
+ * @brief	HIF common RX/TX packet flags
  */
 typedef	enum
 {
@@ -169,10 +169,10 @@ typedef struct
 	{
 		pfe_ct_hif_rx_flags_t rx_flags;
 		pfe_ct_hif_tx_flags_t tx_flags;
-	};
+	} specific;
 } pfe_hif_drv_flags_t;
 
-typedef struct sg_list_tag
+typedef struct
 {
 	uint32_t size;						/*	Number of valid 'items' entries */
 
@@ -180,7 +180,7 @@ typedef struct sg_list_tag
 	uint32_t total_bytes;				/*	Total data length (sum of items[0..size].len) in number of bytes */
 #endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 
-	struct item
+	struct
 	{
 		void *data_pa;					/*	Pointer to buffer (PA) */
 		void *data_va;					/*	Pointer to buffer (VA) */
@@ -209,7 +209,7 @@ enum
 	HIF_EVENT_MAX
 };
 
-typedef struct pfe_pfe_hif_drv_client_tag pfe_hif_drv_client_t;
+typedef struct pfe_hif_drv_client_tag pfe_hif_drv_client_t;
 
 /**
  * @brief	Packet representation struct
@@ -236,60 +236,63 @@ typedef struct pfe_hif_drv_tag pfe_hif_drv_t;
 typedef struct pfe_hif_pkt_tag pfe_hif_pkt_t;
 typedef errno_t (* pfe_hif_drv_client_event_handler)(pfe_hif_drv_client_t *client, void *arg, uint32_t event, uint32_t qno);
 
-void hif_xmit_pkt__(pfe_hif_drv_t *hif, uint32_t client_id, uint32_t q_no, void *data, uint32_t len, uint32_t flags);
-errno_t hif_xmit_pkt(pfe_hif_drv_t *hif, uint32_t client_id, uint32_t q_no, void *data, uint32_t len);
 pfe_hif_drv_t *pfe_hif_drv_create(pfe_hif_chnl_t *channel);
 void pfe_hif_drv_destroy(pfe_hif_drv_t *hif_drv);
 errno_t pfe_hif_drv_init(pfe_hif_drv_t *hif_drv);
 errno_t pfe_hif_drv_start(pfe_hif_drv_t *hif_drv);
-void pfe_hif_drv_tick(pfe_hif_drv_t *hif_drv);
 void pfe_hif_drv_stop(pfe_hif_drv_t *hif_drv);
 void pfe_hif_drv_exit(pfe_hif_drv_t *hif_drv);
+
+#ifdef PFE_CFG_MC_HIF
 void pfe_hif_drv_show_ring_status(pfe_hif_drv_t *hif_drv, bool_t rx, bool_t tx);
+#endif /*PFE_CFG_MC_HIF*/
 
 /*	IHC API */
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 pfe_hif_drv_client_t * pfe_hif_drv_ihc_client_register(pfe_hif_drv_t *hif_drv, pfe_hif_drv_client_event_handler handler, void *priv);
 #ifdef PFE_CFG_TARGET_OS_LINUX
-errno_t pfe_hif_drv_client_xmit_ihc_sg_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t dst, uint32_t queue, hif_drv_sg_list_t *sg_list, void *ref_ptr);
+errno_t pfe_hif_drv_client_xmit_ihc_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t dst, uint32_t queue, void *idex_frame, uint32_t plen);
 #endif
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 /*	AUX API */
+#ifdef PFE_CFG_MC_HIF
 pfe_hif_drv_client_t * pfe_hif_drv_aux_client_register(pfe_hif_drv_t *hif_drv, pfe_hif_drv_client_event_handler handler, void *priv);
+#endif /*PFE_CFG_MC_HIF*/
+
 
 /*	HIF client */
 pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t phy_if_id, uint32_t txq_num, uint32_t rxq_num,
 		uint32_t txq_depth, uint32_t rxq_depth, pfe_hif_drv_client_event_handler handler, void *priv);
 errno_t pfe_hif_drv_client_set_inject_if(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t phy_if_id);
-pfe_hif_drv_t *pfe_hif_drv_client_get_drv(pfe_hif_drv_client_t *client);
-void *pfe_hif_drv_client_get_priv(pfe_hif_drv_client_t *client);
+pfe_hif_drv_t *pfe_hif_drv_client_get_drv(const pfe_hif_drv_client_t *client);
+void *pfe_hif_drv_client_get_priv(const pfe_hif_drv_client_t *client);
 void pfe_hif_drv_client_unregister(pfe_hif_drv_client_t *client);
-void pfe_hif_drv_client_rx_done(pfe_hif_drv_client_t *client);
-void pfe_hif_drv_client_tx_done(pfe_hif_drv_client_t *client);
+void pfe_hif_drv_client_rx_done(const pfe_hif_drv_client_t *client);
+void pfe_hif_drv_client_tx_done(const pfe_hif_drv_client_t *client);
 
 /*	Packet transmission */
 errno_t pfe_hif_drv_client_xmit_pkt(pfe_hif_drv_client_t *client, uint32_t queue, void *data_pa, void *data_va, uint32_t len, void *ref_ptr);
 errno_t pfe_hif_drv_client_xmit_sg_pkt(pfe_hif_drv_client_t *client, uint32_t queue, const hif_drv_sg_list_t *const sg_list, void *ref_ptr);
-void * pfe_hif_drv_client_receive_tx_conf(pfe_hif_drv_client_t *client, uint32_t queue);
+void * pfe_hif_drv_client_receive_tx_conf(const pfe_hif_drv_client_t *client, uint32_t queue);
 
 /*	Packet reception */
-bool_t pfe_hif_drv_client_has_rx_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
+bool_t pfe_hif_drv_client_has_rx_pkt(const pfe_hif_drv_client_t *client, uint32_t queue);
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED) || defined(PFE_CFG_TARGET_OS_LINUX)
 pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uint32_t queue);
-void pfe_hif_pkt_free(pfe_hif_pkt_t *pkt);
+void pfe_hif_pkt_free(const pfe_hif_pkt_t *pkt);
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
 /*	PTP Timestamps */
-errno_t pfe_hif_drv_client_get_ts(pfe_hif_drv_client_t *client, bool_t rx,
-		uint8_t type, uint16_t port, uint16_t seq_id, uint32_t *ts_sec, uint32_t *ts_nsec);
+errno_t pfe_hif_drv_client_get_ts(const pfe_hif_drv_client_t *client, bool_t rx,
+		uint8_t type, uint16_t port, uint16_t seq_id, const uint32_t *ts_sec, const uint32_t *ts_nsec);
 
 /**
  * @brief		Get information if packet is last in frame
  * @param[in]	pkt The packet
  * @return		TRUE if 'pkt' is last packet of a frame. False otherwise.
  */
-static inline bool_t pfe_hif_pkt_is_last(pfe_hif_pkt_t *pkt)
+static inline bool_t pfe_hif_pkt_is_last(const pfe_hif_pkt_t *pkt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pkt))
@@ -307,7 +310,7 @@ static inline bool_t pfe_hif_pkt_is_last(pfe_hif_pkt_t *pkt)
  * @param[in]	pkt The packet
  * @return		TRUE if IP checksum has been verified and is valid
  */
-static inline bool_t pfe_hif_pkt_ipv4_csum_valid(pfe_hif_pkt_t *pkt)
+static inline bool_t pfe_hif_pkt_ipv4_csum_valid(const pfe_hif_pkt_t *pkt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pkt))
@@ -317,7 +320,7 @@ static inline bool_t pfe_hif_pkt_ipv4_csum_valid(pfe_hif_pkt_t *pkt)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return !!(pkt->flags.rx_flags & HIF_RX_IPV4_CSUM);
+	return !!(pkt->flags.specific.rx_flags & HIF_RX_IPV4_CSUM);
 }
 
 /**
@@ -325,7 +328,7 @@ static inline bool_t pfe_hif_pkt_ipv4_csum_valid(pfe_hif_pkt_t *pkt)
  * @param[in]	pkt The packet
  * @return		TRUE if UDP checksum has been verified and is valid
  */
-static inline bool_t pfe_hif_pkt_udpv4_csum_valid(pfe_hif_pkt_t *pkt)
+static inline bool_t pfe_hif_pkt_udpv4_csum_valid(const pfe_hif_pkt_t *pkt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pkt))
@@ -335,14 +338,14 @@ static inline bool_t pfe_hif_pkt_udpv4_csum_valid(pfe_hif_pkt_t *pkt)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return !!(pkt->flags.rx_flags & HIF_RX_UDPV4_CSUM);
+	return !!(pkt->flags.specific.rx_flags & HIF_RX_UDPV4_CSUM);
 }
 /**
  * @brief		Get information that UDP checksum within ipv6 fragment has been verified by PFE
  * @param[in]	pkt The packet
  * @return		TRUE if UDP checksum has been verified and is valid
  */
-static inline bool_t pfe_hif_pkt_udpv6_csum_valid(pfe_hif_pkt_t *pkt)
+static inline bool_t pfe_hif_pkt_udpv6_csum_valid(const pfe_hif_pkt_t *pkt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pkt))
@@ -352,14 +355,14 @@ static inline bool_t pfe_hif_pkt_udpv6_csum_valid(pfe_hif_pkt_t *pkt)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return !!(pkt->flags.rx_flags & HIF_RX_UDPV6_CSUM);
+	return !!(pkt->flags.specific.rx_flags & HIF_RX_UDPV6_CSUM);
 }
 /**
  * @brief		Get information that TCP checksum has been verified by PFE
  * @param[in]	pkt The packet
  * @return		TRUE if TCP checksum withing ipv4 frame has been verified and is valid
  */
-static inline bool_t pfe_hif_pkt_tcpv4_csum_valid(pfe_hif_pkt_t *pkt)
+static inline bool_t pfe_hif_pkt_tcpv4_csum_valid(const pfe_hif_pkt_t *pkt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pkt))
@@ -369,14 +372,14 @@ static inline bool_t pfe_hif_pkt_tcpv4_csum_valid(pfe_hif_pkt_t *pkt)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return !!(pkt->flags.rx_flags & HIF_RX_TCPV4_CSUM);
+	return !!(pkt->flags.specific.rx_flags & HIF_RX_TCPV4_CSUM);
 }
 /**
  * @brief		Get information that TCP checksum has been verified by PFE
  * @param[in]	pkt The packet
  * @return		TRUE if TCP checksum has been verified and is valid
  */
-static inline bool_t pfe_hif_pkt_tcpv6_csum_valid(pfe_hif_pkt_t *pkt)
+static inline bool_t pfe_hif_pkt_tcpv6_csum_valid(const pfe_hif_pkt_t *pkt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pkt))
@@ -386,7 +389,7 @@ static inline bool_t pfe_hif_pkt_tcpv6_csum_valid(pfe_hif_pkt_t *pkt)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return !!(pkt->flags.rx_flags & HIF_RX_TCPV6_CSUM);
+	return !!(pkt->flags.specific.rx_flags & HIF_RX_TCPV6_CSUM);
 }
 
 /**
@@ -394,7 +397,7 @@ static inline bool_t pfe_hif_pkt_tcpv6_csum_valid(pfe_hif_pkt_t *pkt)
  * @param[in]	pkt The packet
  * @return		Pointer to packet data
  */
-static inline addr_t pfe_hif_pkt_get_data(pfe_hif_pkt_t *pkt)
+static inline addr_t pfe_hif_pkt_get_data(const pfe_hif_pkt_t *pkt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pkt))
@@ -412,7 +415,7 @@ static inline addr_t pfe_hif_pkt_get_data(pfe_hif_pkt_t *pkt)
  * @param[in]	pkt The packet
  * @return		Number of bytes in data buffer
  */
-static inline uint32_t pfe_hif_pkt_get_data_len(pfe_hif_pkt_t *pkt)
+static inline uint32_t pfe_hif_pkt_get_data_len(const pfe_hif_pkt_t *pkt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pkt))
@@ -449,7 +452,7 @@ static inline void *pfe_hif_pkt_get_ref_ptr(pfe_hif_pkt_t *pkt)
  * @param[in]	pkt The packet
  * @return		The HIF client instance
  */
-static inline pfe_hif_drv_client_t *pfe_hif_pkt_get_client(pfe_hif_pkt_t *pkt)
+static inline pfe_hif_drv_client_t *pfe_hif_pkt_get_client(const pfe_hif_pkt_t *pkt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pkt))
@@ -467,7 +470,7 @@ static inline pfe_hif_drv_client_t *pfe_hif_pkt_get_client(pfe_hif_pkt_t *pkt)
  * @param[in]	pkt The packet
  * @return		The physical interface ID
  */
-static inline pfe_ct_phy_if_id_t pfe_hif_pkt_get_ingress_phy_id(pfe_hif_pkt_t *pkt)
+static inline pfe_ct_phy_if_id_t pfe_hif_pkt_get_ingress_phy_id(const pfe_hif_pkt_t *pkt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pkt))

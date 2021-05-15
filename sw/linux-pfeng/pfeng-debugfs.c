@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, 2020-2021 NXP
+ * Copyright 2018,2020-2021 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -10,11 +10,10 @@
 
 #include "pfe_cfg.h"
 #include "pfeng.h"
+#include "fci.h"
 
 #if defined(CONFIG_DEBUG_FS)
 
-/* enabled hif channels */
-static u32 hif_chnl_mask = 0;
 static u32 *msg_verbosity_ptr;
 
 #define DEBUGFS_BUF_SIZE 4096
@@ -56,14 +55,14 @@ static const struct file_operations pfeng_##ename##_fops = {			\
 };
 
 #ifdef PFE_CFG_PFE_MASTER
-CREATE_DEBUGFS_ENTRY_TYPE(hif);
 CREATE_DEBUGFS_ENTRY_TYPE(emac);
+CREATE_DEBUGFS_ENTRY_TYPE(l2br);
 CREATE_DEBUGFS_ENTRY_TYPE(class);
 CREATE_DEBUGFS_ENTRY_TYPE(bmu);
 CREATE_DEBUGFS_ENTRY_TYPE(gpi);
 CREATE_DEBUGFS_ENTRY_TYPE(tmu);
 CREATE_DEBUGFS_ENTRY_TYPE(util);
-CREATE_DEBUGFS_ENTRY_TYPE(l2br);
+CREATE_DEBUGFS_ENTRY_TYPE(fp);
 #endif
 CREATE_DEBUGFS_ENTRY_TYPE(hif_chnl);
 
@@ -80,10 +79,6 @@ CREATE_DEBUGFS_ENTRY_TYPE(hif_chnl);
 				*esav = dptr;					\
 		}								\
 	}
-
-#define ADD_DEBUGFS_CHNL_XSTATS_ENTRY(name)					\
-	scnprintf(fname, sizeof(fname), "%s", TOSTRING(name));			\
-	debugfs_create_u64(fname, 0444, ndev->chnl_sc.dentry, &ndev->xstats.name);
 
 int pfeng_debugfs_create(struct pfeng_priv *priv)
 {
@@ -107,76 +102,56 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 	}
 
 #ifdef PFE_CFG_PFE_MASTER
-	ADD_DEBUGFS_ENTRY("class", class, priv->dbgfs, priv->pfe->classifier, &dsav);
-	ADD_DEBUGFS_ENTRY("l2br", l2br, priv->dbgfs, priv->pfe->l2_bridge, &dsav);
-	ADD_DEBUGFS_ENTRY("hif", hif, priv->dbgfs, priv->pfe->hif, &dsav);
-	ADD_DEBUGFS_ENTRY("bmu1", bmu, priv->dbgfs, priv->pfe->bmu[0], &dsav);
-	ADD_DEBUGFS_ENTRY("bmu2", bmu, priv->dbgfs, priv->pfe->bmu[1], &dsav);
-	ADD_DEBUGFS_ENTRY("egpi1", gpi, priv->dbgfs, priv->pfe->gpi[0], &dsav);
-	ADD_DEBUGFS_ENTRY("egpi2", gpi, priv->dbgfs, priv->pfe->gpi[1], &dsav);
-	ADD_DEBUGFS_ENTRY("egpi3", gpi, priv->dbgfs, priv->pfe->gpi[2], &dsav);
-	ADD_DEBUGFS_ENTRY("tmu", tmu, priv->dbgfs, priv->pfe->tmu, &dsav);
-	ADD_DEBUGFS_ENTRY("util", util, priv->dbgfs, priv->pfe->util, &dsav);
-	ADD_DEBUGFS_ENTRY("emac0", emac, priv->dbgfs, priv->pfe->emac[0], &dsav);
-	ADD_DEBUGFS_ENTRY("emac1", emac, priv->dbgfs, priv->pfe->emac[1], &dsav);
-	ADD_DEBUGFS_ENTRY("emac2", emac, priv->dbgfs, priv->pfe->emac[2], &dsav);
+	ADD_DEBUGFS_ENTRY("class", class, priv->dbgfs, priv->pfe_platform->classifier, &dsav);
+	ADD_DEBUGFS_ENTRY("l2br", l2br, priv->dbgfs, priv->pfe_platform->l2_bridge, &dsav);
+	ADD_DEBUGFS_ENTRY("bmu1", bmu, priv->dbgfs, priv->pfe_platform->bmu[0], &dsav);
+	ADD_DEBUGFS_ENTRY("bmu2", bmu, priv->dbgfs, priv->pfe_platform->bmu[1], &dsav);
+	ADD_DEBUGFS_ENTRY("egpi1", gpi, priv->dbgfs, priv->pfe_platform->gpi[0], &dsav);
+	ADD_DEBUGFS_ENTRY("egpi2", gpi, priv->dbgfs, priv->pfe_platform->gpi[1], &dsav);
+	ADD_DEBUGFS_ENTRY("egpi3", gpi, priv->dbgfs, priv->pfe_platform->gpi[2], &dsav);
+	ADD_DEBUGFS_ENTRY("tmu", tmu, priv->dbgfs, priv->pfe_platform->tmu, &dsav);
+	ADD_DEBUGFS_ENTRY("util", util, priv->dbgfs, priv->pfe_platform->util, &dsav);
+	ADD_DEBUGFS_ENTRY("fp", fp, priv->dbgfs, priv->pfe_platform->classifier, &dsav);
+	if (priv->emac[0].enabled)
+		ADD_DEBUGFS_ENTRY("emac0", emac, priv->dbgfs, priv->pfe_platform->emac[0], &dsav);
+	if (priv->emac[1].enabled)
+		ADD_DEBUGFS_ENTRY("emac1", emac, priv->dbgfs, priv->pfe_platform->emac[1], &dsav);
+	if (priv->emac[2].enabled)
+		ADD_DEBUGFS_ENTRY("emac2", emac, priv->dbgfs, priv->pfe_platform->emac[2], &dsav);
 #endif
 
 	return 0;
 }
 
-int pfeng_debugfs_add_hif_chnl(struct pfeng_priv *priv, struct pfeng_ndev *ndev)
+int pfeng_debugfs_add_hif_chnl(struct pfeng_priv *priv, u32 idx)
 {
 	struct device *dev = &priv->pdev->dev;
+	struct pfeng_hif_chnl *chnl = &priv->hif_chnl[idx];
 	char fname[32];
 	struct dentry *dsav = NULL;
 
 	if (!priv->dbgfs)
 		return -ENODEV;
 
-	if (ndev->eth->hif_chnl_sc >= HIF_CFG_MAX_CHANNELS)
-		return -EINVAL;
-
-	if (ndev->chnl_sc.dentry)
-		/* already created */
-		return 0;
+	/* Don't create if particular HIF channel is disabled */
+	if (chnl->status == PFENG_HIF_STATUS_DISABLED)
+		return -ENODEV;
 
 	/* create subdirectory 'chn%d' */
-	scnprintf(fname, sizeof(fname), "chnl%d", ndev->eth->hif_chnl_sc);
-	ndev->chnl_sc.dentry = debugfs_create_dir(fname, priv->dbgfs);
-	if (!ndev->chnl_sc.dentry) {
-		dev_err(dev, "debugfs create directory chnl%d failed\n", ndev->eth->hif_chnl_sc);
-		return -EINVAL;
-	}
-
-	/* remember new chnl number */
-	hif_chnl_mask |= 1 << ndev->eth->hif_chnl_sc;
+	scnprintf(fname, sizeof(fname), "hif%d", idx);
 
 	/* add members to the subdirectory */
-	ADD_DEBUGFS_ENTRY("rings", hif_chnl, ndev->chnl_sc.dentry, ndev->chnl_sc.priv, &dsav);
-
-	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(napi_poll);
-	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(napi_poll_onrun);
-	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(napi_poll_resched);
-	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(napi_poll_completed);
-	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(napi_poll_rx);
-	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(txconf_loop);
-	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(txconf);
-	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(tx_busy);
-	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(tx_pkt_frags);
-	ADD_DEBUGFS_CHNL_XSTATS_ENTRY(tx_pkt_frag_deep);
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-        ADD_DEBUGFS_CHNL_XSTATS_ENTRY(ihc_rx);
-        ADD_DEBUGFS_CHNL_XSTATS_ENTRY(ihc_tx);
-#endif
+	ADD_DEBUGFS_ENTRY(fname, hif_chnl, priv->dbgfs, chnl->priv, &dsav);
 
 	return 0;
 }
 
 void pfeng_debugfs_remove(struct pfeng_priv *priv)
 {
-	if (priv->dbgfs)
+	if (priv->dbgfs) {
 		debugfs_remove_recursive(priv->dbgfs);
+		priv->dbgfs = NULL;
+	}
 }
 
 #else

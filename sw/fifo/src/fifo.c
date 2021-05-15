@@ -1,11 +1,9 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
  * ========================================================================= */
-
-#include <stdbool.h>
 
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -16,7 +14,7 @@
 
 #define is_power_of_2(n) ((n) && !((n) & ((n) - 1U)))
 
-__attribute__((hot)) errno_t fifo_get_fill_level(fifo_t *const fifo, uint32_t *fill_level)
+__attribute__((hot)) errno_t fifo_get_fill_level(const fifo_t *const fifo, uint32_t *fill_level)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == fifo) || (NULL == fill_level)))
@@ -30,7 +28,7 @@ __attribute__((hot)) errno_t fifo_get_fill_level(fifo_t *const fifo, uint32_t *f
 	return EOK;
 }
 
-__attribute__((hot)) errno_t fifo_get_free_space(fifo_t *const fifo, uint32_t *free_space)
+__attribute__((hot)) errno_t fifo_get_free_space(const fifo_t *const fifo, uint32_t *free_space)
 {
 	uint32_t ret;
 	errno_t err;
@@ -91,7 +89,7 @@ __attribute__((cold)) void fifo_destroy(fifo_t *const fifo)
 	}
 }
 
-__attribute__((hot)) void * fifo_peek(fifo_t * const fifo, uint32_t num)
+__attribute__((hot)) void * fifo_peek(const fifo_t * const fifo, uint32_t num)
 {
 	volatile void *ret = NULL;
 

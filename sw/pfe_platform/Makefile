@@ -53,7 +53,7 @@ CCFLAGS_pfe +=-DPFE_CFG_PFE_CT_H_MD5=$(PFE_CT_H_MD5)
 $(info pfe_ct.h MD5 sum is $(PFE_CT_H_MD5))
 
 #Generic compiler flags (which include build type flags)
-CCFLAGS_all += -Wall -fmessage-length=0
+CCFLAGS_all += -Wall -fmessage-length=0 -fvisibility=hidden
 CCFLAGS_all += $(CCFLAGS_$(BUILD_PROFILE))
 CCFLAGS_all += $(CCFLAGS_pfe)
 #Shared library has to be compiled with -fPIC
@@ -75,7 +75,8 @@ SRCS =	src/pfe_class.c \
 		src/pfe_log_if_slave.c \
 		src/pfe_if_db.c \
 		src/pfe_pe.c \
-		src/pfe_phy_if_slave.c
+		src/pfe_phy_if_slave.c \
+		src/pfe_mac_db.c
 else
 SRCS =	src/pfe_bmu.c \
 		src/pfe_class.c \
@@ -100,13 +101,14 @@ SRCS =	src/pfe_bmu.c \
 		src/pfe_flexible_filter.c \
 		src/pfe_fw_feature.c \
 		src/pfe_spd.c \
-		src/pfe_spd_acc.c
+		src/pfe_spd_acc.c \
+		src/pfe_mac_db.c
 
 ifeq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),1)
 SRCS += src/pfe_idex.c
 endif
 endif
-		
+
 SRCS += hw/$(TARGET_HW)/pfe_bmu_csr.c \
 		hw/$(TARGET_HW)/pfe_emac_csr.c \
 		hw/$(TARGET_HW)/pfe_hif_csr.c \
@@ -167,6 +169,7 @@ ccflags-y += -Og
 endif
 ccflags-y += $(CCFLAGS_pfe)
 ccflags-y += $(GLOBAL_CCFLAGS)
+ccflags-y += -Werror
 
 ifeq ($(PFE_CFG_PFE_MASTER),0)
 pfe_platform-y := src/pfe_hif_chnl.o \
@@ -175,7 +178,8 @@ pfe_platform-y := src/pfe_hif_chnl.o \
 		src/pfe_log_if_slave.o \
 		src/pfe_if_db.o \
 		src/pfe_pe.o \
-		src/pfe_phy_if_slave.o
+		src/pfe_phy_if_slave.o \
+		src/pfe_mac_db.o
 else
 pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_class.o \
@@ -195,7 +199,8 @@ pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_if_db.o \
 	src/pfe_safety.o \
 	src/pfe_spd.o \
-	src/pfe_spd_acc.o
+	src/pfe_spd_acc.o \
+	src/pfe_mac_db.o
 
 ifeq ($(PFE_CFG_RTABLE_ENABLE),1)
     pfe_platform-y += src/pfe_rtable.o
@@ -222,7 +227,7 @@ ifneq ($(PFE_CFG_IP_VERSION),PFE_CFG_IP_VERSION_FPGA_5_0_4)
 pfe_platform-y += hw/$(TARGET_HW)/pfe_wdt_csr.o
 pfe_platform-y += src/pfe_wdt.o
 endif
-	
+
 ifeq ($(PFE_CFG_PFE_MASTER),0)
 pfe_platform-y += hw/$(TARGET_HW)/pfe_platform_slave.o
 else
@@ -232,7 +237,7 @@ endif
 ifneq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),0)
 pfe_platform-y += src/pfe_idex.o
 endif
-     
+
 obj-m += pfe_platform.o
 
 linux:

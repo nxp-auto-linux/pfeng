@@ -214,7 +214,11 @@
 #define RECEIVER_ENABLE(x)				((!!(x)) ? (1UL << 0U) : 0UL)	/* RE     */
 #define ENABLE_DOUBLE_VLAN(x)			((!!(x)) ? (1UL << 26U) : 0U)	/* EDVLP  */
 #define GIANT_PACKET_SIZE_LIMIT(x)		(((uint32_t)(x) & 0x3fffUL) << 0U)		/* GPSL   */
+#define TX_PAUSE_TIME(x)			(((uint32_t)(x) & 0xffffUL) << 16U)       /* PT  */
+#define TX_PAUSE_LOW_TRASHOLD(x)		(((uint32_t)(x) & 0x7UL) << 4U)       /* PLT  */
 #define TX_FLOW_CONTROL_ENABLE(x)		((!!(x)) ? (1UL << 1U) : 0U)	/* TFE    */
+#define RX_FLOW_CONTROL_ENABLE(x)		((!!(x)) ? (1UL << 0U) : 0U)    /* RFE    */
+#define RX_FLOW_CONTROL_UNICAST(x)		((!!(x)) ? (1UL << 1U) : 0U)    /* UP    */
 #define BUSY_OR_BACKPRESSURE_ACTIVE(x)	((!!(x)) ? (1UL << 0U) : 0U)	/* FCB_BPA */
 #define GMII_BUSY(x)					((!!(x)) ? (1UL << 0U) : 0UL)	/* GB     */
 #define CLAUSE45_ENABLE(x)				((!!(x)) ? (1UL << 1U) : 0UL)	/* C45E   */
@@ -274,34 +278,42 @@
  */
 #define EMAC_CFG_INDIVIDUAL_ADDR_SLOTS_COUNT	8U
 
-errno_t pfe_emac_cfg_init(void *base_va, pfe_emac_mii_mode_t mode, pfe_emac_speed_t speed, pfe_emac_duplex_t duplex);
-errno_t pfe_emac_cfg_enable_ts(void *base_va, bool_t eclk, uint32_t i_clk_hz, uint32_t o_clk_hz);
-void pfe_emac_cfg_disable_ts(void *base_va);
-errno_t pfe_emac_cfg_adjust_ts_freq(void *base_va, uint32_t i_clk_hz, uint32_t o_clk_hz, uint32_t ppb, bool_t sgn);
-void pfe_emac_cfg_get_ts_time(void *base_va, uint32_t *sec, uint32_t *nsec);
-errno_t pfe_emac_cfg_set_ts_time(void *base_va, uint32_t sec, uint32_t nsec);
-errno_t pfe_emac_cfg_adjust_ts_time(void *base_va, uint32_t sec, uint32_t nsec, bool_t sgn);
-void pfe_emac_cfg_tx_disable(void *base_va);
-errno_t pfe_emac_cfg_set_duplex(void *base_va, pfe_emac_duplex_t duplex);
-errno_t pfe_emac_cfg_set_mii_mode(void *base_va, pfe_emac_mii_mode_t mode);
-errno_t pfe_emac_cfg_set_speed(void *base_va, pfe_emac_speed_t speed);
-errno_t pfe_emac_cfg_set_max_frame_length(void *base_va, uint32_t len);
-errno_t pfe_emac_cfg_get_link_config(void *base_va, pfe_emac_speed_t *speed, pfe_emac_duplex_t *duplex);
-errno_t pfe_emac_cfg_get_link_status(void *base_va, pfe_emac_link_speed_t *link_speed, pfe_emac_duplex_t *duplex, bool_t *link);
-void pfe_emac_cfg_write_addr_slot(void *base_va, pfe_mac_addr_t addr, uint8_t slot);
-uint32_t pfe_emac_cfg_get_hash(void *base_va, pfe_mac_addr_t addr);
-void pfe_emac_cfg_set_uni_group(void *base_va, uint32_t hash, bool_t en);
-void pfe_emac_cfg_set_multi_group(void *base_va, uint32_t hash, bool_t en);
-void pfe_emac_cfg_set_loopback(void *base_va, bool_t en);
-void pfe_emac_cfg_set_promisc_mode(void *base_va, bool_t en);
-void pfe_emac_cfg_set_allmulti_mode(void *base_va, bool_t en);
-void pfe_emac_cfg_set_broadcast(void *base_va, bool_t en);
-void pfe_emac_cfg_set_enable(void *base_va, bool_t en);
-void pfe_emac_cfg_set_flow_control(void *base_va, bool_t en);
-errno_t pfe_emac_cfg_mdio_read22(void *base_va, uint8_t pa, uint8_t ra, uint16_t *val);
-errno_t pfe_emac_cfg_mdio_read45(void *base_va, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t *val);
-errno_t pfe_emac_cfg_mdio_write22(void *base_va, uint8_t pa, uint8_t ra, uint16_t val);
-errno_t pfe_emac_cfg_mdio_write45(void *base_va, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t val);
-uint32_t pfe_emac_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+/* Default Tx time between frame control pkts */
+#define DEFAULT_PAUSE_QUANTA                   0xF000U
+
+errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode, pfe_emac_speed_t speed, pfe_emac_duplex_t duplex);
+errno_t pfe_emac_cfg_enable_ts(addr_t base_va, bool_t eclk, uint32_t i_clk_hz, uint32_t o_clk_hz);
+void pfe_emac_cfg_disable_ts(addr_t base_va);
+errno_t pfe_emac_cfg_adjust_ts_freq(addr_t base_va, uint32_t i_clk_hz, uint32_t o_clk_hz, uint32_t ppb, bool_t sgn);
+void pfe_emac_cfg_get_ts_time(addr_t base_va, uint32_t *sec, uint32_t *nsec);
+errno_t pfe_emac_cfg_set_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec);
+errno_t pfe_emac_cfg_adjust_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec, bool_t sgn);
+void pfe_emac_cfg_tx_disable(addr_t base_va);
+errno_t pfe_emac_cfg_set_duplex(addr_t base_va, pfe_emac_duplex_t duplex);
+errno_t pfe_emac_cfg_set_mii_mode(addr_t base_va, pfe_emac_mii_mode_t mode);
+errno_t pfe_emac_cfg_set_speed(addr_t base_va, pfe_emac_speed_t speed);
+errno_t pfe_emac_cfg_set_max_frame_length(addr_t base_va, uint32_t len);
+errno_t pfe_emac_cfg_get_link_config(addr_t base_va, pfe_emac_speed_t *speed, pfe_emac_duplex_t *duplex);
+errno_t pfe_emac_cfg_get_link_status(addr_t base_va, pfe_emac_link_speed_t *link_speed, pfe_emac_duplex_t *duplex, bool_t *link);
+void pfe_emac_cfg_write_addr_slot(addr_t base_va, const pfe_mac_addr_t addr, uint8_t slot);
+uint32_t pfe_emac_cfg_get_hash(addr_t base_va, const pfe_mac_addr_t addr);
+void pfe_emac_cfg_set_uni_group(addr_t base_va, uint32_t hash, bool_t en);
+void pfe_emac_cfg_set_multi_group(addr_t base_va, uint32_t hash, bool_t en);
+void pfe_emac_cfg_set_loopback(addr_t base_va, bool_t en);
+void pfe_emac_cfg_set_promisc_mode(addr_t base_va, bool_t en);
+void pfe_emac_cfg_set_allmulti_mode(addr_t base_va, bool_t en);
+void pfe_emac_cfg_set_broadcast(addr_t base_va, bool_t en);
+void pfe_emac_cfg_set_enable(addr_t base_va, bool_t en);
+void pfe_emac_cfg_set_tx_flow_control(addr_t base_va, bool_t en);
+void pfe_emac_cfg_set_rx_flow_control(addr_t base_va, bool_t en);
+void pfe_emac_cfg_get_tx_flow_control(addr_t base_va, bool_t *en);
+void pfe_emac_cfg_get_rx_flow_control(addr_t base_va, bool_t *en);
+errno_t pfe_emac_cfg_mdio_read22(addr_t base_va, uint8_t pa, uint8_t ra, uint16_t *val);
+errno_t pfe_emac_cfg_mdio_read45(addr_t base_va, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t *val);
+errno_t pfe_emac_cfg_mdio_write22(addr_t base_va, uint8_t pa, uint8_t ra, uint16_t val);
+errno_t pfe_emac_cfg_mdio_write45(addr_t base_va, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t val);
+uint32_t pfe_emac_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+uint32_t pfe_emac_cfg_get_tx_cnt(addr_t base_va);
+uint32_t pfe_emac_cfg_get_rx_cnt(addr_t base_va);
 
 #endif /* SRC_PFE_EMAC_CSR_H_ */

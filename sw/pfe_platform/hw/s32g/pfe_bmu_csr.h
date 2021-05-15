@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -90,16 +90,16 @@
 #define BMU_MCAST_THRES_INT			(1UL << 7U)
 #define BMU_MCAST_FREE_ERR_INT		(1UL << 8U)
 
-errno_t pfe_bmu_cfg_isr(void *base_va, void *cbus_base_va);
- void pfe_bmu_cfg_irq_mask(void *base_va);
- void pfe_bmu_cfg_irq_unmask(void *base_va);
-void pfe_bmu_cfg_init(void *base_va, pfe_bmu_cfg_t *cfg);
-void pfe_bmu_cfg_fini(void *base_va);
-errno_t pfe_bmu_cfg_reset(void *base_va);
-void pfe_bmu_cfg_enable(void *base_va);
-void pfe_bmu_cfg_disable(void *base_va);
-void * pfe_bmu_cfg_alloc_buf(void *base_va);
-void pfe_bmu_cfg_free_buf(void *base_va, void *buffer);
-uint32_t pfe_bmu_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+errno_t pfe_bmu_cfg_isr(addr_t base_va, addr_t cbus_base_va);
+ void pfe_bmu_cfg_irq_mask(addr_t base_va);
+ void pfe_bmu_cfg_irq_unmask(addr_t base_va);
+void pfe_bmu_cfg_init(addr_t base_va, const pfe_bmu_cfg_t *cfg);
+void pfe_bmu_cfg_fini(addr_t base_va);
+errno_t pfe_bmu_cfg_reset(addr_t base_va);
+void pfe_bmu_cfg_enable(addr_t base_va);
+void pfe_bmu_cfg_disable(addr_t base_va);
+void * pfe_bmu_cfg_alloc_buf(addr_t base_va);
+void pfe_bmu_cfg_free_buf(addr_t base_va, addr_t buffer);
+uint32_t pfe_bmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
 #endif /* PFE_BMU_CSR_H_ */

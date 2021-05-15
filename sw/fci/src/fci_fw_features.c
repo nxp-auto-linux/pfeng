@@ -32,9 +32,9 @@
 errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_cmd_t *reply_buf, uint32_t *reply_len)
 {
 	pfe_fw_feature_t *fw_feature = NULL;
-    fci_t *context = (fci_t *)&__context;
+	fci_t *context = (fci_t *)&__context;
 	fpp_fw_features_cmd_t *fp_cmd;
-    const char *str;
+	const char *str;
 	errno_t ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -68,18 +68,19 @@ errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_c
 	{
 		case FPP_ACTION_UPDATE:
 		{
-            ret = pfe_class_get_feature(context->class, &fw_feature, fp_cmd->name);
+			ret = pfe_class_get_feature(context->class, &fw_feature, fp_cmd->name);
+
 			if(EOK != ret)
 			{
 				*fci_ret = FPP_ERR_ENTRY_NOT_FOUND;
 			}
 			else
 			{
-                ret = pfe_fw_feature_set_val(fw_feature, fp_cmd->val);
-                if(EOK != ret)
-                {
-                    *fci_ret = FPP_ERR_ENTRY_NOT_FOUND;
-                }
+				ret = pfe_fw_feature_set_val(fw_feature, fp_cmd->val);
+				if(EOK != ret)
+				{
+					*fci_ret = FPP_ERR_ENTRY_NOT_FOUND;
+				}
 				*fci_ret = FPP_ERR_OK;
 			}
 			break;

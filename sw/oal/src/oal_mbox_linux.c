@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -102,7 +102,7 @@ static atomic_t mbox_cnt = ATOMIC_INIT(0);	/* to serialize workqueue globally */
 
 static void mbox_ack_msg_internal(oal_mbox_msg_t *msg)
 {
-	oal_mbox_t *mbox = msg->metadata.ptr;
+	oal_mbox_t *mbox = msg->metadata.msg_info.ptr;
 
 	/* signal the cmd is done */
 	atomic_set(&mbox->msg.fin, 1);
@@ -116,7 +116,7 @@ static void mbox_ack_msg_internal(oal_mbox_msg_t *msg)
 void oal_mbox_ack_msg(oal_mbox_msg_t *msg)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == msg) || unlikely(NULL == msg->metadata.ptr))
+	if (unlikely(NULL == msg) || unlikely(NULL == msg->metadata.msg_info.ptr))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
@@ -149,7 +149,7 @@ static errno_t mbox_send_generic(oal_mbox_t *mbox, oal_mbox_msg_type mtype, int3
 
 	/* Fill cmd's data */
 	mbox->msg.data.metadata.type = mtype;
-	mbox->msg.data.metadata.ptr = mbox;
+	mbox->msg.data.metadata.msg_info.ptr = mbox;
 	mbox->msg.data.payload.code = code;
 	mbox->msg.data.payload.ptr = (mtype == OAL_MBOX_MSG_MESSAGE) ? data : NULL;
 	mbox->msg.data.payload.len = (mtype == OAL_MBOX_MSG_MESSAGE) ? len : 0;

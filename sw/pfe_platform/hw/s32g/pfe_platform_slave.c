@@ -8,10 +8,10 @@
  * ========================================================================= */
 
 #include "pfe_cfg.h"
-#ifdef PFE_CFG_PFE_SLAVE
 #include "oal.h"
-#include "hal.h"
 
+#ifdef PFE_CFG_PFE_SLAVE
+#include "hal.h"
 #include "pfe_cbus.h"
 #include "pfe_platform_cfg.h"
 #include "pfe_platform.h"
@@ -51,7 +51,7 @@ void pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf
 /**
  * @brief		Assign HIF to the platform
  */
-static errno_t pfe_platform_create_hif(pfe_platform_t *platform, pfe_platform_config_t *config)
+static errno_t pfe_platform_create_hif(pfe_platform_t *platform, const pfe_platform_config_t *config)
 {
 	uint32_t ii;
 	static pfe_hif_chnl_id_t ids[HIF_CFG_MAX_CHANNELS] = {HIF_CHNL_0, HIF_CHNL_1, HIF_CHNL_2, HIF_CHNL_3};
@@ -131,7 +131,7 @@ static void pfe_platform_destroy_hif_nocpy(pfe_platform_t *platform)
  * @brief		Register logical interface
  * @details		Add logical interface to internal database
  */
-errno_t pfe_platform_register_log_if(pfe_platform_t *platform, pfe_log_if_t *log_if)
+errno_t pfe_platform_register_log_if(const pfe_platform_t *platform, pfe_log_if_t *log_if)
 {
 	uint32_t session_id;
 	errno_t ret;
@@ -172,7 +172,7 @@ errno_t pfe_platform_register_log_if(pfe_platform_t *platform, pfe_log_if_t *log
  * @details		Logical interface will be removed from internal database
  * @warning		Should be called only with locked DB
  */
-errno_t pfe_platform_unregister_log_if(pfe_platform_t *platform, pfe_log_if_t *log_if)
+errno_t pfe_platform_unregister_log_if(const pfe_platform_t *platform, pfe_log_if_t *log_if)
 {
 	errno_t ret = EOK;
 	pfe_if_db_entry_t *entry = NULL;
@@ -214,7 +214,7 @@ errno_t pfe_platform_unregister_log_if(pfe_platform_t *platform, pfe_log_if_t *l
 /**
  * @brief		Register physical interface
  */
-static errno_t pfe_platform_register_phy_if(pfe_platform_t *platform, uint32_t session_id, pfe_phy_if_t *phy_if)
+static errno_t pfe_platform_register_phy_if(const pfe_platform_t *platform, uint32_t session_id, pfe_phy_if_t *phy_if)
 {
 	errno_t ret;
 
@@ -238,7 +238,7 @@ static errno_t pfe_platform_register_phy_if(pfe_platform_t *platform, uint32_t s
  * @param[in]	id Physical interface ID
  * @return		Logical interface instance or NULL if failed.
  */
-pfe_phy_if_t *pfe_platform_get_phy_if_by_id(pfe_platform_t *platform, pfe_ct_phy_if_id_t id)
+pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_ct_phy_if_id_t id)
 {
 	pfe_if_db_entry_t *entry = NULL;
 	uint32_t session_id;
@@ -334,11 +334,7 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 				if (EOK != pfe_platform_register_phy_if(platform, session_id, phy_if))
 				{
 					NXP_LOG_ERROR("Could not register %s\n", pfe_phy_if_get_name(phy_if));
-					if (EOK != pfe_phy_if_destroy(phy_if))
-					{
-						NXP_LOG_DEBUG("Could not destroy physical interface\n");
-					}
-
+					pfe_phy_if_destroy(phy_if);
 					phy_if = NULL;
 					ret = ENODEV;
 					break;
@@ -374,22 +370,22 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
  * @brief	The platform initialization function
  * @details	Initializes the PFE HW platform and prepares it for usage according to configuration.
  */
-errno_t pfe_platform_init(pfe_platform_config_t *config)
+errno_t pfe_platform_init(const pfe_platform_config_t *config)
 {
 	errno_t ret = EOK;
 
 	memset(&pfe, 0U, sizeof(pfe_platform_t));
 
 	/*	Map CBUS address space */
-	pfe.cbus_baseaddr = oal_mm_dev_map((void *)config->cbus_base, config->cbus_len);
-	if (NULL == pfe.cbus_baseaddr)
+	pfe.cbus_baseaddr = (addr_t)oal_mm_dev_map((void *)config->cbus_base, config->cbus_len);
+	if (0ULL == pfe.cbus_baseaddr)
 	{
 		NXP_LOG_ERROR("Can't map PPFE CBUS\n");
 		goto exit;
 	}
 	else
 	{
-		NXP_LOG_INFO("PFE CBUS p0x%p mapped @ v0x%p\n", (void *)config->cbus_base, pfe.cbus_baseaddr);
+		NXP_LOG_INFO("PFE CBUS p0x%p mapped @ v0x%"PRINTADDR_T"\n", (void *)config->cbus_base, pfe.cbus_baseaddr);
 	}
 
 	ret = pfe_platform_create_hif(&pfe, config);
@@ -428,9 +424,9 @@ errno_t pfe_platform_remove(void)
 	pfe_platform_destroy_hif_nocpy(&pfe);
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
-	if (NULL != pfe.cbus_baseaddr)
+	if (0ULL != pfe.cbus_baseaddr)
 	{
-		ret = oal_mm_dev_unmap(pfe.cbus_baseaddr, PFE_CFG_CBUS_LENGTH/* <- FIXME, should use value used on init instead */);
+		ret = oal_mm_dev_unmap((void *)pfe.cbus_baseaddr, PFE_CFG_CBUS_LENGTH/* <- FIXME, should use value used on init instead */);
 		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("Can't unmap PPFE CBUS: %d\n", ret);

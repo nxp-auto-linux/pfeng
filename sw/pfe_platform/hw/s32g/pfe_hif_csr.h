@@ -187,7 +187,8 @@
 #define HIF_TXPKT_INT_EN					(1UL << 4U)
 #define HIF_RX_POLL_CTRL_CYCLE				0x0400UL
 #define HIF_TX_POLL_CTRL_CYCLE				0x0400UL
-#define HIF_INT_COAL_ENABLE					(1UL << 31)
+#define HIF_INT_COAL_TIME_ENABLE			(1UL << 0U)
+#define HIF_INT_COAL_FRAME_ENABLE			(1UL << 1U)
 #define BDP_CSR_RX_DMA_ACTV					(1UL << 16)
 #define HIF_INT_SRC_HIF_CH0_INT				(1UL << 0U)
 #define HIF_INT_SRC_HIF_CH1_INT				(1UL << 1U)
@@ -253,38 +254,42 @@
 #define DXR_CSR_RX_BVALID_FIFO_UNDERRUN_INT			(1UL << 19U)
 #define HIF_AXI_DXR_CSR_RX_BVALID_FIFO_UNDERRUN_INT	(1UL << 20U)
 
-errno_t pfe_hif_cfg_isr(void *base_va);
-void pfe_hif_cfg_irq_mask(void *base_va);
-void pfe_hif_cfg_irq_unmask(void *base_va);
-errno_t pfe_hif_chnl_cfg_isr(void *base_va, uint32_t channel_id, pfe_hif_chnl_event_t *events);
-errno_t pfe_hif_chnl_cfg_init(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_fini(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_irq_mask(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_rx_irq_mask(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_tx_irq_mask(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_irq_unmask(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_rx_irq_unmask(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_tx_irq_unmask(void *base_va, uint32_t channel_id);
-errno_t pfe_hif_cfg_init(void *base_va);
-void pfe_hif_cfg_fini(void *base_va);
-uint32_t pfe_hif_cfg_get_tx_fifo_fill_level(void *base_va);
-void pfe_hif_chnl_cfg_tx_enable(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_tx_disable(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_rx_enable(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_rx_disable(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_rx_dma_start(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_tx_dma_start(void *base_va, uint32_t channel_id);
-void pfe_hif_chnl_cfg_set_rx_bd_ring_addr(void *base_va, uint32_t channel_id, void *rx_ring_pa);
-void pfe_hif_chnl_cfg_set_tx_bd_ring_addr(void *base_va, uint32_t channel_id, void *tx_ring_pa);
-void pfe_hif_chnl_cfg_set_rx_wb_table(void *base_va, uint32_t channel_id, void *wb_tbl_pa, uint32_t tbl_len);
-void pfe_hif_chnl_cfg_set_tx_wb_table(void *base_va, uint32_t channel_id, void *wb_tbl_pa, uint32_t tbl_len);
-bool_t pfe_hif_chnl_cfg_is_rx_dma_active(void *base_va, uint32_t channel_id);
-bool_t pfe_hif_chnl_cfg_is_tx_dma_active(void *base_va, uint32_t channel_id);
-uint16_t pfe_hif_chnl_cfg_get_rx_seqnum(void *base_va, uint32_t channel_id);
-uint16_t pfe_hif_chnl_cfg_get_tx_seqnum(void *base_va, uint32_t channel_id);
-bool_t pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(void *base_va, uint32_t channel_id);
-bool_t pfe_hif_chnl_cfg_is_tx_bdp_fifo_empty(void *base_va, uint32_t channel_id);
-uint32_t pfe_hif_chnl_cfg_get_text_stat(void *base_va, uint32_t channel_id, char_t *buf, uint32_t size, uint8_t verb_level);
-uint32_t pfe_hif_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+errno_t pfe_hif_cfg_isr(addr_t base_va);
+void pfe_hif_cfg_irq_mask(addr_t base_va);
+void pfe_hif_cfg_irq_unmask(addr_t base_va);
+errno_t pfe_hif_chnl_cfg_isr(addr_t base_va, uint32_t channel_id, pfe_hif_chnl_event_t *events);
+errno_t pfe_hif_chnl_cfg_init(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_fini(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_irq_mask(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_rx_irq_mask(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_tx_irq_mask(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_irq_unmask(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_rx_irq_unmask(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_tx_irq_unmask(addr_t base_va, uint32_t channel_id);
+errno_t pfe_hif_cfg_init(addr_t base_va);
+void pfe_hif_cfg_fini(addr_t base_va);
+uint32_t pfe_hif_cfg_get_tx_fifo_fill_level(addr_t base_va);
+void pfe_hif_chnl_cfg_tx_enable(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_tx_disable(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_rx_enable(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_rx_disable(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_rx_dma_start(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_tx_dma_start(addr_t base_va, uint32_t channel_id);
+void pfe_hif_chnl_cfg_set_rx_bd_ring_addr(addr_t base_va, uint32_t channel_id, const void *rx_ring_pa);
+void pfe_hif_chnl_cfg_set_tx_bd_ring_addr(addr_t base_va, uint32_t channel_id, const void *tx_ring_pa);
+void pfe_hif_chnl_cfg_set_rx_wb_table(addr_t base_va, uint32_t channel_id, const void *wb_tbl_pa, uint32_t tbl_len);
+void pfe_hif_chnl_cfg_set_tx_wb_table(addr_t base_va, uint32_t channel_id, const void *wb_tbl_pa, uint32_t tbl_len);
+bool_t pfe_hif_chnl_cfg_is_rx_dma_active(addr_t base_va, uint32_t channel_id);
+bool_t pfe_hif_chnl_cfg_is_tx_dma_active(addr_t base_va, uint32_t channel_id);
+uint16_t pfe_hif_chnl_cfg_get_rx_seqnum(addr_t base_va, uint32_t channel_id);
+uint16_t pfe_hif_chnl_cfg_get_tx_seqnum(addr_t base_va, uint32_t channel_id);
+bool_t pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(addr_t base_va, uint32_t channel_id);
+bool_t pfe_hif_chnl_cfg_is_tx_bdp_fifo_empty(addr_t base_va, uint32_t channel_id);
+errno_t pfe_hif_chnl_cfg_set_rx_irq_coalesce(addr_t base_va, uint32_t channel_id, uint32_t frames, uint32_t cycles);
+errno_t pfe_hif_chnl_cfg_get_rx_irq_coalesce(addr_t base_va, uint32_t channel_id, uint32_t *frames, uint32_t *cycles);
+uint32_t pfe_hif_chnl_cfg_get_text_stat(addr_t base_va, uint32_t channel_id, char_t *buf, uint32_t size, uint8_t verb_level);
+uint32_t pfe_hif_chnl_cfg_get_tx_cnt(addr_t base_va, uint32_t channel_id);
+uint32_t pfe_hif_chnl_cfg_get_rx_cnt(addr_t base_va, uint32_t channel_id);
+uint32_t pfe_hif_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
 #endif /* PFE_HIF_CSR_H_ */

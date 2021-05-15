@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -72,7 +72,7 @@ errno_t oal_job_run(oal_job_t *job);
  * @param[in]	job The job instance
  * @return		EOK if success, error code otherwise
  */
-errno_t oal_job_drain(oal_job_t *job);
+errno_t oal_job_drain(const oal_job_t *job);
 
 #endif /* PUBLIC_OAL_JOB_H_ */
 

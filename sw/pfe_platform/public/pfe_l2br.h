@@ -67,7 +67,11 @@ void pfe_l2br_static_entry_get_mac(pfe_l2br_static_entry_t *static_ent, pfe_mac_
 pfe_l2br_static_entry_t *pfe_l2br_static_entry_get_first(pfe_l2br_t *bridge, pfe_l2br_static_ent_get_crit_t crit, void* arg1, void *arg2);
 pfe_l2br_static_entry_t *pfe_l2br_static_entry_get_next(pfe_l2br_t *bridge);
 errno_t pfe_l2br_static_entry_get_local_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t *local);
+errno_t pfe_l2br_static_entry_get_src_discard_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t *src_discard);
+errno_t pfe_l2br_static_entry_get_dst_discard_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t *dst_discard);
 errno_t pfe_l2br_static_entry_set_local_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t local);
+errno_t pfe_l2br_static_entry_set_src_discard_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t src_discard);
+errno_t pfe_l2br_static_entry_set_dst_discard_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t dst_discard);
 
 pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, pfe_l2br_table_t *mac_table, pfe_l2br_table_t *vlan_table);
 errno_t pfe_l2br_destroy(pfe_l2br_t *bridge);
@@ -77,5 +81,8 @@ pfe_l2br_domain_t *pfe_l2br_get_first_domain(pfe_l2br_t *bridge, pfe_l2br_domain
 pfe_l2br_domain_t *pfe_l2br_get_next_domain(pfe_l2br_t *bridge);
 uint32_t pfe_l2br_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 
+errno_t pfe_l2br_flush_learned(pfe_l2br_t *bridge);
+errno_t pfe_l2br_flush_static(pfe_l2br_t *bridge);
+errno_t pfe_l2br_flush_all(pfe_l2br_t *bridge);
 
 #endif /* PUBLIC_PFE_L2BR_H_ */

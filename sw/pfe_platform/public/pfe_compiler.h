@@ -70,6 +70,15 @@
 			/* Compiling driver */
 			#define PFE_COMPILER_BITFIELD_BEHAVIOR PFE_COMPILER_BITFIELD_HIGH_LAST
 		#endif
+	#elif ((__GNUC__ == 8) && (__GNUC_MINOR__ == 3) && (__GNUC_PATCHLEVEL__ == 0))
+		/* GCC version 8.3.0 */
+		#if (defined(PFE_CFG_TARGET_ARCH_aarch64le))
+			/* Compiling driver */
+			#define PFE_COMPILER_BITFIELD_BEHAVIOR PFE_COMPILER_BITFIELD_HIGH_LAST
+		#elif (defined(PFE_CFG_TARGET_ARCH_armv7le))
+			/* Compiling driver */
+			#define PFE_COMPILER_BITFIELD_BEHAVIOR PFE_COMPILER_BITFIELD_HIGH_LAST
+		#endif
 	#elif (defined (__KERNEL__))
 		/* Linux kernel compilation for not supported compiler */
 		#if (defined(PFE_CFG_TARGET_ARCH_aarch64))
@@ -90,7 +99,7 @@
 
 /* Supported DIAB variants */
 #if (defined(__DCC__))
-	#if ((__VERSION_NUMBER__ == 7020) && defined(__ORDER_LITTLE_ENDIAN__))
+	#if (((__VERSION_NUMBER__ == 7020) || (__VERSION_NUMBER__ == 7030)) && defined(__ORDER_LITTLE_ENDIAN__))
 		/* Compiling MCAL driver */
 		#define PFE_COMPILER_BITFIELD_BEHAVIOR PFE_COMPILER_BITFIELD_HIGH_LAST
 	#endif

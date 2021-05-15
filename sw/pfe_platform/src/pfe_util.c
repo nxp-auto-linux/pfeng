@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -24,7 +24,7 @@
 struct pfe_util_tag
 {
 	bool_t is_fw_loaded;	/*	Flag indicating that firmware has been loaded */
-	void *cbus_base_va;		/*	CBUS base virtual address */
+	addr_t cbus_base_va;		/*	CBUS base virtual address */
 	uint32_t pe_num;		/*	Number of PEs */
 	pfe_pe_t **pe;			/*	List of particular PEs */
 };
@@ -34,7 +34,7 @@ struct pfe_util_tag
  * @param[in]	util The UTIL instance
  * @param[in]	cfg Pointer to the configuration structure
  */
-static void pfe_util_set_config(pfe_util_t *util, pfe_util_cfg_t *cfg)
+static void pfe_util_set_config(const pfe_util_t *util, const pfe_util_cfg_t *cfg)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == util) || (NULL == cfg)))
@@ -56,14 +56,14 @@ static void pfe_util_set_config(pfe_util_t *util, pfe_util_cfg_t *cfg)
  * @param[in]	cfg The UTIL block configuration
  * @return		The UTIL instance or NULL if failed
  */
-pfe_util_t *pfe_util_create(void *cbus_base_va, uint32_t pe_num, pfe_util_cfg_t *cfg)
+pfe_util_t *pfe_util_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_util_cfg_t *cfg)
 {
 	pfe_util_t *util;
 	pfe_pe_t *pe;
 	uint32_t ii;
-	
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == cbus_base_va) || (NULL == cfg)))
+	if (unlikely((NULL_ADDR == cbus_base_va) || (NULL == cfg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -71,7 +71,7 @@ pfe_util_t *pfe_util_create(void *cbus_base_va, uint32_t pe_num, pfe_util_cfg_t 
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	util = oal_mm_malloc(sizeof(pfe_util_t));
-	
+
 	if (NULL == util)
 	{
 		return NULL;
@@ -81,22 +81,22 @@ pfe_util_t *pfe_util_create(void *cbus_base_va, uint32_t pe_num, pfe_util_cfg_t 
 		(void)memset(util, 0, sizeof(pfe_util_t));
 		util->cbus_base_va = cbus_base_va;
 	}
-	
+
 	if (pe_num > 0U)
 	{
 		util->pe = oal_mm_malloc(pe_num * sizeof(pfe_pe_t *));
-		
+
 		if (NULL == util->pe)
 		{
 			oal_mm_free(util);
 			return NULL;
 		}
-		
+
 		/*	Create PEs */
 		for (ii=0U; ii<pe_num; ii++)
 		{
 			pe = pfe_pe_create(cbus_base_va, PE_TYPE_UTIL, (uint8_t)ii);
-			
+
 			if (NULL == pe)
 			{
 				goto free_and_fail;
@@ -106,28 +106,28 @@ pfe_util_t *pfe_util_create(void *cbus_base_va, uint32_t pe_num, pfe_util_cfg_t 
 				pfe_pe_set_iaccess(pe, UTIL_MEM_ACCESS_WDATA, UTIL_MEM_ACCESS_RDATA, UTIL_MEM_ACCESS_ADDR);
 				pfe_pe_set_dmem(pe, PFE_CFG_UTIL_ELF_DMEM_BASE, PFE_CFG_UTIL_DMEM_SIZE);
 				pfe_pe_set_imem(pe, PFE_CFG_UTIL_ELF_IMEM_BASE, PFE_CFG_UTIL_IMEM_SIZE);
-				
+
 				util->pe[ii] = pe;
 				util->pe_num++;
 			}
 		}
-		
+
 		/*	Issue block reset */
 		pfe_util_reset(util);
-		
+
 		/*	Disable the UTIL block */
 		pfe_util_disable(util);
-		
+
 		/*	Set new configuration */
 		pfe_util_set_config(util, cfg);
 	}
-	
+
 	return util;
-	
+
 free_and_fail:
 	pfe_util_destroy(util);
 	util = NULL;
-	
+
 	return NULL;
 }
 
@@ -135,7 +135,7 @@ free_and_fail:
  * @brief		Reset the UTIL block
  * @param[in]	util The UTIL instance
  */
-void pfe_util_reset(pfe_util_t *util)
+void pfe_util_reset(const pfe_util_t *util)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == util))
@@ -153,7 +153,7 @@ void pfe_util_reset(pfe_util_t *util)
  * @details		Enable all UTIL PEs
  * @param[in]	util The UTIL instance
  */
-void pfe_util_enable(pfe_util_t *util)
+void pfe_util_enable(const pfe_util_t *util)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == util))
@@ -167,7 +167,7 @@ void pfe_util_enable(pfe_util_t *util)
 	{
 		NXP_LOG_WARNING("Attempt to enable UTIL PE(s) without previous firmware upload\n");
 	}
-	
+
 	hal_write32(PFE_CORE_ENABLE, util->cbus_base_va + UTIL_TX_CTRL);
 }
 
@@ -175,7 +175,7 @@ void pfe_util_enable(pfe_util_t *util)
  * @brief		Disable the UTIL block
  * @param[in]	util The UTIL instance
  */
-void pfe_util_disable(pfe_util_t *util)
+void pfe_util_disable(const pfe_util_t *util)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == util))
@@ -198,7 +198,7 @@ errno_t pfe_util_load_firmware(pfe_util_t *util, const void *elf)
 {
 	uint32_t ii;
 	errno_t ret;
-	
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == util) || (NULL == elf)))
 	{
@@ -210,16 +210,16 @@ errno_t pfe_util_load_firmware(pfe_util_t *util, const void *elf)
 	for (ii=0U; ii<util->pe_num; ii++)
 	{
 		ret = pfe_pe_load_firmware(util->pe[ii], elf);
-		
+
 		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("UTIL firmware loading failed: %d\n", ret);
 			return ret;
 		}
 	}
-	
+
 	util->is_fw_loaded = TRUE;
-	
+
 	return EOK;
 }
 
@@ -230,7 +230,7 @@ errno_t pfe_util_load_firmware(pfe_util_t *util, const void *elf)
 void pfe_util_destroy(pfe_util_t *util)
 {
 	uint32_t ii;
-	
+
 	if (NULL != util)
 	{
 		for (ii=0U; ii<util->pe_num; ii++)
@@ -238,11 +238,11 @@ void pfe_util_destroy(pfe_util_t *util)
 			pfe_pe_destroy(util->pe[ii]);
 			util->pe[ii] = NULL;
 		}
-		
+
 		pfe_util_disable(util);
-		
+
 		util->pe_num = 0U;
-		
+
 		oal_mm_free(util);
 	}
 }
@@ -252,7 +252,7 @@ void pfe_util_destroy(pfe_util_t *util)
  * @details Checks PE whether it reports a firmware error
  * @param[in] util The UTIL instance
  */
-errno_t pfe_util_isr(pfe_util_t *util)
+errno_t pfe_util_isr(const pfe_util_t *util)
 {
 	uint32_t i;
 
@@ -276,7 +276,7 @@ errno_t pfe_util_isr(pfe_util_t *util)
  * @brief		Mask UTIL interrupts
  * @param[in]	util The UTIL instance
  */
-void pfe_util_irq_mask(pfe_util_t *util)
+void pfe_util_irq_mask(const pfe_util_t *util)
 {
 #if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
 	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
@@ -292,7 +292,7 @@ void pfe_util_irq_mask(pfe_util_t *util)
  * @brief		Unmask UTIL interrupts
  * @param[in]	util The UTIL instance
  */
-void pfe_util_irq_unmask(pfe_util_t *util)
+void pfe_util_irq_unmask(const pfe_util_t *util)
 {
 #if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
 	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
@@ -313,11 +313,11 @@ void pfe_util_irq_unmask(pfe_util_t *util)
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_util_get_text_statistics(pfe_util_t *util, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U, ii;
 	pfe_ct_version_t fw_ver;
-	
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == util))
 	{
@@ -336,7 +336,7 @@ uint32_t pfe_util_get_text_statistics(pfe_util_t *util, char_t *buf, uint32_t bu
 	{
 		len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION <unknown>\n");
 	}
-	
+
 	len += pfe_util_cfg_get_text_stat(util->cbus_base_va, buf + len, buf_len - len, verb_level);
 
 	/*	Get PE info per PE */
@@ -344,7 +344,7 @@ uint32_t pfe_util_get_text_statistics(pfe_util_t *util, char_t *buf, uint32_t bu
 	{
 		len += pfe_pe_get_text_statistics(util->pe[ii], buf + len, buf_len - len, verb_level);
 	}
-	
+
 	return len;
 }
 
@@ -353,7 +353,7 @@ uint32_t pfe_util_get_text_statistics(pfe_util_t *util, char_t *buf, uint32_t bu
  * @param[in]	util The UTIL instance
  * @return		ver Parsed firmware metadata
  */
-errno_t pfe_util_get_fw_version(pfe_util_t *util, pfe_ct_version_t *ver)
+errno_t pfe_util_get_fw_version(const pfe_util_t *util, pfe_ct_version_t *ver)
 {
 	pfe_ct_pe_mmap_t pfe_pe_mmap;
 

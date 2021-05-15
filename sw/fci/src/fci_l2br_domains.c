@@ -119,7 +119,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 			if (EPERM == ret)
 			{
 				NXP_LOG_ERROR("Domain %d already created\n", oal_ntohs(bd_cmd->vlan));
-				*fci_ret = FPP_ERR_L2BRIDGE_DOMAIN_ALREADY_REGISTERED;
+				*fci_ret = FPP_ERR_L2_BD_ALREADY_REGISTERED;
 				ret = EOK;
 				break;
 			}
@@ -311,7 +311,7 @@ finalize_domain_registration:
 			if (NULL == domain)
 			{
 				NXP_LOG_ERROR("Domain %d not found\n", oal_ntohs(bd_cmd->vlan));
-				*fci_ret = FPP_ERR_L2BRIDGE_DOMAIN_NOT_FOUND;
+				*fci_ret = FPP_ERR_L2_BD_NOT_FOUND;
 				ret = EOK;
 			}
 			else
@@ -338,7 +338,7 @@ finalize_domain_registration:
 			if (NULL == domain)
 			{
 				ret = EOK;
-				*fci_ret = FPP_ERR_L2BRIDGE_DOMAIN_NOT_FOUND;
+				*fci_ret = FPP_ERR_L2_BD_NOT_FOUND;
 				break;
 			}
 		}
@@ -352,7 +352,7 @@ finalize_domain_registration:
 				if (NULL == domain)
 				{
 					ret = EOK;
-					*fci_ret = FPP_ERR_L2BRIDGE_DOMAIN_NOT_FOUND;
+					*fci_ret = FPP_ERR_L2_BD_NOT_FOUND;
 					break;
 				}
 			}
@@ -387,12 +387,12 @@ finalize_domain_registration:
 
 			if (TRUE == pfe_l2br_domain_is_default(domain))
 			{
-				bd_cmd->flags |= FPP_L2BR_DOMAIN_DEFAULT;
+				bd_cmd->flags |= FPP_L2_BD_DEFAULT;
 			}
 
 			if (TRUE == pfe_l2br_domain_is_fallback(domain))
 			{
-				bd_cmd->flags |= FPP_L2BR_DOMAIN_FALLBACK;
+				bd_cmd->flags |= FPP_L2_BD_FALLBACK;
 			}
 
 			bd_cmd->if_list = oal_htonl(pfe_l2br_domain_get_if_list(domain));
@@ -529,6 +529,14 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 				{
 					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				}
+				if (EOK != pfe_l2br_static_entry_set_src_discard_flag(context->l2_bridge, entry, br_ent_cmd->src_discard))
+				{
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+				}
+				if (EOK != pfe_l2br_static_entry_set_dst_discard_flag(context->l2_bridge, entry, br_ent_cmd->dst_discard))
+				{
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+				}
 			}
 			break;
 		}
@@ -588,6 +596,8 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 			/* FW list */
 			br_ent_cmd->forward_list =  oal_htonl(pfe_l2br_static_entry_get_fw_list(entry));
 			(void)pfe_l2br_static_entry_get_local_flag(context->l2_bridge, entry, (bool_t *)&br_ent_cmd->local);
+			(void)pfe_l2br_static_entry_get_src_discard_flag(context->l2_bridge, entry, (bool_t *)&br_ent_cmd->src_discard);
+			(void)pfe_l2br_static_entry_get_dst_discard_flag(context->l2_bridge, entry, (bool_t *)&br_ent_cmd->dst_discard);
 			*fci_ret = FPP_ERR_OK;
 			break;
 		}
@@ -608,7 +618,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 uint32_t fci_l2br_static_entry_get_valid_fw_list(void)
 {
 	uint32_t ii;
-	uint32_t session_id, valid_if_list;
+	uint32_t session_id, valid_if_list = 0U;
 	errno_t ret = EOK;
 	fci_t *context = (fci_t *)&__context;
 	pfe_if_db_entry_t *if_db_entry = NULL;

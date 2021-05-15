@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -52,7 +52,7 @@
  * @param[in]	dev The OS specific device structure associated with the memory management. Only for Linux supported.
  * @return		EOK if success
  */
-errno_t oal_mm_init(void *dev);
+errno_t oal_mm_init(const void *dev);
 
 /**
  * @brief		Shut the memory management library down

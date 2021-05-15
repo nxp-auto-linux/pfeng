@@ -83,6 +83,7 @@ errno_t fci_connections_ipv6_ct_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_ct6_c
 errno_t fci_connections_ipv4_timeout_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_timeout_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_static_ent_cmd_t *reply_buf, uint32_t *reply_len);
+errno_t fci_l2br_flush_cmd(uint32_t code, uint16_t *fci_ret);
 errno_t fci_routes_drop_one(fci_rt_db_entry_t *route);
 void fci_routes_drop_all(void);
 void fci_routes_drop_all_ipv4(void);

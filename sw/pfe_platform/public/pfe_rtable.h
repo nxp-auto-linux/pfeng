@@ -79,7 +79,7 @@ typedef enum
  */
 typedef void (* pfe_rtable_callback_t)(void *arg, pfe_rtable_cbk_event_t event);
 
-pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, void *htable_base_pa, uint32_t htable_size, void *pool_base_pa, uint32_t pool_size);
+pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_pa, uint32_t htable_size, addr_t pool_base_pa, uint32_t pool_size);
 errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
 errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
 void pfe_rtable_destroy(pfe_rtable_t *rtable);
@@ -90,6 +90,8 @@ pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_cr
 pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable);
 uint32_t pfe_rtable_get_size(pfe_rtable_t *rtable);
 
+void pfe_rtable_entry_set_ttl_decrement(pfe_rtable_entry_t *entry);
+void pfe_rtable_entry_remove_ttl_decrement(pfe_rtable_entry_t *entry);
 pfe_rtable_entry_t *pfe_rtable_entry_create(void);
 void pfe_rtable_entry_free(pfe_rtable_entry_t *entry);
 errno_t pfe_rtable_entry_set_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple);

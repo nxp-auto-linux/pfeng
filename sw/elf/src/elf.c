@@ -44,6 +44,8 @@
 #include "elf_cfg.h"
 #include "elf.h"
 
+#include "hal.h"
+
 /*==================================================================================================
                                       FILE VERSION CHECKS
 ==================================================================================================*/
@@ -54,7 +56,6 @@
 /*==================================================================================================
                                         LOCAL MACROS
 ==================================================================================================*/
-#define ELF_NAMED_SECT_IDX_FLAG 0x80000000U
 #define ELF64_HEADER_SIZE 64U
 #define ELF32_HEADER_SIZE 52U
 #define SHN_UNDEF       0U    /* Undefined/Not present */
@@ -79,7 +80,7 @@ typedef enum
     ELF_Endian_Big    = 2,
 } ELF_Endian_t;
 
-enum ELF_Type
+enum
 {
     ELF_Type_Relocatable = 1U,
     ELF_Type_Executable = 2U,
@@ -87,7 +88,7 @@ enum ELF_Type
     ELF_Type_Core = 4U,
 };
 
-enum PhT_Types
+enum
 {
     PT_NULL      = 0U,
     PT_LOAD      = 1U, /* Loadable segment */
@@ -104,17 +105,10 @@ enum PhT_Types
 /*==================================================================================================
                                        LOCAL CONSTANTS
 ==================================================================================================*/
-
-/*==================================================================================================
-                                       LOCAL VARIABLES
-==================================================================================================*/
-
-/*==================================================================================================
-                                       GLOBAL CONSTANTS
-==================================================================================================*/
 #if TRUE == ELF_CFG_SECTION_PRINT_ENABLED
-  #if TRUE == ELF_CFG_SECTION_TABLE_USED
-    const int8_t aacSTypes[17][9] =
+  #ifdef NXP_LOG_ENABLED /*  Debug message support */
+    #if TRUE == ELF_CFG_SECTION_TABLE_USED
+    static const int8_t aacSTypes[17][9] =
     {
         "NULL    ",
         "PROGBITS",
@@ -134,7 +128,7 @@ enum PhT_Types
         "HIUSER  ",
         "UNDEFINE",
     };
-    const struct shf_flags_strings
+    static const struct shf_flags_strings
     {
         uint32_t u32Flag;
         char_t   *szString;
@@ -155,10 +149,10 @@ enum PhT_Types
         {0x4000000U, "ORDERED"},
         {0x8000000U, "EXCLUDE"},
     };
-    const uint32_t u32ShT_Flags_Strings_Count = sizeof(ShT_Flags_Strings) / sizeof(struct shf_flags_strings);
-  #endif /* ELF_CFG_SECTION_TABLE_USED */
-  #if TRUE == ELF_CFG_PROGRAM_TABLE_USED
-    const int8_t aacPTypes[11][10] =
+    static const uint32_t u32ShT_Flags_Strings_Count = sizeof(ShT_Flags_Strings) / sizeof(struct shf_flags_strings);
+    #endif /* ELF_CFG_SECTION_TABLE_USED */
+    #if TRUE == ELF_CFG_PROGRAM_TABLE_USED
+    static const int8_t aacPTypes[11][10] =
     {
         "NULL     ",
         "LOAD     ",
@@ -172,8 +166,17 @@ enum PhT_Types
         "GNU_STACK",
         "UNDEFINED",
     };
-  #endif /* ELF_CFG_PROGRAM_TABLE_USED */
+    #endif /* ELF_CFG_PROGRAM_TABLE_USED */
+  #endif /* NXP_LOG_ENABLED */
 #endif /* ELF_CFG_SECTION_PRINT_ENABLED */
+
+/*==================================================================================================
+                                       LOCAL VARIABLES
+==================================================================================================*/
+
+/*==================================================================================================
+                                       GLOBAL CONSTANTS
+==================================================================================================*/
 
 /*==================================================================================================
                                        GLOBAL VARIABLES
@@ -183,19 +186,20 @@ enum PhT_Types
                                    LOCAL FUNCTION PROTOTYPES
 ==================================================================================================*/
 /* GENERAL */
-static bool_t LoadFileData(ELF_File_t *pElfFile, uint32_t u32Offset, uint32_t u32Size, void *pvDestMem);
+static bool_t LoadFileData(const ELF_File_t *pElfFile, uint32_t u32Offset, uint32_t u32Size, void *pvDestMem);
 static inline ELF_Endian_t GetLocalEndian(void);
 /* ELF64 */
 #if TRUE == ELF_CFG_ELF64_SUPPORTED
     static bool_t ELF64_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian);
     static void ELF64_HeaderSwitchEndianness(Elf64_Ehdr *prElf64Header);
+    static bool_t ELF64_Load(bool_t bIsCrosEndian,ELF_File_t *pElfFile,uint32_t *u32NamesSectionOffset,uint32_t *u32NamesSectionSize);
     static void ELF64_ProgTabSwitchEndianness(Elf64_Phdr *arProgHead64, uint32_t u32NumItems);
     static void ELF64_SectTabSwitchEndianness(Elf64_Shdr *arSectHead64, uint32_t u32NumItems);
     #if TRUE == ELF_CFG_PROGRAM_TABLE_USED
         static bool_t ELF64_ProgSectFindNext( ELF_File_t *pElfFile, uint32_t *pu32ProgIdx,
                                                uint64_t *pu64LoadVAddr, uint64_t *pu64LoadPAddr, uint64_t *pu64Length
                                              );
-        static bool_t ELF64_ProgSectLoad( ELF_File_t *pElfFile,
+        static bool_t ELF64_ProgSectLoad( const ELF_File_t *pElfFile,
                                            uint32_t u32ProgIdx, addr_t AccessAddr, addr_t AllocSize
                                          );
     #endif
@@ -203,25 +207,26 @@ static inline ELF_Endian_t GetLocalEndian(void);
         static bool_t ELF64_SectFindName( const ELF_File_t *pElfFile, const char_t *szSectionName,
                                            uint32_t *pu32SectIdx, uint64_t *pu64LoadAddr, uint64_t *pu64Length
                                          );
-        static bool_t ELF64_SectLoad( ELF_File_t *pElfFile,
+        static bool_t ELF64_SectLoad( const ELF_File_t *pElfFile,
                                        uint32_t u32SectIdx, addr_t AccessAddr, addr_t AllocSize
                                      );
     #endif
     #if TRUE == ELF_CFG_SECTION_PRINT_ENABLED
-        static void ELF64_PrintSections(ELF_File_t *pElfFile);
+        static void ELF64_PrintSections(const ELF_File_t *pElfFile);
     #endif /* ELF_CFG_SECTION_PRINT_ENABLED */
 #endif /* ELF_CFG_ELF64_SUPPORTED */
 /* ELF32 */
 #if TRUE == ELF_CFG_ELF32_SUPPORTED
     static bool_t ELF32_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian);
     static void ELF32_HeaderSwitchEndianness(Elf32_Ehdr *prElf32Header);
+    static bool_t ELF32_Load(bool_t bIsCrosEndian,ELF_File_t *pElfFile,uint32_t *u32NamesSectionOffset,uint32_t *u32NamesSectionSize);
     static void ELF32_ProgTabSwitchEndianness(Elf32_Phdr *arProgHead32, uint32_t u32NumItems);
     static void ELF32_SectTabSwitchEndianness(Elf32_Shdr *arSectHead32, uint32_t u32NumItems);
     #if TRUE == ELF_CFG_PROGRAM_TABLE_USED
         static bool_t ELF32_ProgSectFindNext( ELF_File_t *pElfFile, uint32_t *pu32ProgIdx,
                                                uint64_t *pu64LoadVAddr, uint64_t *pu64LoadPAddr, uint64_t *pu64Length
                                              );
-        static bool_t ELF32_ProgSectLoad( ELF_File_t *pElfFile,
+        static bool_t ELF32_ProgSectLoad( const ELF_File_t *pElfFile,
                                            uint32_t u32ProgIdx, addr_t AccessAddr, addr_t AllocSize
                                          );
     #endif
@@ -229,16 +234,18 @@ static inline ELF_Endian_t GetLocalEndian(void);
         static bool_t ELF32_SectFindName( const ELF_File_t *pElfFile, const char_t *szSectionName,
                                            uint32_t *pu32SectIdx, uint64_t *pu64LoadAddr, uint64_t *pu64Length
                                          );
-        static bool_t ELF32_SectLoad( ELF_File_t *pElfFile,
+        static bool_t ELF32_SectLoad( const ELF_File_t *pElfFile,
                                        uint32_t u32SectIdx, addr_t AccessAddr, addr_t AllocSize
                                      );
     #endif
     #if TRUE == ELF_CFG_SECTION_PRINT_ENABLED
-        static void ELF32_PrintSections(ELF_File_t *pElfFile);
+        static void ELF32_PrintSections(const ELF_File_t *pElfFile);
     #endif /* ELF_CFG_SECTION_PRINT_ENABLED */
 #endif /* ELF_CFG_ELF32_SUPPORTED */
 
 static uint32_t buf_read(void *src_buf, uint32_t u32FileSize, uint32_t u32Offset, void *dst_buf, uint32_t nbytes);
+static void ELF_FreePtr(ELF_File_t *pElfFile);
+static bool_t ELF_LoadTables(ELF_File_t *pElfFile, uint32_t *u32NamesSectionOffset, uint32_t *u32NamesSectionSize);
 
 /*==================================================================================================
                                        LOCAL FUNCTIONS
@@ -254,16 +261,16 @@ static uint32_t buf_read(void *src_buf, uint32_t u32FileSize, uint32_t u32Offset
 * @retval       FALSE Failed
 */
 /* Purpose of this function is to implement all the operations and checks only once */
-static bool_t LoadFileData(ELF_File_t *pElfFile, uint32_t u32Offset, uint32_t u32Size, void *pvDestMem)
+static bool_t LoadFileData(const ELF_File_t *pElfFile, uint32_t u32Offset, uint32_t u32Size, void *pvDestMem)
 {
     bool_t bSuccess = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == pElfFile) || (NULL == pvDestMem)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
+    if (unlikely((NULL == pElfFile) || (NULL == pvDestMem)))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return FALSE;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     /* Does it fit to file? */
@@ -315,11 +322,11 @@ static bool_t ELF32_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
     bool_t bSectStatus = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == pElfFile))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
+    if (unlikely(NULL == pElfFile))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return FALSE;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
   #if TRUE == ELF_CFG_PROGRAM_TABLE_USED
@@ -330,9 +337,8 @@ static bool_t ELF32_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
     {
         NXP_LOG_ERROR("ELF32_LoadTables: Unexpected progam header entry size\n");
     }
-
     /* Check the size */
-    if ((pElfFile->Header.r32.e_phoff + ((uint32_t)pElfFile->Header.r32.e_phentsize * (uint32_t)pElfFile->Header.r32.e_phnum)) > pElfFile->u32FileSize)
+    else if ((pElfFile->Header.r32.e_phoff + ((uint32_t)pElfFile->Header.r32.e_phentsize * (uint32_t)pElfFile->Header.r32.e_phnum)) > pElfFile->u32FileSize)
     {
         NXP_LOG_ERROR("ELF32_LoadTables: Requested data block exceeds size of the file\n");
         NXP_LOG_INFO("\n");
@@ -365,6 +371,7 @@ static bool_t ELF32_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
     {
         NXP_LOG_ERROR("ELF32_LoadTables: Unexpected section header entry size\n");
     }
+    /* Check the size */
     else if ((pElfFile->Header.r32.e_shoff + ((uint32_t)pElfFile->Header.r32.e_shentsize * (uint32_t)pElfFile->Header.r32.e_shnum)) > pElfFile->u32FileSize) 
     {
         NXP_LOG_ERROR("ELF32_LoadTables: Requested data block exceeds size of the file\n");
@@ -390,11 +397,11 @@ static bool_t ELF32_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
 static void ELF32_HeaderSwitchEndianness(Elf32_Ehdr *prElf32Header)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == prElf32Header))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
+    if (unlikely(NULL == prElf32Header))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     prElf32Header->e_type       = ENDIAN_SW_2B(prElf32Header->e_type);
@@ -412,17 +419,59 @@ static void ELF32_HeaderSwitchEndianness(Elf32_Ehdr *prElf32Header)
     prElf32Header->e_shstrndx   = ENDIAN_SW_2B(prElf32Header->e_shstrndx);
 }
 
+static bool_t ELF32_Load(bool_t bIsCrosEndian,ELF_File_t *pElfFile,uint32_t *u32NamesSectionOffset,uint32_t *u32NamesSectionSize)
+{
+    bool_t    bRetVal = FALSE;
+
+    if (bIsCrosEndian)
+    {
+        ELF32_HeaderSwitchEndianness(&(pElfFile->Header.r32));
+    }
+    if ((uint16_t)ELF_Type_Executable != pElfFile->Header.r32.e_type)
+    {
+        NXP_LOG_ERROR("ELF_Open: Only executable ELFs are supported\n");
+    }
+    else if (FALSE == ELF32_LoadTables(pElfFile, bIsCrosEndian))
+    {
+        NXP_LOG_ERROR("ELF_Open: Failed to load tables\n");
+    }
+    /* Endianness is now solved in all tables */
+#if TRUE == ELF_CFG_SECTION_TABLE_USED
+    /* Look for section names section */
+    else if ((pElfFile->Header.r32.e_shstrndx == SHN_UNDEF)
+          || (pElfFile->Header.r32.e_shstrndx >= pElfFile->Header.r32.e_shnum)
+          || (0U == pElfFile->arSectHead32[pElfFile->Header.r32.e_shstrndx].sh_size)
+           )
+    {
+        NXP_LOG_ERROR("ELF_Open: Section names not found\n");
+    }
+    else
+    {
+        *u32NamesSectionOffset = pElfFile->arSectHead32[pElfFile->Header.r32.e_shstrndx].sh_offset;
+        *u32NamesSectionSize = pElfFile->arSectHead32[pElfFile->Header.r32.e_shstrndx].sh_size;
+        bRetVal = TRUE;
+    }
+#else  /* ELF_CFG_SECTION_TABLE_USED */
+    else
+    {
+        bRetVal = TRUE;
+    }
+#endif /* ELF_CFG_SECTION_TABLE_USED */
+
+    return bRetVal;
+}
+
 /*================================================================================================*/
 static void ELF32_ProgTabSwitchEndianness(Elf32_Phdr *arProgHead32, uint32_t u32NumItems)
 {
     uint32_t u32Idx;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == arProgHead32))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
+    if (unlikely(NULL == arProgHead32))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     for(u32Idx=0U; u32Idx<u32NumItems; u32Idx++)
@@ -444,11 +493,11 @@ static void ELF32_SectTabSwitchEndianness(Elf32_Shdr *arSectHead32, uint32_t u32
     uint32_t u32Idx;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == arSectHead32))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
+    if (unlikely(NULL == arSectHead32))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     for(u32Idx=0U; u32Idx<u32NumItems; u32Idx++)
@@ -522,7 +571,7 @@ static bool_t ELF32_ProgSectFindNext( ELF_File_t *pElfFile, uint32_t *pu32ProgId
 }
 
 /*================================================================================================*/
-static bool_t ELF32_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx,
+static bool_t ELF32_ProgSectLoad(const ELF_File_t *pElfFile, uint32_t u32ProgIdx,
                                    addr_t AccessAddr, addr_t AllocSize
                                  )
 {
@@ -538,7 +587,7 @@ static bool_t ELF32_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx,
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     if (u32ProgIdx >= pElfFile->Header.r32.e_phnum)
     {
-        NXP_LOG_ERROR("ELF32_ProgSectLoad: Invalid program index: %u\n", u32ProgIdx);
+        NXP_LOG_ERROR("ELF32_ProgSectLoad: Invalid program index: %u\n", (uint_t)u32ProgIdx);
     }
     else if ((uint32_t)PT_LOAD != pElfFile->arProgHead32[u32ProgIdx].p_type)
     {
@@ -646,7 +695,7 @@ static bool_t ELF32_SectFindName( const ELF_File_t *pElfFile, const char_t *szSe
 }
 
 /*================================================================================================*/
-static bool_t ELF32_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t AccessAddr, addr_t AllocSize)
+static bool_t ELF32_SectLoad(const ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t AccessAddr, addr_t AllocSize)
 {
     bool_t bSuccess = FALSE;
 
@@ -660,7 +709,7 @@ static bool_t ELF32_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t A
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     if (u32SectIdx >= pElfFile->Header.r32.e_shnum)
     {
-        NXP_LOG_ERROR("ELF32_SectLoad: Invalid section index: %u\n", u32SectIdx);
+        NXP_LOG_ERROR("ELF32_SectLoad: Invalid section index: %u\n", (uint_t)u32SectIdx);
     }
     else if (AllocSize < pElfFile->arSectHead32[u32SectIdx].sh_size)
     {
@@ -697,7 +746,7 @@ static bool_t ELF32_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t A
   #if TRUE == ELF_CFG_SECTION_PRINT_ENABLED
 
 /*================================================================================================*/
-static void ELF32_PrintSections(ELF_File_t *pElfFile)
+static void ELF32_PrintSections(const ELF_File_t *pElfFile)
 {
 #ifdef NXP_LOG_ENABLED /*  Debug message support */
     uint32_t SectIdx;
@@ -737,9 +786,9 @@ static void ELF32_PrintSections(ELF_File_t *pElfFile)
             NXP_LOG_INFO("%16s", pElfFile->acSectNames + pElfFile->arSectHead32[SectIdx].sh_name);
             NXP_LOG_INFO("%12s    0x%08x    0x%08x    0x%08x    ",
                         aacSTypes[u32Type],
-                        pElfFile->arSectHead32[SectIdx].sh_offset,
-                        pElfFile->arSectHead32[SectIdx].sh_size,
-                        pElfFile->arSectHead32[SectIdx].sh_addr
+                        (uint_t)pElfFile->arSectHead32[SectIdx].sh_offset,
+                        (uint_t)pElfFile->arSectHead32[SectIdx].sh_size,
+                        (uint_t)pElfFile->arSectHead32[SectIdx].sh_addr
                       );
             /* Now print flags on separate line: */
             for (u32FlagIdx = 0U; u32FlagIdx<u32ShT_Flags_Strings_Count; u32FlagIdx++)
@@ -770,14 +819,14 @@ static void ELF32_PrintSections(ELF_File_t *pElfFile)
             }
 
             /* Print program header data */
-            NXP_LOG_INFO("% 3d %s   0x%08x         0x%08x         0x%08x         0x%08x         0x%08x",
-                        ProgIdx,
+            NXP_LOG_INFO("%3u %s   0x%08x         0x%08x         0x%08x         0x%08x         0x%08x",
+                        (uint_t)ProgIdx,
                         aacPTypes[u32Type],
-                        pElfFile->arProgHead32[ProgIdx].p_offset,
-                        pElfFile->arProgHead32[ProgIdx].p_filesz,
-                        pElfFile->arProgHead32[ProgIdx].p_vaddr,
-                        pElfFile->arProgHead32[ProgIdx].p_paddr,
-                        pElfFile->arProgHead32[ProgIdx].p_memsz
+                        (uint_t)pElfFile->arProgHead32[ProgIdx].p_offset,
+                        (uint_t)pElfFile->arProgHead32[ProgIdx].p_filesz,
+                        (uint_t)pElfFile->arProgHead32[ProgIdx].p_vaddr,
+                        (uint_t)pElfFile->arProgHead32[ProgIdx].p_paddr,
+                        (uint_t)pElfFile->arProgHead32[ProgIdx].p_memsz
                       );
             NXP_LOG_INFO("\n");
         }
@@ -801,11 +850,11 @@ static bool_t ELF64_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
     bool_t bSectStatus = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == pElfFile))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
+    if (unlikely(NULL == pElfFile))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return FALSE;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
   #if TRUE == ELF_CFG_PROGRAM_TABLE_USED
@@ -868,11 +917,11 @@ static bool_t ELF64_LoadTables(ELF_File_t *pElfFile, bool_t bIsCrosEndian)
 static void ELF64_HeaderSwitchEndianness(Elf64_Ehdr *prElf64Header)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == prElf64Header))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
+    if (unlikely(NULL == prElf64Header))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     prElf64Header->e_type       = ENDIAN_SW_2B(prElf64Header->e_type);
@@ -890,17 +939,59 @@ static void ELF64_HeaderSwitchEndianness(Elf64_Ehdr *prElf64Header)
     prElf64Header->e_shstrndx   = ENDIAN_SW_2B(prElf64Header->e_shstrndx);
 }
 
+static bool_t ELF64_Load(bool_t bIsCrosEndian,ELF_File_t *pElfFile,uint32_t *u32NamesSectionOffset,uint32_t *u32NamesSectionSize)
+{
+    bool_t    bRetVal = FALSE;
+
+    if (bIsCrosEndian)
+    {
+        ELF64_HeaderSwitchEndianness(&(pElfFile->Header.r64));
+    }
+    if ((uint16_t)ELF_Type_Executable != pElfFile->Header.r64.e_type)
+    {
+        NXP_LOG_ERROR("ELF_Open: Only executable ELFs are supported\n");
+    }
+    else if (FALSE == ELF64_LoadTables(pElfFile, bIsCrosEndian))
+    {
+        NXP_LOG_ERROR("ELF_Open: Failed to load tables\n");
+    }
+    /* Endianness is now solved in all tables */
+#if TRUE == ELF_CFG_SECTION_TABLE_USED
+    /* Look for section names section */
+    else if ((pElfFile->Header.r64.e_shstrndx == SHN_UNDEF)
+          || (pElfFile->Header.r64.e_shstrndx >= pElfFile->Header.r64.e_shnum)
+          || (0U == pElfFile->arSectHead64[pElfFile->Header.r64.e_shstrndx].sh_size)
+           )
+    {
+        NXP_LOG_ERROR("ELF_Open: Section names not found\n");
+    }
+    else
+    {
+        *u32NamesSectionOffset = (uint32_t)pElfFile->arSectHead64[pElfFile->Header.r64.e_shstrndx].sh_offset;
+        *u32NamesSectionSize = (uint32_t)pElfFile->arSectHead64[pElfFile->Header.r64.e_shstrndx].sh_size;
+        bRetVal = TRUE;
+    }
+#else  /* ELF_CFG_SECTION_TABLE_USED */
+    else
+    {
+        bRetVal = TRUE;
+    }
+#endif /* ELF_CFG_SECTION_TABLE_USED */
+
+    return bRetVal;
+}
+
 /*================================================================================================*/
 static void ELF64_ProgTabSwitchEndianness(Elf64_Phdr *arProgHead64, uint32_t u32NumItems)
 {
     uint32_t u32Idx;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == arProgHead64))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
+    if (unlikely(NULL == arProgHead64))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     for(u32Idx=0U; u32Idx<u32NumItems; u32Idx++)
@@ -922,11 +1013,11 @@ static void ELF64_SectTabSwitchEndianness(Elf64_Shdr *arSectHead64, uint32_t u32
     uint32_t u32Idx;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == arSectHead64))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
+    if (unlikely(NULL == arSectHead64))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     for(u32Idx=0U; u32Idx<u32NumItems; u32Idx++)
@@ -1000,7 +1091,7 @@ static bool_t ELF64_ProgSectFindNext( ELF_File_t *pElfFile, uint32_t *pu32ProgId
 }
 
 /*================================================================================================*/
-static bool_t ELF64_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx,
+static bool_t ELF64_ProgSectLoad(const ELF_File_t *pElfFile, uint32_t u32ProgIdx,
                                    addr_t AccessAddr, addr_t AllocSize
                                  )
 {
@@ -1016,7 +1107,7 @@ static bool_t ELF64_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx,
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     if (u32ProgIdx >= pElfFile->Header.r64.e_phnum)
     {
-        NXP_LOG_ERROR("ELF64_ProgSectLoad: Invalid program index: %u\n", u32ProgIdx);
+        NXP_LOG_ERROR("ELF64_ProgSectLoad: Invalid program index: %u\n", (uint_t)u32ProgIdx);
     }
     else if ((uint32_t)PT_LOAD != pElfFile->arProgHead64[u32ProgIdx].p_type)
     {
@@ -1064,7 +1155,7 @@ static bool_t ELF64_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx,
         {
             if (sizeof(addr_t) < sizeof(uint64_t))
             {
-                    NXP_LOG_WARNING("ELF64_ProgSectLoad: addr_t size is not sufficient (%u < %u)", (uint32_t)sizeof(addr_t), (uint32_t)sizeof(uint64_t));
+                    NXP_LOG_WARNING("ELF64_ProgSectLoad: addr_t size is not sufficient (%u < %u)", (uint_t)sizeof(addr_t), (uint_t)sizeof(uint64_t));
             }
 
             (void)memset((void *)(AccessAddr + (addr_t)pElfFile->arProgHead64[u32ProgIdx].p_filesz),
@@ -1128,7 +1219,7 @@ static bool_t ELF64_SectFindName(const ELF_File_t *pElfFile, const char_t *szSec
 }
 
 /*================================================================================================*/
-static bool_t ELF64_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t AccessAddr, addr_t AllocSize)
+static bool_t ELF64_SectLoad(const ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t AccessAddr, addr_t AllocSize)
 {
     bool_t bSuccess = FALSE;
 
@@ -1142,7 +1233,7 @@ static bool_t ELF64_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t A
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     if (u32SectIdx >= pElfFile->Header.r64.e_shnum)
     {
-        NXP_LOG_ERROR("ELF64_SectLoad: Invalid section index: %u\n", u32SectIdx);
+        NXP_LOG_ERROR("ELF64_SectLoad: Invalid section index: %u\n", (uint_t)u32SectIdx);
     }
     else if (AllocSize < pElfFile->arSectHead64[u32SectIdx].sh_size)
     {
@@ -1179,7 +1270,7 @@ static bool_t ELF64_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t A
 
 #if TRUE == ELF_CFG_SECTION_PRINT_ENABLED
 /*================================================================================================*/
-static void ELF64_PrintSections(ELF_File_t *pElfFile)
+static void ELF64_PrintSections(const ELF_File_t *pElfFile)
 {
 #ifdef NXP_LOG_ENABLED /*  Debug message support */
     uint32_t SectIdx;
@@ -1252,8 +1343,8 @@ static void ELF64_PrintSections(ELF_File_t *pElfFile)
             }
 
             /* Print program header data */
-            NXP_LOG_INFO("%d %s 0x%016"PRINT64"x 0x%016"PRINT64"x 0x%016"PRINT64"x 0x%016"PRINT64"x 0x%016"PRINT64"x",
-                ProgIdx,
+            NXP_LOG_INFO("%u %s 0x%016"PRINT64"x 0x%016"PRINT64"x 0x%016"PRINT64"x 0x%016"PRINT64"x 0x%016"PRINT64"x",
+                (uint_t)ProgIdx,
                         aacPTypes[u32Type],
                         pElfFile->arProgHead64[ProgIdx].p_offset,
                         pElfFile->arProgHead64[ProgIdx].p_filesz,
@@ -1279,15 +1370,15 @@ static void ELF64_PrintSections(ELF_File_t *pElfFile)
 static uint32_t buf_read(void *src_buf, uint32_t u32FileSize, uint32_t u32Offset, void *dst_buf, uint32_t nbytes)
 {
     uint32_t u32i = 0;
-    uint8_t *pu8src = (uint8_t *)((addr_t)src_buf + u32Offset);
+    const uint8_t *pu8src = (uint8_t *)((addr_t)src_buf + u32Offset);
     uint8_t *pu8dst = (uint8_t *)dst_buf;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == src_buf) || (NULL == dst_buf)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return 0;
-	}
+    if (unlikely((NULL == src_buf) || (NULL == dst_buf)))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return 0;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     for (u32i = 0U; u32i < nbytes; u32i++)
@@ -1303,6 +1394,70 @@ static uint32_t buf_read(void *src_buf, uint32_t u32FileSize, uint32_t u32Offset
         pu8src++;
     }
     return u32i;
+}
+
+static bool_t ELF_LoadTables(ELF_File_t *pElfFile, uint32_t *u32NamesSectionOffset, uint32_t *u32NamesSectionSize)
+{
+    bool_t bRetVal = FALSE;
+    bool_t    bIsCrosEndian;
+    ELF_Endian_t NativeEndian = GetLocalEndian();
+    ELF_Endian_t BinaryEndian;
+
+    /* Check Endianness */
+    BinaryEndian = ELF_IsLittleEndian(pElfFile) ? ELF_Endian_Little : ELF_Endian_Big;
+    bIsCrosEndian = (BinaryEndian == NativeEndian) ? FALSE : TRUE;
+    NXP_LOG_INFO("ELF_Open: File format: %s\n", pElfFile->bIs64Bit ? "Elf64" : "Elf32");
+    NXP_LOG_INFO("ELF_Open: File endian: %s (%s)\n",
+              bIsCrosEndian ? "Alien" : "Native",
+              (BinaryEndian==ELF_Endian_Little) ? "Little" : "Big"
+            );
+
+    if (TRUE == pElfFile->bIs64Bit)
+    {   /* Loading 64-bit ELF */
+#if TRUE == ELF_CFG_ELF64_SUPPORTED
+        bRetVal = ELF64_Load(bIsCrosEndian, pElfFile, u32NamesSectionOffset, u32NamesSectionSize);
+#else /* ELF_CFG_ELF64_SUPPORTED */
+        NXP_LOG_ERROR("Support for Elf64 was not compiled\n");
+#endif /* ELF_CFG_ELF64_SUPPORTED */
+    }
+    else
+    {   /* Loading 32-bit ELF */
+#if TRUE == ELF_CFG_ELF32_SUPPORTED
+        bRetVal = ELF32_Load(bIsCrosEndian, pElfFile, u32NamesSectionOffset, u32NamesSectionSize);
+#else /* ELF_CFG_ELF32_SUPPORTED */
+        NXP_LOG_ERROR("Support for Elf32 was not compiled\n");
+#endif /* ELF_CFG_ELF32_SUPPORTED */
+    }
+
+    return bRetVal;
+}
+/*================================================================================================*/
+static void ELF_FreePtr(ELF_File_t *pElfFile)
+{
+    if (NULL != pElfFile->arProgHead64)
+    {
+        pElfFile->arProgHead64 = NULL;
+    }
+    if (NULL != pElfFile->arSectHead64)
+    {
+        pElfFile->arSectHead64 = NULL;
+    }
+    if (NULL != pElfFile->arProgHead32)
+    {
+        pElfFile->arProgHead32 = NULL;
+    }
+    if (NULL != pElfFile->arSectHead32)
+    {
+        pElfFile->arSectHead32 = NULL;
+    }
+    if (NULL != pElfFile->acSectNames)
+    {
+        pElfFile->acSectNames = NULL;
+    }
+    if (NULL != pElfFile->pvData)
+    {
+        pElfFile->pvData = NULL;
+    }
 }
 /*==================================================================================================
                                        GLOBAL FUNCTIONS
@@ -1320,18 +1475,15 @@ static uint32_t buf_read(void *src_buf, uint32_t u32FileSize, uint32_t u32Offset
 bool_t ELF_Open(ELF_File_t *pElfFile, void *pvFile, uint32_t u32FileSize)
 {
     bool_t    bRetVal = FALSE;
-    bool_t    bIsCrosEndian;
-    ELF_Endian_t NativeEndian = GetLocalEndian();
-    ELF_Endian_t BinaryEndian;
     uint32_t     u32NamesSectionOffset = 0U;
     uint32_t     u32NamesSectionSize = 0U;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == pElfFile) || (NULL == pvFile)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
+    if (unlikely((NULL == pElfFile) || (NULL == pvFile)))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return FALSE;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     /* Init File info */
@@ -1358,101 +1510,12 @@ bool_t ELF_Open(ELF_File_t *pElfFile, void *pvFile, uint32_t u32FileSize)
     }
     else /* So far SUCCESS */
     {
-    	pElfFile->pvData = pvFile;
+        pElfFile->pvData = pvFile;
         pElfFile->u32FileSize = u32FileSize;
         pElfFile->bIs64Bit = ELF_Is64bit(pElfFile);
         pElfFile->u32ProgScanIdx = 0U;
-        /* Check Endianness */
-        BinaryEndian = ELF_IsLittleEndian(pElfFile) ? ELF_Endian_Little : ELF_Endian_Big;
-        bIsCrosEndian = (BinaryEndian == NativeEndian) ? FALSE : TRUE;
-        NXP_LOG_INFO("ELF_Open: File format: %s\n", pElfFile->bIs64Bit ? "Elf64" : "Elf32");
-        NXP_LOG_INFO("ELF_Open: File endian: %s (%s)\n",
-                  bIsCrosEndian ? "Alien" : "Native",
-                  (BinaryEndian==ELF_Endian_Little) ? "Little" : "Big"
-                );
         /* Load tables */
-        if (TRUE == pElfFile->bIs64Bit)
-        {   /* Loading 64-bit ELF */
-    #if TRUE == ELF_CFG_ELF64_SUPPORTED
-            if (bIsCrosEndian)
-            {
-                ELF64_HeaderSwitchEndianness(&(pElfFile->Header.r64));
-            }
-            if ((uint16_t)ELF_Type_Executable != pElfFile->Header.r64.e_type)
-            {
-                NXP_LOG_ERROR("ELF_Open: Only executable ELFs are supported\n");
-            }
-            else if (FALSE == ELF64_LoadTables(pElfFile, bIsCrosEndian))
-            {
-                NXP_LOG_ERROR("ELF_Open: Failed to load tables\n");
-            }
-            /* Endianness is now solved in all tables */
-        #if TRUE == ELF_CFG_SECTION_TABLE_USED
-            /* Look for section names section */
-            else if ((pElfFile->Header.r64.e_shstrndx == SHN_UNDEF)
-                  || (pElfFile->Header.r64.e_shstrndx >= pElfFile->Header.r64.e_shnum)
-                  || (0U == pElfFile->arSectHead64[pElfFile->Header.r64.e_shstrndx].sh_size)
-                   )
-            {
-                NXP_LOG_ERROR("ELF_Open: Section names not found\n");
-            }
-            else
-            {
-                u32NamesSectionOffset = (uint32_t)pElfFile->arSectHead64[pElfFile->Header.r64.e_shstrndx].sh_offset;
-                u32NamesSectionSize = (uint32_t)pElfFile->arSectHead64[pElfFile->Header.r64.e_shstrndx].sh_size;
-                bRetVal = TRUE;
-            }
-        #else  /* ELF_CFG_SECTION_TABLE_USED */
-            else
-            {
-                bRetVal = TRUE;
-            }
-        #endif /* ELF_CFG_SECTION_TABLE_USED */
-    #else /* ELF_CFG_ELF64_SUPPORTED */
-            NXP_LOG_ERROR("Support for Elf64 was not compiled\n");
-    #endif /* ELF_CFG_ELF64_SUPPORTED */
-        }
-        else
-        {   /* Loading 32-bit ELF */
-    #if TRUE == ELF_CFG_ELF32_SUPPORTED
-            if (bIsCrosEndian)
-            {
-                ELF32_HeaderSwitchEndianness(&(pElfFile->Header.r32));
-            }
-            if ((uint16_t)ELF_Type_Executable != pElfFile->Header.r32.e_type)
-            {
-                NXP_LOG_ERROR("ELF_Open: Only executable ELFs are supported\n");
-            }
-            else if (FALSE == ELF32_LoadTables(pElfFile, bIsCrosEndian))
-            {
-                NXP_LOG_ERROR("ELF_Open: Failed to load tables\n");
-            }
-            /* Endianness is now solved in all tables */
-        #if TRUE == ELF_CFG_SECTION_TABLE_USED
-            /* Look for section names section */
-            else if ((pElfFile->Header.r32.e_shstrndx == SHN_UNDEF)
-                  || (pElfFile->Header.r32.e_shstrndx >= pElfFile->Header.r32.e_shnum)
-                  || (0U == pElfFile->arSectHead32[pElfFile->Header.r32.e_shstrndx].sh_size)
-                   )
-            {
-                NXP_LOG_ERROR("ELF_Open: Section names not found\n");
-            }
-            else
-            {
-                u32NamesSectionOffset = pElfFile->arSectHead32[pElfFile->Header.r32.e_shstrndx].sh_offset;
-                u32NamesSectionSize = pElfFile->arSectHead32[pElfFile->Header.r32.e_shstrndx].sh_size;
-                bRetVal = TRUE;
-            }
-        #else  /* ELF_CFG_SECTION_TABLE_USED */
-            else
-            {
-                bRetVal = TRUE;
-            }
-        #endif /* ELF_CFG_SECTION_TABLE_USED */
-    #else /* ELF_CFG_ELF32_SUPPORTED */
-            NXP_LOG_ERROR("Support for Elf32 was not compiled\n");
-    #endif /* ELF_CFG_ELF32_SUPPORTED */
-        }
+        bRetVal = ELF_LoadTables(pElfFile, &u32NamesSectionOffset, &u32NamesSectionSize);
     }
 
     #if TRUE == ELF_CFG_SECTION_TABLE_USED
@@ -1478,30 +1541,7 @@ bool_t ELF_Open(ELF_File_t *pElfFile, void *pvFile, uint32_t u32FileSize)
     /* === Check overall status and possibly clean-up ================================= */
     if(FALSE == bRetVal)
     {   /* In case of failure free the memory now */
-        if (NULL != pElfFile->arProgHead64)
-        {
-            pElfFile->arProgHead64 = NULL;
-        }
-        if (NULL != pElfFile->arSectHead64)
-        {
-            pElfFile->arSectHead64 = NULL;
-        }
-        if (NULL != pElfFile->arProgHead32)
-        {
-            pElfFile->arProgHead32 = NULL;
-        }
-        if (NULL != pElfFile->arSectHead32)
-        {
-            pElfFile->arSectHead32 = NULL;
-        }
-        if (NULL != pElfFile->acSectNames)
-        {
-            pElfFile->acSectNames = NULL;
-        }
-        if (NULL != pElfFile->pvData)
-        {
-        	pElfFile->pvData = NULL;
-        }
+        ELF_FreePtr(pElfFile);
     }
 
     return bRetVal;
@@ -1514,38 +1554,46 @@ bool_t ELF_Open(ELF_File_t *pElfFile, void *pvFile, uint32_t u32FileSize)
 */
 void ELF_Close(ELF_File_t *pElfFile)
 {
+    bool_t    bIsCrosEndian;
+    ELF_Endian_t NativeEndian = GetLocalEndian();
+    ELF_Endian_t BinaryEndian;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == pElfFile))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
+    if (unlikely(NULL == pElfFile))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-    if (NULL != pElfFile->arProgHead64)
+    /* Check Endianness */
+    BinaryEndian = ELF_IsLittleEndian(pElfFile) ? ELF_Endian_Little : ELF_Endian_Big;
+    bIsCrosEndian = (BinaryEndian == NativeEndian) ? FALSE : TRUE;
+        
+    /* If cross endian, swap the header bytes again to revert the elf file to original,
+       so it can be used again in the next call of Eth_43_PFE_Init()  */
+    if (bIsCrosEndian)
     {
-        pElfFile->arProgHead64 = NULL;
+        if (TRUE == pElfFile->bIs64Bit)
+        {   
+            /* Loading 64-bit ELF */
+            #if TRUE == ELF_CFG_ELF64_SUPPORTED
+                /* Handle endianness */
+                ELF64_ProgTabSwitchEndianness(pElfFile->arProgHead64, pElfFile->Header.r64.e_phnum);
+                ELF64_SectTabSwitchEndianness(pElfFile->arSectHead64, pElfFile->Header.r64.e_shnum);
+            #endif  /* ELF_CFG_ELF64_SUPPORTED */
+        }
+        else
+        {
+            #if TRUE == ELF_CFG_ELF32_SUPPORTED
+                /* Handle endianness */
+                ELF32_ProgTabSwitchEndianness(pElfFile->arProgHead32, pElfFile->Header.r32.e_phnum);
+                ELF32_SectTabSwitchEndianness(pElfFile->arSectHead32, pElfFile->Header.r32.e_shnum);
+            #endif  /* ELF_CFG_ELF32_SUPPORTED */
+        }
     }
-    if (NULL != pElfFile->arSectHead64)
-    {
-        pElfFile->arSectHead64 = NULL;
-    }
-    if (NULL != pElfFile->arProgHead32)
-    {
-        pElfFile->arProgHead32 = NULL;
-    }
-    if (NULL != pElfFile->arSectHead32)
-    {
-        pElfFile->arSectHead32 = NULL;
-    }
-    if (NULL != pElfFile->acSectNames)
-    {
-        pElfFile->acSectNames = NULL;
-    }
-    if (NULL != pElfFile->pvData)
-	{
-		pElfFile->pvData = NULL;
-	}
+    
+    ELF_FreePtr(pElfFile);
 }
 
 #if TRUE == ELF_CFG_PROGRAM_TABLE_USED
@@ -1571,11 +1619,11 @@ bool_t ELF_ProgSectFindNext(ELF_File_t *pElfFile, uint32_t *pu32ProgIdx,
     bool_t bRetVal = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == pElfFile) || (NULL == pu32ProgIdx) || (NULL == pu64LoadVAddr) || (NULL == pu64LoadPAddr) || (NULL == pu64Length)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
+    if (unlikely((NULL == pElfFile) || (NULL == pu32ProgIdx) || (NULL == pu64LoadVAddr) || (NULL == pu64LoadPAddr) || (NULL == pu64Length)))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return FALSE;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     if (TRUE == pElfFile->bIs64Bit)
@@ -1603,16 +1651,16 @@ bool_t ELF_ProgSectFindNext(ELF_File_t *pElfFile, uint32_t *pu32ProgIdx,
 * @retval       TRUE Succeeded
 * @retval       FALSE Failed
 */
-bool_t ELF_ProgSectLoad(ELF_File_t *pElfFile, uint32_t u32ProgIdx, addr_t AccessAddr, addr_t AllocSize)
+bool_t ELF_ProgSectLoad(const ELF_File_t *pElfFile, uint32_t u32ProgIdx, addr_t AccessAddr, addr_t AllocSize)
 {
     bool_t bRetVal = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == pElfFile))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
+    if (unlikely(NULL == pElfFile))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return FALSE;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     if (0U != (ELF_NAMED_SECT_IDX_FLAG & u32ProgIdx))
@@ -1658,11 +1706,11 @@ bool_t ELF_SectFindName(const ELF_File_t *pElfFile, const char_t *szSectionName,
     bool_t bRetVal = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == pElfFile) || (NULL == szSectionName) || (NULL == pu32SectIdx)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
+    if (unlikely((NULL == pElfFile) || (NULL == szSectionName) || (NULL == pu32SectIdx)))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return FALSE;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     if (TRUE == pElfFile->bIs64Bit)
@@ -1678,6 +1726,9 @@ bool_t ELF_SectFindName(const ELF_File_t *pElfFile, const char_t *szSectionName,
         #endif /* ELF_CFG_ELF32_SUPPORTED */
     }
 
+    /* Set the highest bit in the index to make sure that this index is not used in wrong load function. */
+    *pu32SectIdx |= ELF_NAMED_SECT_IDX_FLAG; /* Safe since the ELF index is 16-bit only. */
+
     return bRetVal;
 }
 
@@ -1692,16 +1743,16 @@ bool_t ELF_SectFindName(const ELF_File_t *pElfFile, const char_t *szSectionName,
 * @retval       TRUE Succeeded
 * @retval       FALSE Failed
 */
-bool_t ELF_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t AccessAddr, addr_t AllocSize)
+bool_t ELF_SectLoad(const ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t AccessAddr, addr_t AllocSize)
 {
     bool_t bRetVal = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == pElfFile))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
+    if (unlikely(NULL == pElfFile))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return FALSE;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     if (0U == (ELF_NAMED_SECT_IDX_FLAG & u32SectIdx))
@@ -1733,14 +1784,14 @@ bool_t ELF_SectLoad(ELF_File_t *pElfFile, uint32_t u32SectIdx, addr_t AccessAddr
 *               loading. Disable this function in configuration if it is not needed.
 * @param[in]    pElfFile Structure holding all informations about opened ELF file.
 */
-void ELF_PrintSections(ELF_File_t *pElfFile)
+void ELF_PrintSections(const ELF_File_t *pElfFile)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == pElfFile))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
+    if (unlikely(NULL == pElfFile))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return;
+    }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
     if (TRUE == pElfFile->bIs64Bit)

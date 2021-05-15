@@ -11,6 +11,7 @@
 
 #include "fci_fp_db.h"
 #include "pfe_fp.h"
+#include "fci.h"
 
 
 typedef struct fci_fp_table_tag fci_fp_table_t;
@@ -1382,3 +1383,50 @@ uint32_t fci_fp_print_tables(char_t *buf, uint32_t buf_len, uint8_t verb_level)
     }
     return len;
 }
+
+uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+{
+    fci_fp_table_t *table;
+    pfe_ct_class_flexi_parser_stats_t *c_stats; 
+    LLIST_t *item;
+    uint32_t len = 0U;
+    uint32_t pe_idx = 0U;
+
+    LLIST_ForEach(item, &fci_fp_table_db.tables)
+    {
+        table = LLIST_Data(item,  fci_fp_table_t, db_entry);
+        len += oal_util_snprintf(buf + len, buf_len - len, "%s = {\n", table->name);
+        if (table->dmem_addr != 0)
+        {
+            c_stats = oal_mm_malloc(sizeof(pfe_ct_class_flexi_parser_stats_t) * (pfe_class_get_num_of_pes(table->class) + 1U));
+            if(NULL == c_stats)
+            {
+                NXP_LOG_ERROR("Memory allocation failed\n");
+                oal_mm_free(c_stats);
+                return len;
+            }
+
+            (void)memset(c_stats, 0, sizeof(pfe_ct_class_flexi_parser_stats_t) * (pfe_class_get_num_of_pes(table->class) + 1U));
+
+            for(pe_idx = 0U; pe_idx < pfe_class_get_num_of_pes(table->class); pe_idx++)
+            {
+                pfe_fp_table_get_statistics(table->class, pe_idx, table->dmem_addr, &c_stats[pe_idx +1]);
+                pfe_class_flexi_parser_stats_endian(&c_stats[pe_idx + 1]);
+                pfe_class_sum_flexi_parser_stats(&c_stats[0], &c_stats[pe_idx + 1]);
+            }
+
+            len += pfe_class_fp_stat_to_str(&c_stats[0U], buf + len, buf_len - len, verb_level);
+
+            oal_mm_free(c_stats);
+        }
+        else
+        {
+            len += oal_util_snprintf(buf + len, buf_len - len, "Table not enabled in Firmware\n");
+        }
+
+        len += oal_util_snprintf(buf + len, buf_len - len, "\n}\n");
+    }
+
+    return len;
+}
+

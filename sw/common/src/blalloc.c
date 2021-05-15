@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -191,7 +191,7 @@ blalloc_t *blalloc_create(size_t size, size_t chunk_size)
 	if(0U == (size >> chunk_size))
 	{   /* Memory not large enough to contain at least 1 chunk */
 		NXP_LOG_ERROR("Size of memory is less than a chunk\n");
-		goto size_error;
+		return NULL;
 	}
 
 	/* Allocate memory for internal structure + array of bytes which will have
@@ -201,7 +201,7 @@ blalloc_t *blalloc_create(size_t size, size_t chunk_size)
 	if(NULL == ctx)
 	{   /* Memory allocation failure */
 		NXP_LOG_ERROR("Failed to allocate memory\n");
-		goto alloc_error;
+		return NULL;
 	}
 
 	/* Clear the whole context */
@@ -216,18 +216,13 @@ blalloc_t *blalloc_create(size_t size, size_t chunk_size)
 
 	if(EOK != blalloc_init(ctx))
 	{
-		goto the_end;
+		oal_mm_free(ctx);
+		return NULL;
 	}
 
 	ctx->status = BL_DYNAMIC;
 
 	return ctx;
-
-the_end:
-	oal_mm_free(ctx);
-alloc_error:
-size_error:
-	return NULL;
 }
 
 /**
@@ -476,7 +471,7 @@ void blalloc_free_offs(blalloc_t *ctx, addr_t offset)
 * @param[in] verb_level Verbosity lever
 * @return Number of characters written into the buffer.
 */
-uint32_t blalloc_get_text_statistics(blalloc_t *ctx, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t blalloc_get_text_statistics(const blalloc_t *ctx, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint_t i, j;               /* Counters */
 	uint_t prev = 0U;          /* Did the used chunk precede this chunk? 1 = yes */

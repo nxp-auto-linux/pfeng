@@ -17,8 +17,8 @@ struct pfe_fw_feature_tag
 {
     pfe_ct_feature_desc_t *ll_data;
     const char *string_base;
-    dmem_rw_func_t dmem_read_func;
-    dmem_rw_func_t dmem_write_func;
+    dmem_read_func_t dmem_read_func;
+    dmem_write_func_t dmem_write_func;
     void *dmem_rw_func_data;  
 };
 
@@ -32,11 +32,11 @@ pfe_fw_feature_t *pfe_fw_feature_create(void)
     feature = oal_mm_malloc(sizeof(pfe_fw_feature_t));
     if(NULL != feature)
     {
-        memset(feature, 0U, sizeof(pfe_fw_feature_t));
+        (void)memset(feature, 0U, sizeof(pfe_fw_feature_t));
     }
     else
     {
-        NXP_LOG_ERROR("Cannot allocate %u bytes of memory for feature\n", (uint32_t)sizeof(pfe_fw_feature_t));
+        NXP_LOG_ERROR("Cannot allocate %u bytes of memory for feature\n", (uint_t)sizeof(pfe_fw_feature_t));
     }
     return feature;
 }
@@ -45,7 +45,7 @@ pfe_fw_feature_t *pfe_fw_feature_create(void)
  * @brief Destroys a feature instance previously created by pfe_fw_feature_create()
  * @param[in] feature Previously created feature
  */
-void pfe_fw_feature_destroy(pfe_fw_feature_t *feature)
+void pfe_fw_feature_destroy(const pfe_fw_feature_t *feature)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == feature))
@@ -106,7 +106,7 @@ errno_t pfe_fw_feature_set_string_base(pfe_fw_feature_t *feature, const char *st
  * @param[in] data Class/Util reference used by read_func/write_func.
  * @return EOK or an error code.
  */
-errno_t pfe_fw_feature_set_dmem_funcs(pfe_fw_feature_t *feature, dmem_rw_func_t read_func, dmem_rw_func_t write_func, void *data)
+errno_t pfe_fw_feature_set_dmem_funcs(pfe_fw_feature_t *feature, dmem_read_func_t read_func, dmem_write_func_t write_func, void *data)
 {    
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == feature)||
@@ -130,7 +130,7 @@ errno_t pfe_fw_feature_set_dmem_funcs(pfe_fw_feature_t *feature, dmem_rw_func_t 
  * @param[out] name The feature name to be read.
  * @return EOK or an error code. 
  */
-errno_t pfe_fw_feature_get_name(pfe_fw_feature_t *feature, const char **name)
+errno_t pfe_fw_feature_get_name(const pfe_fw_feature_t *feature, const char **name)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == feature)||(NULL == name)))
@@ -150,7 +150,7 @@ errno_t pfe_fw_feature_get_name(pfe_fw_feature_t *feature, const char **name)
  * @param[out] desc Descripton of the feature
  * @return EOK or an error code. 
  */
-errno_t pfe_fw_feature_get_desc(pfe_fw_feature_t *feature, const char **desc)
+errno_t pfe_fw_feature_get_desc(const pfe_fw_feature_t *feature, const char **desc)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == feature)||(NULL ==desc)))
@@ -171,7 +171,7 @@ errno_t pfe_fw_feature_get_desc(pfe_fw_feature_t *feature, const char **desc)
  * @return EOK or an error code. 
  * @details The variants are always disabled (0), always enabled (1), configured by driver (2).
  */
-errno_t pfe_fw_feature_get_variant(pfe_fw_feature_t *feature, uint8_t *variant)
+errno_t pfe_fw_feature_get_variant(const pfe_fw_feature_t *feature, uint8_t *variant)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == feature)||(NULL==variant)))
@@ -191,7 +191,7 @@ errno_t pfe_fw_feature_get_variant(pfe_fw_feature_t *feature, uint8_t *variant)
  * @param[out] def_val The read default value.
  * @return EOK or an error code.
  */
-errno_t pfe_fw_feature_get_def_val(pfe_fw_feature_t *feature, uint8_t *def_val)
+errno_t pfe_fw_feature_get_def_val(const pfe_fw_feature_t *feature, uint8_t *def_val)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == feature)||(NULL == def_val)))
@@ -211,7 +211,7 @@ errno_t pfe_fw_feature_get_def_val(pfe_fw_feature_t *feature, uint8_t *def_val)
  * @param[out] val Value read from the DMEM
  * @return EOK or an error code. 
  */
-errno_t pfe_fw_feature_get_val(pfe_fw_feature_t *feature, uint8_t *val)
+errno_t pfe_fw_feature_get_val(const pfe_fw_feature_t *feature, uint8_t *val)
 {
 	 errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -221,7 +221,7 @@ errno_t pfe_fw_feature_get_val(pfe_fw_feature_t *feature, uint8_t *val)
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */  
-    ret = feature->dmem_read_func(feature->dmem_rw_func_data, 0U, val, (void *)(addr_t)oal_ntohl(feature->ll_data->position), sizeof(uint8_t));
+    ret = feature->dmem_read_func(feature->dmem_rw_func_data, 0U, val, (addr_t)oal_ntohl(feature->ll_data->position), sizeof(uint8_t));
     return ret;
     
 }
@@ -232,10 +232,10 @@ errno_t pfe_fw_feature_get_val(pfe_fw_feature_t *feature, uint8_t *val)
  * @retval TRUE Feature is enabled (the enable variable value is not 0)
  * @retval FALSE Feature is disable (or its state could not be read)
  */
-bool_t pfe_fw_feature_enabled(pfe_fw_feature_t *feature)
+bool_t pfe_fw_feature_enabled(const pfe_fw_feature_t *feature)
 {
-    uint8_t val;
-    errno_t ret;
+	uint8_t val;
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == feature))
 	{
@@ -244,10 +244,16 @@ bool_t pfe_fw_feature_enabled(pfe_fw_feature_t *feature)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */  
 
-    ret = pfe_fw_feature_get_val(feature, &val);
-    if(EOK != ret) return FALSE;
-    if(0 != val) return TRUE;
-    return FALSE;
+	ret = pfe_fw_feature_get_val(feature, &val);
+	if(EOK != ret) 
+	{
+		return FALSE;
+	}
+	if(0U != val)
+	{
+		return TRUE;
+	}
+	return FALSE;
 }
 
 /**
@@ -256,9 +262,10 @@ bool_t pfe_fw_feature_enabled(pfe_fw_feature_t *feature)
  * @param[in] val Value to be set
  * @return EOK or an error code.
  */
-errno_t pfe_fw_feature_set_val(pfe_fw_feature_t *feature, uint8_t val)
+errno_t pfe_fw_feature_set_val(const pfe_fw_feature_t *feature, uint8_t val)
 {
 	 errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == feature))
 	{
@@ -266,8 +273,6 @@ errno_t pfe_fw_feature_set_val(pfe_fw_feature_t *feature, uint8_t val)
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */  
-    ret = feature->dmem_write_func(feature->dmem_rw_func_data, -1, (void *)(addr_t)oal_ntohl(feature->ll_data->position), &val, sizeof(uint8_t));
-    return ret;
-    
+	ret = feature->dmem_write_func(feature->dmem_rw_func_data, -1, (addr_t)oal_ntohl(feature->ll_data->position), (void *)&val, sizeof(uint8_t));
+	return ret;
 }
-

@@ -61,12 +61,12 @@
 /*==================================================================================================
                                        DEFINES AND MACROS
 ==================================================================================================*/
-#define ELF_NIDENT      16U
-
+#define ELF_NIDENT                  16U
+#define ELF_NAMED_SECT_IDX_FLAG     0x80000000U
 /*==================================================================================================
                                              ENUMS
 ==================================================================================================*/
-enum Elf_Ident
+enum
 {
     EI_MAG0         = 0, /* 0x7F */
     EI_MAG1         = 1, /* 'E' */
@@ -81,7 +81,7 @@ enum Elf_Ident
 };
 
 /* any section that is of type SHT_NOBITS and has the attribute SHF_ALLOC should be allocated */
-enum ShT_Types
+enum
 {
     SHT_NULL      = 0U,   /* Null section */
     SHT_PROGBITS  = 1U,   /* Program information */
@@ -92,7 +92,7 @@ enum ShT_Types
     SHT_REL       = 9U,   /* Relocation (no addend) */
 };
 
-enum ShT_Attributes
+enum
 {
     SHF_WRITE = 0x1, /* Writable */
     SHF_ALLOC = 0x2, /* Occupies memory during execution */
@@ -133,7 +133,7 @@ typedef uint32_t Elf32_Addr;    /* Unsigned address */
 typedef uint64_t Elf64_Off;     /* Unsigned offset */
 typedef uint64_t Elf64_Addr;    /* Unsigned address */
 
-typedef struct
+typedef struct __attribute__((packed))
 {
     uint8_t     e_ident[ELF_NIDENT];
     uint16_t    e_type;
@@ -150,7 +150,7 @@ typedef struct
     uint16_t    e_shnum;
     uint16_t    e_shstrndx;
 } Elf32_Ehdr;
-typedef struct
+typedef struct __attribute__((packed))
 {
     uint8_t     e_ident[ELF_NIDENT];
     uint16_t    e_type;
@@ -168,7 +168,7 @@ typedef struct
     uint16_t    e_shstrndx;
 } Elf64_Ehdr;
 
-typedef struct
+typedef struct __attribute__((packed))
 {
     uint32_t   p_type;
     Elf32_Off  p_offset;
@@ -179,7 +179,7 @@ typedef struct
     uint32_t   p_flags;
     uint32_t   p_align;
 } Elf32_Phdr;
-typedef struct
+typedef struct __attribute__((packed))
 {
     uint32_t   p_type;
     uint32_t   p_flags;
@@ -191,7 +191,7 @@ typedef struct
     uint64_t   p_align;
 } Elf64_Phdr;
 
-typedef struct
+typedef struct __attribute__((packed))
 {
     uint32_t   sh_name;
     uint32_t   sh_type;
@@ -204,7 +204,7 @@ typedef struct
     uint32_t   sh_addralign;
     uint32_t   sh_entsize;
 } Elf32_Shdr;
-typedef struct
+typedef struct __attribute__((packed))
 {
     uint32_t   sh_name;
     uint32_t   sh_type;
@@ -251,7 +251,7 @@ extern void ELF_Close(ELF_File_t *pElfFile);
     extern bool_t ELF_ProgSectFindNext( ELF_File_t *pElfFile, uint32_t *pu32ProgIdx,
                                          uint64_t *pu64LoadVAddr, uint64_t *pu64LoadPAddr, uint64_t *pu64Length
                                        );
-    extern bool_t ELF_ProgSectLoad( ELF_File_t *pElfFile,
+    extern bool_t ELF_ProgSectLoad( const ELF_File_t *pElfFile,
                                      uint32_t u32ProgIdx, addr_t AccessAddr, addr_t AllocSize
                                    );
 #endif
@@ -260,13 +260,13 @@ extern void ELF_Close(ELF_File_t *pElfFile);
     extern bool_t ELF_SectFindName( const ELF_File_t *pElfFile, const char_t *szSectionName,
                                      uint32_t *pu32SectIdx, uint64_t *pu64LoadAddr, uint64_t *pu64Length
                                    );
-    extern bool_t ELF_SectLoad( ELF_File_t *pElfFile,
+    extern bool_t ELF_SectLoad( const ELF_File_t *pElfFile,
                                  uint32_t u32SectIdx, addr_t AccessAddr, addr_t AllocSize
                                );
 #endif
 
 #if TRUE == ELF_CFG_SECTION_PRINT_ENABLED
-    extern void ELF_PrintSections(ELF_File_t *pElfFile);
+    extern void ELF_PrintSections(const ELF_File_t *pElfFile);
 #endif
 
 /*==================================================================================================
@@ -277,7 +277,7 @@ extern void ELF_Close(ELF_File_t *pElfFile);
 * @param[in]    pElfFile Structure holding all informations about opened ELF file.
 * @return       The entry point address
 */
-static inline uint64_t ELF_GetEntryPoint(ELF_File_t *pElfFile)
+static inline uint64_t ELF_GetEntryPoint(const ELF_File_t *pElfFile)
 {
     uint64_t u64Addr;
     if(TRUE == pElfFile->bIs64Bit)
@@ -307,7 +307,7 @@ static inline void ELF_ProgSectSearchReset(ELF_File_t *pElfFile)
 * @retval       TRUE It is 64bit ELF
 * @retval       FALSE It is 32bit ELF
 */
-static inline bool_t ELF_Is64bit(ELF_File_t *pElfFile)
+static inline bool_t ELF_Is64bit(const ELF_File_t *pElfFile)
 {
     return (2U == pElfFile->Header.e_ident[EI_CLASS]) ? TRUE : FALSE;
 }
@@ -317,7 +317,7 @@ static inline bool_t ELF_Is64bit(ELF_File_t *pElfFile)
 * @retval       TRUE It is 32bit ELF
 * @retval       FALSE It is 64bit ELF
 */
-static inline bool_t ELF_Is32bit(ELF_File_t *pElfFile)
+static inline bool_t ELF_Is32bit(const ELF_File_t *pElfFile)
 {
     return (1U == pElfFile->Header.e_ident[EI_CLASS]) ? TRUE : FALSE;
 }
@@ -327,7 +327,7 @@ static inline bool_t ELF_Is32bit(ELF_File_t *pElfFile)
 * @retval       TRUE It is BIG endian ELF
 * @retval       FALSE It is LITTLE endian ELF
 */
-static inline bool_t ELF_IsBigEndian(ELF_File_t *pElfFile)
+static inline bool_t ELF_IsBigEndian(const ELF_File_t *pElfFile)
 {
     return (2U == pElfFile->Header.e_ident[EI_DATA]) ? TRUE : FALSE;
 }
@@ -337,7 +337,7 @@ static inline bool_t ELF_IsBigEndian(ELF_File_t *pElfFile)
 * @retval       TRUE It is LITTLE endian ELF
 * @retval       FALSE It is BIG endian ELF
 */
-static inline bool_t ELF_IsLittleEndian(ELF_File_t *pElfFile)
+static inline bool_t ELF_IsLittleEndian(const ELF_File_t *pElfFile)
 {
     return (1U == pElfFile->Header.e_ident[EI_DATA]) ? TRUE : FALSE;
 }
@@ -348,7 +348,7 @@ static inline bool_t ELF_IsLittleEndian(ELF_File_t *pElfFile)
 * @retval       TRUE ELF architecture matches given value.
 * @retval       FALSE ELF targets different architecture.
 */
-static inline bool_t ELF_IsArchitecture(ELF_File_t *pElfFile, ELF_Arch_t eArch)
+static inline bool_t ELF_IsArchitecture(const ELF_File_t *pElfFile, ELF_Arch_t eArch)
 {
     bool_t bRetVal;
     if(TRUE == pElfFile->bIs64Bit)

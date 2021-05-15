@@ -17,18 +17,18 @@
 
 struct pfe_wdt_tag
 {
-	void *cbus_base_va;
-	void *wdt_base_offset;
-	void *wdt_base_va;
+	addr_t cbus_base_va;
+	addr_t wdt_base_offset;
+	addr_t wdt_base_va;
 	oal_mutex_t lock;
 };
 
-pfe_wdt_t *pfe_wdt_create(void *cbus_base_va, void *wdt_base)
+pfe_wdt_t *pfe_wdt_create(addr_t cbus_base_va, addr_t wdt_base)
 {
 	pfe_wdt_t *wdt;
 
 #if defined(GLOBAL_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == cbus_base_va))
+	if (unlikely(NULL_ADDR == cbus_base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -46,7 +46,7 @@ pfe_wdt_t *pfe_wdt_create(void *cbus_base_va, void *wdt_base)
 		(void)memset(wdt, 0, sizeof(pfe_wdt_t));
 		wdt->cbus_base_va = cbus_base_va;
 		wdt->wdt_base_offset = wdt_base;
-		wdt->wdt_base_va = (void *)((addr_t)wdt->cbus_base_va + (addr_t)wdt->wdt_base_offset);
+		wdt->wdt_base_va = (wdt->cbus_base_va + wdt->wdt_base_offset);
 
 		/*	Resource protection */
 		if (EOK != oal_mutex_init(&wdt->lock))
@@ -189,7 +189,7 @@ void pfe_wdt_irq_unmask(pfe_wdt_t * wdt)
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_wdt_get_text_statistics(pfe_wdt_t *wdt, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_wdt_get_text_statistics(const pfe_wdt_t *wdt, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 

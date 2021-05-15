@@ -142,11 +142,21 @@ typedef struct __pfe_l2br_list_entry_tag
  * @details	Driver is sending signals to the worker thread to request specific
  * 			operations.
  */
-enum pfe_rtable_worker_signals
+enum pfe_l2br_worker_signals
 {
 	SIG_WORKER_STOP,	/*!< Stop the thread */
 	SIG_TIMER_TICK		/*!< Pulse from timer */
 };
+
+/**
+ * @brief	MAC table flush types
+ */
+typedef enum
+{
+	PFE_L2BR_FLUSH_ALL,
+	PFE_L2BR_FLUSH_STATIC,
+	PFE_L2BR_FLUSH_LEARNED
+} pfe_l2br_flush_types;
 
 static errno_t pfe_bd_write_to_class(pfe_l2br_t *bridge, uint32_t base, pfe_ct_bd_entry_t *class_entry);
 static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain);
@@ -176,9 +186,8 @@ static errno_t pfe_bd_write_to_class(pfe_l2br_t *bridge, uint32_t base, pfe_ct_b
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_class_write_dmem(bridge->class, -1, (void *)(addr_t)base, class_entry, sizeof(pfe_ct_bd_entry_t));
+	return pfe_class_write_dmem(bridge->class, -1, (addr_t)base, (void *)class_entry, sizeof(pfe_ct_bd_entry_t));
 }
-
 
 static void pfe_l2br_update_hw_ll_entry(pfe_l2br_domain_t *domain, uint32_t base)
 {
@@ -225,9 +234,7 @@ static void pfe_l2br_update_hw_ll_entry(pfe_l2br_domain_t *domain, uint32_t base
 	{
 		NXP_LOG_DEBUG("Class memory write failed\n");
 	}
-
 }
-
 
 /**
  * @brief		Update HW entry according to domain setup
@@ -369,12 +376,12 @@ errno_t pfe_l2br_domain_create(pfe_l2br_t *bridge, uint16_t vlan)
 				goto free_and_fail;
 			}
 
-			domain->action_data.forward_list = 0U;
-			domain->action_data.untag_list = 0U;
-			domain->action_data.ucast_hit_action = L2BR_ACT_DISCARD;
-			domain->action_data.ucast_miss_action = L2BR_ACT_DISCARD;
-			domain->action_data.mcast_hit_action = L2BR_ACT_DISCARD;
-			domain->action_data.mcast_miss_action = L2BR_ACT_DISCARD;
+			domain->action_data.item.forward_list = 0U;
+			domain->action_data.item.untag_list = 0U;
+			domain->action_data.item.ucast_hit_action = L2BR_ACT_DISCARD;
+			domain->action_data.item.ucast_miss_action = L2BR_ACT_DISCARD;
+			domain->action_data.item.mcast_hit_action = L2BR_ACT_DISCARD;
+			domain->action_data.item.mcast_miss_action = L2BR_ACT_DISCARD;
 
 			/*	Set action data */
 			ret = pfe_l2br_table_entry_set_action_data(domain->vlan_entry, domain->action_data_u64val);
@@ -617,12 +624,12 @@ static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
 		NXP_LOG_INFO("Fall-back bridge domain @ 0x%x (class)\n", bridge->dmem_fb_bd_base);
 		NXP_LOG_INFO("Default bridge domain @ 0x%x (class)\n", bridge->dmem_def_bd_base);
 
-		domain->action_data.forward_list = 0U;
-		domain->action_data.untag_list = 0U;
-		domain->action_data.ucast_hit_action = L2BR_ACT_DISCARD;
-		domain->action_data.ucast_miss_action = L2BR_ACT_DISCARD;
-		domain->action_data.mcast_hit_action = L2BR_ACT_DISCARD;
-		domain->action_data.mcast_miss_action = L2BR_ACT_DISCARD;
+		domain->action_data.item.forward_list = 0U;
+		domain->action_data.item.untag_list = 0U;
+		domain->action_data.item.ucast_hit_action = L2BR_ACT_DISCARD;
+		domain->action_data.item.ucast_miss_action = L2BR_ACT_DISCARD;
+		domain->action_data.item.mcast_hit_action = L2BR_ACT_DISCARD;
+		domain->action_data.item.mcast_miss_action = L2BR_ACT_DISCARD;
 
 		if (EOK != pfe_l2br_update_hw_entry(domain))
 		{
@@ -666,8 +673,8 @@ errno_t pfe_l2br_domain_set_ucast_action(pfe_l2br_domain_t *domain, pfe_ct_l2br_
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	domain->action_data.ucast_hit_action = hit;
-	domain->action_data.ucast_miss_action = miss;
+	domain->action_data.item.ucast_hit_action = hit;
+	domain->action_data.item.ucast_miss_action = miss;
 
 	return pfe_l2br_update_hw_entry(domain);
 }
@@ -689,8 +696,8 @@ errno_t pfe_l2br_domain_get_ucast_action(pfe_l2br_domain_t *domain, pfe_ct_l2br_
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	*hit = domain->action_data.ucast_hit_action;
-	*miss = domain->action_data.ucast_miss_action;
+	*hit = domain->action_data.item.ucast_hit_action;
+	*miss = domain->action_data.item.ucast_miss_action;
 
 	return EOK;
 }
@@ -714,8 +721,8 @@ errno_t pfe_l2br_domain_set_mcast_action(pfe_l2br_domain_t *domain, pfe_ct_l2br_
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	domain->action_data.mcast_hit_action = hit;
-	domain->action_data.mcast_miss_action = miss;
+	domain->action_data.item.mcast_hit_action = hit;
+	domain->action_data.item.mcast_miss_action = miss;
 
 	return pfe_l2br_update_hw_entry(domain);
 }
@@ -737,8 +744,8 @@ errno_t pfe_l2br_domain_get_mcast_action(pfe_l2br_domain_t *domain, pfe_ct_l2br_
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	*hit = domain->action_data.mcast_hit_action;
-	*miss = domain->action_data.mcast_miss_action;
+	*hit = domain->action_data.item.mcast_hit_action;
+	*miss = domain->action_data.item.mcast_miss_action;
 
 	return EOK;
 }
@@ -791,11 +798,11 @@ errno_t pfe_l2br_domain_add_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *iface, b
 	}
 
 	/*	Add it to this domain = update VLAN table entry */
-	domain->action_data.forward_list |= (1U << (uint32_t)id);
+	domain->action_data.item.forward_list |= (1U << (uint32_t)id);
 
 	if (FALSE == tagged)
 	{
-		domain->action_data.untag_list |= (1U << (uint32_t)id);
+		domain->action_data.item.untag_list |= (1U << (uint32_t)id);
 	}
 
 	ret = pfe_l2br_update_hw_entry(domain);
@@ -862,8 +869,8 @@ errno_t pfe_l2br_domain_del_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *iface)
 			id = pfe_phy_if_get_id((pfe_phy_if_t *)entry->ptr);
 
 			/*	Update HW */
-			domain->action_data.forward_list &= ~(1U << (uint32_t)id);
-			domain->action_data.untag_list &= ~(1U << (uint32_t)id);
+			domain->action_data.item.forward_list &= ~(1U << (uint32_t)id);
+			domain->action_data.item.untag_list &= ~(1U << (uint32_t)id);
 
 			ret = pfe_l2br_update_hw_entry(domain);
 			if (EOK != ret)
@@ -919,7 +926,7 @@ __attribute__((pure)) uint32_t pfe_l2br_domain_get_if_list(pfe_l2br_domain_t *do
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return domain->action_data.forward_list;
+	return domain->action_data.item.forward_list;
 }
 
 /**
@@ -939,7 +946,7 @@ __attribute__((pure)) uint32_t pfe_l2br_domain_get_untag_if_list(pfe_l2br_domain
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return domain->action_data.untag_list;
+	return domain->action_data.item.untag_list;
 }
 
 /**
@@ -1285,10 +1292,10 @@ errno_t pfe_l2br_static_entry_create(pfe_l2br_t *bridge, uint16_t vlan, pfe_mac_
 
 		/* Configure action data */
 		static_entry->action_data.val = 0;
-		static_entry->action_data.static_flag = 1;
-		static_entry->action_data.fresh_flag = 1;
-        static_entry->action_data.local_l3 = 0U;
-		static_entry->action_data.forward_list = static_entry->fw_list;
+		static_entry->action_data.item.static_flag = 1;
+		static_entry->action_data.item.fresh_flag = 1;
+        static_entry->action_data.item.local_l3 = 0U;
+		static_entry->action_data.item.forward_list = static_entry->fw_list;
 
 		if (EOK != pfe_l2br_table_entry_set_vlan(static_entry->entry, vlan))
 		{
@@ -1334,6 +1341,31 @@ table_err:
 	return EINVAL;
 }
 
+static errno_t pfe_l2br_static_entry_destroy_nolock(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent)
+{
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == bridge) || (NULL == static_ent)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	LLIST_Remove(&static_ent->list_entry);
+
+	ret = pfe_l2br_table_del_entry(bridge->mac_table, static_ent->entry);
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Static entry couldn't be deleted from HW table (errno %d)\n", ret);
+	}
+
+	oal_mm_free(static_ent);
+
+	return ret;
+}
+
 /**
  * @brief		Destroy L2 bridge static entry
  * @param[in]	bridge Bridge instance
@@ -1359,21 +1391,12 @@ errno_t pfe_l2br_static_entry_destroy(pfe_l2br_t *bridge, pfe_l2br_static_entry_
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-	LLIST_Remove(&static_ent->list_entry);
+	ret = pfe_l2br_static_entry_destroy_nolock(bridge, static_ent);
 
 	if (EOK != oal_mutex_unlock(bridge->mutex))
 	{
 		NXP_LOG_DEBUG("Mutex unlock failed\n");
 	}
-
-	ret = pfe_l2br_table_del_entry(bridge->mac_table, static_ent->entry);
-
-	if (EOK != ret)
-	{
-		NXP_LOG_ERROR("Static entry couldn't be deleted from HW table (errno %d)\n", ret);
-	}
-
-	oal_mm_free(static_ent);
 
 	return ret;
 }
@@ -1415,15 +1438,16 @@ errno_t pfe_l2br_static_entry_replace_fw_list(pfe_l2br_t *bridge, pfe_l2br_stati
 
 /**
  * @brief Sets the local L3 flag (marks/unmarks the MAC address as local one)
- * @param[in]	bridge Bridge instance
- * @param[in]	static_ent Static entry to change forward list
- * @param[in]	local Value to be set
+ * @param[in]		bridge Bridge instance
+ * @param[in]		static_ent Static entry to change forward list
+ * @param[in]		local Value to be set
  * @retval EOK		Success
  * @retval EINVAL	Invalid or missing argument
  * @retval			ENOENT Entry couldn't be updated
  */
 errno_t pfe_l2br_static_entry_set_local_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t local)
 {
+	uint8_t tmp;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == bridge) || (NULL == static_ent)))
 	{
@@ -1432,16 +1456,97 @@ errno_t pfe_l2br_static_entry_set_local_flag(pfe_l2br_t *bridge, pfe_l2br_static
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	/* Make changes */
-	static_ent->action_data.local_l3 = ((FALSE != local)? 1U : 0U);
+	tmp = static_ent->action_data.item.local_l3;
+	static_ent->action_data.item.local_l3 = ((FALSE != local)? 1U : 0U);
 	/* Propagate changes to l2br table */
 	if (EOK != pfe_l2br_table_entry_set_action_data(static_ent->entry, static_ent->action_data_u64val))
 	{
+		static_ent->action_data.item.local_l3 = tmp;
 		NXP_LOG_ERROR("Couldn't set action data\n");
 		return EINVAL;
 	}
 	/* Write to the HW */
 	if (EOK != pfe_l2br_table_update_entry(bridge->mac_table, static_ent->entry))
 	{
+		static_ent->action_data.item.local_l3 = tmp;
+		NXP_LOG_ERROR("Couldn't update entry\n");
+		return ENOENT;
+	}
+	return EOK;
+}
+
+/**
+ * @brief Sets the src_discard flag (enables/disables discard of frames with given SRC MAC address)
+ * @param[in]		bridge Bridge instance
+ * @param[in]		static_ent Static entry to change forward list
+ * @param[in]		src_discard Value to be set
+ * @retval EOK		Success
+ * @retval EINVAL	Invalid or missing argument
+ * @retval			ENOENT Entry couldn't be updated
+ */
+errno_t pfe_l2br_static_entry_set_src_discard_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t src_discard)
+{
+	uint8_t tmp;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == bridge) || (NULL == static_ent)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	/* Make changes */
+	tmp = static_ent->action_data.item.src_discard;
+	static_ent->action_data.item.src_discard = ((FALSE != src_discard)? 1U : 0U);
+	/* Propagate changes to l2br table */
+	if (EOK != pfe_l2br_table_entry_set_action_data(static_ent->entry, static_ent->action_data_u64val))
+	{
+		static_ent->action_data.item.src_discard = tmp;
+		NXP_LOG_ERROR("Couldn't set action data\n");
+		return EINVAL;
+	}
+	/* Write to the HW */
+	if (EOK != pfe_l2br_table_update_entry(bridge->mac_table, static_ent->entry))
+	{
+		static_ent->action_data.item.src_discard = tmp;
+		NXP_LOG_ERROR("Couldn't update entry\n");
+		return ENOENT;
+	}
+	return EOK;
+}
+
+/**
+ * @brief Sets the dst_discard flag (enables/disables discard of frames with given SRC MAC address)
+ * @param[in]		bridge Bridge instance
+ * @param[in]		static_ent Static entry to change forward list
+ * @param[in]		dst_discard Value to be set
+ * @retval EOK		Success
+ * @retval EINVAL	Invalid or missing argument
+ * @retval			ENOENT Entry couldn't be updated
+ */
+errno_t pfe_l2br_static_entry_set_dst_discard_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t dst_discard)
+{
+	uint8_t tmp;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == bridge) || (NULL == static_ent)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	/* Make changes */
+	tmp = static_ent->action_data.item.dst_discard;
+	static_ent->action_data.item.dst_discard = ((FALSE != dst_discard)? 1U : 0U);
+	/* Propagate changes to l2br table */
+	if (EOK != pfe_l2br_table_entry_set_action_data(static_ent->entry, static_ent->action_data_u64val))
+	{
+		static_ent->action_data.item.dst_discard = tmp;
+		NXP_LOG_ERROR("Couldn't set action data\n");
+		return EINVAL;
+	}
+	/* Write to the HW */
+	if (EOK != pfe_l2br_table_update_entry(bridge->mac_table, static_ent->entry))
+	{
+		static_ent->action_data.item.dst_discard = tmp;
 		NXP_LOG_ERROR("Couldn't update entry\n");
 		return ENOENT;
 	}
@@ -1458,14 +1563,56 @@ errno_t pfe_l2br_static_entry_set_local_flag(pfe_l2br_t *bridge, pfe_l2br_static
  */
 errno_t pfe_l2br_static_entry_get_local_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t *local)
 {
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == bridge) || (NULL == static_ent)))
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == bridge) || (NULL == static_ent) || (NULL == local)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-	#endif /* PFE_CFG_NULL_ARG_CHECK */
-	*local = ((0U != static_ent->action_data.local_l3)? TRUE : FALSE);
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	*local = ((0U != static_ent->action_data.item.local_l3)? TRUE : FALSE);
+	return EOK;
+}
+
+/**
+ * @brief Reads the state of src_discard flag
+ * @param[in]	bridge Bridge instance
+ * @param[in]	static_ent Static entry to change forward list
+ * @param[out]	src_discard State of the src_discard flag
+ * @retval EOK		Success
+ * @retval EINVAL	Invalid or missing argument
+ */
+errno_t pfe_l2br_static_entry_get_src_discard_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t *src_discard)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == bridge) || (NULL == static_ent) || (NULL == src_discard)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	*src_discard = ((0U != static_ent->action_data.item.src_discard)? TRUE : FALSE);
+	return EOK;
+}
+
+/**
+ * @brief Reads the state of dst_discard flag
+ * @param[in]	bridge Bridge instance
+ * @param[in]	static_ent Static entry to change forward list
+ * @param[out]	dst_discard State of the dst_discard flag
+ * @retval EOK		Success
+ * @retval EINVAL	Invalid or missing argument
+ */
+errno_t pfe_l2br_static_entry_get_dst_discard_flag(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t *dst_discard)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == bridge) || (NULL == static_ent) || (NULL == dst_discard)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	*dst_discard = ((0U != static_ent->action_data.item.dst_discard)? TRUE : FALSE);
 	return EOK;
 }
 
@@ -1789,6 +1936,12 @@ static void pfe_l2br_do_timeouts(pfe_l2br_t *bridge)
 	entry = pfe_l2br_table_entry_create(bridge->mac_table);
 
 	l2t_iter = pfe_l2br_iterator_create();
+
+	if (EOK != oal_mutex_lock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
 	/*	Go through all entries */
 	ret = pfe_l2br_table_get_first(bridge->mac_table, l2t_iter, L2BR_TABLE_CRIT_VALID, entry);
 	while (EOK == ret)
@@ -1807,6 +1960,8 @@ static void pfe_l2br_do_timeouts(pfe_l2br_t *bridge)
 					pfe_l2br_table_entry_to_str(entry, text_buf, 256);
 					NXP_LOG_DEBUG("Aging:\n%s\n", text_buf);
 				}
+			/* If we delete an entry that has links in collision domain then the entry from collision domain will be moved to hash on the same address from witch we delete the entry */
+				pfe_l2br_iterator_halt(l2t_iter);
 			}
 			else
 			{
@@ -1829,10 +1984,240 @@ static void pfe_l2br_do_timeouts(pfe_l2br_t *bridge)
 		ret = pfe_l2br_table_get_next(bridge->mac_table, l2t_iter, entry);
 	}
 
+	if (EOK != oal_mutex_unlock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
 	/*	Release entry storage */
 	(void)pfe_l2br_table_entry_destroy(entry);
 	/*  Release iterator */
 	pfe_l2br_iterator_destroy(l2t_iter);
+}
+
+/*
+ * @brief		Flush MAC table entries
+ * @param[in]	bridge The bridge instance
+ * @param[in]	type Type of the flush
+ * @return		EOK if success, error code otherwise
+ */
+static errno_t pfe_l2br_flush(pfe_l2br_t *bridge, pfe_l2br_flush_types type)
+{
+	errno_t ret = EOK, query_ret;
+	pfe_l2br_table_entry_t *entry;
+	pfe_l2br_static_entry_t *sentry;
+	pfe_l2br_table_iterator_t *l2t_iter;
+	LLIST_t *item, *aux;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == bridge))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/*	Create entry storage */
+	entry = pfe_l2br_table_entry_create(bridge->mac_table);
+
+	/*	 Create iterator */
+	l2t_iter = pfe_l2br_iterator_create();
+
+	if (EOK != oal_mutex_lock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	switch (type)
+	{
+		case PFE_L2BR_FLUSH_STATIC:
+		{
+			/*	Remove all static entries from local DB */
+			if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
+			{
+				/*	Get first matching entry */
+				LLIST_ForEachRemovable(item, aux, &bridge->static_entries)
+				{
+					/*	Get data */
+					sentry = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
+
+					/*	Destroy entry. LLIST_Remove() is inside... */
+					ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
+					if (EOK != ret)
+					{
+						NXP_LOG_DEBUG("Unable to remove static entry: %d\n", ret);
+					}
+				}
+			}
+
+			break;
+		}
+
+		case PFE_L2BR_FLUSH_ALL:
+		{
+			/*	Remove all static entries from local DB. This must be done before
+				the pfe_l2br_table_flush() because otherwise would report "entry
+				not found" messages. */
+			if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
+			{
+				/*	Get first matching entry */
+				LLIST_ForEachRemovable(item, aux, &bridge->static_entries)
+				{
+					/*	Get data */
+					sentry = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
+
+					/*	Destroy entry. LLIST_Remove() is inside... */
+					ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
+					if (EOK != ret)
+					{
+						NXP_LOG_DEBUG("Unable to remove static entry: %d\n", ret);
+					}
+				}
+			}
+
+			/*	Flush MAC table */
+
+#if 0 /* AAVB-3136: THIS DOES NOT WORK. PFE GETS STUCK. */
+			ret = pfe_l2br_table_flush(bridge->mac_table);
+#else
+			ret = pfe_l2br_table_init(bridge->mac_table);
+#endif /* AAVB-3136 */
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("MAC table flush failed: %d\n", ret);
+			}
+			else
+			{
+				NXP_LOG_INFO("MAC table flushed\n");
+			}
+
+			break;
+		}
+
+		case PFE_L2BR_FLUSH_LEARNED:
+		{
+			/*	Go through all entries */
+			query_ret = pfe_l2br_table_get_first(bridge->mac_table, l2t_iter, L2BR_TABLE_CRIT_VALID, entry);
+			while (EOK == query_ret)
+			{
+				if (FALSE == pfe_l2br_table_entry_is_static(entry))
+				{
+					/*	Remove non-static entry from table */
+					ret = pfe_l2br_table_del_entry(bridge->mac_table, entry);
+					if (EOK != ret)
+					{
+						NXP_LOG_ERROR("Could not delete MAC table entry: %d\n", ret);
+					}
+				}
+
+				query_ret = pfe_l2br_table_get_next(bridge->mac_table, l2t_iter, entry);
+			}
+
+			break;
+		}
+
+		default:
+		{
+			NXP_LOG_DEBUG("Invalid flush type");
+			ret = EINVAL;
+			break;
+		}
+	}
+
+	if (EOK != oal_mutex_unlock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+	/*	Release entry storage */
+	(void)pfe_l2br_table_entry_destroy(entry);
+
+	/*  Release iterator */
+	pfe_l2br_iterator_destroy(l2t_iter);
+
+	return ret;
+}
+
+/**
+ * @brief		Flush all learned MAC table entries
+ * @param[in]	bridge The bridge instance
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_l2br_flush_learned(pfe_l2br_t *bridge)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == bridge))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pfe_l2br_flush(bridge, PFE_L2BR_FLUSH_LEARNED);
+}
+
+/**
+ * @brief		Flush all static MAC table entries
+ * @param[in]	bridge The bridge instance
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_l2br_flush_static(pfe_l2br_t *bridge)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == bridge))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pfe_l2br_flush(bridge, PFE_L2BR_FLUSH_STATIC);
+}
+
+/**
+ * @brief		Flush all MAC table entries
+ * @param[in]	bridge The bridge instance
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_l2br_flush_all(pfe_l2br_t *bridge)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == bridge))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pfe_l2br_flush(bridge, PFE_L2BR_FLUSH_ALL);
+}
+
+/**
+ * @brief		Checks whether the firmware feature with given name is enabled
+ * @param[in]	class Class instance to checks
+ * @param[in]	name Name of the feature to check
+ * @retval		TRUE Feature is enable
+ * @retval		FALSE Feature is not enable
+ */
+
+static bool_t pfe_platform_class_feature_enabled(const pfe_class_t *class, const char *name)
+{
+	pfe_fw_feature_t *fw_feature;
+	errno_t ret;
+	uint8_t variant = 0;
+	/* Does the feature exist? */
+	ret = pfe_class_get_feature(class, &fw_feature, name);
+
+	if(EOK == ret)
+	{       /* Feature exists */
+		/* Get variant */
+		pfe_fw_feature_get_variant(fw_feature, &variant);
+	}
+
+	if (variant == 1)
+		return TRUE;
+
+	return FALSE;
 }
 
 /**
@@ -1912,20 +2297,24 @@ pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, pfe_l2br_tabl
 			NXP_LOG_ERROR("MBox creation failed\n");
 			goto free_and_fail;
 		}
+		/*	Do the aging on host only when FW aging is off */
+		if (pfe_platform_class_feature_enabled(bridge->class, "l2_bridge_aging")==FALSE)
+		{
 
-		/*	Create worker thread */
-		bridge->worker = oal_thread_create(&pfe_l2br_worker_func, bridge, "l2br worker", 0);
-		if (NULL == bridge->worker)
-		{
-			NXP_LOG_ERROR("Couldn't start worker thread\n");
-			goto free_and_fail;
-		}
-		else
-		{
-			if (EOK != oal_mbox_attach_timer(bridge->mbox, PFE_L2BR_CFG_TICK_PERIOD_SEC * 1000, SIG_TIMER_TICK))
+			/*	Create worker thread */
+			bridge->worker = oal_thread_create(&pfe_l2br_worker_func, bridge, "l2br worker", 0);
+			if (NULL == bridge->worker)
 			{
-				NXP_LOG_ERROR("Unable to attach timer\n");
+				NXP_LOG_ERROR("Couldn't start worker thread\n");
 				goto free_and_fail;
+			}
+			else
+			{
+				if (EOK != oal_mbox_attach_timer(bridge->mbox, PFE_L2BR_CFG_TICK_PERIOD_SEC * 1000, SIG_TIMER_TICK))
+				{
+					NXP_LOG_ERROR("Unable to attach timer\n");
+					goto free_and_fail;
+				}
 			}
 		}
 	}
@@ -2270,7 +2659,7 @@ pfe_l2br_domain_t *pfe_l2br_get_next_domain(pfe_l2br_t *bridge)
  */
 uint32_t pfe_l2br_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
-	uint32_t len = 0U;
+    uint32_t len = 0U;
     pfe_l2br_table_entry_t *entry;
     pfe_l2br_table_iterator_t* l2t_iter;
     errno_t ret;

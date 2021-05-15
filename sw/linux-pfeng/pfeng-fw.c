@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2020 NXP
+ * Copyright 2018-2021 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -46,7 +46,7 @@ int pfeng_fw_load(struct pfeng_priv *priv, const char *class_name, const char *u
 	struct device *dev = &priv->pdev->dev;
 	pfe_fw_t *fw;
 	int ret;
-	bool enable_util = priv->cfg->enable_util;
+	bool enable_util = priv->pfe_cfg->enable_util;
 
 	fw = kzalloc(sizeof(*fw), GFP_KERNEL);
 	if(IS_ERR(fw)) {
@@ -54,7 +54,7 @@ int pfeng_fw_load(struct pfeng_priv *priv, const char *class_name, const char *u
 		return -ENOMEM;
 	}
 
-	priv->cfg->fw = fw;
+	priv->pfe_cfg->fw = fw;
 
 	/* load CLASS fw */
 	ret = pfeng_fw_load_file(dev, class_name, &fw->class_data, &fw->class_size);
@@ -82,7 +82,7 @@ err:
 
 void pfeng_fw_free(struct pfeng_priv *priv)
 {
-	pfe_fw_t *fw = priv->cfg->fw;
+	pfe_fw_t *fw = priv->pfe_cfg->fw;
 
 	if(fw->class_data) {
 		kfree(fw->class_data);
@@ -94,7 +94,7 @@ void pfeng_fw_free(struct pfeng_priv *priv)
 		fw->util_data = NULL;
 	}
 
-	priv->cfg->fw = NULL;
+	priv->pfe_cfg->fw = NULL;
 
 	kfree(fw);
 }

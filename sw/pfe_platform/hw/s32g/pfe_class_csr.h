@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2020 NXP
+ *  Copyright 2017-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -307,6 +307,12 @@
 #define CLASS_PE0_QB_DM_ADDR0_VAL	((CLASS_PBUF1_HEADER_BASE_ADDR << 16U) | CLASS_PBUF0_HEADER_BASE_ADDR)
 #define CLASS_PE0_QB_DM_ADDR1_VAL	((CLASS_PBUF3_HEADER_BASE_ADDR << 16U) | CLASS_PBUF2_HEADER_BASE_ADDR)
 
+#define CLASS_TPID_DOT1Q			0x8100UL
+#define CLASS_TPID_DOT1AD_0			0x88A8UL
+#define CLASS_TPID_DOT1AD_1			0x9100UL
+#define CLASS_TPID0_TPID1_VAL		((CLASS_TPID_DOT1AD_1 << 16U) | CLASS_TPID_DOT1AD_0)
+#define CLASS_TPID2_VAL				(CLASS_TPID_DOT1Q)
+
 #define RT_TWO_LEVEL_REF(x)			((!!x) ? (1UL << 0U) : 0U)
 #define PHYNO_IN_HASH(x)			((!!x) ? (1UL << 1U) : 0U)
 #define PARSE_ROUTE_EN(x)			((!!x) ? (1UL << 3U) : 0U)
@@ -337,12 +343,12 @@
 #define PE_IBUS_BYTES(x)			((1UL << (x)) - 1U) << (4U - (x)) /* 0x1 = LSB, 0x8 = MSB (BE) */
 
 
-void pfe_class_cfg_set_config(void *base_va, pfe_class_cfg_t *cfg);
-void pfe_class_cfg_reset(void *base_va);
-void pfe_class_cfg_enable(void *base_va);
-void pfe_class_cfg_disable(void *base_va);
-uint32_t pfe_class_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
-void pfe_class_cfg_set_rtable(void *base_va, void *rtable_pa, uint32_t rtable_len, uint32_t entry_size);
-void pfe_class_cfg_set_def_vlan(void *base_va, uint16_t vlan);
+void pfe_class_cfg_set_config(addr_t base_va, const pfe_class_cfg_t *cfg);
+void pfe_class_cfg_reset(addr_t base_va);
+void pfe_class_cfg_enable(addr_t base_va);
+void pfe_class_cfg_disable(addr_t base_va);
+uint32_t pfe_class_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtable_len, uint32_t entry_size);
+void pfe_class_cfg_set_def_vlan(addr_t base_va, uint16_t vlan);
 
 #endif /* PFE_CLASS_CSR_H_ */

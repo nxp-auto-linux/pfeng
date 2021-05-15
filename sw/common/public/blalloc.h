@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -28,7 +28,7 @@ typedef enum
 /**
  * @brief      Block allocator context representation
  */
-typedef struct blalloc_context
+typedef struct
 {
 	size_t size;      /* Size */
 	size_t chunk_size;/* Size of a memory chunk is 2^this_value */
@@ -63,7 +63,7 @@ void blalloc_fini(blalloc_t *ctx);
 errno_t blalloc_alloc_offs(blalloc_t *ctx, size_t size, size_t align, addr_t *addr);
 void blalloc_free_offs_size(blalloc_t *ctx, addr_t offset, size_t size);
 void blalloc_free_offs(blalloc_t *ctx, addr_t offset);
-uint32_t blalloc_get_text_statistics(blalloc_t *ctx, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+uint32_t blalloc_get_text_statistics(const blalloc_t *ctx, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 
 #endif /* SRC_BLALLOC_H_ */
 

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -326,7 +326,7 @@ errno_t oal_irq_unmask(oal_irq_t *irq)
 	return EOK;
 }
 
-int32_t oal_irq_get_id(oal_irq_t *irq)
+int32_t oal_irq_get_id(const oal_irq_t *irq)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == irq))
@@ -339,7 +339,7 @@ int32_t oal_irq_get_id(oal_irq_t *irq)
 	return irq->id;
 }
 
-errno_t oal_irq_get_flags(oal_irq_t *irq, oal_irq_flags_t *flags)
+errno_t oal_irq_get_flags(const oal_irq_t *irq, oal_irq_flags_t *flags)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == irq) || (NULL == flags)))

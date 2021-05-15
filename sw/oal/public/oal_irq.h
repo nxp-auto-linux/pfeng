@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -133,7 +133,7 @@ errno_t oal_irq_unmask(oal_irq_t *irq);
  * @param[in]	irq The IRQ instance
  * @return		The IRQ ID associated with the instance or -1 if failed
  */
-int32_t oal_irq_get_id(oal_irq_t *irq);
+int32_t oal_irq_get_id(const oal_irq_t *irq);
 
 /**
  * @brief		Get IRQ flags
@@ -141,7 +141,7 @@ int32_t oal_irq_get_id(oal_irq_t *irq);
  * @param[out]	flags Pointer to write interrupt type flags to
  * @return		EOK if success, error code otherwise
  */
-errno_t oal_irq_get_flags(oal_irq_t *irq, oal_irq_flags_t *flags);
+errno_t oal_irq_get_flags(const oal_irq_t *irq, oal_irq_flags_t *flags);
 
 #endif /* OAL_IRQ_H_ */
 

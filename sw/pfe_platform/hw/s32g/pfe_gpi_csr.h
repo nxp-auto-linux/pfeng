@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -165,10 +165,10 @@ typedef struct {
 #define HGPI_TMLF_TXTHRES				0xBCU
 #define HGPI_ASEQ_LEN					0x40U
 
-errno_t pfe_gpi_cfg_init(void *cbus_va, void *base_va, pfe_gpi_cfg_t *cfg);
-errno_t pfe_gpi_cfg_reset(void *base_va);
-void pfe_gpi_cfg_enable(void *base_va);
-void pfe_gpi_cfg_disable(void *base_va);
-uint32_t pfe_gpi_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+errno_t pfe_gpi_cfg_init(addr_t cbus_va, addr_t base_va, const pfe_gpi_cfg_t *cfg);
+errno_t pfe_gpi_cfg_reset(addr_t base_va);
+void pfe_gpi_cfg_enable(addr_t base_va);
+void pfe_gpi_cfg_disable(addr_t base_va);
+uint32_t pfe_gpi_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
 #endif /* PFE_GPI_CSR_H_ */

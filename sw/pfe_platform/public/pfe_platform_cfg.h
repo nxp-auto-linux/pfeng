@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -179,5 +179,8 @@
 
 /* RO defines */
 #define PFE_CFG_RO_HDR_SIZE			0x0010UL
+
+/* Maximal count of entries within hash area of routing table */
+#define PFE_CFG_RT_HASH_ENTRIES_MAX_CNT 1048576U
 
 #endif /* SRC_PFE_PLATFORM_CFG_H_ */

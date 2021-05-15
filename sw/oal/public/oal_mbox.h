@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -111,7 +111,7 @@ typedef enum
  * @note	This is general representation and it is the same for message as
  * 			well as signal type.
  */
-typedef struct oal_mbox_msg_tag
+typedef struct
 {
 	struct
 	{
@@ -126,7 +126,7 @@ typedef struct oal_mbox_msg_tag
 		union {
 			int32_t id;			/*	Internal message ID, shall not be touched by user */
 			void *ptr;			/*	Internal message handle pointer, shall not be touched by user */
-		};
+		} msg_info;
 	} metadata;
 } oal_mbox_msg_t;
 

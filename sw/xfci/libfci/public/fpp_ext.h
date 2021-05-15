@@ -30,7 +30,7 @@
 #define CAL_PACKED_ALIGNED(n)	__attribute__((packed, aligned(n)))
 #endif /* CAL_PACKED_ALIGNED */
 
-#define FPP_ERR_ENTRY_NOT_FOUND                 0xf104
+#define FPP_ERR_ENTRY_NOT_FOUND					0xf104
 #define FPP_ERR_INTERNAL_FAILURE				0xffff
 
 /**
@@ -246,11 +246,18 @@
  */
 typedef enum CAL_PACKED
 {
-	FPP_IF_ENABLED = (1 << 0),		/*!< If set, interface is enabled */
-	FPP_IF_PROMISC = (1 << 1),		/*!< If set, interface is promiscuous */
-	FPP_IF_MATCH_OR = (1 << 3),		/*!< Result of match is logical OR of rules, else AND */
-	FPP_IF_DISCARD = (1 << 4),		/*!< Discard matching frames */
-	FPP_IF_MIRROR = (1 << 5)		/*!< If set mirroring is enabled */
+	FPP_IF_ENABLED = (1 << 0),			/*!< If set, interface is enabled */
+	FPP_IF_PROMISC = (1 << 1),			/*!< If set, interface is promiscuous */
+	FPP_IF_MATCH_OR = (1 << 3),			/*!< Result of match is logical OR of rules, else AND */
+	FPP_IF_DISCARD = (1 << 4),			/*!< Discard matching frames */
+	FPP_IF_MIRROR = (1 << 5),			/*!< If set mirroring is enabled */
+	FPP_IF_LOADBALANCE = (1 << 6),		/*!< If set interface is part of loadbalance bucket */
+	FPP_IF_VLAN_CONF_CHECK = (1 << 7),	/*!< Enable/Disable VLAN conformance check */
+	FPP_IF_PTP_CONF_CHECK = (1 << 8),	/*!< Enable/Disable PTP conformance check */
+	FPP_IF_PTP_PROMISC = (1 << 9),		/*!< Enable/Disable PTP promiscuous mode */
+	FPP_IF_LOOPBACK = (1 << 10),		/*!< If set, loopback mode is enabled */
+	FPP_IF_ALLOW_Q_IN_Q = (1 << 11),	/*!< If set, QinQ traffic is accepted */
+	FPP_IF_MAX = (int)(1U << 31U)
 } fpp_if_flags_t;
 
 /**
@@ -302,9 +309,9 @@ typedef enum CAL_PACKED
 	FPP_IF_MATCH_FP1 = (1 << 28),			/**< Match Packets Accepted by Flexible Parser 1 */
 	FPP_IF_MATCH_SMAC = (1 << 29),			/**< Match Source MAC Address */
 	FPP_IF_MATCH_DMAC = (1 << 30),			/**< Match Destination MAC Address */
-	FPP_IF_MATCH_HIF_COOKIE = (1 << 31),	/**< Match HIF header cookie value */
+	FPP_IF_MATCH_HIF_COOKIE = (int)(1U << 31U),	/**< Match HIF header cookie value */
 	/* Ensure proper size */
-	FPP_IF_MATCH_MAX = (1 << 31)
+	FPP_IF_MATCH_MAX = (int)(1U << 31U)
 } fpp_if_m_rules_t;
 
 /**
@@ -337,7 +344,7 @@ typedef struct CAL_PACKED_ALIGNED(4)
 			uint32_t sip[4];
 			uint32_t dip[4];
 		} v6;
-	};
+	} ipv;
 	/** IP protocol (@ref FPP_IF_MATCH_PROTO) */
 	uint8_t proto;
 	/** Source MAC Address (@ref FPP_IF_MATCH_SMAC) */
@@ -397,7 +404,7 @@ typedef enum CAL_PACKED
  * 				- As reply buffer in functions @ref fci_query or @ref fci_cmd,
  * 				  with @ref FPP_CMD_PHY_IF command.
  */
-typedef struct CAL_PACKED
+typedef struct CAL_PACKED_ALIGNED(4)
 {
 	uint16_t action;			/**< Action */
 	char name[IFNAMSIZ];		/**< Interface name */
@@ -405,13 +412,13 @@ typedef struct CAL_PACKED
 	fpp_if_flags_t flags;		/**< Interface flags (network endian) */
 	fpp_phy_if_op_mode_t mode;	/**< Phy if mode (network endian) */
 	fpp_phy_if_block_state_t block_state;	/**< Phy if block state */
+	fpp_phy_if_stats_t	stats;	/**< Physical interface statistics */
 	uint8_t mac_addr[6];		/**< Phy if MAC (network endian) */
 	char mirror[IFNAMSIZ];		/**< Name of interface to mirror the traffic to */
 	/**	Table to be used to filter ingress traffic. See @ref FPP_CMD_FP_TABLE. If
 	 	here is non-empty string then the filter is enabled. Empty string disables
 	 	the filter. */
 	char ftable[16];
-	fpp_phy_if_stats_t	stats;	/**< Physical interface statistics */
 } fpp_phy_if_cmd_t;
 
 /**
@@ -422,9 +429,10 @@ typedef struct CAL_PACKED
  * 				- As reply buffer in functions @ref fci_query or @ref fci_cmd,
  * 				  with @ref FPP_CMD_LOG_IF command.
  */
-typedef struct CAL_PACKED
+typedef struct CAL_PACKED_ALIGNED(4)
 {
 	uint16_t action;			/**< Action */
+	uint8_t res[2];				/* Additional 2B to ensure correct alignment */
 	char name[IFNAMSIZ];		/**< Interface name */
 	uint32_t id;				/**< Interface ID (network endian) */
 	char parent_name[IFNAMSIZ];	/**< Parent physical interface name */
@@ -433,8 +441,8 @@ typedef struct CAL_PACKED
 								   must be stored in network order (network endian) */
 	fpp_if_flags_t flags;		/**< Interface flags from query or flags to be set (network endian) */
 	fpp_if_m_rules_t match;		/**< Match rules from query or match rules to be set (network endian) */
-	fpp_if_m_args_t arguments;	/**< Arguments for match rules (network endian) */
-	fpp_algo_stats_t stats;		/**< Logical interface statistics */
+	fpp_if_m_args_t CAL_PACKED_ALIGNED(4) arguments;	/**< Arguments for match rules (network endian) */
+	fpp_algo_stats_t CAL_PACKED_ALIGNED(4) stats;		/**< Logical interface statistics */
 } fpp_log_if_cmd_t;
 
 /**
@@ -479,7 +487,7 @@ typedef struct CAL_PACKED
  * Possible command return values are:
  *     - @c FPP_ERR_OK: Domain added.
  *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Unexpected argument.
- *     - @c FPP_ERR_L2BRIDGE_DOMAIN_ALREADY_REGISTERED: Given domain already registered.
+ *     - @c FPP_ERR_L2_BD_ALREADY_REGISTERED: Given domain already registered.
  *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
  *
  *
@@ -499,7 +507,7 @@ typedef struct CAL_PACKED
  * Possible command return values are:
  *     - @c FPP_ERR_OK: Domain removed.
  *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Unexpected argument.
- *     - @c FPP_ERR_L2BRIDGE_DOMAIN_NOT_FOUND: Given domain not found.
+ *     - @c FPP_ERR_L2_BD_NOT_FOUND: Given domain not found.
  *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
  *
  * Action FPP_ACTION_UPDATE
@@ -542,7 +550,7 @@ typedef struct CAL_PACKED
  * Possible command return values are:
  *     - @c FPP_ERR_OK: Domain updated.
  *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Unexpected argument.
- *     - @c FPP_ERR_L2BRIDGE_DOMAIN_NOT_FOUND: Given domain not found.
+ *     - @c FPP_ERR_L2_BD_NOT_FOUND: Given domain not found.
  *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
  *
  * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
@@ -584,23 +592,23 @@ typedef struct CAL_PACKED
  *
  * Possible command return values are:
  *     - @c FPP_ERR_OK: Response buffer written.
- *     - @c FPP_ERR_L2BRIDGE_DOMAIN_NOT_FOUND: No more entries.
+ *     - @c FPP_ERR_L2_BD_NOT_FOUND: No more entries.
  *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
  *
  * @hideinitializer
  */
 #define FPP_CMD_L2_BD						0xf200
 
-#define FPP_ERR_L2BRIDGE_DOMAIN_ALREADY_REGISTERED	0xf201
-#define FPP_ERR_L2BRIDGE_DOMAIN_NOT_FOUND			0xf202
+#define FPP_ERR_L2_BD_ALREADY_REGISTERED	0xf201
+#define FPP_ERR_L2_BD_NOT_FOUND				0xf202
 
 /**
  * @brief	L2 bridge domain flags
  */
 typedef enum CAL_PACKED
 {
-	FPP_L2BR_DOMAIN_DEFAULT = (1 << 0),	/*!< Domain type is default */
-	FPP_L2BR_DOMAIN_FALLBACK = (1 << 1)	/*!< Domain type is fallback */
+	FPP_L2_BD_DEFAULT = (1 << 0),	/*!< Domain type is default */
+	FPP_L2_BD_FALLBACK = (1 << 1)	/*!< Domain type is fallback */
 } fpp_l2_bd_flags_t;
 
 /**
@@ -609,7 +617,7 @@ typedef enum CAL_PACKED
  *          - for command buffer in functions @ref fci_write or @ref fci_cmd,
  *            with commands: @ref FPP_CMD_L2_BD.
  */
-typedef struct CAL_PACKED fpp_l2_bridge_domain_control_cmd
+typedef struct CAL_PACKED
 {
 	/**	Action to be executed (register, unregister, query, ...) */
 	uint16_t action;
@@ -678,6 +686,10 @@ typedef struct CAL_PACKED fpp_l2_bridge_domain_control_cmd
  *     .forward_list = ..,
  *     // Configure the static entry as Local MAC address for L2L3 Bridge mode
  *     .local = 1
+ *     // Do not discard frames sent from the MAC address
+ *     .src_discard = 0
+ *     // Do not discard frames sent to the MAC address
+ *     .dst_discard = 0
  *   };
  * @endcode
  *
@@ -759,7 +771,7 @@ typedef struct CAL_PACKED fpp_l2_bridge_domain_control_cmd
  *     .mac = {...} ;
  *     //Forward list (network endian).
  *     .forward_list = ..;
-  *     // Is the static entry used as Local MAC address for L2L3 Bridge mode
+ *     // Is the static entry used as Local MAC address for L2L3 Bridge mode
  *     .local = ... ; //1 = yes, 0 = no
 
  * @endcode
@@ -776,7 +788,7 @@ typedef struct CAL_PACKED fpp_l2_bridge_domain_control_cmd
 #define FPP_ERR_L2_STATIC_ENT_ALREADY_REGISTERED	0xf341
 #define FPP_ERR_L2_STATIC_EN_NOT_FOUND				0xf342
 
-typedef struct CAL_PACKED fpp_l2_bridge_static_entry_cmd
+typedef struct CAL_PACKED
 {
 	/**	Action to be executed (register, unregister, query, ...) */
 	uint16_t action;
@@ -797,7 +809,52 @@ typedef struct CAL_PACKED fpp_l2_bridge_static_entry_cmd
         MAC address are passed to the IP router algorithm when the value is 1 and the ingress physical interface is configured
         into the L2L3 bridge mode. Other traffic is handle by L2 bridge algorithm. */
 	uint8_t local;
+	/** Frames with this destination MAC address (and VLAN tag) shall be discarded (1 = enable, 0 = disable). */
+	uint8_t dst_discard;
+	/** Frames with this source MAC address (and VLAN tag) shall be discarded (1 = enable, 0 = disable). */
+	uint8_t src_discard;
 } fpp_l2_static_ent_cmd_t;
+
+/**
+ * @def FPP_CMD_L2_FLUSH_LEARNED
+ * @brief FCI command to flush learned MAC table entries
+ * @details	Command will remove all adresses from the L2 bridge MAC table
+ *          which were added within the learning process.
+ *
+ * Possible command return values are:
+ *     -  FPP_ERR_OK: Flush successful.
+ *     -  FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ *
+ * @hideinitializer
+ */
+#define FPP_CMD_L2_FLUSH_LEARNED					0xf380
+
+/**
+ * @def FPP_CMD_L2_FLUSH_STATIC
+ * @brief FCI command to flush static MAC table entries
+ * @details	Command will remove all addresses from the L2 bridge MAC table
+ *          which were added as static entries via @ref FPP_CMD_L2_STATIC_ENT.
+ *
+ * Possible command return values are:
+ *     -  FPP_ERR_OK: Flush successful.
+ *     -  FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ *
+ * @hideinitializer
+ */
+#define FPP_CMD_L2_FLUSH_STATIC						0xf390
+
+/**
+ * @def FPP_CMD_L2_FLUSH_ALL
+ * @brief FCI command to flush all MAC table entries
+ * @details	Command will remove all addresses from the L2 bridge MAC table.
+ *
+ * Possible command return values are:
+ *     -  FPP_ERR_OK: Flush successful.
+ *     -  FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ *
+ * @hideinitializer
+ */
+#define FPP_CMD_L2_FLUSH_ALL						0xf3a0
 
 /**
  * @def FPP_CMD_FP_TABLE
@@ -910,7 +967,7 @@ typedef struct CAL_PACKED fpp_l2_bridge_static_entry_cmd
  *
  * @hideinitializer
  */
-#define FPP_CMD_FP_TABLE                    0xf220
+#define FPP_CMD_FP_TABLE						0xf220
 
 /**
  * @def FPP_CMD_FP_RULE
@@ -1006,7 +1063,7 @@ typedef struct CAL_PACKED fpp_l2_bridge_static_entry_cmd
  *
  * @hideinitializer
  */
-#define FPP_CMD_FP_RULE                     0xf221
+#define FPP_CMD_FP_RULE						0xf221
 
 #define FPP_ERR_FP_RULE_NOT_FOUND			0xf222
 
@@ -1060,7 +1117,7 @@ typedef enum CAL_PACKED
  * - Flexible Parser to stop and return REJECT
  * - Flexible Parser to set the next rule to rule specified in next_rule_name
  */
-typedef struct CAL_PACKED fpp_fp_rule_props_tag
+typedef struct CAL_PACKED
 {
 	/*	Unique identifier of the rule. It is a string up to 15 characters + '\0' */
     uint8_t rule_name[16];
@@ -1085,7 +1142,7 @@ typedef struct CAL_PACKED fpp_fp_rule_props_tag
 /**
  * @brief Arguments for the FPP_CMD_FP_RULE command
  */
-typedef struct CAL_PACKED fpp_fp_rule_cmd_tag
+typedef struct CAL_PACKED
 {
     uint16_t action;        /**< Action to be done */
     fpp_fp_rule_props_t r;  /**< Parameters of the rule */
@@ -1094,7 +1151,7 @@ typedef struct CAL_PACKED fpp_fp_rule_cmd_tag
 /**
  * @brief Arguments for the FPP_CMD_FP_TABLE command
  */
-typedef struct CAL_PACKED fpp_flexible_parser_table_cmd
+typedef struct CAL_PACKED
 {
     uint16_t action;                  /**< Action to be done */
     union
@@ -1106,7 +1163,7 @@ typedef struct CAL_PACKED fpp_flexible_parser_table_cmd
             uint16_t position;        /**< Position where to add rule (network endian) */
         } t;
         fpp_fp_rule_props_t r; /**< Properties of the rule - used as query result */
-    };
+    } table_info;
 } fpp_fp_table_cmd_t;
 
 
@@ -1154,7 +1211,7 @@ typedef struct CAL_PACKED fpp_flexible_parser_table_cmd
 /*
 * @brief Arguments for the FPP_CMD_FP_FLEXIBLE_FILTER command
 */
-typedef struct CAL_PACKED fpp_flexible_filter_cmd
+typedef struct CAL_PACKED
 {
     uint16_t action;         /**< Action to be done on Flexible Filter */
     uint8_t table_name[16];  /**< Name of the Flexible Parser table to be used */
@@ -1211,7 +1268,7 @@ typedef struct CAL_PACKED fpp_flexible_filter_cmd
 /**
  * @brief Argument structure for the FPP_CMD_DATA_BUF_PUT command
  */
-typedef struct CAL_PACKED fpp_buf_cmd_tag
+typedef struct CAL_PACKED
 {
     uint8_t payload[64];	/**< The payload area */
     uint8_t len;			/**< Payload length in number of bytes */
@@ -1400,7 +1457,7 @@ typedef struct CAL_PACKED
 /**
  * @brief Argument of the @ref FPP_CMD_QOS_QUEUE command.
  */
-typedef struct CAL_PACKED fpp_qos_queue_cmd
+typedef struct CAL_PACKED
 {
 	/**	Action */
 	uint16_t action;
@@ -1487,7 +1544,7 @@ typedef struct CAL_PACKED fpp_qos_queue_cmd
 /**
  * @brief Argument of the @ref FPP_CMD_QOS_SCHEDULER command.
  */
-typedef struct CAL_PACKED fpp_qos_scheduler_cmd
+typedef struct CAL_PACKED
 {
 	/**	Action */
 	uint16_t action;
@@ -1570,7 +1627,7 @@ typedef struct CAL_PACKED fpp_qos_scheduler_cmd
 /**
  * @brief Argument of the @ref FPP_CMD_QOS_SHAPER command.
  */
-typedef struct CAL_PACKED fpp_qos_shaper_cmd
+typedef struct CAL_PACKED
 {
 	/**	Action */
 	uint16_t action;

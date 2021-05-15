@@ -100,7 +100,7 @@
 #define FPP_ERR_MSP_NOT_READY				1215
 #define FPP_ERR_WRONG_SOCK_MODE				1216
 
-typedef struct fpp_socket4_open_cmd {
+typedef struct {
 	uint16_t id;
 	uint8_t type;
 	uint8_t mode;
@@ -122,7 +122,7 @@ typedef struct fpp_socket4_open_cmd {
 #endif
 } __attribute__((__packed__)) fpp_socket4_open_cmd_t;
 
-typedef struct fpp_socket4_update_cmd {
+typedef struct {
 	uint16_t id;
 	uint16_t rsvd1;
 	uint32_t saddr;
@@ -142,12 +142,12 @@ typedef struct fpp_socket4_update_cmd {
 #endif
 } __attribute__((__packed__)) fpp_socket4_update_cmd_t;
 
-typedef struct fpp_socket4_close_cmd {
+typedef struct {
 	uint16_t id;
 	uint16_t pad1;
 } __attribute__((__packed__)) fpp_socket4_close_cmd_t;
 
-typedef struct fpp_socket6_open_cmd {
+typedef struct {
 	uint16_t id;
 	uint8_t type;
 	uint8_t mode;
@@ -169,7 +169,7 @@ typedef struct fpp_socket6_open_cmd {
 #endif
 } __attribute__((__packed__)) fpp_socket6_open_cmd_t;
 
-typedef struct fpp_socket6_update_cmd {
+typedef struct {
 	uint16_t id;
 	uint16_t rsvd1;
 	uint32_t saddr[4];
@@ -189,7 +189,7 @@ typedef struct fpp_socket6_update_cmd {
 #endif
 } __attribute__((__packed__)) fpp_socket6_update_cmd_t;
 
-typedef struct fpp_socket6_close_cmd {
+typedef struct {
 	uint16_t id;
 	uint16_t pad1;
 } __attribute__((__packed__)) fpp_socket6_close_cmd_t;
@@ -198,7 +198,7 @@ typedef struct fpp_socket6_close_cmd {
 #define FPP_ERR_TNL_ENTRY_NOT_FOUND                     1001
 
 /*------------------------------------- Protocols ----------------------------*/
-typedef enum fpp_proto {
+typedef enum {
         FPP_PROTO_IPV4 = 0,
         FPP_PROTO_IPV6,
         FPP_PROTO_PPPOE,
@@ -218,6 +218,7 @@ typedef enum fpp_proto {
  * @details This command can be used with various values of `.action`:
  *          - @c FPP_ACTION_REGISTER: Defines a connection and binds it to previously created route(s).
  *          - @c FPP_ACTION_DEREGISTER: Deletes previously defined connection.
+ *          - @c FPP_ACTION_UPDATE: Updates properties of previously defined connection.
  *          - @c FPP_ACTION_QUERY: Gets parameters of existing connection. It creates a snapshot of all active
  *            conntrack entries and replies with first of them.
  *          - @c FPP_ACTION_QUERY_CONT: Shall be called periodically after @c FPP_ACTION_QUERY was called. On each
@@ -310,6 +311,22 @@ typedef enum fpp_proto {
  *   };
  * @endcode
  *
+ * Action FPP_ACTION_UPDATE
+ * ----------------------------
+ * Items to be set in command argument structure:
+ * @code{.c}
+ *   fpp_ct_cmd_t cmd_data =
+ *   {
+ *     .action = FPP_ACTION_UPDATE,    // Update previously created conntrack
+ *     .saddr = ...,                    // Source IPv4 address (network endian)
+ *     .daddr = ...,                    // Destination IPv4 address (network endian)
+ *     .sport = ...,                    // Source port (network endian)
+ *     .dport = ...,                    // Destination port (network endian)
+ *     .protocol = ...,                 // IP protocol ID
+ *     .flags = CTCMD_FLAGS_TTL_DECREMENT, // Only TTL decrement can be updated
+ *   };
+ * @endcode
+ *
  * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
  * -------------------------------------------------
  * Items to be set in command argument structure:
@@ -344,6 +361,7 @@ typedef enum fpp_proto {
  * @details This command can be used with various values of `.action`:
  *          - @c FPP_ACTION_REGISTER: Defines a connection and binds it to previously created route(s).
  *          - @c FPP_ACTION_DEREGISTER: Deletes previously defined connection.
+ *          - @c FPP_ACTION_UPDATE: Updates properties of previously defined connection.
  *          - @c FPP_ACTION_QUERY: Gets parameters of existing connection. It creates a snapshot of all active
  *            conntrack entries and replies with first of them.
  *          - @c FPP_ACTION_QUERY_CONT: Shall be called periodically after @c FPP_ACTION_QUERY was called. On each
@@ -434,6 +452,22 @@ typedef enum fpp_proto {
  *     .sport_reply = ...,              // Reply source port (network endian)
  *     .dport_reply = ...,              // Reply destination port (network endian)
  *     .protocol = ...,                 // IP protocol ID
+ *   };
+ * @endcode
+ *
+ * Action FPP_ACTION_UPDATE
+ * ----------------------------
+ * Items to be set in command argument structure:
+ * @code{.c}
+ *   fpp_ct_cmd_t cmd_data =
+ *   {
+ *     .action = FPP_ACTION_UPDATE,     // Update previously created conntrack
+ *     .saddr[0..3] = ...,              // Source IPv6 address, (network endian)
+ *     .daddr[0..3] = ...,              // Destination IPv6 address, (network endian)
+ *     .sport = ...,                    // Source port (network endian)
+ *     .dport = ...,                    // Destination port (network endian)
+ *     .protocol = ...,                 // IP protocol ID
+ *     .flags = CTCMD_FLAGS_TTL_DECREMENT, // Only TTL decrement can be updated
  *   };
  * @endcode
  *
@@ -688,7 +722,7 @@ typedef struct CAL_PACKED {
 #define FPP_IP_ROUTE_4o6	(1<<1)
 
 /* Structure representing the command sent to enable/disable Ipsec pre-fragmentation */
-typedef struct fpp_ipsec_cmd {
+typedef struct {
 	uint16_t pre_frag_en;
 	uint16_t rsvd;
 } __attribute__((__packed__)) fpp_ipsec_cmd_t;
@@ -716,19 +750,19 @@ typedef struct fpp_ipsec_cmd {
 
 #define FPP_MAX_SPTX_STRING_SIZE	160
 
-typedef struct fpp_rtp_open_cmd {
+typedef struct {
 	uint16_t	call_id;
 	uint16_t	socket_a;
 	uint16_t	socket_b;
 	uint16_t	rsvd;
 } __attribute__((__packed__)) fpp_rtp_open_cmd_t;
 
-typedef struct fpp_rtp_close_cmd {
+typedef struct {
 	uint16_t	call_id;
 	uint16_t	rsvd;
 } __attribute__((__packed__)) fpp_rtp_close_cmd_t;
 
-typedef struct fpp_rtp_takeover_cmd {
+typedef struct {
 	uint16_t	call_id;
 	uint16_t	socket;
 	uint16_t	mode;
@@ -738,7 +772,7 @@ typedef struct fpp_rtp_takeover_cmd {
 	uint32_t	ts_incr;
 } __attribute__((__packed__)) fpp_rtp_takeover_cmd_t;
 
-typedef struct fpp_rtp_ctrl_cmd {
+typedef struct {
 	uint16_t	call_id;
 	uint16_t	control_dir;
 } __attribute__((__packed__)) fpp_rtp_ctrl_cmd_t;
@@ -747,24 +781,24 @@ typedef struct fpp_rtp_ctrl_cmd {
 #define FPP_RTP_SPEC_TX_RESPONSE    1
 #define FPP_RTP_SPEC_TX_STOP        2
 
-typedef struct fpp_rtp_spec_tx_ctrl_cmd {
+typedef struct {
         uint16_t	call_id;
         uint16_t	type;
 } __attribute__((__packed__)) fpp_rtp_spec_tx_ctrl_cmd_t;
 
-typedef struct fpp_rtp_spec_tx_payload_cmd {
+typedef struct {
         uint16_t	call_id;
         uint16_t	payload_id;
         uint16_t	payload_length;
         uint16_t	payload[80];
 } __attribute__((__packed__)) fpp_rtp_spec_tx_payload_cmd_t;
 
-typedef struct fpp_rtcp_query_cmd {
+typedef struct {
 	uint16_t	socket_id;
 	uint16_t       flags;
 } __attribute__((__packed__)) fpp_rtcp_query_cmd_t;
 
-typedef struct fpp_rtcp_query_res {
+typedef struct {
 	uint32_t	prev_reception_period;
 	uint32_t	last_reception_period;
 	uint32_t	num_tx_pkts;
@@ -804,7 +838,7 @@ typedef struct fpp_rtcp_query_res {
 #define FPP_RTPSTATS_TYPE_RLY		4
 #define FPP_RTPSTATS_TYPE_RLY6		5
 
-typedef struct fpp_rtp_stat_enable_cmd {
+typedef struct {
 	uint16_t stream_id;
 	uint16_t stream_type;
 	uint32_t saddr[4];
@@ -815,11 +849,11 @@ typedef struct fpp_rtp_stat_enable_cmd {
 	uint16_t mode;
 } __attribute__((__packed__)) fpp_rtp_stat_enable_cmd_t;
 
-typedef struct fpp_rtp_stat_disable_cmd {
+typedef struct {
 	uint16_t stream_id;
 } __attribute__((__packed__)) fpp_rtp_stat_disable_cmd_t;
 
-typedef struct  fpp_rtp_stat_dtmf_pt_cmd {
+typedef struct  {
 	uint16_t pt; /* 2 payload types coded on 8bits */
 } __attribute__((__packed__)) fpp_rtp_stat_dtmf_pt_cmd_t;
 
@@ -833,7 +867,7 @@ typedef struct  fpp_rtp_stat_dtmf_pt_cmd {
 
 #define FPP_VOICE_BUFFER_SCATTER_MAX	48
 
-typedef struct fpp_voice_buffer_load_cmd {
+typedef struct {
 	uint16_t buffer_id;
 	uint16_t payload_type;
 	uint16_t frame_size;
@@ -843,11 +877,11 @@ typedef struct fpp_voice_buffer_load_cmd {
 	uint32_t addr[FPP_VOICE_BUFFER_SCATTER_MAX];
 } __attribute__((__packed__)) fpp_voice_buffer_load_cmd_t;
 
-typedef struct fpp_voice_buffer_unload_cmd {
+typedef struct {
 	uint16_t buffer_id;
 } __attribute__((__packed__)) fpp_voice_buffer_unload_cmd_t;
 
-typedef struct fpp_voice_buffer_start_cmd {
+typedef struct {
 	uint16_t socket_id;
 	uint16_t buffer_id;
 	uint16_t seq_number_base;
@@ -856,7 +890,7 @@ typedef struct fpp_voice_buffer_start_cmd {
 	uint32_t timestamp_base;
 } __attribute__((__packed__)) fpp_voice_buffer_start_cmd_t;
 
-typedef struct fpp_voice_buffer_stop_cmd {
+typedef struct {
         uint16_t socket_id;
 } __attribute__((__packed__)) fpp_voice_buffer_stop_cmd_t;
 /*-------------------------------- Exceptions -------------------------------*/
@@ -872,14 +906,14 @@ typedef struct fpp_voice_buffer_stop_cmd {
 
 #define FPP_EXPT_MAX_DSCP   63
 
-typedef struct fpp_expt_queue_dscp_cmd {
+typedef struct {
 	uint16_t	queue;
 	uint16_t	num_dscp;
 	uint8_t	dscp[FPP_EXPT_MAX_DSCP];
 	uint8_t	pad;
 } __attribute__((__packed__)) fpp_expt_queue_dscp_cmd_t;
 
-typedef struct fpp_expt_queue_control_cmd {
+typedef struct {
 	uint16_t	queue;
 	uint16_t	pad;
 } __attribute__((__packed__)) fpp_expt_queue_control_cmd_t;
@@ -931,7 +965,7 @@ typedef struct fpp_expt_queue_control_cmd {
 #define FPP_EXPT_TYPE_ARP   0x2
 #define FPP_EXPT_TYPE_PCAP  0x3
 
-typedef struct fpp_qm_qos_enable_cmd {
+typedef struct {
 #ifndef LS1043
 	uint16_t	interface;
 #else
@@ -940,7 +974,7 @@ typedef struct fpp_qm_qos_enable_cmd {
 	uint16_t	enable;
 } __attribute__((__packed__)) fpp_qm_qos_enable_cmd_t;              
 
-typedef struct fpp_qm_queue_qos_enable_cmd {
+typedef struct {
 #ifndef LS1043
 	uint16_t	interface;
 #else
@@ -951,7 +985,7 @@ typedef struct fpp_qm_queue_qos_enable_cmd {
 } __attribute__((__packed__)) fpp_qm_queue_qos_enable_cmd_t;
 
 
-typedef struct fpp_qm_qos_alg_cmd {
+typedef struct {
 #ifndef LS1043
 	uint16_t	interface;
 #else
@@ -960,7 +994,7 @@ typedef struct fpp_qm_qos_alg_cmd {
         uint16_t	scheduler;
 } __attribute__((__packed__)) fpp_qm_qos_alg_cmd_t;
                 
-typedef struct fpp_qm_nhigh_cmd {
+typedef struct {
 #ifndef LS1043
 	uint16_t	interface;
 #else
@@ -969,7 +1003,7 @@ typedef struct fpp_qm_nhigh_cmd {
         uint16_t	number_high_queues;
 } __attribute__((__packed__)) fpp_qm_nhigh_cmd_t;
 
-typedef struct fpp_qm_max_txdepth_cmd_t {
+typedef struct {
 #ifndef LS1043
 	uint16_t	interface;
 #else
@@ -978,7 +1012,7 @@ typedef struct fpp_qm_max_txdepth_cmd_t {
         uint16_t	max_bytes;
 } __attribute__((__packed__)) fpp_qm_max_txdepth_cmd_t;
 
-typedef struct fpp_qm_max_qdepth_cmd {
+typedef struct {
 #ifndef LS1043
 	uint16_t	interface;
 #else
@@ -987,7 +1021,7 @@ typedef struct fpp_qm_max_qdepth_cmd {
         uint16_t	qtxdepth[FPP_NUM_QUEUES];
 } __attribute__((__packed__)) fpp_qm_max_qdepth_cmd_t;
 
-typedef struct fpp_qm_max_weight_cmd {
+typedef struct {
 #ifndef LS1043
 	uint16_t	interface;
 #else
@@ -996,7 +1030,7 @@ typedef struct fpp_qm_max_weight_cmd {
         uint16_t	qxweight[FPP_NUM_QUEUES];
 } __attribute__((__packed__)) fpp_qm_max_weight_cmd_t;
 
-typedef struct fpp_qm_rate_limit_cmd {
+typedef struct {
 #ifndef LS1043
 	uint16_t	interface;
 #else
@@ -1008,12 +1042,12 @@ typedef struct fpp_qm_rate_limit_cmd {
         uint32_t	bucket_size;
 } __attribute__((__packed__)) fpp_qm_rate_limit_cmd_t;
 
-typedef struct fpp_qm_expt_rate_cmd {
+typedef struct {
         uint16_t	if_type;
         uint16_t	pkts_per_msec;
 } __attribute__((__packed__)) fpp_qm_expt_rate_cmd_t;
 
-typedef struct fpp_qm_query_rl
+typedef struct
 {
         uint16_t	action;
         uint16_t	mask;
@@ -1022,7 +1056,7 @@ typedef struct fpp_qm_query_rl
 } __attribute__((__packed__)) fpp_qm_query_rl_t;
 
 #ifndef COMCERTO_2000
-typedef struct fpp_qm_query_cmd
+typedef struct
 {
 	uint16_t action;
 	uint16_t port;
@@ -1100,7 +1134,7 @@ typedef struct fpp_qm_query_sched_cmd
 } __attribute__((__packed__)) fpp_qm_query_sched_cmd_t;
 #endif
 
-typedef struct fpp_qm_reset_cmd {
+typedef struct {
 #ifndef LS1043
 	uint16_t	interface;
 #else
@@ -1109,7 +1143,7 @@ typedef struct fpp_qm_reset_cmd {
 	uint16_t	pad;
 } __attribute__((__packed__)) fpp_qm_reset_cmd_t;
 
-typedef struct fpp_qm_shaper_cfg {
+typedef struct {
 #ifndef LS1043
 	uint16_t	interface;
 #else
@@ -1124,7 +1158,7 @@ typedef struct fpp_qm_shaper_cfg {
         uint32_t	queues;
 } __attribute__((__packed__)) fpp_qm_shaper_cfg_t;
 
-typedef struct fpp_qm_scheduler_cfg {
+typedef struct {
 #ifndef LS1043
 	uint16_t	interface;
 #else
@@ -1137,7 +1171,7 @@ typedef struct fpp_qm_scheduler_cfg {
         uint32_t	queues;
 } __attribute__((__packed__)) fpp_qm_scheduler_cfg_t;
 
-typedef struct fpp_qm_dscp_queue_mod {
+typedef struct {
         uint16_t	queue;
         uint16_t	num_dscp;
         uint8_t	dscp[FPP_NUM_DSCP];
@@ -1181,7 +1215,7 @@ typedef struct fpp_qm_dscp_queue_mod {
 #define FPP_L2_BRIDGE_MODE_LEARNING    2
 #define FPP_L2_BRIDGE_MODE_NO_LEARNING 3
 
-typedef struct fpp_rx_icc_enable_cmd {
+typedef struct {
 	uint16_t	interface;
 	uint16_t	acc_value;
 	uint16_t	on_thr;
@@ -1191,11 +1225,11 @@ typedef struct fpp_rx_icc_enable_cmd {
 	uint32_t	val2;
 } __attribute__((__packed__)) fpp_rx_icc_enable_cmd_t;
 
-typedef struct fpp_rx_icc_disable_cmd {
+typedef struct {
 	uint16_t	interface;
 } __attribute__((__packed__)) fpp_rx_icc_disable_cmd_t;
 
-typedef struct fpp_rx_icc_show_return_cmd {
+typedef struct {
 	uint16_t	padding_in_rc_out;
 	uint16_t	state;
 	uint16_t	acc_value;
@@ -1204,7 +1238,7 @@ typedef struct fpp_rx_icc_show_return_cmd {
 } __attribute__((__packed__)) fpp_rx_icc_show_return_cmd_t;
 
 /* L2 Bridging Enable command */
-typedef struct fpp_l2_bridge_enable_cmd {
+typedef struct {
 	uint16_t	interface;
 	uint16_t	enable_flag;
 	char  		input_name[IFNAMSIZ];
@@ -1212,7 +1246,7 @@ typedef struct fpp_l2_bridge_enable_cmd {
 
 
 /* L2 Bridging Add Entry command */
-typedef struct fpp_l2_bridge_add_entry_cmd {
+typedef struct {
 	uint16_t	input_interface;
 	uint16_t	input_svlan;
 	uint16_t	input_cvlan;
@@ -1233,7 +1267,7 @@ typedef struct fpp_l2_bridge_add_entry_cmd {
 
 
 /* L2 Bridging Remove Entry command */
-typedef struct fpp_l2_bridge_remove_entry_cmd {
+typedef struct {
 	uint16_t	input_interface;
 	uint16_t	input_svlan;
 	uint16_t	input_cvlan;
@@ -1247,7 +1281,7 @@ typedef struct fpp_l2_bridge_remove_entry_cmd {
 
 
 /* L2 Bridging Query Status response */
-typedef struct fpp_l2_bridge_query_status_response {
+typedef struct {
 	uint16_t ackstatus;
 	uint16_t status;
 	uint8_t ifname[IFNAMSIZ];
@@ -1256,7 +1290,7 @@ typedef struct fpp_l2_bridge_query_status_response {
 
 
 /* L2 Bridging Query Entry response */
-typedef struct fpp_l2_bridge_query_entry_response {
+typedef struct {
 	uint16_t	ackstatus;
 	uint16_t	eof;
 	uint16_t	input_interface;
@@ -1278,7 +1312,7 @@ typedef struct fpp_l2_bridge_query_entry_response {
 } __attribute__((__packed__)) fpp_l2_bridge_query_entry_response_t;
 
 /* L2 Bridging  Flow entry command */
-typedef struct fpp_l2_bridge_flow_entry_cmd {
+typedef struct {
 	uint16_t action;				/*Action to perform*/
 	uint16_t	ethertype;			/* If VLAN Tag !=0, ethertype of next header */
 	uint8_t	destaddr[6];			/* Dst MAC addr */
@@ -1301,7 +1335,7 @@ typedef struct fpp_l2_bridge_flow_entry_cmd {
 } __attribute__((__packed__)) fpp_l2_bridge_flow_entry_cmd_t;
 
 /* L2 Bridging Control command */
-typedef struct fpp_l2_bridge_control_cmd {
+typedef struct {
 	uint16_t mode_timeout;		/* Either set bridge mode or set timeout for flow entries */
 } __attribute__((__packed__)) fpp_l2_bridge_control_cmd_t;
 
@@ -1356,56 +1390,56 @@ typedef struct fpp_l2_bridge_control_cmd {
 #define FPP_ERR_FLOW_ENTRY_NOT_FOUND	1600
 #define FPP_ERR_INVALID_IP_FAMILY	1601
 
-typedef struct fpp_stat_enable_cmd {
+typedef struct {
 	uint16_t	action; /* 1 - Enable, 0 - Disable */
 	uint16_t	pad;
 	uint32_t	bitmask; /* Specifies the feature to be enabled or disabled */
 } __attribute__((__packed__)) fpp_stat_enable_cmd_t;
 
-typedef struct fpp_stat_queue_cmd {
+typedef struct {
 	uint16_t	action; /* Reset, Query, Query & Reset */
 	uint16_t	interface;
 	uint16_t	queue;
 	uint16_t	pad;
 } __attribute__((__packed__)) fpp_stat_queue_cmd_t;
 
-typedef struct fpp_stat_interface_cmd {
+typedef struct {
 	uint16_t	action; /* Reset, Query, Query & Reset */
 	uint16_t	interface;
 } __attribute__((__packed__)) fpp_stat_interface_cmd_t;
 
-typedef struct fpp_stat_connection_cmd {
+typedef struct {
 	uint16_t	action; /* Reset, Query, Query & Reset */
 	uint16_t	pad;
 } __attribute__((__packed__)) fpp_stat_connection_cmd_t;
 
-typedef struct fpp_stat_pppoe_status_cmd {
+typedef struct {
 	uint16_t	action; /* Reset, Query, Query & Reset */
 	uint16_t	pad;
 } __attribute__((__packed__)) fpp_stat_pppoe_status_cmd_t;
 
-typedef struct fpp_stat_bridge_status_cmd {
+typedef struct {
 	uint16_t	action; /* Reset, Query, Query & Reset */
 	uint16_t	pad;
 } __attribute__((__packed__)) fpp_stat_bridge_status_cmd_t;
 
-typedef struct fpp_stat_ipsec_status_cmd {
+typedef struct {
 	uint16_t	action; /* Reset, Query, Query & Reset */
 	uint16_t	pad;
 } __attribute__((__packed__)) fpp_stat_ipsec_status_cmd_t;
 
-typedef struct fpp_stat_vlan_status_cmd {
+typedef struct {
 	uint16_t	action; /* Reset, Query, Query & Reset */
 	uint16_t	pad;
 } __attribute__((__packed__)) fpp_stat_vlan_status_cmd_t;
 
-typedef struct fpp_stat_tunnel_status_cmd {
+typedef struct {
 	uint16_t	action; /* Reset, Query, Query & Reset */
 	uint16_t	pad;
         char            if_name[IFNAMSIZ];
 } __attribute__((__packed__)) fpp_stat_tunnel_status_cmd_t;
 
-typedef struct fpp_stat_flow_status_cmd {
+typedef struct {
 	uint8_t	action;
 	uint8_t	pad;
 	uint8_t	ip_family;
@@ -1416,15 +1450,15 @@ typedef struct fpp_stat_flow_status_cmd {
 		struct {
 			uint32_t	Saddr;		/*Source IPv4 address*/
 			uint32_t	Daddr;		/*Destination IPv4 address*/
-		};
+		} v4;
 		struct {
 			uint32_t	Saddr_v6[4];		/*Source IPv6 address*/
 			uint32_t	Daddr_v6[4];		/*Destination IPv6 address*/
-		};
-	};
+		} v6;
+	} ipv;
 } __attribute__((__packed__)) fpp_stat_flow_status_cmd_t;
 
-typedef struct fpp_stat_queue_response {
+typedef struct {
 	uint16_t	ackstatus;
 	uint16_t	rsvd1;
 	uint32_t	peak_queue_occ;
@@ -1432,7 +1466,7 @@ typedef struct fpp_stat_queue_response {
 	uint32_t	dropped_pkts;
 } __attribute__((__packed__)) fpp_stat_queue_response_t;
 
-typedef struct fpp_stat_interface_pkt_response {
+typedef struct {
 	uint16_t	ackstatus;
 	uint16_t	rsvd1;
 	uint32_t	total_pkts_transmitted;
@@ -1441,18 +1475,18 @@ typedef struct fpp_stat_interface_pkt_response {
 	uint32_t	total_bytes_received[2]; /* 64 bit counter stored as 2*32 bit counters */
 } __attribute__((__packed__)) fpp_stat_interface_pkt_response_t;
 
-typedef struct fpp_stat_conn_response {
+typedef struct {
 	uint16_t	ackstatus;
 	uint16_t	rsvd1;
 	uint32_t	max_active_connections;
 	uint32_t	num_active_connections;
 } __attribute__((__packed__)) fpp_stat_conn_response_t;
 
-typedef struct fpp_stat_pppoe_status_response {
+typedef struct {
 	uint16_t ackstatus;
 } __attribute__((__packed__)) fpp_stat_pppoe_status_response_t;
 
-typedef struct fpp_stat_pppoe_entry_response {
+typedef struct {
 	uint16_t 	ackstatus;
 	uint16_t 	eof;
 	uint16_t	sessionid;
@@ -1461,11 +1495,11 @@ typedef struct fpp_stat_pppoe_entry_response {
 	uint32_t	total_packets_transmitted;
 } __attribute__((__packed__)) fpp_stat_pppoe_entry_response_t;
 
-typedef struct fpp_stat_bridge_status_response {
+typedef struct {
 	uint16_t	ackstatus;
 } __attribute__((__packed__)) fpp_stat_bridge_status_response_t;
 
-typedef struct fpp_stat_bridge_entry_response {
+typedef struct {
 	uint16_t	ackstatus;
 	uint16_t	eof;
 	uint16_t	input_interface;
@@ -1483,7 +1517,7 @@ typedef struct fpp_stat_bridge_entry_response {
 	char        output_name[IFNAMSIZ];
 } __attribute__((__packed__)) fpp_stat_bridge_entry_response_t;
 
-typedef struct fpp_stat_ipsec_entry_response {
+typedef struct {
 	uint16_t	ackstatus;
 	uint16_t	eof;
 	uint16_t	family;
@@ -1497,7 +1531,7 @@ typedef struct fpp_stat_ipsec_entry_response {
 } __attribute__((__packed__)) fpp_stat_ipsec_entry_response_t;
 
 
-typedef struct fpp_stat_vlan_entry_response {
+typedef struct {
 	uint16_t ackstatus;
 	uint16_t eof;
 	uint16_t vlanID;
@@ -1511,7 +1545,7 @@ typedef struct fpp_stat_vlan_entry_response {
 } __attribute__((__packed__)) fpp_stat_vlan_entry_response_t;
 
 
-typedef struct fpp_stat_tunnel_entry_response {
+typedef struct {
 	uint16_t ackstatus;
 	uint16_t eof;
 	uint32_t rsvd;
@@ -1522,7 +1556,7 @@ typedef struct fpp_stat_tunnel_entry_response {
 	unsigned char if_name[IFNAMSIZ];
 } __attribute__((__packed__)) fpp_stat_tunnel_entry_response_t;
 
-typedef struct fpp_stat_flow_entry_response {
+typedef struct {
 	uint16_t	ackstatus;
 	uint8_t	ip_family;
 	uint8_t	Protocol;
@@ -1532,12 +1566,12 @@ typedef struct fpp_stat_flow_entry_response {
 		struct {
 			uint32_t	Saddr;		/*Source IPv4 address*/
 			uint32_t	Daddr;		/*Destination IPv4 address*/
-		};
+		} v4;
 		struct {
 			uint32_t	Saddr_v6[4];		/*Source IPv6 address*/
 			uint32_t	Daddr_v6[4];		/*Destination IPv6 address*/
-		};
-	};
+		} v6;
+	} ipv;
 	uint64_t	TotalPackets;
 	uint64_t	TotalBytes;
 } __attribute__((__packed__)) fpp_stat_flow_entry_response_t;
@@ -1571,7 +1605,7 @@ typedef struct fpp_stat_flow_entry_response {
 #define FPP_ALTCONF_IPSECRL_ON		1
 #define FPP_ALTCONF_IPSECRL_NUM_PARAMS	3  /* maximu number of u32 allowed for this option */
 
-typedef struct fpp_alt_set_cmd {
+typedef struct {
 	uint16_t	option_id;
 	uint16_t	num_params;
 	uint32_t	params[FPP_ALTCONF_OPTION_MAX_PARAMS];
@@ -1586,26 +1620,26 @@ typedef struct fpp_alt_set_cmd {
 #define FPP_NATPT_CONTROL_4to6		0x02
 #define FPP_NATPT_CONTROL_TCPFIN	0x0100
 
-typedef struct fpp_natpt_open_cmd {
+typedef struct {
 	uint16_t		socket_a;
 	uint16_t		socket_b;
 	uint16_t		control;
 	uint16_t		rsvd1;
 } __attribute__((__packed__)) fpp_natpt_open_cmd_t;
 
-typedef struct fpp_natpt_close_cmd {
+typedef struct {
 	uint16_t		socket_a;
 	uint16_t		socket_b;
 } __attribute__((__packed__)) fpp_natpt_close_cmd;
 
-typedef struct fpp_natpt_query_cmd {
+typedef struct {
 	uint16_t		reserved1;
 	uint16_t		socket_a;
 	uint16_t		socket_b;
 	uint16_t		reserved2;
 } __attribute__((__packed__)) fpp_natpt_query_cmd_t;
 
-typedef struct fpp_natpt_query_response {
+typedef struct {
 	uint16_t		retcode;
 	uint16_t		socket_a;
 	uint16_t		socket_b;
@@ -1624,7 +1658,7 @@ typedef struct fpp_natpt_query_response {
 #define FPP_CMD_IPV4_FF_CONTROL		0x0321
 
 /* Structure representing the command sent to enable/disable fast-forward */
-typedef struct fpp_ff_ctrl_cmd {
+typedef struct {
         uint16_t enable;
         uint16_t reserved;
 } __attribute__((__packed__)) fpp_ff_ctrl_cmd_t;
@@ -1637,7 +1671,7 @@ typedef struct fpp_ff_ctrl_cmd {
 #define FPP_CMD_VLAN_RESET		0x0902
 
 /* VLAN command as understood by FPP */
-typedef struct fpp_vlan_cmd {
+typedef struct {
         uint16_t       action;
         uint16_t       vlan_id; /* Carries skip count for ACTION_QUERY */
         char 		vlan_ifname[IFNAMSIZ];
@@ -1653,7 +1687,7 @@ typedef struct fpp_vlan_cmd {
 
 
 /* MacVlan command as understood by FPP */
-typedef struct fpp_macvlan_cmd {
+typedef struct {
         uint16_t       action;
         unsigned char   macaddr[6]; 
         char 		macvlan_ifname[IFNAMSIZ];
@@ -1692,7 +1726,7 @@ typedef struct fpp_macvlan_cmd {
 #define FPP_CMD_NETKEY_FLOW_REMOVE		FPP_CMD_IPSEC_FLOW_REMOVE
 #define FPP_CMD_NETKEY_FLOW_NOTIFY		FPPCMD_IPSEC_FLOW_NOTIFY
 
-typedef struct fpp_sa_query_cmd {
+typedef struct {
         uint16_t	action;
         uint16_t	handle; /* handle */
         /* SPI information */
@@ -1758,7 +1792,7 @@ typedef struct fpp_sa_query_cmd {
 #define FPP_ERR_PPPOE_ENTRY_NOT_FOUND		801
 
 /* Structure representing the command sent to add or remove a pppoe session */
-typedef struct fpp_pppoe_cmd {
+typedef struct {
 	uint16_t action;		 	/*Action to perform*/
 	uint16_t sessionid;
 	uint8_t  macaddr[6];
@@ -1767,13 +1801,13 @@ typedef struct fpp_pppoe_cmd {
 	uint16_t mode;
 } __attribute__((__packed__)) fpp_pppoe_cmd_t;
 
-typedef struct fpp_pppoe_idle {
+typedef struct {
 	char		ppp_if[IFNAMSIZ];
 	uint32_t	xmit_idle;
 	uint32_t	recv_idle;
 } __attribute__((__packed__)) fpp_pppoe_idle_t;
 
-typedef struct fpp_relay_info {
+typedef struct {
         uint8_t        peermac1[6];
         uint8_t        peermac2[6];
         char            ipifname[IFNAMSIZ];
@@ -1783,7 +1817,7 @@ typedef struct fpp_relay_info {
 } __attribute__((__packed__)) fpp_relay_info_t;
 
 /* Structure representing the command sent to add or remove a pppoe session */
-typedef struct fpp_pppoe_relay_cmd {
+typedef struct {
         uint16_t       action;      /*Action to perform */
         uint8_t        peermac1[6];
         uint8_t        peermac2[6];
@@ -1840,7 +1874,7 @@ typedef struct fpp_wifi_cmd
 #define FPP_CMD_TUNNEL_4rd_ID_CONV_psid     0x0B08
 
 /* CMM / FPP API Command */
-typedef struct fpp_tunnel_create_cmd {
+typedef struct {
 	char            name[IFNAMSIZ];
 	uint32_t       local[4];
 	uint32_t       remote[4];
@@ -1857,11 +1891,11 @@ typedef struct fpp_tunnel_create_cmd {
 	uint16_t	pad;
 } __attribute__((__packed__)) fpp_tunnel_create_cmd_t;
 
-typedef struct fpp_tunnel_del_cmd {
+typedef struct {
         char            name[IFNAMSIZ];
 } __attribute__((__packed__)) fpp_tunnel_del_cmd_t;
 
-typedef struct fpp_tunnel_sec_cmd {
+typedef struct {
         char            name[IFNAMSIZ];
         uint16_t       sa_nr;
         uint16_t       sa_reply_nr;
@@ -1870,7 +1904,7 @@ typedef struct fpp_tunnel_sec_cmd {
 } __attribute__((__packed__)) fpp_tunnel_sec_cmd_t;
 
 /* CMM / FPP API Command */
-typedef struct fpp_tunnel_query_cmd {
+typedef struct {
 	unsigned short	result;
 	unsigned short 	unused;
         char            name[IFNAMSIZ];
@@ -1898,7 +1932,7 @@ typedef struct {
 }sam_port_info_t;
 typedef sam_port_info_t rt_mw_ipstack_sam_port_t;
 
-typedef struct fpp_tunnel_id_conv_cmd {
+typedef struct {
        uint8_t        name[IFNAMSIZ];
        sam_port_info_t sam_port_info;
         uint32_t       IdConvStatus:1,
@@ -1907,7 +1941,7 @@ typedef struct fpp_tunnel_id_conv_cmd {
 
 #else
 
-typedef struct fpp_tunnel_id_conv_cmd {
+typedef struct {
 	uint16_t IdConvStatus;
         uint16_t       Pad;
 } __attribute__((__packed__)) fpp_tunnel_id_conv_cmd_t;
@@ -1964,7 +1998,7 @@ typedef struct CAL_PACKED {
 	uint32_t	timeout_value2;
 } fpp_timeout_cmd_t;
 
-typedef struct fpp_frag_timeout_cmd {
+typedef struct {
 	uint16_t	timeout;
 	uint16_t	mode;
 } __attribute__((__packed__)) fpp_frag_timeout_cmd_t;
@@ -1979,20 +2013,20 @@ typedef struct fpp_frag_timeout_cmd {
 #define FPP_PKTCAP_SLICE				0x2
 #define MAX_FLF_INSTRUCTIONS                            30
 
-typedef struct fpp_pktcap_status_cmd{
+typedef struct {
 	uint16_t	action;
 	uint8_t 	ifindex;
 	uint8_t	status;
 }__attribute__((__packed__)) fpp_pktcap_status_cmd_t;
 
-typedef struct fpp_pktcap_slice_cmd{
+typedef struct {
 	uint16_t	action;
 	uint8_t 	ifindex;
 	uint8_t	rsvd;
 	uint16_t	slice;
 }__attribute__((__packed__)) fpp_pktcap_slice_cmd_t;
 
-typedef struct fpp_pktcap_query_cmd{
+typedef struct {
 	uint16_t	slice;
 	uint16_t	status;
 }__attribute__((__packed__)) fpp_pktcap_query_cmd_t;
@@ -2002,7 +2036,7 @@ typedef struct fpp_pktcap_query_cmd{
 /* Port Update command - begin */
 
 #define FPP_CMD_PORT_UPDATE 0x0505
-typedef struct fpp_port_update_cmd {
+typedef struct {
 	uint16_t port_id;
 	char ifname[IFNAMSIZ];
 }__attribute__((__packed__)) fpp_port_update_cmd_t;
@@ -2021,17 +2055,17 @@ typedef struct fpp_port_update_cmd {
 #define FPP_ERR_ICC_THRESHOLD_OUT_OF_RANGE	1503
 #define FPP_ERR_ICC_INVALID_MASKLEN		1504
 
-typedef struct fpp_icc_reset_cmd {
+typedef struct {
 	uint16_t	reserved1;
 	uint16_t	reserved2;
 } __attribute__((__packed__)) fpp_icc_reset_cmd_t;
 
-typedef struct fpp_icc_threshold_cmd {
+typedef struct {
 	uint16_t	bmu1_threshold;
 	uint16_t	bmu2_threshold;
 } __attribute__((__packed__)) fpp_icc_threshold_cmd_t;
 
-typedef struct fpp_icc_add_delete_cmd {
+typedef struct {
 	uint16_t	action;
 	uint8_t	interface;
 	uint8_t	table_type;
@@ -2065,16 +2099,16 @@ typedef struct fpp_icc_add_delete_cmd {
 			uint16_t prio_from;
 			uint16_t prio_to;
 		} vlan;
-	};
+	} icc;
 } __attribute__((__packed__)) fpp_icc_add_delete_cmd_t;
 
-typedef struct fpp_icc_query_cmd {
+typedef struct {
 	uint16_t	action;
 	uint8_t	interface;
 	uint8_t	reserved;
 } __attribute__((__packed__)) fpp_icc_query_cmd_t;
 
-typedef struct fpp_icc_query_reply {
+typedef struct {
 	uint16_t	rtncode;
 	uint16_t	query_result;
 	uint8_t	interface;
@@ -2109,14 +2143,14 @@ typedef struct fpp_icc_query_reply {
 			uint16_t prio_from;
 			uint16_t prio_to;
 		} vlan;
-	};
+	} icc;
 } __attribute__((__packed__)) fpp_icc_query_reply_t;
 
 /*----------------------------------------L2TP-------------------------------*/
 #define FPP_CMD_L2TP_ITF_ADD		0x1600
 #define FPP_CMD_L2TP_ITF_DEL		0x1601
 
-typedef struct fpp_l2tp_itf_add_cmd {
+typedef struct {
 	char ifname[IFNAMSIZ];
 	uint16_t	sock_id;
 	uint16_t	local_tun_id;
@@ -2126,7 +2160,7 @@ typedef struct fpp_l2tp_itf_add_cmd {
 	uint16_t	options;
 }__attribute__((__packed__)) fpp_l2tp_itf_add_cmd_t;
 
-typedef struct fpp_l2tp_itf_del_cmd {
+typedef struct {
 	char ifname[IFNAMSIZ];
 }__attribute__((__packed__)) fpp_l2tp_itf_del_cmd_t;
 #endif /* FPP_H_ */

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -17,7 +17,7 @@
 
 struct pfe_hif_tag
 {
-	void *cbus_base_va;			/*	CBUS base virtual address */
+	addr_t cbus_base_va;			/*	CBUS base virtual address */
 	pfe_hif_chnl_t **channels;
 #ifdef PFE_CFG_PARANOID_IRQ
 	oal_mutex_t lock;			/*	Mutex to lock access to HW resources */
@@ -30,7 +30,7 @@ struct pfe_hif_tag
  * @param[in]	hif The HIF instance
  * @return		EOK if interrupt has been processed
  */
-errno_t pfe_hif_isr(pfe_hif_t *hif)
+errno_t pfe_hif_isr(const pfe_hif_t *hif)
 {
 	errno_t ret;
 
@@ -67,7 +67,7 @@ errno_t pfe_hif_isr(pfe_hif_t *hif)
  * @details		Only affects HIF IRQs, not channel IRQs.
  * @param[in]	hif The HIF instance
  */
-void pfe_hif_irq_mask(pfe_hif_t *hif)
+void pfe_hif_irq_mask(const pfe_hif_t *hif)
 {
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&hif->lock))
@@ -91,7 +91,7 @@ void pfe_hif_irq_mask(pfe_hif_t *hif)
  * @details		Only affects HIF IRQs, not channel IRQs.
  * @param[in]	hif The HIF instance
  */
-void pfe_hif_irq_unmask(pfe_hif_t *hif)
+void pfe_hif_irq_unmask(const pfe_hif_t *hif)
 {
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&hif->lock))
@@ -118,7 +118,7 @@ void pfe_hif_irq_unmask(pfe_hif_t *hif)
  * @param[in]	channels Bitmask specifying channels to be managed by the instance
  * @return		The HIF instance or NULL if failed
  */
-pfe_hif_t *pfe_hif_create(void *cbus_base_va, pfe_hif_chnl_id_t channels)
+pfe_hif_t *pfe_hif_create(addr_t cbus_base_va, pfe_hif_chnl_id_t channels)
 {
 	pfe_hif_t *hif;
 	int32_t ii;
@@ -128,7 +128,7 @@ pfe_hif_t *pfe_hif_create(void *cbus_base_va, pfe_hif_chnl_id_t channels)
 #endif /* PFE_CFG_PFE_MASTER */
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == cbus_base_va))
+	if (unlikely(NULL_ADDR == cbus_base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -236,7 +236,7 @@ pfe_hif_t *pfe_hif_create(void *cbus_base_va, pfe_hif_chnl_id_t channels)
  * @param[in]	channel_id The channel ID
  * @return		The HIF channel instance or NULL if failed
  */
-pfe_hif_chnl_t *pfe_hif_get_channel(pfe_hif_t *hif, pfe_hif_chnl_id_t channel_id)
+pfe_hif_chnl_t *pfe_hif_get_channel(const pfe_hif_t *hif, pfe_hif_chnl_id_t channel_id)
 {
 	uint32_t ii;
 
@@ -330,7 +330,7 @@ void pfe_hif_destroy(pfe_hif_t *hif)
  * @return		Number of bytes written to the buffer
  *
  */
-uint32_t pfe_hif_get_text_statistics(pfe_hif_t *hif, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_hif_get_text_statistics(const pfe_hif_t *hif, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 	

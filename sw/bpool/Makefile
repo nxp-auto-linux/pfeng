@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2020 NXP
+#  Copyright 2018-2021 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -41,7 +41,7 @@ LIBS_profile += -lprofilingS
 CCFLAGS_pfe += -D$(PFE_CFG_TARGET_ARCH_DEF) -D$(PFE_CFG_TARGET_OS_DEF) -D$(PFE_CFG_BUILD_PROFILE_DEF)
 
 #Generic compiler flags (which include build type flags)
-CCFLAGS_all += -Wall -fmessage-length=0
+CCFLAGS_all += -Wall -fmessage-length=0 -fvisibility=hidden
 CCFLAGS_all += $(CCFLAGS_$(BUILD_PROFILE))
 CCFLAGS_all += $(CCFLAGS_pfe)
 #Shared library has to be compiled with -fPIC
@@ -97,6 +97,7 @@ rebuild: clean all
 ccflags-y += $(INCLUDES)
 ccflags-y += $(CCFLAGS_pfe)
 ccflags-y += $(GLOBAL_CCFLAGS)
+ccflags-y += -Werror
 
 bpool-y := src/bpool.o
 #bpool-y := $(OBJS)

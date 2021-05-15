@@ -431,6 +431,8 @@ static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route
 	pfe_rtable_entry_set_timeout(new_entry, fci_connections_get_default_timeout(tuple->proto));
 	/*	Set route ID (network endian) */
 	pfe_rtable_entry_set_route_id(new_entry, route->id);
+	/*	Set ttl decrement by default */
+	pfe_rtable_entry_set_ttl_decrement(new_entry);
 
 	/*	Change MAC addresses */
 	pfe_phy_if_get_mac_addr(route->iface, mac_addr);
@@ -1159,9 +1161,68 @@ free_and_fail:
 		}
 
 		case FPP_ACTION_UPDATE:
-		{
-			/*	Not supported yet */
-			*fci_ret = FPP_ERR_UNKNOWN_COMMAND;
+		{	
+			if (TRUE == ipv6)
+			{
+				NXP_LOG_DEBUG("Attempt to update IPv6 connection:\n%s\n", fci_connections_ipv6_cmd_to_str(ct6_cmd));
+			}
+			else
+			{
+				NXP_LOG_DEBUG("Attempt to update IPv4 connection:\n%s\n", fci_connections_ipv4_cmd_to_str(ct_cmd));
+			}
+
+			NXP_LOG_INFO("UPDATED conntrack, only TTL decrement flag will be updated\n");
+
+			/*      Get entry by 5-tuple */
+			if (TRUE == ipv6)
+ 			{
+				fci_connections_ipv6_cmd_to_5t(ct6_cmd, &tuple);
+			}
+			else
+			{
+				fci_connections_ipv4_cmd_to_5t(ct_cmd, &tuple);
+			}
+
+			entry = pfe_rtable_get_first(context->rtable, RTABLE_CRIT_BY_5_TUPLE, (void *)&tuple);
+
+			if (NULL != entry)
+			{
+
+				if (TRUE == ipv6)
+				{
+					if (ct6_cmd->flags & CTCMD_FLAGS_TTL_DECREMENT)
+					{
+						pfe_rtable_entry_set_ttl_decrement(entry);
+					}
+					else
+					{
+						pfe_rtable_entry_remove_ttl_decrement(entry);
+					}
+				}
+				else
+				{
+					if (ct_cmd->flags & CTCMD_FLAGS_TTL_DECREMENT)
+					{
+						pfe_rtable_entry_set_ttl_decrement(entry);
+					}
+					else
+					{
+						pfe_rtable_entry_remove_ttl_decrement(entry);
+					}
+				}
+
+				*fci_ret = FPP_ERR_OK;
+				ret = EOK;
+
+			}
+			else
+			{
+				NXP_LOG_DEBUG("FPP_CMD_IPVx_CONNTRACK: Entry not found\n");
+				*fci_ret = FPP_ERR_CT_ENTRY_NOT_FOUND;
+				ret = EEXIST;
+			}
+
+
 			break;
 		}
 
@@ -1279,6 +1340,18 @@ free_and_fail:
 			if (EOK != pfe_rtable_entry_to_5t_out(entry, &tuple))
 			{
 				NXP_LOG_ERROR("Couldn't get output tuple\n");
+			}
+
+			if (0 != (actions & RT_ACT_DEC_TTL))
+			{
+				if (TRUE == ipv6)
+				{
+					ct6_reply->flags |= CTCMD_FLAGS_TTL_DECREMENT;
+				}
+				else
+				{
+					ct_reply->flags |= CTCMD_FLAGS_TTL_DECREMENT;
+				}
 			}
 
 			if (0 != (actions & RT_ACT_CHANGE_SIP_ADDR))

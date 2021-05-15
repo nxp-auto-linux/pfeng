@@ -115,7 +115,7 @@ typedef struct
  */
 struct __attribute__((aligned(HAL_CACHE_LINE_SIZE))) __pfe_hif_chnl_tag
 {
-	void *cbus_base_va;				/*	CBUS base virtual address */
+	addr_t cbus_base_va;				/*	CBUS base virtual address */
 	uint32_t id;					/*	Channel ID within HIF (0, 1, 2, ...) */
 	pfe_hif_ring_t *rx_ring;		/*	The RX ring instance */
 	pfe_hif_ring_t *tx_ring;		/*	The TX ring instance */
@@ -142,7 +142,7 @@ static errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl) __attribute__((cold));
 static errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_t *chnl) __attribute__((cold));
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
-static void pfe_hif_chnl_refill_rx_buffers(pfe_hif_chnl_t *chnl) __attribute__((hot));
+static void pfe_hif_chnl_refill_rx_buffers(const pfe_hif_chnl_t *chnl) __attribute__((hot));
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
 #ifdef PFE_CFG_HIF_TX_FIFO_FIX
@@ -294,7 +294,7 @@ void pfe_hif_chnl_irq_unmask(pfe_hif_chnl_t *chnl)
  * @brief	Supply fresh RX buffers to the channel
  * @details	Function populates channel's RX resource with buffer from internal pool
  */
-__attribute__((hot)) static void pfe_hif_chnl_refill_rx_buffers(pfe_hif_chnl_t *chnl)
+__attribute__((hot)) static void pfe_hif_chnl_refill_rx_buffers(const pfe_hif_chnl_t *chnl)
 {
 	void *new_buffer_va;
 	void *new_buffer_pa;
@@ -355,13 +355,13 @@ __attribute__((hot)) static void pfe_hif_chnl_refill_rx_buffers(pfe_hif_chnl_t *
  * 					for HIF NOCPY channel abstraction.
  * @return		The channel instance or NULL if failed
  */
-__attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(void *cbus_base_va, uint32_t id, pfe_bmu_t *bmu)
+__attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, uint32_t id, const pfe_bmu_t *bmu)
 {
 	pfe_hif_chnl_t *chnl;
 	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == cbus_base_va))
+	if (unlikely(NULL_ADDR == cbus_base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -499,7 +499,7 @@ free_and_fail:
  * @param[in]	chnl The channel instance
  * @return		The identifier of the channel
  */
-__attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_id(pfe_hif_chnl_t *chnl)
+__attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_id(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -707,7 +707,7 @@ __attribute__((cold)) void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl)
  * 				pfe_hif_chnl_supply_rx_buf() call(s).
  * @param[in]	chnl The channel instance
  */
-__attribute__((hot)) void pfe_hif_chnl_rx_dma_start(pfe_hif_chnl_t *chnl)
+__attribute__((hot)) void pfe_hif_chnl_rx_dma_start(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -739,7 +739,7 @@ __attribute__((hot)) void pfe_hif_chnl_rx_dma_start(pfe_hif_chnl_t *chnl)
  * 				after TX ring is modified after the pfe_hif_chnl_tx() call(s).
  * @param[in]	chnl The channel instance
  */
-__attribute__((hot)) void pfe_hif_chnl_tx_dma_start(pfe_hif_chnl_t *chnl)
+__attribute__((hot)) void pfe_hif_chnl_tx_dma_start(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -977,6 +977,49 @@ __attribute__((hot)) void pfe_hif_chnl_tx_irq_unmask(pfe_hif_chnl_t *chnl)
 }
 
 /**
+ * @brief		Get HIF channel RX coalesce
+ * @details		Get HIF channel coalesce setting
+ * @param[in]	chnl The channel instance
+ * @param[out]	frames The channel coalesce setting by frames
+ * @param[out]	cycles The channel coalesce setting by cycles
+ * @retval		EOK On success
+ */
+errno_t pfe_hif_chnl_get_rx_irq_coalesce(pfe_hif_chnl_t *chnl, uint32_t *frames, uint32_t *cycles)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == chnl) || (NULL == frames) || (NULL == cycles)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pfe_hif_chnl_cfg_get_rx_irq_coalesce(chnl->cbus_base_va, chnl->id, frames, cycles);
+}
+
+/**
+ * @brief		Set HIF channel RX coalesce
+ * @details		Set HIF channel coalesce setting.
+ * 				For frames=0 and cycles=0, the coalescing will be disabled.
+ * @param[in]	chnl The channel instance
+ * @param[in]	frames The channel coalesce setting by frames
+ * @param[in]	cycles The channel coalesce setting by cycles
+ * @retval		EOK On success
+ */
+errno_t pfe_hif_chnl_set_rx_irq_coalesce(pfe_hif_chnl_t *chnl, uint32_t frames, uint32_t cycles)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == chnl))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pfe_hif_chnl_cfg_set_rx_irq_coalesce(chnl->cbus_base_va, chnl->id, frames, cycles);
+}
+
+/**
  * @brief		Get TX confirmation status
  * @details		After pfe_hif_chnl_tx() call the HIF channel will transmit the
  * 				supplied buffer. Once the transmission has been done a TX confirmation
@@ -986,7 +1029,7 @@ __attribute__((hot)) void pfe_hif_chnl_tx_irq_unmask(pfe_hif_chnl_t *chnl)
  * @param[in]	chnl The channel instance
  * @return		TRUE if channel got new TX confirmation, FALSE otherwise
  */
-__attribute__((pure, hot)) bool_t pfe_hif_chnl_has_tx_conf(pfe_hif_chnl_t *chnl)
+__attribute__((pure, hot)) bool_t pfe_hif_chnl_has_tx_conf(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -1004,7 +1047,7 @@ __attribute__((pure, hot)) bool_t pfe_hif_chnl_has_tx_conf(pfe_hif_chnl_t *chnl)
  * @param		chnl The channel instance
  * @return		TRUE if RX resource can accept new buffer
  */
-__attribute__((pure, hot)) bool_t pfe_hif_chnl_can_accept_rx_buf(pfe_hif_chnl_t *chnl)
+__attribute__((pure, hot)) bool_t pfe_hif_chnl_can_accept_rx_buf(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -1026,7 +1069,7 @@ __attribute__((pure, hot)) bool_t pfe_hif_chnl_can_accept_rx_buf(pfe_hif_chnl_t 
  * @retval		TRUE Channel can accept 'num' TX requests (buffers)
  * @retval		FALSE Not enough space in TX FIFO
  */
-__attribute__((pure, hot)) bool_t pfe_hif_chnl_can_accept_tx_num(pfe_hif_chnl_t *chnl, uint16_t num)
+__attribute__((pure, hot)) bool_t pfe_hif_chnl_can_accept_tx_num(const pfe_hif_chnl_t *chnl, uint16_t num)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -1099,7 +1142,7 @@ __attribute__((hot)) bool_t pfe_hif_chnl_can_accept_tx_data(pfe_hif_chnl_t *chnl
  * @retval		TRUE TX FIFO is empty
  * @retval		FALSE TX FIFO contains entries waiting for transmission
  */
-__attribute__((pure, hot)) bool_t pfe_hif_chnl_tx_fifo_empty(pfe_hif_chnl_t *chnl)
+__attribute__((pure, hot)) bool_t pfe_hif_chnl_tx_fifo_empty(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -1117,7 +1160,7 @@ __attribute__((pure, hot)) bool_t pfe_hif_chnl_tx_fifo_empty(pfe_hif_chnl_t *chn
  * @param[in]	chnl The channel instance
  * @return		Size of the RX FIFO in number of entries
  */
-__attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_rx_fifo_depth(pfe_hif_chnl_t *chnl)
+__attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_rx_fifo_depth(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -1135,7 +1178,7 @@ __attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_rx_fifo_depth(pfe_hif_chnl
  * @param[in]	chnl The channel instance
  * @return		Size of the TX FIFO in number of entries
  */
-__attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_tx_fifo_depth(pfe_hif_chnl_t *chnl)
+__attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_tx_fifo_depth(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -1164,7 +1207,7 @@ __attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_tx_fifo_depth(pfe_hif_chnl
  * @retval		ENOSPC TX queue is full
  * @retval		EIO Internal error
  */
-__attribute__((hot)) errno_t pfe_hif_chnl_tx(pfe_hif_chnl_t *chnl, void *buf_pa, void *buf_va, uint32_t len, bool_t lifm)
+__attribute__((hot)) errno_t pfe_hif_chnl_tx(const pfe_hif_chnl_t *chnl, const void *buf_pa, const void *buf_va, uint32_t len, bool_t lifm)
 {
 	errno_t err = EOK;
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
@@ -1326,7 +1369,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_tx(pfe_hif_chnl_t *chnl, void *buf_pa,
  * @retval		EOK Next frame has been transmitted
  * @retval		EAGAIN No pending confirmations
  */
-__attribute__((hot)) errno_t pfe_hif_chnl_get_tx_conf(pfe_hif_chnl_t *chnl)
+__attribute__((hot)) errno_t pfe_hif_chnl_get_tx_conf(const pfe_hif_chnl_t *chnl)
 {
 	bool_t lifm;
 #ifdef PFE_CFG_HIF_TX_FIFO_FIX
@@ -1448,7 +1491,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx(pfe_hif_chnl_t *chnl, void **buf_pa
  * @retval		EAGAIN No more data to receive right now
  * @retval		ENOMEM Out of memory
  */
-__attribute__((hot)) errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf_va, uint32_t *len, bool_t *lifm, void **meta)
+__attribute__((hot)) errno_t pfe_hif_chnl_rx_va(const pfe_hif_chnl_t *chnl, void **buf_va, uint32_t *len, bool_t *lifm, void **meta)
 {
 	errno_t err;
 	void *buf_pa;
@@ -1541,7 +1584,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf
  * @return		Size of the metadata storage pointed by the 'meta' arugument of
  * 				the pfe_hif_chnl_rx_va().
  */
-__attribute__((cold)) uint32_t pfe_hif_chnl_get_meta_size(pfe_hif_chnl_t *chnl)
+__attribute__((cold)) uint32_t pfe_hif_chnl_get_meta_size(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -1652,7 +1695,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_release_buf(pfe_hif_chnl_t *chnl, void
  * @return		EOK Success
  * @note		Must not be preempted by pfe_hif_chnl_rx_disable()
  */
-__attribute__((hot)) errno_t pfe_hif_chnl_supply_rx_buf(pfe_hif_chnl_t *chnl, void *buf_pa, uint32_t size)
+__attribute__((hot)) errno_t pfe_hif_chnl_supply_rx_buf(const pfe_hif_chnl_t *chnl, const void *buf_pa, uint32_t size)
 {
 	errno_t err = EOK;
 
@@ -1959,7 +2002,7 @@ free_and_fail:
  * @param[in]	chnl The channel instance
  * @return		TRUE if the BDP is active, FALSE otherwise
  */
-__attribute__((hot)) bool_t pfe_hif_chnl_is_rx_dma_active(pfe_hif_chnl_t *chnl)
+__attribute__((hot)) bool_t pfe_hif_chnl_is_rx_dma_active(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -1990,7 +2033,7 @@ __attribute__((hot)) bool_t pfe_hif_chnl_is_rx_dma_active(pfe_hif_chnl_t *chnl)
  * @param[in]	chnl The channel instance
  * @return		TRUE if the BDP is active, FALSE otherwise
  */
-__attribute__((hot)) bool_t pfe_hif_chnl_is_tx_dma_active(pfe_hif_chnl_t *chnl)
+__attribute__((hot)) bool_t pfe_hif_chnl_is_tx_dma_active(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -2094,10 +2137,13 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_
 		channel until the BDP RX FIFO is empty. */
 	while (FALSE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
 	{
-		/*	Provide single RX buffer */
-		if (EOK != pfe_hif_chnl_supply_rx_buf(chnl, rx_buf_pa, DUMMY_RX_BUF_LEN))
+		if (0U == pfe_hif_ring_get_fill_level(chnl->rx_ring))
 		{
-			NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
+			/*	Provide single RX buffer */
+			if (EOK != pfe_hif_chnl_supply_rx_buf(chnl, rx_buf_pa, DUMMY_RX_BUF_LEN))
+			{
+				NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
+			}
 		}
 
 		/*	Send dummy packet to self HIF channel */
@@ -2381,7 +2427,7 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
  * @param[in]	size 		Buffer length
  * @param[in]	verb_level 	Verbosity level, number of data written to the buffer
  */
-__attribute__((cold)) uint32_t pfe_hif_chnl_dump_ring(pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, char_t *buf, uint32_t size, uint8_t verb_level)
+__attribute__((cold)) uint32_t pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, char_t *buf, uint32_t size, uint8_t verb_level)
 {
 	uint32_t len = 0;
 
@@ -2407,6 +2453,62 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_dump_ring(pfe_hif_chnl_t *chnl, bool
 }
 
 /**
+ * @brief		Get number of transmitted packets (from PFE to HOST)
+ * @param[in]	emac The channel instance
+ * @return		Number of transmitted packets
+ */
+uint32_t pfe_hif_chnl_get_tx_cnt(const pfe_hif_chnl_t *chnl)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == chnl))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0xffffffffU;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
+	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
+	{
+		/*	HIF_NOCPY */
+		return pfe_hif_chnl_cfg_get_tx_cnt(chnl->cbus_base_va);
+	}
+	else
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
+	{
+		return pfe_hif_chnl_cfg_get_tx_cnt(chnl->cbus_base_va, chnl->id);
+	}
+}
+
+/**
+ * @brief		Get number of received packets (from HOST to PFE)
+ * @param[in]	emac The channel instance
+ * @return		Number of received packets
+ */
+uint32_t pfe_hif_chnl_get_rx_cnt(const pfe_hif_chnl_t *chnl)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == chnl))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0xffffffffU;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
+	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
+	{
+		/*	HIF_NOCPY */
+		return pfe_hif_nocpy_chnl_cfg_get_rx_cnt(chnl->cbus_base_va);
+	}
+	else
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
+	{
+		return pfe_hif_chnl_cfg_get_rx_cnt(chnl->cbus_base_va, chnl->id);
+	}
+}
+
+/**
  * @brief		Return HIF channel runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	chnl 		The channel instance
@@ -2415,7 +2517,7 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_dump_ring(pfe_hif_chnl_t *chnl, bool
  * @param[in]	verb_level 	Verbosity level, number of data written to the buffer
  * @return		Number of bytes written to the buffe
  */
-__attribute__((cold)) uint32_t pfe_hif_chnl_get_text_statistics(pfe_hif_chnl_t *chnl, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+__attribute__((cold)) uint32_t pfe_hif_chnl_get_text_statistics(const pfe_hif_chnl_t *chnl, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 
@@ -2439,7 +2541,8 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_get_text_statistics(pfe_hif_chnl_t *
 		/*	HIF */
 		len += pfe_hif_chnl_cfg_get_text_stat(chnl->cbus_base_va, chnl->id, buf, buf_len, verb_level);
 
-		len += pfe_hif_chnl_dump_ring(chnl, TRUE, TRUE, buf, buf_len, verb_level);
+		if (verb_level >= 9)
+			len += pfe_hif_chnl_dump_ring(chnl, TRUE, TRUE, buf + len, buf_len - len, verb_level);
 	}
 
 	return len;

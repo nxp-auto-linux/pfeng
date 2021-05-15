@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -50,15 +50,15 @@ static inline pfe_hif_chnl_id_t pfe_hif_chnl_from_phy_id(pfe_ct_phy_if_id_t phy)
 
 typedef struct pfe_hif_tag pfe_hif_t;
 
-pfe_hif_t *pfe_hif_create(void *cbus_base_va, pfe_hif_chnl_id_t channels_mask);
-pfe_hif_chnl_t *pfe_hif_get_channel(pfe_hif_t *hif, pfe_hif_chnl_id_t channel_id);
+pfe_hif_t *pfe_hif_create(addr_t cbus_base_va, pfe_hif_chnl_id_t channels_mask);
+pfe_hif_chnl_t *pfe_hif_get_channel(const pfe_hif_t *hif, pfe_hif_chnl_id_t channel_id);
 void pfe_hif_destroy(pfe_hif_t *hif);
 
 #ifdef PFE_CFG_PFE_MASTER
-errno_t pfe_hif_isr(pfe_hif_t *hif);
-void pfe_hif_irq_mask(pfe_hif_t *hif);
-void pfe_hif_irq_unmask(pfe_hif_t *hif);
-uint32_t pfe_hif_get_text_statistics(pfe_hif_t *hif, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+errno_t pfe_hif_isr(const pfe_hif_t *hif);
+void pfe_hif_irq_mask(const pfe_hif_t *hif);
+void pfe_hif_irq_unmask(const pfe_hif_t *hif);
+uint32_t pfe_hif_get_text_statistics(const pfe_hif_t *hif, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 #endif /* PFE_CFG_PFE_MASTER */
 
 #endif /* PUBLIC_PFE_HIF_H_ */

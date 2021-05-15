@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -120,7 +120,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
 	{
 		case FPP_ACTION_REGISTER:
         {
-            ret = fci_fp_db_create_table((char_t *)fp_cmd->t.table_name);
+            ret = fci_fp_db_create_table((char_t *)fp_cmd->table_info.t.table_name);
             if(EOK == ret)
             {
                 *fci_ret = FPP_ERR_OK;
@@ -133,7 +133,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
         }
 		case FPP_ACTION_DEREGISTER:
         {
-            ret = fci_fp_db_destroy_table((char_t *)fp_cmd->t.table_name, FALSE);
+            ret = fci_fp_db_destroy_table((char_t *)fp_cmd->table_info.t.table_name, FALSE);
             if(EOK == ret)
             {
                 *fci_ret = FPP_ERR_OK;
@@ -146,7 +146,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
         }
         case FPP_ACTION_USE_RULE:
         {
-            ret = fci_fp_db_add_rule_to_table((char_t *)fp_cmd->t.table_name, (char_t *)fp_cmd->t.rule_name, oal_ntohs(fp_cmd->t.position));
+            ret = fci_fp_db_add_rule_to_table((char_t *)fp_cmd->table_info.t.table_name, (char_t *)fp_cmd->table_info.t.rule_name, oal_ntohs(fp_cmd->table_info.t.position));
             if(EOK == ret)
             {
                 *fci_ret = FPP_ERR_OK;
@@ -159,7 +159,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
         }
         case FPP_ACTION_UNUSE_RULE:
         {
-            fci_fp_db_remove_rule_from_table((char_t *)fp_cmd->t.rule_name);
+            fci_fp_db_remove_rule_from_table((char_t *)fp_cmd->table_info.t.rule_name);
             if(EOK == ret)
             {
                 *fci_ret = FPP_ERR_OK;
@@ -178,10 +178,10 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
             uint16_t offset;
             pfe_ct_fp_flags_t flags;
 
-            ret = fci_fp_db_get_table_first_rule((char_t *)fp_cmd->t.table_name, &rule_name, &data, &mask, &offset, &flags, &next_rule);
+            ret = fci_fp_db_get_table_first_rule((char_t *)fp_cmd->table_info.t.table_name, &rule_name, &data, &mask, &offset, &flags, &next_rule);
             if(EOK == ret)
             {
-            	fci_fp_construct_rule_reply(&reply_buf->r, rule_name, next_rule, data, mask, offset, flags);
+            	fci_fp_construct_rule_reply(&reply_buf->table_info.r, rule_name, next_rule, data, mask, offset, flags);
                 *fci_ret = FPP_ERR_OK;
                 *reply_len = sizeof(fpp_fp_table_cmd_t);
             }
@@ -199,10 +199,10 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
             uint16_t offset;
             pfe_ct_fp_flags_t flags;
 
-            ret = fci_fp_db_get_table_next_rule((char_t *)fp_cmd->t.table_name, &rule_name, &data, &mask, &offset, &flags, &next_rule);
+            ret = fci_fp_db_get_table_next_rule((char_t *)fp_cmd->table_info.t.table_name, &rule_name, &data, &mask, &offset, &flags, &next_rule);
             if(EOK == ret)
             {
-            	fci_fp_construct_rule_reply(&reply_buf->r, rule_name, next_rule, data, mask, offset, flags);
+            	fci_fp_construct_rule_reply(&reply_buf->table_info.r, rule_name, next_rule, data, mask, offset, flags);
                 *fci_ret = FPP_ERR_OK;
                 *reply_len = sizeof(fpp_fp_table_cmd_t);
             }

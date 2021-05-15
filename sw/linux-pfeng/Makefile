@@ -1,24 +1,35 @@
 #
 # Copyright 2018-2021 NXP
 #
-# SPDX-License-Identifier: GPL-2.0
+# SPDX-License-Identifier:     BSD OR GPL-2.0
 #
 #
 
-KERNELDIR ?= /usr/src/linux-headers-`uname -r`
+ifeq ($(KERNELDIR), )
+	$(error Path to the kernel must be provided in KERNELDIR variable!)
+endif
+
+# Set up all required build options
 TARGET_OS := LINUX
-PFE_CFG_MULTI_INSTANCE_SUPPORT ?= 0
+ARCH := arm64
 PLATFORM ?= aarch64-fsl-linux
-ARCH ?= arm64
+PFE_CFG_MULTI_INSTANCE_SUPPORT ?= 0
 PFE_CFG_IP_VERSION ?= PFE_CFG_IP_VERSION_NPU_7_14a
 PFE_CFG_LINUX_TRACE ?= 0
-PFE_CFG_MC_HIF=0
-PFE_CFG_SC_HIF=1
+PFE_CFG_HIF_USE_BD_TRIGGER ?= 1
+PFE_CFG_BD_MEM = "pfe-bdr-pool"
+PFE_CFG_SYS_MEM = "pfe-bmu2-pool"
+PFE_CFG_LINUX_NO_SERDES_SUPPORT ?= 0
 
+# Warning for PFE_CFG_LINUX_TRACE=1:
+# The compile time checker doesn't work well with -Og
+# See: https://lkml.org/lkml/2018/11/2/542
+
+#
 # Unsupported config options
-# * PFE_CFG_CSUM_ALL_FRAMES	: dynamically managable in driver
-# * PFE_CFG_MC_HIF		: only one client per channel
-# * PFE_CFG_IEEE1588_SUPPORT : dynamicly managed in driver
+# * PFE_CFG_CSUM_ALL_FRAMES		: dynamicly managed in driver
+# * PFE_CFG_MC_HIF, PFE_CFG_SC_HIF	: both are supported pernamently
+# * PFE_CFG_IEEE1588_SUPPORT		: dynamicly managed in driver
 
 PLAT_DEFINES = KBUILD_MODPOST_WARN=1 TARGET_OS=$(TARGET_OS) KERNELDIR=$(KERNELDIR) PLATFORM=$(PLATFORM) ARCH=$(ARCH) CROSS_COMPILE=$(PLATFORM)-
 
@@ -42,30 +53,39 @@ ifneq ($(PFE_CFG_LINUX_TRACE),0)
 ccflags-y += -Og
 endif
 ccflags-y += -Wno-date-time
+ccflags-y += -Werror
+ifneq ($(PFE_CFG_LINUX_NO_SERDES_SUPPORT),0)
+ccflags-y += -DPFENG_CFG_LINUX_NO_SERDES_SUPPORT
+endif
 
 OBJ_LIBFCI_DIR = ../xfci/libfci
-OBJ_DIRS = ../oal ../bpool  ../elf  ../fifo  ../pfe_hif_drv  ../pfe_platform ../common
+OBJ_DIRS = ../oal ../bpool  ../elf  ../fifo  ../pfe_hif_drv ../pfe_platform ../common
 
 ifneq ($(PFE_CFG_FCI_ENABLE),0)
 OBJ_DIRS += ../fci
 endif
 
-pfeng-objs := ../pfe_platform/pfe_platform.o ../oal/oal.o ../elf/elf.o ../fifo/fifo.o ../pfe_hif_drv/pfe_hif_drv.o ../bpool/bpool.o ../common/blalloc.o
-pfeng-slave-objs := ../pfe_platform/pfe_platform.o ../oal/oal.o ../elf/elf.o ../fifo/fifo.o ../pfe_hif_drv/pfe_hif_drv.o ../bpool/bpool.o ../common/blalloc.o
+pfeng-objs-libs := ../pfe_platform/pfe_platform.o ../oal/oal.o ../elf/elf.o ../fifo/fifo.o ../pfe_hif_drv/pfe_hif_drv.o ../bpool/bpool.o ../common/blalloc.o
 
 ifneq ($(PFE_CFG_FCI_ENABLE),0)
-pfeng-objs += ../fci/fci.o
-pfeng-slave-objs += ../fci/fci.o
+pfeng-objs-libs += ../fci/fci.o
 endif
 
+pfeng-objs-core := pfeng-drv.o pfeng-debugfs.o pfeng-hif.o pfeng-bman.o pfeng-netif.o pfeng-ethtool.o pfeng-hwts.o
+
 ifneq ($(PFE_CFG_PFE_MASTER),0)
-pfeng-objs += pfeng-drv.o pfeng-hw-s32g.o pfeng-fw.o pfeng-debugfs.o pfeng-napi.o pfeng-ethtool.o pfeng-mdio.o pfeng-phylink.o pfeng-hif.o pfeng-ptp.o pfeng-hwts.o
+pfeng-objs := $(pfeng-objs-libs) $(pfeng-objs-core) pfeng-fw.o pfeng-mdio.o pfeng-phylink.o pfeng-ptp.o
 obj-m += pfeng.o
 else
-pfeng-slave-objs += pfeng-drv.o pfeng-hw-s32g.o pfeng-fw.o pfeng-debugfs.o pfeng-napi.o pfeng-ethtool.o pfeng-hif.o pfeng-hwts.o
+pfeng-slave-objs := $(pfeng-objs-libs) $(pfeng-objs-core)
 obj-m += pfeng-slave.o
 endif
 
+ifeq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),1)
+ifeq ($(PFE_CFG_IP_VERSION),PFE_CFG_IP_VERSION_NPU_7_14)
+$(error "Unsupported combination: Multi-instance is not supported on cut 1.1 silicon!")
+endif
+endif
 
 .PHONY: all drv-build drv-clean libfci-build libfci-clean
 

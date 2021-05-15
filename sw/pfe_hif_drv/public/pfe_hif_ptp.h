@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2020 NXP
+ *  Copyright 2020-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -17,6 +17,7 @@ typedef struct
 	oal_mutex_t *lock;
 	LLIST_t entries;
 	oal_thread_t *worker;
+	oal_mbox_t *mbox;
 	uint8_t count;
 	bool_t reported;
 } pfe_hif_ptp_ts_db_t;

@@ -6,9 +6,9 @@
  * ========================================================================= */
 
 #include "pfe_cfg.h"
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-
 #include "oal.h"
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 #include "linked_list.h"
 #include "pfe_hif_drv.h"
 #include "pfe_idex.h"
@@ -168,15 +168,15 @@ typedef struct __attribute__((packed)) pfe_idex_request_tag
 	pfe_idex_request_state_t state;
 	/*	Internal linked list hook */
 	union { /* Avoids changing struct size between 32/64bit architectures */
-        struct __attribute__((packed)) {
-        	LLIST_t list_entry;
+		struct __attribute__((packed)) {
+			LLIST_t list_entry;
 			/*	Internal timeout value */
 			uint32_t timeout;
 			void *resp_buf;
 			uint16_t resp_buf_len;
-        };
-        uint8_t padding[30U];
-    };
+		} config;
+		uint8_t padding[30U];
+	} linked;
 } pfe_idex_request_t;
 
 ct_assert(sizeof(pfe_idex_request_t) == 37);
@@ -269,9 +269,8 @@ static errno_t pfe_idex_ihc_handler(pfe_hif_drv_client_t *client, void *arg, uin
 
 		default:
 		{
-			NXP_LOG_ERROR("Unexpected IHC event: 0x%x\n", event);
+			NXP_LOG_ERROR("Unexpected IHC event: 0x%x\n", (uint_t)event);
 			return EINVAL;
-			break;
 		}
 	}
 
@@ -397,7 +396,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 						ret = pfe_idex_request_finalize(idex_resp->seqnum, IDEX_REQ_RES_OK, resp_payload, oal_ntohs(idex_resp->plen));
 						if (EOK != ret)
 						{
-							NXP_LOG_ERROR("Can't finalize IDEX request %d: %d\n", oal_ntohl(idex_resp->seqnum), ret);
+							NXP_LOG_ERROR("Can't finalize IDEX request %u: %d\n", (uint_t)oal_ntohl(idex_resp->seqnum), ret);
 						}
 
 						break;
@@ -434,7 +433,7 @@ static void pfe_idex_do_tx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 	void *ref_ptr;
 	pfe_idex_frame_header_t *idex_header;
 
-    (void)idex;
+	(void)idex;
 
 	while (TRUE)
 	{
@@ -516,7 +515,7 @@ static pfe_idex_request_t *pfe_idex_request_get_by_id(pfe_idex_seqnum_t seqnum)
 
 	LLIST_ForEach(item, &idex->req_list)
 	{
-		req = LLIST_Data(item, pfe_idex_request_t, list_entry);
+		req = LLIST_Data(item, pfe_idex_request_t, linked.config.list_entry);
 		if (seqnum == req->seqnum)
 		{
 			return req;
@@ -543,6 +542,7 @@ static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, pfe_idex_requ
 	pfe_idex_request_t *req = NULL;
 	errno_t ret = EOK;
 
+    (void)res;
 	/*	Lock request storage access */
 	if (EOK != oal_mutex_lock(&idex->req_list_lock))
 	{
@@ -558,12 +558,12 @@ static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, pfe_idex_requ
 	else
 	{
 		/*	2.) Copy response data to buffer associated with request */
-		if ((NULL != resp_buf) && (NULL != req->resp_buf))
+		if ((NULL != resp_buf) && (NULL != req->linked.config.resp_buf))
 		{
-			if (resp_len <= req->resp_buf_len)
+			if (resp_len <= req->linked.config.resp_buf_len)
 			{
-				(void)memcpy(req->resp_buf, resp_buf, resp_len);
-				req->resp_buf_len = resp_len;
+				(void)memcpy(req->linked.config.resp_buf, resp_buf, resp_len);
+				req->linked.config.resp_buf_len = resp_len;
 			}
 			else
 			{
@@ -664,14 +664,9 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
 	if (EOK != ret)
 	{
 		NXP_LOG_ERROR("IDEX response TX failed\n");
-		/*	Release the response instance */
-		oal_mm_free_contig(resp);
 	}
-	else
-	{
-		/*	Response transmitted. Will be released once it is processed */
-		;
-	}
+	/*	Release the response instance */
+	oal_mm_free_contig(resp);
 
 	return ret;
 }
@@ -721,10 +716,10 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	req->seqnum = seqnum;
 	req->type = type;
 	req->dst_phy_id = dst_phy;
-	req->timeout = IDEX_CFG_REQ_TIMEOUT_SEC;
+	req->linked.config.timeout = IDEX_CFG_REQ_TIMEOUT_SEC;
 	req->state = IDEX_REQ_STATE_NEW;
-	req->resp_buf = resp;
-	req->resp_buf_len = resp_len;
+	req->linked.config.resp_buf = resp;
+	req->linked.config.resp_buf_len = resp_len;
 
 	/*	Add payload */
 	payload = (void *)((addr_t)req + sizeof(pfe_idex_request_t));
@@ -736,7 +731,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-	LLIST_AddAtEnd(&req->list_entry, &idex->req_list);
+	LLIST_AddAtEnd(&req->linked.config.list_entry, &idex->req_list);
 
 	if (EOK != oal_mutex_unlock(&idex->req_list_lock))
 	{
@@ -825,7 +820,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			NXP_LOG_DEBUG("Mutex lock failed\n");
 		}
 
-		LLIST_Remove(&req->list_entry);
+		LLIST_Remove(&req->linked.config.list_entry);
 		oal_mm_free_contig(req);
 
 		if (EOK != oal_mutex_unlock(&idex->req_list_lock))
@@ -890,8 +885,8 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 #ifndef PFE_CFG_TARGET_OS_LINUX
 	ret = pfe_hif_drv_client_xmit_sg_pkt(pfe_idex.ihc_client, 0U, &sg_list, (void *)idex_hdr);
 #else
-	ret = pfe_hif_drv_client_xmit_ihc_sg_pkt(pfe_idex.ihc_client, dst_phy, 0U, &sg_list, (void *)idex_hdr);
-#endif
+	ret = pfe_hif_drv_client_xmit_ihc_pkt(pfe_idex.ihc_client, dst_phy, 0U, (void *)idex_hdr, sg_list.items[0].len);
+#endif /* PFE_CFG_TARGET_OS_LINUX */
 	if (EOK != ret)
 	{
 		NXP_LOG_ERROR("IDEX frame TX failed. Err %u\n", ret);
@@ -964,15 +959,6 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master)
 		return EFAULT;
 	}
 
-	/*	Activate the driver. From now IHC is available. */
-	ret = pfe_hif_drv_start(hif_drv);
-	if (EOK != ret)
-	{
-		NXP_LOG_ERROR("Unable to start HIF driver\n");
-		pfe_idex_fini();
-		return ret;
-	}
-
 	return EOK;
 }
 
@@ -999,7 +985,7 @@ void pfe_idex_fini(void)
 		{
 			LLIST_ForEachRemovable(item, aux, &idex->req_list)
 			{
-				req = (pfe_idex_request_t *)LLIST_Data(item, pfe_idex_request_t, list_entry);
+				req = (pfe_idex_request_t *)LLIST_Data(item, pfe_idex_request_t, linked.config.list_entry);
 				if (unlikely(NULL != req))
 				{
 					LLIST_Remove(item);
@@ -1116,20 +1102,18 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, void *buf, uint16_
 			msg_plen = oal_ntohs(msg->plen);
 
 			/*	Copy RPC response data to caller's buffer */
-			if ((msg_plen > 0U) && (NULL == local_resp_buf))
+			if (0U == msg_plen)
 			{
-				NXP_LOG_WARNING("RPC response data received but there is no buffer supplied\n");
+#ifdef IDEX_CFG_VERBOSE
+				NXP_LOG_DEBUG("RPC response without payload received\n");
+#endif /* IDEX_CFG_VERBOSE */
 			}
-			else if (msg_plen > resp_len)
+			else if (msg_plen > resp_len) /* if the response is too big */
 			{
 				NXP_LOG_ERROR("Caller's buffer is too small\n");
 				ret = ENOMEM;
 			}
-			else if (0U == msg_plen)
-			{
-				/* NXP_LOG_DEBUG("RPC response without payload received\n"); */
-			}
-			else
+			else /* there is response, it is not too big and we have buffer */
 			{
 				payload = (void *)((addr_t)msg + sizeof(pfe_idex_msg_rpc_t));
 				(void)memcpy(resp, payload, msg_plen);

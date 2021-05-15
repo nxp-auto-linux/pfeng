@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2020 NXP
+ *  Copyright 2020-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -50,7 +50,7 @@ static errno_t pfe_spd_update_phyif(pfe_phy_if_t *phy_if, pfe_ct_ipsec_spd_t *sp
         /* Set correct DMEM pointer */
         spd->entries = oal_htonl(dmem_addr + sizeof(pfe_ct_ipsec_spd_t));
         /* Copy the new SPD into allocated memory */
-        pfe_class_write_dmem(class_ptr, -1, (void *)dmem_addr, spd, size);
+        pfe_class_write_dmem(class_ptr, -1, dmem_addr, (void *)spd, size);
         /* Get the address of the old memory before it is lost */
         old_addr = pfe_phy_if_get_spd(phy_if);
         /* Replace the old SPD pointer by the new one */
@@ -133,7 +133,7 @@ errno_t pfe_spd_add_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd_ent
             if(0 != dmem_addr)
             {
                 spd->entries = oal_htonl(dmem_addr + sizeof(pfe_ct_ipsec_spd_t));
-                pfe_class_write_dmem(class_ptr, -1, (void *)dmem_addr, spd, sizeof(pfe_ct_ipsec_spd_t) + sizeof(pfe_ct_spd_entry_t));
+                pfe_class_write_dmem(class_ptr, -1, dmem_addr, (void *)spd, sizeof(pfe_ct_ipsec_spd_t) + sizeof(pfe_ct_spd_entry_t));
                 pfe_phy_if_set_spd(phy_if, dmem_addr);
                 ret = EOK;
             }

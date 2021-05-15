@@ -18,10 +18,12 @@
 
 #include "pfeng.h"
 
+/* represents DT mdio@ node */
+#define PFENG_DT_NODENAME_MDIO		"fsl,pfeng-mdio"
+
 static int pfeng_mdio_read(struct mii_bus *bus, int phyaddr, int phyreg)
 {
-	struct pfeng_ndev *ndev = bus->priv;
-	pfe_emac_t *emac = ndev->priv->pfe->emac[ndev->eth->emac_id];
+	pfe_emac_t *emac = bus->priv;
 	int ret;
 	u16 val;
 
@@ -39,8 +41,7 @@ static int pfeng_mdio_read(struct mii_bus *bus, int phyaddr, int phyreg)
 
 static int pfeng_mdio_write(struct mii_bus *bus, int phyaddr, int phyreg, u16 phydata)
 {
-	struct pfeng_ndev *ndev = bus->priv;
-	pfe_emac_t *emac = ndev->priv->pfe->emac[ndev->eth->emac_id];
+	pfe_emac_t *emac = bus->priv;
 	int ret;
 
 	if (phyreg & MII_ADDR_C45) {
@@ -58,67 +59,108 @@ static int pfeng_mdio_write(struct mii_bus *bus, int phyaddr, int phyreg, u16 ph
 /**
  * @brief	Create new MDIO bus instance
  * @details	Creates and initializes the MDIO bus instance
- * @param[in]	netdev net device structure
- * @return	0 if OK, error number if failed
+ * @param[in]	priv The driver main structure
+ * @return	> 0 if OK, negative error number if failed
  */
-int pfeng_mdio_register(struct pfeng_ndev *ndev)
+int pfeng_mdio_register(struct pfeng_priv *priv)
 {
-	struct mii_bus *bus;
-	struct device_node *dn;
-	int ret;
+	struct device *dev = &priv->pdev->dev;
+	int i;
 
-	dn = of_get_compatible_child(ndev->eth->dn, PFENG_DT_NODENAME_MDIO);
-	if (!dn) {
-		netdev_dbg(ndev->netdev, "No compatible MDIO bus\n");
-		return 0;
+	for (i = 0; i < ARRAY_SIZE(pfeng_emac_ids); i++) {
+		struct mii_bus *bus;
+		int ret;
+
+		if (!priv->emac[i].enabled) {
+			dev_warn(dev, "MDIO bus %d disabled: No EMAC\n", i);
+			continue;
+		}
+
+		if (!priv->emac[i].dn_mdio) {
+			dev_info(dev, "MDIO bus %d disabled: Not found in DT\n", i);
+			continue;
+		}
+
+		if (!of_device_is_available(priv->emac[i].dn_mdio)) {
+			dev_info(dev, "MDIO bus %d disabled in DT\n", i);
+			continue;
+		}
+
+		if (!priv->pfe_platform->emac[i]) {
+			dev_warn(dev, "MDIO bus %d can't get linked EMAC\n", i);
+			continue;
+		}
+
+		/* create MDIO bus */
+		bus = mdiobus_alloc();
+		if (!bus)
+			return -ENOMEM;
+
+		bus->priv = priv->pfe_platform->emac[i];
+		bus->name = "PFEng Ethernet MDIO";
+		snprintf(bus->id, MII_BUS_ID_SIZE, "%s.%d", bus->name, i);
+		bus->read = pfeng_mdio_read;
+		bus->write = pfeng_mdio_write;
+		bus->parent = dev;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,9,0)
+		bus->probe_capabilities = MDIOBUS_C22_C45;
+#endif
+
+		ret = of_mdiobus_register(bus, priv->emac[i].dn_mdio);
+		if (ret) {
+			mdiobus_free(bus);
+			return ret;
+		}
+
+		priv->emac[i].mii_bus = bus;
 	}
 
-	if (!of_device_is_available(dn)) {
-		netdev_dbg(ndev->netdev, "MDIO bus disabled\n");
-		return 0;
-	}
-
-	/* create MDIO bus */
-	bus = mdiobus_alloc();
-	if (!bus)
-		return -ENOMEM;
-
-	bus->priv = ndev;
-	bus->name = "PFEng Ethernet MDIO";
-	snprintf(bus->id, MII_BUS_ID_SIZE, "%s.%s",
-		 bus->name, ndev->eth->name);
-	bus->read = pfeng_mdio_read;
-	bus->write = pfeng_mdio_write;
-	bus->parent = ndev->dev;
-	ndev->mii_bus = bus;
-
-	ret = of_mdiobus_register(bus, dn);
-	if (ret) {
-		mdiobus_free(bus);
-		ndev->mii_bus = NULL;
-		return ret;
-	}
-
-	return 0;
+	return i;
 }
 
 /**
  * @brief	Destroy the MDIO bus
  * @details	Unregister and destroy the MDIO bus instance
- * @param[in]	netdev net device structure
- * @return	0 if OK, error number if failed
+ * @param[in]	priv The driver main structure
  */
-int pfeng_mdio_unregister(struct pfeng_ndev *ndev)
+void pfeng_mdio_unregister(struct pfeng_priv *priv)
 {
-	if (!ndev) {
-		return 0;
+	int i;
+
+	if (!priv)
+		return;
+
+	for (i = 0; i < ARRAY_SIZE(pfeng_emac_ids); i++) {
+
+		if (!priv->emac[i].mii_bus)
+			continue;
+
+		mdiobus_unregister(priv->emac[i].mii_bus);
+		mdiobus_free(priv->emac[i].mii_bus);
+		priv->emac[i].mii_bus = NULL;
 	}
+}
 
-	if (!ndev->mii_bus)
-		return 0;
+int pfeng_mdio_suspend(struct pfeng_priv *priv)
+{
+	/* empty */
+	return 0;
+}
 
-	mdiobus_unregister(ndev->mii_bus);
-	mdiobus_free(ndev->mii_bus);
+int pfeng_mdio_resume(struct pfeng_priv *priv)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(pfeng_emac_ids); i++) {
+		if (!priv->emac[i].enabled)
+			continue;
+
+		if (!priv->emac[i].mii_bus)
+			continue;
+
+		/* Refresh EMAC link (was changed after platform reload) */
+		priv->emac[i].mii_bus->priv = priv->pfe_platform->emac[i];
+	}
 
 	return 0;
 }

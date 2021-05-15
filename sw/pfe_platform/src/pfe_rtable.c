@@ -61,17 +61,17 @@ typedef union
  */
 struct pfe_rtable_tag
 {
-	void *htable_base_pa;					/*	Hash table: Base physical address */
-	void *htable_base_va;					/*	Hash table: Base virtual address */
-	void *htable_end_pa;					/*	Hash table: End of hash table, physical */
-	void *htable_end_va;					/*	Hash table: End of hash table, virtual */
+	addr_t htable_base_pa;					/*	Hash table: Base physical address */
+	addr_t htable_base_va;					/*	Hash table: Base virtual address */
+	addr_t htable_end_pa;					/*	Hash table: End of hash table, physical */
+	addr_t htable_end_va;					/*	Hash table: End of hash table, virtual */
 	addr_t htable_va_pa_offset;				/*	Offset = VA - PA */
 	uint32_t htable_size;					/*	Hash table: Number of entries */
 
-	void *pool_base_pa;						/*	Pool: Base physical address */
-	void *pool_base_va;						/*	Pool: Base virtual address */
-	void *pool_end_pa;						/*	Pool: End of pool, physical */
-	void *pool_end_va;						/*	Pool: End of pool, virtual */
+	addr_t pool_base_pa;						/*	Pool: Base physical address */
+	addr_t pool_base_va;						/*	Pool: Base virtual address */
+	addr_t pool_end_pa;						/*	Pool: End of pool, physical */
+	addr_t pool_end_va;						/*	Pool: End of pool, virtual */
 	addr_t pool_va_pa_offset;				/*	Offset = VA - PA */
 	uint32_t pool_size;						/*	Pool: Number of entries */
 	fifo_t *pool_va;						/*	Pool of entries (virtual addresses) */
@@ -433,13 +433,13 @@ static bool_t pfe_rtable_phys_entry_is_htable(pfe_rtable_t *rtable, pfe_ct_rtabl
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (((void *)phys_entry >= rtable->htable_base_va) && ((void *)phys_entry < rtable->htable_end_va))
+	if (((addr_t)phys_entry >= rtable->htable_base_va) && ((addr_t)phys_entry < rtable->htable_end_va))
 	{
 		return TRUE;
 	}
 	else
 	{
-		if (((void *)phys_entry >= rtable->htable_base_pa) && ((void *)phys_entry < rtable->htable_end_pa))
+		if (((addr_t)phys_entry >= rtable->htable_base_pa) && ((addr_t)phys_entry < rtable->htable_end_pa))
 		{
 			return TRUE;
 		}
@@ -467,13 +467,13 @@ static bool_t pfe_rtable_phys_entry_is_pool(pfe_rtable_t *rtable, pfe_ct_rtable_
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (((void *)phys_entry >= rtable->pool_base_va) && ((void *)phys_entry < rtable->pool_end_va))
+	if (((addr_t)phys_entry >= rtable->pool_base_va) && ((addr_t)phys_entry < rtable->pool_end_va))
 	{
 		return TRUE;
 	}
 	else
 	{
-		if (((void *)phys_entry >= rtable->pool_base_pa) && ((void *)phys_entry < rtable->pool_end_pa))
+		if (((addr_t)phys_entry >= rtable->pool_base_pa) && ((addr_t)phys_entry < rtable->pool_end_pa))
 		{
 			return TRUE;
 		}
@@ -977,12 +977,12 @@ errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
 
 	if ((IPV_INVALID != entry->phys_entry->flag_ipv6) && (output_sip->is_ipv4))
 	{
-		memcpy(&entry->phys_entry->args.v4.sip, &output_sip->v4, 4);
+		memcpy(&entry->phys_entry->args.ipv.v4.sip, &output_sip->v4, 4);
 		entry->phys_entry->flag_ipv6 = IPV4;
 	}
 	else if ((IPV_INVALID != entry->phys_entry->flag_ipv6) && (!output_sip->is_ipv4))
 	{
-		memcpy(&entry->phys_entry->args.v6.sip[0], &output_sip->v6, 16);
+		memcpy(&entry->phys_entry->args.ipv.v6.sip[0], &output_sip->v6, 16);
 		entry->phys_entry->flag_ipv6 = IPV6;
 	}
 	else
@@ -1017,12 +1017,12 @@ errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
 
 	if ((IPV_INVALID != entry->phys_entry->flag_ipv6) && (output_dip->is_ipv4))
 	{
-		memcpy(&entry->phys_entry->args.v4.dip, &output_dip->v4, 4);
+		memcpy(&entry->phys_entry->args.ipv.v4.dip, &output_dip->v4, 4);
 		entry->phys_entry->flag_ipv6 = IPV4;
 	}
 	else if ((IPV_INVALID != entry->phys_entry->flag_ipv6) && (!output_dip->is_ipv4))
 	{
-		memcpy(&entry->phys_entry->args.v6.dip[0], &output_dip->v6, 16);
+		memcpy(&entry->phys_entry->args.ipv.v6.dip[0], &output_dip->v6, 16);
 		entry->phys_entry->flag_ipv6 = IPV6;
 	}
 	else
@@ -1080,6 +1080,46 @@ void pfe_rtable_entry_set_out_dport(pfe_rtable_entry_t *entry, uint16_t output_d
 
 	entry->phys_entry->args.dport = oal_htons(output_dport);
 	entry->phys_entry->actions |= oal_htonl(RT_ACT_CHANGE_DPORT);
+}
+
+/**
+ * @brief		Set TTL decrement
+ * @details		Set TTL to be decremented
+ *			if the RT_ACT_DEC_TTL action is set.
+ * @param[in]	entry The routing table entry instance
+ */
+
+void pfe_rtable_entry_set_ttl_decrement(pfe_rtable_entry_t *entry)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	entry->phys_entry->actions |= oal_htonl(RT_ACT_DEC_TTL);
+}
+
+/**
+ * @brief		Remove TTL decrement
+ * @details		Remove TTL to be decremented
+ *			if the RT_ACT_DEC_TTL action is set.
+ * @param[in]	entry The routing table entry instance
+ */
+
+void pfe_rtable_entry_remove_ttl_decrement(pfe_rtable_entry_t *entry)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	entry->phys_entry->actions &= ~(oal_htonl(RT_ACT_DEC_TTL));
 }
 
 /**
@@ -2048,14 +2088,14 @@ static void *rtable_worker_func(void *arg)
  * @param[in]	pool_size Number of entries within the pool
  * @return		The routing table instance or NULL if failed
  */
-pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, void *htable_base_va, uint32_t htable_size, void *pool_base_va, uint32_t pool_size)
+pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint32_t htable_size, addr_t pool_base_va, uint32_t pool_size)
 {
 	pfe_rtable_t *rtable;
 	pfe_ct_rtable_entry_t *table_va;
 	uint32_t ii;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == htable_base_va) || (NULL == pool_base_va) || (NULL == class)))
+	if (unlikely((NULL_ADDR == htable_base_va) || (NULL_ADDR == pool_base_va) || (NULL == class)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -2088,7 +2128,7 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, void *htable_base_va, uint32
 
 		/*	Store properties */
 		rtable->htable_base_va = htable_base_va;
-		rtable->htable_base_pa = oal_mm_virt_to_phys_contig(htable_base_va);
+		rtable->htable_base_pa = (addr_t)oal_mm_virt_to_phys_contig((void *)htable_base_va);
 		rtable->htable_size = htable_size;
 		rtable->htable_end_va = rtable->htable_base_va + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
 		rtable->htable_end_pa = rtable->htable_base_pa + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
@@ -2099,7 +2139,7 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, void *htable_base_va, uint32
 		rtable->pool_end_va = rtable->pool_base_va + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
 		rtable->pool_end_pa = rtable->pool_base_pa + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
 
-		if ((NULL == rtable->htable_base_va) || (NULL == rtable->pool_base_va))
+		if ((NULL_ADDR == rtable->htable_base_va) || (NULL_ADDR == rtable->pool_base_va))
 		{
 			NXP_LOG_ERROR("Can't map the table memory\n");
 			goto free_and_fail;
@@ -2107,8 +2147,8 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, void *htable_base_va, uint32
 		else
 		{
 			/*	Pre-compute conversion offsets */
-			rtable->htable_va_pa_offset = (addr_t)rtable->htable_base_va - (addr_t)rtable->htable_base_pa;
-			rtable->pool_va_pa_offset = (addr_t)rtable->pool_base_va - (addr_t)rtable->pool_base_pa;
+			rtable->htable_va_pa_offset = rtable->htable_base_va - rtable->htable_base_pa;
+			rtable->pool_va_pa_offset = rtable->pool_base_va - rtable->pool_base_pa;
 		}
 
 		/*	Configure the classifier */
@@ -2239,16 +2279,16 @@ void pfe_rtable_destroy(pfe_rtable_t *rtable)
 			rtable->mbox = NULL;
 		}
 
-		if (NULL != rtable->htable_base_va)
+		if (NULL_ADDR != rtable->htable_base_va)
 		{
 			/*	Just forget the address */
-			rtable->htable_base_va = NULL;
+			rtable->htable_base_va = NULL_ADDR;
 		}
 
-		if (NULL != rtable->pool_base_va)
+		if (NULL_ADDR != rtable->pool_base_va)
 		{
 			/*	Just forget the address */
-			rtable->pool_base_va = NULL;
+			rtable->pool_base_va = NULL_ADDR;
 		}
 
 		if (NULL != rtable->pool_va)
@@ -2349,16 +2389,16 @@ errno_t pfe_rtable_entry_to_5t_out(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tup
 	if (IPV6 == entry->phys_entry->flag_ipv6)
 	{
 		/*	SRC + DST IP */
-		memcpy(&tuple->src_ip.v6, &entry->phys_entry->args.v6.sip[0], 16);
-		memcpy(&tuple->dst_ip.v6, &entry->phys_entry->args.v6.dip[0], 16);
+		memcpy(&tuple->src_ip.v6, &entry->phys_entry->args.ipv.v6.sip[0], 16);
+		memcpy(&tuple->dst_ip.v6, &entry->phys_entry->args.ipv.v6.dip[0], 16);
 		tuple->src_ip.is_ipv4 = FALSE;
 		tuple->dst_ip.is_ipv4 = FALSE;
 	}
 	else
 	{
 		/*	SRC + DST IP */
-		memcpy(&tuple->src_ip.v4, &entry->phys_entry->args.v4.sip, 4);
-		memcpy(&tuple->dst_ip.v4, &entry->phys_entry->args.v4.dip, 4);
+		memcpy(&tuple->src_ip.v4, &entry->phys_entry->args.ipv.v4.sip, 4);
+		memcpy(&tuple->dst_ip.v4, &entry->phys_entry->args.ipv.v4.dip, 4);
 		tuple->src_ip.is_ipv4 = TRUE;
 		tuple->dst_ip.is_ipv4 = TRUE;
 	}

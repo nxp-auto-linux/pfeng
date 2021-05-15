@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2020 NXP
+ *  Copyright 2017-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -12,7 +12,7 @@
 * @brief   This structure shall be used to link structures of data.
 * @details Just put this anywhere into the structs which shall be linked.
 */
-typedef struct LLIST_Struct
+typedef struct  __attribute__((packed)) LLIST_Struct
 {
    struct LLIST_Struct *prNext;
    struct LLIST_Struct *prPrev;

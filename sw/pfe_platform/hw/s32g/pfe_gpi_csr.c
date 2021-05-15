@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -26,13 +26,13 @@
 #error Unsupported IP version
 #endif /* PFE_CFG_IP_VERSION */
 
-static void pfe_gpi_cfg_init_inqos(void *base_va);
+static void pfe_gpi_cfg_init_inqos(addr_t base_va);
 
 /**
  * @brief		Initialize ingress QoS module
  * @param[in]	base_va Base address of GPI register space (virtual)
  */
-static void pfe_gpi_cfg_init_inqos(void *base_va)
+static void pfe_gpi_cfg_init_inqos(addr_t base_va)
 {
 	uint32_t ii;
 	uint32_t val;
@@ -78,9 +78,9 @@ static void pfe_gpi_cfg_init_inqos(void *base_va)
  * @param[in]	base_va Base address of GPI register space (virtual)
  * @return		EOK if success, error code if invalid configuration is detected
  */
-errno_t pfe_gpi_cfg_init(void *cbus_va, void *base_va, pfe_gpi_cfg_t *cfg)
+errno_t pfe_gpi_cfg_init(addr_t cbus_va, addr_t base_va, const pfe_gpi_cfg_t *cfg)
 {
-	addr_t gpi_cbus_offset = (addr_t)base_va - (addr_t)cbus_va;
+	addr_t gpi_cbus_offset = base_va - cbus_va;
 
 	switch (gpi_cbus_offset)
 	{
@@ -124,7 +124,7 @@ errno_t pfe_gpi_cfg_init(void *cbus_va, void *base_va, pfe_gpi_cfg_t *cfg)
  * @retval		EOK Success
  * @retval		ETIMEDOUT Reset procedure timed-out
  */
-errno_t pfe_gpi_cfg_reset(void *base_va)
+errno_t pfe_gpi_cfg_reset(addr_t base_va)
 {
 	uint32_t timeout = 20U;
 	uint32_t reg = hal_read32(base_va + GPI_CTRL);
@@ -152,7 +152,7 @@ errno_t pfe_gpi_cfg_reset(void *base_va)
  * @brief		Enable the GPI module
  * @param[in]	base_va Base address of GPI register space (virtual)
  */
-void pfe_gpi_cfg_enable(void *base_va)
+void pfe_gpi_cfg_enable(addr_t base_va)
 {
 	uint32_t reg = hal_read32(base_va + GPI_CTRL);
 
@@ -163,7 +163,7 @@ void pfe_gpi_cfg_enable(void *base_va)
  * @brief		Disable the GPI module
  * @param[in]	base_va Base address of GPI register space (virtual)
  */
-void pfe_gpi_cfg_disable(void *base_va)
+void pfe_gpi_cfg_disable(addr_t base_va)
 {
 	uint32_t reg = hal_read32(base_va + GPI_CTRL);
 
@@ -180,13 +180,13 @@ void pfe_gpi_cfg_disable(void *base_va)
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_gpi_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level)
+uint32_t pfe_gpi_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 	uint32_t reg;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == base_va))
+	if (unlikely(NULL_ADDR == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -58,27 +58,27 @@
 #define BDP_CSR_TX_CBD_INT			(1U << 3)
 #define BDP_CSR_TX_PKT_INT			(1U << 4)
 
-errno_t pfe_hif_nocpy_cfg_isr(void *base_va);
-void pfe_hif_nocpy_cfg_irq_mask(void *base_va);
-void pfe_hif_nocpy_cfg_irq_unmask(void *base_va);
+errno_t pfe_hif_nocpy_cfg_isr(addr_t base_va);
+void pfe_hif_nocpy_cfg_irq_mask(addr_t base_va);
+void pfe_hif_nocpy_cfg_irq_unmask(addr_t base_va);
 errno_t pfe_hif_nocpy_cfg_set_cbk(pfe_hif_chnl_event_t event, pfe_hif_chnl_cbk_t cbk, void *arg);
-errno_t pfe_hif_nocpy_cfg_init(void *base_va);
-void pfe_hif_nocpy_cfg_fini(void *base_va);
-void pfe_hif_nocpy_cfg_tx_enable(void *base_va);
-void pfe_hif_nocpy_cfg_tx_disable(void *base_va);
-void pfe_hif_nocpy_cfg_rx_enable(void *base_va);
-void pfe_hif_nocpy_cfg_rx_disable(void *base_va);
-void pfe_hif_nocpy_cfg_rx_dma_start(void *base_va);
-void pfe_hif_nocpy_cfg_tx_dma_start(void *base_va);
-void pfe_hif_nocpy_cfg_rx_irq_mask(void *base_va);
-void pfe_hif_nocpy_cfg_rx_irq_unmask(void *base_va);
-void pfe_hif_nocpy_cfg_tx_irq_mask(void *base_va);
-void pfe_hif_nocpy_cfg_tx_irq_unmask(void *base_va);
-void pfe_hif_nocpy_cfg_set_rx_bd_ring_addr(void *base_va, void *rx_ring_pa);
-void pfe_hif_nocpy_cfg_set_tx_bd_ring_addr(void *base_va, void *tx_ring_pa);
-bool_t pfe_hif_nocpy_cfg_is_rx_dma_active(void *base_va);
-bool_t pfe_hif_nocpy_cfg_is_tx_dma_active(void *base_va);
-uint32_t pfe_hif_nocpy_chnl_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
-uint32_t pfe_hif_nocpy_cfg_get_text_stat(void *base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+errno_t pfe_hif_nocpy_cfg_init(addr_t base_va);
+void pfe_hif_nocpy_cfg_fini(addr_t base_va);
+void pfe_hif_nocpy_cfg_tx_enable(addr_t base_va);
+void pfe_hif_nocpy_cfg_tx_disable(addr_t base_va);
+void pfe_hif_nocpy_cfg_rx_enable(addr_t base_va);
+void pfe_hif_nocpy_cfg_rx_disable(addr_t base_va);
+void pfe_hif_nocpy_cfg_rx_dma_start(addr_t base_va);
+void pfe_hif_nocpy_cfg_tx_dma_start(addr_t base_va);
+void pfe_hif_nocpy_cfg_rx_irq_mask(addr_t base_va);
+void pfe_hif_nocpy_cfg_rx_irq_unmask(addr_t base_va);
+void pfe_hif_nocpy_cfg_tx_irq_mask(addr_t base_va);
+void pfe_hif_nocpy_cfg_tx_irq_unmask(addr_t base_va);
+void pfe_hif_nocpy_cfg_set_rx_bd_ring_addr(addr_t base_va, const void *rx_ring_pa);
+void pfe_hif_nocpy_cfg_set_tx_bd_ring_addr(addr_t base_va, const  void *tx_ring_pa);
+bool_t pfe_hif_nocpy_cfg_is_rx_dma_active(addr_t base_va);
+bool_t pfe_hif_nocpy_cfg_is_tx_dma_active(addr_t base_va);
+uint32_t pfe_hif_nocpy_chnl_cfg_get_text_stat(addr_t base_va, const char_t *buf, uint32_t size, uint8_t verb_level);
+uint32_t pfe_hif_nocpy_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
 #endif /* PFE_HIF_NOCPY_CSR_H_ */

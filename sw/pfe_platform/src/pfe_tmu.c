@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -18,21 +18,7 @@
 
 struct pfe_tmu_tag
 {
-	void *cbus_base_va;
-};
-
-/*	Scheduler instance */
-struct pfe_tmu_sch_tag
-{
-	void *cbus_base_va;			/*	CBUS base virtual address */
-	void *sch_base_va;			/*	Scheduler base address */
-};
-
-/*	Shaper instance */
-struct pfe_tmu_shp_tag
-{
-	void *cbus_base_va;			/*	CBUS base virtual address */
-	void *shp_base_va;			/*	Shaper base address */
+	addr_t cbus_base_va;
 };
 
 /**
@@ -40,7 +26,7 @@ struct pfe_tmu_shp_tag
  * @param[in]	tmu The TMU instance
  * @param[in]	cfg Pointer to the configuration structure
  */
-static void pfe_tmu_init(pfe_tmu_t *tmu, pfe_tmu_cfg_t *cfg)
+static void pfe_tmu_init(const pfe_tmu_t *tmu, const pfe_tmu_cfg_t *cfg)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == tmu) || (NULL == cfg)))
@@ -52,7 +38,7 @@ static void pfe_tmu_init(pfe_tmu_t *tmu, pfe_tmu_cfg_t *cfg)
 
 	pfe_tmu_disable(tmu);
 	oal_time_mdelay(10);
-	
+
 	if (EOK != pfe_tmu_cfg_init(tmu->cbus_base_va, cfg))
 	{
 		NXP_LOG_ERROR("Couldn't initialize the TMU\n");
@@ -69,13 +55,13 @@ static void pfe_tmu_init(pfe_tmu_t *tmu, pfe_tmu_cfg_t *cfg)
  * @param[in]	cfg The TMU block configuration
  * @return		The TMU instance or NULL if failed
  */
-pfe_tmu_t *pfe_tmu_create(void *cbus_base_va, uint32_t pe_num, pfe_tmu_cfg_t *cfg)
+pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cfg_t *cfg)
 {
 	pfe_tmu_t *tmu;
 	(void)pe_num;
-	
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == cbus_base_va) || (NULL == cfg)))
+	if (unlikely((NULL_ADDR == cbus_base_va) || (NULL == cfg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -83,7 +69,7 @@ pfe_tmu_t *pfe_tmu_create(void *cbus_base_va, uint32_t pe_num, pfe_tmu_cfg_t *cf
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	tmu = oal_mm_malloc(sizeof(pfe_tmu_t));
-	
+
 	if (NULL == tmu)
 	{
 		return NULL;
@@ -93,16 +79,16 @@ pfe_tmu_t *pfe_tmu_create(void *cbus_base_va, uint32_t pe_num, pfe_tmu_cfg_t *cf
 		(void)memset(tmu, 0, sizeof(pfe_tmu_t));
 		tmu->cbus_base_va = cbus_base_va;
 	}
-	
+
 	/*	Issue block reset */
 	pfe_tmu_reset(tmu);
-	
+
 	/*	Disable the TMU */
 	pfe_tmu_disable(tmu);
-	
+
 	/*	Set new configuration */
 	pfe_tmu_init(tmu, cfg);
-	
+
 	return tmu;
 }
 
@@ -110,7 +96,7 @@ pfe_tmu_t *pfe_tmu_create(void *cbus_base_va, uint32_t pe_num, pfe_tmu_cfg_t *cf
  * @brief		Reset the TMU block
  * @param[in]	tmu The TMU instance
  */
-void pfe_tmu_reset(pfe_tmu_t *tmu)
+void pfe_tmu_reset(const pfe_tmu_t *tmu)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -128,7 +114,7 @@ void pfe_tmu_reset(pfe_tmu_t *tmu)
  * @details		Enable all TMU PEs
  * @param[in]	tmu The TMU instance
  */
-void pfe_tmu_enable(pfe_tmu_t *tmu)
+void pfe_tmu_enable(const pfe_tmu_t *tmu)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -146,7 +132,7 @@ void pfe_tmu_enable(pfe_tmu_t *tmu)
  * @details		Disable all TMU PEs
  * @param[in]	tmu The TMU instance
  */
-void pfe_tmu_disable(pfe_tmu_t *tmu)
+void pfe_tmu_disable(const pfe_tmu_t *tmu)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -167,7 +153,7 @@ void pfe_tmu_disable(pfe_tmu_t *tmu)
  * @param[in]	buf_pa Buffer physical address
  * @param[in]	len Number of bytes to send
  */
-void pfe_tmu_send(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, void *buf_pa, uint16_t len)
+void pfe_tmu_send(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, const void *buf_pa, uint16_t len)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == tmu) || (NULL == buf_pa)))
@@ -184,7 +170,7 @@ void pfe_tmu_send(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, void *b
  * @brief		Destroy TMU instance
  * @param[in]	tmu The TMU instance
  */
-void pfe_tmu_destroy(pfe_tmu_t *tmu)
+void pfe_tmu_destroy(const pfe_tmu_t *tmu)
 {
 	if (NULL != tmu)
 	{
@@ -200,7 +186,7 @@ void pfe_tmu_destroy(pfe_tmu_t *tmu)
  * @param[in]	queue Queue ID
  * @return		EOK if the arguments are valid
  */
-static errno_t pfe_tmu_check_queue(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue)
+static errno_t pfe_tmu_check_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue)
 {
 	const pfe_tmu_phy_cfg_t *pcfg;
 
@@ -232,7 +218,7 @@ static errno_t pfe_tmu_check_queue(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8
  * @param[in]	sch Scheduler ID
  * @return		EOK if the arguments are valid
  */
-static errno_t pfe_tmu_check_scheduler(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
+static errno_t pfe_tmu_check_scheduler(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
 {
 	const pfe_tmu_phy_cfg_t *pcfg;
 
@@ -241,7 +227,7 @@ static errno_t pfe_tmu_check_scheduler(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, u
 	pcfg = pfe_tmu_cfg_get_phy_config(phy);
 	if (NULL == pcfg)
 	{
-		NXP_LOG_ERROR("Invalid phy: %d\n", (uint32_t)phy);
+		NXP_LOG_ERROR("Invalid phy: %d\n", (int_t)phy);
 		return EINVAL;
 	}
 	else
@@ -264,7 +250,7 @@ static errno_t pfe_tmu_check_scheduler(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, u
  * @param[in]	shp Shaper ID
  * @return		EOK if the arguments are valid
  */
-static errno_t pfe_tmu_check_shaper(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
+static errno_t pfe_tmu_check_shaper(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
 	const pfe_tmu_phy_cfg_t *pcfg;
 
@@ -273,7 +259,7 @@ static errno_t pfe_tmu_check_shaper(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint
 	pcfg = pfe_tmu_cfg_get_phy_config(phy);
 	if (NULL == pcfg)
 	{
-		NXP_LOG_ERROR("Invalid phy: %d\n", (uint32_t)phy);
+		NXP_LOG_ERROR("Invalid phy: %d\n", (int_t)phy);
 		return EINVAL;
 	}
 	else
@@ -297,7 +283,7 @@ static errno_t pfe_tmu_check_shaper(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint
  * @param[out]	level Pointer to memory where the fill level value shall be written
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_queue_get_fill_level(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *level)
+errno_t pfe_tmu_queue_get_fill_level(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *level)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == tmu) || (NULL == level)))
@@ -325,7 +311,7 @@ errno_t pfe_tmu_queue_get_fill_level(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
  * @param[out]	level Pointer to memory where the count shall be written
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_queue_get_drop_count(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt)
+errno_t pfe_tmu_queue_get_drop_count(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == tmu) || (NULL == cnt)))
@@ -353,7 +339,7 @@ errno_t pfe_tmu_queue_get_drop_count(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
  * @param[out]	level Pointer to memory where the count shall be written
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_queue_get_tx_count(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt)
+errno_t pfe_tmu_queue_get_tx_count(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == tmu) || (NULL == cnt)))
@@ -383,7 +369,7 @@ errno_t pfe_tmu_queue_get_tx_count(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8
  * @param[in]	max Max threshold (number of packets)
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_queue_set_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue,
+errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue,
 		pfe_tmu_queue_mode_t mode, uint32_t min, uint32_t max)
 {
     errno_t ret_val;
@@ -444,7 +430,7 @@ errno_t pfe_tmu_queue_set_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t q
  * @param[in]	max Pointer to memory where 'max' value shall be written
  * @return		EOK if success, error code otherwise
  */
-pfe_tmu_queue_mode_t pfe_tmu_queue_get_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
+pfe_tmu_queue_mode_t pfe_tmu_queue_get_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t queue, uint32_t *min, uint32_t *max)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -474,7 +460,7 @@ pfe_tmu_queue_mode_t pfe_tmu_queue_get_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t p
  * @param[in]	prob Drop probability in [%]
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_queue_set_wred_prob(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t prob)
+errno_t pfe_tmu_queue_set_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t prob)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -515,7 +501,7 @@ errno_t pfe_tmu_queue_set_wred_prob(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint
  * @param[in]	prob Poiter to memory where drop probability in [%] shall be written
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_queue_get_wred_prob(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t *prob)
+errno_t pfe_tmu_queue_get_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t *prob)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -548,7 +534,7 @@ errno_t pfe_tmu_queue_get_wred_prob(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint
  * @param[in]	queue The queue ID
  * @return		Number of zones between 'min' and 'max'
  */
-uint8_t pfe_tmu_queue_get_wred_zones(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue)
+uint8_t pfe_tmu_queue_get_wred_zones(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -574,7 +560,7 @@ uint8_t pfe_tmu_queue_get_wred_zones(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
  * @param[in]	phy Physical interface ID
  * @return		Number of queues
  */
-uint8_t pfe_tmu_queue_get_cnt(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy)
+uint8_t pfe_tmu_queue_get_cnt(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy)
 {
 	const pfe_tmu_phy_cfg_t *pcfg;
 
@@ -602,7 +588,7 @@ uint8_t pfe_tmu_queue_get_cnt(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy)
  * @param[in]	min_credit Minimum credit value
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_shp_set_limits(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
+errno_t pfe_tmu_shp_set_limits(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t shp, int32_t max_credit, int32_t min_credit)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -633,7 +619,7 @@ errno_t pfe_tmu_shp_set_limits(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
  * @param[out]	min_credit Pointer to memory where minimum credit value shall be written
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_shp_get_limits(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t *max_credit, int32_t *min_credit)
+errno_t pfe_tmu_shp_get_limits(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t *max_credit, int32_t *min_credit)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu) || unlikely(NULL == max_credit) || unlikely(NULL == min_credit))
@@ -662,7 +648,7 @@ errno_t pfe_tmu_shp_get_limits(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t s
  *					the shaper unused.
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_shp_set_position(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint8_t pos)
+errno_t pfe_tmu_shp_set_position(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint8_t pos)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -691,7 +677,7 @@ errno_t pfe_tmu_shp_set_position(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t
  *					the shaper unused.
  * @return		EOK if success, error code otherwise
  */
-uint8_t pfe_tmu_shp_get_position(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
+uint8_t pfe_tmu_shp_get_position(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -717,7 +703,7 @@ uint8_t pfe_tmu_shp_get_position(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t
  * @parma[in]	phy Physical interface ID
  * @param[in]	shp The shaper ID
  */
-errno_t pfe_tmu_shp_enable(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
+errno_t pfe_tmu_shp_enable(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -745,7 +731,7 @@ errno_t pfe_tmu_shp_enable(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
  * @param[in]	mode Shaper mode
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_shp_set_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, pfe_tmu_rate_mode_t mode)
+errno_t pfe_tmu_shp_set_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, pfe_tmu_rate_mode_t mode)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -772,7 +758,7 @@ errno_t pfe_tmu_shp_set_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_
  * @param[in]	shp The shaper ID
  * @return		Shaper rate mode
  */
-pfe_tmu_rate_mode_t pfe_tmu_shp_get_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
+pfe_tmu_rate_mode_t pfe_tmu_shp_get_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -800,7 +786,7 @@ pfe_tmu_rate_mode_t pfe_tmu_shp_get_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t
  * @param[in]	isl Idle slope in units per second as given by chosen mode
  *					(bits-per-second, packets-per-second)
  */
-errno_t pfe_tmu_shp_set_idle_slope(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint32_t isl)
+errno_t pfe_tmu_shp_set_idle_slope(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint32_t isl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -827,7 +813,7 @@ errno_t pfe_tmu_shp_set_idle_slope(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8
  * @param[in]	shp The shaper ID
  * @return		Current idle slope value
  */
-uint32_t pfe_tmu_shp_get_idle_slope(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
+uint32_t pfe_tmu_shp_get_idle_slope(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -853,7 +839,7 @@ uint32_t pfe_tmu_shp_get_idle_slope(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint
  * @parma[in]	phy Physical interface ID
  * @param[in]	shp The shaper ID
  */
-errno_t pfe_tmu_shp_disable(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
+errno_t pfe_tmu_shp_disable(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -882,7 +868,7 @@ errno_t pfe_tmu_shp_disable(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
  * @param[in]	mode The rate mode to be used by scheduler
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_sch_set_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
+errno_t pfe_tmu_sch_set_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t sch, pfe_tmu_rate_mode_t mode)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -910,7 +896,7 @@ errno_t pfe_tmu_sch_set_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
  * @param[in]	sch The scheduler ID
  * @return		Current rate mode or RATE_MODE_INVALID in case of error
  */
-pfe_tmu_rate_mode_t pfe_tmu_sch_get_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
+pfe_tmu_rate_mode_t pfe_tmu_sch_get_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -938,7 +924,7 @@ pfe_tmu_rate_mode_t pfe_tmu_sch_get_rate_mode(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t
  * @param[in]	algo The algorithm to be used
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_sch_set_algo(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
+errno_t pfe_tmu_sch_set_algo(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t sch, pfe_tmu_sched_algo_t algo)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -966,7 +952,7 @@ errno_t pfe_tmu_sch_set_algo(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
  * @param[in]	sch The scheduler ID
  * @return		Current rate mode or SCHED_ALGO_INVALID in case of error
  */
-pfe_tmu_sched_algo_t pfe_tmu_sch_get_algo(pfe_tmu_t *tmu,
+pfe_tmu_sched_algo_t pfe_tmu_sch_get_algo(const pfe_tmu_t *tmu,
 		pfe_ct_phy_if_id_t phy, uint8_t sch)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -994,7 +980,7 @@ pfe_tmu_sched_algo_t pfe_tmu_sch_get_algo(pfe_tmu_t *tmu,
  * @param[in]	sch The scheduler ID
  * @return		Number of scheduler inputs
  */
-uint8_t pfe_tmu_sch_get_input_cnt(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
+uint8_t pfe_tmu_sch_get_input_cnt(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
 {
 	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
 	{
@@ -1016,7 +1002,7 @@ uint8_t pfe_tmu_sch_get_input_cnt(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_
  * @param[in]	weight The weight value to be used by chosen scheduling algorithm
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_sch_set_input_weight(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
+errno_t pfe_tmu_sch_set_input_weight(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t sch, uint8_t input, uint32_t weight)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1046,7 +1032,7 @@ errno_t pfe_tmu_sch_set_input_weight(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
  * @param[in]	input Scheduler input
  * @return		Input weight
  */
-uint32_t pfe_tmu_sch_get_input_weight(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
+uint32_t pfe_tmu_sch_get_input_weight(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -1076,7 +1062,7 @@ uint32_t pfe_tmu_sch_get_input_weight(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, ui
  * @param[in]	input Input of 'dst_sch' where output of 'src_sch' shall be connected
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_sch_bind_sch_output(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t src_sch, uint8_t dst_sch, uint8_t input)
+errno_t pfe_tmu_sch_bind_sch_output(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t src_sch, uint8_t dst_sch, uint8_t input)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -1105,7 +1091,7 @@ errno_t pfe_tmu_sch_bind_sch_output(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint
  * @param[in]	input Scheduler input
  * @return		ID of the connected scheduler or PFE_TMU_INVALID_SCHEDULER
  */
-uint8_t pfe_tmu_sch_get_bound_sch_output(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
+uint8_t pfe_tmu_sch_get_bound_sch_output(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -1134,7 +1120,7 @@ uint8_t pfe_tmu_sch_get_bound_sch_output(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
  * @param[in]	queue Queue to be connected to the scheduler input
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_tmu_sch_bind_queue(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
+errno_t pfe_tmu_sch_bind_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t sch, uint8_t input, uint8_t queue)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1164,7 +1150,7 @@ errno_t pfe_tmu_sch_bind_queue(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
  * @param[in]	input Scheduler input to be queried
  * @return		Queue ID connected to the input or PFE_TMU_INVALID_QUEUE if not present
  */
-uint8_t pfe_tmu_sch_get_bound_queue(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
+uint8_t pfe_tmu_sch_get_bound_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -1193,7 +1179,7 @@ uint8_t pfe_tmu_sch_get_bound_queue(pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_tmu_get_text_statistics(pfe_tmu_t *tmu, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_tmu_get_text_statistics(const pfe_tmu_t *tmu, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 
@@ -1204,7 +1190,7 @@ uint32_t pfe_tmu_get_text_statistics(pfe_tmu_t *tmu, char_t *buf, uint32_t buf_l
 		return 0U;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	
+
 	len += pfe_tmu_cfg_get_text_stat(tmu->cbus_base_va, buf, buf_len, verb_level);
 
 	return len;

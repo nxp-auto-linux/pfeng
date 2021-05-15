@@ -46,13 +46,13 @@ struct pfe_if_db_entry_tag
 		pfe_log_if_t *log_if;
 		pfe_phy_if_t *phy_if;
 		void *iface;
-	};
+	} info;
 
 	/*	DB/Chaining */
 	LLIST_t list_member;
 };
 
-typedef struct if_db_context_tag
+typedef struct
 {
 	uint32_t session_id;
 	uint32_t seed;
@@ -72,8 +72,8 @@ typedef struct if_db_context_tag
 static if_db_context_t if_db_context;
 
 
-static bool_t pfe_if_db_match_criterion(pfe_if_db_t *db, pfe_if_db_get_criterion_t crit, crit_arg_t *arg, pfe_if_db_entry_t *entry);
-static errno_t pfe_if_db_check_precondition(if_db_context_t *pr_if_db_context, uint32_t session_id);
+static bool_t pfe_if_db_match_criterion(const pfe_if_db_t *db, pfe_if_db_get_criterion_t crit, const crit_arg_t *arg, const pfe_if_db_entry_t *entry);
+static errno_t pfe_if_db_check_precondition(const if_db_context_t *pr_if_db_context, uint32_t session_id);
 #if defined(PFE_CFG_IF_DB_WORKER)
 static void * pfe_if_db_worker(void *arg);
 #endif /* PFE_CFG_IF_DB_WORKER */
@@ -159,7 +159,7 @@ static void * pfe_if_db_worker(void *arg)
  * @retval		PERM Preconditions are not fulfilled
  * @warning		context should be locked before call
  */
-static errno_t pfe_if_db_check_precondition(if_db_context_t *pr_if_db_context, uint32_t session_id)
+static errno_t pfe_if_db_check_precondition(const if_db_context_t *pr_if_db_context, uint32_t session_id)
 {
 	errno_t ret = EOK;
 
@@ -190,7 +190,7 @@ static errno_t pfe_if_db_check_precondition(if_db_context_t *pr_if_db_context, u
  * @retval		TRUE Entry matches the criterion
  * @retval		FALSE Entry does not match the criterion
  */
-static bool_t pfe_if_db_match_criterion(pfe_if_db_t *db, pfe_if_db_get_criterion_t crit, crit_arg_t *arg, pfe_if_db_entry_t *entry)
+static bool_t pfe_if_db_match_criterion(const pfe_if_db_t *db, pfe_if_db_get_criterion_t crit, const crit_arg_t *arg, const pfe_if_db_entry_t *entry)
 {
 	bool_t match = FALSE;
 
@@ -214,11 +214,11 @@ static bool_t pfe_if_db_match_criterion(pfe_if_db_t *db, pfe_if_db_get_criterion
 		{
 			if (PFE_IF_DB_LOG == db->type)
 			{
-				match = (arg->if_id == (uint8_t)pfe_log_if_get_id(entry->log_if));
+				match = (arg->if_id == (uint8_t)pfe_log_if_get_id(entry->info.log_if));
 			}
 			else
 			{
-				match = (arg->if_id == (uint8_t)pfe_phy_if_get_id(entry->phy_if));
+				match = (arg->if_id == (uint8_t)pfe_phy_if_get_id(entry->info.phy_if));
 			}
 
 			break;
@@ -226,7 +226,7 @@ static bool_t pfe_if_db_match_criterion(pfe_if_db_t *db, pfe_if_db_get_criterion
 
 		case IF_DB_CRIT_BY_INSTANCE:
 		{
-			match = (arg->iface == entry->iface);
+			match = (arg->iface == entry->info.iface);
 			break;
 		}
 
@@ -234,11 +234,11 @@ static bool_t pfe_if_db_match_criterion(pfe_if_db_t *db, pfe_if_db_get_criterion
 		{
 			if (PFE_IF_DB_LOG == db->type)
 			{
-				match = (0 == strcmp(arg->name, pfe_log_if_get_name(entry->log_if)));
+				match = (0 == strcmp(arg->name, pfe_log_if_get_name(entry->info.log_if)));
 			}
 			else
 			{
-				match = (0 == strcmp(arg->name, pfe_phy_if_get_name(entry->phy_if)));
+				match = (0 == strcmp(arg->name, pfe_phy_if_get_name(entry->info.phy_if)));
 			}
 
 			break;
@@ -384,7 +384,7 @@ pfe_if_db_t * pfe_if_db_create(pfe_if_db_type_t type)
  * @brief		Destroy DB
  * @param[in]	db The DB instance
  */
-void pfe_if_db_destroy(pfe_if_db_t *db)
+void pfe_if_db_destroy(const pfe_if_db_t *db)
 {
 	if (NULL != db)
 	{
@@ -457,11 +457,11 @@ void pfe_if_db_destroy(pfe_if_db_t *db)
  * @param[in]	entry The entry
  * @return		Physical interface instance
  */
-__attribute__((pure)) pfe_phy_if_t *pfe_if_db_entry_get_phy_if(pfe_if_db_entry_t *entry)
+__attribute__((pure)) pfe_phy_if_t *pfe_if_db_entry_get_phy_if(const pfe_if_db_entry_t *entry)
 {
 	if (NULL != entry)
 	{
-		return entry->phy_if;
+		return entry->info.phy_if;
 	}
 	else
 	{
@@ -474,11 +474,11 @@ __attribute__((pure)) pfe_phy_if_t *pfe_if_db_entry_get_phy_if(pfe_if_db_entry_t
  * @param[in]	entry The entry
  * @return		Logical interface instance
  */
-__attribute__((pure)) pfe_log_if_t *pfe_if_db_entry_get_log_if(pfe_if_db_entry_t *entry)
+__attribute__((pure)) pfe_log_if_t *pfe_if_db_entry_get_log_if(const pfe_if_db_entry_t *entry)
 {
 	if (NULL != entry)
 	{
-		return entry->log_if;
+		return entry->info.log_if;
 	}
 	else
 	{
@@ -548,7 +548,7 @@ errno_t pfe_if_db_add(pfe_if_db_t *db, uint32_t session_id, void *iface, pfe_ct_
 	if (NULL != new_entry)
 	{
 		/*	Store values */
-		new_entry->iface = iface;
+		new_entry->info.iface = iface;
 		new_entry->owner = owner;
 
 		/*	Put to DB */
@@ -774,7 +774,7 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
  * @warning		The returned entry must not be accessed after pfe_if_db_remove(entry)
  *				or pfe_if_db_drop_all() has been called.
  */
-errno_t pfe_if_db_get_single(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_criterion_t crit, void *arg, pfe_if_db_entry_t **db_entry)
+errno_t pfe_if_db_get_single(const pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_criterion_t crit, void *arg, pfe_if_db_entry_t **db_entry)
 {
 	LLIST_t *curItem;
 	bool_t match = FALSE;
@@ -988,10 +988,10 @@ errno_t pfe_if_db_get_next(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry
  * @param[in]	session_id ID of active session
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_log_if_db_drop_all(pfe_if_db_t *db, uint32_t session_id)
+errno_t pfe_log_if_db_drop_all(const pfe_if_db_t *db, uint32_t session_id)
 {
 	LLIST_t *curItem, *aux;
-	pfe_if_db_entry_t *entry;
+	const pfe_if_db_entry_t *entry;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == db))
