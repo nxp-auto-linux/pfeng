@@ -42,7 +42,7 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"BETA 0.9.4"
+#define PFENG_DRIVER_VERSION		"BETA 0.9.4 CD1 FORD"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"

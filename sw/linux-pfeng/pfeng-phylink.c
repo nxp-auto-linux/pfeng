@@ -238,7 +238,6 @@ static void pfeng_mac_an_restart(struct phylink_config *config)
 static int s32g_set_rgmii_speed(struct pfeng_netif *netif, unsigned int speed)
 {
 	struct clk *tx_clk = netif->priv->emac[netif->cfg->emac].tx_clk;
-	struct clk *rx_clk = netif->priv->emac[netif->cfg->emac].rx_clk;
 	unsigned long rate = 0;
 
 	switch (speed) {
@@ -260,9 +259,6 @@ static int s32g_set_rgmii_speed(struct pfeng_netif *netif, unsigned int speed)
 		clk_set_rate(tx_clk, rate);
 		netdev_info(netif->netdev, "Set TX clock to %luHz\n", rate);
 	}
-
-	if (rx_clk)
-		clk_set_rate(rx_clk, rate);
 
 	return 0;
 }

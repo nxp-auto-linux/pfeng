@@ -1266,34 +1266,60 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 	struct net_device *netdev = netif->netdev;
 	struct pfeng_emac *emac = &netif->priv->emac[netif->cfg->emac];
 	struct pfeng_hif_chnl *chnl;
+	__maybe_unused u64 clk_rate;
 	int ret, i;
 
 	rtnl_lock();
 
 #ifdef PFE_CFG_PFE_MASTER
 	/* Restart RX/TX EMAC clocks */
-	if (emac->tx_clk) {
-		ret = clk_prepare_enable(emac->tx_clk);
-		if (ret) {
-			dev_err(dev, "TX clocks restart on EMAC%d failed: %d\n", netif->cfg->emac, ret);
-			ret = 0;
-			devm_clk_put(dev, emac->tx_clk);
-			emac->tx_clk = NULL;
-		} else
-			dev_info(dev, "TX clocks on EMAC%d restarted\n", netif->cfg->emac);
+
+	/* retrieve max rate */
+	switch (emac->max_speed) {
+	case SPEED_10:
+		clk_rate = 2500000;
+		break;
+	case SPEED_100:
+		clk_rate = 25000000;
+		break;
+	case SPEED_1000:
+	default:
+		clk_rate = 125000000;
+		break;
 	}
+
+	if (emac->tx_clk) {
+		ret = clk_set_rate(emac->tx_clk, clk_rate);
+		if (ret)
+			dev_err(dev, "Failed to set TX clock on EMAC%d: %d\n", netif->cfg->emac, ret);
+		else {
+			ret = clk_prepare_enable(emac->tx_clk);
+			if (ret) {
+				dev_err(dev, "TX clocks restart on EMAC%d failed: %d\n", netif->cfg->emac, ret);
+				ret = 0;
+				devm_clk_put(dev, emac->tx_clk);
+				emac->tx_clk = NULL;
+			} else
+				dev_info(dev, "TX clocks on EMAC%d restarted\n", netif->cfg->emac);
+		}
+	}
+
 	if (emac->rx_clk) {
-		ret = clk_prepare_enable(emac->rx_clk);
-		if (ret) {
-			dev_err(dev, "RX clocks restart on EMAC%d failed: %d\n", netif->cfg->emac, ret);
-			ret = 0;
-			devm_clk_put(dev, emac->rx_clk);
-			emac->rx_clk = NULL;
-		} else
-			dev_info(dev, "RX clocks on EMAC%d restarted\n", netif->cfg->emac);
+		ret = clk_set_rate(emac->rx_clk, clk_rate);
+		if (ret)
+			dev_err(dev, "Failed to set RX clock on EMAC%d: %d\n", netif->cfg->emac, ret);
+		else {
+			ret = clk_prepare_enable(emac->rx_clk);
+			if (ret) {
+				dev_err(dev, "RX clocks restart on EMAC%d failed: %d\n", netif->cfg->emac, ret);
+				ret = 0;
+				devm_clk_put(dev, emac->rx_clk);
+				emac->rx_clk = NULL;
+			} else
+				dev_info(dev, "RX clocks on EMAC%d restarted\n", netif->cfg->emac);
+		}
 	}
 #endif /* PFE_CFG_PFE_MASTER */
-
 
 	ret = pfeng_netif_logif_init_second_stage(netif);
 
