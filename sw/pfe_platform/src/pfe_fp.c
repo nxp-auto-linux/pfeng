@@ -38,7 +38,7 @@ uint32_t pfe_fp_create_table(pfe_class_t *class, uint8_t rules_count)
     errno_t res;
 
     /* Calculate needed size */
-    size = sizeof(pfe_ct_fp_table_t) + (rules_count * sizeof(pfe_ct_fp_rule_t));
+    size = (uint32_t)sizeof(pfe_ct_fp_table_t) + ((uint32_t)rules_count * sizeof(pfe_ct_fp_rule_t));
     /* Allocate DMEM */
     addr = pfe_class_dmem_heap_alloc(class, size);
     if(0U == addr)
@@ -49,7 +49,7 @@ uint32_t pfe_fp_create_table(pfe_class_t *class, uint8_t rules_count)
     /* Write the table header */
     temp.count = rules_count;
     temp.rules = oal_htonl(addr + sizeof(pfe_ct_fp_table_t));
-    memset(&temp.fp_stats, 0, sizeof(pfe_ct_class_flexi_parser_stats_t));
+    (void)memset(&temp.fp_stats, 0, sizeof(pfe_ct_class_flexi_parser_stats_t));
     res = pfe_class_write_dmem(class, -1, addr, (void *)&temp, sizeof(pfe_ct_fp_table_t));
     if(EOK != res)
     {
@@ -70,7 +70,7 @@ uint32_t pfe_fp_create_table(pfe_class_t *class, uint8_t rules_count)
 * @details Function writes the rule at specified position in the previously created table.
 * @return 0 on failure otherwise the DMEM address of the rule.
 */
-uint32_t pfe_fp_table_write_rule(pfe_class_t *class, uint32_t table_address, pfe_ct_fp_rule_t *rule, uint8_t position)
+uint32_t pfe_fp_table_write_rule(pfe_class_t *class, uint32_t table_address, const pfe_ct_fp_rule_t *rule, uint8_t position)
 {
     pfe_ct_fp_rule_t temp;
     addr_t addr;
@@ -99,7 +99,7 @@ uint32_t pfe_fp_table_write_rule(pfe_class_t *class, uint32_t table_address, pfe
 * @param[in] class Classifier used to create the table
 * @param[in] table_address Address returned by the pfe_fp_create_table()
 */
-void pfe_fp_destroy_table(pfe_class_t *class, uint32_t table_address)
+void pfe_fp_destroy_table(const pfe_class_t *class, uint32_t table_address)
 {
     /* Just free the memory */
     pfe_class_dmem_heap_free(class, table_address);
@@ -112,13 +112,15 @@ errno_t pfe_fp_table_get_statistics(pfe_class_t *class, uint32_t pe_idx, uint32_
     addr_t addr;
 
     addr = table_address;
-    res = pfe_class_read_dmem(class, pe_idx, (void *)&temp, addr, sizeof(pfe_ct_fp_table_t));
+    res = pfe_class_read_dmem(class, (int32_t)pe_idx, (void *)&temp, addr, sizeof(pfe_ct_fp_table_t));
     if(EOK != res)
     {
         NXP_LOG_ERROR("Cannot read from DMEM\n");
-	return res;
+    }
+    else
+    {
+        (void)memcpy(stats, &temp.fp_stats, sizeof(pfe_ct_class_flexi_parser_stats_t));
     }
 
-    memcpy(stats, &temp.fp_stats, sizeof(pfe_ct_class_flexi_parser_stats_t));
     return res;
 }

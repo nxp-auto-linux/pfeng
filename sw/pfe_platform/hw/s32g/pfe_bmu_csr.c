@@ -13,6 +13,9 @@
 #include "pfe_cbus.h"
 #include "pfe_bmu_csr.h"
 
+
+#define IS_POWER_OF_2(n) (((n) != 0U) && (((n) & ((n) - 1U)) == 0U))
+
 #ifndef PFE_CBUS_H_
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
@@ -171,13 +174,27 @@ void pfe_bmu_cfg_irq_unmask(addr_t base_va)
  */
 void pfe_bmu_cfg_init(addr_t base_va, const pfe_bmu_cfg_t *cfg)
 {
+	uint32_t bmu_buf_size_exp;
+	if (unlikely(FALSE == IS_POWER_OF_2(cfg->buf_size)))
+	{
+		NXP_LOG_ERROR("BMU buffer size is not power of 2\n");
+		return;
+	}
 	hal_write32(0U, base_va + BMU_CTRL);
 	hal_write32(0x0U, base_va + BMU_INT_ENABLE);
 	hal_write32(0xffffffffU, base_va + BMU_INT_SRC);
 
 	hal_write32((uint32_t)(cfg->pool_pa & 0xffffffffU), base_va + BMU_UCAST_BASEADDR);
 	hal_write32(cfg->max_buf_cnt & 0xffffU, base_va + BMU_UCAST_CONFIG);
-	hal_write32(cfg->buf_size & 0xffffU, base_va + BMU_BUF_SIZE);
+
+	for(bmu_buf_size_exp = 0; bmu_buf_size_exp < (sizeof(cfg->buf_size) * 8U); bmu_buf_size_exp++)
+	{
+		if(cfg->buf_size == (1UL << bmu_buf_size_exp))
+		{
+			hal_write32(bmu_buf_size_exp & 0xffffU, base_va + BMU_BUF_SIZE);
+			break;
+		}
+	}
 
 	/*	Thresholds. 75% of maximum number of available buffers. */
 	hal_write32((cfg->max_buf_cnt * 75U) / 100U, base_va + BMU_THRES);

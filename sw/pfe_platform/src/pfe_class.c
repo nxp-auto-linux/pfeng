@@ -50,131 +50,6 @@ static void pfe_class_sum_pe_algo_stats(pfe_ct_class_algo_stats_t *sum, const pf
 static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
 
 /**
- * @brief		Read "put" buffer
- * @param[in]	pe The PE instance
- * @param[out]	buf Pointer to memory where buffer shall be written
- * @retval		EOK Success and buffer is valid
- * @retval		EAGAIN Buffer is invalid
- * @retval		ENOENT Buffer not found
- */
-errno_t pfe_pe_get_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
-{
-	uint8_t flags;
-	errno_t ret = ENOENT;
-	pfe_ct_pe_mmap_t mmap_data;
-	const pfe_ct_class_mmap_t *class_mmap_data;
-
-	/*	Get mmap base from PE[0] since all PEs have the same memory map */
-	if (EOK != pfe_pe_get_mmap(pe, &mmap_data))
-	{
-		NXP_LOG_ERROR("Could not get memory map\n");
-		return ENOENT;
-	}
-
-	class_mmap_data = &mmap_data.class_pe;
-
-	if (0U == class_mmap_data->put_buffer)
-	{
-		return ENOENT;
-	}
-
-	if (EOK != pfe_pe_lock(pe))
-	{
-		NXP_LOG_DEBUG("PE lock failed\n");
-		return EPERM;
-	}
-
-	/*	Get "put" buffer status */
-	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &flags,
-			oal_ntohl(class_mmap_data->put_buffer) + offsetof(pfe_ct_buffer_t, flags),
-				sizeof(uint8_t));
-
-	if (0U != flags)
-	{
-		/*	Copy buffer to local memory */
-		pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, buf, oal_ntohl(class_mmap_data->put_buffer), sizeof(pfe_ct_buffer_t));
-
-		/*	Clear flags */
-		flags = 0U;
-		pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe,
-				oal_ntohl(class_mmap_data->put_buffer) + offsetof(pfe_ct_buffer_t, flags),
-					&flags, sizeof(uint8_t));
-
-		ret = EOK;
-	}
-	else
-	{
-		ret = EAGAIN;
-	}
-
-	if (EOK != pfe_pe_unlock(pe))
-	{
-		NXP_LOG_DEBUG("PE unlock failed\n");
-	}
-
-
-	return ret;
-}
-
-/**
- * @brief		Write "get" buffer
- * @param[in]	pe The PE instance
- * @param[out]	buf Pointer to data to be written
- * @retval		EOK Success and buffer is valid
- * @retval		EAGAIN Buffer is occupied
- * @retval		ENOENT Buffer not found
- */
-errno_t pfe_pe_put_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
-{
-	uint8_t flags;
-	errno_t ret = ENOENT;
-	pfe_ct_pe_mmap_t mmap_data;
-	const pfe_ct_class_mmap_t *class_mmap_data;
-
-	if (EOK != pfe_pe_get_mmap(pe, &mmap_data))
-	{
-		NXP_LOG_ERROR("Could not get memory map\n");
-		return ENOENT;
-	}
-
-	class_mmap_data = &mmap_data.class_pe;
-	if (0U == class_mmap_data->get_buffer)
-	{
-		return ENOENT;
-	}
-
-	if (EOK != pfe_pe_lock(pe))
-	{
-		NXP_LOG_DEBUG("PE lock failed\n");
-	return EPERM;
-	}
-
-	/*	Get "get" buffer status */
-	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &flags,
-			oal_ntohl(class_mmap_data->get_buffer) + offsetof(pfe_ct_buffer_t, flags),
-				sizeof(uint8_t));
-
-	if (0U == flags)
-	{
-		/*	Send data to PFE */
-		buf->flags |= 1U;
-		pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe,
-				oal_ntohl(class_mmap_data->get_buffer), buf, sizeof(pfe_ct_buffer_t));
-		ret = EOK;
-	}
-	else
-	{
-		ret = EAGAIN;
-	}
-
-	if (EOK != pfe_pe_unlock(pe))
-	{
-		NXP_LOG_DEBUG("PE unlock failed\n");
-	}
-	return ret;
-}
-
-/**
  * @brief CLASS ISR
  * @details Checks all PEs whether they report a firmware error
  * @param[in] class The CLASS instance
@@ -182,8 +57,8 @@ errno_t pfe_pe_put_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
 errno_t pfe_class_isr(const pfe_class_t *class)
 {
 	uint32_t i;
-	pfe_ct_buffer_t buf;
 #ifdef PFE_CFG_FCI_ENABLE
+	pfe_ct_buffer_t buf;
 	fci_msg_t msg;
 #endif /* PFE_CFG_FCI_ENABLE */
 
@@ -195,24 +70,27 @@ errno_t pfe_class_isr(const pfe_class_t *class)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	/* Read the error record from each PE */
-	for (i = 0U; i < class->pe_num; i++)
-	{
-		(void)pfe_pe_get_fw_errors(class->pe[i]);
-	}
-
-	/*	Read data to be delivered to host */
 	for (i=0U; i<class->pe_num; i++)
 	{
-		/*	Check if there is new message */
-		if (EOK == pfe_pe_get_data(class->pe[i], &buf))
+		/*	Allow safe use of _nolock() functions. We don't call the _mem_lock()
+			here as we don't need to have coherent accesses. */
+		if (EOK != pfe_pe_lock(class->pe[i]))
 		{
+			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+		}
+
+		/*	Read and print the error record from each PE */
+		(void)pfe_pe_get_fw_errors_nolock(class->pe[i]);
+
 #ifdef PFE_CFG_FCI_ENABLE
+		/*	Check if there is new message */
+		if (EOK == pfe_pe_get_data_nolock(class->pe[i], &buf))
+		{
 			/*	Provide data to user via FCI */
 			msg.msg_cmd.code = FPP_CMD_DATA_BUF_AVAIL;
 			msg.msg_cmd.length = buf.len;
 
-			if (buf.len > sizeof(msg.msg_cmd.payload))
+			if (msg.msg_cmd.length > (uint32_t)sizeof(msg.msg_cmd.payload))
 			{
 				NXP_LOG_ERROR("FCI buffer is too small\n");
 			}
@@ -224,7 +102,12 @@ errno_t pfe_class_isr(const pfe_class_t *class)
 					NXP_LOG_ERROR("Can't report data to FCI clients\n");
 				}
 			}
-#endif
+		}
+#endif /* PFE_CFG_FCI_ENABLE */
+
+		if (EOK != pfe_pe_unlock(class->pe[i]))
+		{
+			NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
 		}
 	}
 
@@ -464,6 +347,9 @@ void pfe_class_reset(pfe_class_t *class)
  */
 void pfe_class_enable(pfe_class_t *class)
 {
+	uint16_t timeout = 50U;
+	pfe_ct_pe_sw_state_t state;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == class))
 	{
@@ -483,7 +369,23 @@ void pfe_class_enable(pfe_class_t *class)
 	}
 
 	pfe_class_cfg_enable(class->cbus_base_va);
-	class->enabled = TRUE;
+
+	do
+	{
+		oal_time_usleep(5U);
+		timeout--;
+		state = pfe_pe_get_fw_state(class->pe[0U]);
+	}
+	while ((state < PFE_FW_STATE_INIT) && (timeout > 0U));
+	
+	if (timeout == 0U)
+	{
+		NXP_LOG_ERROR("Time-out waiting for classifier to init\n");
+	}
+	else
+	{
+		class->enabled = TRUE;
+	}
 
 	if (EOK != oal_mutex_unlock(&class->mutex))
 	{
@@ -595,6 +497,7 @@ static errno_t pfe_class_load_fw_features(pfe_class_t *class)
 	errno_t ret = EOK;
     pfe_ct_feature_desc_t *entry;
     uint32_t i, j;
+    bool_t val_break = FALSE;
 
 	ret = pfe_pe_get_mmap(class->pe[0U], &mmap);
 	if(EOK == ret)
@@ -630,46 +533,59 @@ static errno_t pfe_class_load_fw_features(pfe_class_t *class)
                         class->fw_features = NULL;
                         class->fw_features_count = 0U;
                         ret = ENOMEM;
-                        break;
+                        val_break = TRUE;
                     }
-                    /* Get feature low level data */
-                    ret = pfe_pe_get_fw_feature_entry(class->pe[0U], i, &entry);
-                    if(EOK != ret)
+                    else
                     {
-                         NXP_LOG_ERROR("Failed get ll data for feature %u\n", (uint_t)i);
-                        /* Destroy previously created and return failure */
-                        for(j = 0U; j < i; j++)
+                        /* Get feature low level data */
+                        ret = pfe_pe_get_fw_feature_entry(class->pe[0U], i, &entry);
+                        if(EOK != ret)
                         {
-                            pfe_fw_feature_destroy(class->fw_features[j]);
-                            class->fw_features[j] = NULL;
+                             NXP_LOG_ERROR("Failed get ll data for feature %u\n", (uint_t)i);
+                            /* Destroy previously created and return failure */
+                            for(j = 0U; j < i; j++)
+                            {
+                                pfe_fw_feature_destroy(class->fw_features[j]);
+                                class->fw_features[j] = NULL;
+                            }
+                            oal_mm_free(class->fw_features);
+                            class->fw_features = NULL;
+                            class->fw_features_count = 0U;
+                            ret = EINVAL;
+                            val_break = TRUE;
                         }
-                        oal_mm_free(class->fw_features);
-                        class->fw_features = NULL;
-                        class->fw_features_count = 0U;
-                        ret = EINVAL;
-                        break;
+                        else
+                        {
+                            /* Set the low level data in the feature */
+                            (void)pfe_fw_feature_set_ll_data(class->fw_features[i], entry);
+                            /* Set the feature string base */
+                            ret = pfe_fw_feature_set_string_base(class->fw_features[i], pfe_pe_get_fw_feature_str_base(class->pe[0U]));
+                            if(EOK != ret)
+                            {
+                                NXP_LOG_ERROR("Failed to set string base for feature %u\n", (uint_t)i);
+                                /* Destroy previously created and return failure */
+                                for(j = 0U; j < i; j++)
+                                {
+                                    pfe_fw_feature_destroy(class->fw_features[j]);
+                                    class->fw_features[j] = NULL;
+                                }
+                                oal_mm_free(class->fw_features);
+                                class->fw_features = NULL;
+                                class->fw_features_count = 0U;
+                                ret = EINVAL;
+                                val_break = TRUE;
+                            }
+                            else
+                            {
+                                /* Set functions to read/write DMEM and their data */
+                                (void)pfe_fw_feature_set_dmem_funcs(class->fw_features[i], pfe_class_read_dmem, pfe_class_write_dmem, (void *)class);
+                            }
+                        }
                     }
-                    /* Set the low level data in the feature */
-                    (void)pfe_fw_feature_set_ll_data(class->fw_features[i], entry);
-                    /* Set the feature string base */
-                    ret = pfe_fw_feature_set_string_base(class->fw_features[i], pfe_pe_get_fw_feature_str_base(class->pe[0U]));
-                    if(EOK != ret)
+                    if (TRUE == val_break)
                     {
-                        NXP_LOG_ERROR("Failed to set string base for feature %u\n", (uint_t)i);
-                        /* Destroy previously created and return failure */
-                        for(j = 0U; j < i; j++)
-                        {
-                            pfe_fw_feature_destroy(class->fw_features[j]);
-                            class->fw_features[j] = NULL;
-                        }
-                        oal_mm_free(class->fw_features);
-                        class->fw_features = NULL;
-                        class->fw_features_count = 0U;
-                        ret = EINVAL;
                         break;
                     }
-                    /* Set functions to read/write DMEM and their data */
-                    (void)pfe_fw_feature_set_dmem_funcs(class->fw_features[i], pfe_class_read_dmem, pfe_class_write_dmem, (void *)class);
                 }
             }
         } /* Else is OK too */
@@ -949,7 +865,7 @@ errno_t pfe_class_set_rtable(pfe_class_t *class, addr_t rtable_pa, uint32_t rtab
 {
 	errno_t ret = EOK;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class) || (NULL == rtable_pa)))
+	if (unlikely((NULL == class) || (NULL_ADDR == rtable_pa)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -1032,7 +948,7 @@ errno_t pfe_class_get_feature(const pfe_class_t *class, pfe_fw_feature_t **featu
     const char *fname;
     errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class)||(NULL = feature)||(NULL = name)))
+	if (unlikely((NULL == class)||(NULL == feature)||(NULL == name)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -1062,7 +978,7 @@ errno_t pfe_class_get_feature(const pfe_class_t *class, pfe_fw_feature_t **featu
 errno_t pfe_class_get_feature_first(pfe_class_t *class, pfe_fw_feature_t **feature)
 {
  #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class)||(NULL = feature)))
+	if (unlikely((NULL == class)||(NULL == feature)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -1087,7 +1003,7 @@ errno_t pfe_class_get_feature_first(pfe_class_t *class, pfe_fw_feature_t **featu
 errno_t pfe_class_get_feature_next(pfe_class_t *class, pfe_fw_feature_t **feature)
 {
  #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class)||(NULL = feature)))
+	if (unlikely((NULL == class)||(NULL == feature)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -1130,7 +1046,7 @@ static void pfe_class_alg_stats_endian(pfe_ct_class_algo_stats_t *stat)
 void pfe_class_flexi_parser_stats_endian(pfe_ct_class_flexi_parser_stats_t *stats)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == stat))
+	if (unlikely(NULL == stats))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
@@ -1261,16 +1177,28 @@ uint32_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
 
 	for (ii=0U; ii<class->pe_num; ii++)
 	{
+		/*	Allow safe use of _nolock() functions. We don't call the _mem_lock()
+		 	here as we don't need to have coherent accesses. */
+		if (EOK != pfe_pe_lock(class->pe[ii]))
+		{
+			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+		}
+
 		tries = 0U;
 		do
 		{
-			ret = pfe_pe_put_data(class->pe[ii], buf);
+			ret = pfe_pe_put_data_nolock(class->pe[ii], buf);
 			if (EAGAIN == ret)
 			{
 				tries++;
 				oal_time_usleep(200U);
 			}
 		} while ((ret == EAGAIN) && (tries < 10U));
+
+		if (EOK != pfe_pe_unlock(class->pe[ii]))
+		{
+			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+		}
 
 		if (EOK != ret)
 		{
@@ -1328,56 +1256,71 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 
 	len += pfe_class_cfg_get_text_stat(class->cbus_base_va, buf + len, buf_len - len, verb_level);
 
-
 	/* Allocate memory to copy the statistics from PEs + one position for sums
 	   (having sums separate from data allows to print also per PE details) */
 	pe_stats = oal_mm_malloc(sizeof(pfe_ct_pe_stats_t) * (class->pe_num + 1U));
-	if(NULL == pe_stats)
+	if (NULL == pe_stats)
 	{
 		NXP_LOG_ERROR("Memory allocation failed\n");
 		return len;
 	}
+
 	(void)memset(pe_stats, 0, sizeof(pfe_ct_pe_stats_t) * (class->pe_num + 1U));
+
 	c_alg_stats = oal_mm_malloc(sizeof(pfe_ct_classify_stats_t) * (class->pe_num + 1U));
-	if(NULL == c_alg_stats)
+	if (NULL == c_alg_stats)
 	{
 		NXP_LOG_ERROR("Memory allocation failed\n");
 		oal_mm_free(pe_stats);
 		return len;
 	}
+
 	(void)memset(c_alg_stats, 0, sizeof(pfe_ct_classify_stats_t) * (class->pe_num + 1U));
+
 	/* Get the memory map - all PEs share the same memory map
 	   therefore we can read arbitrary one (in this case 0U) */
 	ret = pfe_pe_get_mmap(class->pe[0U], &mmap);
-	if(EOK != ret)
+	if (EOK != ret)
 	{
 		NXP_LOG_ERROR("Cannot get PE memory map\n");
 		oal_mm_free(c_alg_stats);
 		oal_mm_free(pe_stats);
 		return len;
 	}
-	/* Lock all PEs - they will stop processing frames and wait */
+
+	/* Lock all PEs - they will stop processing frames and wait. This will
+	   ensure data coherence. */
 	for (ii = 0U; ii < class->pe_num; ii++)
 	{
 		ret = pfe_pe_mem_lock(class->pe[ii]);
-		if(EOK != ret)
+		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("PE %u could not be locked\n", (uint_t)ii);
-			len += oal_util_snprintf(buf + len, buf_len - len, "PE %u could not be locked - statistics are not coherent\n", ii);
+			len += oal_util_snprintf(buf + len, buf_len - len,
+					"PE %u could not be locked - statistics are not coherent\n", ii);
 		}
 	}
+
 	/* Get PE info per PE
 	   - leave 1st position in allocated memory empty for sums */
 	for (ii = 0U; ii < class->pe_num; ii++)
 	{
-		(void)pfe_pe_get_classify_stats(class->pe[ii], oal_ntohl(mmap.class_pe.classification_stats), &c_alg_stats[ii + 1U]);
-		(void)pfe_pe_get_pe_stats(class->pe[ii], oal_ntohl(mmap.class_pe.pe_stats), &pe_stats[ii + 1U]);
+		(void)pfe_pe_get_classify_stats_nolock(
+							class->pe[ii],
+							oal_ntohl(mmap.class_pe.classification_stats),
+							&c_alg_stats[ii + 1U]);
+
+		(void)pfe_pe_get_pe_stats_nolock(
+					class->pe[ii],
+					oal_ntohl(mmap.class_pe.pe_stats),
+					&pe_stats[ii + 1U]);
 	}
-	 /* Enable all PEs */
+
+	/* Unlock all PEs */
 	for (ii = 0U; ii < class->pe_num; ii++)
 	{
 		ret = pfe_pe_mem_unlock(class->pe[ii]);
-		if(EOK != ret)
+		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("PE %u could not be unlocked\n", (uint_t)ii);
 		}
@@ -1399,14 +1342,17 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		pfe_class_alg_stats_endian(&c_alg_stats[ii + 1U].hif_to_hif);
 		pfe_class_flexi_parser_stats_endian(&c_alg_stats[ii + 1U].flexible_filter);
 		pfe_class_pe_stats_endian(&pe_stats[ii + 1U]);
+
 		/* Calculate sums */
 		pe_stats[0].processed += pe_stats[ii + 1U].processed;
 		pe_stats[0].discarded += pe_stats[ii + 1U].discarded;
 		pe_stats[0].injected += pe_stats[ii + 1U].injected;
+
 		for(j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)
 		{
 			pe_stats[0].replicas[j] += pe_stats[ii + 1U].replicas[j];
 		}
+
 		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].flexible_router, &c_alg_stats[ii + 1U].flexible_router);
 		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].ip_router, &c_alg_stats[ii + 1U].ip_router);
 		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].l2_bridge, &c_alg_stats[ii + 1U].l2_bridge);
@@ -1418,18 +1364,22 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 
 	/* Print results */
 	len += oal_util_snprintf(buf + len, buf_len - len, "-- Per PE statistics --\n");
+
 	for (ii = 0U; ii < class->pe_num; ii++)
 	{
 		len += oal_util_snprintf(buf + len, buf_len - len, "PE %u Frames processed: %u\n", ii, pe_stats[ii + 1U].processed);
 		len += oal_util_snprintf(buf + len, buf_len - len, "PE %u Frames discarded: %u\n", ii, pe_stats[ii + 1U].discarded);
 	}
+
 	len += oal_util_snprintf(buf + len, buf_len - len, "-- Summary statistics --\n");
 	len += oal_util_snprintf(buf + len, buf_len - len, "Frames processed: %u\n", pe_stats[0].processed);
 	len += oal_util_snprintf(buf + len, buf_len - len, "Frames discarded: %u\n", pe_stats[0].discarded);
-	for(j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)
+
+	for (j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)
 	{
 		len += oal_util_snprintf(buf + len, buf_len - len, "Frames with %u replicas: %u\n", j + 1U, pe_stats[0].replicas[j]);
 	}
+
 	len += oal_util_snprintf(buf + len, buf_len - len, "Frames with HIF_TX_INJECT: %u\n", pe_stats[0].injected);
 
 	len += oal_util_snprintf(buf + len, buf_len - len, "- Flexible router -\n");
@@ -1449,9 +1399,11 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 
 	len += oal_util_snprintf(buf + len, buf_len - len, "\nDMEM heap\n---------\n");
 	len += blalloc_get_text_statistics(class->heap_context, buf + len, buf_len - len, verb_level);
+
 	/* Free allocated memory */
 	oal_mm_free(c_alg_stats);
 	oal_mm_free(pe_stats);
+
 	if (EOK != oal_mutex_unlock(&class->mutex))
 	{
 		NXP_LOG_DEBUG("mutex unlock failed\n");

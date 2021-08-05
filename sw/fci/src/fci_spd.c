@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020 NXP
+ *  Copyright 2020-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -17,6 +17,8 @@
 #include "fci_internal.h"
 #include "fci.h"
 #include "fci_spd.h"
+
+#ifdef PFE_CFG_FCI_ENABLE
 
 errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf, uint32_t *reply_len)
 {
@@ -121,7 +123,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
             /* Using the fact that enums have same values for the corresponding flags */
             spd_entry.action = (pfe_ct_spd_entry_action_t)spd_cmd->spd_action;
 
-            ret = pfe_spd_acc_add_rule(phy_if, ntohs(spd_cmd->position), &spd_entry);
+            ret = pfe_spd_acc_add_rule(phy_if, oal_ntohs(spd_cmd->position), &spd_entry);
             if(EOK != ret)
             {
                 *fci_ret = FPP_ERR_INTERNAL_FAILURE;
@@ -133,7 +135,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
             break;
 
         case FPP_ACTION_DEREGISTER:
-            ret = pfe_spd_acc_remove_rule(phy_if, ntohs(spd_cmd->position));
+            ret = pfe_spd_acc_remove_rule(phy_if, oal_ntohs(spd_cmd->position));
             if(EOK != ret)
             {
                 *fci_ret = FPP_ERR_INTERNAL_FAILURE;
@@ -181,7 +183,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
                 reply_buf->spi = spd_entry.spi;
                 /* Using the fact that enums have same values for the corresponding flags */
                 reply_buf->spd_action = (fpp_spd_action_t)spd_entry.action;
-                reply_buf->position = htons(search_position);
+                reply_buf->position = oal_htons(search_position);
                 search_position++;
                 *fci_ret = FPP_ERR_OK;
                 *reply_len = sizeof(fpp_spd_cmd_t);
@@ -190,7 +192,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
             else
             {
                 *fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
-                ret = ENOENT;
+                ret = EOK;
             }
             break;
 
@@ -206,3 +208,4 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
     return ret;
 }
 
+#endif /* PFE_CFG_FCI_ENABLE */

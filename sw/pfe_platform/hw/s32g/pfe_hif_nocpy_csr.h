@@ -80,5 +80,7 @@ bool_t pfe_hif_nocpy_cfg_is_rx_dma_active(addr_t base_va);
 bool_t pfe_hif_nocpy_cfg_is_tx_dma_active(addr_t base_va);
 uint32_t pfe_hif_nocpy_chnl_cfg_get_text_stat(addr_t base_va, const char_t *buf, uint32_t size, uint8_t verb_level);
 uint32_t pfe_hif_nocpy_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+uint32_t pfe_hif_nocpy_cfg_get_tx_cnt(addr_t base_va);
+uint32_t pfe_hif_nocpy_cfg_get_rx_cnt(addr_t base_va);
 
 #endif /* PFE_HIF_NOCPY_CSR_H_ */

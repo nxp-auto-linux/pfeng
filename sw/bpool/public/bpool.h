@@ -343,6 +343,7 @@ void bpool_put(bpool_t *pool, const void *va) __attribute__((hot));
 errno_t bpool_get_fill_level(bpool_t *pool, uint32_t *fill_level) __attribute__((hot));
 uint32_t bpool_get_depth(const bpool_t *pool) __attribute__((pure, hot));
 errno_t bpool_destroy(bpool_t * pool) __attribute__((cold));
+errno_t bpool_clear(bpool_t * pool) __attribute__((cold));
 
 #endif /* SRC_BPOOL_H_ */
 

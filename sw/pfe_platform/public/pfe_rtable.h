@@ -14,6 +14,13 @@
 #include "pfe_class.h"
 #include "pfe_phy_if.h" /* pfe_interface_t */
 
+/**
+ * @brief	Tick period for internal timer in seconds
+ * @details	The timer is used to sample the active routing table entries and decrement
+ * 			associated time-out values when entries are not being used by the firmware.
+ */
+#define PFE_RTABLE_CFG_TICK_PERIOD_SEC			1U
+
 typedef struct pfe_rtable_tag pfe_rtable_t;
 typedef struct pfe_rtable_entry_tag pfe_rtable_entry_t;
 
@@ -26,7 +33,7 @@ typedef struct
 
 	union
 	{
-		uint16_t v6[16];
+		uint16_t v6[8];
 	} v6;
 
 	bool_t is_ipv4;
@@ -79,54 +86,56 @@ typedef enum
  */
 typedef void (* pfe_rtable_callback_t)(void *arg, pfe_rtable_cbk_event_t event);
 
-pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_pa, uint32_t htable_size, addr_t pool_base_pa, uint32_t pool_size);
+pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint32_t htable_size, addr_t pool_base_va, uint32_t pool_size);
 errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
 errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
 void pfe_rtable_destroy(pfe_rtable_t *rtable);
 uint32_t pfe_rtable_get_entry_size(void);
-errno_t pfe_rtable_entry_to_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple);
-errno_t pfe_rtable_entry_to_5t_out(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple);
+errno_t pfe_rtable_entry_to_5t(const pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple);
+errno_t pfe_rtable_entry_to_5t_out(const pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple);
 pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_criterion_t crit, void *arg);
 pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable);
-uint32_t pfe_rtable_get_size(pfe_rtable_t *rtable);
+uint32_t pfe_rtable_get_size(const pfe_rtable_t *rtable);
 
 void pfe_rtable_entry_set_ttl_decrement(pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_remove_ttl_decrement(pfe_rtable_entry_t *entry);
 pfe_rtable_entry_t *pfe_rtable_entry_create(void);
 void pfe_rtable_entry_free(pfe_rtable_entry_t *entry);
 errno_t pfe_rtable_entry_set_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple);
-errno_t pfe_rtable_entry_set_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr);
+errno_t pfe_rtable_entry_set_sip(pfe_rtable_entry_t *entry, const pfe_ip_addr_t *ip_addr);
 void pfe_rtable_entry_get_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr);
-errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *output_sip);
-errno_t pfe_rtable_entry_set_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr);
+errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, const pfe_ip_addr_t *output_sip);
+errno_t pfe_rtable_entry_set_dip(pfe_rtable_entry_t *entry, const pfe_ip_addr_t *ip_addr);
 void pfe_rtable_entry_get_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr);
-errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *output_dip);
+errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, const pfe_ip_addr_t *output_dip);
 void pfe_rtable_entry_set_sport(pfe_rtable_entry_t *entry, uint16_t sport);
-uint16_t pfe_rtable_entry_get_sport(pfe_rtable_entry_t *entry);
+uint16_t pfe_rtable_entry_get_sport(const pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_set_out_sport(pfe_rtable_entry_t *entry, uint16_t output_sport);
-void pfe_rtable_entry_set_dport(pfe_rtable_entry_t *entry, uint16_t sport);
-uint16_t pfe_rtable_entry_get_dport(pfe_rtable_entry_t *entry);
+void pfe_rtable_entry_set_dport(pfe_rtable_entry_t *entry, uint16_t dport);
+uint16_t pfe_rtable_entry_get_dport(const pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_set_out_dport(pfe_rtable_entry_t *entry, uint16_t output_dport);
 void pfe_rtable_entry_set_proto(pfe_rtable_entry_t *entry, uint8_t proto);
-uint8_t pfe_rtable_entry_get_proto(pfe_rtable_entry_t *entry);
-errno_t pfe_rtable_entry_set_dstif(pfe_rtable_entry_t *entry, pfe_phy_if_t *iface);
-void pfe_rtable_entry_set_out_mac_addrs(pfe_rtable_entry_t *entry, pfe_mac_addr_t smac, pfe_mac_addr_t dmac);
+uint8_t pfe_rtable_entry_get_proto(const pfe_rtable_entry_t *entry);
+errno_t pfe_rtable_entry_set_dstif(pfe_rtable_entry_t *entry, const pfe_phy_if_t *iface);
+void pfe_rtable_entry_set_out_mac_addrs(pfe_rtable_entry_t *entry,const pfe_mac_addr_t smac,const pfe_mac_addr_t dmac);
 void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan);
-uint16_t pfe_rtable_entry_get_out_vlan(pfe_rtable_entry_t *entry);
+uint16_t pfe_rtable_entry_get_out_vlan(const pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_set_out_inner_vlan(pfe_rtable_entry_t *entry, uint16_t vlan);
 void pfe_rtable_entry_set_out_pppoe_sid(pfe_rtable_entry_t *entry, uint16_t sid);
 pfe_ct_route_actions_t pfe_rtable_entry_get_action_flags(pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_set_timeout(pfe_rtable_entry_t *entry, uint32_t timeout);
 void pfe_rtable_entry_set_route_id(pfe_rtable_entry_t *entry, uint32_t route_id);
-errno_t pfe_rtable_entry_get_route_id(pfe_rtable_entry_t *entry, uint32_t *route_id);
+errno_t pfe_rtable_entry_get_route_id(const pfe_rtable_entry_t *entry, uint32_t *route_id);
 void pfe_rtable_entry_set_callback(pfe_rtable_entry_t *entry, pfe_rtable_callback_t cbk, void *arg);
 void pfe_rtable_entry_set_refptr(pfe_rtable_entry_t *entry, void *refptr);
 void *pfe_rtable_entry_get_refptr(pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_set_child(pfe_rtable_entry_t *entry, pfe_rtable_entry_t *child);
-pfe_rtable_entry_t *pfe_rtable_entry_get_child(pfe_rtable_entry_t *entry);
+pfe_rtable_entry_t *pfe_rtable_entry_get_child(const pfe_rtable_entry_t *entry);
 
 void pfe_rtable_entry_set_id5t(pfe_rtable_entry_t *entry, uint32_t id5t);
-errno_t pfe_rtable_entry_get_id5t(pfe_rtable_entry_t *entry, uint32_t *id5t);
+errno_t pfe_rtable_entry_get_id5t(const pfe_rtable_entry_t *entry, uint32_t *id5t);
 errno_t pfe_rtable_entry_set_dstif_id(pfe_rtable_entry_t *entry, pfe_ct_phy_if_id_t if_id);
+
+void pfe_rtable_do_timeouts(pfe_rtable_t *rtable);
 
 #endif /* PUBLIC_PFE_RTABLE_H_ */

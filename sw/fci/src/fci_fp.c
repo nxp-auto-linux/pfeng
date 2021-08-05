@@ -16,6 +16,8 @@
 #include "pfe_class.h"
 #include "pfe_flexible_filter.h"
 
+#ifdef PFE_CFG_FCI_ENABLE
+
 /**
 * @brief Constructs a query reply with specified rule parameters in the specified buffer
 * @param[in] r Buffer where to construct the query reply
@@ -270,7 +272,7 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
 	{
 		case FPP_ACTION_REGISTER:
         {
-            pfe_ct_fp_flags_t flags = 0U;
+            pfe_ct_fp_flags_t flags = FP_FL_NONE;
             switch(fp_cmd->r.match_action)
             {
                 case FP_ACCEPT:
@@ -285,7 +287,6 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
                     NXP_LOG_ERROR("Impossible happened\n");
                     *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
                     return EINVAL;
-                    break;
             }
             switch(fp_cmd->r.offset_from)
             {
@@ -301,8 +302,6 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
                     NXP_LOG_ERROR("Impossible happened\n");
                     *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
                     return EINVAL;
-                    break;
-
             }
             if(TRUE == fp_cmd->r.invert)
             {
@@ -388,4 +387,5 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
     return ret;
 }
 
+#endif /* PFE_CFG_FCI_ENABLE */
 

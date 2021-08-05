@@ -25,6 +25,8 @@
 #include "fci_internal.h"
 #include "fci.h"
 
+#ifdef PFE_CFG_FCI_ENABLE
+
 /**
  * @brief			Process FPP_CMD_L2_FLUSH_* commands
  * @param[in]		msg FCI cmd code
@@ -86,7 +88,7 @@ errno_t fci_l2br_flush_cmd(uint32_t code, uint16_t *fci_ret)
 
 		default:
 		{
-			NXP_LOG_ERROR("Unknown L2 bridge command: 0x%x\n", code);
+			NXP_LOG_ERROR("Unknown L2 bridge command: 0x%x\n", (uint_t)code);
 			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 			break;
 		}
@@ -94,3 +96,5 @@ errno_t fci_l2br_flush_cmd(uint32_t code, uint16_t *fci_ret)
 
 	return ret;
 }
+
+#endif /* PFE_CFG_FCI_ENABLE */

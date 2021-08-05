@@ -1073,7 +1073,7 @@ errno_t pfe_hif_chnl_cfg_set_rx_irq_coalesce(addr_t base_va, uint32_t channel_id
 
 			/* Enable time-based coalescing */
 			hal_write32(HIF_INT_COAL_TIME_ENABLE, base_va + HIF_INT_COAL_EN_CHn(channel_id));
-			hal_write32(frames, base_va + HIF_ABS_FRAME_COUNT_CHn(channel_id));
+			hal_write32(cycles, base_va + HIF_ABS_INT_TIMER_CHn(channel_id));
 			ret = EOK;
 		}
 	}

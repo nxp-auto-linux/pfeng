@@ -99,10 +99,16 @@ pfe_hif_chnl_t *pfe_hif_nocpy_get_channel(const pfe_hif_nocpy_t *hif, uint32_t c
  * @brief		Destroy HIF_NOCPY instance
  * @param[in]	hif The HIF_NOCPY instance
  */
-void pfe_hif_nocpy_destroy(const pfe_hif_nocpy_t *hif)
+void pfe_hif_nocpy_destroy(pfe_hif_nocpy_t *hif)
 {
 	if (NULL != hif)
 	{
+		if (NULL != hif->channel)
+		{
+			pfe_hif_chnl_destroy(hif->channel);
+			hif->channel = NULL;
+		}
+		
 		pfe_hif_nocpy_cfg_fini(hif->base_va);
 		oal_mm_free(hif);
 	}

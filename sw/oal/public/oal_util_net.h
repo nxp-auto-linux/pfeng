@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -39,6 +39,13 @@
  */
 #elif defined(PFE_CFG_TARGET_OS_LINUX)
 #include "oal_util_net_linux.h"
+
+/*
+ * AUTOSAR
+ *
+ */
+#elif defined(PFE_CFG_TARGET_OS_AUTOSAR)
+#include "oal_util_net_autosar.h"
 
 /*
  * unknown OS

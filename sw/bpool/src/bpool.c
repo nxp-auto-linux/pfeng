@@ -11,6 +11,10 @@
 #include "fifo.h"
 #include "bpool.h"
 
+/*==================================================================================================
+*                          LOCAL TYPEDEFS (STRUCTURES, UNIONS, ENUMS)
+==================================================================================================*/
+
 /*
  * 	Performance assumptions:
  * 		- Buffer space start address is aligned to at least cache line size.
@@ -20,11 +24,12 @@
  * 		- Size of every descriptor is padded to integer multiple of cache line size.
  */
 
-#define is_power_of_2(n) ((n) && !((n) & ((n) - 1U)))
-
+#define is_power_of_2(n) (((n) != 0U) && (((n) & ((n) - 1U)) == 0U))
+ 
 static errno_t bpool_create_check_buffer_size_and_align(uint32_t buf_size, uint32_t align);
 static uint32_t bpool_create_calculate_aligned_buf_size(uint32_t buf_size);
-
+static errno_t bpool_get_and_check_alignment_of_physical_address(void **paddr, void **vaddr, addr_t block_size, const uint32_t *aligned_buf_size, bool_t cached);
+static errno_t bpool_fifo_creat_and_mutex_init(bpool_t *the_pool, const uint32_t* depth);
 static errno_t bpool_create_check_buffer_size_and_align(uint32_t buf_size, uint32_t align)
 {
 	errno_t ret;
@@ -86,6 +91,61 @@ static uint32_t bpool_create_calculate_aligned_buf_size(uint32_t buf_size)
 	return aligned_buf_size;
 }
 
+static errno_t bpool_get_and_check_alignment_of_physical_address(void **paddr, void **vaddr, addr_t block_size, const uint32_t *aligned_buf_size, bool_t cached)
+{
+	/*	Get physically contiguous memory region (buffers) */
+	if(TRUE == cached)
+	{
+		*vaddr = oal_mm_malloc_contig_named_aligned_cache(PFE_CFG_RX_MEM, block_size, *aligned_buf_size);
+	}
+	else
+	{
+		*vaddr = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_RX_MEM, block_size, *aligned_buf_size);
+	}
+	if (NULL == *vaddr)
+	{
+		NXP_LOG_ERROR("Unable to get aligned memory block\n");
+		return ECANCELED;
+	}
+
+	/*	Get physical address */
+	*paddr = oal_mm_virt_to_phys_contig(*vaddr);
+	if (NULL == *paddr)
+	{
+		NXP_LOG_ERROR("Unable to get physical address\n");
+		oal_mm_free_contig(*vaddr);
+		return ECANCELED;
+	}
+
+	/*	Check alignment of physical address */
+	if((addr_t)*paddr != ((addr_t)*paddr & ~((addr_t)*aligned_buf_size-1U)))
+	{
+		NXP_LOG_ERROR("The physical address p0x%p is not properly aligned to buffer size %u\n", *paddr, (uint_t)*aligned_buf_size);
+		oal_mm_free_contig(*vaddr);
+		return ECANCELED;
+	}
+	return EOK;
+}
+static errno_t bpool_fifo_creat_and_mutex_init(bpool_t *the_pool, const uint32_t* depth)
+{
+	/*	Create FIFO as a container of the pool. Ensure the FIFO is 'protected' against
+	 	concurrent accesses. */
+	the_pool->free_fifo = fifo_create(*depth);
+	if (NULL == the_pool->free_fifo)
+	{
+		NXP_LOG_ERROR("Can't create buffer FIFO\n");
+		return ECANCELED;
+	}
+
+	if (EOK != oal_mutex_init(&the_pool->fifo_lock))
+	{
+		NXP_LOG_ERROR("Mutex initialization failed\n");
+		fifo_destroy((fifo_t *)(the_pool->free_fifo));
+		the_pool->free_fifo = NULL;
+		return ECANCELED;
+	}
+    return EOK;
+}
 /**
  * @brief		Destroy pool and release all allocated memory
  * @param[in]	pool The bpool instance
@@ -117,6 +177,28 @@ __attribute__((cold)) errno_t bpool_destroy(bpool_t * pool)
 
 	/*	Release the pool itself */
 	oal_mm_free_contig(pool);
+
+	return EOK;
+}
+
+/**
+ * @brief		Clear buffer pool
+ * @param[in]	pool The bpool instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid argument
+ */
+__attribute__((cold)) errno_t bpool_clear(bpool_t * pool)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pool))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/*	Clear buffer FIFO */
+	fifo_clear((fifo_t *)(pool->free_fifo));
 
 	return EOK;
 }
@@ -279,8 +361,8 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 {
 	uint32_t i;
 	bpool_rx_buf_t *fifo_item;
-	void *paddr;
-	void *vaddr;
+	void *paddr = NULL;
+	void *vaddr = NULL;
 	addr_t buf_paddr;
 	addr_t buf_vaddr;
 	bpool_t *the_pool;
@@ -338,49 +420,15 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 		NXP_LOG_DEBUG("Sub-optimal structure alignment: bpool instance\n");
 	}
 
-	/*	Create FIFO as a container of the pool. Ensure the FIFO is 'protected' against
-	 	concurrent accesses. */
-	the_pool->free_fifo = fifo_create(depth);
-	if (NULL == the_pool->free_fifo)
+	ret = bpool_fifo_creat_and_mutex_init(the_pool, &depth);
+	if (EOK != ret)
 	{
-		NXP_LOG_ERROR("Can't create buffer FIFO\n");
 		goto release_pool_and_fail;
 	}
-
-	if (EOK != oal_mutex_init(&the_pool->fifo_lock))
+	ret = bpool_get_and_check_alignment_of_physical_address(&paddr, &vaddr, block_size, &aligned_buf_size, cached);
+	if (EOK != ret)
 	{
-		NXP_LOG_ERROR("Mutex initialization failed\n");
-		goto release_fifo_and_fail;
-	}
-
-	/*	Get physically contiguous memory region (buffers) */
-	if(TRUE == cached)
-	{
-		vaddr = oal_mm_malloc_contig_named_aligned_cache(PFE_CFG_RX_MEM, block_size, aligned_buf_size);
-	}
-	else
-	{
-		vaddr = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_RX_MEM, block_size, aligned_buf_size);
-	}
-	if (NULL == vaddr)
-	{
-		NXP_LOG_ERROR("Unable to get aligned memory block\n");
 		goto release_mutex_and_fail;
-	}
-
-	/*	Get physical address */
-	paddr = oal_mm_virt_to_phys_contig(vaddr);
-	if (NULL == paddr)
-	{
-		NXP_LOG_ERROR("Unable to get physical address\n");
-		goto release_block_and_fail;
-	}
-
-	/*	Check alignment of physical address */
-	if((addr_t)paddr != ((addr_t)paddr & ~((addr_t)aligned_buf_size-1U)))
-	{
-		NXP_LOG_ERROR("The physical address p0x%p is not properly aligned to buffer size %u\n", paddr, (uint_t)aligned_buf_size);
-		goto release_block_and_fail;
 	}
 
 	the_pool->block_origin_pa = paddr;
@@ -444,12 +492,10 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 					(void *)the_pool->buffer_va_start);
 
 	return the_pool;
-
 release_block_and_fail:
 	oal_mm_free_contig(vaddr);
 release_mutex_and_fail:
 	(void)oal_mutex_destroy(&the_pool->fifo_lock);
-release_fifo_and_fail:
 	fifo_destroy((fifo_t *)(the_pool->free_fifo));
 	the_pool->free_fifo = NULL;
 release_pool_and_fail:

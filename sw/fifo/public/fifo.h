@@ -83,6 +83,7 @@ static inline void * fifo_get(fifo_t * const fifo)
 
 fifo_t * fifo_create(const uint32_t depth) __attribute__((cold));
 void fifo_destroy(fifo_t *const fifo) __attribute__((cold));
+void fifo_clear(fifo_t *const fifo) __attribute__((cold));
 void * fifo_peek(const fifo_t * const fifo, uint32_t num) __attribute__((hot));
 errno_t fifo_get_fill_level(const fifo_t *const fifo, uint32_t *fill_level) __attribute__((hot));
 errno_t fifo_get_free_space(const fifo_t *const fifo, uint32_t *free_space) __attribute__((hot));

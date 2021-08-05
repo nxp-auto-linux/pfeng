@@ -597,7 +597,7 @@ errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 			NXP_LOG_DEBUG("Can't set MAC address: %d\n", ret);
 
 			/*	Remove the address from local database */
-			ret = pfe_mac_db_del_addr(iface->mac_db, addr);
+			ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
 			if(EOK != ret)
 			{
 				NXP_LOG_WARNING("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
@@ -619,11 +619,12 @@ errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
  * @brief		Delete MAC address
  * @param[in]	iface The interface instance
  * @param[in]	addr The MAC address to delete
+ * @param[in]	owner The identification of driver instance
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  * @retval		ENOEXEC Command failed
  */
-errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr)
+errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
 {
 	pfe_platform_rpc_pfe_log_if_del_mac_addr_arg_t req = {0};
 	errno_t ret = EOK;
@@ -647,7 +648,7 @@ errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr)
 
 	(void)pfe_log_if_db_lock();
 
-	ret = pfe_mac_db_del_addr(iface->mac_db, addr);
+	ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
 	if(EOK != ret)
 	{
 		NXP_LOG_WARNING("Unable to remove MAC address from log_if MAC database: %d\n", ret);
@@ -1211,6 +1212,119 @@ errno_t pfe_log_if_loopback_disable(pfe_log_if_t *iface)
 	if (EOK != ret)
 	{
 		NXP_LOG_DEBUG("Can't disable loopback mode: %d\n", ret);
+	}
+
+	(void)pfe_log_if_db_unlock();
+
+	return ret;
+}
+
+/**
+ * @brief		Check if interface is configured to discard accepted frames
+ * @param[in]	iface The interface instance
+ * @return		TRUE if discarding is enabled, FALSE otherwise
+ */
+bool_t pfe_log_if_is_discard(pfe_log_if_t *iface)
+{
+	pfe_platform_rpc_pfe_log_if_is_discard_arg_t req = {0};
+	pfe_platform_rpc_pfe_log_if_is_discard_ret_t rpc_ret = {0};
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	req.log_if_id = iface->id;
+
+	(void)pfe_log_if_db_lock();
+
+	/*	Query the master driver */
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_IS_DISCARD, &req, sizeof(req), &rpc_ret, sizeof(rpc_ret));
+
+	(void)pfe_log_if_db_unlock();
+
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("Can't get discard status: %d\n", ret);
+		return FALSE;
+	}
+	else
+	{
+		return rpc_ret.status;
+	}
+}
+
+/**
+ * @brief		Disable discarding frames accepted by logical interface
+ * @details		Function configures logical interface to stop to discard all accepted frames
+ *				and to pass them to the configured egress interfaces.
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_log_if_discard_enable(pfe_log_if_t *iface)
+{
+	errno_t ret = EOK;
+	pfe_platform_rpc_pfe_log_if_discard_enable_arg_t req = {0};
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	req.log_if_id = iface->id;
+
+	(void)pfe_log_if_db_lock();
+
+	/* Enable loopback mode */
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_DISCARD_ENABLE, &req, sizeof(req), NULL, 0U);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("Can't enable discard: %d\n", ret);
+	}
+
+	(void)pfe_log_if_db_unlock();
+
+	return ret;
+}
+
+/**
+ * @brief		Enable discarding frames accepted by logical interface
+ * @details		Function configures logical interface to discard all accepted frames instead of
+ *				passing them to the configured egress interfaces.
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_log_if_discard_disable(pfe_log_if_t *iface)
+{
+	errno_t ret = EOK;
+	pfe_platform_rpc_pfe_log_if_discard_disable_arg_t req = {0};
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	req.log_if_id = iface->id;
+
+	(void)pfe_log_if_db_lock();
+
+	/* Enable loopback mode */
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_DISCARD_DISABLE, &req, sizeof(req), NULL, 0U);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("Can't disable discard: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();

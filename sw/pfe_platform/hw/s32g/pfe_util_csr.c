@@ -55,3 +55,24 @@ uint32_t pfe_util_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, 
 
 	return len;
 }
+
+/**
+ * @brief		Dispatch interrupt from util.
+ * @details		ACK and process triggered interrupts.
+
+ * @param[in]	base_va 	Base address of UTIL register space (virtual)
+ * @return		EOK if interrupt has been handled, error code otherwise
+ */
+errno_t pfe_util_cfg_isr(addr_t base_va)
+{
+	uint32_t irq_src;
+
+	/* Get IRQ status */
+	irq_src = hal_read32(base_va + UTIL_UPE_GP_REG_ADDR);
+	/*ACK interrupt */
+	hal_write32(irq_src, base_va + UTIL_UPE_GP_REG_ADDR);
+
+	/* TODO: Handle related interrupt here */
+
+	return EOK;
+}

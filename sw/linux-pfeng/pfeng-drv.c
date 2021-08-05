@@ -61,6 +61,12 @@
 /* Major IP version for cut2.0 */
 #define PFE_IP_MAJOR_VERSION_CUT2		2
 
+/* PFE SYS CLK is 300MHz */
+#define PFE_CLK_SYS_RATE			300000000
+
+/* PFE TS CLK is 200MHz */
+#define PFE_CLK_TS_RATE				200000000
+
 #include "pfeng.h"
 
 MODULE_LICENSE("GPL");
@@ -224,11 +230,13 @@ static int release_config_from_dt(struct pfeng_priv *priv)
 	for (id = 0; id < PFENG_PFE_EMACS; id++) {
 		struct pfeng_emac *emac = &priv->emac[id];
 #if !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0)
 		struct device *dev = &priv->pdev->dev;
 
 		/* Remove device depeendency for SerDes */
 		if (emac->intf_mode == PHY_INTERFACE_MODE_SGMII && emac->serdes_phy)
 			device_link_remove(dev, &emac->serdes_phy->dev);
+#endif
 #endif /* !PFENG_CFG_LINUX_NO_SERDES_SUPPORT */
 
 		/* EMAC RX clk */
@@ -392,45 +400,76 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 		if (netif_cfg->macaddr)
 			dev_dbg(dev, "DT mac addr: %pM", netif_cfg->macaddr);
 
+		/* logif mode */
+		if (of_find_property(child, "fsl,pfeng-logif-mode", NULL)) {
+			ret = of_property_read_u32(child, "fsl,pfeng-logif-mode", &id);
+			if (ret) {
+				dev_err(dev, "The logif mode is invalid: %d\n", id);
+				ret = -EINVAL;
+				goto err;
+			}
+			switch (id) {
+			default:
+				dev_err(dev, "The logif mode is invalid: %d\n", id);
+				ret = -EINVAL;
+				goto err;
+			case PFENG_LOGIF_MODE_TX_INJECT:
+				netif_cfg->tx_inject = true;
+				netif_cfg->aux = false;
+				break;
+			case PFENG_LOGIF_MODE_TX_CLASS:
+				netif_cfg->tx_inject = false;
+				netif_cfg->aux = false;
+				break;
+			case PFENG_LOGIF_MODE_AUX:
+				netif_cfg->tx_inject = false;
+				netif_cfg->aux = true;
+				break;
+			}
+		} else {
+			netif_cfg->tx_inject = true;
+			netif_cfg->aux = false;
+		}
+		dev_info(dev, "logif(%s) mode: %s,%s", netif_cfg->name,
+			netif_cfg->aux ? "aux" : "std",
+			netif_cfg->tx_inject ? "tx-inject " : "tx-class");
+
+		if (!netif_cfg->aux) {
 #ifdef PFE_CFG_PFE_MASTER
-		netif_cfg->tx_inject = true;
+			/* EMAC link */
+			dn = of_parse_phandle(child, "fsl,pfeng-emac-link", 0);
+			if (!dn) {
+				dev_err(dev, "Required EMAC link is missing\n");
+				ret = -EINVAL;
+				goto err;
+			}
+			id = pfeng_of_get_addr(dn);
+			if (id < 0) {
+				dev_err(dev, "Required EMAC link is invalid\n");
+				ret = -EINVAL;
+				goto err;
+			}
 #else
-		/* Must be FALSE for SLAVE driver */
-		netif_cfg->tx_inject = false;
+			/* EMAC id */
+			if (!of_find_property(child, "fsl,pfeng-emac-id", NULL)) {
+				dev_err(dev, "The required EMAC id is missing\n");
+				ret = -EINVAL;
+				goto err;
+			}
+			ret = of_property_read_u32(child, "fsl,pfeng-emac-id", &id);
+			if (ret || id >= PFENG_PFE_EMACS) {
+				dev_err(dev, "The EMAC id is invalid: %d\n", id);
+				ret = -EINVAL;
+				goto err;
+			}
+			if (of_find_property(child, "fsl,pfeng-emac-router", NULL))
+				netif_cfg->emac_router = true;
 #endif /* PFE_CFG_PFE_MASTER */
 
-#ifdef PFE_CFG_PFE_MASTER
-		/* EMAC link */
-		dn = of_parse_phandle(child, "fsl,pfeng-emac-link", 0);
-		if (!dn) {
-			dev_err(dev, "Required EMAC link is missing\n");
-			ret = -EINVAL;
-			goto err;
+			netif_cfg->emac = id;
+			emac_list |= 1 << id;
+			dev_info(dev, "logif(%s) EMAC: %u", netif_cfg->name, netif_cfg->emac);
 		}
-		id = pfeng_of_get_addr(dn);
-		if (id < 0) {
-			dev_err(dev, "Required EMAC link is invalid\n");
-			ret = -EINVAL;
-			goto err;
-		}
-#else
-		/* EMAC id */
-		if (!of_find_property(child, "fsl,pfeng-emac-id", NULL)) {
-			dev_err(dev, "The required EMAC id is missing\n");
-			ret = -EINVAL;
-			goto err;
-		}
-		ret = of_property_read_u32(child, "fsl,pfeng-emac-id", &id);
-		if (ret || id > 2) {
-			dev_err(dev, "The EMAC id is invalid: %d\n", id);
-			ret = -EINVAL;
-			goto err;
-		}
-#endif /* PFE_CFG_PFE_MASTER */
-
-		netif_cfg->emac = id;
-		emac_list |= 1 << id;
-		dev_info(dev, "logif(%s) EMAC: %u", netif_cfg->name, netif_cfg->emac);
 
 		/* HIF phandle(s) */
 		hifmap = 0;
@@ -577,12 +616,15 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 		if (emac->intf_mode == PHY_INTERFACE_MODE_SGMII) {
 			scnprintf(tmp, sizeof(tmp), "emac%d_xpcs", id);
 			emac->serdes_phy = devm_phy_get(dev, tmp);
-			if (!emac->serdes_phy) {
+			if (IS_ERR(emac->serdes_phy)) {
+				emac->serdes_phy = NULL;
 				dev_err(dev, "SerDes PHY for EMAC%d was not found\n", id);
 			} else {
 				/* Add device depeendency for SerDes */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0)
 				if (device_link_add(dev, &emac->serdes_phy->dev, DL_FLAG_STATELESS /*| DL_FLAG_PM_RUNTIME*/))
 					dev_err(dev, "Failed to enable SerDes PM dependency for EMAC%d\n", id);
+#endif
 			}
 		} else {
 			emac->serdes_phy = NULL;
@@ -598,15 +640,6 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 		if (IS_ERR(emac->tx_clk)) {
 			emac->tx_clk = NULL;
 			dev_dbg(dev, "No TX clocks declared on EMAC%d for interface %s\n", id, phy_modes(intf_mode));
-		} else {
-			ret = clk_prepare_enable(emac->tx_clk);
-			if (ret) {
-				dev_err(dev, "TX clocks on EMAC%d for interface %s failed: %d\n", id, phy_modes(intf_mode), ret);
-				ret = 0;
-				devm_clk_put(dev, emac->tx_clk);
-				emac->tx_clk = NULL;
-			} else
-				dev_info(dev, "TX clocks on EMAC%d for interface %s installed\n", id, phy_modes(intf_mode));
 		}
 
 		/* optional: rx clock */
@@ -617,16 +650,7 @@ static int create_config_from_dt(struct pfeng_priv *priv)
 		emac->rx_clk = devm_get_clk_from_child(dev, child, tmp);
 		if (IS_ERR(emac->rx_clk)) {
 			emac->rx_clk = NULL;
-		dev_dbg(dev, "No RX clocks declared on EMAC%d for interface %s\n", id, phy_modes(intf_mode));
-		} else {
-			ret = clk_prepare_enable(emac->rx_clk);
-			if (ret) {
-				dev_err(dev, "RX clocks on EMAC%d for interface %s failed: %d\n", id, phy_modes(intf_mode), ret);
-				ret = 0;
-				devm_clk_put(dev, emac->rx_clk);
-				emac->rx_clk = NULL;
-			} else
-				dev_info(dev, "RX clocks on EMAC%d for interface %s installed\n", id, phy_modes(intf_mode));
+			dev_dbg(dev, "No RX clocks declared on EMAC%d for interface %s\n", id, phy_modes(intf_mode));
 		}
 	} /* foreach PFENG_DT_COMPATIBLE_EMAC */
 #endif
@@ -799,6 +823,11 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
+	int ret;
+
+	ret = pm_runtime_resume_and_get(dev);
+        if (ret < 0)
+                return ret;
 
 	if (!priv) {
 		dev_err(dev, "Removal failed. No priv data.\n");
@@ -869,6 +898,9 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	/* Shutdown memory management */
 	oal_mm_shutdown();
 
+	pm_runtime_put_noidle(dev);
+	pm_runtime_disable(dev);
+
 	return 0;
 }
 
@@ -926,6 +958,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	struct pfeng_priv *priv;
 	struct device *dev = &pdev->dev;
 	__maybe_unused struct reset_control *rst;
+	__maybe_unused int id;
 	int ret;
 
 	if (!pdev->dev.of_node)
@@ -1015,6 +1048,11 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		priv->clk_sys = NULL;
 		goto err_drv;
 	}
+	ret = clk_set_rate(priv->clk_sys, PFE_CLK_SYS_RATE);
+	if (ret) {
+		dev_err(dev, "Failed to set clock 'pfe_sys'. Error: %d\n", ret);
+		goto err_drv;
+	}
 	ret = clk_prepare_enable(priv->clk_sys);
 	if (ret) {
 		dev_err(dev, "Failed to enable clock 'pfe_sys'. Error: %d\n", ret);
@@ -1029,18 +1067,22 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		priv->clk_pe = NULL;
 		goto err_drv;
 	}
-	ret = clk_prepare_enable(priv->clk_pe);
-	if (ret) {
-		dev_err(dev, "Failed to enable clock 'pfe_pe'. Error: %d\n", ret);
-		goto err_drv;
-	}
 	/* PE clock should be double the frequency of System clock */
 	ret = clk_set_rate(priv->clk_pe, clk_get_rate(priv->clk_sys) * 2);
 	if (ret) {
 		dev_err(dev, "Failed to set clock 'pfe_pe'. Error: %d\n", ret);
 		goto err_drv;
 	}
+	ret = clk_prepare_enable(priv->clk_pe);
+	if (ret) {
+		dev_err(dev, "Failed to enable clock 'pfe_pe'. Error: %d\n", ret);
+		goto err_drv;
+	}
 	dev_info(dev, "Clocks: sys=%luMHz pe=%luMHz\n", clk_get_rate(priv->clk_sys) / 1000000, clk_get_rate(priv->clk_pe) / 1000000);
+
+	pm_runtime_get_noresume(dev);
+	pm_runtime_set_active(dev);
+	pm_runtime_enable(dev);
 
 	/* Set correct PFE_EMACs interfaces */
 	if(pfeng_s32g_set_emac_interfaces(priv,
@@ -1055,6 +1097,61 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		ret = pfeng_pfe_reset(priv);
 		if (ret)
 			goto err_drv;
+	}
+
+	/* Prepare EMAC RX/TX clocks */
+	for (id = 0; id < PFENG_PFE_EMACS; id++) {
+		struct pfeng_emac *emac = &priv->emac[id];
+		u64 clk_rate;
+
+		if (!emac->enabled)
+			continue;
+
+		/* retrieve max rate */
+		switch (emac->max_speed) {
+		case SPEED_10:
+			clk_rate = 2500000;
+			break;
+		case SPEED_100:
+			clk_rate = 25000000;
+			break;
+		case SPEED_1000:
+		default:
+			clk_rate = 125000000;
+			break;
+		}
+
+		if (emac->tx_clk) {
+			ret = clk_set_rate(emac->tx_clk, clk_rate);
+			if (ret)
+				dev_err(dev, "Failed to set TX clock on EMAC%d for interface %s. Error %d\n", id, phy_modes(emac->intf_mode), ret);
+			else {
+				ret = clk_prepare_enable(emac->tx_clk);
+				if (ret)
+					dev_err(dev, "Failed to enable TX clocks on EMAC%d for interface %s. Error %d\n", id, phy_modes(emac->intf_mode), ret);
+			}
+			if (ret) {
+				devm_clk_put(dev, emac->tx_clk);
+				emac->tx_clk = NULL;
+			} else
+				dev_info(dev, "TX clock on EMAC%d for interface %s installed\n", id, phy_modes(emac->intf_mode));
+		}
+
+		if (emac->rx_clk) {
+			ret = clk_set_rate(emac->rx_clk, clk_rate);
+			if (ret)
+				dev_err(dev, "Failed to set RX clock on EMAC%d for interface %s. Error %d\n", id, phy_modes(emac->intf_mode), ret);
+			else {
+				ret = clk_prepare_enable(emac->rx_clk);
+				if (ret)
+					dev_err(dev, "Failed to enable RX clocks on EMAC%d for interface %s. Error %d\n", id, phy_modes(emac->intf_mode), ret);
+			}
+			if (ret) {
+				devm_clk_put(dev, emac->rx_clk);
+				emac->rx_clk = NULL;
+			} else
+				dev_info(dev, "RX clock on EMAC%d for interface %s installed\n", id, phy_modes(emac->intf_mode));
+		}
 	}
 #endif
 
@@ -1097,6 +1194,9 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		goto err_drv;
 	}
 
+	/* Create debugfs */
+	pfeng_debugfs_create(priv);
+
 #ifdef PFE_CFG_PFE_MASTER
 	/* Prepare PTP clock */
 	priv->clk_ptp_reference = 0U;
@@ -1105,19 +1205,20 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		dev_warn(dev, "Failed to get pfe_ts clock. PTP will be disabled.\n");
 		priv->clk_ptp = NULL;
 	} else {
-		ret = clk_prepare_enable(priv->clk_ptp);
+		ret = clk_set_rate(priv->clk_ptp, PFE_CLK_TS_RATE);
 		if (ret) {
+			dev_warn(dev, "Failed to set pfe_ts clock. PTP will be disabled.\n");
 			priv->clk_ptp = NULL;
-			dev_err(dev, "Failed to enable clock pfe_ts: %d\n", ret);
-		} else
-			priv->clk_ptp_reference = clk_get_rate(priv->clk_ptp);
+		} else {
+			ret = clk_prepare_enable(priv->clk_ptp);
+			if (ret) {
+				priv->clk_ptp = NULL;
+				dev_err(dev, "Failed to enable clock pfe_ts: %d\n", ret);
+			} else
+				priv->clk_ptp_reference = clk_get_rate(priv->clk_ptp);
+		}
 	}
-#endif /* PFE_CFG_PFE_MASTER */
 
-	/* Create debugfs */
-	pfeng_debugfs_create(priv);
-
-#ifdef PFE_CFG_PFE_MASTER
 	/* Create MDIO buses */
 	pfeng_mdio_register(priv);
 #endif /* PFE_CFG_PFE_MASTER */
@@ -1132,6 +1233,14 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_drv;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,8,0)
+	dev_pm_set_driver_flags(dev, DPM_FLAG_NO_DIRECT_COMPLETE);
+#else
+	dev_pm_set_driver_flags(dev, DPM_FLAG_NEVER_SKIP);
+#endif
+
+	pm_runtime_put_noidle(dev);
+
 	return 0;
 
 err_drv:
@@ -1142,7 +1251,7 @@ err_drv:
 
 /* PM support */
 
-#ifdef CONFIG_PM_SLEEP
+#ifdef PFE_CFG_PFE_MASTER
 /**
  * pfeng_pm_suspend
  * @dev: device pointer
@@ -1221,19 +1330,21 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	if (of_dma_is_coherent(dev->of_node))
 		ret = pfeng_s32g_set_port_coherency(priv);
 
+	pinctrl_pm_select_default_state(dev);
+
 	/* Start clocks */
 	if (!priv->clk_sys) {
 		dev_err(dev, "Main clock 'pfe_sys' disappeared\n");
 		return -ENODEV;
 	}
+	ret = clk_set_rate(priv->clk_sys, PFE_CLK_SYS_RATE);
+	if (ret) {
+		dev_err(dev, "Failed to set clock 'pfe_sys'. Error: %d\n", ret);
+		return -EINVAL;
+	}
 	ret = clk_prepare_enable(priv->clk_sys);
 	if (ret) {
 		dev_err(dev, "Failed to enable clock 'pfe_sys'. Error: %d\n", ret);
-		return -EINVAL;
-	}
-	ret = clk_prepare_enable(priv->clk_pe);
-	if (ret) {
-		dev_err(dev, "Failed to enable clock 'pfe_pe'. Error: %d\n", ret);
 		return -EINVAL;
 	}
 	ret = clk_set_rate(priv->clk_pe, clk_get_rate(priv->clk_sys) * 2);
@@ -1241,12 +1352,10 @@ static int pfeng_drv_pm_resume(struct device *dev)
 		dev_err(dev, "Failed to set clock 'pfe_pe'. Error: %d\n", ret);
 		return -EINVAL;
 	}
-
-	if (priv->clk_ptp && (ret = clk_prepare_enable(priv->clk_ptp))) {
-		dev_err(dev, "Failed to enable clock 'pfe_ts'. Error: %d\n", ret);
-		/* Free clock, now is unusable */
-		devm_clk_put(dev, priv->clk_ptp);
-		priv->clk_ptp = NULL;
+	ret = clk_prepare_enable(priv->clk_pe);
+	if (ret) {
+		dev_err(dev, "Failed to enable clock 'pfe_pe'. Error: %d\n", ret);
+		return -EINVAL;
 	}
 
 	/* Set correct PFE_EMACs interfaces */
@@ -1281,6 +1390,24 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	pfeng_debugfs_create(priv);
 
 #ifdef PFE_CFG_PFE_MASTER
+	/* PTP clock */
+	if (priv->clk_ptp) {
+		ret = clk_set_rate(priv->clk_ptp, PFE_CLK_TS_RATE);
+		if (ret) {
+			dev_warn(dev, "Failed to set pfe_ts clock. PTP will be disabled.\n");
+			clk_put(priv->clk_ptp);
+			priv->clk_ptp = NULL;
+		} else {
+			ret = clk_prepare_enable(priv->clk_ptp);
+			if (ret) {
+				dev_warn(dev, "Failed to enable clock 'pfe_ts'. PTP will be disabled.\n");
+				/* Free clock, now is unusable */
+				clk_put(priv->clk_ptp);
+				priv->clk_ptp = NULL;
+			}
+		}
+	}
+
 	/* MDIO buses */
 	pfeng_mdio_resume(priv);
 #endif /* PFE_CFG_PFE_MASTER */
@@ -1306,7 +1433,20 @@ err_pfe_init:
 
 	return ret;
 }
-#endif /* CONFIG_PM_SLEEP */
+#else /* PFE_MASTER */
+/* Slave PM is not supported */
+static int pfeng_drv_pm_suspend(struct device *dev)
+{
+	dev_err(dev, "Suspending driver is unsupported\n");
+
+	return -ENOTSUP;
+}
+
+static int pfeng_drv_pm_resume(struct device *dev)
+{
+	return 0;
+}
+#endif
 
 SIMPLE_DEV_PM_OPS(pfeng_drv_pm_ops,
 			pfeng_drv_pm_suspend,

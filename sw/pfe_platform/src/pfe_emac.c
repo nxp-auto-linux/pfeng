@@ -52,10 +52,10 @@ static bool_t pfe_emac_flush_criterion_eval(const pfe_mac_addr_db_entry_t *entry
 static void pfe_emac_addr_db_init(pfe_emac_t *emac);
 static errno_t pfe_emac_addr_db_add(pfe_emac_t *emac, const pfe_mac_addr_t addr, bool_t in_hash_grp, uint32_t data, pfe_drv_id_t owner);
 static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(const pfe_emac_t *emac, uint32_t hash);
-static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(const pfe_emac_t *emac, const pfe_mac_addr_t addr);
+static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(const pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 static errno_t pfe_emac_addr_db_del_entry(const pfe_emac_t *emac, pfe_mac_addr_db_entry_t *entry);
 static void pfe_emac_addr_db_drop_all(const pfe_emac_t *emac);
-static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, const pfe_mac_addr_t addr);
+static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 
 /**
  * @brief		Evaluate given DB entry against specified criterion
@@ -235,9 +235,10 @@ static void pfe_emac_addr_db_drop_all(const pfe_emac_t *emac)
  * @details		Access to the shared resources => needs to be called within the critical section!
  * @param[in]	emac The EMAC instance
  * @param[in]	addr The MAC address to search
+ * @param[in]	owner The identification of driver instance
  * @return		The DB entry if found or NULL if address is not present
  */
-static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(const pfe_emac_t *emac, const pfe_mac_addr_t addr)
+static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(const pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
 {
 	pfe_mac_addr_db_entry_t *entry = NULL;
 	LLIST_t *curItem;
@@ -253,7 +254,7 @@ static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(const pfe_emac_t *
 	LLIST_ForEach(curItem, &emac->mac_addr_list)
 	{
 		entry = LLIST_Data(curItem, pfe_mac_addr_db_entry_t, iterator);
-		if (0 == memcmp(addr, entry->addr, sizeof(pfe_mac_addr_t)))
+		if ((entry->owner == owner) && (0 == memcmp(addr, entry->addr, sizeof(pfe_mac_addr_t))))
 		{
 			return entry;
 		}
@@ -1093,7 +1094,7 @@ errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_emac_crit_t crit, pfe_mac
 			(void)memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
 			if (TRUE == pfe_emac_flush_criterion_eval(entry, crit, type, owner))
 			{
-				ret = pfe_emac_del_addr_nolock(emac, entry->addr);
+				ret = pfe_emac_del_addr_nolock(emac, entry->addr, entry->owner);
 				if (EOK != ret)
 				{
 					NXP_LOG_WARNING("Can't remove MAC address within the flush function\n");
@@ -1128,11 +1129,12 @@ errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_emac_crit_t crit, pfe_mac
  * @details		Address resolution will be done using exact match with the added address 
  * @param[in]	emac The EMAC instance
  * @param[in]	addr The MAC address to delete
+ * @param[in]	owner The identification of driver instance
  * @retval		EOK Success
  * @retval		ENOENT Address not found
  * @note		Must not be preempted by: pfe_emac_add_addr(), pfe_emac_destroy()
  */
-errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr)
+errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
 {
 	errno_t ret;
 	
@@ -1148,7 +1150,7 @@ errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-	ret = pfe_emac_del_addr_nolock(emac, addr);
+	ret = pfe_emac_del_addr_nolock(emac, addr, owner);
 
 	if (EOK != oal_mutex_unlock(&emac->mutex))
 	{
@@ -1163,11 +1165,12 @@ errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr)
  * @details		Address resolution will be done using exact match with the added address 
  * @param[in]	emac The EMAC instance
  * @param[in]	addr The MAC address to delete
+ * @param[in]	owner The identification of driver instance
  * @retval		EOK Success
  * @retval		ENOENT Address not found
  * @note		Must not be preempted by: pfe_emac_add_addr(), pfe_emac_destroy()
  */
-static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, const pfe_mac_addr_t addr)
+static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
 {
 	pfe_mac_addr_db_entry_t *entry, local_entry;
 	errno_t ret;
@@ -1181,7 +1184,7 @@ static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, const pfe_mac_addr_t a
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Get address entry from the internal DB */
-	entry = pfe_emac_addr_db_find_by_addr(emac, addr);
+	entry = pfe_emac_addr_db_find_by_addr(emac, addr, owner);
 
 	if (NULL == entry)
 	{
@@ -1216,16 +1219,7 @@ static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, const pfe_mac_addr_t a
 		else
 		{
 			/*	Configure the HW */
-			if (pfe_emac_is_multi(addr))
-			{
-				/*	Multicast */
-				pfe_emac_cfg_set_multi_group(emac->emac_base_va, local_entry.hash, FALSE);
-			}
-			else
-			{
-				/*	Unicast */
-				pfe_emac_cfg_set_uni_group(emac->emac_base_va, local_entry.hash, FALSE);
-			}
+			pfe_emac_cfg_set_hash_group(emac->emac_base_va, local_entry.hash, FALSE);
 		}
 	}
 	else
@@ -1275,7 +1269,7 @@ errno_t pfe_emac_add_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_i
 	}
 
 	/*	Check if address is already registered */
-	entry = pfe_emac_addr_db_find_by_addr(emac, addr);
+	entry = pfe_emac_addr_db_find_by_addr(emac, addr, owner);
 
 	if (NULL != entry)
 	{
@@ -1326,16 +1320,7 @@ errno_t pfe_emac_add_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_i
 		}
 
 		/*	Configure the HW */
-		if (pfe_emac_is_multi(addr))
-		{
-			/*	Multicast */
-			pfe_emac_cfg_set_multi_group(emac->emac_base_va, hash, TRUE);
-		}
-		else
-		{
-			/*	Unicast */
-			pfe_emac_cfg_set_uni_group(emac->emac_base_va, hash, TRUE);
-		}	
+		pfe_emac_cfg_set_hash_group(emac->emac_base_va, hash, TRUE);
 	}
 	/* There is free address slot, use it */
 	else
@@ -1439,7 +1424,7 @@ void pfe_emac_destroy(pfe_emac_t *emac)
 		LLIST_ForEachRemovable(curItem, tmp_item, &emac->mac_addr_list)
 		{
 			entry = LLIST_Data(curItem, pfe_mac_addr_db_entry_t, iterator);
-			if (EOK != pfe_emac_del_addr_nolock(emac, entry->addr))
+			if (EOK != pfe_emac_del_addr_nolock(emac, entry->addr, entry->owner))
 			{
 				NXP_LOG_WARNING("Can't remove MAC address within the destroy function\n");
 			}

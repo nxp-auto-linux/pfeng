@@ -230,7 +230,7 @@ errno_t pfe_fw_feature_get_val(const pfe_fw_feature_t *feature, uint8_t *val)
  * @brief Checks whether the given feature is in enabled state
  * @param[in] feature Feature to check the enabled state
  * @retval TRUE Feature is enabled (the enable variable value is not 0)
- * @retval FALSE Feature is disable (or its state could not be read)
+ * @retval FALSE Feature is disabled (or its state could not be read)
  */
 bool_t pfe_fw_feature_enabled(const pfe_fw_feature_t *feature)
 {

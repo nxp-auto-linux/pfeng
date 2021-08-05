@@ -48,12 +48,12 @@ typedef struct
  *          instead of dynamic blalloc_create() and blalloc_destroy(). 
  */
 #define BLALLOC_STATIC_INST(__name, __size, __chunk_size) \
-static uint8_t blalloc_buf_##__name[((__size >> __chunk_size) + BLALLOC_CFG_CHUNKS_IN_BYTE - 1U) / BLALLOC_CFG_CHUNKS_IN_BYTE] = {0U}; \
+static uint8_t blalloc_buf_##__name[(((__size) >> (__chunk_size)) + BLALLOC_CFG_CHUNKS_IN_BYTE - 1U) / BLALLOC_CFG_CHUNKS_IN_BYTE] = {0U}; \
 static blalloc_t __name = \
     { \
         .chunkinfo = blalloc_buf_##__name, \
-        .size = __size, \
-        .chunk_size = __chunk_size \
+        .size = (__size), \
+        .chunk_size = (__chunk_size) \
     }
 
 blalloc_t *blalloc_create(size_t size, size_t chunk_size);

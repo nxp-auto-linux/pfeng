@@ -13,8 +13,8 @@
 #include "pfe_fp.h"
 #include "fci.h"
 
+#ifdef PFE_CFG_FCI_ENABLE
 
-typedef struct fci_fp_table_tag fci_fp_table_t;
 /**
 * @brief Flexible parser rule representation
 */
@@ -102,7 +102,7 @@ typedef enum
 static fci_fp_rule_db_t fci_fp_rule_db;
 static fci_fp_table_db_t fci_fp_table_db;
 
-static bool_t fci_fp_match_rule_by_criterion(fci_fp_rule_criterion_t crit, fci_fp_rule_criterion_arg_t *arg, fci_fp_rule_t *rule);
+static bool_t fci_fp_match_rule_by_criterion(fci_fp_rule_criterion_t crit, const fci_fp_rule_criterion_arg_t *arg, const fci_fp_rule_t *rule);
 static fci_fp_rule_t *fci_fp_rule_get_first(fci_fp_rule_db_t *db, fci_fp_rule_criterion_t crit, void *arg, dbase_t dbase);
 static fci_fp_rule_t *fci_fp_rule_get_next(fci_fp_rule_db_t *db, dbase_t dbase);
 static bool_t fci_fp_match_table_by_criterion(fci_fp_table_criterion_t crit, fci_fp_table_criterion_arg_t *arg, fci_fp_table_t *table);
@@ -118,7 +118,7 @@ static fci_fp_table_t *fci_fp_table_get_next(fci_fp_table_db_t *db);
  * @retval       TRUE Rule matches the criterion
  * @retval       FALSE Rule does not match the criterion
  */
-static bool_t fci_fp_match_rule_by_criterion(fci_fp_rule_criterion_t crit, fci_fp_rule_criterion_arg_t *arg, fci_fp_rule_t *rule)
+static bool_t fci_fp_match_rule_by_criterion(fci_fp_rule_criterion_t crit, const fci_fp_rule_criterion_arg_t *arg, const fci_fp_rule_t *rule)
 {
     bool_t match;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -204,7 +204,7 @@ static fci_fp_rule_t *fci_fp_rule_get_first(fci_fp_rule_db_t *db, fci_fp_rule_cr
             }
             db->cur_crit_arg.name = mem;
             /* Copy the string */
-            strcpy(mem, (char_t *)arg);
+            (void)strcpy(mem, (char_t *)arg);
             break;
         }
         default:
@@ -418,7 +418,7 @@ static fci_fp_table_t *fci_fp_table_get_first(fci_fp_table_db_t *db, fci_fp_tabl
             }
             db->cur_crit_arg.name = mem;
             /* Copy the string */
-            strcpy(mem, (char_t *)arg);
+            (void)strcpy(mem, (char_t *)arg);
             break;
         }
         case FP_TABLE_CRIT_ADDRESS:
@@ -551,8 +551,8 @@ static errno_t fci_fp_get_rule_pos_in_table(fci_fp_table_t *table, fci_fp_rule_t
 */
 void fci_fp_db_init(void)
 {
-    memset(&fci_fp_rule_db, 0U, sizeof(fci_fp_rule_db_t));
-    memset(&fci_fp_table_db, 0U, sizeof(fci_fp_table_db_t));
+    (void)memset(&fci_fp_rule_db, 0U, sizeof(fci_fp_rule_db_t));
+    (void)memset(&fci_fp_table_db, 0U, sizeof(fci_fp_table_db_t));
     LLIST_Init(&fci_fp_table_db.tables);
     LLIST_Init(&fci_fp_rule_db.rules);
 
@@ -619,19 +619,19 @@ errno_t fci_fp_db_create_rule(char_t *name, uint32_t data, uint32_t mask, uint16
     else
     {
         /* Initialize */
-        memset(rule, 0, mem_size);
+        (void)memset(rule, 0, mem_size);
         LLIST_Init(&rule->db_entry);
         LLIST_Init(&rule->table_entry);
         /* Store the input parameters */
         rule->name = (char_t *)&rule[1];
-        strcpy(rule->name, name);
+        (void)strcpy(rule->name, name);
         rule->data = data;
         rule->mask = mask;
         rule->offset = offset;
         if(NULL != next_rule)
         {   /* Just store the next rule name, no validation yet because rule may be added later */
             rule->next_rule = rule->name + strlen(name) + 1U;
-            strcpy(rule->next_rule, next_rule);
+            (void)strcpy(rule->next_rule, next_rule);
         }
         else
         {
@@ -714,12 +714,12 @@ errno_t fci_fp_db_create_table(char_t *name)
     else
     {
         /* Initialize */
-        memset(table, 0, mem_size);
+        (void)memset(table, 0, mem_size);
         LLIST_Init(&table->db_entry);
         LLIST_Init(&table->rules_db.rules);
         /* Store the input parameters */
         table->name = (char_t *)&table[1];
-        strcpy(table->name, name);
+        (void)strcpy(table->name, name);
         /* Add the table into the global database */
         LLIST_AddAtEnd(&table->db_entry, &fci_fp_table_db.tables);
     }
@@ -872,7 +872,7 @@ errno_t fci_fp_db_add_rule_to_table(char_t *table_name, char_t *rule_name, uint1
             }
             if(FALSE == added)
             {   /* The requested position has not been found - add at the end */
-                NXP_LOG_WARNING("Position %u does not exist, adding at %u\n", position, i);
+                NXP_LOG_WARNING("Position %u does not exist, adding at %u\n", (uint_t)position, (uint_t)i);
                 LLIST_AddAtEnd(&rule->table_entry, &table->rules_db.rules);
                 rule->table = table;
                 table->rule_count += 1U;
@@ -1097,7 +1097,7 @@ errno_t fci_fp_db_get_table_from_addr(uint32_t addr, char_t **table_name)
     table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_ADDRESS, &addr);
     if(NULL == table)
     {
-        NXP_LOG_WARNING("Table with address 0x%x not found\n", addr);
+        NXP_LOG_WARNING("Table with address 0x%x not found\n", (uint_t)addr);
         return ENOENT;
     }
     *table_name = table->name;
@@ -1300,6 +1300,7 @@ errno_t fci_fp_db_get_table_next_rule(char_t *table_name, char_t **rule_name, ui
 static uint32_t fci_fp_print_rule(fci_fp_rule_t *rule, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
     uint32_t len = 0U;
+	(void)verb_level;
 
     len += oal_util_snprintf(buf + len, buf_len - len, "%s = {", rule->name);
     /* Conditions */
@@ -1391,6 +1392,7 @@ uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_le
     LLIST_t *item;
     uint32_t len = 0U;
     uint32_t pe_idx = 0U;
+	(void)temp;
 
     LLIST_ForEach(item, &fci_fp_table_db.tables)
     {
@@ -1429,4 +1431,6 @@ uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_le
 
     return len;
 }
+
+#endif /* PFE_CFG_FCI_ENABLE */
 

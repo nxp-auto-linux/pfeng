@@ -179,7 +179,7 @@
 #define HIF_TXPKT_INT						(1UL << 4U)
 #define HIF_CTRL_DMA_EN						(1UL << 0U)
 #define HIF_CTRL_BDP_POLL_CTRL_EN			(1UL << 1U)
-#define HIF_CTRL_BDP_CH_START_WSTB			(1UL << 2U)
+#define HIF_CTRL_BDP_CH_START_WSTB          (1UL << 2U)
 #define HIF_INT_EN							(1UL << 0U)
 #define HIF_RXBD_INT_EN						(1UL << 1U)
 #define HIF_RXPKT_INT_EN					(1UL << 2U)

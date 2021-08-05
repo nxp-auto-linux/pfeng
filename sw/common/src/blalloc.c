@@ -430,6 +430,15 @@ void blalloc_free_offs(blalloc_t *ctx, addr_t offset)
 	uint8_t chunk;
 	uint_t i,j;
 
+	/* Check if chunk is free already or not */	
+	byte = ctx->chunkinfo[first_byte];
+	chunk = (byte << (first_shift * CHUNK_BITS_COUNT)) & CHUNK_TEST_MASK;
+	if(chunk == 0x0U)
+	{
+		NXP_LOG_WARNING("blalloc_free_offs called on an already empty area\n");
+		return;
+	}
+
 	if((ctx->start_srch) > first_chunk)
 	{   /* We have new first known empty chunk, remember it */
 		ctx->start_srch = first_chunk;

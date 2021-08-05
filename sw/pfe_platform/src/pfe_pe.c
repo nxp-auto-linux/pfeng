@@ -28,7 +28,7 @@ static oal_mutex_t mem_access_lock;
 struct pfe_pe_tag
 {
 	pfe_ct_pe_type_t type;				/* PE type */
-	addr_t cbus_base_va;					/* CBUS base (virtual) */
+	addr_t cbus_base_va;				/* CBUS base (virtual) */
 	uint8_t id;							/* PE HW ID (0..N) */
 
 	/*	DMEM */
@@ -44,14 +44,14 @@ struct pfe_pe_tag
 	addr_t lmem_size;					/* PE's LMEM size */
 
 	/*	DDR */
-	addr_t ddr_base_addr_pa;				/* PE's DDR base address (physical, as seen by host) */
-	addr_t ddr_base_addr_va;				/* PE's DDR base address (virtual) */
+	addr_t ddr_base_addr_pa;			/* PE's DDR base address (physical, as seen by host) */
+	addr_t ddr_base_addr_va;			/* PE's DDR base address (virtual) */
 	addr_t ddr_size;					/* PE's DDR size */
 
 	/*	Indirect Access */
-	addr_t mem_access_wdata;				/* PE's _MEM_ACCESS_WDATA register address (virtual) */
+	addr_t mem_access_wdata;			/* PE's _MEM_ACCESS_WDATA register address (virtual) */
 	addr_t mem_access_addr;				/* PE's _MEM_ACCESS_ADDR register address (virtual) */
-	addr_t mem_access_rdata;				/* PE's _MEM_ACCESS_RDATA register address (virtual) */
+	addr_t mem_access_rdata;			/* PE's _MEM_ACCESS_RDATA register address (virtual) */
 
 	/* FW Errors*/
 	uint32_t error_record_addr;			/* Error record storage address in DMEM */
@@ -66,8 +66,10 @@ struct pfe_pe_tag
 
 	/*	MMap */
 	pfe_ct_pe_mmap_t *mmap_data;		/* Buffer containing the memory map data */
+
 	/* Mutex */
 	oal_mutex_t lock_mutex;				/* Locking PE API mutex */
+	bool_t miflock;						/* When TRUE then PFE memory interface is locked */
 };
 
 typedef enum
@@ -76,11 +78,20 @@ typedef enum
 	PFE_PE_IMEM
 } pfe_pe_mem_t;
 
-static void pfe_pe_memcpy_from_host_to_imem_32_nolock(pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len);
-static bool_t pfe_pe_is_active(pfe_pe_t *pe);
-static void pfe_pe_memcpy_from_imem_to_host_32_nolock(pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len);
-static void pfe_pe_mem_memset_nolock(pfe_pe_t *pe, pfe_pe_mem_t mem, uint8_t val, addr_t addr, uint32_t len);
-static errno_t pfe_pe_set_number(pfe_pe_t *pe);
+static void pfe_pe_memcpy_from_host_to_imem_32_nolock(
+		pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len);
+static bool_t pfe_pe_is_active_nolock(pfe_pe_t *pe);
+static void pfe_pe_memcpy_from_imem_to_host_32_nolock(
+		pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len);
+static void pfe_pe_mem_memset_nolock(
+		pfe_pe_t *pe, pfe_pe_mem_t mem, uint8_t val, addr_t addr, uint32_t len);
+static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(
+		pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len);
+
+/*	This one is not static because a firmware test code is using it but it is
+	neither declared in public header because it should not be public. */
+void pfe_pe_memcpy_from_dmem_to_host_32_nolock(
+		pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len);
 
 /**
  * @brief		Query if PE is active
@@ -88,31 +99,34 @@ static errno_t pfe_pe_set_number(pfe_pe_t *pe);
  * @param[in]	pe The PE instance
  * @return		TRUE if PE is active, FALSE if not
  */
-static bool_t pfe_pe_is_active(pfe_pe_t *pe)
+static bool_t pfe_pe_is_active_nolock(pfe_pe_t *pe)
 {
 	pfe_ct_pe_sw_state_monitor_t state_monitor;
-
+    bool_t ret = FALSE;
+    
 	if(NULL == pe->mmap_data)
-	{   /* Not loaded */
-		NXP_LOG_WARNING("PE %u; Firmware not loaded\n", pe->id);
-		return FALSE;
+	{
+		NXP_LOG_WARNING("PE %u: Firmware not loaded\n", pe->id);
 	}
+    else
+    {
+        ret = TRUE;
+        /*	Get state */
+        pfe_pe_memcpy_from_dmem_to_host_32_nolock(
+                pe,
+                &state_monitor,
+                oal_ntohl(pe->mmap_data->common.state_monitor),
+                sizeof(pfe_ct_pe_sw_state_monitor_t));
 
-	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &state_monitor, oal_ntohl(pe->mmap_data->common.state_monitor), sizeof(pfe_ct_pe_sw_state_monitor_t));
+        if ((PFE_FW_STATE_STOPPED == state_monitor.state) || (PFE_FW_STATE_UNINIT == state_monitor.state))
+        {
+            ret = FALSE;
+        }
+        /*	PFE_FW_STATE_INIT == state_monitor.state is considered as running because
+		the transition to next state is short */
+    }
 
-	if(PFE_FW_STATE_STOPPED == state_monitor.state)
-	{   /* Stopped */
-		return FALSE;
-	}
-
-	if(PFE_FW_STATE_UNINIT == state_monitor.state)
-	{   /* Not initialized yet */
-		return FALSE;
-	}
-	/* PFE_FW_STATE_INIT == state_monitor.state is considered as running because
-	   the transition to next state is short */
-
-	return TRUE;
+	return ret;
 }
 
 /**
@@ -122,7 +136,20 @@ static bool_t pfe_pe_is_active(pfe_pe_t *pe)
 */
 errno_t pfe_pe_lock(pfe_pe_t *pe)
 {
-    return oal_mutex_lock(&pe->lock_mutex);
+	errno_t ret = oal_mutex_lock(&pe->lock_mutex);
+
+	if (unlikely(pe->miflock))
+	{
+		NXP_LOG_ERROR("Lock already indicated.\n");
+	}
+
+	if (likely(EOK == ret))
+	{
+		/*	Indicate the 'lock' status */
+		pe->miflock = TRUE;
+	}
+
+	return ret;
 }
 
 /**
@@ -132,13 +159,16 @@ errno_t pfe_pe_lock(pfe_pe_t *pe)
 */
 errno_t pfe_pe_unlock(pfe_pe_t *pe)
 {
-    return oal_mutex_unlock(&pe->lock_mutex);
+	/*	Indicate the 'unlock' status */
+	pe->miflock = FALSE;
+
+	return oal_mutex_unlock(&pe->lock_mutex);
 }
 
 /**
  * @brief		Lock PE memory
  * @details		While locked, the PE can't access internal memory. Invoke the PE graceful
- *				stop request and wait for confirmation.
+ *				stop request and wait for confirmation. Also lock the PE memory interface.
  * @param[in]	pe The PE instance
  * @return		EOK if success, error code otherwise
  */
@@ -159,14 +189,15 @@ errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 		return EINVAL;
 	}
 
-	if (EOK != oal_mutex_lock(&pe->lock_mutex))
+	if (EOK != pfe_pe_lock(pe))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
 		return EPERM;
 	}
 
 	/*	Read the misc control structure from DMEM */
-	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
+	pfe_pe_memcpy_from_dmem_to_host_32_nolock(
+			pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
 
 	if (0U != misc_ctrl.graceful_stop_request)
 	{
@@ -178,10 +209,12 @@ errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 		{
 			NXP_LOG_ERROR("Duplicate stop request\n");
 		}
-		if (EOK != oal_mutex_unlock(&pe->lock_mutex))
+
+		if (EOK != pfe_pe_unlock(pe))
 		{
-			NXP_LOG_ERROR("mutex unlock failed\n");
+			NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
 		}
+
 		return EPERM;
 	}
 	else
@@ -193,15 +226,13 @@ errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 	}
 
 	/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
-	pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
+	pfe_pe_memcpy_from_host_to_dmem_32_nolock(
+			pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
 
-	if (FALSE == pfe_pe_is_active(pe))
+	if (FALSE == pfe_pe_is_active_nolock(pe))
 	{
-		/*	Access to PE memories is considered to be safe */
-		if (EOK != oal_mutex_unlock(&pe->lock_mutex))
-		{
-			NXP_LOG_ERROR("mutex unlock failed\n");
-		}
+		/*	Access to PE memories is considered to be safe. PE memory
+			interface is locked. */
 		return EOK;
 	}
 
@@ -216,30 +247,32 @@ errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 			misc_ctrl.graceful_stop_request = 0U;
 
 			/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
-			pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
-			if (EOK != oal_mutex_unlock(&pe->lock_mutex))
+			pfe_pe_memcpy_from_host_to_dmem_32_nolock(
+					pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
+
+			if (EOK != pfe_pe_unlock(pe))
 			{
-				NXP_LOG_ERROR("mutex unlock failed\n");
+				NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
 			}
+
 			return ETIME;
 		}
 
 		oal_time_usleep(10U);
 		timeout--;
-		pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
+		pfe_pe_memcpy_from_dmem_to_host_32_nolock(
+				pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
 
-	} while(0U == misc_ctrl.graceful_stop_confirmation);
-	if (EOK != oal_mutex_unlock(&pe->lock_mutex))
-	{
-		NXP_LOG_ERROR("mutex unlock failed\n");
-	}
+	} while (0U == misc_ctrl.graceful_stop_confirmation);
+
+	/*	Access to PE memory interface is locked */
 	return EOK;
 }
 
 /**
  * @brief		Unlock PE memory
  * @details		While locked, the PE can't access internal memory. Here the memory
- * 				will be unlocked.
+ * 				and the memory interface will be unlocked.
  * @param[in]	pe The PE instance
  * @return		EOK if success, error code otherwise
  */
@@ -258,20 +291,20 @@ errno_t pfe_pe_mem_unlock(pfe_pe_t *pe)
 	{
 		return EINVAL;
 	}
-	if (EOK != oal_mutex_lock(&pe->lock_mutex))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-		return EPERM;
-	}
+
 	/*	Cancel the stop request */
 	misc_ctrl.graceful_stop_request = 0U;
 
 	/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
-	pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
-	if (EOK != oal_mutex_unlock(&pe->lock_mutex))
+	pfe_pe_memcpy_from_host_to_dmem_32_nolock(
+			pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
+
+	/*	Unlock access to PE memory interface */
+	if (EOK != pfe_pe_unlock(pe))
 	{
-		NXP_LOG_ERROR("mutex unlock failed\n");
+		NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
 	}
+
 	return EOK;
 }
 
@@ -343,18 +376,14 @@ static uint32_t pfe_pe_mem_read(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t addr, uin
 				| PE_IBUS_PE_ID(pe->id)
 				| PE_IBUS_WREN(0U);
 
-	if (EOK != oal_mutex_lock(&mem_access_lock))
+	/*	Sanity check if we can safely access the memory interface */
+	if (unlikely(!pe->miflock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Accessing unlocked PE memory interface (read).\n");
 	}
 
 	hal_write32((uint32_t)adrr_temp, pe->mem_access_addr);
 	val = oal_ntohl(hal_read32(pe->mem_access_rdata));
-
-	if (EOK != oal_mutex_unlock(&mem_access_lock))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
-	}
 
 	if (unlikely(adrr_temp & 0x3U))
 	{
@@ -438,18 +467,14 @@ static void pfe_pe_mem_write(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_
 			| PE_IBUS_PE_ID(pe->id)
 			| PE_IBUS_WREN(bytesel);
 
-	if (EOK != oal_mutex_lock(&mem_access_lock))
+	/*	Sanity check if we can safely access the memory interface */
+	if (unlikely(!pe->miflock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Accessing unlocked PE memory interface (write).\n");
 	}
 
 	hal_write32(oal_htonl(val_temp), pe->mem_access_wdata);
 	hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
-
-	if (EOK != oal_mutex_unlock(&mem_access_lock))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
-	}
 }
 
 /**
@@ -546,7 +571,8 @@ void pfe_pe_imem_memset(pfe_pe_t *pe, uint8_t val, addr_t addr, uint32_t len)
  * @param[in]	dst_addr DMEM destination address (must be 32-bit aligned)
  * @param[in]	len Number of bytes to read
  */
-void pfe_pe_memcpy_from_host_to_dmem_32_nolock(pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len)
+static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(
+		pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len)
 {
 	uint32_t val;
 	uint32_t offset;
@@ -717,26 +743,31 @@ errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_coun
 	while (ii < pe_count)
 	{
 		ret = pfe_pe_mem_lock(pe[ii]);
-		if(EOK != ret)
+		if (EOK != ret)
 		{
 			NXP_LOG_DEBUG("Memory unlock failed\n");
+
 			/* Free all already locked PEs */
-			for(; ii >= 0; ii--)
+			for (; ii >= 0; ii--)
 			{
 				(void)pfe_pe_mem_unlock(pe[ii]);
 			}
+
 			return ret;
 		}
+
 		ii++;
 	}
 
-	/* Perform the read from required PEs*/
-	for(ii = 0; ii < pe_count; ii++)
+	/* Perform the read from required PEs */
+	for (ii = 0; ii < pe_count; ii++)
 	{
 		/* Check if there is still memory  */
-		if(buffer_len >= ((read_len * (uint32_t)ii) + read_len))
+		if (buffer_len >= ((read_len * (uint32_t)ii) + read_len))
 		{
-			pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe[ii], (void *)((uint8_t*)dst_ptr + (read_len * (uint32_t)ii)), src_addr, read_len);
+			pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe[ii],
+					(void *)((uint8_t*)dst_ptr + (read_len * (uint32_t)ii)),
+						src_addr, read_len);
 		}
 		else
 		{
@@ -745,15 +776,16 @@ errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_coun
 		}
 	}
 
-	for(ii = 0; ii < pe_count; ii++)
+	for (ii = 0; ii < pe_count; ii++)
 	{
-		/* Backup return from mecpy */
+		/* Backup return from memcpy */
 		ret_store = ret;
 		ret = pfe_pe_mem_unlock(pe[ii]);
 		if(EOK != ret)
 		{
 			NXP_LOG_DEBUG("Memory unlock failed\n");
-			/* Error occurred override the return from previous actions */
+
+			/* Error occurred. Override the return from previous actions. */
 			ret_store = ret;
 		}
 	}
@@ -933,7 +965,7 @@ void pfe_pe_memcpy_from_imem_to_host_32(pfe_pe_t *pe, void *dst_ptr, addr_t src_
  * @retval		EOK Success
  * @retval		EINVAL Unsupported section type or wrong input address alignment
  */
-static errno_t pfe_pe_load_dmem_section(pfe_pe_t *pe, const void *sdata, addr_t addr, addr_t size, uint32_t type)
+static errno_t pfe_pe_load_dmem_section_nolock(pfe_pe_t *pe, const void *sdata, addr_t addr, addr_t size, uint32_t type)
 {
 	errno_t ret = EOK;
 
@@ -941,65 +973,74 @@ static errno_t pfe_pe_load_dmem_section(pfe_pe_t *pe, const void *sdata, addr_t 
 	if (unlikely((NULL == pe) || (NULL == sdata)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+    else
+    {
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (((addr_t)(sdata) & 0x3U) != (addr & 0x3U))
-	{
-		NXP_LOG_ERROR("Load address 0x%p and elf file address 0x%p don't have the same alignment\n", (void *)addr, sdata);
-		return EINVAL;
-	}
+        if (((addr_t)(sdata) & 0x3U) != (addr & 0x3U))
+        {
+            NXP_LOG_ERROR("Load address 0x%p and elf file address 0x%p don't have the same alignment\n", (void *)addr, sdata);
+            ret = EINVAL;
+        }
+        else
+        {
+            if ((addr & 0x3U) != 0U)
+            {
+                NXP_LOG_ERROR("Load address 0x%p is not 32bit aligned\n", (void *)addr);
+                ret = EINVAL;
+            }
+            else
+            {
+                switch (type)
+                {
+                    case 0x7000002aU: /* MIPS.abiflags */
+                    {
+                        /* Skip the section */
+                        break;
+                    }
+                    case (uint32_t)SHT_PROGBITS:
+                    {
+            #if defined(FW_WRITE_CHECK_EN)
+                        void *buf = oal_mm_malloc(size);
+            #endif /* FW_WRITE_CHECK_EN */
 
-	if ((addr & 0x3U) != 0U)
-	{
-		NXP_LOG_ERROR("Load address 0x%p is not 32bit aligned\n", (void *)addr);
-		return EINVAL;
-	}
+                        /*	Write section data */
+                        pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, addr - pe->dmem_elf_base_va, sdata, size);
 
-	switch (type)
-	{
-		case 0x7000002aU: /* MIPS.abiflags */
-		{
-			/* Skip the section */
-			break;
-		}
-		case (uint32_t)SHT_PROGBITS:
-		{
-#if defined(FW_WRITE_CHECK_EN)
-			void *buf = oal_mm_malloc(size);
-#endif /* FW_WRITE_CHECK_EN */
+            #if defined(FW_WRITE_CHECK_EN)
+                        pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, buf, addr, size);
 
-			/*	Write section data */
-			pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, addr - pe->dmem_elf_base_va, sdata, size);
+                        if (0 != memcmp(buf, sdata, size))
+                        {
+                            NXP_LOG_ERROR("DMEM data inconsistent\n");
+                        }
 
-#if defined(FW_WRITE_CHECK_EN)
-			pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, buf, addr, size);
+                        oal_mm_free(buf);
+            #endif /* FW_WRITE_CHECK_EN */
 
-			if (0 != memcmp(buf, sdata, size))
-			{
-				NXP_LOG_ERROR("DMEM data inconsistent\n");
-			}
+                        break;
+                    }
 
-			oal_mm_free(buf);
-#endif /* FW_WRITE_CHECK_EN */
+                    case (uint32_t)SHT_NOBITS:
+                    {
+                        pfe_pe_mem_memset_nolock(pe, PFE_PE_DMEM, 0U, addr, size);
+                        break;
+                    }
 
-			break;
-		}
-
-		case (uint32_t)SHT_NOBITS:
-		{
-			pfe_pe_dmem_memset(pe, 0U, addr, size);
-			break;
-		}
-
-		default:
-		{
-			NXP_LOG_ERROR("Unsupported section type: 0x%x\n", (uint_t)type);
-			ret = EINVAL;
-			break;
-		}
-	}
+                    default:
+                    {
+                        NXP_LOG_ERROR("Unsupported section type: 0x%x\n", (uint_t)type);
+                        ret = EINVAL;
+                        break;
+                    }
+                }
+            }
+        }
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+    }
+#endif
 
 	return ret;
 }
@@ -1016,7 +1057,7 @@ static errno_t pfe_pe_load_dmem_section(pfe_pe_t *pe, const void *sdata, addr_t 
  * @retval		EFAULT Wrong input address alignment
  * @retval		EINVAL Unsupported section type
  */
-static errno_t pfe_pe_load_imem_section(pfe_pe_t *pe, const void *data, addr_t addr, addr_t size, uint32_t type)
+static errno_t pfe_pe_load_imem_section_nolock(pfe_pe_t *pe, const void *data, addr_t addr, addr_t size, uint32_t type)
 {
 	errno_t ret = EOK;
 
@@ -1031,7 +1072,8 @@ static errno_t pfe_pe_load_imem_section(pfe_pe_t *pe, const void *data, addr_t a
 	/*	Check alignment first */
 	if (((addr_t)(data) & 0x3U) != (addr & 0x1U))
 	{
-		NXP_LOG_ERROR("Load address 0x%p and elf file address 0x%p) don't have the same alignment\n", (void *)addr, data);
+		NXP_LOG_ERROR("Load address 0x%p and elf file address 0x%p) don't have the same alignment\n",
+				(void *)addr, data);
 		return EFAULT;
 	}
 
@@ -1206,12 +1248,12 @@ static errno_t pfe_pe_load_elf_section(pfe_pe_t *pe, const void *sdata, addr_t l
 	if (pfe_pe_is_dmem(pe, load_addr, size))
 	{
 		/*	Section belongs to DMEM */
-		ret_val = pfe_pe_load_dmem_section(pe, sdata, load_addr, size, type);
+		ret_val = pfe_pe_load_dmem_section_nolock(pe, sdata, load_addr, size, type);
 	}
 	else if (pfe_pe_is_imem(pe, load_addr, size))
 	{
 		/*	Section belongs to IMEM */
-		ret_val = pfe_pe_load_imem_section(pe, sdata, load_addr, size, type);
+		ret_val = pfe_pe_load_imem_section_nolock(pe, sdata, load_addr, size, type);
 	}
 	else if (pfe_pe_is_lmem(pe, load_addr, size))
 	{
@@ -1347,7 +1389,6 @@ void pfe_pe_set_dmem(pfe_pe_t *pe, addr_t elf_base, addr_t len)
 
 	pe->dmem_elf_base_va = elf_base;
 	pe->dmem_size = len;
-	pfe_pe_mem_memset_nolock(pe, PFE_PE_DMEM, 0U, 0U, len);
 }
 
 /**
@@ -1369,7 +1410,6 @@ void pfe_pe_set_imem(pfe_pe_t *pe, addr_t elf_base, addr_t len)
 
 	pe->imem_elf_base_va = elf_base;
 	pe->imem_size = len;
-	pfe_pe_mem_memset_nolock(pe, PFE_PE_IMEM, 0U, 0U, len);
 }
 
 /**
@@ -1436,24 +1476,6 @@ void pfe_pe_set_iaccess(pfe_pe_t *pe, uint32_t wdata_reg, uint32_t rdata_reg, ui
 	pe->mem_access_wdata = (pe->cbus_base_va + wdata_reg);
 }
 
-/**
- * @brief Sets the PE ID in the FW
- * @param[in] pe The PE which ID shall be set in the FW
- * @return EOK if success, error code otherwise
- */
-static errno_t pfe_pe_set_number(pfe_pe_t *pe)
-{
-	if(NULL == pe->mmap_data)
-	{
-		NXP_LOG_WARNING("Memory map is not known\n");
-		return ENOENT;
-	}
-
-	pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, oal_ntohl(pe->mmap_data->common.pe_id), &pe->id, sizeof(uint8_t));
-
-	return EOK;
-}
-
 static void print_fw_issue(const pfe_ct_pe_mmap_t *fw_mmap)
 {
 #ifdef NXP_LOG_ENABLED 
@@ -1477,7 +1499,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 	addr_t load_addr;
 	void *buf;
 	errno_t ret;
-	uint32_t section_idx;
+	uint32_t section_idx = 0U;
 	uint32_t mask_sectIdx;
 	const ELF_File_t *elf_file = (ELF_File_t *)elf;
 	const Elf32_Shdr *shdr = NULL;
@@ -1492,6 +1514,15 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
+	if (EOK != pfe_pe_lock(pe))
+	{
+		NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+	}
+
+	/*	Initialize DMEM and IMEM */
+	pfe_pe_mem_memset_nolock(pe, PFE_PE_DMEM, 0U, 0U, pe->dmem_size);
+	pfe_pe_mem_memset_nolock(pe, PFE_PE_IMEM, 0U, 0U, pe->imem_size);
+
 	/*	Attempt to get section containing firmware memory map data */
 	if (TRUE == ELF_SectFindName(elf_file, ".pfe_pe_mmap", &section_idx, NULL, NULL))
 	{
@@ -1500,11 +1531,18 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 
 		/*	Load section to RAM */
 		shdr = &elf_file->arSectHead32[mask_sectIdx];
-        /* Get the mmap size */
-        (void)memcpy((void*)&mmap_size, (const void*)((addr_t)elf_file->pvData + shdr->sh_offset), sizeof(uint32_t));
-        /* Convert mmap size endian ! */
-        mmap_size = oal_ntohl(mmap_size);
-        tmp_mmap = (pfe_ct_pe_mmap_t *)oal_mm_malloc(mmap_size);
+
+		/* Get the mmap size, used to load correct data from FW file*/
+		(void)memcpy(
+				(void*)&mmap_size,
+				(const void*)((addr_t)elf_file->pvData + shdr->sh_offset),
+				sizeof(uint32_t));
+
+		/* Convert mmap size endian ! */
+		mmap_size = oal_ntohl(mmap_size);
+
+		/* Allocate memory with size of union variable to maintain memory consistency */
+		tmp_mmap = (pfe_ct_pe_mmap_t *)oal_mm_malloc(sizeof(*tmp_mmap));
 		if (NULL == tmp_mmap)
 		{
 			ret = ENOMEM;
@@ -1514,14 +1552,21 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 		{
 			/*  Firmware version check */
 			static const char_t mmap_version_str[] = TOSTRING(PFE_CFG_PFE_CT_H_MD5);
-			(void)memcpy((void*)tmp_mmap, (const void*)((addr_t)elf_file->pvData + shdr->sh_offset), mmap_size);
+
+			(void)memcpy(
+					(void*)tmp_mmap,
+					(const void*)((addr_t)elf_file->pvData + shdr->sh_offset),
+					mmap_size);
+
 			if(0 != strcmp(mmap_version_str, tmp_mmap->common.version.cthdr))
 			{
 				ret = EINVAL;
 				print_fw_issue(tmp_mmap);
 				goto free_and_fail;
 			}
-			NXP_LOG_INFO("pfe_ct.h file version\"%s\"\n",mmap_version_str);
+
+			NXP_LOG_INFO("pfe_ct.h file version\"%s\"\n", mmap_version_str);
+
 			/*	Indicate that mmap_data is available */
 			pe->mmap_data = tmp_mmap;
 		}
@@ -1625,12 +1670,15 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 		}
 	}
 
+	if (EOK != pfe_pe_unlock(pe))
+	{
+		NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
+	}
+
 	/* Clear the internal copy of the index on each FW load because
 	   FW will also start from 0 */
 	pe->last_error_write_index = 0U;
 	pe->error_record_addr = 0U;
-	/* Set the PE number in the FW */
-	(void)pfe_pe_set_number(pe);
 	return EOK;
 
 free_and_fail:
@@ -1652,6 +1700,11 @@ free_and_fail:
 		oal_mm_free(pe->fw_feature_section);
 		pe->fw_feature_section = NULL;
 		pe->fw_feature_section_size = 0U;
+	}
+
+	if (EOK != pfe_pe_unlock(pe))
+	{
+		NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
 	}
 
 	return ret;
@@ -1764,18 +1817,21 @@ errno_t pfe_pe_get_fw_feature_entry(pfe_pe_t *pe, uint32_t id, pfe_ct_feature_de
 	{	/* Avoid running uninitialized */
 		return ENOENT;
 	}
+
 	/* Get the pointer to the descriptions and count of the features
-	   (do it only once and remember the values)
-	*/
+	   (do it only once and remember the values) */
 	if(INVALID_FEATURES_BASE == pe->fw_features_base)
-	{   /* The mmap has not been queried for error record yet */
+	{
 		pfe_ct_pe_mmap_t pfe_pe_mmap;
-		/* Query map for the error record address */
+
+		/* The mmap has not been queried for error record yet. Query map for
+		   the error record address. */
 		if (EOK != pfe_pe_get_mmap(pe, &pfe_pe_mmap))
 		{
 			NXP_LOG_ERROR("Could not get memory map\n");
 			return ENOENT;
 		}
+
 		/* Remember the features record address and size */
 		pe->fw_features_base = oal_ntohl(pfe_pe_mmap.common.version.features);
 		if(pe->fw_features_base > pe->fw_feature_section_size)
@@ -1784,63 +1840,80 @@ errno_t pfe_pe_get_fw_feature_entry(pfe_pe_t *pe, uint32_t id, pfe_ct_feature_de
 			pe->fw_features_base = INVALID_FEATURES_BASE;
 			return EIO;
 		}
+
 		pe->fw_features_size = oal_ntohl(pfe_pe_mmap.common.version.features_count);
 	}
 
 	/* Check if the requested id does exist */
 	if(id < pe->fw_features_size)
-	{   /* Entry at given id does exist */
-		entry_ptr = oal_ntohl(*(uint32_t *)((addr_t)pe->fw_feature_section + (pe->fw_features_base + (id * sizeof(PFE_PTR(pfe_ct_feature_desc_t))))));
+	{
+		/* Entry at given id does exist so return it */
+		entry_ptr = oal_ntohl(*(uint32_t *)(
+						(addr_t)pe->fw_feature_section
+							+ (pe->fw_features_base
+							+ (id * sizeof(PFE_PTR(pfe_ct_feature_desc_t))))));
+
 		*entry = (pfe_ct_feature_desc_t *)((addr_t)pe->fw_feature_section + entry_ptr);
+
 		return EOK;
 	}
+
 	return ENOENT;
 }
 
 /**
  * @brief		Reads out errors reported by the PE Firmware and prints them on debug console
  * @param[in]	pe PE which error report shall be read out
- * @return EOK on success or error code
+ * @return		EOK on success or error code
  */
-errno_t pfe_pe_get_fw_errors(pfe_pe_t *pe)
+errno_t pfe_pe_get_fw_errors_nolock(pfe_pe_t *pe)
 {
 #ifdef NXP_LOG_ENABLED
 	pfe_ct_error_record_t error_record; /* Copy of the PE error record */
 	uint32_t read_start;                /* Starting position in error record to read */
 	uint32_t i;
 	uint32_t errors_count;
+	pfe_ct_pe_mmap_t pfe_pe_mmap;
 
 	if(NULL == pe->fw_err_section)
-	{	/* Avoid running uninitialized */
+	{
+		/* Avoid running uninitialized */
 		return ENOENT;
 	}
 
 	if(0U == pe->error_record_addr)
-	{   /* The mmap has not been queried for error record yet */
-		pfe_ct_pe_mmap_t pfe_pe_mmap;
-		/* Query map for the error record address */
+	{
+		/* The memory map has not been queried for error record yet. Get
+		   the map and query it for the error record address. */
 		if (EOK != pfe_pe_get_mmap(pe, &pfe_pe_mmap))
 		{
 			NXP_LOG_ERROR("Could not get memory map\n");
 			return ENOENT;
 		}
+
 		/* Remember the error record address */
 		pe->error_record_addr = oal_ntohl(pfe_pe_mmap.common.error_record);
 	}
 
-	/* Copy error record from PE to local memory */
-	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &error_record, pe->error_record_addr, sizeof(pfe_ct_error_record_t));
+	pfe_pe_memcpy_from_dmem_to_host_32_nolock(
+			pe, &error_record, pe->error_record_addr, sizeof(pfe_ct_error_record_t));
+
 	/* Get the number of new errors */
 	errors_count = oal_ntohl(error_record.write_index) - pe->last_error_write_index;
+
 	/* First unread error */
 	read_start = pe->last_error_write_index;
+
 	/* Where to continue next time */
 	pe->last_error_write_index = oal_ntohl(error_record.write_index);
 	if(0U != errors_count)
-	{   /* New errors reported - go through them */
+	{
+		/* New errors reported - go through them */
 		if(errors_count > FP_ERROR_RECORD_SIZE)
 		{
-			NXP_LOG_WARNING("FW error log overflow by %u\n", (uint_t)errors_count - FP_ERROR_RECORD_SIZE + 1U);
+			NXP_LOG_WARNING("FW error log overflow by %u\n",
+					(uint_t)errors_count - FP_ERROR_RECORD_SIZE + 1U);
+
 			/* Overflow has occurred - the write_index contains oldest record */
 			read_start = oal_ntohl(error_record.write_index);
 			errors_count = FP_ERROR_RECORD_SIZE;
@@ -1853,31 +1926,40 @@ errno_t pfe_pe_get_fw_errors(pfe_pe_t *pe)
 			const pfe_ct_error_t *error_ptr;
 			const char_t *error_str;
 			const char_t *error_file;
-			 uint32_t error_val;
+			uint32_t error_val;
 
-			error_addr = oal_ntohl(error_record.errors[(read_start + i) & (FP_ERROR_RECORD_SIZE - 1U)]);
-			error_val = oal_ntohl(error_record.values[(read_start + i) & (FP_ERROR_RECORD_SIZE - 1U)]);
+			error_addr = oal_ntohl(error_record.errors[(read_start + i)
+													  & (FP_ERROR_RECORD_SIZE - 1U)]);
+			error_val = oal_ntohl(error_record.values[(read_start + i)
+													  & (FP_ERROR_RECORD_SIZE - 1U)]);
 			if(error_addr > pe->fw_err_section_size)
 			{
 				NXP_LOG_ERROR("Invalid error address from FW 0x%x\n", (uint_t)error_addr);
 				break;
 			}
+
 			/* Get to the error message through the .errors section */
 			error_ptr = (pfe_ct_error_t *)((addr_t)pe->fw_err_section + error_addr);
 			if(oal_ntohl(error_ptr->message) > pe->fw_err_section_size)
 			{
-				NXP_LOG_ERROR("Invalid error message from FW 0x%x", (uint_t)oal_ntohl(error_ptr->message));
+				NXP_LOG_ERROR("Invalid error message from FW 0x%x",
+						(uint_t)oal_ntohl(error_ptr->message));
 				break;
 			}
+
 			error_str = (char_t *)((addr_t)pe->fw_err_section + oal_ntohl(error_ptr->message));
 			if(oal_ntohl(error_ptr->file) > pe->fw_err_section_size)
 			{
-				NXP_LOG_ERROR("Invalid file name from FW 0x%x", (uint_t)oal_ntohl(error_ptr->file));
+				NXP_LOG_ERROR("Invalid file name from FW 0x%x",
+						(uint_t)oal_ntohl(error_ptr->file));
 				break;
 			}
+
 			error_file =  (char_t *)((addr_t)pe->fw_err_section + oal_ntohl(error_ptr->file));
 			error_line = oal_ntohl(error_ptr->line);
-			NXP_LOG_ERROR("PE%d: %s line %u: %s (0x%x)\n", pe->id, error_file, (uint_t)error_line, error_str, (uint_t)error_val);
+
+			NXP_LOG_ERROR("PE%d: %s line %u: %s (0x%x)\n",
+					pe->id, error_file, (uint_t)error_line, error_str, (uint_t)error_val);
 		}
 	}
 #else
@@ -1921,7 +2003,7 @@ errno_t pfe_pe_check_mmap(const pfe_pe_t *pe)
  * @retval		EOK		Success
  * @retval		EINVAL	Invalid argument
  */
-errno_t pfe_pe_get_pe_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_pe_stats_t *stats)
+errno_t pfe_pe_get_pe_stats_nolock(pfe_pe_t *pe, uint32_t addr, pfe_ct_pe_stats_t *stats)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == stats)))
@@ -1935,7 +2017,9 @@ errno_t pfe_pe_get_pe_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_pe_stats_t *stat
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+
 	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, stats, addr, sizeof(pfe_ct_pe_stats_t));
+
 	return EOK;
 }
 
@@ -1947,7 +2031,7 @@ errno_t pfe_pe_get_pe_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_pe_stats_t *stat
  * @retval		EOK		Success
  * @retval		EINVAL	Invalid argument
  */
-errno_t pfe_pe_get_classify_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_classify_stats_t *stats)
+errno_t pfe_pe_get_classify_stats_nolock(pfe_pe_t *pe, uint32_t addr, pfe_ct_classify_stats_t *stats)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == stats)))
@@ -1961,7 +2045,9 @@ errno_t pfe_pe_get_classify_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_classify_s
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+
 	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, stats, addr, sizeof(pfe_ct_classify_stats_t));
+
 	return EOK;
 }
 
@@ -1973,7 +2059,7 @@ errno_t pfe_pe_get_classify_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_classify_s
  * @retval		EOK		Success
  * @retval		EINVAL	Invalid argument
  */
-errno_t pfe_pe_get_class_algo_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_class_algo_stats_t *stats)
+errno_t pfe_pe_get_class_algo_stats_nolock(pfe_pe_t *pe, uint32_t addr, pfe_ct_class_algo_stats_t *stats)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == stats)))
@@ -1987,7 +2073,9 @@ errno_t pfe_pe_get_class_algo_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_class_al
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+
 	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, stats, addr, sizeof(pfe_ct_class_algo_stats_t));
+
 	return EOK;
 }
 
@@ -2004,6 +2092,7 @@ uint32_t pfe_pe_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, ui
 	uint32_t len = 0U;
 
 	(void)verb_level;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == stat) || (NULL == buf)))
 	{
@@ -2011,10 +2100,12 @@ uint32_t pfe_pe_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, ui
 		return 0U;
 	}
 #endif
+
 	len += oal_util_snprintf(buf + len, buf_len - len, "Frames processed: %u\n", oal_ntohl(stat->processed));
 	len += oal_util_snprintf(buf + len, buf_len - len, "Frames accepted:  %u\n", oal_ntohl(stat->accepted));
 	len += oal_util_snprintf(buf + len, buf_len - len, "Frames rejected:  %u\n", oal_ntohl(stat->rejected));
 	len += oal_util_snprintf(buf + len, buf_len - len, "Frames discarded: %u\n", oal_ntohl(stat->discarded));
+
 	return len;
 }
 
@@ -2072,43 +2163,190 @@ static inline const char_t *pfe_pe_get_fw_state_str(pfe_ct_pe_sw_state_t state)
 * @param[in] verb_level Verbosity level
 * @return Number of bytes written into the text buffer
 */
-static uint32_t pfe_pe_get_measurements(pfe_pe_t *pe, uint32_t count, uint32_t ptr, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+static uint32_t pfe_pe_get_measurements_nolock(pfe_pe_t *pe, uint32_t count, uint32_t ptr, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	pfe_ct_measurement_t *m = NULL;
 	uint_t i;
 	uint32_t len = 0U;
 
-    (void)verb_level;
+	(void)verb_level;
+
 	if(0U == ptr)
 	{   /* This shall not happen - FW did not initialize data correctly */
 		NXP_LOG_ERROR("Inconsistent data in pfe_pe_mmap\n");
-		return 0U;
 	}
+    else
+    {
+        /* Get buffer to read data from DMEM */
+        m = oal_mm_malloc(sizeof(pfe_ct_measurement_t) * count);
+        if(NULL != m)
+        {   /* Memory allocation succeed */
+            /* Copy the data into the allocated buffer */
+            pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, m, ptr, sizeof(pfe_ct_measurement_t) * count);
 
-	/* Get buffer to read data from DMEM */
-	m = oal_mm_malloc(sizeof(pfe_ct_measurement_t) * count);
-	if(NULL == m)
-	{   /* Memory allocation failed */
-	    return 0U;
-	}
-	/* Copy the data into the allocated buffer */
-	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, m, ptr, sizeof(pfe_ct_measurement_t) * count);
-	/* Print the data */
-	for(i = 0U; i < count; i++)
-	{
-		/* Variables just to make code more readable */
-		uint32_t avg = oal_ntohl(m[i].avg);
-		uint32_t min = oal_ntohl(m[i].min);
-		uint32_t max = oal_ntohl(m[i].max);
-		uint32_t cnt = oal_ntohl(m[i].cnt);
-		/* Just print the data without interpreting them */
-		len += oal_util_snprintf(buf + len, buf_len - len, "Measurement %u:\tmin %10u\tmax %10u\tavg %10u\tcnt %10u\n", i, min, max, avg, cnt);
-	}
-	/* Free the allocated buffer */
-	oal_mm_free(m);
+            /* Print the data */
+            for(i = 0U; i < count; i++)
+            {
+                /* Variables just to make code more readable */
+                uint32_t avg = oal_ntohl(m[i].avg);
+                uint32_t min = oal_ntohl(m[i].min);
+                uint32_t max = oal_ntohl(m[i].max);
+                uint32_t cnt = oal_ntohl(m[i].cnt);
 
+                /* Just print the data without interpreting them */
+                len += oal_util_snprintf(buf + len, buf_len - len,
+                        "Measurement %u:\tmin %10u\tmax %10u\tavg %10u\tcnt %10u\n",
+                            i, min, max, avg, cnt);
+            }
+
+            /* Free the allocated buffer */
+            oal_mm_free(m);
+        }
+    }
+	
 	return len;
 }
+
+/**
+ * @brief		Provides current state of PE firmware
+ * @param[in]	pe 			The PE instance
+ * @return		Current state of PE firmware
+ *
+ */
+pfe_ct_pe_sw_state_t pfe_pe_get_fw_state(pfe_pe_t *pe)
+{
+	pfe_ct_pe_sw_state_monitor_t state_monitor;
+
+	/* Get the pfe_ct_pe_mmap_t structure from PE */
+	if (NULL == pe->mmap_data)
+	{
+		return PFE_FW_STATE_UNINIT;
+	}
+
+	/*	We don't need coherent data here so only lock the
+	 	memory interface without locking the PE memory. */
+	if (EOK != pfe_pe_lock(pe))
+	{
+		NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+	}
+
+	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &state_monitor,
+					oal_ntohl(pe->mmap_data->common.state_monitor), 
+					sizeof(pfe_ct_pe_sw_state_monitor_t));
+
+	if (EOK != pfe_pe_unlock(pe))
+	{
+		NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
+	}
+
+	return state_monitor.state;
+}
+
+/**
+ * @brief		Read "put" buffer
+ * @param[in]	pe The PE instance
+ * @param[out]	buf Pointer to memory where buffer shall be written
+ * @retval		EOK Success and buffer is valid
+ * @retval		EAGAIN Buffer is invalid
+ * @retval		ENOENT Buffer not found
+ */
+errno_t pfe_pe_get_data_nolock(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
+{
+	uint8_t flags;
+	errno_t ret = ENOENT;
+	pfe_ct_pe_mmap_t mmap_data;
+	const pfe_ct_class_mmap_t *class_mmap_data;
+
+	/*	Get mmap base from PE[0] since all PEs have the same memory map */
+	if (EOK != pfe_pe_get_mmap(pe, &mmap_data))
+	{
+		NXP_LOG_ERROR("Could not get memory map\n");
+	}
+    else
+    {
+        class_mmap_data = &mmap_data.class_pe;
+
+        if (0U != class_mmap_data->put_buffer)
+        {
+            /*	Get "put" buffer status */
+            pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &flags,
+                    oal_ntohl(class_mmap_data->put_buffer) + offsetof(pfe_ct_buffer_t, flags),
+                        sizeof(uint8_t));
+
+            if (0U != flags)
+            {
+                /*	Copy buffer to local memory */
+                pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, buf, oal_ntohl(class_mmap_data->put_buffer), sizeof(pfe_ct_buffer_t));
+
+                /*	Clear flags */
+                flags = 0U;
+
+                pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe,
+                        oal_ntohl(class_mmap_data->put_buffer) + offsetof(pfe_ct_buffer_t, flags),
+                            &flags, sizeof(uint8_t));
+
+                ret = EOK;
+            }
+            else
+            {
+                ret = EAGAIN;
+            }
+        }
+    }
+	
+
+	return ret;
+}
+
+/**
+ * @brief		Write "get" buffer
+ * @param[in]	pe The PE instance
+ * @param[out]	buf Pointer to data to be written
+ * @retval		EOK Success and buffer is valid
+ * @retval		EAGAIN Buffer is occupied
+ * @retval		ENOENT Buffer not found
+ */
+errno_t pfe_pe_put_data_nolock(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
+{
+	uint8_t flags;
+	errno_t ret = ENOENT;
+	pfe_ct_pe_mmap_t mmap_data;
+	const pfe_ct_class_mmap_t *class_mmap_data;
+
+	if (EOK != pfe_pe_get_mmap(pe, &mmap_data))
+	{
+		NXP_LOG_ERROR("Could not get memory map\n");
+	}
+    else
+    {
+        class_mmap_data = &mmap_data.class_pe;
+        if (0U != class_mmap_data->get_buffer)
+        {
+            /*	Get "get" buffer status */
+            pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &flags,
+                    oal_ntohl(class_mmap_data->get_buffer) + offsetof(pfe_ct_buffer_t, flags),
+                        sizeof(uint8_t));
+
+            if (0U == flags)
+            {
+                /*	Send data to PFE */
+                buf->flags |= 1U;
+
+                pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe,
+                        oal_ntohl(class_mmap_data->get_buffer), buf, sizeof(pfe_ct_buffer_t));
+
+                ret = EOK;
+            }
+            else
+            {
+                ret = EAGAIN;
+            }
+        }
+    }
+
+	return ret;
+}
+
 /**
  * @brief		Return PE runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
@@ -2124,24 +2362,40 @@ uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len,
 	uint32_t len = 0U;
 	pfe_ct_pe_sw_state_monitor_t state_monitor;
 
-	/* Get the pfe_ct_pe_mmap_t structure from PE */
 	if (NULL == pe->mmap_data)
 	{
 		return 0U;
 	}
+
 	len += oal_util_snprintf(buf + len, buf_len - len, "\nPE %u\n----\n", pe->id);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- PE state monitor -\n");
-	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &state_monitor, oal_ntohl(pe->mmap_data->common.state_monitor), sizeof(pfe_ct_pe_sw_state_monitor_t));
-	len += oal_util_snprintf(buf + len, buf_len - len, "FW State: %u (%s), counter %u\n",state_monitor.state,
-	                         pfe_pe_get_fw_state_str(state_monitor.state), oal_ntohl(state_monitor.counter));
 
-    /* This is a class PE therefore we may access the specific data */
-	if(0U != oal_ntohl(pe->mmap_data->common.measurement_count))
-	{   /* The FW provides processing time measurements */
+	/*	Make the PFE data coherent */
+	if (EOK != pfe_pe_mem_lock(pe))
+	{
+		NXP_LOG_DEBUG("Memory lock failed\n");
+	}
+
+	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &state_monitor,
+			oal_ntohl(pe->mmap_data->common.state_monitor), sizeof(pfe_ct_pe_sw_state_monitor_t));
+
+	len += oal_util_snprintf(buf + len, buf_len - len, "FW State: %u (%s), counter %u\n",
+			state_monitor.state, pfe_pe_get_fw_state_str(state_monitor.state),
+				oal_ntohl(state_monitor.counter));
+
+	/* This is a class PE therefore we may access the specific data */
+	if (0U != oal_ntohl(pe->mmap_data->common.measurement_count))
+	{
 		len += oal_util_snprintf(buf + len, buf_len - len, "- Measurements -\n");
-		len += pfe_pe_get_measurements(pe, oal_ntohl(pe->mmap_data->common.measurement_count),
-		                                oal_ntohl(pe->mmap_data->common.measurements),
-		                                buf + len, buf_len - len, verb_level);
+
+		/* Read processing time measurements */
+		len += pfe_pe_get_measurements_nolock(pe, oal_ntohl(pe->mmap_data->common.measurement_count),
+				oal_ntohl(pe->mmap_data->common.measurements), buf + len, buf_len - len, verb_level);
+	}
+
+	if (EOK != pfe_pe_mem_unlock(pe))
+	{
+		NXP_LOG_DEBUG("Memory unlock failed\n");
 	}
 
 	return len;

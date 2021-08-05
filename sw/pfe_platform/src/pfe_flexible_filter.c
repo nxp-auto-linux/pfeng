@@ -44,7 +44,7 @@ errno_t pfe_flexible_filter_set(pfe_class_t *class, const uint32_t dmem_addr)
     /* Get the memory map */
 	/* All PEs share the same memory map therefore we can read
 	   arbitrary one (in this case 0U) */
-	ret = pfe_class_get_mmap(class, 0U, &mmap);
+	ret = pfe_class_get_mmap(class, 0, &mmap);
 	if(EOK == ret)
 	{
         /* Get the flexible filter address */

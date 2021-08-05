@@ -191,7 +191,7 @@ struct sk_buff *pfeng_hif_chnl_txconf_get_skbuf(struct pfeng_hif_chnl *chnl)
 	return pool->tx_tbl[idx].skb;
 }
 
-int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl)
+int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_budget)
 {
 	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;
 	u32 idx = pool->rd_idx;
@@ -216,7 +216,7 @@ int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl)
 	}
 	pool->rd_idx = idx;
 
-	dev_consume_skb_any(skb);
+	napi_consume_skb(skb, napi_budget);
 
 	return 0;
 }

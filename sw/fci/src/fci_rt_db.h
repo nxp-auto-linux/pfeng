@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2020 NXP
+ *  Copyright 2017-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -25,11 +25,12 @@
 /**
  * @brief	Route database entry type
  */
-typedef struct __route_entry_tag
+typedef struct 
 {
 	void *refptr;					/*	Reference pointer storage */
 	uint32_t id;					/*	Route entry identifier */
 	uint16_t mtu;
+	pfe_mac_addr_t src_mac;
 	pfe_mac_addr_t dst_mac;
 	pfe_ip_addr_t dst_ip;			/*	Destination IP (ipv4/ipv6) */
 	pfe_phy_if_t *iface;			/*	Associated interface */
@@ -54,7 +55,7 @@ typedef enum
 /**
  * @brief	Route database instance representation type
  */
-typedef struct __fci_rt_db_tag
+typedef struct 
 {
 	LLIST_t theList;
 	LLIST_t *cur_item;					/*	Current entry to be returned. See ...get_first() and ...get_next() */
@@ -70,7 +71,8 @@ typedef struct __fci_rt_db_tag
 } fci_rt_db_t;
 
 void fci_rt_db_init(fci_rt_db_t *db);
-errno_t fci_rt_db_add(fci_rt_db_t *db, pfe_ip_addr_t *dst_ip, pfe_mac_addr_t *dst_mac,
+errno_t fci_rt_db_add(fci_rt_db_t *db, pfe_ip_addr_t *dst_ip, 
+					pfe_mac_addr_t *src_mac, pfe_mac_addr_t *dst_mac,
 					pfe_phy_if_t *iface, uint32_t id, void *refptr, bool_t overwrite);
 errno_t fci_rt_db_remove(fci_rt_db_t *db, fci_rt_db_entry_t *entry);
 errno_t fci_rt_db_drop_all(fci_rt_db_t *db);

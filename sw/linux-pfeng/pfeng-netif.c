@@ -9,6 +9,7 @@
 #include <linux/rtnetlink.h>
 #include <linux/list.h>
 #include <linux/clk.h>
+#include <linux/if_vlan.h>
 
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -28,11 +29,90 @@ typedef struct
 	pfe_drv_id_t owner;		/* Identification of the driver that owns this entry */
 } pfeng_netif_mac_db_list_entry_t;
 
+static struct pfeng_emac *pfeng_netif_get_emac(struct pfeng_netif *netif)
+{
+	if (netif->cfg->aux)
+		return NULL;
+
+	return &netif->priv->emac[netif->cfg->emac];
+}
+
+static pfe_log_if_t *pfeng_netif_get_emac_logif(struct pfeng_netif *netif)
+{
+	if (!pfeng_netif_get_emac(netif))
+		return NULL;
+
+	return pfeng_netif_get_emac(netif)->logif_emac;
+}
+
+static pfe_phy_if_t *pfeng_netif_get_emac_phyif(struct pfeng_netif *netif)
+{
+	if (!pfeng_netif_get_emac(netif))
+		return NULL;
+
+	return pfeng_netif_get_emac(netif)->phyif_emac;
+}
+
+static u8 *__mac_to_str(const u8 *addr, u8 *buf, int len)
+{
+	scnprintf(buf, len, "%pM", addr);
+
+	return buf;
+}
+
+#define mac_to_str(addr, buf) __mac_to_str((addr), (buf), sizeof(buf))
+
+static int pfeng_uc_list_sync(struct net_device *netdev)
+{
+	struct pfeng_netif *netif = netdev_priv(netdev);
+	pfe_phy_if_t *phyif_emac = pfeng_netif_get_emac_phyif(netif);
+	struct netdev_hw_addr *ha;
+	errno_t ret;
+	u8 buf[18];
+
+	if (!phyif_emac)
+		return 0;
+
+	ret = pfe_phy_if_flush_mac_addrs(phyif_emac, MAC_DB_CRIT_BY_OWNER_AND_TYPE,
+					 PFE_TYPE_UC, netif->priv->local_drv_id);
+	if (ret != EOK) {
+		netdev_err(netdev, "failed to flush multicast MAC addresses\n");
+		return -ret;
+	}
+
+	ret = pfe_phy_if_add_mac_addr(phyif_emac, netdev->dev_addr,
+				      netif->priv->local_drv_id);
+	if (ret != EOK) {
+		netdev_err(netdev, "failed to add %s to %s: %d\n",
+			   mac_to_str(netdev->dev_addr, buf),
+			   pfe_phy_if_get_name(phyif_emac), ret);
+		return -ret;
+	}
+
+	netdev_for_each_uc_addr(ha, netdev) {
+		if (!is_unicast_ether_addr(ha->addr))
+			continue;
+
+		ret = pfe_phy_if_add_mac_addr(phyif_emac, ha->addr, netif->priv->local_drv_id);
+		if (ret != EOK)
+			netdev_warn(netdev, "failed to add %s to %s: %d\n",
+				    mac_to_str(ha->addr, buf), pfe_phy_if_get_name(phyif_emac), ret);
+	}
+
+	return -ret;
+}
+
 static int pfeng_netif_logif_open(struct net_device *netdev)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 	struct pfeng_hif_chnl *chnl;
 	int ret = 0, i;
+
+#ifdef PFE_CFG_PFE_MASTER
+	ret = pm_runtime_resume_and_get(netif->dev);
+	if (ret < 0)
+		return ret;
+#endif /* PFE_CFG_PFE_MASTER */
 
 #ifdef PFE_CFG_PFE_SLAVE
 	if (!netif->slave_netif_inited) {
@@ -57,6 +137,23 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 			netdev_err(netif->netdev, "Invalid HIF%u (not running)\n", i);
 			return -EINVAL;
 		}
+
+		if (!netif->cfg->tx_inject) {
+			/* PFENG_LOGIF_MODE_TX_CLASS mode requires logIf config */
+			if (!pfe_log_if_is_enabled(chnl->logif_hif)) {
+				ret = pfe_log_if_enable(chnl->logif_hif);
+				if (ret)
+					netdev_warn(netdev, "Cannot enable logif HIF%i: %d\n", i, ret);
+			} else
+				netdev_info(netdev, "Logif HIF%i already enabled\n", i);
+
+			if (!pfe_log_if_is_promisc(chnl->logif_hif)) {
+				ret = pfe_log_if_promisc_enable(chnl->logif_hif);
+				if (ret)
+					netdev_warn(netdev, "Cannot set promisc mode for logif HIF%i: %d\n", i, ret);
+			} else
+				netdev_dbg(netdev, "Logif HIF%i already in promisc mode\n", i);
+		}
 	}
 
 #ifdef PFE_CFG_PFE_MASTER
@@ -65,15 +162,20 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 		ret = pfeng_phylink_start(netif);
 		if (ret)
 			netdev_warn(netdev, "Error starting phylink: %d\n", ret);
-	}
+	} else
+		netif_carrier_on(netdev);
 #endif
 
 	/* Enable EMAC logif */
-	ret = pfe_log_if_enable(netif->priv->emac[netif->cfg->emac].logif_emac);
-	if (ret) {
-		netdev_err(netdev, "Cannot enable EMAC: %d\n", ret);
-		goto err_mac_ena;
+	if (pfeng_netif_get_emac(netif)) {
+		ret = pfe_log_if_enable(pfeng_netif_get_emac(netif)->logif_emac);
+		if (ret) {
+			netdev_err(netdev, "Cannot enable EMAC: %d\n", ret);
+			goto err_mac_ena;
+		}
 	}
+
+	pfeng_uc_list_sync(netdev);
 
 #ifdef PFE_CFG_PFE_SLAVE
 	netif_carrier_on(netdev);
@@ -84,6 +186,9 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 	return ret;
 
 err_mac_ena:
+#ifdef PFE_CFG_PFE_MASTER
+	pm_runtime_put(netif->dev);
+#endif /* PFE_CFG_PFE_MASTER */
 	return ret;
 }
 
@@ -98,52 +203,6 @@ static struct pfeng_hif_chnl *pfeng_netif_map_tx_channel(struct pfeng_netif *net
 	//TODO: id = skb_get_queue_mapping(skb);
 
 	return &netif->priv->hif_chnl[id - 1];
-}
-
-static int pfeng_netif_logif_txack(struct pfeng_hif_chnl *chnl, int limit)
-{
-	unsigned int done = 0;
-
-	while(pfe_hif_chnl_get_tx_conf(chnl->priv) == EOK) {
-
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-		/* Check for IHC packet first */
-		if (unlikely (pfeng_hif_chnl_txconf_get_flag(chnl) == PFENG_MAP_PKT_IHC)) {
-			pfe_hif_drv_client_t *client = &chnl->ihc_client;
-			/* IDEX confirmation must return IDEX API compatible data */
-			if (!pfe_hif_drv_ihc_put_conf(client)) {
-				/* Call IHC TX callback */
-				client->event_handler(client, client->priv, EVENT_TXDONE_IND, 0);
-			} else {
-				dev_err(chnl->dev, "TXconf IHC queuing failed.\n");
-			}
-		}
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
-		pfeng_hif_chnl_txconf_free_map_full(chnl);
-
-		done++;
-	}
-	return done;
-}
-
-static void pfeng_netif_tx_conf(struct work_struct *work)
-{
-	struct pfeng_netif *netif = container_of(work, struct pfeng_netif, tx_conf_work);
-	struct pfeng_hif_chnl *chnl;
-	int ring_len;
-
-	/* TODO: replace this with Tx NAPI! */
-	chnl = pfeng_netif_map_tx_channel(netif, NULL);
-	pfeng_netif_logif_txack(chnl, 0 /* no NAPI */);
-	ring_len = pfe_hif_chnl_get_tx_fifo_depth(chnl->priv);
-
-	if (pfe_hif_chnl_can_accept_tx_num(chnl->priv, ring_len >> 1)) {
-		/* only one queue per netdev used at this point */
-		netif_wake_subqueue(netif->netdev, 0);
-	} else {
-		schedule_work(&netif->tx_conf_work);
-	}
 }
 
 static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device *netdev)
@@ -171,16 +230,7 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	}
 
 	/* Protect shared HIF channel resource */
-#ifndef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	if (unlikely(chnl->cl_mode == PFENG_HIF_MODE_SHARED))
-#else
-	if (unlikely((chnl->cl_mode == PFENG_HIF_MODE_SHARED) || chnl->ihc))
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-#ifdef LOCK_TX_SPINLOCK
-		spin_lock(&chnl->lock_tx);
-#else
-		mutex_lock(&chnl->lock_tx);
-#endif
+	pfeng_hif_shared_chnl_lock_tx(chnl);
 
 #ifdef PFE_CFG_HIF_TX_FIFO_FIX
 	if (unlikely(FALSE == pfe_hif_chnl_can_accept_tx_data(chnl->priv, skb_pagelen(skb) + PFENG_TX_PKT_HEADER_SIZE))) {
@@ -189,14 +239,10 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	}
 #endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 
-	/* Cleanup Tx HIF channel ring(s) first */
-	pfeng_netif_logif_txack(chnl, 0 /* no NAPI */);
-
 	/* Check for ring space */
 	if (unlikely(!pfe_hif_chnl_can_accept_tx_num(chnl->priv, nfrags + 1))) {
 		netif_stop_subqueue(netdev, skb->queue_mapping);
-		/* TODO: replace this with Tx NAPI! */
-		schedule_work(&netif->tx_conf_work);
+		chnl->queues_stopped = true;
 		goto busy_drop;
 	}
 
@@ -227,13 +273,15 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	tx_hdr->queue = 0;
 #endif /* PFE_CFG_HIF_PRIO_CTRL */
 
-#ifdef PFE_CFG_ROUTE_HIF_TRAFFIC
-	/* Tag the frame with ID of target physical interface */
-	tx_hdr->cookie = oal_htonl(netif->cfg->emac);
-#else
-	tx_hdr->flags |= HIF_TX_INJECT;
-	tx_hdr->e_phy_ifs = oal_htonl(1U << netif->cfg->emac);
-#endif /* PFE_CFG_ROUTE_HIF_TRAFFIC */
+	/* Use correct TX mode */
+	if (likely(netif->cfg->tx_inject)) {
+		/* Set INJECT flag and bypass classifier */
+		tx_hdr->flags |= HIF_TX_INJECT;
+		tx_hdr->e_phy_ifs = oal_htonl(1U << netif->cfg->emac);
+	} else {
+		/* Tag the frame with ID of target physical interface */
+		tx_hdr->cookie = oal_htonl(netif->cfg->emac);
+	}
 
 	if (likely(netdev->features & NETIF_F_IP_CSUM))
 		tx_hdr->flags |= HIF_TX_IP_CSUM | HIF_TX_TCP_CSUM | HIF_TX_UDP_CSUM;
@@ -248,7 +296,7 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 			/* Tell stack to wait for hw timestamp */
 			skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
 
-			/* Tell HW to make timestamp  with our ref_num */
+			/* Tell HW to make timestamp with our ref_num */
 			tx_hdr->flags |= HIF_TX_ETS;
 			tx_hdr->refnum = htons(ref_num);
 		}
@@ -303,16 +351,7 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 		pfeng_hif_chnl_txconf_put_map_frag(chnl, frag, des, plen, NULL, PFENG_MAP_PKT_NORMAL);
 	}
 
-#ifndef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	if (unlikely(chnl->cl_mode == PFENG_HIF_MODE_SHARED))
-#else
-	if (unlikely((chnl->cl_mode == PFENG_HIF_MODE_SHARED) || chnl->ihc))
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-#ifdef LOCK_TX_SPINLOCK
-		spin_unlock(&chnl->lock_tx);
-#else
-		mutex_unlock(&chnl->lock_tx);
-#endif
+	pfeng_hif_shared_chnl_unlock_tx(chnl);
 
 	netdev->stats.tx_packets++;
 	netdev->stats.tx_bytes += skb->len;
@@ -320,168 +359,25 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	return NETDEV_TX_OK;
 
 busy_drop:
-#ifndef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	if (unlikely(chnl->cl_mode == PFENG_HIF_MODE_SHARED))
-#else
-	if (unlikely((chnl->cl_mode == PFENG_HIF_MODE_SHARED) || chnl->ihc))
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-#ifdef LOCK_TX_SPINLOCK
-		spin_unlock(&chnl->lock_tx);
-#else
-		mutex_unlock(&chnl->lock_tx);
-#endif
+	pfeng_hif_shared_chnl_unlock_tx(chnl);
 
 	netdev->stats.tx_dropped++;
 	return NETDEV_TX_BUSY;
 
 }
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-
-static void dump_idex_rawpkt(const char *label, void *data, u32 dlen)
-{
-#if 0
-#ifdef PFE_CFG_PFE_MASTER
-	const char *mode = "MASTER";
-#else
-	const char *mode = "SLAVE";
-#endif
-	const uint32_t hdrsize = sizeof(pfe_ct_hif_rx_hdr_t);
-	//pfe_ct_phy_if_id_t i_phy_id = pfe_hif_pkt_get_ingress_phy_id(pkt);
-
-	printk("IDEX-%s: %s: %*ph\n", mode, label, hdrsize, data);
-	printk("IDEX-%s: %s: %*ph\n", mode, label, dlen - hdrsize, data + hdrsize);
-#endif
-}
-
-void pfeng_ihc_tx_work_handler(struct work_struct *work)
-{
-	struct pfeng_priv* priv = container_of(work, struct pfeng_priv, ihc_tx_work);
-	struct pfeng_hif_chnl *chnl = priv->ihc_chnl;
-	struct pfeng_ihc_tx ihc_tx = { 0 };
-	struct sk_buff *skb = NULL;
-	dma_addr_t des = 0;
-	int refid = -1, ret;
-
-	/* IHC transport requires protection */
-#ifdef LOCK_TX_SPINLOCK
-	spin_lock(&chnl->lock_tx);
-#else
-	mutex_lock(&chnl->lock_tx);
-#endif
-
-	if (!kfifo_get(&priv->ihc_tx_fifo, &ihc_tx)) {
-		dev_err(chnl->dev, "No IHC TX data!\n");
-		goto err;
-	}
-	skb = ihc_tx.skb;
-
-	/* Cleanup Tx HIF channel ring first */
-	pfeng_netif_logif_txack(chnl, 0 /* no NAPI */);
-
-	/* Remap skb */
-	des = dma_map_single(chnl->dev, skb->data, skb_headlen(skb), DMA_TO_DEVICE);
-	if (unlikely(dma_mapping_error(chnl->dev, des))) {
-		dev_err(chnl->dev, "No possible to map IHC frame, dropped.\n");
-		goto err;
-	}
-	refid = pfeng_hif_chnl_txconf_put_map_frag(chnl, skb->data, des, skb_headlen(skb), skb, PFENG_MAP_PKT_IHC);
-	/* Increment to be able to pass number 0 */
-	refid++;
-
-	ret = pfe_hif_chnl_tx(chnl->priv, (void *)des, skb->data, skb_headlen(skb), true);
-	if (unlikely(EOK != ret)) {
-		pfeng_hif_chnl_txconf_unroll_map_full(chnl, refid - 1, 0);
-		goto err;
-	}
-#ifdef LOCK_TX_SPINLOCK
-	spin_unlock(&chnl->lock_tx);
-#else
-	mutex_unlock(&chnl->lock_tx);
-#endif
-
-	return;
-
-err:
-#ifdef LOCK_TX_SPINLOCK
-	spin_unlock(&chnl->lock_tx);
-#else
-	mutex_unlock(&chnl->lock_tx);
-#endif
-	if(skb)
-		kfree_skb(skb);
-
-	return;
-}
-
-/**
- * @brief		Transmit IHC packet
- * @param[in]	client Client instance
- * @param[in]	dst Destination physical interface ID. Should by HIFs only.
- * @param[in]	queue TX queue number
- * @param[in]	idex_frame Pointer to the IHC packet with TX header
- * @return		EOK if success, error code otherwise.
- */
-errno_t pfe_hif_drv_client_xmit_ihc_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t dst, uint32_t queue, void *idex_frame, uint32_t flen)
-{
-	struct pfeng_hif_chnl *chnl = container_of(client, struct pfeng_hif_chnl, ihc_client);
-	struct pfeng_priv *priv = (struct pfeng_priv *)dev_get_drvdata(chnl->dev);
-	struct sk_buff *skb = NULL;
-	int ret, pktlen;
-	pfe_ct_hif_tx_hdr_t *tx_hdr;
-	struct pfeng_ihc_tx ihc_tx = { 0 };
-
-	/* Find minimal pkt size */
-	if ((PFENG_TX_PKT_HEADER_SIZE + flen) < 68)
-		pktlen = 68;
-	else
-		pktlen = PFENG_TX_PKT_HEADER_SIZE + flen;
-
-	/* Copy packet to skb to reuse txconf standard cleaning */
-	skb = alloc_skb(pktlen, GFP_ATOMIC);
-	if (!skb) {
-		oal_mm_free_contig(idex_frame);
-		return ENOMEM;
-	}
-
-	/* Set TX header */
-	tx_hdr = (pfe_ct_hif_tx_hdr_t *)skb->data;
-	memset(tx_hdr, 0, PFENG_TX_PKT_HEADER_SIZE);
-	tx_hdr->chid = chnl->idx;
-	tx_hdr->flags |= HIF_TX_IHC | HIF_TX_INJECT;
-	tx_hdr->e_phy_ifs = oal_htonl(1U << dst);
-	skb_put(skb, PFENG_TX_PKT_HEADER_SIZE);
-
-	/* Append IDEX frame */
-	skb_put_data(skb, idex_frame, flen);
-dump_idex_rawpkt("TX", skb->data, skb_headlen(skb));
-
-	/* Free original idex_frame */
-	oal_mm_free_contig(idex_frame);
-
-	ihc_tx.chnl = chnl;
-	ihc_tx.skb = skb;
-
-	/* Send data to worker */
-	ret = kfifo_put(&priv->ihc_tx_fifo, ihc_tx);
-	if (ret != 1) {
-		dev_err(chnl->dev, "IHC TX kfifo full\n");
-		kfree_skb(skb);
-		return -ENOMEM;
-	}
-
-	schedule_work(&priv->ihc_tx_work);
-
-	return 0;
-}
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
 static int pfeng_netif_logif_stop(struct net_device *netdev)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
+	pfe_phy_if_t *phyif_emac = pfeng_netif_get_emac_phyif(netif);
 
-	if (!netif || !netif->cfg)
-		return 0;
+	if (phyif_emac) {
+		pfe_phy_if_flush_mac_addrs(phyif_emac, MAC_DB_CRIT_BY_OWNER_AND_TYPE,
+					   PFE_TYPE_MC, netif->priv->local_drv_id);
+
+		pfe_phy_if_flush_mac_addrs(phyif_emac, MAC_DB_CRIT_BY_OWNER_AND_TYPE,
+					   PFE_TYPE_UC, netif->priv->local_drv_id);
+	}
 
 #ifdef PFE_CFG_PFE_MASTER
 	/* Stop PHY */
@@ -490,6 +386,8 @@ static int pfeng_netif_logif_stop(struct net_device *netdev)
 #endif
 
 	netif_tx_stop_all_queues(netdev);
+
+	pm_runtime_put(netif->dev);
 
 	return 0;
 }
@@ -529,12 +427,140 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 	return ret;
 }
 
-static int pfeng_netif_logif_set_mac_address(struct net_device *netdev, void *p)
+static int pfeng_addr_sync(struct net_device *netdev, const u8 *addr)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
-	struct pfeng_emac *emac = &netif->priv->emac[netif->cfg->emac];
+	pfe_phy_if_t *phyif_emac = pfeng_netif_get_emac_phyif(netif);
+	errno_t ret;
+	u8 buf[18];
+
+	ret = pfe_phy_if_add_mac_addr(phyif_emac, addr, netif->priv->local_drv_id);
+	if (ret != EOK)
+		netdev_warn(netdev, "failed to add %s to %s: %d\n",
+			    mac_to_str(addr, buf), pfe_phy_if_get_name(phyif_emac), ret);
+
+	return -ret;
+}
+
+static int pfeng_addr_mc_sync(struct net_device *netdev, const u8 *addr)
+{
+	if (!is_multicast_ether_addr(addr))
+		return 0;
+
+	return pfeng_addr_sync(netdev, addr);
+}
+
+static int pfeng_addr_mc_unsync(struct net_device *netdev, const u8 *addr)
+{
+	struct pfeng_netif *netif = netdev_priv(netdev);
+
+	netif->mc_unsynced = true;
+
+	return 0;
+}
+
+static int pfeng_addr_uc_sync(struct net_device *netdev, const u8 *addr)
+{
+	if (!is_unicast_ether_addr(addr))
+		return 0;
+
+	return pfeng_addr_sync(netdev, addr);
+}
+
+static int pfeng_addr_uc_unsync(struct net_device *netdev, const u8 *addr)
+{
+	struct pfeng_netif *netif = netdev_priv(netdev);
+
+	netif->uc_unsynced = true;
+
+	return 0;
+}
+
+static int pfeng_mc_list_sync(struct net_device *netdev)
+{
+	struct pfeng_netif *netif = netdev_priv(netdev);
+	pfe_phy_if_t *phyif_emac = pfeng_netif_get_emac_phyif(netif);
+	struct netdev_hw_addr *ha;
+	errno_t ret;
+	u8 buf[18];
+
+	if (!phyif_emac)
+		return 0;
+
+	ret = pfe_phy_if_flush_mac_addrs(phyif_emac, MAC_DB_CRIT_BY_OWNER_AND_TYPE,
+					 PFE_TYPE_MC, netif->priv->local_drv_id);
+	if (ret != EOK) {
+		netdev_err(netdev, "failed to flush multicast MAC addresses\n");
+		return -ret;
+	}
+
+	netdev_for_each_mc_addr(ha, netdev) {
+		if (!is_multicast_ether_addr(ha->addr))
+			continue;
+
+		ret = pfe_phy_if_add_mac_addr(phyif_emac, ha->addr, netif->priv->local_drv_id);
+		if (ret != EOK)
+			netdev_warn(netdev, "failed to add %s to %s: %d\n",
+				    mac_to_str(ha->addr, buf), pfe_phy_if_get_name(phyif_emac), ret);
+	}
+
+	return -ret;
+}
+
+static void pfeng_netif_set_rx_mode(struct net_device *netdev)
+{
+	struct pfeng_netif *netif = netdev_priv(netdev);
+	pfe_phy_if_t *phyif_emac = pfeng_netif_get_emac_phyif(netif);
+	bool uprom = false, mprom = false;
+
+	if (!phyif_emac)
+		return;
+
+	if (netdev->flags & IFF_PROMISC) {
+		/* Enable promiscuous mode */
+		if (pfe_phy_if_promisc_enable(phyif_emac) != EOK)
+			netdev_warn(netdev, "failed to enable promisc mode\n");
+
+		uprom = true;
+		mprom = true;
+	} else if (netdev->flags & IFF_ALLMULTI) {
+		if (pfe_phy_if_allmulti_enable(phyif_emac) != EOK)
+			netdev_warn(netdev, "failed to enable promisc mode\n");
+
+		mprom = true;
+	}
+
+	__dev_uc_sync(netdev, pfeng_addr_uc_sync, pfeng_addr_uc_unsync);
+	__dev_mc_sync(netdev, pfeng_addr_mc_sync, pfeng_addr_mc_unsync);
+
+	if (netif->uc_unsynced) {
+		pfeng_uc_list_sync(netdev);
+		netif->uc_unsynced = false;
+	}
+
+	if (netif->mc_unsynced) {
+		pfeng_mc_list_sync(netdev);
+		netif->mc_unsynced = false;
+	}
+
+	if (!mprom) {
+		if (pfe_phy_if_allmulti_disable(phyif_emac) != EOK)
+			netdev_warn(netdev, "failed to disable allmulti mode\n");
+	}
+
+	if (!uprom) {
+		if (pfe_phy_if_is_promisc(phyif_emac)) {
+			if (pfe_phy_if_promisc_disable(phyif_emac) != EOK)
+				netdev_warn(netdev, "failed to disable promisc mode\n");
+		}
+	}
+
+	return;
+}
+
+static int pfeng_netif_set_mac_address(struct net_device *netdev, void *p)
+{
 	struct sockaddr *addr = (struct sockaddr *)p;
-	int ret = 0;
 
 	if (is_valid_ether_addr(addr->sa_data)) {
 		ether_addr_copy(netdev->dev_addr, addr->sa_data);
@@ -545,248 +571,20 @@ static int pfeng_netif_logif_set_mac_address(struct net_device *netdev, void *p)
 
 	netdev_info(netdev, "setting MAC addr: %pM\n", netdev->dev_addr);
 
-	if (emac->logif_emac) {
-		ret = pfe_log_if_flush_mac_addrs(
-			emac->logif_emac,
-			MAC_DB_CRIT_BY_OWNER_AND_TYPE,
-			PFE_TYPE_UC,
-			netif->priv->local_drv_id);
-
-		if (ret) {
-			netdev_err(netdev, "Can't delete existing unicast MAC address, new address won't be added!\n");
-			return ret;
-		}
-
-		ret = pfe_log_if_add_mac_addr(emac->logif_emac, netdev->dev_addr, netif->priv->local_drv_id);
-	}
-	if (!ret)
-		return 0;
-
-	return -ENOSPC;
+	return pfeng_uc_list_sync(netdev);
 }
 
-#ifdef PFE_CFG_PFE_MASTER
-static char_t *mac_to_str(pfe_mac_addr_t addr)
+static netdev_features_t pfeng_netif_fix_features(struct net_device *netdev, netdev_features_t features)
 {
-	static char_t buf[18];
-
-	scnprintf(buf, sizeof(buf), "%pM", &addr[0]);
-
-	return buf;
-}
-
-/**
- * @brief		Add new MAC addresses from list of requested addresses
- * @param[in]	netdev The pointer to the network device structure
- * @param[in]	iface The interface instance
- * @param[in]	req_list List of requested addresses
- * @retval		Execution status, EOK Success, error code otherwise
- */
-static int pfeng_netif_add_mac_addrs(struct net_device *netdev, pfe_log_if_t *iface, struct list_head *req_list)
-{
-	int ret = EOK;
-	struct list_head *item;
-	pfeng_netif_mac_db_list_entry_t *entry;
-	pfe_mac_addr_t addr;
-	pfe_ct_phy_if_id_t owner;
-
-	/* Iterate over list of requested addresses */
-	list_for_each(item, req_list) {
-		entry = list_entry(item, pfeng_netif_mac_db_list_entry_t, iterator);
-		(void)memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
-		owner = entry->owner;
-
-		netdev_dbg(netdev, "Adding %s to %s\n",
-					mac_to_str(addr), pfe_log_if_get_name(iface));
-
-		/* Add address into interface active list */
-		ret = pfe_log_if_add_mac_addr(iface, addr, owner);
-		if((ret != EOK) && (ret != ENOEXEC)) {
-			netdev_warn(netdev, "unable to add %s into %s: %d\n",
-						mac_to_str(addr), pfe_log_if_get_name(iface), ret);
-			return ret;
-		}
-	}
-
-	return EOK;
-}
-
-/**
- * @brief		Delete unused MAC addresses based on comparison of requested list with
- * 				internal MAC database according to specified rules.
- * @param[in]	netdev The pointer to the network device structure
- * @param[in]	iface The interface instance
- * @param[in]	req_list List of requested addresses
- * @param[in]	mac_db MAC database instance
- * @retval		Execution status, EOK Success, error code otherwise
- */
-static int pfeng_netif_del_mac_addrs(struct net_device *netdev, pfe_log_if_t *iface, struct list_head *req_list, pfe_mac_db_t *mac_db)
-{
-	int ret = EOK;
-	pfeng_netif_mac_db_list_entry_t *entry = NULL;
-	pfe_mac_addr_t addr_act;
-	struct list_head *item;
-	bool entry_found;
-
-	if((ret = pfe_mac_db_get_first_addr(mac_db, MAC_DB_CRIT_BY_TYPE, PFE_TYPE_MC, PFE_CFG_LOCAL_IF, addr_act)) != EOK)
-		netdev_dbg(netdev, "get first MAC address status: %d\n", ret);
-
-	while(ret == EOK) {
-		entry_found = false;
-
-		list_for_each(item, req_list) {
-			entry = list_entry(item, pfeng_netif_mac_db_list_entry_t, iterator);
-			if (!memcmp(addr_act, entry->addr, sizeof(pfe_mac_addr_t))) {
-				entry_found = true;
-				break;
-			}
-		}
-
-		if ((!entry_found) && (pfe_emac_is_multi(addr_act))) {
-			/* Del address from interface active list */
-			netdev_dbg(netdev, "Removing %s from %s\n",
-						mac_to_str(addr_act), pfe_log_if_get_name(iface));
-
-			ret = pfe_log_if_del_mac_addr(iface, addr_act);
-			if ((ret != EOK) && (ret != ENOENT)) {
-				netdev_warn(netdev, "unable to del %s from %s: %d\n",
-							mac_to_str(addr_act), pfe_log_if_get_name(iface), ret);
-				return ret;
-			}
-		}
-
-		ret = pfe_mac_db_get_next_addr(mac_db, addr_act);
-	}
-
-	return EOK;
-}
-
-/**
- * @brief		Add MAC address into the list of requested addresses
- * @param[in]	netdev The pointer to the network device structure
- * @param[in]	list Pointer to list of requested addresses
- * @param[in]	addr The MAC address to add
- * @param[in]	owner The identification of driver instance
- * @retval		EOK Success
- * @retval		ENOMEM Not enough memory
- */
-static int pfeng_netif_add_mac_to_request_list(struct net_device *netdev, struct list_head *list, pfe_mac_addr_t addr, pfe_drv_id_t owner)
-{
-	int ret = EOK;
-	pfeng_netif_mac_db_list_entry_t *entry = NULL;
-	struct list_head *item;
-	bool is_present = false;
-
-	list_for_each(item, list) {
-		entry = list_entry(item, pfeng_netif_mac_db_list_entry_t, iterator);
-		if (!memcmp(addr, entry->addr, sizeof(pfe_mac_addr_t))) {
-			is_present = true;
-			break;
-		}
-	}
-
-	if(!is_present) {
-		/* Add address to the list */
-		entry = kmalloc(sizeof(pfeng_netif_mac_db_list_entry_t), GFP_KERNEL);
-		if (!entry) {
-			netdev_err(netdev, "Memory allocation failed\n");
-			ret = ENOMEM;
-		} else {
-			(void)memcpy(entry->addr, addr, sizeof(pfe_mac_addr_t));
-			entry->owner = owner;
-			list_add_tail(&entry->iterator, list);
-		}
-	}
-
-	return ret;
-}
-
-/**
- * @brief		Destroy list of requested addresses and free memory
- * @param[in]	list requested list
- * @retval		EOK Success
- * @retval		ENOEXEC Command failed
- */
-static int pfeng_netif_destroy_mac_request_list(struct list_head *list)
-{
-	int ret = EOK;
-	struct list_head *item, *aux;
-	pfeng_netif_mac_db_list_entry_t *entry;
-
-	/* Destroy list of requested addresses and free memory */
-	list_for_each_safe(item, aux, list) {
-		entry = list_entry(item, pfeng_netif_mac_db_list_entry_t, iterator);
-		if (NULL != entry) {
-			list_del_init(&entry->iterator);
-			kfree(entry);
-			entry = NULL;
-		}
-	}
-
-	return ret;
-}
-#endif /* PFE_CFG_PFE_MASTER */
-
-static void pfeng_netif_logif_set_rx_mode(struct net_device *netdev)
-{
-#ifdef PFE_CFG_PFE_MASTER
 	struct pfeng_netif *netif = netdev_priv(netdev);
-	pfe_ct_phy_if_id_t hif_id = netif->priv->local_drv_id;
-	pfe_log_if_t *logif_emac = netif->priv->emac[netif->cfg->emac].logif_emac;
 
-	struct list_head req_mac_list; /* List of requested MAC addresses from stack to be written into HW */
-	pfe_mac_db_t *mac_db;
-
-	if (netdev->flags & IFF_PROMISC) {
-		/* Enable promiscuous mode */
-		if (pfe_log_if_promisc_enable(logif_emac) == EOK)
-			netdev_dbg(netdev, "promisc enabled\n");
-	} else if (netdev->flags & IFF_ALLMULTI) {
-		if (pfe_log_if_allmulti_enable(logif_emac) == EOK)
-			netdev_dbg(netdev, "allmulti enabled\n");
-	} else if (netdev->flags & IFF_MULTICAST) {
-		struct netdev_hw_addr *ha;
-		INIT_LIST_HEAD(&req_mac_list);
-		/* Create list of requested MAC addresses to be written into HW */
-		netdev_for_each_mc_addr(ha, netdev) {
-			if (EOK != pfeng_netif_add_mac_to_request_list(netdev, &req_mac_list, ha->addr, hif_id)) {
-				pfeng_netif_destroy_mac_request_list(&req_mac_list);
-				return;
-			}
-		}
-
-		/* Check if request list is not empty */
-		if (!list_empty(&req_mac_list)) {
-			mac_db = pfe_log_if_get_mac_db(logif_emac);
-			if (!mac_db) {
-				netdev_warn(netdev, "no MAC database found\n");
-			} else {
-				/* Add new addresses from requested list */
-				if (EOK != pfeng_netif_add_mac_addrs(netdev, logif_emac, &req_mac_list)) {
-					pfeng_netif_destroy_mac_request_list(&req_mac_list);
-					return;
-				}
-
-				/* Delete all addresses not present in requested list based on given criterion */
-				if (EOK != pfeng_netif_del_mac_addrs(netdev, logif_emac, &req_mac_list, mac_db)) {
-					pfeng_netif_destroy_mac_request_list(&req_mac_list);
-					return;
-				}
-			}
-		}
-
-		/* Destroy requested list */
-		pfeng_netif_destroy_mac_request_list(&req_mac_list);
-	} else {
-		/* Disable promiscuous mode */
-		if (pfe_log_if_promisc_disable(logif_emac) == EOK)
-			netdev_dbg(netdev, "promisc disabled\n");
-		/* Disable allmulti mode */
-		if (pfe_log_if_allmulti_disable(logif_emac) == EOK)
-			netdev_dbg(netdev, "allmulti disabled\n");
+	/* Don't enable hw checksumming for AUX interface */
+	if (netif->cfg->aux) {
+		features &= ~(NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM | NETIF_F_RXCSUM);
+		netdev_info(netdev, "checksum offload not possible for AUX interface\n");
 	}
-#endif
-	return;
+
+	return features;
 }
 
 static const struct net_device_ops pfeng_netdev_ops = {
@@ -795,8 +593,9 @@ static const struct net_device_ops pfeng_netdev_ops = {
 	.ndo_stop		= pfeng_netif_logif_stop,
 	.ndo_change_mtu		= pfeng_netif_logif_change_mtu,
 	.ndo_do_ioctl		= pfeng_netif_logif_ioctl,
-	.ndo_set_mac_address	= pfeng_netif_logif_set_mac_address,
-	.ndo_set_rx_mode	= pfeng_netif_logif_set_rx_mode,
+	.ndo_set_mac_address	= pfeng_netif_set_mac_address,
+	.ndo_set_rx_mode	= pfeng_netif_set_rx_mode,
+	.ndo_fix_features	= pfeng_netif_fix_features,
 };
 
 static void pfeng_netif_detach_hifs(struct pfeng_netif *netif)
@@ -808,6 +607,12 @@ static void pfeng_netif_detach_hifs(struct pfeng_netif *netif)
 	pfeng_netif_for_each_chnl(netif, i, chnl) {
 		if (!(netif->cfg->hifmap & (1 << i)))
 			continue;
+
+		if (netif->cfg->aux) {
+			chnl->netifs[HIF_CLIENTS_AUX_IDX] = NULL;
+			netdev_info(netdev, "AUX unsubscribe from HIF%u\n", chnl->idx);
+			continue;
+		}
 
 		/* Unsubscribe from HIF channel */
 		if (chnl->netifs[netif->cfg->emac] != netif) {
@@ -836,6 +641,12 @@ static int pfeng_netif_attach_hifs(struct pfeng_netif *netif)
 			goto err;
 		}
 
+		if (netif->cfg->aux) {
+			chnl->netifs[HIF_CLIENTS_AUX_IDX] = netif;
+			netdev_info(netdev, "AUX subscribe to HIF%u\n", chnl->idx);
+			continue;
+		}
+
 		/* Subscribe to HIF channel */
 		if (chnl->netifs[netif->cfg->emac]) {
 			netdev_err(netdev, "Unable to register to HIF%u\n", i);
@@ -843,7 +654,7 @@ static int pfeng_netif_attach_hifs(struct pfeng_netif *netif)
 			goto err;
 		}
 		chnl->netifs[netif->cfg->emac] = netif;
-		netdev_err(netdev, "Subscribe to HIF%u\n", chnl->idx);
+		netdev_info(netdev, "Subscribe to HIF%u\n", chnl->idx);
 	}
 	ret = 0;
 
@@ -853,7 +664,7 @@ err:
 
 static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 {
-	pfe_log_if_t *logif_emac = netif->priv->emac[netif->cfg->emac].logif_emac;
+	pfe_log_if_t *logif_emac;
 
 	if (!netif->netdev)
 		return;
@@ -870,6 +681,7 @@ static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 #endif /* PFE_CFG_PFE_MASTER */
 
 	/* Stop EMAC logif */
+	logif_emac = pfeng_netif_get_emac_logif(netif);
 	if (logif_emac) {
 		pfe_log_if_disable(logif_emac);
 		if (EOK != pfe_platform_unregister_log_if(netif->priv->pfe_platform, logif_emac))
@@ -904,7 +716,7 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 {
 	struct net_device *netdev = netif->netdev;
 	struct pfeng_priv *priv = netif->priv;
-	struct pfeng_emac *emac = &priv->emac[netif->cfg->emac];
+	struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
 	struct pfeng_hif_chnl *chnl;
 	int ret, i;
 
@@ -915,48 +727,56 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 	}
 
 	/* Prefetch linked EMAC interfaces */
-	if (!emac->phyif_emac) {
-		emac->phyif_emac = pfe_platform_get_phy_if_by_id(priv->pfe_platform, netif->cfg->emac);
+	if (emac) {
 		if (!emac->phyif_emac) {
-			netdev_err(netdev, "Could not get linked EMAC physical interface\n");
-			goto err;
-		}
-	}
-	if (!emac->logif_emac) {
-		emac->logif_emac = pfe_log_if_create(emac->phyif_emac, (char *)netif->cfg->name);
-		if (!emac->logif_emac) {
-			netdev_err(netdev, "EMAC Logif can't be created: %s\n", netif->cfg->name);
-			goto err;
-		} else {
-			ret = pfe_platform_register_log_if(priv->pfe_platform, emac->logif_emac);
-			if (ret) {
-				netdev_err(netdev, "Can't register EMAC Logif\n");
+			emac->phyif_emac = pfe_platform_get_phy_if_by_id(priv->pfe_platform, netif->cfg->emac);
+			if (!emac->phyif_emac) {
+				netdev_err(netdev, "Could not get linked EMAC physical interface\n");
 				goto err;
 			}
 		}
-		netdev_dbg(netdev, "EMAC Logif created: %s @%px\n", netif->cfg->name, emac->logif_emac);
-	}
-	else
-		netdev_dbg(netdev, "EMAC Logif reused: %s @%px\n", netif->cfg->name, emac->logif_emac);
+		if (!emac->logif_emac) {
+			emac->logif_emac = pfe_log_if_create(emac->phyif_emac, (char *)netif->cfg->name);
+			if (!emac->logif_emac) {
+				netdev_err(netdev, "EMAC Logif can't be created: %s\n", netif->cfg->name);
+				goto err;
+			} else {
+				ret = pfe_platform_register_log_if(priv->pfe_platform, emac->logif_emac);
+				if (ret) {
+					netdev_err(netdev, "Can't register EMAC Logif\n");
+					goto err;
+				}
+			}
+			ret = pfe_log_if_promisc_enable(emac->logif_emac);
+			if (ret) {
+				netdev_err(netdev, "Can't set EMAC Logif promiscuous mode\n");
+				goto err;
+			}
+			netdev_dbg(netdev, "EMAC Logif created: %s @%px\n", netif->cfg->name, emac->logif_emac);
+		} else
+			netdev_dbg(netdev, "EMAC Logif reused: %s @%px\n", netif->cfg->name, emac->logif_emac);
 
-	/* Make sure that EMAC ingress traffic will be forwarded to respective HIF channel */
-	i = ffs(netif->cfg->hifmap) - 1;
+		/* Make sure that EMAC ingress traffic will be forwarded to respective HIF channel */
+		i = ffs(netif->cfg->hifmap) - 1;
 #ifdef PFE_CFG_PFE_MASTER
-	if (netif->cfg->hifs > 1)
-		/* Loadbalansing requires routing to PFE_PHY_IF_ID_HIF */
-		ret = pfe_log_if_set_egress_ifs(emac->logif_emac, 1 << PFE_PHY_IF_ID_HIF);
-	else
-		ret = pfe_log_if_set_egress_ifs(emac->logif_emac, 1 << pfeng_hif_ids[i]);
+		if (netif->cfg->hifs > 1)
+			/* Loadbalansing requires routing to PFE_PHY_IF_ID_HIF */
+			ret = pfe_log_if_set_egress_ifs(emac->logif_emac, 1 << PFE_PHY_IF_ID_HIF);
+		else
+			ret = pfe_log_if_set_egress_ifs(emac->logif_emac, 1 << pfeng_hif_ids[i]);
 #else
-	ret = pfe_log_if_add_egress_if(emac->logif_emac, pfe_platform_get_phy_if_by_id(priv->pfe_platform, pfeng_hif_ids[i]));
+		ret = pfe_log_if_add_egress_if(emac->logif_emac, pfe_platform_get_phy_if_by_id(priv->pfe_platform, pfeng_hif_ids[i]));
 #endif /* PFE_CFG_PFE_MASTER */
-	if (EOK != ret) {
-		netdev_err(netdev, "Can't set EMAC egress interface\n");
-		goto err;
+		if (EOK != ret) {
+			netdev_err(netdev, "Can't set EMAC egress interface\n");
+			goto err;
+		}
 	}
 
 	/* Prefetch linked HIF(s) */
 	pfeng_netif_for_each_chnl(netif, i, chnl) {
+		char hifname[16];
+
 		if (!(netif->cfg->hifmap & (1 << i)))
 			continue;
 
@@ -988,10 +808,43 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 			goto err;
 		}
 		netdev_info(netdev, "Enable HIF%u\n", i);
+
+		if (!chnl->logif_hif) {
+			scnprintf(hifname, sizeof(hifname) - 1, "%s-logif", pfe_phy_if_get_name(chnl->phyif_hif));
+			chnl->logif_hif = pfe_log_if_create(chnl->phyif_hif, hifname);
+			if (!chnl->logif_hif) {
+				netdev_err(netdev, "HIF Logif can't be created: %s\n", hifname);
+				goto err;
+			}
+
+			ret = pfe_platform_register_log_if(priv->pfe_platform, chnl->logif_hif);
+			if (ret) {
+				netdev_err(netdev, "Can't register HIF Logif\n");
+				goto err;
+			}
+			netdev_dbg(netdev, "HIF Logif created: %s @%px\n", hifname, chnl->logif_hif);
+		} else
+			netdev_dbg(netdev, "HIF Logif reused: %s @%px\n", hifname, chnl->logif_hif);
+
+		if (emac) {
+			if (!netif->cfg->tx_inject) {
+				/* Make sure that HIF ingress traffic will be forwarded to respective EMAC */
+#ifdef PFE_CFG_PFE_MASTER
+				ret = pfe_log_if_set_egress_ifs(chnl->logif_hif, 1 << pfeng_emac_ids[netif->cfg->emac]);
+#else
+				ret = pfe_log_if_add_egress_if(chnl->logif_hif, pfe_platform_get_phy_if_by_id(priv->pfe_platform, pfeng_emac_ids[netif->cfg->emac]));
+#endif
+				if (EOK != ret) {
+					netdev_err(netdev, "Can't set HIF egress interface\n");
+					goto err;
+				}
+			}
+		}
 	}
 
+#ifdef PFE_CFG_PFE_SLAVE
 	/* Add rule for local MAC */
-	if (!netif->cfg->tx_inject) {
+	if (netif->cfg->tx_inject && emac) {
 		/* Configure the logical interface to accept frames matching local MAC address */
 		ret = pfe_log_if_add_match_rule(emac->logif_emac, IF_MATCH_DMAC, (void *)netif->cfg->macaddr, 6U);
 		if (EOK != ret) {
@@ -999,15 +852,18 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 			ret = -ret;
 			goto err;
 		}
-		/* Set parent physical interface to FlexibleRouter mode */
-		ret = pfe_phy_if_set_op_mode(emac->phyif_emac, IF_OP_FLEX_ROUTER);
-		if (EOK != ret) {
-			netdev_err(netdev, "Can't set flexrouter operation mode\n");
-			ret = -ret;
-			goto err;
+		if (netif->cfg->emac_router) {
+			/* Set parent physical interface to FlexibleRouter mode */
+			ret = pfe_phy_if_set_op_mode(emac->phyif_emac, IF_OP_FLEX_ROUTER);
+			if (EOK != ret) {
+				netdev_err(netdev, "Can't set flexrouter operation mode\n");
+				ret = -ret;
+				goto err;
+			}
 		}
 		netdev_info(netdev, "receive traffic matching its MAC address\n");
 	}
+#endif /* PFE_CFG_PFE_SLAVE */
 
 	return 0;
 
@@ -1031,7 +887,8 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 		memcpy(&saddr.sa_data, netif->cfg->macaddr, sizeof(saddr.sa_data));
 	else
 		memset(&saddr.sa_data, 0, sizeof(saddr.sa_data));
-	pfeng_netif_logif_set_mac_address(netdev, (void *)&saddr);
+
+	pfeng_netif_set_mac_address(netdev, (void *)&saddr);
 
 	/* Init hw timestamp */
 	ret = pfeng_hwts_init(netif);
@@ -1088,6 +945,7 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 
 	/* Set the sysfs physical device reference for the network logical device */
 	SET_NETDEV_DEV(netdev, dev);
+	netdev->dev.of_node = netif_cfg->dn; /* required by of_find_net_device_by_node(), AAVB-3196 */
 
 	/* set ifconfig visible config */
 	netdev->mem_start = (unsigned long)priv->pfe_cfg->cbus_base;
@@ -1108,7 +966,7 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 
 	/* MTU ranges */
 	netdev->min_mtu = ETH_MIN_MTU;
-	netdev->max_mtu = ETH_DATA_LEN;
+	netdev->max_mtu = ETH_DATA_LEN + VLAN_HLEN; /* account for 8021q DSA tag length, AAVB-3196 */
 
 	/* Each packet requires extra buffer for Tx header (metadata) */
 	netdev->needed_headroom = PFENG_TX_PKT_HEADER_SIZE;
@@ -1117,16 +975,18 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 	pfeng_ethtool_init(netdev);
 
 	/* Add phylink */
-	if (priv->emac[netif_cfg->emac].intf_mode != PHY_INTERFACE_MODE_INTERNAL)
+	if (!netif_cfg->aux && priv->emac[netif_cfg->emac].intf_mode != PHY_INTERFACE_MODE_INTERNAL)
 		pfeng_phylink_create(netif);
 #endif
 
-	INIT_WORK(&netif->tx_conf_work, pfeng_netif_tx_conf);
-
 	/* Accelerated feature */
-	netdev->hw_features |= NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM | NETIF_F_RXCSUM;
+	if (!netif_cfg->aux) {
+		/* Chksumming can be enabled only if no AUX involved */
+		netdev->hw_features |= NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM | NETIF_F_RXCSUM;
+	}
 	netdev->hw_features |= NETIF_F_SG;
 	netdev->features = netdev->hw_features;
+	netdev->priv_flags |= IFF_UNICAST_FLT;
 
 	ret = register_netdev(netdev);
 	if (ret) {
@@ -1212,19 +1072,26 @@ int pfeng_netif_create(struct pfeng_priv *priv)
 
 static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 {
-	struct pfeng_emac *emac = &netif->priv->emac[netif->cfg->emac];
+	struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
 	struct pfeng_hif_chnl *chnl;
 	int i;
 
 #ifdef PFE_CFG_PFE_MASTER
-	pfeng_phylink_mac_change(netif, false);
+	if (emac)
+		pfeng_phylink_mac_change(netif, false);
 #endif /* PFE_CFG_PFE_MASTER */
 
 	netif_device_detach(netif->netdev);
 
 	rtnl_lock();
 
-	pfe_log_if_disable(emac->logif_emac);
+	if (emac) {
+		/* Save EMAC pause */
+		pfeng_ethtool_params_save(netif);
+
+		/* Disable EMAC */
+		pfe_log_if_disable(emac->logif_emac);
+	}
 
 #ifdef PFE_CFG_PFE_MASTER
 	/* Stop PHY */
@@ -1232,10 +1099,12 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 		pfeng_phylink_stop(netif);
 
 	/* Stop RX/TX EMAC clocks */
-	if (emac->tx_clk)
-		clk_disable_unprepare(emac->tx_clk);
-	if (emac->rx_clk)
-		clk_disable_unprepare(emac->rx_clk);
+	if (emac) {
+		if (emac->tx_clk)
+			clk_disable_unprepare(emac->tx_clk);
+		if (emac->rx_clk)
+			clk_disable_unprepare(emac->rx_clk);
+	}
 #endif /* PFE_CFG_PFE_MASTER */
 
 	rtnl_unlock();
@@ -1249,12 +1118,20 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 		/* Skip in case of IHC channel */
 		if (!chnl->ihc)
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+		{
 			chnl->phyif_hif = NULL;
+			if (chnl->logif_hif) {
+				pfe_log_if_disable(chnl->logif_hif);
+				chnl->logif_hif = NULL;
+			}
+		}
 	}
 
 	/* Reset linked EMAC IFs */
-	emac->phyif_emac = NULL;
-	emac->logif_emac = NULL;
+	if (emac) {
+		emac->phyif_emac = NULL;
+		emac->logif_emac = NULL;
+	}
 
 	return 0;
 }
@@ -1264,36 +1141,68 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 	struct pfeng_priv *priv = netif->priv;
 	__maybe_unused struct device *dev = &priv->pdev->dev;
 	struct net_device *netdev = netif->netdev;
-	struct pfeng_emac *emac = &netif->priv->emac[netif->cfg->emac];
+	struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
 	struct pfeng_hif_chnl *chnl;
 	int ret, i;
 
 	rtnl_lock();
 
 #ifdef PFE_CFG_PFE_MASTER
+
 	/* Restart RX/TX EMAC clocks */
-	if (emac->tx_clk) {
-		ret = clk_prepare_enable(emac->tx_clk);
-		if (ret) {
-			dev_err(dev, "TX clocks restart on EMAC%d failed: %d\n", netif->cfg->emac, ret);
-			ret = 0;
-			devm_clk_put(dev, emac->tx_clk);
-			emac->tx_clk = NULL;
-		} else
-			dev_info(dev, "TX clocks on EMAC%d restarted\n", netif->cfg->emac);
-	}
-	if (emac->rx_clk) {
-		ret = clk_prepare_enable(emac->rx_clk);
-		if (ret) {
-			dev_err(dev, "RX clocks restart on EMAC%d failed: %d\n", netif->cfg->emac, ret);
-			ret = 0;
-			devm_clk_put(dev, emac->rx_clk);
-			emac->rx_clk = NULL;
-		} else
-			dev_info(dev, "RX clocks on EMAC%d restarted\n", netif->cfg->emac);
+
+	if (emac) {
+		u64 clk_rate;
+
+		/* retrieve max rate */
+		switch (emac->max_speed) {
+		case SPEED_10:
+			clk_rate = 2500000;
+			break;
+		case SPEED_100:
+			clk_rate = 25000000;
+			break;
+		case SPEED_1000:
+		default:
+			clk_rate = 125000000;
+			break;
+		}
+
+		if (emac->tx_clk) {
+			ret = clk_set_rate(emac->tx_clk, clk_rate);
+			if (ret)
+				dev_err(dev, "Failed to set TX clock on EMAC%d: %d\n", netif->cfg->emac, ret);
+			else {
+				ret = clk_prepare_enable(emac->tx_clk);
+				if (ret)
+					dev_err(dev, "TX clocks restart on EMAC%d failed: %d\n", netif->cfg->emac, ret);
+				else
+					dev_info(dev, "TX clocks on EMAC%d restarted\n", netif->cfg->emac);
+			}
+			if (ret) {
+				devm_clk_put(dev, emac->tx_clk);
+				emac->tx_clk = NULL;
+			}
+		}
+
+		if (emac->rx_clk) {
+			ret = clk_set_rate(emac->rx_clk, clk_rate);
+			if (ret)
+				dev_err(dev, "Failed to set RX clock on EMAC%d: %d\n", netif->cfg->emac, ret);
+			else {
+				ret = clk_prepare_enable(emac->rx_clk);
+				if (ret)
+					dev_err(dev, "RX clocks restart on EMAC%d failed: %d\n", netif->cfg->emac, ret);
+				else
+					dev_info(dev, "RX clocks on EMAC%d restarted\n", netif->cfg->emac);
+			}
+			if (ret) {
+				devm_clk_put(dev, emac->rx_clk);
+				emac->rx_clk = NULL;
+			}
+		}
 	}
 #endif /* PFE_CFG_PFE_MASTER */
-
 
 	ret = pfeng_netif_logif_init_second_stage(netif);
 
@@ -1307,12 +1216,37 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 
 		if (chnl->status != PFENG_HIF_STATUS_RUNNING)
 			netdev_warn(netif->netdev, "HIF%u in invalid state: not running\n", i);
+
+		if (!netif->cfg->tx_inject) {
+			/* PFENG_LOGIF_MODE_TX_CLASS mode requires logIf config */
+			if (!pfe_log_if_is_enabled(chnl->logif_hif)) {
+				ret = pfe_log_if_enable(chnl->logif_hif);
+				if (ret)
+					netdev_warn(netdev, "Cannot enable logif HIF%i: %d\n", i, ret);
+			} else
+				netdev_info(netdev, "Logif HIF%i already enabled\n", i);
+
+			if (!pfe_log_if_is_promisc(chnl->logif_hif)) {
+				ret = pfe_log_if_promisc_enable(chnl->logif_hif);
+				if (ret)
+					netdev_warn(netdev, "Cannot set promisc mode for logif HIF%i: %d\n", i, ret);
+			} else
+				netdev_dbg(netdev, "Logif HIF%i already in promisc mode\n", i);
+		}
 	}
 
 	/* Enable EMAC logif */
-	ret = pfe_log_if_enable(emac->logif_emac);
-	if (ret)
-		netdev_warn(netdev, "Cannot enable EMAC: %d\n", ret);
+	if (emac) {
+		ret = pfe_log_if_enable(emac->logif_emac);
+		if (ret)
+			netdev_warn(netdev, "Cannot enable EMAC: %d\n", ret);
+
+		/* Restore RX mode: promisc & UC/MC addresses */
+		pfeng_netif_set_rx_mode(netdev);
+
+		/* Restore EMAC pause and coalesce */
+		pfeng_ethtool_params_restore(netif);
+	}
 
 #ifdef PFE_CFG_PFE_SLAVE
 	netif_carrier_on(netdev);

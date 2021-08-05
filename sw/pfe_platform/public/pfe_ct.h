@@ -312,14 +312,13 @@ typedef struct __attribute__((packed, aligned(4)))
  */
 typedef enum __attribute__((packed))
 {
-	IF_OP_DISABLED = 0U,			/*!< Disabled */
-	IF_OP_DEFAULT = 1U,				/*!< Default operational mode */
-	IF_OP_BRIDGE = 2U,				/*!< L2 bridge */
-	IF_OP_ROUTER = 3U,				/*!< L3 router */
-	IF_OP_VLAN_BRIDGE = 4U,			/*!< L2 bridge with VLAN */
-	IF_OP_FLEX_ROUTER = 5U,			/*!< Flexible router */
-	IF_OP_L2L3_BRIDGE = 6U,			/*!< L2-L3 bridge */
-	IF_OP_L2L3_VLAN_BRIDGE = 7U,	/*!< L2-L3 bridge with VLAN */
+	IF_OP_DEFAULT = 0U,				/*!< Default operational mode */
+	IF_OP_BRIDGE = 1U,				/*!< L2 bridge */
+	IF_OP_ROUTER = 2U,				/*!< L3 router */
+	IF_OP_VLAN_BRIDGE = 3U,			/*!< L2 bridge with VLAN */
+	IF_OP_FLEX_ROUTER = 4U,			/*!< Flexible router */
+	IF_OP_L2L3_BRIDGE = 5U,			/*!< L2-L3 bridge */
+	IF_OP_L2L3_VLAN_BRIDGE = 6U,	/*!< L2-L3 bridge with VLAN */
 } pfe_ct_if_op_mode_t;
 
 /*	We expect given pfe_ct_if_op_mode_t size due to byte order compatibility. */
@@ -339,6 +338,7 @@ typedef enum __attribute__((packed))
 	IF_FL_PTP_PROMISC = (1U << 9U),		/*!< PTP traffic will bypass all ingress checks */
 	IF_FL_LOOPBACK = (1U << 10U),		/*!< If set, interface is in loopback mode */
 	IF_FL_ALLOW_Q_IN_Q = (1U << 11U),	/*!< If set, QinQ traffic is accepted */
+	IF_FL_DISCARD_TTL = (1U << 12U),	/*!< Discard packet with TTL<2 instead of passing to default logical interface */
 	IF_FL_MAX = (int)(1U << 31U)
 } pfe_ct_if_flags_t;
 
@@ -724,6 +724,15 @@ typedef struct __attribute__ (( packed, aligned (4) ))
 } pfe_ct_pe_misc_control_t;
 
 /**
+	@brief Miscellaneous config between host and PE
+*/
+typedef struct __attribute__ (( packed, aligned (4) ))
+{
+	/*	Timeout of mac aging algorithm of l2 bridge in seconds*/
+	uint16_t l2_mac_aging_timeout;
+} pfe_ct_misc_config_t;
+
+/**
  * @brief Statistics gathered for each classification algorithm
  * @details NULL pointer means that given statistics are no available
  */
@@ -866,6 +875,8 @@ typedef struct __attribute__((packed, aligned(4)))
 	pfe_ct_version_t version;
 	/*	Misc. control  */
 	PFE_PTR(pfe_ct_pe_misc_control_t) pe_misc_control;
+	/*	Misc. config  */
+	PFE_PTR(pfe_ct_misc_config_t) misc_config;
 	/*	Errors reported by the FW */
 	PFE_PTR(pfe_ct_error_record_t) error_record;
 	/*	FW state */
@@ -874,8 +885,6 @@ typedef struct __attribute__((packed, aligned(4)))
 	uint32_t measurement_count;
 	/*	Performance measurement storages - NULL = none (feature not enabled) */
 	PFE_PTR(pfe_ct_measurement_t) measurements;
-	/*	PE ID */
-	PFE_PTR(uint8_t) pe_id;
 } pfe_ct_common_mmap_t;
 
 /**
@@ -909,14 +918,37 @@ typedef struct __attribute__((packed, aligned(4)))
 	PFE_PTR(pfe_ct_buffer_t) get_buffer;
 } pfe_ct_class_mmap_t;
 
+/**
+ * @brief IPsec state
+ */
+typedef struct  {
+	uint32_t hse_mu;					/* HSE MU to be used */
+	uint32_t hse_mu_chn;				/* HSE MU channel to be used (currently unused) */
+	uint32_t response_ok;				/* HSE_SRV_RSP_OK */
+	uint32_t verify_failed;				/* HSE_SRV_RSP_VERIFY_FAILED */
+	uint32_t ipsec_invalid_data;		/* HSE_SRV_RSP_IPSEC_INVALID_DATA */
+	uint32_t ipsec_replay_detected;		/* HSE_SRV_RSP_IPSEC_REPLAY_DETECTED */
+	uint32_t ipsec_replay_late;			/* HSE_SRV_RSP_IPSEC_REPLAY_LATE */
+	uint32_t ipsec_seqnum_overflow;		/* HSE_SRV_RSP_IPSEC_SEQNUM_OVERFLOW */
+	uint32_t ipsec_ce_drop;				/* HSE_SRV_RSP_IPSEC_CE_DROP */
+	uint32_t ipsec_ttl_exceeded;		/* HSE_SRV_RSP_IPSEC_TTL_EXCEEDED */
+	uint32_t ipsec_valid_dummy_payload;	/* HSE_SRV_RSP_IPSEC_VALID_DUMMY_PAYLOAD */
+	uint32_t ipsec_header_overflow;		/* HSE_SRV_RSP_IPSEC_HEADER_LEN_OVERFLOW */
+	uint32_t ipsec_padding_check_fail;	/* HSE_SRV_RSP_IPSEC_PADDING_CHECK_FAIL */
+	uint32_t handled_error_code;		/* Code of handled error (one of above errors) */
+	uint32_t handled_error_said;		/* SAId of handled error (one of above errors) */
+	uint32_t unhandled_error_code;		/* default case store code */
+	uint32_t unhandled_error_said;		/* default case store code */
+} ipsec_state_t;
 
 /**
  * @brief UTIL PE memory map representation type shared between host and PFE
  */
 typedef struct __attribute__((packed, aligned(4)))
 {
-	/*	Common part for all PE types - must be 1st in the structure */
+	/*  Common part for all PE types - must be 1st in the structure */
 	pfe_ct_common_mmap_t common;
+	PFE_PTR(ipsec_state_t) ipsec_state;
 } pfe_ct_util_mmap_t;
 
 typedef union __attribute__((packed, aligned(4)))
@@ -1026,7 +1058,7 @@ ct_assert(sizeof(pfe_ct_hif_tx_flags_t) == sizeof(uint8_t));
 /**
  * @brief	HIF TX packet header
  */
-typedef struct __attribute__((aligned))
+typedef struct __attribute__((packed))
 {
 	/*	TX flags */
 	pfe_ct_hif_tx_flags_t flags;
@@ -1075,7 +1107,7 @@ typedef struct __attribute__((packed))
  */
 typedef struct __attribute__((packed))
 {
-	uint8_t reserved[24U];
+	uint8_t reserved[16U];
 } pfe_ct_post_cls_hdr_t;
 
 /**
@@ -1218,11 +1250,11 @@ typedef struct __attribute__((packed, aligned(4))) pfe_ct_rtable_entry_tag
 	/*	---------- 6x8 byte boundary ---------- */
 
 	/*	*/
+	/*	Information updated by the Classifier */
+	pfe_rtable_entry_status_t status;
 	uint8_t entry_state;
 	/*	Egress physical interface ID */
 	pfe_ct_phy_if_id_t e_phy_if;
-	/*	Information updated by the Classifier */
-	pfe_rtable_entry_status_t status;
 	/*	IPv6 flag */
 	uint8_t flag_ipv6;
 	/*	Routing actions */

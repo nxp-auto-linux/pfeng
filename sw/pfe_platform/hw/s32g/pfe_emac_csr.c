@@ -179,7 +179,7 @@ errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,  pfe_emac_sp
 			, base_va + MTL_RXQ0_OPERATION_MODE);
 
 	hal_write32(0U, base_va + MTL_TXQ0_OPERATION_MODE);
-	hal_write32(GIANT_PACKET_SIZE_LIMIT(1518U), base_va + MAC_EXT_CONFIGURATION);
+	hal_write32(GIANT_PACKET_SIZE_LIMIT(1522U), base_va + MAC_EXT_CONFIGURATION);
 
 	hal_write32(0U, base_va + MAC_TIMESTAMP_CONTROL);
 	hal_write32(0U, base_va + MAC_SUB_SECOND_INCREMENT);
@@ -801,7 +801,7 @@ void pfe_emac_cfg_write_addr_slot(addr_t base_va, const pfe_mac_addr_t addr, uin
 
 	hal_write32(top, base_va + MAC_ADDRESS_HIGH(slot));
 	hal_write32(bottom, base_va + MAC_ADDRESS_LOW(slot));
-	oal_time_usleep(10);
+	oal_time_udelay(10);
 	hal_write32(bottom, base_va + MAC_ADDRESS_LOW(slot));
 }
 
@@ -824,14 +824,15 @@ uint32_t pfe_emac_cfg_get_hash(addr_t base_va, const pfe_mac_addr_t addr)
  * @param[in]	hash The hash value
  * @param[in]	en TRUE means ENABLE, FALSE means DISABLE
  */
-void pfe_emac_cfg_set_uni_group(addr_t base_va, uint32_t hash, bool_t en)
+void pfe_emac_cfg_set_hash_group(addr_t base_va, uint32_t hash, bool_t en)
 {
-	uint32_t reg;
+	uint32_t reg, old_reg;
 	uint32_t val = (hash & 0xfc000000U) >> 26U;
 	uint8_t hash_table_idx = ((uint8_t)val & 0x40U) >> 6U;
 	uint8_t pos = ((uint8_t)val & 0x1fU);
 
 	reg = hal_read32(base_va + MAC_HASH_TABLE_REG(hash_table_idx));
+	old_reg = reg;
 
 	if (en)
 	{
@@ -842,21 +843,15 @@ void pfe_emac_cfg_set_uni_group(addr_t base_va, uint32_t hash, bool_t en)
 		reg &= ~((uint32_t)1U << pos);
 	}
 
+	if (reg == old_reg)
+	{
+		return;
+	}
+
 	hal_write32(reg, base_va + MAC_HASH_TABLE_REG(hash_table_idx));
 	/*	Wait at least 4 clock cycles ((G)MII) */
-	oal_time_usleep(10);
+	oal_time_udelay(10);
 	hal_write32(reg, base_va + MAC_HASH_TABLE_REG(hash_table_idx));
-}
-
-/**
- * @brief		Enable/Disable multicast address group defined by 'hash'
- * @param[in]	base_va Base address of MAC register space (virtual)
- * @param[in]	hash The hash value
- * @param[in]	en TRUE means ENABLE, FALSE means DISABLE
- */
-void pfe_emac_cfg_set_multi_group(addr_t base_va, uint32_t hash, bool_t en)
-{
-	pfe_emac_cfg_set_uni_group(base_va, hash, en);
 }
 
 /**
@@ -1359,7 +1354,7 @@ uint32_t pfe_emac_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, 
 	if(verb_level >= 5U)
 	{
 		reg = hal_read32(base_va + RX_OVERSIZE_PACKETS_GOOD);
-		len += oal_util_snprintf(buf + len, size - len, "TX_OSIZE_PACKETS_GOOD              : 0x%x\n", reg);
+		len += oal_util_snprintf(buf + len, size - len, "RX_OSIZE_PACKETS_GOOD              : 0x%x\n", reg);
 		reg = hal_read32(base_va + RX_UNDERSIZE_PACKETS_GOOD);
 		len += oal_util_snprintf(buf + len, size - len, "RX_UNDERSIZE_PACKETS_GOOD          : 0x%x\n", reg);
 	}

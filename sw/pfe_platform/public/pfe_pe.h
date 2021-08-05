@@ -31,21 +31,20 @@ void pfe_pe_memcpy_from_imem_to_host_32(pfe_pe_t *pe, void *dst_ptr, addr_t src_
 void pfe_pe_dmem_memset(pfe_pe_t *pe, uint8_t val, addr_t addr, uint32_t len);
 void pfe_pe_imem_memset(pfe_pe_t *pe, uint8_t val, addr_t addr, uint32_t len);
 errno_t pfe_pe_get_fw_feature_entry(pfe_pe_t *pe, uint32_t id, pfe_ct_feature_desc_t **entry);
-errno_t pfe_pe_get_pe_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_pe_stats_t *stats);
-errno_t pfe_pe_get_classify_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_classify_stats_t *stats);
-errno_t pfe_pe_get_class_algo_stats(pfe_pe_t *pe, uint32_t addr, pfe_ct_class_algo_stats_t *stats);
+errno_t pfe_pe_get_pe_stats_nolock(pfe_pe_t *pe, uint32_t addr, pfe_ct_pe_stats_t *stats);
+errno_t pfe_pe_get_classify_stats_nolock(pfe_pe_t *pe, uint32_t addr, pfe_ct_classify_stats_t *stats);
+errno_t pfe_pe_get_class_algo_stats_nolock(pfe_pe_t *pe, uint32_t addr, pfe_ct_class_algo_stats_t *stats);
 uint32_t pfe_pe_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
+pfe_ct_pe_sw_state_t pfe_pe_get_fw_state(pfe_pe_t *pe);
 uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 void pfe_pe_destroy(pfe_pe_t *pe);
 errno_t pfe_pe_check_mmap(const pfe_pe_t *pe);
-errno_t pfe_pe_get_fw_errors(pfe_pe_t *pe);
-errno_t pfe_pe_get_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf);
-errno_t pfe_pe_put_data(pfe_pe_t *pe, pfe_ct_buffer_t *buf);
+errno_t pfe_pe_get_fw_errors_nolock(pfe_pe_t *pe);
+errno_t pfe_pe_get_data_nolock(pfe_pe_t *pe, pfe_ct_buffer_t *buf);
+errno_t pfe_pe_put_data_nolock(pfe_pe_t *pe, pfe_ct_buffer_t *buf);
 errno_t pfe_pe_mem_lock(pfe_pe_t *pe);
 errno_t pfe_pe_mem_unlock(pfe_pe_t *pe);
 errno_t pfe_pe_lock(pfe_pe_t *pe);
-void pfe_pe_memcpy_from_dmem_to_host_32_nolock(pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len);
-void pfe_pe_memcpy_from_host_to_dmem_32_nolock(pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len);
 errno_t pfe_pe_unlock(pfe_pe_t *pe);
 char *pfe_pe_get_fw_feature_str_base(const pfe_pe_t *pe);
 

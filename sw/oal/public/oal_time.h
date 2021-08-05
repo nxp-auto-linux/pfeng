@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -36,6 +36,10 @@ void oal_time_usleep(uint32_t usec);
  * @brief		Suspend a thread for a given number of milliseconds
  * @param[in]	msec The number of milliseconds that you want the process to sleep for
  */
+void oal_time_msleep(uint32_t msec);
+
+void oal_time_udelay(uint32_t usec);
+
 void oal_time_mdelay(uint32_t msec);
 
 #endif /* PUBLIC_OAL_TIME_H_ */

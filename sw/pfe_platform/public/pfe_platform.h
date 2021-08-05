@@ -77,6 +77,7 @@ typedef struct
 	pfe_ct_phy_if_id_t local_hif; /* ID of the local interface */
 	uint32_t rtable_hash_size;	/* Size (number of entries) of hash area within routing table */
 	uint32_t rtable_collision_size;	/* Size (number of entries) of collision area within routing table */
+	uint16_t vlan_id;	/* VLAN ID used for L2 Bridge configuration */
 } pfe_platform_config_t;
 
 typedef struct

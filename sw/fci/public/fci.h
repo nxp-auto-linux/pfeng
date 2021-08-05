@@ -33,7 +33,7 @@ typedef struct
 /**
  * @brief	FCI instance type
  */
-typedef struct __fci_tag fci_t;
+typedef struct fci_tag fci_t;
 
 errno_t fci_init(fci_init_info_t *info, const char_t *const identifier);
 void fci_fini(void);

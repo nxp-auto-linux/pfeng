@@ -65,7 +65,7 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface);
 errno_t pfe_phy_if_allmulti_enable(pfe_phy_if_t *iface);
 errno_t pfe_phy_if_allmulti_disable(pfe_phy_if_t *iface);
 errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
-errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr);
+errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 pfe_mac_db_t *pfe_phy_if_get_mac_db(const pfe_phy_if_t *iface);
 errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr);
 errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);

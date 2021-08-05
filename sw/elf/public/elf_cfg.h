@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -87,7 +87,9 @@
 * @def      ELF_CFG_ELF64_SUPPORTED
 * @brief    Configures whether 64-bit ELF format support shall be built.
 */
-#define ELF_CFG_ELF64_SUPPORTED TRUE
+#ifndef ELF_CFG_ELF64_SUPPORTED
+#define ELF_CFG_ELF64_SUPPORTED FALSE
+#endif
 
 /**
 * @def      ELF_CFG_SECTION_PRINT_ENABLED

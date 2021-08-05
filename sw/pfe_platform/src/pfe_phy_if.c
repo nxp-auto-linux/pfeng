@@ -58,7 +58,6 @@ static errno_t pfe_phy_if_write_to_class_nostats(const pfe_phy_if_t *iface, pfe_
 static errno_t pfe_phy_if_write_to_class(const pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if);
 static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_log_if_t *log_if);
 static bool_t pfe_phy_if_has_enabled_log_if_nolock(const pfe_phy_if_t *iface);
-static bool_t pfe_phy_if_has_promisc_log_if_nolock(const pfe_phy_if_t *iface);
 static bool_t pfe_phy_if_has_loopback_log_if_nolock(const pfe_phy_if_t *iface);
 static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface);
 static errno_t pfe_phy_if_set_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag);
@@ -84,7 +83,7 @@ static errno_t pfe_phy_if_write_to_class_nostats(const pfe_phy_if_t *iface, pfe_
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/* Be sure that phy_stats are at correct place */
-	ct_assert((sizeof(pfe_ct_phy_if_t) - sizeof(pfe_ct_phy_if_stats_t)) == offsetof(pfe_ct_phy_if_t, phy_stats));
+	ct_assert_offsetof((sizeof(pfe_ct_phy_if_t) - sizeof(pfe_ct_phy_if_stats_t)) == offsetof(pfe_ct_phy_if_t, phy_stats));
 
 	return pfe_class_write_dmem(iface->class, -1, iface->dmem_base, (void *)class_if,
 								sizeof(pfe_ct_phy_if_t) - sizeof(pfe_ct_phy_if_stats_t));
@@ -218,7 +217,7 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 		iface->phy_if_class.id = id;
 		iface->phy_if_class.block_state = IF_BS_FORWARDING;
 		iface->phy_if_class.mirror = PFE_PHY_IF_ID_INVALID;
-		iface->phy_if_class.flags = (pfe_ct_if_flags_t)oal_htonl(IF_FL_ALLOW_Q_IN_Q|IF_FL_FF_ALL_TCP);
+		iface->phy_if_class.flags = (pfe_ct_if_flags_t)oal_htonl(IF_FL_ALLOW_Q_IN_Q|IF_FL_FF_ALL_TCP|IF_FL_ENABLED);
 
 		/* Be sure that statistics are zeroed (endianness doesn't mater for this) */
 		iface->phy_if_class.phy_stats.ingress	= 0;
@@ -525,32 +524,6 @@ static bool_t pfe_phy_if_has_enabled_log_if_nolock(const pfe_phy_if_t *iface)
 	{
 		entry = LLIST_Data(curItem, pfe_phy_if_list_entry_t, iterator);
 		if (TRUE == pfe_log_if_is_enabled(entry->log_if))
-		{
-			return TRUE;
-		}
-	}
-
-	return FALSE;
-}
-
-static bool_t pfe_phy_if_has_promisc_log_if_nolock(const pfe_phy_if_t *iface)
-{
-	LLIST_t *curItem;
-	const pfe_phy_if_list_entry_t *entry;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	LLIST_ForEach(curItem, &iface->log_ifs)
-	{
-		entry = LLIST_Data(curItem, pfe_phy_if_list_entry_t, iterator);
-		if ((TRUE == pfe_log_if_is_enabled(entry->log_if))
-				&& (TRUE == pfe_log_if_is_promisc(entry->log_if)))
 		{
 			return TRUE;
 		}
@@ -1685,7 +1658,7 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 
 	/*      Enable instance loopback mode. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
-	iface->phy_if_class.flags |= IF_FL_LOOPBACK;
+	iface->phy_if_class.flags |= oal_htonl(IF_FL_LOOPBACK);
 	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
@@ -1772,7 +1745,7 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 
 	/*      Disable instance loopback mode. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
-	iface->phy_if_class.flags &= ~IF_FL_LOOPBACK;
+	iface->phy_if_class.flags &= (pfe_ct_if_flags_t)oal_htonl(~IF_FL_LOOPBACK);
 	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
@@ -1908,24 +1881,6 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	/*
-		Go through all associated logical interfaces and search
-		for promiscuous ones. If there is some enabled promiscuous
-		logical interface, don't disable promiscuous mode on the
-		physical one.
-	*/
-	if (TRUE == pfe_phy_if_has_promisc_log_if_nolock(iface))
-	{
-		NXP_LOG_INFO("%s primiscuous mode not disabled since contains promiscuous logical interface(s)\n", iface->name);
-
-		if (EOK != oal_mutex_unlock(&iface->lock))
-		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
-		}
-
-		return EOK;
-	}
-
 	/*	Disable instance promiscuous mode. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
 	iface->phy_if_class.flags &= (pfe_ct_if_flags_t)oal_htonl(~IF_FL_PROMISC);
@@ -2002,9 +1957,9 @@ errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	/*	Enable instance loadbalance mode. Backup flags and write the changes. */
+	/*	Enable instance load balance mode. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
-	iface->phy_if_class.flags |= IF_FL_LOAD_BALANCE;
+	iface->phy_if_class.flags |= oal_htonl(IF_FL_LOAD_BALANCE);
 	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
@@ -2054,7 +2009,7 @@ errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
 
 	/*	Disable instance loadbalance mode. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
-	iface->phy_if_class.flags &= ~IF_FL_LOAD_BALANCE;
+	iface->phy_if_class.flags &= (pfe_ct_if_flags_t)oal_htonl(~IF_FL_LOAD_BALANCE);
 	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
@@ -2377,6 +2332,11 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 				if (EOK != ret)
 				{
 					NXP_LOG_ERROR("Unable to add MAC address: %d\n", ret);
+					/* Delete the MAC address from database */
+					ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
+					if (EOK != ret) {
+						NXP_LOG_ERROR("Unable to delete MAC address: %d\n", ret);
+					}
 					ret = ENOEXEC;
 				}
 			}
@@ -2410,11 +2370,12 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
  * @brief		Delete MAC address
  * @param[in]	iface The interface instance
  * @param[in]	addr The MAC address to delete
+ * @param[in]	owner The identification of driver instance
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  * @retval		ENOENT Address not found
  */
-errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr)
+errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
 {
 	errno_t ret = EOK;
 
@@ -2441,14 +2402,14 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr)
 	{
 		if (PFE_PHY_IF_EMAC == iface->type)
 		{
-			ret = pfe_mac_db_del_addr(iface->mac_db, addr);
+			ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
 			if(EOK != ret)
 			{
 				NXP_LOG_WARNING("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
 			}
 			else
 			{
-				ret = pfe_emac_del_addr(iface->port.emac, addr);
+				ret = pfe_emac_del_addr(iface->port.emac, addr, owner);
 				if (EOK != ret)
 				{
 					NXP_LOG_ERROR("Unable to del MAC address: %d\n", ret);
@@ -2537,7 +2498,7 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 			ret = pfe_mac_db_get_first_addr(iface->mac_db, MAC_DB_CRIT_ALL, PFE_TYPE_ANY, PFE_CFG_LOCAL_IF, addr);
 			if(EOK != ret)
 			{
-				NXP_LOG_WARNING("unable to get MAC address: %d\n", ret);
+				NXP_LOG_WARNING("%s: Unable to get MAC address: %d\n", iface->name, ret);
 			}
 		}
 		else if (PFE_PHY_IF_HIF == iface->type)

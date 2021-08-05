@@ -297,8 +297,7 @@ errno_t pfe_emac_cfg_get_link_config(addr_t base_va, pfe_emac_speed_t *speed, pf
 errno_t pfe_emac_cfg_get_link_status(addr_t base_va, pfe_emac_link_speed_t *link_speed, pfe_emac_duplex_t *duplex, bool_t *link);
 void pfe_emac_cfg_write_addr_slot(addr_t base_va, const pfe_mac_addr_t addr, uint8_t slot);
 uint32_t pfe_emac_cfg_get_hash(addr_t base_va, const pfe_mac_addr_t addr);
-void pfe_emac_cfg_set_uni_group(addr_t base_va, uint32_t hash, bool_t en);
-void pfe_emac_cfg_set_multi_group(addr_t base_va, uint32_t hash, bool_t en);
+void pfe_emac_cfg_set_hash_group(addr_t base_va, uint32_t hash, bool_t en);
 void pfe_emac_cfg_set_loopback(addr_t base_va, bool_t en);
 void pfe_emac_cfg_set_promisc_mode(addr_t base_va, bool_t en);
 void pfe_emac_cfg_set_allmulti_mode(addr_t base_va, bool_t en);

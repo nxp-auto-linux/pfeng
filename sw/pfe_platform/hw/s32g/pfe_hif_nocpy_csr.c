@@ -33,7 +33,7 @@
  * 			then user must trigger the HIF to fetch next BD explicitly by
  * 			pfe_hif_nocpy_rx_dma_start() and pfe_hif_nocpy_tx_dma_start().
  */
-#define	PFE_HIF_NOCPY_CFG_USE_BD_POLLING	FALSE
+#define	PFE_HIF_NOCPY_CFG_USE_BD_POLLING	TRUE
 
 typedef struct
 {
@@ -231,6 +231,9 @@ void pfe_hif_nocpy_cfg_tx_enable(addr_t base_va)
 
 	regval = hal_read32(base_va + HIF_NOCPY_TX_CTRL);
 	regval |= HIF_CTRL_DMA_EN;
+#if (TRUE == PFE_HIF_NOCPY_CFG_USE_BD_POLLING)
+	regval |= HIF_CTRL_BDP_POLL_CTRL_EN;
+#endif
 	hal_write32(regval, base_va + HIF_NOCPY_TX_CTRL);
 
 	pfe_hif_nocpy_cfg_tx_irq_unmask(base_va);
@@ -262,6 +265,9 @@ void pfe_hif_nocpy_cfg_rx_enable(addr_t base_va)
 
 	regval = hal_read32(base_va + HIF_NOCPY_RX_CTRL);
 	regval |= HIF_CTRL_DMA_EN;
+#if (TRUE == PFE_HIF_NOCPY_CFG_USE_BD_POLLING)
+	regval |= HIF_CTRL_BDP_POLL_CTRL_EN;
+#endif
 	hal_write32(regval, base_va + HIF_NOCPY_RX_CTRL);
 
 	pfe_hif_nocpy_cfg_rx_irq_unmask(base_va);
@@ -278,7 +284,6 @@ void pfe_hif_nocpy_cfg_rx_enable(addr_t base_va)
  */
 void pfe_hif_nocpy_cfg_rx_disable(addr_t base_va)
 {
-
 	hal_write32(0U, base_va + HIF_NOCPY_RX_CTRL);
 
 	pfe_hif_nocpy_cfg_rx_irq_mask(base_va);
@@ -297,6 +302,8 @@ void pfe_hif_nocpy_cfg_rx_dma_start(addr_t base_va)
 	regval = hal_read32(base_va + HIF_NOCPY_RX_CTRL);
 	regval |= HIF_CTRL_BDP_CH_START_WSTB;
 	hal_write32(regval, base_va + HIF_NOCPY_RX_CTRL);
+#else
+    (void)base_va;
 #endif /* PFE_HIF_NOCPY_CFG_USE_BD_POLLING */
 }
 
@@ -313,6 +320,8 @@ void pfe_hif_nocpy_cfg_tx_dma_start(addr_t base_va)
 	regval = hal_read32(base_va + HIF_NOCPY_TX_CTRL);
 	regval |= HIF_CTRL_BDP_CH_START_WSTB;
 	hal_write32(regval, base_va + HIF_NOCPY_TX_CTRL);
+#else
+    (void)base_va;
 #endif /* PFE_HIF_NOCPY_CFG_USE_BD_POLLING */
 }
 
@@ -456,11 +465,35 @@ bool_t pfe_hif_nocpy_cfg_is_tx_dma_active(addr_t base_va)
  */
 uint32_t pfe_hif_nocpy_chnl_cfg_get_text_stat(addr_t base_va, const char_t *buf, uint32_t size, uint8_t verb_level)
 {
-    (void)base_va;
-    (void)buf;
-    (void)size;
-    (void)verb_level;
+	(void)base_va;
+	(void)buf;
+	(void)size;
+	(void)verb_level;
 	return 0U;
+}
+
+/**
+ * @brief		Get number of transmitted packets
+ * @param[in]	base_va Base address of channel register space (virtual)
+ * @return		Number of transmitted packets
+ */
+uint32_t pfe_hif_nocpy_cfg_get_tx_cnt(addr_t base_va)
+{
+	(void)base_va;
+	NXP_LOG_WARNING("HIF NOCPY does not provide TX packet counter\n");
+	return 0xffffffffU;
+}
+
+/**
+ * @brief		Get number of received packets
+ * @param[in]	base_va Base address of channel register space (virtual)
+ * @return		Number of received packets
+ */
+uint32_t pfe_hif_nocpy_cfg_get_rx_cnt(addr_t base_va)
+{
+	(void)base_va;
+	NXP_LOG_WARNING("HIF NOCPY does not provide RX packet counter\n");
+	return 0xffffffffU;
 }
 
 /**

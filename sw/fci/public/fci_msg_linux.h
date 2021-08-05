@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -37,13 +37,8 @@ typedef struct
 		{
 			uint32_t port_id;								/*!< Node identifier (port ID) */
 		} msg_client_unregister;
-
-		struct
-		{
-			uint32_t code;									/*!< Message code */
-			uint32_t length;								/*!< Message length */
-			uint8_t payload[FCI_CFG_MAX_CMD_PAYLOAD_LEN];	/*!< Message payload */
-		} msg_cmd;
+		
+		fci_msg_cmd_t msg_cmd;
 	};
 
 	/*	FCI internal storage */

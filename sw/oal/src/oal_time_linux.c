@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -37,9 +37,19 @@ void oal_time_usleep(uint32_t usec)
 		(void)msleep_interruptible(usec / MSEC);
 }
 
-void oal_time_mdelay(uint32_t msec)
+void oal_time_msleep(uint32_t msec)
 {
 	oal_time_usleep(msec * MSEC);
+}
+
+void oal_time_udelay(uint32_t usec)
+{
+	udelay(usec);
+}
+
+void oal_time_mdelay(uint32_t msec)
+{
+	mdelay(msec);
 }
 
 /** @}*/

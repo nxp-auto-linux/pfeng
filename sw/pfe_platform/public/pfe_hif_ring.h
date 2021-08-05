@@ -10,10 +10,6 @@
 #ifndef PUBLIC_PFE_HIF_RING_H_
 #define PUBLIC_PFE_HIF_RING_H_
 
-#if defined(PFE_CFG_HIF_NOCPY_DIRECT)
-#include "pfe_ct.h" /* pfe_ct_phy_if_id_t */
-#endif /* PFE_CFG_HIF_NOCPY_DIRECT */
-
 typedef struct pfe_hif_ring_tag pfe_hif_ring_t;
 
 pfe_hif_ring_t *pfe_hif_ring_create(bool_t rx, uint16_t seqnum, bool_t nocpy) __attribute__((cold));
@@ -34,8 +30,5 @@ bool_t spfe_hif_ring_is_below_wm(const pfe_hif_ring_t *ring) __attribute__((pure
 void pfe_hif_ring_invalidate(const pfe_hif_ring_t *ring) __attribute__((cold));
 uint32_t pfe_hif_ring_get_fill_level(const pfe_hif_ring_t *ring) __attribute__((pure, hot));
 uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name, char_t *buf, uint32_t size, uint8_t verb_level);
-#if defined(PFE_CFG_HIF_NOCPY_DIRECT)
-void pfe_hif_ring_set_egress_if(pfe_hif_ring_t *ring, pfe_ct_phy_if_id_t id) __attribute__((hot));
-#endif /* PFE_CFG_HIF_NOCPY_DIRECT */
 
 #endif /* PUBLIC_PFE_HIF_RING_H_ */

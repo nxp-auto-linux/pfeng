@@ -86,7 +86,7 @@ static errno_t pfe_log_if_write_to_class_nostats(const pfe_log_if_t *iface, pfe_
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/* Be sure that class_stats are at correct place */
-	ct_assert((sizeof(pfe_ct_log_if_t) - sizeof(pfe_ct_class_algo_stats_t)) == offsetof(pfe_ct_log_if_t, class_stats));
+	ct_assert_offsetof((sizeof(pfe_ct_log_if_t) - sizeof(pfe_ct_class_algo_stats_t)) == offsetof(pfe_ct_log_if_t, class_stats));
 
 	return pfe_class_write_dmem(iface->class, -1, iface->dmem_base, (void *)class_if,
 							    sizeof(pfe_ct_log_if_t) - sizeof(pfe_ct_class_algo_stats_t));
@@ -963,6 +963,11 @@ errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 		if (EOK != pfe_phy_if_add_mac_addr(iface->parent, addr, owner))
 		{
 			NXP_LOG_ERROR("Could not add MAC address (%s, parent: %s)\n", iface->name, pfe_phy_if_get_name(iface->parent));
+			/* Delete the MAC address from database */
+			ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
+			if (EOK != ret) {
+				NXP_LOG_ERROR("Unable to delete MAC address: %d\n", ret);
+			}
 			ret = ENOEXEC;
 		}
 	}
@@ -979,12 +984,13 @@ errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
  * @brief		Delete MAC address
  * @param[in]	iface The interface instance
  * @param[in]	addr The MAC address to delete
+ * @param[in]	owner The identification of driver instance
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  * @retval		ENOENT MAC address not found in local database
  * @retval		ENOEXEC Command failed
  */
-errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr)
+errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
 {
 	errno_t ret = EOK;
 
@@ -1001,14 +1007,14 @@ errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	ret = pfe_mac_db_del_addr(iface->mac_db, addr);
+	ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
 	if(EOK != ret)
 	{
 		NXP_LOG_WARNING("Unable to remove MAC address from log_if MAC database: %d\n", ret);
 	}
 	else
 	{
-		ret = pfe_phy_if_del_mac_addr(iface->parent, addr);
+		ret = pfe_phy_if_del_mac_addr(iface->parent, addr, owner);
 		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("Unable to del MAC address: %d\n", ret);
@@ -1709,32 +1715,6 @@ errno_t pfe_log_if_promisc_enable(pfe_log_if_t *iface)
 		NXP_LOG_DEBUG("mutex unlock failed\n");
 	}
 
-	if (EOK == ret)
-	{
-		/*	Enable the underlying physical interface */
-		ret = pfe_phy_if_promisc_enable(iface->parent);
-		if (EOK != ret)
-		{
-			/*	Revert */
-			if (EOK != oal_mutex_lock(&iface->lock))
-			{
-				NXP_LOG_DEBUG("mutex lock failed\n");
-			}
-
-			iface->log_if_class.flags = tmp;
-			ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
-			if (EOK != ret)
-			{
-				NXP_LOG_ERROR("Could not revert DMEM change\n");
-			}
-
-			if (EOK != oal_mutex_unlock(&iface->lock))
-			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
-			}
-		}
-	}
-
 	return ret;
 }
 
@@ -1775,32 +1755,6 @@ errno_t pfe_log_if_promisc_disable(pfe_log_if_t *iface)
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
 		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-
-	if (EOK == ret)
-	{
-		/*	Disable the underlying physical interface */
-		ret = pfe_phy_if_promisc_disable(iface->parent);
-		if (EOK != ret)
-		{
-			/*	Revert */
-			if (EOK != oal_mutex_lock(&iface->lock))
-			{
-				NXP_LOG_DEBUG("mutex lock failed\n");
-			}
-
-			iface->log_if_class.flags = tmp;
-			ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
-			if (EOK != ret)
-			{
-				NXP_LOG_ERROR("Could not revert DMEM change\n");
-			}
-
-			if (EOK != oal_mutex_unlock(&iface->lock))
-			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
-			}
-		}
 	}
 
 	return ret;

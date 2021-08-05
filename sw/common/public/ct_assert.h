@@ -15,13 +15,17 @@
 #define ASSERT_CONCAT_(a, b) a##b
 #define ASSERT_CONCAT(a, b) ASSERT_CONCAT_(a, b)
 
-#ifdef __ghs__ /* AAVB-2386 */
-	/* Dummy implementation with no check to avoid compile error */
-	#define ct_assert(e) enum { ASSERT_CONCAT(precompile_assert_, __COUNTER__) = 1 } 
+#define ct_assert(e) enum { ASSERT_CONCAT(precompile_assert_, __COUNTER__) = 1/(!!(e)) }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+    /* The compiler options for MCAL driver generate errors or warnings when offsetof is used inside of ct_assert.
+    So it is not possible to assert offset of structures at compile time for MCAL driver.
+    This is done at runtime in test case Eth_43_PFE_TC_CT_ASSERT in test suite Eth_43_PFE_TS_017.
+    Therefore ct_assert_offsetof is a dummy implementation on MCAL driver.
+    */
+    #define ct_assert_offsetof(e) enum { ASSERT_CONCAT(precompile_assert_, __COUNTER__) = 1 } 
 #else
-	#define ASSERT_CONCAT_INNER(a, b) a##b
-	#define ASSERT_CONCAT_OUTER(a, b) ASSERT_CONCAT_INNER(a, b)
-	#define ct_assert(e) enum { ASSERT_CONCAT_OUTER(precompile_assert_, __COUNTER__) = 1/(!!(e)) }
-#endif /* __ghs__ */
+    #define ct_assert_offsetof(e) enum { ASSERT_CONCAT(precompile_assert_, __COUNTER__) = 1/(!!(e)) }
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* CT_ASSERT_H */

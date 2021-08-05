@@ -34,7 +34,7 @@
 /**
  * @brief	This is the FCI endpoint representation structure.
  */
-struct __fci_tag
+struct fci_tag
 {
 	fci_core_t *core;
 

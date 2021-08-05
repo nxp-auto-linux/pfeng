@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2020 NXP
+ *  Copyright 2017-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -24,6 +24,8 @@
 #include "oal.h"
 #include "linked_list.h"
 #include "fci_rt_db.h"
+
+#ifdef PFE_CFG_FCI_ENABLE
 
 static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, fci_rt_db_entry_t *entry);
 
@@ -115,6 +117,7 @@ void fci_rt_db_init(fci_rt_db_t *db)
 /**
  * @brief		Add a route to DB
  * @param[in]	db The route DB instance
+ * @param[in]	src_mac Source MAC address
  * @param[in]	dst_mac Destination MAC address
  * @param[in]	iface Name of the output interface
  * @param[in]	id The route ID
@@ -124,14 +127,15 @@ void fci_rt_db_init(fci_rt_db_t *db)
  * @retval		ENOMEM Memory allocation failed
  * @retval		EPERM Attempt to insert already existing entry without 'overwrite' set to 'true'
  */
-errno_t fci_rt_db_add(fci_rt_db_t *db,  pfe_ip_addr_t *dst_ip, pfe_mac_addr_t *dst_mac,
+errno_t fci_rt_db_add(fci_rt_db_t *db,  pfe_ip_addr_t *dst_ip, 
+					pfe_mac_addr_t *src_mac, pfe_mac_addr_t *dst_mac,
 					pfe_phy_if_t *iface, uint32_t id, void *refptr, bool_t overwrite)
 {
 	fci_rt_db_entry_t *new_entry;
 	bool_t is_new = false;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == db) || (NULL == dst_ip) || (NULL == dst_mac) || (NULL == iface)))
+	if (unlikely((NULL == db) || (NULL == dst_ip) || (NULL == src_mac) || (NULL == dst_mac) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -165,6 +169,7 @@ errno_t fci_rt_db_add(fci_rt_db_t *db,  pfe_ip_addr_t *dst_ip, pfe_mac_addr_t *d
 
 	/*	Store values */
 	memcpy(&new_entry->dst_ip, dst_ip, sizeof(pfe_ip_addr_t));
+	memcpy(&new_entry->src_mac, src_mac, sizeof(pfe_mac_addr_t));
 	memcpy(&new_entry->dst_mac, dst_mac, sizeof(pfe_mac_addr_t));
 	new_entry->iface = iface;
 	new_entry->id = id;
@@ -406,4 +411,5 @@ errno_t fci_rt_db_drop_all(fci_rt_db_t *db)
 	return EOK;
 }
 
+#endif /* PFE_CFG_FCI_ENABLE */
 /** @}*/

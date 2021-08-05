@@ -7,15 +7,16 @@
 Required properties:
 - compatible : Should be "fsl,s32g274a-pfeng"
 - reg : Address and length of the register set for the device
+- resets: Specify PFE partition reset
 - interrupts : Should contain all pfeng interrupts but hifs: bmu,upegpt,safety
 - clocks : Should contain at least: pfe_sys, pfe_pe
-- memory-region : Physical address space for PFE buffers, must be in the range 0x00020000 - 0xbfffffff.
+- memory-region : Physical address space for PFE buffers
 		  The following memory regions are required in this exact order:
-		  1) reserved region for the BMU2 buffer pool, starting at physical addr 0x83000000,
+		  1) reserved region for the BMU2 buffer pool, must be in the range 0x00020000 - 0xbfffffff;
 		  "fsl,pfe-bmu2-pool" compatible;
-		  2) reserved region for non-cacheable DMA buffers, starting at physical addr 0x83200000,
+		  2) reserved region for non-cacheable DMA buffers,
 		  "shared-dma-pool" compatible;
-		  3) reserved region for buffer descriptor rings, starting at physical addr 0x83be0000,
+		  3) reserved region for buffer descriptor rings,
 		  "fsl,pfe-bdr-pool" compatible;
 
 Optional properties:
@@ -23,6 +24,7 @@ Optional properties:
 - fsl,fw-class-name : PFE CLASS firmware filename
 - fsl,fw-util-name : PFE UTIL firmware filename
 - fsl,pfeng-master-hif-channel : [slave only] The number of master's HIF channel (0-3)
+- phys : Serdes phys for sgmii interfaces
 
 Required subnode:
 - hif : specifies the PFE HIF channel
@@ -33,7 +35,7 @@ Required properties for 'hif' subnode:
 - compatible : Should be "fsl,pfeng-hif"
 - reg : Small number, indexing the HIF channel
 - interrupts : Should contain HIF channel interrupt
-- fsl,pfeng-hif-mode : Should contain channel mode: "s-cl/s-ch", "s-cl/m-ch"
+- fsl,pfeng-hif-mode : channel mode PFENG_HIF_MODE_EXCLUSIVE/PFENG_HIF_MODE_SHARED
 - fsl,pfeng-ihc : [master/slave only] Annotate for IHC traffic
 
 Required properties for 'emac' subnode:
@@ -55,13 +57,14 @@ Requires properties for 'ethernet' subnode:
 - compatible : Should be "fsl,pfeng-logif"
 - reg : Small number, indexing the network interfaces
 - fsl,pfeng-if-name : Logical interface name visible in the Linux
-- fsl,pfeng-logif-mode : 0 for now
+- fsl,pfeng-logif-mode : PFENG_LOGIF_MODE_TX_INJECT/PFENG_LOGIF_MODE_TX_CLASS/PFENG_LOGIF_MODE_AUX
 - fsl,pfeng-hif-channels : array of phandles of 'hif' nodes
 - fsl,pfeng-emac-link : [master/standalone only] phandle to coresponding 'emac' node
 - fsl,pfeng-emac-id : [slave only] PFE EMAC id (0..2)
 
 Optional properties for 'ethernet' subnode:
 - fsl,pfeng-ihc : [master/slave only] Declares the interface for IHC traffic
+- fsl,pfeng-emac-router : [slave only] switch linked EMAC to ROUTER_OP mode
 - local-mac-address : MAC address
 - phy-handle : phandle to the PHY device connected to this device.
 - fixed-link : Assume a fixed link. See fixed-link.txt in the same directory.
@@ -95,9 +98,9 @@ reserved-memory {
 	};
 };
 
-pfe@46080000 {
+pfe@46000000 {
 	compatible = "fsl,s32g274a-pfeng";
-	pfe: pfe@46080000 {
+	pfe: pfe@46000000 {
 		compatible = "fsl,s32g274a-pfeng";
 		reg = <0x0 0x46000000 0x0 0x1000000>,	 /* PFE controller */
 			  <0x0 0x4007ca00 0x0 0x4>;	 /* S32G274a syscon */
@@ -110,12 +113,22 @@ pfe@46080000 {
 			      <GIC_SPI 196 IRQ_TYPE_EDGE_RISING>,
 			      <GIC_SPI 197 IRQ_TYPE_EDGE_RISING>;
 		interrupt-names = "bmu", "nocpy", "upegpt", "safety";
-		clocks = <&clks S32G274A_SCMI_CLK_PFE_AXI>,
-			 <&clks S32G274A_SCMI_CLK_PFE_PE>;
-		clock-names = "pfe_sys", "pfe_pe";
+		dma-coherent;
+		resets = <&reset S32GEN1_SCMI_RST_PART2>;
+		reset-names = "pfe_part";
+		clocks = <&clks S32G_SCMI_CLK_PFE_AXI>,
+			 <&clks S32G_SCMI_CLK_PFE_PE>,
+			 <&clks S32G_SCMI_CLK_PFE_TS>;
+		clock-names = "pfe_sys", "pfe_pe", "pfe_ts";
 		memory-region = <&pfe_reserved_bmu2>, <&pfe_reserved>, <&pfe_reserved_bdr>;
 		fsl,fw-class-name = "s32g_pfe_class.fw";
 		fsl,fw-util-name = "s32g_pfe_util.fw";
+		phys = <&serdes1 PHY_TYPE_XPCS 0 0>,
+			 <&serdes1 PHY_TYPE_XPCS 1 1>,
+			 <&serdes0 PHY_TYPE_XPCS 1 1>;
+		phy-names = "emac0_xpcs", "emac1_xpcs", "emac2_xpcs";
+		nvmem-cells = <&soc_revision>;
+		nvmem-cell-names = "soc_revision";
 
 		/* PFE_HIF_0 */
 		pfe_hif0: hif@0 {
@@ -125,7 +138,8 @@ pfe@46080000 {
 			status = "disabled";
 			interrupts =  <GIC_SPI 190 IRQ_TYPE_EDGE_RISING>;
 			reg = <0>;
-			fsl,pfeng-hif-mode = "s-cl/s-ch";
+			fsl,pfeng-hif-mode = <PFENG_HIF_MODE_EXCLUSIVE>;
+			fsl,pfeng-ihc;
 		};
 
 		/* PFE_HIF_1 */
@@ -136,7 +150,7 @@ pfe@46080000 {
 			status = "disabled";
 			interrupts =  <GIC_SPI 191 IRQ_TYPE_EDGE_RISING>;
 			reg = <1>;
-			fsl,pfeng-hif-mode = "s-cl/s-ch";
+			fsl,pfeng-hif-mode = <PFENG_HIF_MODE_SHARED>;
 		};
 
 		/* PFE_HIF_2 */
@@ -147,18 +161,7 @@ pfe@46080000 {
 			status = "disabled";
 			interrupts =  <GIC_SPI 192 IRQ_TYPE_EDGE_RISING>;
 			reg = <2>;
-			fsl,pfeng-hif-mode = "s-cl/s-ch";
-		};
-
-		/* PFE_HIF_3 */
-		pfe_hif3: hif@3 {
-			compatible = "fsl,pfeng-hif";
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";
-			interrupts =  <GIC_SPI 193 IRQ_TYPE_EDGE_RISING>;
-			reg = <3>;
-			fsl,pfeng-hif-mode = "s-cl/s-ch";
+			fsl,pfeng-hif-mode = <PFENG_HIF_MODE_EXCLUSIVE>;
 		};
 
 		/* PFE_EMAC_0 */
@@ -168,12 +171,18 @@ pfe@46080000 {
 			#size-cells = <0>;
 			status = "okay";
 			reg = <0>;
-			clocks = <&clks S32G274A_SCMI_CLK_PFE0_TX_SGMII>,
-				 <&clks S32G274A_SCMI_CLK_PFE0_TX_RGMII>,
-				 <&clks S32G274A_SCMI_CLK_PFE0_TX_RMII>,
-				 <&clks S32G274A_SCMI_CLK_PFE0_TX_MII>;
+			clocks = <&clks S32G_SCMI_CLK_PFE0_TX_SGMII>,
+				 <&clks S32G_SCMI_CLK_PFE0_TX_RGMII>,
+				 <&clks S32G_SCMI_CLK_PFE0_TX_RMII>,
+				 <&clks S32G_SCMI_CLK_PFE0_TX_MII>,
+				 <&clks S32G_SCMI_CLK_PFE0_RX_SGMII>,
+				 <&clks S32G_SCMI_CLK_PFE0_RX_RGMII>,
+				 <&clks S32G_SCMI_CLK_PFE0_RX_RMII>,
+				 <&clks S32G_SCMI_CLK_PFE0_RX_MII>;
 			clock-names = "tx_sgmii", "tx_rgmii",
-				      "tx_rmii", "tx_mii";
+				      "tx_rmii", "tx_mii",
+				      "rx_sgmii", "rx_rgmii",
+				      "rx_rmii", "rx_mii";
 			phy-mode = "sgmii";
 
 			/* mdio */
@@ -192,13 +201,19 @@ pfe@46080000 {
 			#size-cells = <0>;
 			status = "okay";
 			reg = <1>;
-			clocks = <&clks S32G274A_SCMI_CLK_PFE1_TX_SGMII>,
-				 <&clks S32G274A_SCMI_CLK_PFE1_TX_RGMII>,
-				 <&clks S32G274A_SCMI_CLK_PFE1_TX_RMII>,
-				 <&clks S32G274A_SCMI_CLK_PFE1_TX_MII>;
+			clocks = <&clks S32G_SCMI_CLK_PFE1_TX_SGMII>,
+				 <&clks S32G_SCMI_CLK_PFE1_TX_RGMII>,
+				 <&clks S32G_SCMI_CLK_PFE1_TX_RMII>,
+				 <&clks S32G_SCMI_CLK_PFE1_TX_MII>,
+				 <&clks S32G_SCMI_CLK_PFE1_RX_SGMII>,
+				 <&clks S32G_SCMI_CLK_PFE1_RX_RGMII>,
+				 <&clks S32G_SCMI_CLK_PFE1_RX_RMII>,
+				 <&clks S32G_SCMI_CLK_PFE1_RX_MII>;
 			clock-names = "tx_sgmii", "tx_rgmii",
-				      "tx_rmii", "tx_mii";
-			phy-mode = "rgmii";
+				      "tx_rmii", "tx_mii",
+				      "rx_sgmii", "rx_rgmii",
+				      "rx_rmii", "rx_mii";
+			phy-mode = "rgmii-id";
 
 			/* mdio */
 			pfe_mdio1: mdio@1 {
@@ -216,13 +231,19 @@ pfe@46080000 {
 			#size-cells = <0>;
 			status = "okay";
 			reg = <2>;
-			clocks = <&clks S32G274A_SCMI_CLK_PFE2_TX_SGMII>,
-				 <&clks S32G274A_SCMI_CLK_PFE2_TX_RGMII>,
-				 <&clks S32G274A_SCMI_CLK_PFE2_TX_RMII>,
-				 <&clks S32G274A_SCMI_CLK_PFE2_TX_MII>;
+			clocks = <&clks S32G_SCMI_CLK_PFE2_TX_SGMII>,
+				 <&clks S32G_SCMI_CLK_PFE2_TX_RGMII>,
+				 <&clks S32G_SCMI_CLK_PFE2_TX_RMII>,
+				 <&clks S32G_SCMI_CLK_PFE2_TX_MII>,
+				 <&clks S32G_SCMI_CLK_PFE2_RX_SGMII>,
+				 <&clks S32G_SCMI_CLK_PFE2_RX_RGMII>,
+				 <&clks S32G_SCMI_CLK_PFE2_RX_RMII>,
+				 <&clks S32G_SCMI_CLK_PFE2_RX_MII>;
 			clock-names = "tx_sgmii", "tx_rgmii",
-				      "tx_rmii", "tx_mii";
-			phy-mode = "rgmii";
+				      "tx_rmii", "tx_mii",
+				      "rx_sgmii", "rx_rgmii",
+				      "rx_rmii", "rx_mii";
+			phy-mode = "rgmii-id";
 
 			/* mdio */
 			pfe_mdio2: mdio@2 {
@@ -241,7 +262,7 @@ pfe@46080000 {
 			status = "disabled";
 			local-mac-address = [ 00 04 9F BE EF 00 ];
 			fsl,pfeng-if-name = "pfe0";
-			fsl,pfeng-logif-mode = <0>;
+			fsl,pfeng-logif-mode = <PFENG_LOGIF_MODE_TX_INJECT>;
 			fsl,pfeng-emac-link = <&pfe_emac0>;
 			fsl,pfeng-hif-channels = <&pfe_hif0>;
 		};
@@ -254,7 +275,7 @@ pfe@46080000 {
 			status = "disabled";
 			local-mac-address = [ 00 04 9F BE EF 01 ];
 			fsl,pfeng-if-name = "pfe1";
-			fsl,pfeng-logif-mode = <0>;
+			fsl,pfeng-logif-mode = <PFENG_LOGIF_MODE_TX_INJECT>;
 			fsl,pfeng-emac-link = <&pfe_emac1>;
 			fsl,pfeng-hif-channels = <&pfe_hif1>;
 		};
@@ -267,9 +288,89 @@ pfe@46080000 {
 			status = "disabled";
 			local-mac-address = [ 00 04 9F BE EF 02 ];
 			fsl,pfeng-if-name = "pfe2";
-			fsl,pfeng-logif-mode = <0>;
+			fsl,pfeng-logif-mode = <PFENG_LOGIF_MODE_TX_INJECT>;
 			fsl,pfeng-emac-link = <&pfe_emac2>;
 			fsl,pfeng-hif-channels = <&pfe_hif2>;
 		};
+
+		/* Logical network interface 'aux0' */
+		pfe_aux0: ethernet@3 {
+			compatible = "fsl,pfeng-logif";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+			local-mac-address = [ 00 04 9F BE EF 80 ];
+			fsl,pfeng-if-name = "aux0";
+			fsl,pfeng-logif-mode = <PFENG_LOGIF_MODE_AUX>;
+			fsl,pfeng-hif-channels = <&pfe_hif1>;
+		};
+
 	};
+};
+
+/* Example of PFE slave driver entry. Requires SLAVE mode driver */
+pfe_slave: pfe_slave@46000000 {
+	compatible = "fsl,s32g274a-pfeng-slave";
+	reg = <0x0 0x46000000 0x0 0x1000000>;	 /* PFE controller */
+	#address-cells = <0x01>;
+	#size-cells = <0x00>;
+	interrupt-parent = <&gic>;
+	dma-coherent;
+	memory-region = <&pfe_reserved_slave>,
+			<&pfe_reserved_bdr_slave>;
+	fsl,pfeng-master-hif-channel = <0>;
+	status = "disabled";
+
+	/* PFE_HIF_3 */
+	pfesl_hif3: hif@3 {
+		compatible = "fsl,pfeng-hif";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+		interrupts = <GIC_SPI 193 IRQ_TYPE_EDGE_RISING>;
+		reg = <3>;
+		fsl,pfeng-hif-mode = <PFENG_HIF_MODE_SHARED>;
+		fsl,pfeng-ihc;
+	};
+
+	/* Logical network interface 'pfe0sl' */
+	pfesl_logif0: ethernet@0 {
+		compatible = "fsl,pfeng-logif";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+		local-mac-address = [ 00 04 9F BE FF 10 ];
+		fsl,pfeng-if-name = "pfe0sl";
+		fsl,pfeng-logif-mode = <PFENG_LOGIF_MODE_TX_INJECT>;
+		fsl,pfeng-emac-id = <0>; /* PFE_EMAC_0 */
+		fsl,pfeng-emac-router;
+		fsl,pfeng-hif-channels = <&pfesl_hif3>;
+	};
+
+	/* Logical network interface 'pfe1sl' */
+	pfesl_logif1: ethernet@1 {
+		compatible = "fsl,pfeng-logif";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+		local-mac-address = [ 00 04 9F BE FF 11 ];
+		fsl,pfeng-if-name = "pfe1sl";
+		fsl,pfeng-logif-mode = <PFENG_LOGIF_MODE_TX_INJECT>;
+		fsl,pfeng-emac-router;
+		fsl,pfeng-emac-id = <1>; /* PFE_EMAC_1 */
+		fsl,pfeng-hif-channels = <&pfesl_hif3>;
+	};
+
+	/* Logical network interface 'aux0sl' */
+	pfesl_aux0: ethernet@11 {
+		compatible = "fsl,pfeng-logif";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+		local-mac-address = [ 00 04 9F BE FF 80 ];
+		fsl,pfeng-if-name = "aux0sl";
+		fsl,pfeng-logif-mode = <PFENG_LOGIF_MODE_AUX>;
+		fsl,pfeng-hif-channels = <&pfesl_hif3>;
+	};
+
 };

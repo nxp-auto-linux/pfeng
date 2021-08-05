@@ -238,7 +238,6 @@ static void pfeng_mac_an_restart(struct phylink_config *config)
 static int s32g_set_rgmii_speed(struct pfeng_netif *netif, unsigned int speed)
 {
 	struct clk *tx_clk = netif->priv->emac[netif->cfg->emac].tx_clk;
-	struct clk *rx_clk = netif->priv->emac[netif->cfg->emac].rx_clk;
 	unsigned long rate = 0;
 
 	switch (speed) {
@@ -260,9 +259,6 @@ static int s32g_set_rgmii_speed(struct pfeng_netif *netif, unsigned int speed)
 		clk_set_rate(tx_clk, rate);
 		netdev_info(netif->netdev, "Set TX clock to %luHz\n", rate);
 	}
-
-	if (rx_clk)
-		clk_set_rate(rx_clk, rate);
 
 	return 0;
 }
@@ -323,7 +319,7 @@ static void pfeng_mac_link_down(struct phylink_config *config, unsigned int mode
 	netif_tx_stop_all_queues(netif->netdev);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,7,0)
 static void pfeng_mac_link_up(struct phylink_config *config,  struct phy_device *phy,
 			      unsigned int mode, phy_interface_t interface, int speed,
 			      int duplex, bool tx_pause, bool rx_pause)
@@ -333,7 +329,7 @@ static void pfeng_mac_link_up(struct phylink_config *config,  struct phy_device 
 	/* Enable Rx and Tx */
 	netif_tx_wake_all_queues(netif->netdev);
 }
-#else	/* kernel 5.4 */
+#else
 static void pfeng_mac_link_up(struct phylink_config *config, unsigned int mode,
 			      phy_interface_t interface, struct phy_device *phy)
 {

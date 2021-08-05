@@ -53,6 +53,8 @@
 #define UTIL_BUS_ACCESS_RDATA		(CBUS_UTIL_CSR_BASE_ADDR + 0x230U)
 
 #define UTIL_INQ_AFULL_THRES		(CBUS_UTIL_CSR_BASE_ADDR + 0x234U)
+#define UTIL_UPE_GP_REG_ADDR		(CBUS_UTIL_CSR_BASE_ADDR + 0x238U)
+#define UTIL_HOST_GP_REG_ADDR		(CBUS_UTIL_CSR_BASE_ADDR + 0x23CU)
 
 #define UTIL_PE_IBUS_ACCESS_PMEM	(1UL << 17U)
 #define UTIL_PE_IBUS_ACCESS_DMEM	(1UL << 18U)
@@ -60,5 +62,6 @@
 #define UTIL_PE_IBUS_PMEM_BASE(i)	((((i) & 0x3) << 20U) | UTIL_PE_IBUS_ACCESS_PMEM)
 
 uint32_t pfe_util_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+errno_t pfe_util_cfg_isr(addr_t base_va);
 
 #endif /* UTIL_CSR_H_ */

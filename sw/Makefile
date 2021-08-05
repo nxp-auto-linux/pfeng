@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2020 NXP
+#  Copyright 2018-2021 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -34,3 +34,8 @@ clean: $(PFE_DRIVER).qp_clean $(addsuffix .qp_clean,$(PFE_RELATIVES))
 %.qp_clean: $(basename %.qp_clean)
 	cd $(basename $@)
 	$(MAKE) clean
+
+# Return configured compiler version
+.PHONY: compiler_version
+compiler_version:
+	@echo "$(COMPILER_NAME), $(COMPILER_VERSION)"

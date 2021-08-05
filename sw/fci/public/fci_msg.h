@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -18,6 +18,8 @@
 #ifndef SRC_FCI_MSG_H_
 #define SRC_FCI_MSG_H_
 
+#include "ct_assert.h"
+
 /**
  * @brief	Maximum size of FCI IPC message payload
  * @see		fci_msg_t
@@ -35,8 +37,21 @@ typedef enum
 	FCI_MSG_CLIENT_UNREGISTER,
 	FCI_MSG_CMD,
 	FCI_MSG_CORE_CLIENT_BROADCAST,
-	FCI_MSG_TYPE_MAX
+	/* Ensure proper size */
+	FCI_MSG_TYPE_MAX = (int)(1U << 31U)
 } msg_type_t;
+
+ct_assert(sizeof(msg_type_t) == sizeof(uint32_t));
+
+/**
+ * @brief	FCI message command type
+ */
+typedef struct
+{
+	uint32_t code;									/*!< Message code */
+	uint32_t length;								/*!< Message length */
+	uint8_t payload[FCI_CFG_MAX_CMD_PAYLOAD_LEN];	/*!< Message payload */
+} fci_msg_cmd_t;
 
 /*
  * QNX

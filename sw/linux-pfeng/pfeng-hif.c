@@ -13,14 +13,16 @@
 #include "pfe_hif_drv.h"
 
 #include "pfeng.h"
+#define PFE_DEFAULT_TX_WORK (PFE_CFG_HIF_RING_LENGTH >> 1)
 
 int pfeng_hif_chnl_stop(struct pfeng_hif_chnl *chnl)
 {
 	/* Disable channel interrupt */
 	pfe_hif_chnl_irq_mask(chnl->priv);
 
-	/* Disable the channel RX interrupts */
+	/* Disable the channel RX/TX interrupts */
 	pfe_hif_chnl_rx_irq_mask(chnl->priv);
+	pfe_hif_chnl_tx_irq_mask(chnl->priv);
 
 	/* Disable RX */
 	pfe_hif_chnl_rx_disable(chnl->priv);
@@ -56,8 +58,9 @@ int pfeng_hif_chnl_start(struct pfeng_hif_chnl *chnl)
 		return -EINVAL;
 	}
 
-	/* Enable the channel RX interrupts */
+	/* Enable the channel RX/TX interrupts */
 	pfe_hif_chnl_rx_irq_unmask(chnl->priv);
+	pfe_hif_chnl_tx_irq_unmask(chnl->priv);
 
 	chnl->status = PFENG_HIF_STATUS_RUNNING;
 
@@ -67,18 +70,19 @@ int pfeng_hif_chnl_start(struct pfeng_hif_chnl *chnl)
 }
 
 /**
- * @brief		HIF channel RX ISR
- * @details		Will be called by HIF channel instance when RX event has occurred
- * @note		To see which context the ISR is running in please see the
+ * @brief		HIF channel ISR
+ * @details		Will be called by HIF channel instance when an event has occurred
+ * @note		To see which context the ISR is running in refer to the
  * 				pfe_hif_chnl module implementation.
  */
-static void pfeng_hif_drv_chnl_rx_isr(void *arg)
+static void pfeng_hif_drv_chnl_isr(void *arg)
 {
         struct pfeng_hif_chnl *chnl = (struct pfeng_hif_chnl *)arg;
 
 	if(napi_schedule_prep(&chnl->napi)) {
 
 		pfe_hif_chnl_rx_irq_mask(chnl->priv);
+		pfe_hif_chnl_tx_irq_mask(chnl->priv);
 
 		__napi_schedule_irqoff(&chnl->napi);
 	}
@@ -104,6 +108,60 @@ static irqreturn_t pfeng_hif_chnl_direct_isr(int irq, void *arg)
 
 	return IRQ_HANDLED;
 }
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+
+static int pfe_hif_drv_ihc_put_pkt(pfe_hif_drv_client_t *client, void *data, uint32_t len, void *ref)
+{
+	struct pfeng_hif_chnl *chnl = container_of(client, struct pfeng_hif_chnl, ihc_client);
+	pfe_ct_hif_rx_hdr_t *hif_hdr = data;
+	pfe_hif_pkt_t *rx_metadata;
+
+	/*	Create the RX metadata */
+	rx_metadata = oal_mm_malloc(sizeof(*rx_metadata));
+	if (unlikely(!rx_metadata))
+		return -ENOMEM;
+
+	memset(rx_metadata, 0, sizeof(*rx_metadata));
+
+	rx_metadata->client = client;
+	rx_metadata->data = (addr_t)data;
+	rx_metadata->len = len;
+
+	rx_metadata->flags.specific.rx_flags = hif_hdr->flags;
+	rx_metadata->i_phy_if = hif_hdr->i_phy_if;
+	rx_metadata->ref_ptr = ref;
+
+	if (unlikely(EOK != fifo_put(client->ihc_rx_fifo, rx_metadata))) {
+		dev_err(chnl->dev, "IHC RX fifo full\n");
+		oal_mm_free(rx_metadata);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int pfe_hif_drv_ihc_put_tx_conf(pfe_hif_drv_client_t *client, void *data, uint32_t len)
+{
+	struct pfeng_hif_chnl *chnl = container_of(client, struct pfeng_hif_chnl, ihc_client);
+	void *idex_frame;
+
+	idex_frame = oal_mm_malloc_contig_aligned_nocache(len, 0U);
+	if (unlikely(!idex_frame))
+		return -ENOMEM;
+
+	memcpy(idex_frame, data, len);
+
+	if (unlikely(EOK != fifo_put(client->ihc_txconf_fifo, idex_frame))) {
+		dev_err(chnl->dev, "IHC TX fifo full\n");
+		oal_mm_free_contig(idex_frame);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 /**
  * @brief	Process HIF channel receive
@@ -155,10 +213,14 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 
 		/* Find appropriate netif */
 		netif = chnl->netifs[hif_hdr->i_phy_if];
-		if (!netif) {
-			dev_err(chnl->dev, "Packet for unconfigured PhyIf %d\n", hif_hdr->i_phy_if);
-			consume_skb(skb);
-			continue;
+		if (unlikely(!netif)) {
+			/* Try AUX */
+			netif = chnl->netifs[HIF_CLIENTS_AUX_IDX];
+			if (unlikely(!netif)) {
+				dev_err(chnl->dev, "Packet for unconfigured PhyIf %d\n", hif_hdr->i_phy_if);
+				consume_skb(skb);
+				continue;
+			}
 		}
 		netdev = netif->netdev;
 		skb->dev = netdev;
@@ -193,10 +255,7 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 
 		skb->protocol = eth_type_trans(skb, netdev);
 
-		if (unlikely(skb->ip_summed == CHECKSUM_NONE))
-			netif_receive_skb(skb);
-		else
-			napi_gro_receive(&chnl->napi, skb);
+		napi_gro_receive(&chnl->napi, skb);
 
 		netdev->stats.rx_packets++;
 		netdev->stats.rx_bytes += skb_headlen(skb);
@@ -213,24 +272,102 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 #endif
 }
 
-static int pfeng_hif_chnl_rx_poll(struct napi_struct *napi, int budget)
+static bool pfeng_hif_chnl_tx_conf(struct pfeng_hif_chnl *chnl, int napi_budget)
+{
+	unsigned int done = 0;
+
+	while (pfe_hif_chnl_has_tx_conf(chnl->priv) && done < PFE_DEFAULT_TX_WORK) {
+
+		if (unlikely(pfe_hif_chnl_get_tx_conf(chnl->priv) != EOK))
+			break;
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+		/* Check for IHC packet first */
+		if (unlikely (pfeng_hif_chnl_txconf_get_flag(chnl) == PFENG_MAP_PKT_IHC)) {
+			struct sk_buff *skb = pfeng_hif_chnl_txconf_get_skbuf(chnl);
+			pfe_hif_drv_client_t *client = &chnl->ihc_client;
+
+			/* IDEX confirmation must return IDEX API compatible data */
+			skb_pull(skb, PFENG_TX_PKT_HEADER_SIZE);
+			if (!pfe_hif_drv_ihc_put_tx_conf(client, skb->data, skb_headlen(skb))) {
+				/* Call IHC TX callback */
+				client->event_handler(client, client->priv, EVENT_TXDONE_IND, 0);
+			} else {
+				dev_err(chnl->dev, "TXconf IHC queuing failed.\n");
+			}
+		}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
+		pfeng_hif_chnl_txconf_free_map_full(chnl, napi_budget);
+
+		done++;
+	}
+
+	if (unlikely(chnl->queues_stopped)) {
+		if (pfe_hif_chnl_can_accept_tx_num(chnl->priv, napi_budget)) {
+			int i;
+
+			for (i = 0; i < HIF_CLIENTS_MAX; i++) {
+				struct pfeng_netif *netif = chnl->netifs[i];
+
+				if (!netif)
+					continue;
+
+				if (unlikely(netif_carrier_ok(netif->netdev) &&
+					     __netif_subqueue_stopped(netif->netdev, 0))) {
+					/* only one queue per netdev used at this point */
+					netif_wake_subqueue(netif->netdev, 0);
+					chnl->queues_stopped = false;
+				}
+			}
+		}
+	}
+
+	return done < PFE_DEFAULT_TX_WORK;
+}
+
+static int pfeng_hif_chnl_poll(struct napi_struct *napi, int budget)
 {
 	struct pfeng_hif_chnl *chnl = container_of(napi, struct pfeng_hif_chnl, napi);
-	int done = 0;
+	bool complete;
+	int work_done = 0;
 
+	complete = pfeng_hif_chnl_tx_conf(chnl, budget);
 	/* Consume RX pkt(s) */
-	done = pfeng_hif_chnl_rx(chnl, budget);
+	work_done = pfeng_hif_chnl_rx(chnl, budget);
+	if (work_done == budget)
+		complete = false;
 
-	if (done < budget && napi_complete_done(napi, done)) {
+	if (!complete)
+		return budget;
 
-		/* Enable RX interrupt */
+	if (likely(napi_complete_done(napi, work_done))) {
+
+		/* Enable interrupts */
 		pfe_hif_chnl_rx_irq_unmask(chnl->priv);
+		pfe_hif_chnl_tx_irq_unmask(chnl->priv);
 
 		/* Trigger the RX DMA */
 		pfe_hif_chnl_rx_dma_start(chnl->priv);
 	}
 
-	return done;
+	return work_done;
+}
+
+int pfeng_hif_chnl_set_coalesce(struct pfeng_hif_chnl *chnl, struct clk *clk_sys, u32 usecs, u32 frames)
+{
+	u32 cycles;
+	int ret;
+
+	cycles = usecs * (DIV_ROUND_UP(clk_get_rate(clk_sys), USEC_PER_SEC));
+
+	ret = pfe_hif_chnl_set_rx_irq_coalesce(chnl->priv, 0, cycles);
+	if (!ret) {
+		chnl->cfg_rx_max_coalesced_frames = frames;
+		chnl->cfg_rx_coalesce_usecs = usecs;
+	}
+
+	return -ret; /* convert platform err code to linux kernel err code */
 }
 
 static int pfeng_hif_chnl_drv_remove(struct pfeng_priv *priv, u32 idx)
@@ -249,22 +386,20 @@ static int pfeng_hif_chnl_drv_remove(struct pfeng_priv *priv, u32 idx)
 	pfeng_hif_chnl_stop(chnl);
 
 	/* Stop NAPI */
-	if (chnl->status == PFENG_HIF_STATUS_RUNNING) {
+	if (chnl->status >= PFENG_HIF_STATUS_ENABLED) {
 		napi_disable(&chnl->napi);
 		netif_napi_del(&chnl->napi);
 	}
 	/* Prepare for startup state (in case of STR use) */
 	chnl->status = PFENG_HIF_STATUS_REQUESTED;
 
-	/* Release IRQ line */
-	devm_free_irq(dev, priv->pfe_cfg->irq_vector_hif_chnls[idx], chnl->priv);
-
 	/* Release attached RX/TX pools */
 	pfeng_bman_pool_destroy(chnl);
 
-	if (priv->pfe_cfg->irq_vector_hif_chnls[idx]) {
-		disable_irq(priv->pfe_cfg->irq_vector_hif_chnls[idx]);
-	}
+	/* Release IRQ line */
+	disable_irq(priv->pfe_cfg->irq_vector_hif_chnls[idx]);
+	irq_set_affinity_hint(priv->pfe_cfg->irq_vector_hif_chnls[idx], NULL);
+	devm_free_irq(dev, priv->pfe_cfg->irq_vector_hif_chnls[idx], chnl->priv);
 
 	/* Forget HIF channel data */
 	chnl->priv = NULL;
@@ -288,10 +423,11 @@ static char *get_hif_chnl_mode_str(struct pfeng_hif_chnl *chnl)
 
 static int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 idx)
 {
+	int irq = priv->pfe_cfg->irq_vector_hif_chnls[idx];
 	struct device *dev = &priv->pdev->dev;
 	struct pfeng_hif_chnl *chnl;
-	int ret = 0;
 	char irq_name[20];
+	int ret = 0;
 
 	if (idx >= PFENG_PFE_HIF_CHANNELS) {
 		dev_err(dev, "Invalid HIF instance number: %u\n", idx);
@@ -306,31 +442,28 @@ static int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 idx)
 	}
 	chnl->dev = dev;
 	chnl->idx = idx;
-#ifndef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	if (unlikely(chnl->cl_mode == PFENG_HIF_MODE_SHARED))
-#else
-	if (unlikely((chnl->cl_mode == PFENG_HIF_MODE_SHARED) || chnl->ihc))
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-#ifdef LOCK_TX_SPINLOCK
-		spin_lock_init(&chnl->lock_tx);
-#else
-		mutex_init(&chnl->lock_tx);
-#endif
 
-	/* Register HIF channel RX callback */
-	pfe_hif_chnl_set_event_cbk(chnl->priv, HIF_CHNL_EVT_RX_IRQ, &pfeng_hif_drv_chnl_rx_isr, (void *)chnl);
+	if (unlikely((chnl->cl_mode == PFENG_HIF_MODE_SHARED) || chnl->ihc))
+		spin_lock_init(&chnl->lock_tx);
+
+	/* Register HIF channel RX/TX callback */
+	pfe_hif_chnl_set_event_cbk(chnl->priv, HIF_CHNL_EVT_RX_IRQ | HIF_CHNL_EVT_TX_IRQ,
+				   pfeng_hif_drv_chnl_isr, (void *)chnl);
 
 	/* Create interrupt name */
 	scnprintf(irq_name, sizeof(irq_name), "pfe-hif-%d:%s", idx, get_hif_chnl_mode_str(chnl));
 
 	/* HIF channel IRQ */
-	ret = devm_request_irq(dev, priv->pfe_cfg->irq_vector_hif_chnls[idx], pfeng_hif_chnl_direct_isr,
-		0, kstrdup(irq_name, GFP_KERNEL), chnl->priv);
+	ret = devm_request_irq(dev, irq, pfeng_hif_chnl_direct_isr, 0,
+			       devm_kstrdup(dev, irq_name, GFP_KERNEL), chnl->priv);
 	if (ret < 0) {
 		dev_err(dev, "Error allocating the IRQ %d for '%s', error %d\n",
-			priv->pfe_cfg->irq_vector_hif_chnls[idx], irq_name, ret);
+			irq, irq_name, ret);
 		return ret;
 	}
+
+	/* configure interrupt affinity hint */
+	irq_set_affinity_hint(irq, get_cpu_mask(idx % num_online_cpus()));
 
 	/* Create bman for channel */
 	if (!chnl->bman.rx_pool) {
@@ -348,8 +481,11 @@ static int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 idx)
 	/* Create dummy netdev required for independent HIF channel support */
 	init_dummy_netdev(&chnl->dummy_netdev);
 
+	/* init interrupt coalescing */
+	pfeng_hif_chnl_set_coalesce(chnl, priv->clk_sys, PFENG_INT_TIMER_DEFAULT, 0);
+
 	chnl->status = PFENG_HIF_STATUS_ENABLED;
-	netif_napi_add(&chnl->dummy_netdev, &chnl->napi, pfeng_hif_chnl_rx_poll, NAPI_POLL_WEIGHT);
+	netif_napi_add(&chnl->dummy_netdev, &chnl->napi, pfeng_hif_chnl_poll, NAPI_POLL_WEIGHT);
 	napi_enable(&chnl->napi);
 
 	dev_info(dev, "HIF%d enabled\n", idx);
@@ -486,3 +622,240 @@ void pfeng_hif_remove(struct pfeng_priv *priv)
 		pfeng_hif_chnl_drv_remove(priv, idx);
 	}
 }
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+
+/* structs pfe_hif_drv_tag and pfe_hif_drv_client_tag are declared in pfeng.h */
+
+void pfe_hif_drv_client_unregister(pfe_hif_drv_client_t *client)
+{
+	struct pfeng_hif_chnl *chnl = container_of(client, struct pfeng_hif_chnl, ihc_client);
+
+	/*	Release IHC fifo */
+	if (client->ihc_rx_fifo) {
+		u32 fill_level;
+		errno_t err = fifo_get_fill_level(client->ihc_rx_fifo, &fill_level);
+
+		if (unlikely(EOK != err)) {
+			dev_info(chnl->dev, "Unable to get IHC fifo fill level: %d\n", err);
+		} else if (fill_level) {
+			dev_info(chnl->dev, "IHC Queue is not empty\n");
+		}
+
+		fifo_destroy(client->ihc_rx_fifo);
+		client->ihc_rx_fifo = NULL;
+	}
+
+	if (client->ihc_txconf_fifo) {
+		u32 fill_level;
+		errno_t err = fifo_get_fill_level(client->ihc_txconf_fifo, &fill_level);
+
+		if (unlikely(EOK != err)) {
+			dev_info(chnl->dev, "Unable to get IHC tx conf fifo fill level: %d\n", err);
+		} else if (fill_level) {
+			dev_info(chnl->dev, "IHC Tx conf Queue is not empty\n");
+		}
+
+		fifo_destroy(client->ihc_txconf_fifo);
+		client->ihc_txconf_fifo = NULL;
+	}
+
+	/*	Cleanup memory */
+	memset(client, 0, sizeof(pfe_hif_drv_client_t));
+
+	dev_info(chnl->dev, "IHC client unregistered\n");
+}
+
+pfe_hif_drv_client_t * pfe_hif_drv_ihc_client_register(pfe_hif_drv_t *hif_drv, pfe_hif_drv_client_event_handler handler, void *priv)
+{
+
+	struct pfeng_hif_chnl *chnl = container_of(hif_drv, struct pfeng_hif_chnl, hif_drv);
+	pfe_hif_drv_client_t *client = &chnl->ihc_client;
+	int ret;
+
+	if (client->hif_drv) {
+		dev_err(chnl->dev, "IHC client already registered\n");
+		return NULL;
+	}
+
+	/* Initialize the instance */
+	memset(client, 0, sizeof(pfe_hif_drv_client_t));
+	client->ihc_rx_fifo = fifo_create(32);
+	if (!client->ihc_rx_fifo) {
+		dev_err(chnl->dev, "Can't create IHC RX fifo. Err %d\n", ret);
+		return NULL;
+	}
+	client->ihc_txconf_fifo = fifo_create(32);
+	if (!client->ihc_txconf_fifo) {
+		dev_err(chnl->dev, "Can't create IHC TXconf fifo. Err %d\n", ret);
+		return NULL;
+	}
+	client->hif_drv = hif_drv;
+	client->priv = priv;
+	client->event_handler = handler;
+	client->inited = true;
+
+	dev_info(chnl->dev, "IHC client registered\n");
+	return client;
+}
+
+/**
+ * @brief		Release packet
+ * @param[in]	pkt The packet instance
+ */
+void pfe_hif_pkt_free(const pfe_hif_pkt_t *pkt)
+{
+	if (pkt->ref_ptr)
+		kfree_skb(pkt->ref_ptr);
+	oal_mm_free(pkt);
+}
+
+/**
+ * @brief		Get packet from RX queue for IHC data
+ * @param[in]	client IHC Client instance
+ * @param[in]	queue RX queue number
+ * @return		Pointer to SW buffer descriptor containing the packet or NULL
+ * 				if the queue does not contain data
+ *
+ * @warning		Intended to be called for IHC client only
+ */
+pfe_hif_pkt_t * pfe_hif_drv_client_receive_pkt(pfe_hif_drv_client_t *client, uint32_t queue)
+{
+	struct pfeng_hif_chnl *chnl = container_of(client, struct pfeng_hif_chnl, ihc_client);
+
+	if (&chnl->ihc_client != client)
+	{
+		/* Only IHC client supported */
+		dev_err(chnl->dev, "Only HIF IHC client supported\n");
+		return NULL;
+	}
+
+	/* No resource protection here */
+	return fifo_get(client->ihc_rx_fifo);
+}
+
+/**
+ * @brief		Get TX confirmation
+ * @param[in]	client Client instance
+ * @param[in]	queue TX queue number
+ * @return		Pointer to data associated with the transmitted buffer. See pfe_hif_drv_client_xmit_pkt()
+ * 				and pfe_hif_drv_client_xmit_sg_pkt().
+ * @note		Only a single thread can call this function for given client+queue
+ * 				combination.
+ */
+void *pfe_hif_drv_client_receive_tx_conf(const pfe_hif_drv_client_t *client, uint32_t queue)
+{
+	struct pfeng_hif_chnl *chnl = container_of(client, struct pfeng_hif_chnl, ihc_client);
+
+	if (&chnl->ihc_client != client)
+	{
+		/* Only IHC client supported */
+		dev_err(chnl->dev, "Only HIF IHC client supported\n");
+		return NULL;
+	}
+
+	/* No resource protection here */
+	return fifo_get(client->ihc_txconf_fifo);
+}
+
+void pfeng_ihc_tx_work_handler(struct work_struct *work)
+{
+	struct pfeng_priv* priv = container_of(work, struct pfeng_priv, ihc_tx_work);
+	struct pfeng_hif_chnl *chnl = priv->ihc_chnl;
+	struct sk_buff *skb = NULL;
+	dma_addr_t des = 0;
+	int refid = -1, ret;
+
+	/* IHC transport requires protection */
+	spin_lock(&chnl->lock_tx);
+
+	if (!kfifo_get(&priv->ihc_tx_fifo, &skb)) {
+		dev_err(chnl->dev, "No IHC TX data!\n");
+		goto err;
+	}
+
+	/* Remap skb */
+	des = dma_map_single(chnl->dev, skb->data, skb_headlen(skb), DMA_TO_DEVICE);
+	if (unlikely(dma_mapping_error(chnl->dev, des))) {
+		dev_err(chnl->dev, "No possible to map IHC frame, dropped.\n");
+		goto err;
+	}
+	refid = pfeng_hif_chnl_txconf_put_map_frag(chnl, skb->data, des, skb_headlen(skb), skb, PFENG_MAP_PKT_IHC);
+	/* Increment to be able to pass number 0 */
+	refid++;
+
+	ret = pfe_hif_chnl_tx(chnl->priv, (void *)des, skb->data, skb_headlen(skb), true);
+	if (unlikely(EOK != ret)) {
+		pfeng_hif_chnl_txconf_unroll_map_full(chnl, refid - 1, 0);
+		goto err;
+	}
+	spin_unlock(&chnl->lock_tx);
+
+	return;
+
+err:
+	spin_unlock(&chnl->lock_tx);
+	if(skb)
+		kfree_skb(skb);
+
+	return;
+}
+
+/**
+ * @brief		Transmit IHC packet
+ * @param[in]	client Client instance
+ * @param[in]	queue TX queue number
+ * @param[in]	sg_list Pointer to the SG list and packet metadata
+ * @param[in]	idex_frame Pointer to the IHC packet with TX header
+ * @return		EOK if success, error code otherwise.
+ */
+errno_t pfe_hif_drv_client_xmit_sg_pkt(pfe_hif_drv_client_t *client, uint32_t queue, const hif_drv_sg_list_t *const sg_list, void *idex_frame)
+{
+	struct pfeng_hif_chnl *chnl = container_of(client, struct pfeng_hif_chnl, ihc_client);
+	struct pfeng_priv *priv = dev_get_drvdata(chnl->dev);
+	uint32_t flen = sg_list->items[0].len;
+	pfe_ct_hif_tx_hdr_t *tx_hdr;
+	struct sk_buff *skb;
+	int ret, pktlen;
+
+	/* Find minimal pkt size */
+	if ((PFENG_TX_PKT_HEADER_SIZE + flen) < 68)
+		pktlen = 68;
+	else
+		pktlen = PFENG_TX_PKT_HEADER_SIZE + flen;
+
+	/* Copy packet to skb to reuse txconf standard cleaning */
+	skb = alloc_skb(pktlen, GFP_ATOMIC);
+	if (!skb) {
+		oal_mm_free_contig(idex_frame);
+		return ENOMEM;
+	}
+
+	/* Set TX header */
+	tx_hdr = (pfe_ct_hif_tx_hdr_t *)skb->data;
+	memset(tx_hdr, 0, PFENG_TX_PKT_HEADER_SIZE);
+	tx_hdr->chid = chnl->idx;
+	tx_hdr->flags |= HIF_TX_IHC | HIF_TX_INJECT;
+	tx_hdr->e_phy_ifs = oal_htonl(1U << sg_list->dst_phy);
+	skb_put(skb, PFENG_TX_PKT_HEADER_SIZE);
+
+	/* Append IDEX frame */
+	skb_put_data(skb, idex_frame, flen);
+
+	/* Free original idex_frame */
+	oal_mm_free_contig(idex_frame);
+
+	/* Send data to worker */
+	ret = kfifo_put(&priv->ihc_tx_fifo, skb);
+	if (ret != 1) {
+		dev_err(chnl->dev, "IHC TX kfifo full\n");
+		kfree_skb(skb);
+		return -ENOMEM;
+	}
+
+	queue_work(priv->ihc_tx_wq, &priv->ihc_tx_work);
+
+	return 0;
+}
+
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */

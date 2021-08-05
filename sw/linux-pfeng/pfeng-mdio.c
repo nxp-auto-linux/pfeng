@@ -24,14 +24,21 @@
 static int pfeng_mdio_read(struct mii_bus *bus, int phyaddr, int phyreg)
 {
 	pfe_emac_t *emac = bus->priv;
+	struct device *dev = bus->parent;
 	int ret;
 	u16 val;
+
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0)
+		return ret;
 
 	if (phyreg & MII_ADDR_C45) {
 		ret = pfe_emac_mdio_read45(emac, (u16)phyaddr, (phyreg >> 16) & 0x1F, (u16)phyreg & 0xFFFF, &val, 0);
 	} else {
 		ret = pfe_emac_mdio_read22(emac, (u16)phyaddr, (u16)phyreg, &val, 0);
 	}
+
+	pm_runtime_put(dev);
 
 	if (!ret)
 		return val;
@@ -42,13 +49,20 @@ static int pfeng_mdio_read(struct mii_bus *bus, int phyaddr, int phyreg)
 static int pfeng_mdio_write(struct mii_bus *bus, int phyaddr, int phyreg, u16 phydata)
 {
 	pfe_emac_t *emac = bus->priv;
+	struct device *dev = bus->parent;
 	int ret;
+
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0)
+		return ret;
 
 	if (phyreg & MII_ADDR_C45) {
 		ret = pfe_emac_mdio_write45(emac, (u16)phyaddr, (phyreg >> 16) & 0x1F, (u16)phyreg & 0xFFFF, phydata, 0);
 	} else {
 		ret = pfe_emac_mdio_write22(emac, (u16)phyaddr, (u16)phyreg, phydata, 0);
 	}
+
+	pm_runtime_put(dev);
 
 	if (ret)
 		return -ret;

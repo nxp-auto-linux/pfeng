@@ -160,8 +160,8 @@ __attribute__((cold)) pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_
 		bmu->pool_base_pa = cfg->pool_pa;
 		bmu->pool_base_va = cfg->pool_va;
 		bmu->pool_va_offset = bmu->pool_base_va - bmu->pool_base_pa;
-		bmu->pool_size = ((uint32_t)1U << cfg->buf_size) * cfg->max_buf_cnt;
-		bmu->buf_size = ((uint32_t)1U << cfg->buf_size);
+		bmu->pool_size = cfg->buf_size * cfg->max_buf_cnt;
+		bmu->buf_size = cfg->buf_size;
 
 #ifdef PFE_CFG_PARANOID_IRQ
 		/*	Resource protection */
@@ -401,7 +401,7 @@ __attribute__((cold, pure)) uint32_t pfe_bmu_get_buf_size(const pfe_bmu_t *bmu)
 __attribute__((hot)) void pfe_bmu_free_buf(const pfe_bmu_t *bmu, addr_t buffer)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == bmu) || (NULL == buffer)))
+	if (unlikely((NULL == bmu) || (NULL_ADDR == buffer)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;

@@ -89,6 +89,22 @@ __attribute__((cold)) void fifo_destroy(fifo_t *const fifo)
 	}
 }
 
+__attribute__((cold)) void fifo_clear(fifo_t *const fifo)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == fifo))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (NULL != fifo)
+	{
+		fifo->read = 0U;
+		fifo->write = fifo->depth;
+	}
+}
+
 __attribute__((hot)) void * fifo_peek(const fifo_t * const fifo, uint32_t num)
 {
 	volatile void *ret = NULL;

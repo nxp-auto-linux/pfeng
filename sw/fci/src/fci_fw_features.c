@@ -19,6 +19,8 @@
 #include "oal.h"
 #include "fci_fw_features.h"
 
+#ifdef PFE_CFG_FCI_ENABLE
+
 /**
  * @brief			Processes FPP_CMD_FW_FEATURES commands
  * @param[in]		msg FCI message containing the FPP_CMD_FP_FEATURES command
@@ -141,3 +143,5 @@ errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_c
 	}
 	return ret;
 }
+
+#endif /* PFE_CFG_FCI_ENABLE */

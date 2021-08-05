@@ -42,7 +42,7 @@ typedef struct pfe_mac_db_tag pfe_mac_db_t;
 pfe_mac_db_t *pfe_mac_db_create(void);
 errno_t pfe_mac_db_destroy(pfe_mac_db_t *db);
 errno_t pfe_mac_db_add_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
-errno_t pfe_mac_db_del_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr);
+errno_t pfe_mac_db_del_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 errno_t pfe_mac_db_flush(pfe_mac_db_t *db, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
 errno_t pfe_mac_db_get_first_addr(pfe_mac_db_t *db, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner, pfe_mac_addr_t addr);
 errno_t pfe_mac_db_get_next_addr(pfe_mac_db_t *db, pfe_mac_addr_t addr);

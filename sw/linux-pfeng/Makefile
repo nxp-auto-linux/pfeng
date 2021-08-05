@@ -59,13 +59,13 @@ ccflags-y += -DPFENG_CFG_LINUX_NO_SERDES_SUPPORT
 endif
 
 OBJ_LIBFCI_DIR = ../xfci/libfci
-OBJ_DIRS = ../oal ../bpool  ../elf  ../fifo  ../pfe_hif_drv ../pfe_platform ../common
+OBJ_DIRS = ../oal ../bpool  ../elf  ../fifo  ../pfe_platform ../common
 
 ifneq ($(PFE_CFG_FCI_ENABLE),0)
 OBJ_DIRS += ../fci
 endif
 
-pfeng-objs-libs := ../pfe_platform/pfe_platform.o ../oal/oal.o ../elf/elf.o ../fifo/fifo.o ../pfe_hif_drv/pfe_hif_drv.o ../bpool/bpool.o ../common/blalloc.o
+pfeng-objs-libs := ../pfe_platform/pfe_platform.o ../oal/oal.o ../elf/elf.o ../fifo/fifo.o ../bpool/bpool.o ../common/blalloc.o
 
 ifneq ($(PFE_CFG_FCI_ENABLE),0)
 pfeng-objs-libs += ../fci/fci.o

@@ -187,7 +187,7 @@ errno_t pfe_emac_mdio_write45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_
 errno_t pfe_emac_add_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_emac_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
 errno_t pfe_emac_get_addr(pfe_emac_t *emac, pfe_mac_addr_t addr);
-errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr);
+errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 void pfe_emac_destroy(pfe_emac_t *emac);
 uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 uint32_t pfe_emac_get_rx_cnt(const pfe_emac_t *emac);

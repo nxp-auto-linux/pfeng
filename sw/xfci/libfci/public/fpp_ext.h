@@ -257,6 +257,7 @@ typedef enum CAL_PACKED
 	FPP_IF_PTP_PROMISC = (1 << 9),		/*!< Enable/Disable PTP promiscuous mode */
 	FPP_IF_LOOPBACK = (1 << 10),		/*!< If set, loopback mode is enabled */
 	FPP_IF_ALLOW_Q_IN_Q = (1 << 11),	/*!< If set, QinQ traffic is accepted */
+	FPP_IF_DISCARD_TTL = (1 << 12),		/*!< Discard packet with TTL<2 instead of passing to default logical interface */
 	FPP_IF_MAX = (int)(1U << 31U)
 } fpp_if_flags_t;
 
@@ -266,14 +267,13 @@ typedef enum CAL_PACKED
  */
 typedef enum CAL_PACKED
 {
-	FPP_IF_OP_DISABLED = 0,			/*!< Disabled */
-	FPP_IF_OP_DEFAULT = 1,			/*!< Default operational mode */
-	FPP_IF_OP_BRIDGE = 2,			/*!< L2 bridge */
-	FPP_IF_OP_ROUTER = 3,			/*!< L3 router */
-	FPP_IF_OP_VLAN_BRIDGE = 4,		/*!< L2 bridge with VLAN */
-	FPP_IF_OP_FLEXIBLE_ROUTER = 5,	/*!< Flexible router */
-	FPP_IF_OP_L2L3_BRIDGE = 6,		/*!< L2 bridge and L3 router combination*/
-	FPP_IF_OP_L2L3_VLAN_BRIDGE = 7,	/*!< L2 Vlan bridge and L3 router combination*/
+	FPP_IF_OP_DEFAULT = 0,			/*!< Default operational mode */
+	FPP_IF_OP_BRIDGE = 1,			/*!< L2 bridge */
+	FPP_IF_OP_ROUTER = 2,			/*!< L3 router */
+	FPP_IF_OP_VLAN_BRIDGE = 3,		/*!< L2 bridge with VLAN */
+	FPP_IF_OP_FLEXIBLE_ROUTER = 4,	/*!< Flexible router */
+	FPP_IF_OP_L2L3_BRIDGE = 5,		/*!< L2 bridge and L3 router combination*/
+	FPP_IF_OP_L2L3_VLAN_BRIDGE = 6,	/*!< L2 Vlan bridge and L3 router combination*/
 } fpp_phy_if_op_mode_t;
 
 /**
@@ -617,7 +617,7 @@ typedef enum CAL_PACKED
  *          - for command buffer in functions @ref fci_write or @ref fci_cmd,
  *            with commands: @ref FPP_CMD_L2_BD.
  */
-typedef struct CAL_PACKED
+typedef struct CAL_PACKED_ALIGNED(2)
 {
 	/**	Action to be executed (register, unregister, query, ...) */
 	uint16_t action;
@@ -788,7 +788,7 @@ typedef struct CAL_PACKED
 #define FPP_ERR_L2_STATIC_ENT_ALREADY_REGISTERED	0xf341
 #define FPP_ERR_L2_STATIC_EN_NOT_FOUND				0xf342
 
-typedef struct CAL_PACKED
+typedef struct CAL_PACKED_ALIGNED(4)
 {
 	/**	Action to be executed (register, unregister, query, ...) */
 	uint16_t action;
@@ -1142,7 +1142,7 @@ typedef struct CAL_PACKED
 /**
  * @brief Arguments for the FPP_CMD_FP_RULE command
  */
-typedef struct CAL_PACKED
+typedef struct CAL_PACKED_ALIGNED(2)
 {
     uint16_t action;        /**< Action to be done */
     fpp_fp_rule_props_t r;  /**< Parameters of the rule */
@@ -1151,7 +1151,7 @@ typedef struct CAL_PACKED
 /**
  * @brief Arguments for the FPP_CMD_FP_TABLE command
  */
-typedef struct CAL_PACKED
+typedef struct CAL_PACKED_ALIGNED(2)
 {
     uint16_t action;                  /**< Action to be done */
     union
@@ -1393,7 +1393,7 @@ typedef enum CAL_PACKED
 /**
  * @brief Argument structure for the FPP_CMD_SPD command
  */
-typedef struct CAL_PACKED
+typedef struct CAL_PACKED_ALIGNED(4)
 {
 	uint16_t action;			/**< Action */
 	char name[IFNAMSIZ];		/**< Interface name */
@@ -1457,7 +1457,7 @@ typedef struct CAL_PACKED
 /**
  * @brief Argument of the @ref FPP_CMD_QOS_QUEUE command.
  */
-typedef struct CAL_PACKED
+typedef struct CAL_PACKED_ALIGNED(4)
 {
 	/**	Action */
 	uint16_t action;
@@ -1544,7 +1544,7 @@ typedef struct CAL_PACKED
 /**
  * @brief Argument of the @ref FPP_CMD_QOS_SCHEDULER command.
  */
-typedef struct CAL_PACKED
+typedef struct CAL_PACKED_ALIGNED(4)
 {
 	/**	Action */
 	uint16_t action;
@@ -1627,7 +1627,7 @@ typedef struct CAL_PACKED
 /**
  * @brief Argument of the @ref FPP_CMD_QOS_SHAPER command.
  */
-typedef struct CAL_PACKED
+typedef struct CAL_PACKED_ALIGNED(4)
 {
 	/**	Action */
 	uint16_t action;
@@ -1638,6 +1638,12 @@ typedef struct CAL_PACKED
 	uint8_t id;
 	/**	Position of the shaper */
 	uint8_t position;
+	/**	Idle slope in units per second (network endian) */
+	uint32_t isl;
+	/**	Max credit (network endian) */
+	int32_t max_credit;
+	/**	Min credit (network endian) */
+	int32_t min_credit;
 	/**	Shaper mode:
 		- 0 - Shaper disabled
 		- 1 - Data rate. The `isl` is in units of bits-per-second and
@@ -1645,12 +1651,6 @@ typedef struct CAL_PACKED
 		- 2 - Packet rate. The `isl` is in units of packets-per-second
 			  and `max_credit` with `min_credit` are number of packets.*/
 	uint8_t mode;
-	/**	Idle slope in units per second (network endian) */
-	uint32_t isl;
-	/**	Max credit (network endian) */
-	int32_t max_credit;
-	/**	Min credit (network endian) */
-	int32_t min_credit;
 } fpp_qos_shaper_cmd_t;
 
 
@@ -1687,13 +1687,13 @@ typedef struct CAL_PACKED
  * @hideinitializer
  */
 #define FPP_CMD_FW_FEATURE 0xf227
-#define FPP_FEATURE_NAME_SIZE 16
+#define FPP_FEATURE_NAME_SIZE 32
 #define FPP_FEATURE_DESC_SIZE 128
 
 /**
  * @brief Argument of the @ref FPP_CMD_FW_FEATURE command.
  */
-typedef struct CAL_PACKED
+typedef struct CAL_PACKED_ALIGNED(2)
 {
     uint16_t action;                       /**< Action to be done */
     char name[FPP_FEATURE_NAME_SIZE + 1];  /**< Feature name (only queries, cannot be modified) */

@@ -250,9 +250,6 @@ void pfe_hif_drv_show_ring_status(pfe_hif_drv_t *hif_drv, bool_t rx, bool_t tx);
 /*	IHC API */
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 pfe_hif_drv_client_t * pfe_hif_drv_ihc_client_register(pfe_hif_drv_t *hif_drv, pfe_hif_drv_client_event_handler handler, void *priv);
-#ifdef PFE_CFG_TARGET_OS_LINUX
-errno_t pfe_hif_drv_client_xmit_ihc_pkt(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t dst, uint32_t queue, void *idex_frame, uint32_t plen);
-#endif
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 /*	AUX API */
@@ -284,8 +281,8 @@ void pfe_hif_pkt_free(const pfe_hif_pkt_t *pkt);
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
 /*	PTP Timestamps */
-errno_t pfe_hif_drv_client_get_ts(const pfe_hif_drv_client_t *client, bool_t rx,
-		uint8_t type, uint16_t port, uint16_t seq_id, const uint32_t *ts_sec, const uint32_t *ts_nsec);
+errno_t pfe_hif_drv_client_get_ts(pfe_hif_drv_client_t * const client, bool_t rx,
+		uint8_t type, uint16_t port, uint16_t seq_id, uint32_t * const ts_sec, uint32_t * const ts_nsec);
 
 /**
  * @brief		Get information if packet is last in frame

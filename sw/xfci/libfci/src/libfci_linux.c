@@ -1,6 +1,6 @@
 /* =========================================================================
  *  Copyright (C) 2007 Mindspeed Technologies, Inc.
- *  Copyright 2017-2020 NXP
+ *  Copyright 2017-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -211,7 +211,7 @@ int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned sho
 					goto close_and_exit;
 				}
 
-				if (0 != NLMSG_LENGTH(nlh))
+				if (0U != (nlh->nlmsg_len - NLMSG_LENGTH(0)))
 				{
 					reply_msg = NLMSG_DATA(nlh);
 					if (0 != reply_msg->msg_cmd.length)
@@ -297,7 +297,7 @@ int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned sho
 					goto close_and_exit;
 				}
 
-				if (0 != NLMSG_LENGTH(nlh))
+				if (0U != (nlh->nlmsg_len - NLMSG_LENGTH(0)))
 				{
 					reply_msg = NLMSG_DATA(nlh);
 					if (0 != reply_msg->msg_cmd.length)
@@ -577,15 +577,15 @@ static int __fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *c
 		{
 			/*	Success, pass reply data (if any) and its length to user */
 			if ((NULL != rep_buf) && (NULL != rep_len) &&
-				(2U <= reply_msg->msg_cmd.length) &&
-				(0U != NLMSG_LENGTH(nlh)))
+				(4U <= reply_msg->msg_cmd.length) &&
+				(0U != (nlh->nlmsg_len - NLMSG_LENGTH(0))))
 			{
 #if (TRUE == FCI_CFG_FORCE_LEGACY_API)
 				memcpy(rep_buf, reply_msg->msg_cmd.payload, reply_msg->msg_cmd.length);
 				*rep_len = reply_msg->msg_cmd.length;
 #else
-				memcpy(rep_buf, ((void *)reply_msg->msg_cmd.payload + 2U), reply_msg->msg_cmd.length - 2U);
-				*rep_len = reply_msg->msg_cmd.length - 2U;
+				memcpy(rep_buf, ((void *)reply_msg->msg_cmd.payload + 4U), reply_msg->msg_cmd.length - 4U);
+				*rep_len = reply_msg->msg_cmd.length - 4U;
 #endif /* FCI_CFG_FORCE_LEGACY_API */
 			}
 			memcpy(&cmd_ret, reply_msg->msg_cmd.payload, sizeof(unsigned short));

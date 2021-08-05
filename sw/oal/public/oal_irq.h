@@ -143,6 +143,8 @@ int32_t oal_irq_get_id(const oal_irq_t *irq);
  */
 errno_t oal_irq_get_flags(const oal_irq_t *irq, oal_irq_flags_t *flags);
 
+bool_t oal_irq_in_atomic(void);
+
 #endif /* OAL_IRQ_H_ */
 
 /** @}*/

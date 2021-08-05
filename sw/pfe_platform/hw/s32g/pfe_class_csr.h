@@ -310,8 +310,8 @@
 #define CLASS_TPID_DOT1Q			0x8100UL
 #define CLASS_TPID_DOT1AD_0			0x88A8UL
 #define CLASS_TPID_DOT1AD_1			0x9100UL
-#define CLASS_TPID0_TPID1_VAL		((CLASS_TPID_DOT1AD_1 << 16U) | CLASS_TPID_DOT1AD_0)
-#define CLASS_TPID2_VAL				(CLASS_TPID_DOT1Q)
+#define CLASS_TPID0_TPID1_VAL         ((CLASS_TPID_DOT1AD_0 << 16U) | CLASS_TPID_DOT1Q)
+#define CLASS_TPID2_VAL                               (CLASS_TPID_DOT1AD_1)
 
 #define RT_TWO_LEVEL_REF(x)			((!!x) ? (1UL << 0U) : 0U)
 #define PHYNO_IN_HASH(x)			((!!x) ? (1UL << 1U) : 0U)

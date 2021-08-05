@@ -14,7 +14,7 @@
  * 				possibilities for HIF's RX and TX buffer descriptor rings.
  * 				Each ring is treated as a single instance therefore module can
  * 				be used to handle HIF with multiple channels (RX/TX ring pairs).
- * 
+ *
  * @note		BD and WB BD rings are non-cached entities.
  *
  * @warning		No concurrency prevention is implemented here. User shall
@@ -30,8 +30,8 @@
 #include "pfe_cbus.h"
 #include "pfe_hif_ring.h"
 
-#define RING_LEN						PFE_HIF_RING_CFG_LENGTH
-#define RING_LEN_MASK					(PFE_HIF_RING_CFG_LENGTH - 1U)
+#define RING_LEN						PFE_CFG_HIF_RING_LENGTH
+#define RING_LEN_MASK					(PFE_CFG_HIF_RING_LENGTH - 1U)
 
 /* Buffer descriptor WORD0 */
 #define HIF_RING_BD_W0_DESC_EN				(1U << 31U)
@@ -291,14 +291,14 @@ __attribute__((cold)) static void pfe_hif_ring_invalidate_std(const pfe_hif_ring
 __attribute__((hot)) static inline void inc_write_index_nocpy(pfe_hif_ring_t *ring);
 __attribute__((hot)) static inline void inc_read_index_nocpy(pfe_hif_ring_t *ring);
 __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_nocpy(uint16_t seqnum, bool_t rx);
-static inline errno_t pfe_hif_ring_enqueue_buf_nocpy(pfe_hif_ring_t *ring, void *buf_pa, uint32_t length, bool_t lifm);
+static inline errno_t pfe_hif_ring_enqueue_buf_nocpy(pfe_hif_ring_t *ring, const void *buf_pa, uint32_t length, bool_t lifm);
 static inline errno_t pfe_hif_ring_dequeue_buf_nocpy(pfe_hif_ring_t *ring, void **buf_pa, uint32_t *length, bool_t *lifm);
 #ifdef PFE_CFG_HIF_TX_FIFO_FIX
 static inline errno_t pfe_hif_ring_dequeue_plain_nocpy(pfe_hif_ring_t *ring, bool_t *lifm, uint32_t *len);
 #else
 static inline errno_t pfe_hif_ring_dequeue_plain_nocpy(pfe_hif_ring_t *ring, bool_t *lifm);
 #endif /* PFE_CFG_HIF_TX_FIFO_FIX */
-__attribute__((cold)) static void pfe_hif_ring_invalidate_nocpy(pfe_hif_ring_t *ring);
+__attribute__((cold)) static void pfe_hif_ring_invalidate_nocpy(const pfe_hif_ring_t *ring);
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 __attribute__((hot)) static inline void inc_write_index_std(pfe_hif_ring_t *ring)
@@ -469,7 +469,7 @@ __attribute__((pure, cold)) uint32_t pfe_hif_ring_get_wb_tbl_len(const pfe_hif_r
 		return 0U;
 	}
 #else /* PFE_CFG_HIF_NOCPY_SUPPORT */
-    (void)ring;
+	(void)ring;
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 	return RING_LEN;
@@ -489,8 +489,8 @@ __attribute__((pure, hot)) uint32_t pfe_hif_ring_get_len(const pfe_hif_ring_t *r
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#else 
-    (void)ring;
+#else
+	(void)ring;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return RING_LEN;
@@ -533,40 +533,12 @@ __attribute__((hot)) errno_t pfe_hif_ring_enqueue_buf(pfe_hif_ring_t *ring, cons
 }
 
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-#if defined(PFE_CFG_HIF_NOCPY_DIRECT)
-/**
- * @brief		Set egress interface ID
- * @details		This function allows to modify egress interface to be used to transmit
- * 				frame given by subsequent pfe_hif_ring_enqueue_buf() call. Only reason
- * 				why this exists is the HIF NOCPY 'direct' mode where the egress interface
- * 				must be present in the TX buffer descriptor because the post classification
- * 				header which is required to be prepend to the frame and contains the
- * 				information is partially ignored and the egress interface identifier is
- * 				overwritten with the one programmed within the TX descriptor. Enjoy.
- * @param[in]	ring The ring instance
- * @param[in]	id The physical interface ID
- * @note		Only valid for HIF NOCPY TX ring manipulation. All other usages will be
- * 				ignored.
- */
-__attribute__((hot)) void pfe_hif_ring_set_egress_if(pfe_hif_ring_t *ring, pfe_ct_phy_if_id_t id)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == ring))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	ring->wr_bd_nocpy->tx_portno = id;
-}
-#endif /* PFE_CFG_HIF_NOCPY_DIRECT */
 
 /**
  * @brief		The HIF NOCPY variant
  * @param[in]	buf_pa This must be BMU2 allocated physical address
  */
-static inline errno_t pfe_hif_ring_enqueue_buf_nocpy(pfe_hif_ring_t *ring, void *buf_pa, uint32_t length, bool_t lifm)
+static inline errno_t pfe_hif_ring_enqueue_buf_nocpy(pfe_hif_ring_t *ring, const void *buf_pa, uint32_t length, bool_t lifm)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ring) | (NULL == buf_pa)))
@@ -587,29 +559,17 @@ static inline errno_t pfe_hif_ring_enqueue_buf_nocpy(pfe_hif_ring_t *ring, void 
 		 	the HIF NOCPY is clearing the flags once BD is processed... */
 		ring->wr_bd_nocpy->data = (uint32_t)((addr_t)buf_pa & 0xffffffffU);
 		ring->wr_bd_nocpy->tx_buflen = (uint16_t)length;
-		ring->wr_bd_nocpy->tx_status = 0xf0U; /* This is from reference code. Not documented. */
-
-#if defined(PFE_CFG_HIF_NOCPY_DIRECT)
-		/*	In case the HIF NOCPY TX works in 'direct' mode (packet is not passed to classifier but
-		 	directly transmitted via physical interface. We must deliver the physical interface
-		 	identifier here (because of course the headers we're putting together within the HIF
-			channel layer and which contains the interface identifier, is being overwritten by
-			information taken from the TX BD... So we need to get the egress interface and configure
-			the TX BD here...
-
-			For this purpose the pfe_hif_ring_set_egress_if() has been implemented to not completely
-			break the HIF ring API logic. Therefore we do not touch the tx_portno here and expect
-			that caller has already called the pfe_hif_ring_set_egress_if().
-		*/
-
-		/* ring->wr_bd_nocpy->tx_portno = 0U; */
-#else
-#error LMEM copy mode not implemented yet
-#endif /* PFE_HIF_RING_CFG_NOCPY_DIRECT_MODE */
-
-
+		/* BD_STATUS = {src_buf_offset, dst_buf_offset, buf_len}, the last field tells how many bytes to
+		   copy from the DDR buffer to LMEM buffer (experimentally verified behavior, not documented) in
+		   LMEM copy mode, ignored in DIRECT mode. The value 0xFF was tested
+		   to work correctly. 0xF0 causes 16 bytes to be missing at the end of LMEM buffer. Value 0 causes
+		   all bytes to be missing except the header. */
+		/* AAVB-3403 shall better describe and set the value of tx_status */
+		ring->wr_bd_nocpy->tx_status = 0xFFU;
+		/* Request the LMEM copy mode */
+		ring->wr_bd_nocpy->lmem_cpy = 1U;
 		ring->wr_bd_nocpy->tx_queueno = 0U;
-		ring->wr_bd_nocpy->lmem_cpy = 0U;
+		ring->wr_bd_nocpy->pkt_xfer = 1U;
 
 		if (lifm)
 		{
@@ -622,7 +582,6 @@ static inline errno_t pfe_hif_ring_enqueue_buf_nocpy(pfe_hif_ring_t *ring, void 
 
 		/*	Write the BD 'enable' bit */
 		ring->wr_bd_nocpy->desc_en = 1U;
-
 		/*	Increment the write pointer */
 		inc_write_index_nocpy(ring);
 	}
@@ -751,7 +710,7 @@ static inline errno_t pfe_hif_ring_dequeue_buf_nocpy(pfe_hif_ring_t *ring, void 
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/* if (unlikely(0U != ring->rd_bd_nocpy->desc_en)) */
-	if (1U != ring->rd_bd_nocpy->pkt_xfer)
+	if (0U != ring->rd_bd_nocpy->pkt_xfer)
 	{
 		return EAGAIN;
 	}
@@ -771,8 +730,10 @@ static inline errno_t pfe_hif_ring_dequeue_buf_nocpy(pfe_hif_ring_t *ring, void 
 		*lifm = (0U != ring->rd_bd_nocpy->lifm);
 
 		/*	Re-enable the descriptor so HIF can write another RX buffer there */
-		ring->rd_bd_nocpy->pkt_xfer = 0U;
+		ring->rd_bd_nocpy->pkt_xfer = 1U;
 		ring->rd_bd_nocpy->desc_en = 1U;
+		/*	Must clear also lifm flag to prepare BD for next use */
+		ring->rd_bd_nocpy->lifm = 0U;
 
 		/*	Increment the read pointer */
 		inc_read_index_nocpy(ring);
@@ -916,7 +877,7 @@ static inline errno_t pfe_hif_ring_dequeue_plain_nocpy(pfe_hif_ring_t *ring, boo
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/* if (unlikely((0U != ring->rd_bd_nocpy->desc_en) || (0U == pfe_hif_ring_get_fill_level(ring)))) */
-	if (0U == ring->rd_bd_nocpy->pkt_xfer) /* TODO: Is this OK also within RX ring? */
+	if (1U == ring->rd_bd_nocpy->pkt_xfer) /* TODO: Is this OK also within RX ring? */
 	{
 		/*	Nothing to dequeue */
 		return EAGAIN;
@@ -939,7 +900,7 @@ static inline errno_t pfe_hif_ring_dequeue_plain_nocpy(pfe_hif_ring_t *ring, boo
 #endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 
 		/*	Clear the 'TX done' flag */
-		ring->rd_bd_nocpy->pkt_xfer = 0U;
+		ring->rd_bd_nocpy->pkt_xfer = 1U;
 		ring->rd_bd_nocpy->desc_en = 0U;
 
 		/*	Increment the read pointer */
@@ -1040,12 +1001,12 @@ __attribute__((cold)) errno_t pfe_hif_ring_drain_buf(pfe_hif_ring_t *ring, void 
 	if (ring->is_nocpy && ring->is_rx)
 	{
 		bool_t lifm;
-		uint32_t len;
 
 		/*	In this case we will do standard dequeue until the ring is empty. This
 			will ensure that application can drain RX buffers and return all BMU
 			buffers back to the HW pool. */
 #ifdef PFE_CFG_HIF_TX_FIFO_FIX
+		uint32_t len;
 		if (EOK == pfe_hif_ring_dequeue_plain_nocpy(ring, &lifm, &len))
 #else
 		if (EOK == pfe_hif_ring_dequeue_plain_nocpy(ring, &lifm))
@@ -1143,7 +1104,7 @@ __attribute__((cold)) void pfe_hif_ring_invalidate(const pfe_hif_ring_t *ring)
 /**
  * @brief		The HIF NOCPY variant
  */
-__attribute__((cold)) static void pfe_hif_ring_invalidate_nocpy(pfe_hif_ring_t *ring)
+__attribute__((cold)) static void pfe_hif_ring_invalidate_nocpy(const pfe_hif_ring_t *ring)
 {
 	uint32_t ii;
 
@@ -1183,7 +1144,7 @@ __attribute__((cold)) static void pfe_hif_ring_invalidate_std(const pfe_hif_ring
 
 	for (ii=0U; ii<RING_LEN; ii++)
 	{
-		/*	Mark the descriptor as last BD and set enable flag */
+		/*	Mark the descriptor as last BD and clear enable flag */
 		(((pfe_hif_bd_t *)ring->base_va)[ii]).ctrl_seqnum_w0 &= ~HIF_RING_BD_W0_DESC_EN;
 		(((pfe_hif_bd_t *)ring->base_va)[ii]).ctrl_seqnum_w0 |= HIF_RING_BD_W0_LAST_BD;
 
@@ -1357,7 +1318,7 @@ __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_nocpy(uint16_t 
 	}
 
 	size = RING_LEN * sizeof(pfe_hif_nocpy_bd_t);
-	ring->base_va = oal_mm_malloc_contig_aligned_nocache(size, ii);
+	ring->base_va = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_BD_MEM, size, ii);
 
 	if (unlikely(NULL == ring->base_va))
 	{
@@ -1402,14 +1363,16 @@ __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_nocpy(uint16_t 
 		if (TRUE == ring->is_rx)
 		{
 			/*	Mark BD as RX */
-			hw_desc_va[ii].dir = 1U;
+			hw_desc_va[ii].dir = 0U;
 			/*	Enable the descriptor */
 			hw_desc_va[ii].desc_en = 1U;
+			hw_desc_va[ii].pkt_xfer = 1U;
 		}
 		else
 		{
-			hw_desc_va[ii].dir = 0U;
+			hw_desc_va[ii].dir = 1U;
 			hw_desc_va[ii].desc_en = 0U;
+			hw_desc_va[ii].pkt_xfer = 1U;
 		}
 
 		/*	Enable BD interrupt */

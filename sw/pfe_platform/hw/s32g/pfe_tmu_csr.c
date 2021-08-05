@@ -29,6 +29,8 @@
 
 static errno_t pfe_tmu_cntx_mem_write(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t loc, uint32_t data);
 static errno_t pfe_tmu_cntx_mem_read(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t loc, uint32_t *data);
+static errno_t pfe_tmu_context_memory(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue_temp, uint16_t min, uint16_t max);
+static uint8_t pfe_tmu_hif_q_to_tmu_q(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue);
 
 /**
  * @brief		Return QoS configuration of given physical interface
@@ -411,6 +413,42 @@ static uint8_t pfe_tmu_hif_q_to_tmu_q(addr_t cbus_base_va, pfe_ct_phy_if_id_t ph
 	return PFE_TMU_INVALID_QUEUE;
 }
 
+static errno_t pfe_tmu_context_memory(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue_temp, uint16_t min, uint16_t max)
+{
+	uint32_t reg;
+	errno_t ret;
+	/*	Initialize probabilities. Probability tables are @ position 5 and 6 per queue. */
+	/*	Context memory position 5 (curQ_hw_prob_cfg_tbl0):
+	 	 	[4:0]	Zone0 value
+	 		[9:5]	Zone1 value
+	 		[14:10]	Zone2 value
+	 		[19:15]	Zone3 value
+	 		[24:20]	Zone4 value
+	 		[29:25]	Zone5 value
+	 	Context memory position 6 (curQ_hw_prob_cfg_tbl1):
+	 	 	[4:0]	Zone6 value
+	 	 	[9:5]	Zone7 value
+	*/
+
+	reg = 0U;
+	ret = pfe_tmu_cntx_mem_write(cbus_base_va, phy, (8U * queue_temp) + 5U, reg);
+	if (EOK != ret)
+	{
+		return ret;
+	}
+
+	ret = pfe_tmu_cntx_mem_write(cbus_base_va, phy, (8U * queue_temp) + 6U, reg);
+	if (EOK != ret)
+	{
+		return ret;
+	}
+
+	/*	curQ_Qmax[8:0], curQ_Qmin[8:0], curQ_cfg[1:0] are @ position 4 per queue */
+	reg = ((uint32_t)max << 11U) | ((uint32_t)min << 2U) | 0x2UL;
+	ret = pfe_tmu_cntx_mem_write(cbus_base_va, phy, (8U * queue_temp) + 4U, reg);
+	return ret;
+}
+
 /**
  * @brief		Get number of packets in the queue
  * @param[in]	cbus_base_va The cbus base address
@@ -658,7 +696,6 @@ errno_t pfe_tmu_q_mode_set_tail_drop(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy
  */
 errno_t pfe_tmu_q_mode_set_wred(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint16_t min, uint16_t max)
 {
-	uint32_t reg;
 	errno_t ret;
 	uint8_t queue_temp = queue;
 
@@ -679,41 +716,8 @@ errno_t pfe_tmu_q_mode_set_wred(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uin
 			return EINVAL;
 		}
 	}
-
-	/*	Initialize probabilities. Probability tables are @ position 5 and 6 per queue. */
-	/*	Context memory position 5 (curQ_hw_prob_cfg_tbl0):
-	 	 	[4:0]	Zone0 value
-	 		[9:5]	Zone1 value
-	 		[14:10]	Zone2 value
-	 		[19:15]	Zone3 value
-	 		[24:20]	Zone4 value
-	 		[29:25]	Zone5 value
-	 	Context memory position 6 (curQ_hw_prob_cfg_tbl1):
-	 	 	[4:0]	Zone6 value
-	 	 	[9:5]	Zone7 value
-	*/
-	reg = 0U;
-	ret = pfe_tmu_cntx_mem_write(cbus_base_va, phy, (8U * queue_temp) + 5U, reg);
-	if (EOK != ret)
-	{
-		return ret;
-	}
-
-	ret = pfe_tmu_cntx_mem_write(cbus_base_va, phy, (8U * queue_temp) + 6U, reg);
-	if (EOK != ret)
-	{
-		return ret;
-	}
-
-	/*	curQ_Qmax[8:0], curQ_Qmin[8:0], curQ_cfg[1:0] are @ position 4 per queue */
-	reg = ((uint32_t)max << 11U) | ((uint32_t)min << 2U) | 0x2UL;
-	ret = pfe_tmu_cntx_mem_write(cbus_base_va, phy, (8U * queue_temp) + 4U, reg);
-	if (EOK != ret)
-	{
-		return ret;
-	}
-
-	return EOK;
+	ret = pfe_tmu_context_memory(cbus_base_va, phy, queue_temp, min, max);
+	return ret;
 }
 
 /**
@@ -1049,7 +1053,10 @@ errno_t pfe_tmu_shp_cfg_set_idle_slope(addr_t cbus_base_va,
 
 	reg = hal_read32(cbus_base_va + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_CLK_FRQ);
 	sys_clk_hz = (reg & 0xffffULL) * 1000000ULL;
+#ifndef __ghs__
+	/* Workaround for ghs linker error with long long printf AAVB-3569 */
 	NXP_LOG_INFO("Using PFE sys_clk value %"PRINT64"uHz\n", sys_clk_hz);
+#endif
 
 	/*	Set weight (added to credit counter with each sys_clk_hz/clk_div tick) */
 	switch (pfe_tmu_shp_cfg_get_rate_mode(cbus_base_va, phy, shp))
@@ -1090,7 +1097,10 @@ errno_t pfe_tmu_shp_cfg_set_idle_slope(addr_t cbus_base_va,
 		reg = hal_read32(shp_base_va + TMU_SHP_CTRL);
 		reg &= 0x1U;
 		hal_write32(reg | (CLK_DIV_LOG2 << 1), shp_base_va + TMU_SHP_CTRL);
+#ifndef __ghs__
+		/* Workaround for ghs linker error with long long printf AAVB-3569 */
 		NXP_LOG_INFO("Shaper tick is %"PRINT64"uHz\n", sys_clk_hz / CLK_DIV);
+#endif
 	}
 
 	return ret;
@@ -1114,7 +1124,27 @@ uint32_t pfe_tmu_shp_cfg_get_idle_slope(addr_t cbus_base_va,
 	reg = hal_read32(cbus_base_va + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_CLK_FRQ);
 	sys_clk_hz = (reg & 0xffffULL) * 1000000ULL;
 	wgt = hal_read32(shp_base_va + TMU_SHP_WGHT) & 0xfffffU;
-	isl = ((uint64_t)wgt * 8ULL * sys_clk_hz) / (CLK_DIV * (1ULL << 12));
+	
+	switch (pfe_tmu_shp_cfg_get_rate_mode(cbus_base_va, phy, shp))
+	{
+		case RATE_MODE_DATA_RATE:
+		{
+			isl = ((uint64_t)wgt * 8ULL * sys_clk_hz) / (CLK_DIV * (1ULL << 12));
+		}
+		break;
+		
+		case RATE_MODE_PACKET_RATE:
+		{
+			isl = ((uint64_t)wgt * sys_clk_hz) / (CLK_DIV * (1ULL << 12));
+		}
+		break;
+		
+		default:
+		{
+			isl = 0ULL;
+			break;
+		}
+	}
 
 	return (uint32_t)isl;
 }

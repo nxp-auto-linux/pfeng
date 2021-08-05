@@ -14,6 +14,8 @@
 #include "fci_fw_features.h"
 #include "fci_spd.h"
 
+#ifdef PFE_CFG_FCI_ENABLE
+
  /* Global variable used across all fci files */
 fci_t __context = {0};
 
@@ -31,7 +33,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 	errno_t ret = EOK; /* Return value */
 	uint16_t fci_ret = FPP_ERR_OK; /* FCI command return value */
 
-	uint8_t *reply_buf_ptr = NULL;
+	uint32_t *reply_buf_ptr = NULL;
 	uint32_t *reply_buf_len_ptr = NULL;
 	uint16_t *reply_retval_ptr = NULL;
 
@@ -44,14 +46,14 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #if (FALSE == FCI_CFG_FORCE_LEGACY_API)
-	/*	Allocate space for return value by skipping first two bytes */
-	reply_buf_ptr = ((uint8_t *)&rep_msg->msg_cmd.payload[0] + 2);
+	/*	Allocate space for return value ( + padding) by skipping first 4 bytes */
+	reply_buf_ptr = ((uint32_t *)&rep_msg->msg_cmd.payload[4]);
 	reply_buf_len_ptr = &rep_msg->msg_cmd.length;
 
-	/*	Available reply buffer is two bytes less than maximum FCI message payload length */
-	*reply_buf_len_ptr = FCI_CFG_MAX_CMD_PAYLOAD_LEN - 2U;
+	/*	Available reply buffer is 4 bytes less than maximum FCI message payload length */
+	*reply_buf_len_ptr = FCI_CFG_MAX_CMD_PAYLOAD_LEN - 4U;
 #else
-	/*	Don't allocate space for return value. First two bytes of payload buffer will be overwritten... */
+	/*	Don't allocate space for return value. First 4 bytes of payload buffer will be overwritten... */
 	reply_buf_ptr = rep_msg->msg_cmd.payload;
 	reply_buf_len_ptr = &rep_msg->msg_cmd.length;
 	*reply_buf_len_ptr = FCI_CFG_MAX_CMD_PAYLOAD_LEN;
@@ -264,7 +266,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 
 				default:
 				{
-					NXP_LOG_WARNING("Unknown CMD code received: 0x%x\n", msg->msg_cmd.code);
+					NXP_LOG_WARNING("Unknown CMD code received: 0x%x\n", (uint_t)msg->msg_cmd.code);
 					ret = EINVAL;
 					fci_ret = FPP_ERR_UNKNOWN_COMMAND;
 					break;
@@ -273,10 +275,10 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 
 			/*	Inform client about command execution status */
 #if (FALSE == FCI_CFG_FORCE_LEGACY_API)
-			/*	We're adding another two bytes at the beginning of the FCI message payload area */
-			rep_msg->msg_cmd.length = *reply_buf_len_ptr + 2U;
+			/*	We're adding another 4 bytes at the beginning of the FCI message payload area */
+			rep_msg->msg_cmd.length = *reply_buf_len_ptr + 4U;
 #else
-			/*	Pass reply buffer length as is. First two bytes will be overwritten by the return value. */
+			/*	Pass reply buffer length as is. First 4 bytes will be overwritten by the return value. */
 			rep_msg->msg_cmd.length = *reply_buf_len_ptr;
 #endif /* FCI_CFG_FORCE_LEGACY_API */
 			reply_retval_ptr = (uint16_t *)rep_msg->msg_cmd.payload;
@@ -501,7 +503,9 @@ errno_t fci_disable_if(pfe_phy_if_t *phy_if)
 {
 	fci_t *context = (fci_t *)&__context;
 	fci_rt_db_entry_t *route_entry;
+#if defined(PFE_CFG_RTABLE_ENABLE)
 	pfe_rtable_entry_t *rtable_entry;
+#endif /* PFE_CFG_RTABLE_ENABLE */
 	errno_t ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -522,22 +526,26 @@ errno_t fci_disable_if(pfe_phy_if_t *phy_if)
 	route_entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_IF, phy_if);
 	while (NULL != route_entry)
 	{
+#if defined(PFE_CFG_RTABLE_ENABLE)
 		rtable_entry = pfe_rtable_get_first(context->rtable, RTABLE_CRIT_BY_ROUTE_ID, &route_entry->id);
 		if (NULL != rtable_entry)
 		{
 			/*	There is routing table entry using the interface */
 			return EOK;
 		}
+#endif /* PFE_CFG_RTABLE_ENABLE */
 
 		route_entry = fci_rt_db_get_next(&context->route_db);
 	}
 
+#if defined(PFE_CFG_L2BRIDGE_ENABLE)
 	/*	Also don't disable it when interface is in bridge */
 	if (NULL != pfe_l2br_get_first_domain(context->l2_bridge, L2BD_BY_PHY_IF, (void *)phy_if))
 	{
 		/*	Interface is assigned to some L2 bridge domain */
 		return EOK;
 	}
+#endif /* PFE_CFG_L2BRIDGE_ENABLE */
 
 	/*	Interface is not being used by FCI logic, disable it. Note that
 	 	if some logical interface associated with this physical one is
@@ -550,3 +558,5 @@ errno_t fci_disable_if(pfe_phy_if_t *phy_if)
 
 	return ret;
 }
+
+#endif /* PFE_CFG_FCI_ENABLE */

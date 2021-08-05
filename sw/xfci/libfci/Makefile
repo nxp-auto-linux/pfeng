@@ -5,36 +5,40 @@
 #
 # =========================================================================
 
-TARGET_OS ?= QNX
-
-#Build profile, possible values: release, debug, profile, coverage
-BUILD_PROFILE ?= release
-
-#Compiler definitions
 include ../../build_env.mak
-
-ifeq ($(TARGET_OS),LINUX)
-  OUTPUT_DIR = build/$(BUILD_PROFILE)
-  CC ?= $(PLATFORM)-gcc
-  CXX ?= $(PLATFORM)-g++
-  INC_PREFIX = 
-else
-  #Build architecture/variant string, possible values: x86, armv7le, etc...
-  PLATFORM ?= aarch64le
-  CONFIG_NAME ?= $(PLATFORM)-$(BUILD_PROFILE)
-  PFE_CFG_TARGET_ARCH_DEF = PFE_CFG_TARGET_ARCH_$(PLATFORM)
-  PFE_CFG_TARGET_OS_DEF = PFE_CFG_TARGET_OS_$(TARGET_OS)
-  PFE_CFG_BUILD_PROFILE_DEF := PFE_CFG_BUILD_PROFILE_$(shell echo $(BUILD_PROFILE) | tr [a-z] [A-Z])
-
-  OUTPUT_DIR = build/$(CONFIG_NAME)
-  CC = qcc -Vgcc_nto$(PLATFORM)
-  CXX = qcc -lang-c++ -Vgcc_nto$(PLATFORM)
-  LD = $(CC) -static -a
-  INC_PREFIX =
-endif
 
 ARTIFACT = libfci.a
 TARGET = $(OUTPUT_DIR)/$(ARTIFACT)
+
+#Build profile. Possible values: release, debug, profile, coverage
+BUILD_PROFILE ?= release
+
+#Build string for architecture/variant.
+CONFIG_NAME ?= $(PLATFORM)-$(BUILD_PROFILE)
+OUTPUT_DIR = build/$(CONFIG_NAME)
+
+TARGET_OS ?= QNX
+
+#Specific configuration per TARGET_OS.
+ifeq ($(TARGET_OS),LINUX)
+	CC ?= $(PLATFORM)-gcc
+	CXX ?= $(PLATFORM)-g++
+	INC_PREFIX = 
+	
+	#Expand GLOBAL_CCFLAGS to get rid of single quotes around string parameters of GLOBAL_CCFLAGS.
+	#Those single quotes are utilized in build process of the Linux PFE driver, but they cause warnings in this makefile.
+	GLOBAL_CCFLAGS := $(shell echo $(GLOBAL_CCFLAGS))
+else
+	PLATFORM ?= aarch64le
+	PFE_CFG_TARGET_ARCH_DEF = PFE_CFG_TARGET_ARCH_$(PLATFORM)
+	PFE_CFG_TARGET_OS_DEF = PFE_CFG_TARGET_OS_$(TARGET_OS)
+	PFE_CFG_BUILD_PROFILE_DEF := PFE_CFG_BUILD_PROFILE_$(shell echo $(BUILD_PROFILE) | tr [a-z] [A-Z])
+
+	CC = qcc -Vgcc_nto$(PLATFORM)
+	CXX = qcc -lang-c++ -Vgcc_nto$(PLATFORM)
+	LD = $(CC) -static -a
+	INC_PREFIX =
+endif
 
 #User defined include/preprocessor flags and libraries
 INCLUDES += -I$(INC_PREFIX)src \
@@ -44,8 +48,6 @@ INCLUDES += -I$(INC_PREFIX)src \
 			-I$(INC_PREFIX)../../fci/public \
 			-I$(INC_PREFIX)../../pfe_platform/public
 
-#LIBS += -L/path/to/my/lib/$(PLATFORM)/usr/lib -lmylib
-		
 #Dependencies
 DEPENDENCIES = $(subst -L,,$(subst $(EMPTY) $(EMPTY)-l:,/,$(LIBS)))
 
@@ -79,10 +81,10 @@ rwildcard = $(wildcard $(addprefix $1/*.,$2)) $(foreach d,$(wildcard $1/*),$(cal
 
 #Source list
 ifeq ($(TARGET_OS),LINUX)
-  SRCS = src/libfci_linux.c
+	SRCS = src/libfci_linux.c
 endif
 ifeq ($(TARGET_OS),QNX)
-  SRCS = src/libfci_qnx.c
+	SRCS = src/libfci_qnx.c
 endif
 
 

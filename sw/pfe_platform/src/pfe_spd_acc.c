@@ -14,8 +14,12 @@
 #include "blalloc.h"
 #include "pfe_class.h"
 #include "pfe_rtable.h"
+#include "pfe_if_db.h"
 
 #include "pfe_spd.h"
+
+#ifdef PFE_CFG_FCI_ENABLE
+
 /* HW acceleration of the SPD entry search must be supported by a proper configuration
    which we do here */
 
@@ -33,12 +37,12 @@ pfe_rtable_t *rtable_ptr = NULL;
 errno_t pfe_spd_acc_init(pfe_class_t *class, pfe_rtable_t *rtable)
 {
     errno_t ret = EOK;
-#if 0 //todo AAVB-2539
+#if 0 /* todo AAVB-2539 */
     addr_t id;
 #endif
     /* Initialize submodules */
     pfe_spd_init(class);
-#if 0 //todo AAVB-2539
+#if 0 /* todo AAVB-2539 */
 #if defined(PFE_CFG_RTABLE_ENABLE)
     rtable_ptr = rtable;
     /* Create a pool of unique IDs */
@@ -58,6 +62,8 @@ errno_t pfe_spd_acc_init(pfe_class_t *class, pfe_rtable_t *rtable)
         ret = ENOMEM;
     }
 #endif
+#else
+    (void)rtable;
 #endif
     return ret;
 
@@ -67,9 +73,9 @@ errno_t pfe_spd_acc_init(pfe_class_t *class, pfe_rtable_t *rtable)
 * @brief Destroys the module
 * @note No other function is allowed to be called after pfe_spd_acc_destroy() call except pfe_spd_acc_init()
 */
-void pfe_spd_acc_destroy(void)
+void pfe_spd_acc_destroy(pfe_if_db_t *phy_if_db)
 {
-#if 0 //todo AAVB-2539
+#if 0 /* todo AAVB-2539 */
 #if defined(PFE_CFG_RTABLE_ENABLE)
     if(NULL != pfe_spd_acc_id_pool)
     {
@@ -80,8 +86,15 @@ void pfe_spd_acc_destroy(void)
     rtable_ptr = NULL;
 #endif
 #endif
+
+    pfe_spd_destroy(phy_if_db);
+
+    /* Forget platform instances */
+    pfe_spd_acc_id_pool = NULL;
+    rtable_ptr = NULL;
 }
 
+#if 0 /* todo AAVB-2539 */
 /**
 * @brief Converts the type pfe_ct_spd_entry_t into pfe_rtable_entry_t
 * @details The conversion of pfe_ct_spd_entry_t into pfe_rtable_entry_t is needed in a specific
@@ -140,7 +153,7 @@ static inline errno_t pfe_spd_acc_convert_to_rt_entry(pfe_ct_spd_entry_t *entry,
     pfe_rtable_entry_set_dstif_id(rt_entry, PFE_PHY_IF_ID_UTIL);
     return ret;
 }
-
+#endif
 
 /**
 * @brief Adds a rule to the SPD at given position
@@ -158,7 +171,7 @@ static inline errno_t pfe_spd_acc_convert_to_rt_entry(pfe_ct_spd_entry_t *entry,
 errno_t pfe_spd_acc_add_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd_entry_t *entry)
 {
     errno_t ret;
-#if 0 //todo AAVB-2539
+#if 0 /* todo AAVB-2539 */
     addr_t id;
     pfe_rtable_entry_t *rt_entry;
 #endif
@@ -169,7 +182,7 @@ errno_t pfe_spd_acc_add_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd
         return EINVAL;
     }
 #endif
-#if 0 //todo AAVB-2539
+#if 0 /* todo AAVB-2539 */
 #if defined(PFE_CFG_RTABLE_ENABLE)
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if(unlikely((NULL == rtable_ptr) || (NULL == pfe_spd_acc_id_pool)))
@@ -269,7 +282,7 @@ errno_t pfe_spd_acc_add_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd
 errno_t pfe_spd_acc_remove_rule(pfe_phy_if_t * phy_if, uint16_t position)
 {
     errno_t ret;
-#if 0 //todo AAVB-2539
+#if 0 /* todo AAVB-2539 */
     pfe_ct_spd_entry_t entry;
     pfe_rtable_entry_t *rt_entry;
 #endif
@@ -280,7 +293,7 @@ errno_t pfe_spd_acc_remove_rule(pfe_phy_if_t * phy_if, uint16_t position)
         return EINVAL;
     }
 #endif
-#if 0 //todo AAVB-2539
+#if 0 /* todo AAVB-2539 */
 #if defined(PFE_CFG_RTABLE_ENABLE)
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if(unlikely((NULL == rtable_ptr) || (NULL == pfe_spd_acc_id_pool)))
@@ -332,3 +345,5 @@ errno_t pfe_spd_acc_get_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd
 {
     return pfe_spd_get_rule(phy_if, position, entry);
 }
+
+#endif /* PFE_CFG_FCI_ENABLE */

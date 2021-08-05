@@ -24,6 +24,6 @@ typedef struct pfe_hif_nocpy_tag pfe_hif_nocpy_t;
 pfe_hif_nocpy_t *pfe_hif_nocpy_create(addr_t base_va, const pfe_bmu_t *bmu);
 pfe_hif_chnl_t *pfe_hif_nocpy_get_channel(const pfe_hif_nocpy_t *hif, uint32_t channel_id);
 uint32_t pfe_hif_nocpy_get_text_statistics(const pfe_hif_nocpy_t *hif, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-void pfe_hif_nocpy_destroy(const pfe_hif_nocpy_t *hif);
+void pfe_hif_nocpy_destroy(pfe_hif_nocpy_t *hif);
 
 #endif /* PUBLIC_PFE_HIF_NOCPY_H_ */

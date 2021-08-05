@@ -354,4 +354,9 @@ errno_t oal_irq_get_flags(const oal_irq_t *irq, oal_irq_flags_t *flags)
 	return EOK;
 }
 
+bool_t oal_irq_in_atomic()
+{
+	return in_atomic();
+}
+
 /** @}*/

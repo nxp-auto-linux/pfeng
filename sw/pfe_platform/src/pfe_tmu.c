@@ -37,7 +37,7 @@ static void pfe_tmu_init(const pfe_tmu_t *tmu, const pfe_tmu_cfg_t *cfg)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pfe_tmu_disable(tmu);
-	oal_time_mdelay(10);
+	oal_time_msleep(10);
 
 	if (EOK != pfe_tmu_cfg_init(tmu->cbus_base_va, cfg))
 	{

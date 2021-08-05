@@ -47,6 +47,36 @@ static void pfe_util_set_config(const pfe_util_t *util, const pfe_util_cfg_t *cf
 	hal_write32(cfg->pe_sys_clk_ratio, util->cbus_base_va + UTIL_PE_SYS_CLK_RATIO);
 }
 
+/*
+ * @brief		Create PEs
+ * 
+ */
+static errno_t pfe_util_create_pe(uint32_t pe_num, addr_t cbus_base_va, pfe_util_t *util)
+{
+	pfe_pe_t *pe;
+	uint32_t ii;
+	/*	Create PEs */
+	for (ii=0U; ii<pe_num; ii++)
+	{
+		pe = pfe_pe_create(cbus_base_va, PE_TYPE_UTIL, (uint8_t)ii);
+
+		if (NULL == pe)
+		{
+			return ECANCELED;
+		}
+		else
+		{
+			pfe_pe_set_iaccess(pe, UTIL_MEM_ACCESS_WDATA, UTIL_MEM_ACCESS_RDATA, UTIL_MEM_ACCESS_ADDR);
+			pfe_pe_set_dmem(pe, PFE_CFG_UTIL_ELF_DMEM_BASE, PFE_CFG_UTIL_DMEM_SIZE);
+			pfe_pe_set_imem(pe, PFE_CFG_UTIL_ELF_IMEM_BASE, PFE_CFG_UTIL_IMEM_SIZE);
+
+			util->pe[ii] = pe;
+			util->pe_num++;
+		}
+	}
+	return EOK;
+}
+
 /**
  * @brief		Create new UTIL instance
  * @details		Creates and initializes UTIL instance. After successful
@@ -59,8 +89,7 @@ static void pfe_util_set_config(const pfe_util_t *util, const pfe_util_cfg_t *cf
 pfe_util_t *pfe_util_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_util_cfg_t *cfg)
 {
 	pfe_util_t *util;
-	pfe_pe_t *pe;
-	uint32_t ii;
+	errno_t ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL_ADDR == cbus_base_va) || (NULL == cfg)))
@@ -93,25 +122,11 @@ pfe_util_t *pfe_util_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_util
 		}
 
 		/*	Create PEs */
-		for (ii=0U; ii<pe_num; ii++)
+		ret = pfe_util_create_pe(pe_num, cbus_base_va, util);
+		if(EOK != ret)
 		{
-			pe = pfe_pe_create(cbus_base_va, PE_TYPE_UTIL, (uint8_t)ii);
-
-			if (NULL == pe)
-			{
-				goto free_and_fail;
-			}
-			else
-			{
-				pfe_pe_set_iaccess(pe, UTIL_MEM_ACCESS_WDATA, UTIL_MEM_ACCESS_RDATA, UTIL_MEM_ACCESS_ADDR);
-				pfe_pe_set_dmem(pe, PFE_CFG_UTIL_ELF_DMEM_BASE, PFE_CFG_UTIL_DMEM_SIZE);
-				pfe_pe_set_imem(pe, PFE_CFG_UTIL_ELF_IMEM_BASE, PFE_CFG_UTIL_IMEM_SIZE);
-
-				util->pe[ii] = pe;
-				util->pe_num++;
-			}
+			goto free_and_fail;
 		}
-
 		/*	Issue block reset */
 		pfe_util_reset(util);
 
@@ -267,8 +282,23 @@ errno_t pfe_util_isr(const pfe_util_t *util)
 	/* Read the error record from each PE */
 	for (i = 0U; i < util->pe_num; i++)
 	{
-		(void)pfe_pe_get_fw_errors(util->pe[i]);
+		/*	Allow safe use of _nolock() functions. We don't call the _mem_lock()
+			here as we don't need to have coherent accesses. */
+		if (EOK != pfe_pe_lock(util->pe[i]))
+		{
+			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+		}
+		
+		(void)pfe_pe_get_fw_errors_nolock(util->pe[i]);
+		
+		if (EOK != pfe_pe_unlock(util->pe[i]))
+		{
+			NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
+		}
 	}
+
+	/* Acknowledge interrupt */
+	(void) pfe_util_cfg_isr(util->cbus_base_va);
 
 	return EOK;
 }
@@ -317,6 +347,7 @@ uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, char_t *buf, uint3
 {
 	uint32_t len = 0U, ii;
 	pfe_ct_version_t fw_ver;
+	pfe_ct_pe_mmap_t mmap;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == util))
@@ -342,7 +373,32 @@ uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, char_t *buf, uint3
 	/*	Get PE info per PE */
 	for (ii=0U; ii<util->pe_num; ii++)
 	{
+		ipsec_state_t state = { 0 };
 		len += pfe_pe_get_text_statistics(util->pe[ii], buf + len, buf_len - len, verb_level);
+
+		if (EOK == pfe_pe_get_mmap(util->pe[ii], &mmap))
+		{
+			/* IPsec statistics */
+			pfe_pe_memcpy_from_dmem_to_host_32(util->pe[ii], &state, oal_ntohl(mmap.util_pe.ipsec_state), sizeof(state));
+			len += oal_util_snprintf(buf + len, buf_len - len, "\nIPsec\n", state.hse_mu);
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE MU            0x%x\n", oal_ntohl(state.hse_mu));
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE MU Channel    0x%x\n", oal_ntohl(state.hse_mu_chn));
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_OK                        0x%x\n", oal_ntohl(state.response_ok));
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_VERIFY_FAILED             0x%x\n", oal_ntohl(state.verify_failed));
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_INVALID_DATA        0x%x\n", oal_ntohl(state.ipsec_invalid_data));
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_REPLAY_DETECTED     0x%x\n", oal_ntohl(state.ipsec_replay_detected));
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_REPLAY_LATE         0x%x\n", oal_ntohl(state.ipsec_replay_late));
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_SEQNUM_OVERFLOW     0x%x\n", oal_ntohl(state.ipsec_seqnum_overflow));
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_CE_DROP             0x%x\n", oal_ntohl(state.ipsec_ce_drop));
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_TTL_EXCEEDED        0x%x\n", oal_ntohl(state.ipsec_ttl_exceeded));
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_VALID_DUMMY_PAYLOAD 0x%x\n", oal_ntohl(state.ipsec_valid_dummy_payload));
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_HEADER_LEN_OVERFLOW 0x%x\n", oal_ntohl(state.ipsec_header_overflow));
+			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_PADDING_CHECK_FAIL  0x%x\n", oal_ntohl(state.ipsec_padding_check_fail));
+			len += oal_util_snprintf(buf + len, buf_len - len, "Code of handled error    0x%x\n", oal_ntohl(state.handled_error_code));
+			len += oal_util_snprintf(buf + len, buf_len - len, "SAId of handled error    0x%x\n", oal_ntohl(state.handled_error_said));
+			len += oal_util_snprintf(buf + len, buf_len - len, "Code of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_code));
+			len += oal_util_snprintf(buf + len, buf_len - len, "SAId of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_said));
+		}
 	}
 
 	return len;

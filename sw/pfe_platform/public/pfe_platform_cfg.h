@@ -13,12 +13,6 @@
 #define TMU_TYPE_TMU		1U
 #define TMU_TYPE_TMU_LITE	2U
 
-/**
- * @brief	Number of entries of a HIF ring
- * @note	Must be power of 2
- */
-#define PFE_HIF_RING_CFG_LENGTH				256U
-
 /*
  * @brief TMU variant
  */
@@ -52,27 +46,9 @@
 #define	PFE_CFG_BMU1_BUF_COUNT				0x200U
 
 /**
- * @brief	BMU1 buffer size
- * @details	Value = log2(size)
+ * @brief	BMU1 buffer size in Bytes
  */
-#define PFE_CFG_BMU1_BUF_SIZE				0x8U	/* 256 bytes */
-
-/**
- * @brief	Maximum number of buffers - BMU2
- */
-#if defined(PFE_CFG_TARGET_OS_LINUX) && defined(PFE_CFG_TARGET_ARCH_x86_64)
-/* Linux x86 has issue with big memory buffers
-*/
-#define	PFE_CFG_BMU2_BUF_COUNT				0x200U
-#else
-#define	PFE_CFG_BMU2_BUF_COUNT				0x400U
-#endif
-
-/**
- * @brief	BMU2 buffer size
- * @details	Value = log2(size)
- */
-#define PFE_CFG_BMU2_BUF_SIZE				0xbU	/* 2048 bytes */
+#define PFE_CFG_BMU1_BUF_SIZE				256U	/* 256 bytes */
 
 /**
  * @brief	DMEM base address as defined by .elf
@@ -138,7 +114,7 @@
 /**
  * @brief	Size of BMU1 buffers area in number of bytes
  */
-#define PFE_CFG_BMU1_LMEM_SIZE				((1UL << PFE_CFG_BMU1_BUF_SIZE) * PFE_CFG_BMU1_BUF_COUNT)
+#define PFE_CFG_BMU1_LMEM_SIZE				(PFE_CFG_BMU1_BUF_SIZE * PFE_CFG_BMU1_BUF_COUNT)
 
 /**
  * @brief	Offset in LMEM, where PE memory area starts

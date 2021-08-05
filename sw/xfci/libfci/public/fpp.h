@@ -20,6 +20,10 @@
 #define CAL_PACKED_ALIGNED(n)	__attribute__((packed, aligned(n)))
 #endif /* CAL_PACKED_ALIGNED */
 
+#ifndef CAL_ALIGNED
+#define CAL_ALIGNED(n)	__attribute__((aligned(n)))
+#endif /* CAL_ALIGNED */
+
 /**
  * @file	fpp.h
  * @brief	The legacy FCI API
@@ -506,7 +510,7 @@ typedef enum {
  *              - for command buffer in functions @ref fci_write, @ref fci_query or
  *                @ref fci_cmd, with @ref FPP_CMD_IPV4_CONNTRACK command.
  */
-typedef struct CAL_PACKED {
+typedef struct CAL_PACKED_ALIGNED(4) {
 	uint16_t action;			/**< Action to perform */
 	uint16_t rsvd0;
 	uint32_t saddr;				/**< Source IP address */
@@ -561,7 +565,7 @@ typedef struct CAL_PACKED {
  *              - for command buffer in functions @ref fci_write, @ref fci_query or
  *                @ref fci_cmd, with @ref FPP_CMD_IPV6_CONNTRACK command.
  */
-typedef struct CAL_PACKED {
+typedef struct CAL_PACKED_ALIGNED(4) {
 	uint16_t action;			/**< Action to perform */
 	uint16_t rsvd1;
 	uint32_t saddr[4];			/**< Source IP address */
@@ -633,6 +637,8 @@ typedef struct CAL_PACKED {
  *   fpp_rt_cmd_t cmd_data =
  *   {
  *     .action = FPP_ACTION_REGISTER, // Register new route
+ *     .src_mac = ...,                // Source MAC address (network endian). 
+ *                                    // If left unset (all-zero), then MAC of the egress interface is used.
  *     .dst_mac = ...,                // Destination MAC address (network endian)
  *     .output_device = ...,          // Name of egress interface (name of physical interface)
  *     .id = ...                      // Chosen number will be used as unique route identifier (network endian)
@@ -663,6 +669,7 @@ typedef struct CAL_PACKED {
  *
  * Response data provided (@ref fpp_rt_cmd_t):
  * @code{.c}
+ *     rsp_data.src_mac;        // Source MAC address
  *     rsp_data.dst_mac;        // Destination MAC address
  *     rsp_data.output_device;  // Output device name
  *     rsp_data.id;             // Route ID (network endian)
@@ -705,9 +712,10 @@ typedef struct CAL_PACKED {
  *              - as reply buffer in functions @ref fci_query or @ref fci_cmd,
  *                with @ref FPP_CMD_IP_ROUTE command.
  */
-typedef struct CAL_PACKED {
+typedef struct CAL_PACKED_ALIGNED(4) {
 	uint16_t action;					/**< Action to perform */
 	uint16_t mtu;
+	uint8_t src_mac[6];					/**< Source MAC address (network endian) */
 	uint8_t dst_mac[6];					/**< Destination MAC address (network endian) */
 	uint16_t pad;						
 	char	  output_device[IFNAMSIZ];	/**< Name of egress physical interface */
@@ -1991,7 +1999,7 @@ typedef struct {
  *              - for command buffer in functions @ref fci_write, @ref fci_query or
  *                @ref fci_cmd, with @ref FPP_CMD_IPV4_SET_TIMEOUT command.
  */
-typedef struct CAL_PACKED {
+typedef struct CAL_PACKED_ALIGNED(4) {
 	uint16_t	protocol;
 	uint16_t	sam_4o6_timeout;
 	uint32_t	timeout_value1;

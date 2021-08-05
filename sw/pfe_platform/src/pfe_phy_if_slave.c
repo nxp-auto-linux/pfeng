@@ -351,7 +351,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 {
 	errno_t ret;
-	pfe_ct_if_op_mode_t mode = IF_OP_DISABLED;
+	pfe_ct_if_op_mode_t mode = IF_OP_DEFAULT;
 	pfe_platform_rpc_pfe_phy_if_get_op_mode_arg_t arg = {0};
 	pfe_platform_rpc_pfe_phy_if_get_op_mode_ret_t rpc_ret = {0};
 
@@ -359,7 +359,7 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return IF_OP_DISABLED;
+		return IF_OP_DEFAULT;
 	}
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
@@ -1147,7 +1147,7 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 		if (EOK != ret)
 		{
 			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR failed: %d\n", ret);
-			ret = pfe_mac_db_del_addr(iface->mac_db, addr);
+			ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
 			if(EOK != ret)
 			{
 				NXP_LOG_WARNING("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
@@ -1169,11 +1169,12 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
  * @brief		Delete MAC address
  * @param[in]	iface The interface instance
  * @param[in]	addr The MAC address to delete
+ * @param[in]	owner The identification of driver instance
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  * @retval		ENOENT Address not found
  */
-errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr)
+errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, pfe_ct_phy_if_id_t owner)
 {
 	errno_t ret = EOK;
 	pfe_platform_rpc_pfe_phy_if_del_mac_addr_arg_t arg = {0};
@@ -1205,7 +1206,7 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr)
 	}
 	else
 	{
-		ret = pfe_mac_db_del_addr(iface->mac_db, addr);
+		ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
 		if(EOK != ret)
 		{
 			NXP_LOG_WARNING("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
@@ -1268,7 +1269,7 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 	ret = pfe_mac_db_get_first_addr(iface->mac_db, MAC_DB_CRIT_ALL, PFE_TYPE_ANY, PFE_CFG_LOCAL_IF, addr);
 	if(EOK != ret)
 	{
-		NXP_LOG_WARNING("unable to get MAC address: %d\n", ret);
+		NXP_LOG_WARNING("%s: Unable to get MAC address: %d\n", iface->name, ret);
 	}
 
 	if (EOK != oal_mutex_unlock(&iface->lock))

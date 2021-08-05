@@ -25,6 +25,8 @@
 #include "fci_internal.h"
 #include "fci.h"
 
+#ifdef PFE_CFG_FCI_ENABLE
+
 static errno_t fci_l2br_domain_remove(pfe_l2br_domain_t *domain);
 static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *phy_if);
 uint32_t fci_l2br_static_entry_get_valid_fw_list(void);
@@ -226,7 +228,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 							}
 							else
 							{
-								NXP_LOG_INFO("Domain %d: Interface %d updated\n", oal_ntohs(bd_cmd->vlan), ii);
+								NXP_LOG_INFO("Domain %d: Interface %d updated\n", (int_t)oal_ntohs(bd_cmd->vlan), (int_t)ii);
 							}
 						}
 						else if (EOK != ret)
@@ -237,13 +239,13 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						else
 						{
 							/*	Added */
-							NXP_LOG_INFO("Domain %d: Interface %d added\n", oal_ntohs(bd_cmd->vlan), ii);
+							NXP_LOG_INFO("Domain %d: Interface %d added\n", (int_t)oal_ntohs(bd_cmd->vlan), (int_t)ii);
 						}
 					}
 					else
 					{
 						/*	Interface list contains interface not found in FCI database */
-						NXP_LOG_ERROR("Interface %d not found\n", ii);
+						NXP_LOG_ERROR("Interface %d not found\n", (int_t)ii);
 						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 						ret = EOK;
 						break; /* break the 'for' loop */
@@ -272,7 +274,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 							}
 							else
 							{
-								NXP_LOG_INFO("Domain %d: Interface %d removed\n", oal_ntohs(bd_cmd->vlan), ii);
+								NXP_LOG_INFO("Domain %d: Interface %d removed\n", (int_t)oal_ntohs(bd_cmd->vlan), (int_t)ii);
 							}
 						}
 					}
@@ -521,7 +523,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 			{
 				*fci_ret = FPP_ERR_OK;
 
-				if (EOK != pfe_l2br_static_entry_replace_fw_list(context->l2_bridge, entry,  oal_ntohl(br_ent_cmd->forward_list)))
+				if (EOK != pfe_l2br_static_entry_replace_fw_list(context->l2_bridge, entry, oal_ntohl(br_ent_cmd->forward_list)))
 				{
 					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				}
@@ -594,7 +596,8 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 			/* MAC */
 			pfe_l2br_static_entry_get_mac(entry, br_ent_cmd->mac);
 			/* FW list */
-			br_ent_cmd->forward_list =  oal_htonl(pfe_l2br_static_entry_get_fw_list(entry));
+			br_ent_cmd->forward_list = oal_htonl(pfe_l2br_static_entry_get_fw_list(entry));
+			/* misc flags */
 			(void)pfe_l2br_static_entry_get_local_flag(context->l2_bridge, entry, (bool_t *)&br_ent_cmd->local);
 			(void)pfe_l2br_static_entry_get_src_discard_flag(context->l2_bridge, entry, (bool_t *)&br_ent_cmd->src_discard);
 			(void)pfe_l2br_static_entry_get_dst_discard_flag(context->l2_bridge, entry, (bool_t *)&br_ent_cmd->dst_discard);
@@ -666,7 +669,7 @@ static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, pfe_phy_if_t
 {
 	fci_t *context = (fci_t *)&__context;
 	errno_t ret = EOK;
-	pfe_ct_phy_if_id_t id = PFE_PHY_IF_ID_INVALID;
+	pfe_ct_phy_if_id_t id;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == domain)))
@@ -724,6 +727,8 @@ static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, pfe_phy_if_t
 			}
 		}
 	}
+	
+	(void)id;
 
 	return ret;
 }
@@ -775,5 +780,6 @@ static errno_t fci_l2br_domain_remove(pfe_l2br_domain_t *domain)
 	return ret;
 }
 
+#endif /* PFE_CFG_FCI_ENABLE */
 
 /** @}*/

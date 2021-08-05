@@ -19,6 +19,7 @@
 #include <linux/phylink.h>
 #include <linux/kfifo.h>
 #include <linux/mutex.h>
+#include <linux/clk.h>
 #if !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
 #include <linux/pcs/fsl-s32gen1-xpcs.h>
 #include <linux/phy/phy.h>
@@ -42,7 +43,7 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"BETA 0.9.4"
+#define PFENG_DRIVER_VERSION		"BETA 0.9.5"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
@@ -70,6 +71,15 @@ static const pfe_ct_phy_if_id_t pfeng_hif_ids[] = {
 #define PFENG_PFE_HIF_CHANNELS		(ARRAY_SIZE(pfeng_hif_ids))
 #define PFENG_PFE_EMACS			(ARRAY_SIZE(pfeng_emac_ids))
 
+/* LOGIF mode variants */
+enum {
+	PFENG_LOGIF_MODE_TX_INJECT,
+	PFENG_LOGIF_MODE_TX_CLASS,
+	PFENG_LOGIF_MODE_RESERVED_1,
+	PFENG_LOGIF_MODE_AUX
+};
+
+
 /* HIF channel mode variants */
 enum {
 	PFENG_HIF_MODE_EXCLUSIVE,
@@ -89,6 +99,8 @@ enum {
 };
 
 #define PFENG_TX_PKT_HEADER_SIZE	(sizeof(pfe_ct_hif_tx_hdr_t))
+
+#define PFENG_INT_TIMER_DEFAULT		256 /* usecs */
 
 /* skbs waiting for time stamp */
 struct pfeng_ts_skb {
@@ -114,6 +126,12 @@ struct pfeng_netif_cfg {
 	u8				hifs;
 	u32				hifmap;
 	bool				tx_inject;
+	bool				aux;
+	bool				pause_rx;
+	bool				pause_tx;
+#ifdef PFE_CFG_PFE_SLAVE
+	bool				emac_router;
+#endif /* PFE_CFG_PFE_SLAVE */
 };
 
 /* net interface private data */
@@ -130,8 +148,10 @@ struct pfeng_netif {
 	struct work_struct		ihc_slave_work;
 	bool				slave_netif_inited;
 #endif /* PFE_CFG_PFE_SLAVE */
+	/* if set, the multicast/ unicast MAC addr list needs to be sync'ed with the hw */
+	bool mc_unsynced;
+	bool uc_unsynced;
 
-	struct work_struct		tx_conf_work;
 	/* PTP/Time stamping*/
 	struct ptp_clock_info           ptp_ops;
 	struct ptp_clock                *ptp_clock;
@@ -166,16 +186,16 @@ struct pfeng_rx_chnl_pool;
 struct pfeng_tx_chnl_pool;
 struct pfeng_hif_chnl {
 	struct napi_struct		napi ____cacheline_aligned_in_smp;
-	struct mutex			lock_tx;
+	spinlock_t			lock_tx;
 	struct net_device		dummy_netdev;
 	struct device			*dev;
 	pfe_hif_chnl_t			*priv;
 	struct dentry			*dentry;
 	int				cl_mode;
 	bool				ihc;
+	bool				queues_stopped;
 	u8				status;
 	u8				idx;
-	u8				netif_q_idx;
 	u32				features;
 
 	struct pfeng_netif		*netifs[HIF_CLIENTS_MAX];
@@ -193,7 +213,22 @@ struct pfeng_hif_chnl {
 
 	pfe_phy_if_t			*phyif_hif;
 	pfe_log_if_t			*logif_hif;
+
+	u32				cfg_rx_max_coalesced_frames;
+	u32				cfg_rx_coalesce_usecs;
 };
+
+static inline void pfeng_hif_shared_chnl_lock_tx(struct pfeng_hif_chnl *chnl)
+{
+	if (unlikely((chnl->cl_mode == PFENG_HIF_MODE_SHARED) || chnl->ihc))
+		spin_lock(&chnl->lock_tx);
+}
+
+static inline void pfeng_hif_shared_chnl_unlock_tx(struct pfeng_hif_chnl *chnl)
+{
+	if (unlikely((chnl->cl_mode == PFENG_HIF_MODE_SHARED) || chnl->ihc))
+		spin_unlock(&chnl->lock_tx);
+}
 
 struct pfeng_emac {
 	struct clk			*tx_clk;
@@ -221,11 +256,6 @@ struct pfeng_emac {
 	pfe_log_if_t			*logif_emac;
 };
 
-struct pfeng_ihc_tx {
-	struct pfeng_hif_chnl		*chnl;
-	struct sk_buff			*skb;
-};
-
 /* driver private data */
 struct pfeng_priv {
 	struct platform_device		*pdev;
@@ -248,7 +278,7 @@ struct pfeng_priv {
 	bool				ihc_enabled;
 	struct workqueue_struct		*ihc_tx_wq;
 	struct work_struct		ihc_tx_work;
-	DECLARE_KFIFO_PTR(ihc_tx_fifo, struct pfeng_ihc_tx);
+	DECLARE_KFIFO_PTR(ihc_tx_fifo, struct sk_buff *);
 #ifdef PFE_CFG_PFE_SLAVE
 	struct workqueue_struct		*ihc_slave_wq;
 #endif /* PFE_CFG_PFE_SLAVE */
@@ -283,9 +313,8 @@ int pfeng_hif_create(struct pfeng_priv *priv);
 void pfeng_hif_remove(struct pfeng_priv *priv);
 struct sk_buff *pfeng_hif_chnl_receive_pkt(struct pfeng_hif_chnl *chnl, uint32_t queue);
 int pfeng_hif_chnl_event_handler(pfe_hif_drv_client_t *client, void *data, uint32_t event, uint32_t qno);
-int pfe_hif_drv_ihc_put_pkt(pfe_hif_drv_client_t *client, void *data, uint32_t len, void *ref);
-int pfe_hif_drv_ihc_put_conf(pfe_hif_drv_client_t *client);
 int pfeng_hif_chnl_start(struct pfeng_hif_chnl *chnl);
+int pfeng_hif_chnl_set_coalesce(struct pfeng_hif_chnl *chnl, struct clk *clk_sys, u32 usecs, u32 frames);
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 void pfeng_ihc_tx_work_handler(struct work_struct *work);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
@@ -298,7 +327,7 @@ int pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_hif_chnl *chnl, void *va_add
 u8 pfeng_hif_chnl_txconf_get_flag(struct pfeng_hif_chnl *chnl);
 struct sk_buff *pfeng_hif_chnl_txconf_get_skbuf(struct pfeng_hif_chnl *chnl);
 int pfeng_hif_chnl_txconf_unroll_map_full(struct pfeng_hif_chnl *chnl, u32 idx, u32 nfrags);
-int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl);
+int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_budget);
 bool pfeng_hif_chnl_txconf_check(struct pfeng_hif_chnl *chnl, u32 elems);
 
 /* netif */
@@ -307,6 +336,8 @@ void pfeng_netif_remove(struct pfeng_priv *priv);
 int pfeng_netif_suspend(struct pfeng_priv *priv);
 int pfeng_netif_resume(struct pfeng_priv *priv);
 void pfeng_ethtool_init(struct net_device *netdev);
+int pfeng_ethtool_params_save(struct pfeng_netif *netif);
+int pfeng_ethtool_params_restore(struct pfeng_netif *netif);
 int pfeng_phylink_create(struct pfeng_netif *netif);
 int pfeng_phylink_connect_phy(struct pfeng_netif *netif);
 int pfeng_phylink_start(struct pfeng_netif *netif);
@@ -328,5 +359,17 @@ int pfeng_hwts_store_tx_ref(struct pfeng_netif *netif, struct sk_buff *skb);
 int pfeng_hwts_ioctl_set(struct pfeng_netif *netif, struct ifreq *rq);
 int pfeng_hwts_ioctl_get(struct pfeng_netif *netif, struct ifreq *rq);
 int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct ethtool_ts_info *info);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,9,0)
+static inline int pm_runtime_resume_and_get(struct device *dev)
+{
+	int ret = pm_runtime_get_sync(dev);
+
+	if (ret < 0)
+		pm_runtime_put_noidle(dev);
+
+	return ret;
+}
+#endif
 
 #endif

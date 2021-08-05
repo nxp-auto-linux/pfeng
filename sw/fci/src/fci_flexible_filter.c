@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -14,6 +14,8 @@
 #include "fci_internal.h"
 #include "pfe_class.h"
 #include "pfe_flexible_filter.h"
+
+#ifdef PFE_CFG_FCI_ENABLE
 
 /**
  * @brief			Processes FPP_CMD_FP_FLEXIBLE_FILTER commands
@@ -44,6 +46,8 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
+#else
+	(void)reply_buf;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     fp_cmd = (fpp_flexible_filter_cmd_t *)(msg->msg_cmd.payload);
     /* Important to initialize to avoid buffer overflows */    
@@ -118,3 +122,4 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
 
 }
 
+#endif /* PFE_CFG_FCI_ENABLE */

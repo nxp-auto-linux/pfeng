@@ -8,7 +8,6 @@
 #include "pfe_cfg.h"
 #include "pfeng.h"
 
-#include <linux/clk.h>
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
 #include <linux/phylink.h>
@@ -134,9 +133,8 @@ static int pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coalesce
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 	struct pfeng_hif_chnl *chnl;
+	int ret;
 	u32 idx;
-	u64 cycles = 0;
-	int ret = 0;
 
 	/* Right now we only support two modes:
 	 * 1) disabled coalescing
@@ -144,15 +142,9 @@ static int pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coalesce
 	 *
 	 * Note: Frame count triggered coalescing is not supported on S32G2 silicon
 	 */
-	if (ec->rx_max_coalesced_frames > 1 && ec->rx_coalesce_usecs == 0) {
+	if (ec->rx_max_coalesced_frames > 0 && ec->rx_coalesce_usecs == 0) {
 		netdev_err(netif->netdev, "Frame based coalescing is unsupported\n");
 		return -EINVAL;
-	}
-
-	if (ec->rx_coalesce_usecs) {
-		cycles =  ec->rx_coalesce_usecs * (DIV_ROUND_UP(clk_get_rate(netif->priv->clk_sys), USEC_PER_SEC));
-		if (cycles > U32_MAX)
-			return -EINVAL;
 	}
 
 	/* Setup all linked HIF channel */
@@ -161,7 +153,7 @@ static int pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coalesce
 			continue;
 
 		chnl = &netif->priv->hif_chnl[idx];
-		ret = pfe_hif_chnl_set_rx_irq_coalesce(chnl->priv, ec->rx_max_coalesced_frames, cycles);
+		ret = pfeng_hif_chnl_set_coalesce(chnl, netif->priv->clk_sys, ec->rx_coalesce_usecs, 0);
 		if (ret)
 			break;
 	}
@@ -169,10 +161,23 @@ static int pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coalesce
 	return ret;
 }
 
+static int pfeng_ethtool_begin(struct net_device *netdev)
+{
+	struct pfeng_netif *netif = netdev_priv(netdev);
+
+	return pm_runtime_resume_and_get(&netif->priv->pdev->dev);
+}
+
+static void pfeng_ethtool_complete(struct net_device *netdev)
+{
+	struct pfeng_netif *netif = netdev_priv(netdev);
+
+	pm_runtime_put(&netif->priv->pdev->dev);
+}
+
 static const struct ethtool_ops pfeng_ethtool_ops = {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,0)
-	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS |
-				     ETHTOOL_COALESCE_RX_MAX_FRAMES,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,7,0)
+	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS,
 #endif
 	.get_drvinfo = pfeng_ethtool_getdrvinfo,
 	.get_link = ethtool_op_get_link,
@@ -184,10 +189,52 @@ static const struct ethtool_ops pfeng_ethtool_ops = {
 	.get_ts_info = pfeng_ethtool_get_ts_info,
 	.get_coalesce = pfeng_get_coalesce,
 	.set_coalesce = pfeng_set_coalesce,
-
+	.begin = pfeng_ethtool_begin,
+	.complete = pfeng_ethtool_complete,
 };
 
 void pfeng_ethtool_init(struct net_device *netdev)
 {
 	netdev->ethtool_ops = &pfeng_ethtool_ops;
+}
+
+int pfeng_ethtool_params_save(struct pfeng_netif *netif) {
+	struct net_device *netdev = netif->netdev;
+	struct ethtool_pauseparam epp;
+
+	/* Coalesce (saved in pfeng_hif_chnl_set_coalesce()) */
+
+	/* Pause */
+	pfeng_ethtool_get_pauseparam(netdev, &epp);
+	netif->cfg->pause_tx = epp.tx_pause;
+	netif->cfg->pause_rx = epp.rx_pause;
+
+	return 0;
+}
+
+int pfeng_ethtool_params_restore(struct pfeng_netif *netif) {
+	struct net_device *netdev = netif->netdev;
+	struct pfeng_hif_chnl *chnl;
+	struct ethtool_coalesce ec;
+	struct ethtool_pauseparam epp;
+	int ret, idx = ffs(netif->cfg->hifmap) - 1;
+
+	/* Coalesce */
+	chnl = &netif->priv->hif_chnl[idx];
+	ec.rx_max_coalesced_frames = chnl->cfg_rx_max_coalesced_frames;
+	ec.rx_coalesce_usecs = chnl->cfg_rx_coalesce_usecs;
+
+	ret = pfeng_set_coalesce(netdev, &ec);
+	if (ret)
+		netdev_warn(netdev, "Coalescing not restored\n");
+
+	/* Pause */
+	epp.tx_pause = netif->cfg->pause_tx;
+	epp.rx_pause = netif->cfg->pause_rx;
+	epp.autoneg = AUTONEG_DISABLE;
+	ret = pfeng_ethtool_set_pauseparam(netdev, &epp);
+	if (ret)
+		netdev_warn(netdev, "Pause not restored\n");
+
+	return 0;
 }

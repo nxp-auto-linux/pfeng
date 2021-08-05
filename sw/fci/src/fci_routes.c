@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -24,6 +24,8 @@
 
 #include "fci_internal.h"
 #include "fci.h"
+
+#ifdef PFE_CFG_FCI_ENABLE
 
 static void fci_routes_remove_related_connections(fci_rt_db_entry_t *route);
 
@@ -83,7 +85,8 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 	fpp_rt_cmd_t *rt_cmd;
 	bool_t is_ipv6 = FALSE;
 	errno_t ret = EOK;
-	pfe_mac_addr_t mac;
+	pfe_mac_addr_t src_mac;
+	pfe_mac_addr_t dst_mac;
 	pfe_ip_addr_t ip;
 	fci_rt_db_entry_t *rt_entry = NULL;
 	pfe_if_db_entry_t *if_entry = NULL;
@@ -121,8 +124,8 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 	rt_cmd = (fpp_rt_cmd_t *)(msg->msg_cmd.payload);
 	is_ipv6 = (oal_ntohl(rt_cmd->flags) == 2U) ? TRUE : FALSE;
 
-	/*	Prepare MAC and IP address */
-	memcpy(mac, rt_cmd->dst_mac, sizeof(pfe_mac_addr_t));
+	/*	Prepare MAC and IP destination address */
+	memcpy(dst_mac, rt_cmd->dst_mac, sizeof(pfe_mac_addr_t));
 	memset(&ip, 0, sizeof(pfe_ip_addr_t));
 
 	if (is_ipv6)
@@ -167,8 +170,21 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 
 			phy_if = pfe_if_db_entry_get_phy_if(if_entry);
 
+			/*	Prepare MAC source address */
+			{
+				const pfe_mac_addr_t zero_mac = {0u};
+				if (0 == memcmp(rt_cmd->src_mac, zero_mac, sizeof(pfe_mac_addr_t)))
+				{
+					pfe_phy_if_get_mac_addr(phy_if, src_mac);
+				}
+				else
+				{
+					memcpy(src_mac, rt_cmd->src_mac, sizeof(pfe_mac_addr_t));
+				}
+			}
+
 			/*	Add entry to database (values in network endian) */
-			ret = fci_rt_db_add(&context->route_db,	&ip, &mac,
+			ret = fci_rt_db_add(&context->route_db,	&ip, &src_mac, &dst_mac,
 								phy_if,
 								rt_cmd->id,
 								msg->client,
@@ -188,7 +204,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			}
 			else
 			{
-				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Route (ID: %d, IF: %s) added\n", oal_ntohl(rt_cmd->id), rt_cmd->output_device);
+				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Route (ID: %d, IF: %s) added\n", (int_t)oal_ntohl(rt_cmd->id), rt_cmd->output_device);
 				*fci_ret = FPP_ERR_OK;
 			}
 
@@ -201,7 +217,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			rt_entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (void *)&rt_cmd->id);
 			if (NULL == rt_entry)
 			{
-				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Requested route %d not found\n", oal_ntohl(rt_cmd->id));
+				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Requested route %d not found\n", (int_t)oal_ntohl(rt_cmd->id));
 				*fci_ret = FPP_ERR_RT_ENTRY_NOT_FOUND;
 				break;
 			}
@@ -216,7 +232,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			}
 			else
 			{
-				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Route %d removed\n", oal_ntohl(rt_cmd->id));
+				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Route %d removed\n", (int_t)oal_ntohl(rt_cmd->id));
 			}
 
 			break;
@@ -260,6 +276,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 
 			/*	Build reply structure */
 			reply_buf->mtu = rt_entry->mtu;
+			memcpy(reply_buf->src_mac, rt_entry->src_mac, sizeof(pfe_mac_addr_t));
 			memcpy(reply_buf->dst_mac, rt_entry->dst_mac, sizeof(pfe_mac_addr_t));
 
 			if (rt_entry->dst_ip.is_ipv4)
@@ -350,7 +367,7 @@ errno_t fci_routes_drop_one(fci_rt_db_entry_t *route)
 		}
 	}
 
-	NXP_LOG_DEBUG("Removing route with ID %d\n", oal_ntohl(route->id));
+	NXP_LOG_DEBUG("Removing route with ID %d\n", (int_t)oal_ntohl(route->id));
 
 	/*	Remove all associated connections */
 	fci_routes_remove_related_connections(route);
@@ -473,4 +490,5 @@ void fci_routes_drop_all_ipv6(void)
 	}
 }
 
+#endif /* PFE_CFG_FCI_ENABLE */
 /** @}*/

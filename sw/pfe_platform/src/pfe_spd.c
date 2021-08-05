@@ -12,6 +12,10 @@
 #include "pfe_ct.h"
 #include "pfe_class.h"
 #include "pfe_phy_if.h"
+#include "pfe_if_db.h"
+
+#ifdef PFE_CFG_FCI_ENABLE
+
 static pfe_ct_ipsec_spd_t *pfe_spds[PFE_PHY_IF_ID_MAX] = {NULL};
 static pfe_class_t *class_ptr = NULL;
 
@@ -62,21 +66,115 @@ static errno_t pfe_spd_update_phyif(pfe_phy_if_t *phy_if, pfe_ct_ipsec_spd_t *sp
     return ret;
 }
 
+/*
+* @brief Destroys all SPD information stored in PHY
+* @param[in] phy_if Physical interface with SPD to be destroyed
+*/
+static void pfe_spd_destroy_phyif(pfe_phy_if_t *phy_if)
+{
+	uint32_t baddr = 0;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if(unlikely(NULL == phy_if))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif
+
+	baddr = pfe_phy_if_get_spd(phy_if);
+	pfe_class_dmem_heap_free(class_ptr, baddr);
+	if (EOK != pfe_phy_if_set_spd(phy_if, 0))
+	{
+		NXP_LOG_ERROR("PHY SPD memory could't be cleared\n");
+	}
+}
+
 /**
 * @brief Function initializes the module
 * @param[in] class Reference to the class to be used
 */
 void pfe_spd_init(pfe_class_t *class)
 {
+	uint32_t idx = 0;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    if(unlikely(NULL == class))
-    {
-        NXP_LOG_ERROR("NULL argument received\n");
-        return;
-    }
+	if(unlikely(NULL == class))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
 #endif
-    /* Initialize the internal context */
-    class_ptr = class;
+	/* Initialize the internal context */
+	class_ptr = class;
+
+	for(idx = 0; idx < sizeof(pfe_spds)/sizeof(pfe_spds[0]); idx++)
+	{
+		pfe_spds[idx] = NULL;
+	}
+}
+
+/**
+* @brief Function destroys the module
+* @param[in] phy_if_db Database of physical interfaces
+*/
+void pfe_spd_destroy(pfe_if_db_t *phy_if_db)
+{
+	uint32_t idx = 0;
+	uint32_t session_id = 0;
+	errno_t ret = EOK;
+	pfe_phy_if_t *phy_if = NULL;
+	pfe_if_db_entry_t *if_db_entry = NULL;
+
+	/* Clean the DB */
+	for(idx = 0; idx < sizeof(pfe_spds)/sizeof(pfe_spds[0]); idx++)
+	{
+		if(NULL == pfe_spds[idx])
+		{
+			continue;
+		}
+
+		phy_if = NULL;
+		if_db_entry = NULL;
+
+		if(EOK != pfe_if_db_lock(&session_id))
+		{
+			NXP_LOG_DEBUG("DB lock failed\n");
+		}
+
+		/* Get PHY from DB*/
+		ret = pfe_if_db_get_first(phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)idx, &if_db_entry);
+		if (ret == EOK)
+		{
+			phy_if = pfe_if_db_entry_get_phy_if(if_db_entry);
+
+			if (NULL != phy_if)
+			{
+				/* Clean all SPD info from the PHY */
+				pfe_spd_destroy_phyif(phy_if);
+			}
+			else
+			{
+				NXP_LOG_ERROR("Invalid PHY instance\n");
+			}
+		}
+		else
+		{
+			NXP_LOG_ERROR("Couldn't get PHY instance\n");
+		}
+
+		oal_mm_free(pfe_spds[idx]);
+		pfe_spds[idx] = NULL;
+
+		if(EOK != pfe_if_db_unlock(session_id))
+		{
+			NXP_LOG_DEBUG("DB unlock failed\n");
+		}
+
+	}
+
+	/* Forget class */
+	class_ptr = NULL;
 }
 
 /**
@@ -123,7 +221,7 @@ errno_t pfe_spd_add_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd_ent
         {
             /* Initialize the database content */
             spd->entry_count = oal_htonl(new_count);
-            spd->no_ip_action = SPD_ACT_BYPASS; /* As required by the spec. */ //todo - make it configurable AAVB-2450           
+            spd->no_ip_action = SPD_ACT_BYPASS; /* As required by the spec. */ /* todo - make it configurable AAVB-2450 */          
             /* Set the new entry */
             memcpy(&entries[0U], entry, sizeof(pfe_ct_spd_entry_t));
             /* Store the new database */
@@ -345,3 +443,5 @@ errno_t pfe_spd_get_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd_ent
     }
     return ret;
 }
+
+#endif /* PFE_CFG_FCI_ENABLE */

@@ -23,12 +23,16 @@
 #include "fci_internal.h"
 #include "fci.h"
 
+#ifdef PFE_CFG_FCI_ENABLE
+
 /*
  * 	This is storage of scheduler algorithms ordered in way
  *	as defined by the FCI (see fpp_ext.h::fpp_qos_scheduler_cmd_t)
  */
 static const pfe_tmu_sched_algo_t sch_algos[] = {SCHED_ALGO_PQ, SCHED_ALGO_DWRR, SCHED_ALGO_RR, SCHED_ALGO_WRR};
+#ifdef NXP_LOG_ENABLED
 static const char_t *sch_algos_str[] = {"SCHED_ALGO_PQ", "SCHED_ALGO_DWRR", "SCHED_ALGO_RR", "SCHED_ALGO_WRR"};
+#endif /* NXP_LOG_ENABLED */
 
 static pfe_phy_if_t *fci_get_phy_if_by_name(char_t *name)
 {
@@ -133,13 +137,13 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 			if (q->id > cnt)
 			{
 				NXP_LOG_ERROR("Queue ID %d out of range. Interface %s implements %d queues\n",
-						q->id, q->if_name, cnt);
+						(int_t)q->id, q->if_name, (int_t)cnt);
 				*fci_ret = FPP_ERR_QOS_QUEUE_NOT_FOUND;
 				break;
 			}
 
 			NXP_LOG_DEBUG("Setting queue %d mode: %d (min: %d, max: %d)\n",
-					q->id, q->mode, oal_ntohl(q->min), oal_ntohl(q->max));
+					(int_t)q->id, (int_t)q->mode, (int_t)oal_ntohl(q->min), (int_t)oal_ntohl(q->max));
 
 			if (q->mode > 3U)
 			{
@@ -184,14 +188,14 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 
 					for (ii=0U; ii<cnt; ii++)
 					{
-						NXP_LOG_DEBUG("Setting queue %d zone %d probability %d%\n",
-								q->id, ii, q->zprob[ii]);
+						NXP_LOG_DEBUG("Setting queue %d zone %d probability %d%%\n",
+								(int_t)q->id, (int_t)ii, (int_t)q->zprob[ii]);
 						ret = pfe_tmu_queue_set_wred_prob(pfe->tmu,
 								pfe_phy_if_get_id(phy_if), q->id, ii, q->zprob[ii]);
 						if (EOK != ret)
 						{
 							NXP_LOG_ERROR("Could not set queue %d zone %d probability %d: %d\n",
-									q->id, ii, q->zprob[ii], ret);
+									(int_t)q->id, (int_t)ii, (int_t)q->zprob[ii], (int_t)ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							break; /* for */
 						}
@@ -220,7 +224,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 			if (q->id > cnt)
 			{
 				NXP_LOG_ERROR("Queue ID %d out of range. Interface %s implements %d queues\n",
-						q->id, q->if_name, cnt);
+						(int_t)q->id, q->if_name, (int_t)cnt);
 				*fci_ret = FPP_ERR_QOS_QUEUE_NOT_FOUND;
 				break;
 			}
@@ -277,7 +281,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 									pfe->tmu, pfe_phy_if_get_id(phy_if), q->id, ii, &reply_buf->zprob[ii]);
 							if (EOK != ret)
 							{
-								NXP_LOG_ERROR("Could not get queue %d zone %d probability: %d\n", q->id, ii, ret);
+								NXP_LOG_ERROR("Could not get queue %d zone %d probability: %d\n", (int_t)q->id, (int_t)ii, (int_t)ret);
 								*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 								break; /* for */
 							}
@@ -436,12 +440,12 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 			{
 				if ((0U == ((1U << ii) & sch->input_en)) || (sch->input_src[ii] == 255U))
 				{
-					NXP_LOG_DEBUG("Disabling scheduler %d input %d\n", sch->id, ii);
+					NXP_LOG_DEBUG("Disabling scheduler %d input %d\n", (int_t)sch->id, (int_t)ii);
 					ret = pfe_tmu_sch_bind_queue(pfe->tmu, pfe_phy_if_get_id(phy_if),
 								sch->id, ii, PFE_TMU_INVALID_QUEUE);
 					if (EOK != ret)
 					{
-						NXP_LOG_ERROR("Could not invalidate scheduler input %d: %d\n", ii, ret);
+						NXP_LOG_ERROR("Could not invalidate scheduler input %d: %d\n", (int_t)ii, (int_t)ret);
 						*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 						break; /* for */
 					}
@@ -451,13 +455,13 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 					if (sch->input_src[ii] < 8U)
 					{
 						NXP_LOG_DEBUG("Connecting source %d to scheduler %d input %d\n",
-								sch->input_src[ii], sch->id, ii);
+								(int_t)sch->input_src[ii], (int_t)sch->id, (int_t)ii);
 						ret = pfe_tmu_sch_bind_queue(pfe->tmu, pfe_phy_if_get_id(phy_if),
 								sch->id, ii, sch->input_src[ii]);
 						if (EOK != ret)
 						{
 							NXP_LOG_ERROR("Could not connect source %d to scheduler input %d\n",
-									sch->input_src[ii], ii);
+									(int_t)sch->input_src[ii], (int_t)ii);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							break; /* for */
 						}
@@ -465,32 +469,32 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 					else if (sch->input_src[ii] == 8U)
 					{
 						NXP_LOG_DEBUG("Connecting scheduler %d output to scheduler %d input %d\n",
-								sch->id-1U, sch->id, ii);
+								(int_t)(sch->id-1U), (int_t)sch->id, (int_t)ii);
 						ret = pfe_tmu_sch_bind_sch_output(pfe->tmu, pfe_phy_if_get_id(phy_if),
 								sch->id-1U, sch->id, ii);
 						if (EOK != ret)
 						{
 							NXP_LOG_ERROR("Could not connect scheduler %d output to scheduler %d input %d: %d\n",
-									sch->id-1U, sch->id, ii, ret);
+									(int_t)(sch->id-1U), (int_t)sch->id, (int_t)ii, (int_t)ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							break; /* for */
 						}
 					}
 					else
 					{
-						NXP_LOG_ERROR("Unsupported scheduler input %d source: %d\n", ii, sch->input_src[ii]);
+						NXP_LOG_ERROR("Unsupported scheduler input %d source: %d\n", (int_t)ii, (int_t)sch->input_src[ii]);
 						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 						break; /* for */
 					}
 
 					NXP_LOG_DEBUG("Setting scheduler %d input %d weight: %d\n",
-							sch->id, ii, oal_ntohl(sch->input_w[ii]));
+							(int_t)sch->id, (int_t)ii, (int_t)oal_ntohl(sch->input_w[ii]));
 					ret = pfe_tmu_sch_set_input_weight(pfe->tmu, pfe_phy_if_get_id(phy_if),
 							sch->id, ii, oal_ntohl(sch->input_w[ii]));
 					if (EOK != ret)
 					{
 						NXP_LOG_ERROR("Could not set scheduler %d input %d weight %d: %d\n",
-								sch->id, ii, oal_ntohl(sch->input_w[ii]), ret);
+								(int_t)sch->id, (int_t)ii, (int_t)oal_ntohl(sch->input_w[ii]), (int_t)ret);
 						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 						break; /* for */
 					}
@@ -728,7 +732,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 				}
 
 				NXP_LOG_DEBUG("Setting shaper %d credit limits %d-%d\n",
-						shp->id, oal_ntohl(shp->max_credit), oal_ntohl(shp->min_credit));
+						(int_t)shp->id, (int_t)oal_ntohl(shp->max_credit), (int_t)oal_ntohl(shp->min_credit));
 				ret = pfe_tmu_shp_set_limits(pfe->tmu, pfe_phy_if_get_id(phy_if), shp->id,
 						oal_ntohl(shp->max_credit), oal_ntohl(shp->min_credit));
 				if (EOK != ret)
@@ -750,13 +754,13 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 				}
 
 				NXP_LOG_DEBUG("Setting shaper %d idle slope: %d\n",
-						shp->id, oal_ntohl(shp->isl));
+						(int_t)shp->id, (int_t)oal_ntohl(shp->isl));
 				ret = pfe_tmu_shp_set_idle_slope(pfe->tmu, pfe_phy_if_get_id(phy_if), shp->id,
 						oal_ntohl(shp->isl));
 				if (EOK != ret)
 				{
 					NXP_LOG_ERROR("Can't set shaper %d idle slope %d: %d\n",
-							shp->id, oal_ntohl(shp->isl), ret);
+							(int_t)shp->id, (int_t)oal_ntohl(shp->isl), (int_t)ret);
 					*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 					break;
 				}
@@ -844,4 +848,5 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 	return ret;
 }
 
+#endif /* PFE_CFG_FCI_ENABLE */
 /** @}*/

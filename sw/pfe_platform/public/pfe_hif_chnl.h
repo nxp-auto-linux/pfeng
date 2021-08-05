@@ -185,7 +185,7 @@ typedef void (* pfe_hif_chnl_cbk_t)(void *arg);
 errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl) __attribute__((cold));
 void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl) __attribute__((cold));
 errno_t pfe_hif_chnl_rx(pfe_hif_chnl_t *chnl, void **buf_pa, uint32_t *len, bool_t *lifm) __attribute__((hot));
-errno_t pfe_hif_chnl_rx_va(const pfe_hif_chnl_t *chnl, void **buf_va, uint32_t *len, bool_t *lifm, void **meta) __attribute__((hot));
+errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf_va, uint32_t *len, bool_t *lifm, void **meta) __attribute__((hot));
 uint32_t pfe_hif_chnl_get_meta_size(const pfe_hif_chnl_t *chnl) __attribute__((cold));
 errno_t pfe_hif_chnl_release_buf(pfe_hif_chnl_t *chnl, void *buf_va) __attribute__((hot));
 void pfe_hif_chnl_rx_dma_start(const pfe_hif_chnl_t *chnl) __attribute__((hot));
@@ -196,7 +196,7 @@ uint32_t pfe_hif_chnl_get_rx_fifo_depth(const pfe_hif_chnl_t *chnl) __attribute_
 /*	TX */
 errno_t pfe_hif_chnl_tx_enable(pfe_hif_chnl_t *chnl) __attribute__((cold));
 void pfe_hif_chnl_tx_disable(pfe_hif_chnl_t *chnl) __attribute__((cold));
-errno_t pfe_hif_chnl_tx(const pfe_hif_chnl_t *chnl, const void *buf_pa, const void *buf_va, uint32_t len, bool_t lifm) __attribute__((hot));
+errno_t pfe_hif_chnl_tx(pfe_hif_chnl_t *chnl, const void *buf_pa, const void *buf_va, uint32_t len, bool_t lifm) __attribute__((hot));
 void pfe_hif_chnl_tx_dma_start(const pfe_hif_chnl_t *chnl) __attribute__((hot));
 bool_t pfe_hif_chnl_can_accept_tx_num(const pfe_hif_chnl_t *chnl, uint16_t num) __attribute__((pure, hot));
 #ifdef PFE_CFG_HIF_TX_FIFO_FIX
@@ -204,7 +204,7 @@ bool_t pfe_hif_chnl_can_accept_tx_data(pfe_hif_chnl_t *chnl, uint32_t num) __att
 #endif /* PFE_CFG_HIF_TX_FIFO_FIX */
 bool_t pfe_hif_chnl_tx_fifo_empty(const pfe_hif_chnl_t *chnl) __attribute__((pure, hot));
 bool_t pfe_hif_chnl_has_tx_conf(const pfe_hif_chnl_t *chnl) __attribute__((pure, hot));
-errno_t pfe_hif_chnl_get_tx_conf(const pfe_hif_chnl_t *chnl) __attribute__((hot));
+errno_t pfe_hif_chnl_get_tx_conf(pfe_hif_chnl_t *chnl) __attribute__((hot));
 uint32_t pfe_hif_chnl_get_tx_fifo_depth(const pfe_hif_chnl_t *chnl) __attribute__((pure, cold));
 
 /*	Instance control */

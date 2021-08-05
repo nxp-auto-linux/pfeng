@@ -313,11 +313,16 @@
  *                table entry then a new entry, containing the Physical Interface which the packet has
  *                been received on, is added - learned. Destination MAC address of an ingress packet
  *                is then used to search the table to determine the target interface.
+ *              - <b>Static entries:</b>
+ *                Bridge table can also contain static entry that are not aged. This entry is otherwise
+ *                the same as standard entry. The main usage of static entry is to configure
+ *                bridge in forward only mode and configure all entries manually. In this case only
+ *                predetermined traffic matching to the static entries will be forwarded.
  *              - <b>Aging:</b>
  *                Each MAC table entry gets default timeout value once learned. In time this timeout is
  *                being decreased until zero is reached. Entries with zero timeout value are automatically
  *                removed from the table. The timeout value is re-set each time the corresponding table
- *                entry is used to process a packet.
+ *                entry is used to process a packet. The static entries are not affected by aging.
  *              - <b>Port migration:</b>
  *                When a MAC address is seen on one interface of the switch and an entry has been created,
  *                it is automatically updated when the MAC address is seen on another interface.
@@ -354,19 +359,19 @@
  *                Standard domain. Specifies what to do when packet with VLAN ID matching the Standard
  *                BD is received.
  *
- *              Configuration
- *              -------------
+ *              Configuration (Bridge Domain)
+ *              ----------------------------
  *              Here are steps needed to configure VLAN-aware switch:
  *              -# Optionally get list of available physical interfaces and their IDs. See the
  *                 @ref if_mgmt.
-  *             -# Create a bridge domain (VLAN domain) (@ref FPP_CMD_L2_BD +
+ *              -# Create a bridge domain (VLAN domain) (@ref FPP_CMD_L2_BD +
  *                 @ref FPP_ACTION_REGISTER).
-  *             -# Configure domain hit/miss actions (@ref FPP_CMD_L2_BD + @ref FPP_ACTION_UPDATE)
+ *              -# Configure domain hit/miss actions (@ref FPP_CMD_L2_BD + @ref FPP_ACTION_UPDATE)
  *                 to let the bridge know how to process matching traffic.
  *              -# Add physical interfaces as members of that domain (@ref FPP_CMD_L2_BD +
  *                 @ref FPP_ACTION_UPDATE). Adding interface to a bridge domain causes switch of its
  *                 operation mode to @ref FPP_IF_OP_VLAN_BRIDGE and enabling promiscuous mode on MAC
- *                 level.
+ *                 level. There is also a preconfigured default domain that identifies with VLAN 1.
  *              -# Set physical interface(s) to VLAN bridge mode @ref FPP_IF_OP_VLAN_BRIDGE using
  *                 @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
  *              -# Set promiscuous mode and enable physical interface(s) by setting the
@@ -376,7 +381,7 @@
  *              For simple, non-VLAN aware switch do:
  *              -# Optionally get list of available physical interfaces and their IDs. See the
  *                 @ref if_mgmt.
-  *             -# Add physical interfaces as members of fall-back BD (@ref FPP_CMD_L2_BD +
+ *              -# Add physical interfaces as members of fall-back BD (@ref FPP_CMD_L2_BD +
  *                 @ref FPP_ACTION_UPDATE). The fall-back BD is identified by VLAN 0 and exists
  *                 automatically.
  *              -# Configure domain hit/miss actions (@ref FPP_CMD_L2_BD + @ref FPP_ACTION_UPDATE)
@@ -398,6 +403,12 @@
  *
  *              List of available bridge domains with their properties can be retrieved using
  *              @ref FPP_CMD_L2_BD + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
+ *
+ *              Static mac entries can be added once the bridge domain is configured. To add or update use
+ *              @ref FPP_CMD_L2_STATIC_ENT + @ref FPP_ACTION_REGISTER + @ref FPP_ACTION_UPDATE.
+ *              A static entry can be deleted using @ref FPP_CMD_L2_STATIC_ENT + @ref FPP_ACTION_DEREGISTER
+ *              or all entries using @ref FPP_CMD_L2_FLUSH_STATIC.
+ *
  *
  * @subsection l2l3_bridge L2L3 Bridge
  *             Introduction
@@ -675,8 +686,8 @@
  * @details     This file contains generic API and API description
  */
 
-#ifndef _LIBFCI_H
-#define _LIBFCI_H
+#ifndef LIBFCI_H
+#define LIBFCI_H
 
 #ifndef TRUE
 #define TRUE 1
@@ -949,199 +960,4 @@ int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned sho
  */
 int fci_fd(FCI_CLIENT *this_client);
 
-/** @} */
-#endif /* _LIBFCI_H */
-
-/*
- * @def FPP_CMD_L2BRIDGE_MODE
- * @brief Specifies FCI command that enables or disables automatic L2 bridge learning
- * @details In both modes, the physical addresses can be associated with ports with @ref FPP_CMD_L2BRIDGE_ADD_ENTRY
- *          command. That creates static entry which is valid until it is removed with
- *          @ref FPP_CMD_L2BRIDGE_REMOVE_ENTRY command. In learning mode the physical addresses are also associated
- *          to ports automatically (learned). This way dynamic entries are created. Their lifetime can be specified
- *          by @ref FPP_CMD_L2BRIDGE_LRN_TIMEOUT command. All dynamic entries can be deleted at once with
- *          @ref FPP_CMD_L2BRIDGE_LRN_RESET command.
- *
- *          The disable command causes that no new entries are learned after this command
- *          and that the learned entries do not expire (the aging timer stops ticking).
- *          The enable command resumes the learning and aging again. The L2 bridge is
- *          configured to start with learning and aging process enabled.
- *
- *          This command may be used to learn entries during certain period and to prevent
- *          further learning for security reasons.
- *
- * Command Argument Type: @ref fpp_l2_bridge_control_cmd_t
- *
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_l2_bridge_control_cmd_t cmd_data =
- *   {
- *     // Timeout: Either FPP_L2_BRIDGE_MODE_LEARNING or FPP_L2_BRIDGE_MODE_NO_LEARNING
- *     .mode_timeout = ...
- *   };
- * @endcode
- *
- * @hideinitializer
- */
-
-/*
- * @struct  fpp_l2_bridge_control_cmd_t
- * @brief   Data structure to be used for command buffer for L2 bridge control commands
- * @details It can be used:
- *          - for command buffer in functions @ref fci_write or @ref fci_cmd,
- *            with commands: @ref FPP_CMD_L2BRIDGE_MODE and @ref FPP_CMD_L2BRIDGE_LRN_TIMEOUT.
- */
-
-/*
- * @def FPP_CMD_L2BRIDGE_ENABLE_PORT
- * @brief Specifies FCI command that adds or removes a port to or from the L2 Bridge
- * @details The enable action is selected by setting @c enable_flag to 1 and it causes that
- *          the specified interface becomes part of the bridge. The physical interface acts as
- *          bridge external port and all frames arriving at this interface are subject to the
- *          fast forwarding according to the L2 Bridge rules. Frames sent out by the original
- *          interface are also subject to the L2 Bridge fast forwarding. The interface becomes
- *          L2 Bridge internal port and the physical interface becomes external port and frames
- *          are fast forwarded between them or any other L2 Bridge port.
- *
- *          The disable action, selected by setting @c enable_flag to 0, causes the interface
- *          to return to the normal operation.
- *
- *          The interface is selected by setting the @c input_name to the name of the interface.
- *
- * Command Argument Type: @ref fpp_l2_bridge_enable_cmd_t
- *
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_l2_bridge_enable_cmd_t cmd_data =
- *   {
- *       .input_name = ...,   // Interface to add/remove
- *       .enable_flag = ...   // Enable flag, either 1 or 0
- *   };
- * @endcode
- *
- * @hideinitializer
- */
-
-/*
- * @struct  fpp_l2_bridge_enable_cmd_t
- * @brief   Data structure to be used for command buffer for L2 bridge port disabling/enabling commands
- * @details It can be used:
- *          - for command buffer in functions @ref fci_write or @ref fci_cmd,
- *            with @ref FPP_CMD_L2BRIDGE_ENABLE_PORT command.
- */
-
-/*
- * @def FPP_CMD_L2BRIDGE_ADD_ENTRY
- * @brief Specifies FCI command that adds a static entry into the L2 bridge
- * @details Allows adding a fast forwarding rule into L2 bridge without involving Learning process.
- *          Such rule is also not affected by aging. The matching destination address @c destaddr
- *          and the outbound interface name @c output_name must be provided in the command data.
- *
- *          The command data carry the MAC address to be matched and name of the interface which physical
- *          interface shall be used to send out the frames. It is not possible to send frames to internal port.
- *
- * Command Argument Type: @ref fpp_l2_bridge_add_entry_cmd_t
- *
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_l2_bridge_add_entry_cmd_t cmd_data =
- *   {
- *     // Destination MAC address to match
- *     .destaddr = {..., ..., ..., ..., ..., ...},
- *     // Interface (external port) to send out matching frames
- *     .output_name = ...
- *   };
- * @endcode
- *
- * @hideinitializer
- */
-
-/*
- * @struct  fpp_l2_bridge_add_entry_cmd_t
- * @brief   Data structure to be used for command buffer for L2 bridge control commands
- * @details It can be used:
- *          - for command buffer in functions @ref fci_write or @ref fci_cmd,
- *            with @ref FPP_CMD_L2BRIDGE_ADD_ENTRY command.
- */
-
-/*
- * @def FPP_CMD_L2BRIDGE_REMOVE_ENTRY
- * @brief Specifies FCI command that removes static entry from the L2 bridge
- * @details This is a reverse operation to the FPP_CMD_L2BRIDGE_ADD_ENTRY which removes the previously
- *          added static entry. Just the MAC address is needed to identify the entry.
- *
- * Command Argument Type: @ref fpp_l2_bridge_remove_entry_cmd_t
- *
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_l2_bridge_remove_entry_cmd_t cmd_data =
- *   {
- *     // Destination MAC address to match - identifies the entry
- *     .destaddr = {..., ..., ..., ..., ..., ...},
- *   };
- * @endcode
- *
- * @hideinitializer
- */
-
-/*
- * @struct  fpp_l2_bridge_remove_entry_cmd_t
- * @brief   Data structure to be used for command buffer for L2 bridge control commands
- * @details It can be used:
- *          - for command buffer in functions @ref fci_write or @ref fci_cmd,
- *            with @ref FPP_CMD_L2BRIDGE_REMOVE_ENTRY command.
- */
-
-/*
- * @def FPP_CMD_L2BRIDGE_LRN_TIMEOUT
- * @brief Specifies FCI command that sets the life time for the learned L2 Bridge entries
- * @details Each learned entry starts with a configured life time which is decremented
- *          each second unless the entry is used to fast forward frame. The entry is deleted
- *          when the life time reaches value 0. The initial value of the life time is configured
- *          by this command. The value is expressed in seconds and the allowed range is 1 to 65535.
- *          The default value is 300 seconds (5 minutes).
- * @note The entries learned before the timeout change are not updated unless they are used for
- *       fast forward - in each seconds the following two options can happen to the existing entry
- *       - entry life time is decremented
- *       - entry life time is set to the configured value (the latest value applies)
- *
- * Command Argument Type: @ref fpp_l2_bridge_control_cmd_t
- *
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_l2_bridge_control_cmd_t cmd_data =
- *   {
- *     .mode_timeout = ...,   // Timeout in seconds
- *   };
- * @endcode
- *
- * @hideinitializer
- */
-
-/*
- * @def FPP_CMD_L2BRIDGE_LRN_RESET
- * @brief Specifies an FCI command that removes all learned entries from the L2 bridge
- * @details All learned entries are removed from the bridge immediately. Static entries added by the
- *          FPP_CMD_L2BRIDGE_ADD_ENTRY are not affected and their removal is possible only by command
- *          FPP_CMD_L2BRIDGE_REMOVE_ENTRY. The command does not use any data.
- *
- * Command Argument Type: none (cmd_buf = NULL; cmd_len = 0;)
- *
- * @hideinitializer
- */
-
-/*
- * @def FPP_CMD_L2BRIDGE_QUERY_ENTRY
- * To Be Documented, not implemented yet
- *
- * @hideinitializer
- */
-
-/*
- * @def FPP_CMD_L2BRIDGE_QUERY_STATUS
- * To Be Documented, not implemented yet
- *
- * @hideinitializer
- */
-
-/** @}*/
+#endif /* LIBFCI_H */

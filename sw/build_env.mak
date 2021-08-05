@@ -57,16 +57,14 @@ export PFE_CFG_MASTER_IF?=6
 #Main local host interface to be used for data communication (see pfe_ct_phy_if_id_t)
 export PFE_CFG_LOCAL_IF?=$(PFE_CFG_PFE0_IF)
 #HIF NOCPY support
-export PFE_CFG_HIF_NOCPY_SUPPORT?=0
-#HIF NOCPY direct mode. When disabled then LMEM copy mode is used.
-export PFE_CFG_HIF_NOCPY_DIRECT?=0
+export PFE_CFG_HIF_NOCPY_SUPPORT?=1
 #Force TX CSUM calculation on all frames (this forcibly overwrite all IP/TCP/UDP checksums in FW)
 export PFE_CFG_CSUM_ALL_FRAMES?=0
 #HIF sequence number check. 1 - enable, 0 - disable
 export PFE_CFG_HIF_SEQNUM_CHECK?=0
 #IP version
 export PFE_CFG_IP_VERSION?=PFE_CFG_IP_VERSION_NPU_7_14a
-#QNX only: When enabled cache maintenence is not performed on buffers.
+#QNX only: When enabled cache maintenance is not performed on buffers.
 export PFE_CFG_BUFFERS_COHERENT?=1
 #Build of rtable feature. 1 - enable, 0 - disable
 export PFE_CFG_RTABLE_ENABLE?=1
@@ -94,6 +92,8 @@ export PFE_CFG_SYS_MEM?="pfe_ddr"
 export PFE_CFG_BD_MEM?="pfe_ddr"
 #RX buffers location
 export PFE_CFG_RX_MEM?="pfe_ddr"
+#TX buffers location
+export PFE_CFG_TX_MEM?="pfe_ddr"
 #Routing table location
 export PFE_CFG_RT_MEM?="pfe_ddr"
 #Routing table hash size (number of entries)
@@ -104,6 +104,13 @@ export PFE_CFG_RT_COLLISION_SIZE?=256
 export PFE_CFG_HIF_PRIO_CTRL=1
 #Enable safe interrupt handling
 export PFE_CFG_SAFE_IRQ?=1
+#Maximum number of System buffers
+export PFE_CFG_BMU2_BUF_COUNT?=1024
+#System buffer size
+export PFE_CFG_BMU2_BUF_SIZE?=2048
+#Number of entries of a HIF ring, must be power of 2
+export PFE_CFG_HIF_RING_LENGTH?=256
+
 
 ifeq ($(PFE_CFG_HIF_DRV_MODE),0)
   #Use multi-client HIF driver. Required when multiple logical interfaces need to
@@ -154,6 +161,10 @@ ifeq ($(PFE_CFG_PFE_MASTER),0)
   ifeq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),0)
     $(warning Slave driver must have multi-instance support enabled)
     PFE_CFG_MULTI_INSTANCE_SUPPORT=1
+  endif
+  ifneq ($(PFE_CFG_HIF_NOCPY_SUPPORT),0)
+    $(warning HIF nocpy is not supported in SLAVE mode)
+    PFE_CFG_HIF_NOCPY_SUPPORT=0
   endif
   export PFE_CFG_FCI_ENABLE=0
 endif
@@ -206,11 +217,11 @@ GLOBAL_CCFLAGS+=-DPFE_CFG_PFE1_IF=$(PFE_CFG_PFE1_IF)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE2_IF=$(PFE_CFG_PFE2_IF)
 
 ifneq ($(PFE_CFG_HIF_NOCPY_SUPPORT),0)
+  ifeq ($(TARGET_OS),QNX)
     GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_NOCPY_SUPPORT
-endif
-
-ifneq ($(PFE_CFG_HIF_NOCPY_DIRECT),0)
-    GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_NOCPY_DIRECT
+  else
+	#todo Implement HIF NOCPY support on Linux AAVB-2829
+  endif
 endif
 
 ifneq ($(PFE_CFG_HIF_USE_BD_TRIGGER),0)
@@ -321,6 +332,15 @@ ifneq ($(PFE_CFG_RX_MEM),0)
   endif
 endif
 
+ifneq ($(PFE_CFG_TX_MEM),0)
+  # Pass string literal
+  ifeq ($(TARGET_OS),LINUX)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_TX_MEM='\"$(PFE_CFG_TX_MEM)\"'
+  else
+    GLOBAL_CCFLAGS+=-DPFE_CFG_TX_MEM='$(PFE_CFG_TX_MEM)'
+  endif
+endif
+
 ifneq ($(PFE_CFG_RT_MEM),0)
   # Pass string literal
   ifeq ($(TARGET_OS),LINUX)
@@ -346,6 +366,15 @@ ifneq ($(PFE_CFG_SAFE_IRQ),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_SAFE_IRQ
 endif
 
+ifneq ($(PFE_CFG_BMU2_BUF_COUNT),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_BMU2_BUF_COUNT=$(PFE_CFG_BMU2_BUF_COUNT)
+endif
+ifneq ($(PFE_CFG_BMU2_BUF_SIZE),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_BMU2_BUF_SIZE=$(PFE_CFG_BMU2_BUF_SIZE)
+endif
+ifneq ($(PFE_CFG_HIF_RING_LENGTH),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_RING_LENGTH=$(PFE_CFG_HIF_RING_LENGTH)
+endif
 # This variable will be propagated to every Makefile in the project
 export GLOBAL_CCFLAGS;
 
@@ -391,8 +420,13 @@ ifeq ($(TARGET_OS),QNX)
 
     export OUTPUT_DIR=build/$(CONFIG_NAME)
 
-    export CC=qcc -Vgcc_nto$(PLATFORM)
-    export CXX=qcc -lang-c++ -Vgcc_nto$(PLATFORM)
+    # Compiler name, aka compiler to be used for testing
+    COMPILER_NAME?=gcc
+
+    # Compiler version to be used for testing
+    COMPILER_VERSION?=8.3.0
+    export CC=qcc -V$(COMPILER_VERSION),$(COMPILER_NAME)_nto$(PLATFORM)
+    export CXX=qcc -lang-c++ -V$(COMPILER_VERSION),$(COMPILER_NAME)_nto$(PLATFORM)
     export LD=$(CC)
     export INC_PREFIX=
 

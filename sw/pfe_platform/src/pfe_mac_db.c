@@ -24,7 +24,7 @@ struct pfe_mac_db_tag
 };
 
 static bool_t pfe_mac_db_criterion_eval(const pfe_mac_db_list_entry_t *entry, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
-static pfe_mac_db_list_entry_t *pfe_mac_db_find_by_addr(const pfe_mac_db_t *db, const pfe_mac_addr_t addr);
+static pfe_mac_db_list_entry_t *pfe_mac_db_find_by_addr(const pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 
 /**
  * @brief		Evaluate given DB entry against specified criterion
@@ -162,7 +162,8 @@ errno_t pfe_mac_db_destroy(pfe_mac_db_t *db)
  * @param[in]	addr MAC address to search for
  * @return		Pointer to related entry, NULL if address not found
  */
-static pfe_mac_db_list_entry_t *pfe_mac_db_find_by_addr(const pfe_mac_db_t *db, const pfe_mac_addr_t addr)
+static pfe_mac_db_list_entry_t *pfe_mac_db_find_by_addr(const pfe_mac_db_t *db, const pfe_mac_addr_t addr,
+							pfe_drv_id_t owner)
 {
 	pfe_mac_db_list_entry_t *entry = NULL;
 	LLIST_t *item;
@@ -171,7 +172,7 @@ static pfe_mac_db_list_entry_t *pfe_mac_db_find_by_addr(const pfe_mac_db_t *db, 
 	LLIST_ForEach(item, &db->mac_list)
 	{
 		entry = LLIST_Data(item, pfe_mac_db_list_entry_t, iterator);
-		if (0 == memcmp(addr, entry->addr, sizeof(pfe_mac_addr_t)))
+		if ((entry->owner == owner) && (0 == memcmp(addr, entry->addr, sizeof(pfe_mac_addr_t))))
 		{
 			found = TRUE;
 			break;
@@ -204,7 +205,7 @@ errno_t pfe_mac_db_add_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv
 	}
 
 	/* Add only if the same address does not already exist in DB */
-	entry = pfe_mac_db_find_by_addr(db, addr);
+	entry = pfe_mac_db_find_by_addr(db, addr, owner);
 	if (NULL == entry)
 	{
 		/*	Add address to local list */
@@ -252,7 +253,7 @@ errno_t pfe_mac_db_add_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv
  * @param[in]		addr The MAC address to delete from database
  * @return			Execution status, EOK if success, error code otherwise
  */
-errno_t pfe_mac_db_del_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr)
+errno_t pfe_mac_db_del_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
 {
 	errno_t ret = EOK;
 	pfe_mac_db_list_entry_t *entry;
@@ -262,7 +263,7 @@ errno_t pfe_mac_db_del_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	entry = pfe_mac_db_find_by_addr(db, addr);
+	entry = pfe_mac_db_find_by_addr(db, addr, owner);
 	if (NULL == entry)
 	{
 		NXP_LOG_DEBUG("MAC address was not found\n");

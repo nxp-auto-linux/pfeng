@@ -13,36 +13,10 @@
 #include "pfe_hif_drv.h"
 #include "pfe_idex.h"
 
-/* #define IDEX_CFG_VERBOSE */
-/* #define IDEX_CFG_VERY_VERBOSE */
-
-/**
- * @brief	Number of request allowed to be pending/waiting for confirmation at
- * 			the same time.
- */
-#define IDEX_CFG_REQ_FIFO_DEPTH		8U
-
 /**
  * @brief	IDEX request timeout in seconds
  */
 #define IDEX_CFG_REQ_TIMEOUT_SEC	1U
-
-/*
- *	IDEX worker mbox codes
- */
-#define IDEX_WORKER_POLL			(1)
-#define IDEX_WORKER_QUIT			(2)
-
-/**
- * @brief	IDEX request return values
- * @details	When IDEX request is finalized, this codes are passed to the
- * 			waiting thread to notify it about request status.
- */
-typedef enum
-{
-	IDEX_REQ_RES_OK,
-	IDEX_REQ_RES_TIMEOUT
-} pfe_idex_request_result_t;
 
 /**
  * @brief		IDEX sequence number type
@@ -228,7 +202,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex);
 static void pfe_idex_do_tx(pfe_hif_drv_client_t *client, pfe_idex_t *idex);
 static pfe_idex_request_t *pfe_idex_request_get_by_id(pfe_idex_seqnum_t seqnum);
 static errno_t pfe_idex_request_set_state(pfe_idex_seqnum_t seqnum, pfe_idex_request_state_t state);
-static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, pfe_idex_request_result_t res, void *resp_buf, uint16_t resp_len);
+static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, void *resp_buf, uint16_t resp_len);
 static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_response_type_t type, pfe_idex_seqnum_t seqnum, void *data, uint16_t data_len);
 static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_type_t type, void *data, uint16_t data_len);
 #ifdef PFE_CFG_PFE_SLAVE
@@ -311,7 +285,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 				idex_req = (pfe_idex_request_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
 
 #ifdef IDEX_CFG_VERBOSE
-				NXP_LOG_DEBUG("Request %d received\n", oal_ntohl(idex_req->seqnum));
+				NXP_LOG_DEBUG("Request %u received\n", oal_ntohl(idex_req->seqnum));
 #endif /* IDEX_CFG_VERBOSE */
 
 				switch (idex_req->type)
@@ -351,7 +325,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 						else
 						{
 #ifdef IDEX_CFG_VERBOSE
-							NXP_LOG_DEBUG("RPC callback not found, request %d ignored\n", oal_ntohl(idex_req->seqnum));
+							NXP_LOG_DEBUG("RPC callback not found, request %u ignored\n", oal_ntohl(idex_req->seqnum));
 #endif /* IDEX_CFG_VERBOSE */
 						}
 
@@ -376,7 +350,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 				idex_resp = (pfe_idex_response_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
 
 #ifdef IDEX_CFG_VERBOSE
-				NXP_LOG_DEBUG("Response %d received\n", oal_ntohl(idex_resp->seqnum));
+				NXP_LOG_DEBUG("Response %u received\n", oal_ntohl(idex_resp->seqnum));
 #endif /* IDEX_CFG_VERBOSE */
 
 				/*	Matching request found. Check type. */
@@ -393,7 +367,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 						void *resp_payload = (void *)((addr_t)idex_resp + sizeof(pfe_idex_response_t));
 
 						/*	Finalize the associated request */
-						ret = pfe_idex_request_finalize(idex_resp->seqnum, IDEX_REQ_RES_OK, resp_payload, oal_ntohs(idex_resp->plen));
+						ret = pfe_idex_request_finalize(idex_resp->seqnum, resp_payload, oal_ntohs(idex_resp->plen));
 						if (EOK != ret)
 						{
 							NXP_LOG_ERROR("Can't finalize IDEX request %u: %d\n", (uint_t)oal_ntohl(idex_resp->seqnum), ret);
@@ -455,7 +429,7 @@ static void pfe_idex_do_tx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 				pfe_idex_request_t *req_header = (pfe_idex_request_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
 
 		#ifdef IDEX_CFG_VERBOSE
-				NXP_LOG_DEBUG("Request %d transmitted\n", oal_ntohl(req_header->seqnum));
+				NXP_LOG_DEBUG("Request %u transmitted\n", oal_ntohl(req_header->seqnum));
 		#endif /* IDEX_CFG_VERBOSE */
 
 				/*	Change request state */
@@ -478,7 +452,7 @@ static void pfe_idex_do_tx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 		#ifdef IDEX_CFG_VERBOSE
 				pfe_idex_response_t *resp_header = (pfe_idex_response_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
 
-				NXP_LOG_DEBUG("Response %d transmitted\n", oal_ntohl(resp_header->seqnum));
+				NXP_LOG_DEBUG("Response %u transmitted\n", oal_ntohl(resp_header->seqnum));
 		#endif /* IDEX_CFG_VERBOSE */
 
 				/*	Responses are released immediately once transmitted */
@@ -531,18 +505,16 @@ static pfe_idex_request_t *pfe_idex_request_get_by_id(pfe_idex_seqnum_t seqnum)
  * 				2.) Pass response data
  * 				3.) Marks request as "completed"
  * @param[in]	seqnum Sequence number identifying the request
- * @param[in]	res Value to be passed to the waiting thread as blocking result
  * @param[in]	resp_buf Pointer to response data buffer. If NULL no response is passed.
  * @param[in]	resp_len Number of byte in response buffer
  * @return		EOK if success, error code otherwise
  */
-static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, pfe_idex_request_result_t res, void *resp_buf, uint16_t resp_len)
+static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, void *resp_buf, uint16_t resp_len)
 {
 	pfe_idex_t *idex = (pfe_idex_t *)&pfe_idex;
 	pfe_idex_request_t *req = NULL;
 	errno_t ret = EOK;
 
-    (void)res;
 	/*	Lock request storage access */
 	if (EOK != oal_mutex_lock(&idex->req_list_lock))
 	{
@@ -656,7 +628,7 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
 	(void)memcpy(payload, data, data_len);
 
 #ifdef IDEX_CFG_VERBOSE
-	NXP_LOG_DEBUG("Sending response %d\n", oal_ntohl(seqnum));
+	NXP_LOG_DEBUG("Sending response %u\n", oal_ntohl(seqnum));
 #endif /* IDEX_CFG_VERBOSE */
 
 	/*	Send it out within IDEX frame */
@@ -740,7 +712,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 
 	/*	3.) Send the request */
 #ifdef IDEX_CFG_VERBOSE
-	NXP_LOG_DEBUG("Sending IDEX request %d\n", oal_ntohl(req->seqnum));
+	NXP_LOG_DEBUG("Sending IDEX request %u\n", oal_ntohl(req->seqnum));
 #endif /* IDEX_CFG_VERBOSE */
 
 	/*	Send it out as payload of IDEX frame */
@@ -785,25 +757,32 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			}
 
 			/*	Wait a bit */
-			oal_time_usleep(timeout_step);
+			if (FALSE == oal_irq_in_atomic())
+			{
+				oal_time_usleep(timeout_step);
+			}
+			else
+			{
+				oal_time_udelay(timeout_step);
+			}
 		}
 
 		if (0U == timeout_us)
 		{
 #ifdef IDEX_CFG_VERY_VERBOSE
-			NXP_LOG_DEBUG("IDEX request %d timed-out\n", oal_ntohl(req->seqnum));
+			NXP_LOG_DEBUG("IDEX request %u timed-out\n", oal_ntohl(req->seqnum));
 
 			if (IDEX_REQ_STATE_COMMITTED == req->state)
 			{
-				NXP_LOG_DEBUG("Request %d not transmitted\n", oal_ntohl(req->seqnum));
+				NXP_LOG_DEBUG("Request %u not transmitted\n", oal_ntohl(req->seqnum));
 			}
 			else if (IDEX_REQ_STATE_TRANSMITTED == req->state)
 			{
-				NXP_LOG_DEBUG("Request %d not responded\n", oal_ntohl(req->seqnum));
+				NXP_LOG_DEBUG("Request %u not responded\n", oal_ntohl(req->seqnum));
 			}
 			else
 			{
-				NXP_LOG_DEBUG("Request %d state is: %d\n", oal_ntohl(req->seqnum), req->state);
+				NXP_LOG_DEBUG("Request %u state is: %d\n", oal_ntohl(req->seqnum), req->state);
 			}
 #endif /* IDEX_CFG_VERY_VERBOSE */
 			ret = ETIMEDOUT;
@@ -847,8 +826,11 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 	errno_t ret;
 	hif_drv_sg_list_t sg_list = { 0U };
 
-	/*	Get IDX frame buffer */
-	idex_hdr = oal_mm_malloc_contig_aligned_nocache((addr_t)(sizeof(pfe_idex_frame_header_t)) + (addr_t)data_len, 0U);
+	/*	Get IDEX frame buffer */
+	idex_hdr = oal_mm_malloc_contig_named_aligned_cache(
+								PFE_CFG_TX_MEM,
+								(addr_t)(sizeof(pfe_idex_frame_header_t)) + (addr_t)data_len,
+								0U);
 	if (NULL == idex_hdr)
 	{
 		NXP_LOG_ERROR("Memory allocation failed\n");
@@ -882,11 +864,7 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 	sg_list.items[0].len = (uint32_t)(sizeof(pfe_idex_frame_header_t)) + (uint32_t)data_len;
 
 	/*	Send it out */
-#ifndef PFE_CFG_TARGET_OS_LINUX
 	ret = pfe_hif_drv_client_xmit_sg_pkt(pfe_idex.ihc_client, 0U, &sg_list, (void *)idex_hdr);
-#else
-	ret = pfe_hif_drv_client_xmit_ihc_pkt(pfe_idex.ihc_client, dst_phy, 0U, (void *)idex_hdr, sg_list.items[0].len);
-#endif /* PFE_CFG_TARGET_OS_LINUX */
 	if (EOK != ret)
 	{
 		NXP_LOG_ERROR("IDEX frame TX failed. Err %u\n", ret);
@@ -1022,7 +1000,7 @@ errno_t pfe_idex_set_rpc_cbk(pfe_idex_rpc_cbk_t cbk, void *arg)
 }
 
 /**
- * @brief		Execute RPC agains IDEX master. Blocking call.
+ * @brief		Execute RPC against IDEX master. Blocking call.
  * @param[in]	id Request identifier to be passed to remote RPC callback
  * @param[in]	buf Buffer containing RPC argument data
  * @param[in]	buf_len Length of RPC argument data in the buffer
@@ -1056,73 +1034,74 @@ errno_t pfe_idex_master_rpc(uint32_t id, void *buf, uint16_t buf_len, void *resp
 errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, void *buf, uint16_t buf_len, void *resp, uint16_t resp_len)
 {
 	errno_t ret;
-	pfe_idex_msg_rpc_t *msg = oal_mm_malloc((addr_t)(sizeof(pfe_idex_msg_rpc_t)) + (addr_t)buf_len);
-	uint8_t local_resp_buf[256] = { 0U };
+	const uint16_t resp_buf_size = 256U;
+	uint8_t *alloc_buf = oal_mm_malloc((addr_t)resp_buf_size + sizeof(pfe_idex_msg_rpc_t) + (addr_t)buf_len);
+	uint8_t *local_resp_buf = alloc_buf;
+	pfe_idex_msg_rpc_t *msg = (pfe_idex_msg_rpc_t *)&(alloc_buf[resp_buf_size]);
 	uint16_t msg_plen;
 	void *payload;
 
-	if (NULL == msg)
+	if (NULL == alloc_buf)
 	{
-		return ENOMEM;
-	}
-
-	msg->rpc_id = oal_htonl(id);
-	msg->plen = oal_htons(buf_len);
-	msg->rpc_ret = oal_htonl(EOK);
-
-	payload = (void *)((addr_t)msg + sizeof(pfe_idex_msg_rpc_t));
-	(void)memcpy(payload, buf, buf_len);
-
-	/*	This one is blocking */
-	ret = pfe_idex_request_send(dst_phy, IDEX_RPC, msg, sizeof(pfe_idex_msg_rpc_t) + buf_len, local_resp_buf, sizeof(local_resp_buf));
-
-	/*	Dispose the message buffer */
-	oal_mm_free(msg);
-	msg = NULL;
-
-	if (EOK != ret)
-	{
-		/*	Transport error */
-		NXP_LOG_INFO("RPC transport failed: %d\n", ret);
+		ret = ENOMEM;
 	}
 	else
 	{
-		/*	Get the remote return value from the response */
-		msg = (pfe_idex_msg_rpc_t *)&local_resp_buf[0];
-
-		/*	Sanity checks */
-		if (id != oal_ntohl(msg->rpc_id))
+		msg->rpc_id = oal_htonl(id);
+		msg->plen = oal_htons(buf_len);
+		msg->rpc_ret = oal_htonl(EOK);
+	
+		payload = (void *)((addr_t)msg + sizeof(pfe_idex_msg_rpc_t));
+		(void)memcpy(payload, buf, buf_len);
+	
+		/*	This one is blocking */
+		ret = pfe_idex_request_send(dst_phy, IDEX_RPC, msg, sizeof(pfe_idex_msg_rpc_t) + buf_len, local_resp_buf, resp_buf_size);
+	
+		if (EOK != ret)
 		{
-			NXP_LOG_ERROR("RPC response ID does not match the request\n");
-			ret = EINVAL;
+			/*	Transport error */
+			NXP_LOG_INFO("RPC transport failed: %d\n", ret);
 		}
 		else
 		{
-			ret = oal_ntohl(msg->rpc_ret);
-			msg_plen = oal_ntohs(msg->plen);
-
-			/*	Copy RPC response data to caller's buffer */
-			if (0U == msg_plen)
+			/*	Get the remote return value from the response */
+			msg = (pfe_idex_msg_rpc_t *)&local_resp_buf[0];
+	
+			/*	Sanity checks */
+			if (id != oal_ntohl(msg->rpc_id))
 			{
-#ifdef IDEX_CFG_VERBOSE
-				NXP_LOG_DEBUG("RPC response without payload received\n");
-#endif /* IDEX_CFG_VERBOSE */
+				NXP_LOG_ERROR("RPC response ID does not match the request\n");
+				ret = EINVAL;
 			}
-			else if (msg_plen > resp_len) /* if the response is too big */
+			else
 			{
-				NXP_LOG_ERROR("Caller's buffer is too small\n");
-				ret = ENOMEM;
-			}
-			else /* there is response, it is not too big and we have buffer */
-			{
-				payload = (void *)((addr_t)msg + sizeof(pfe_idex_msg_rpc_t));
-				(void)memcpy(resp, payload, msg_plen);
-
+				ret = oal_ntohl(msg->rpc_ret);
+				msg_plen = oal_ntohs(msg->plen);
+	
+				/*	Copy RPC response data to caller's buffer */
+				if (0U == msg_plen)
+				{
 #ifdef IDEX_CFG_VERBOSE
-				NXP_LOG_DEBUG("%d bytes of RPC response received\n", msg_plen);
+					NXP_LOG_DEBUG("RPC response without payload received\n");
 #endif /* IDEX_CFG_VERBOSE */
+				}
+				else if (msg_plen > resp_len) /* if the response is too big */
+				{
+					NXP_LOG_ERROR("Caller's buffer is too small\n");
+					ret = ENOMEM;
+				}
+				else /* there is response, it is not too big and we have buffer */
+				{
+					payload = (void *)((addr_t)msg + sizeof(pfe_idex_msg_rpc_t));
+					(void)memcpy(resp, payload, msg_plen);
+	
+#ifdef IDEX_CFG_VERBOSE
+					NXP_LOG_DEBUG("%d bytes of RPC response received\n", msg_plen);
+#endif /* IDEX_CFG_VERBOSE */
+				}
 			}
 		}
+		oal_mm_free(alloc_buf);
 	}
 
 	return ret;

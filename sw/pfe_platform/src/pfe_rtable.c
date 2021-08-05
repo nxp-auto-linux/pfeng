@@ -30,13 +30,6 @@
 #include "pfe_class.h"
 
 /**
- * @brief	Tick period for internal timer in seconds
- * @details	The timer is used to sample the active routing table entries and decrement
- * 			associated time-out values when entries are not being used by the firmware.
- */
-#define PFE_RTABLE_CFG_TICK_PERIOD_SEC			1
-
-/**
  * @brief	If TRUE then driver performs an entry update only if it is ensured that firmware
  *			and the driver are not accessing/updating the same entry in the same time.
  */
@@ -79,8 +72,10 @@ struct pfe_rtable_tag
 	LLIST_t active_entries;					/*	List of active entries. Need to be protected by mutex */
 
 	oal_mutex_t *lock;						/*	Mutex to protect the table and related resources from concurrent accesses */
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR)
 	oal_thread_t *worker;					/*	Worker thread */
 	oal_mbox_t *mbox;						/*	Message box to communicate with the worker thread */
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
 
 	pfe_rtable_get_criterion_t cur_crit;	/*	Current criterion */
 	LLIST_t *cur_item;						/*	Current entry to be returned. See ...get_first() and ...get_next() */
@@ -146,6 +141,7 @@ typedef enum
 	IPV_INVALID = 0xff
 } pfe_ipv_type_t;
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR)
 /**
  * @brief	Worker thread signals
  * @details	Driver is sending signals to the worker thread to request specific
@@ -156,24 +152,27 @@ enum pfe_rtable_worker_signals
 	SIG_WORKER_STOP,	/*	!< Stop the thread */
 	SIG_TIMER_TICK		/*	!< Pulse from timer */
 };
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
 
 static uint32_t pfe_get_crc32_be(uint32_t crc, uint8_t *data, uint16_t len);
 static void pfe_rtable_invalidate(pfe_rtable_t *rtable);
 static uint32_t pfe_rtable_entry_get_hash(pfe_rtable_entry_t *entry, pfe_rtable_hash_type_t htype, uint32_t hash_mask);
-static bool_t pfe_rtable_phys_entry_is_htable(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry);
-static bool_t pfe_rtable_phys_entry_is_pool(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry);
+static bool_t pfe_rtable_phys_entry_is_htable(const pfe_rtable_t *rtable, const pfe_ct_rtable_entry_t *phys_entry);
+static bool_t pfe_rtable_phys_entry_is_pool(const pfe_rtable_t *rtable, const pfe_ct_rtable_entry_t *phys_entry);
 static pfe_ct_rtable_entry_t *pfe_rtable_phys_entry_get_pa(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry_va);
 static pfe_ct_rtable_entry_t *pfe_rtable_phys_entry_get_va(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry_pa);
 static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
-static void rtable_do_timeouts(pfe_rtable_t *rtable);
-static void *rtable_worker_func(void *arg);
-static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, pfe_rtable_criterion_arg_t *arg, pfe_rtable_entry_t *entry);
-static bool_t pfe_rtable_entry_is_in_table(pfe_rtable_entry_t *entry);
-static pfe_rtable_entry_t *pfe_rtable_get_by_phys_entry_va(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry_va);
+static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, const pfe_rtable_criterion_arg_t *arg, pfe_rtable_entry_t *entry);
+static bool_t pfe_rtable_entry_is_in_table(const pfe_rtable_entry_t *entry);
+static pfe_rtable_entry_t *pfe_rtable_get_by_phys_entry_va(const pfe_rtable_t *rtable, const pfe_ct_rtable_entry_t *phys_entry_va);
 
-#define CRCPOLY_BE 0x04c11db7
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR)
+	static void *rtable_worker_func(void *arg);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
 
-static pfe_rtable_entry_t *pfe_rtable_get_by_phys_entry_va(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry_va)
+#define CRCPOLY_BE 0x04C11DB7U
+
+static pfe_rtable_entry_t *pfe_rtable_get_by_phys_entry_va(const pfe_rtable_t *rtable, const pfe_ct_rtable_entry_t *phys_entry_va)
 {
 	LLIST_t *item;
 	pfe_rtable_entry_t *entry;
@@ -215,19 +214,25 @@ static pfe_rtable_entry_t *pfe_rtable_get_by_phys_entry_va(pfe_rtable_t *rtable,
 
 static uint32_t pfe_get_crc32_be(uint32_t crc, uint8_t *data, uint16_t len)
 {
-	int32_t i;
+	uint8_t i;
+    uint16_t length = len;
+    uint32_t tempcrc = crc;
+    const uint8_t *tempdata = data;
 
-	while (len--)
+	while (length > 0U)
 	{
-		crc ^= *data++ << 24;
-
-		for (i = 0; i < 8; i++)
+		tempcrc ^= ((uint32_t)(*tempdata) << 24U);
+        tempdata++;
+        
+		for (i = 0U; i < 8U; i++)
 		{
-			crc = (crc << 1) ^ ((crc & 0x80000000) ? CRCPOLY_BE : 0);
+			tempcrc = (tempcrc << 1U) ^ ((0U != (tempcrc & 0x80000000U)) ? CRCPOLY_BE : 0U);
 		}
+        
+        length--;
 	}
 
-	return crc;
+	return tempcrc;
 }
 
 /**
@@ -249,11 +254,14 @@ static void pfe_rtable_invalidate(pfe_rtable_t *rtable)
 
 	table = (pfe_ct_rtable_entry_t *)rtable->htable_base_va;
 
-	oal_mutex_lock(rtable->lock);
+	if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
+    {
+        NXP_LOG_DEBUG("Mutex lock failed\n");
+    }
 
 	for (ii=0U; ii<rtable->htable_size; ii++)
 	{
-		table[ii].flags = oal_ntohl(0);
+		table[ii].flags = (pfe_ct_rtable_flags_t)(oal_ntohl(0));
 		table[ii].next = oal_ntohl(0);
 	}
 
@@ -261,11 +269,14 @@ static void pfe_rtable_invalidate(pfe_rtable_t *rtable)
 
 	for (ii=0U; ii<rtable->pool_size; ii++)
 	{
-		table[ii].flags = oal_ntohl(0);
+		table[ii].flags = (pfe_ct_rtable_flags_t)(oal_ntohl(0));
 		table[ii].next = oal_ntohl(0);
 	}
 
-	oal_mutex_unlock(rtable->lock);
+    if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+    {
+        NXP_LOG_DEBUG("Mutex unlock failed\n");
+    }
 }
 
 /**
@@ -281,137 +292,136 @@ static uint32_t pfe_rtable_entry_get_hash(pfe_rtable_entry_t *entry, pfe_rtable_
 	uint32_t crc = 0xffffffffU;
 	uint32_t sport = 0U;
 	uint32_t ip_addr;
-
+    
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
+        return 0;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+    if (0U != ((uint8_t)htype & (uint8_t)IPV4_5T))
+    {
+        if ((0U != ((uint8_t)htype & (uint8_t)ADD_SIP_CRC)) && (0U != ((uint8_t)htype & (uint8_t)ADD_SPORT_CRC)))
+        {
+            /*	CRC(SIP) + DIP + CRC(SPORT) + DPORT + PROTO */
+            sport = oal_ntohl(entry->phys_entry->u.v4.sip) ^ (uint32_t)oal_ntohs(entry->phys_entry->sport);
+            temp = pfe_get_crc32_be(crc, (uint8_t *)&sport, 4);
+            temp += oal_ntohl(entry->phys_entry->u.v4.dip);
+            temp += entry->phys_entry->proto;
+            temp += oal_ntohs(entry->phys_entry->dport);
+        }
+        else if (0U != ((uint8_t)htype & (uint8_t)ADD_SIP_CRC))
+        {
+            /*	CRC(SIP) + DIP + SPORT + DPORT + PROTO */
+            ip_addr = oal_ntohl(entry->phys_entry->u.v4.sip);
+            temp = pfe_get_crc32_be(crc, (uint8_t *)&ip_addr, 4);
+            temp += oal_ntohl(entry->phys_entry->u.v4.dip);
+            temp += entry->phys_entry->proto;
+            temp += oal_ntohs(entry->phys_entry->sport);
+            temp += oal_ntohs(entry->phys_entry->dport);
+        }
+        else if (0U != ((uint8_t)htype & (uint8_t)ADD_SPORT_CRC))
+        {
+            /*	SIP + DIP + CRC(SPORT) + DPORT + PROTO */
+            sport = (uint32_t)oal_ntohs(entry->phys_entry->sport);
+            temp = pfe_get_crc32_be(crc, (uint8_t *)&sport, 4);
+            temp += oal_ntohl(entry->phys_entry->u.v4.sip);
+            temp += oal_ntohl(entry->phys_entry->u.v4.dip);
+            temp += entry->phys_entry->proto;
+            temp += oal_ntohs(entry->phys_entry->dport);
+        }
+        else
+        {
+            /*	SIP + DIP + SPORT + DPORT + PROTO */
+            temp = oal_ntohl(entry->phys_entry->u.v4.sip);
+            temp += oal_ntohl(entry->phys_entry->u.v4.dip);
+            temp += entry->phys_entry->proto;
+            temp += oal_ntohs(entry->phys_entry->sport);
+            temp += oal_ntohs(entry->phys_entry->dport);
+        }
+    }
+    else if (0U != ((uint32_t)htype & (uint32_t)IPV6_5T))
+    {
+        uint32_t crc_ipv6 = 0;
+        int32_t jj;
 
-	if (htype & IPV4_5T)
-	{
-		if ((htype & ADD_SIP_CRC) && (htype & ADD_SPORT_CRC))
-		{
-			/*	CRC(SIP) + DIP + CRC(SPORT) + DPORT + PROTO */
-			sport = oal_ntohl(entry->phys_entry->u.v4.sip) ^ (uint32_t)oal_ntohs(entry->phys_entry->sport);
-			temp = pfe_get_crc32_be(crc, (uint8_t *)&sport, 4);
-			temp += oal_ntohl(entry->phys_entry->u.v4.dip);
-			temp += entry->phys_entry->proto;
-			temp += oal_ntohs(entry->phys_entry->dport);
-		}
-		else if (htype & ADD_SIP_CRC)
-		{
-			/*	CRC(SIP) + DIP + SPORT + DPORT + PROTO */
-			ip_addr = oal_ntohl(entry->phys_entry->u.v4.sip);
-			temp = pfe_get_crc32_be(crc, (uint8_t *)&ip_addr, 4);
-		    temp += oal_ntohl(entry->phys_entry->u.v4.dip);
-		    temp += entry->phys_entry->proto;
-		    temp += oal_ntohs(entry->phys_entry->sport);
-		    temp += oal_ntohs(entry->phys_entry->dport);
-		}
-		else if (htype & ADD_SPORT_CRC)
-		{
-			/*	SIP + DIP + CRC(SPORT) + DPORT + PROTO */
-			sport = oal_ntohs(entry->phys_entry->sport);
-			temp = pfe_get_crc32_be(crc, (uint8_t *)&sport, 4);
-			temp += oal_ntohl(entry->phys_entry->u.v4.sip);
-			temp += oal_ntohl(entry->phys_entry->u.v4.dip);
-			temp += entry->phys_entry->proto;
-			temp += oal_ntohs(entry->phys_entry->dport);
-		}
-		else
-		{
-			/*	SIP + DIP + SPORT + DPORT + PROTO */
-			temp = oal_ntohl(entry->phys_entry->u.v4.sip);
-			temp += oal_ntohl(entry->phys_entry->u.v4.dip);
-			temp += entry->phys_entry->proto;
-			temp += oal_ntohs(entry->phys_entry->sport);
-			temp += oal_ntohs(entry->phys_entry->dport);
-		}
-	}
-	else if (htype & IPV6_5T)
-	{
-		uint32_t crc_ipv6 = 0;
-		int32_t jj;
+        for(jj=0; jj<4 ; jj++)
+        {
+            crc_ipv6 += (oal_ntohl(entry->phys_entry->u.v6.sip[jj]));
+        }
 
-		for(jj=0; jj<4 ; jj++)
-		{
-			crc_ipv6 += (oal_ntohl(entry->phys_entry->u.v6.sip[jj]));
-		}
+        if ((0U != ((uint8_t)htype & (uint8_t)ADD_SIP_CRC)) && (0U != ((uint8_t)htype & (uint8_t)ADD_SPORT_CRC)))
+        {
+            /*	CRC(SIP) + DIP + CRC(SPORT) + DPORT + PROTO */
+            sport = crc_ipv6 ^ (uint32_t)oal_ntohs(entry->phys_entry->sport);
+            temp = pfe_get_crc32_be(crc,(uint8_t *)&sport, 4);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[0]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[1]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[2]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[3]);
+            temp += entry->phys_entry->proto;
+            temp += oal_ntohs(entry->phys_entry->dport);
+        }
+        else if (0U != ((uint8_t)htype & (uint8_t)ADD_SIP_CRC))
+        {
+            /*	CRC(SIP) + DIP + SPORT + DPORT + PROTO */
+            temp = pfe_get_crc32_be(crc, (uint8_t *)&crc_ipv6, 4);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[0]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[1]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[2]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[3]);
+            temp += entry->phys_entry->proto;
+            temp += oal_ntohs(entry->phys_entry->sport);
+            temp += oal_ntohs(entry->phys_entry->dport);
+        }
+        else if (0U != ((uint8_t)htype & (uint8_t)ADD_SPORT_CRC))
+        {
+            /*	SIP + DIP + CRC(SPORT) + DPORT + PROTO */
+            sport = (uint32_t)oal_ntohs(entry->phys_entry->sport);
+            temp = pfe_get_crc32_be(crc,(uint8_t *)&sport, 4);
+            temp += oal_ntohl(entry->phys_entry->u.v6.sip[0]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.sip[1]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.sip[2]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.sip[3]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[0]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[1]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[2]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[3]);
+            temp += entry->phys_entry->proto;
+            temp += oal_ntohs(entry->phys_entry->dport);
+        }
+        else
+        {
+            /*	SIP + DIP + SPORT + DPORT + PROTO */
+            temp = oal_ntohl(entry->phys_entry->u.v6.sip[0]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.sip[1]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.sip[2]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.sip[3]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[0]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[1]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[2]);
+            temp += oal_ntohl(entry->phys_entry->u.v6.dip[3]);
+            temp += entry->phys_entry->proto;
+            temp += oal_ntohs(entry->phys_entry->sport);
+            temp += oal_ntohs(entry->phys_entry->dport);
+        }
+    }
+    else
+    {
+        NXP_LOG_ERROR("Unknown hash type requested\n");
+        return 0U;
+    }
 
-		if ((htype & ADD_SIP_CRC) && (htype & ADD_SPORT_CRC))
-		{
-			/*	CRC(SIP) + DIP + CRC(SPORT) + DPORT + PROTO */
-			sport = crc_ipv6 ^ (uint32_t)oal_ntohs(entry->phys_entry->sport);
-			temp = pfe_get_crc32_be(crc,(uint8_t *)&sport, 4);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[0]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[1]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[2]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[3]);
-			temp += entry->phys_entry->proto;
-			temp += oal_ntohs(entry->phys_entry->dport);
-		}
-		else if (htype & ADD_SIP_CRC)
-		{
-			/*	CRC(SIP) + DIP + SPORT + DPORT + PROTO */
-			temp = pfe_get_crc32_be(crc, (uint8_t *)&crc_ipv6, 4);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[0]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[1]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[2]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[3]);
-			temp += entry->phys_entry->proto;
-			temp += oal_ntohs(entry->phys_entry->sport);
-			temp += oal_ntohs(entry->phys_entry->dport);
-		}
-		else if (htype & ADD_SPORT_CRC)
-		{
-			/*	SIP + DIP + CRC(SPORT) + DPORT + PROTO */
-			sport = oal_ntohs(entry->phys_entry->sport);
-			temp = pfe_get_crc32_be(crc,(uint8_t *)&sport, 4);
-			temp += oal_ntohl(entry->phys_entry->u.v6.sip[0]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.sip[1]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.sip[2]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.sip[3]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[0]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[1]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[2]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[3]);
-			temp += entry->phys_entry->proto;
-			temp += oal_ntohs(entry->phys_entry->dport);
-		}
-		else
-		{
-			/*	SIP + DIP + SPORT + DPORT + PROTO */
-			temp = oal_ntohl(entry->phys_entry->u.v6.sip[0]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.sip[1]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.sip[2]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.sip[3]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[0]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[1]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[2]);
-			temp += oal_ntohl(entry->phys_entry->u.v6.dip[3]);
-			temp += entry->phys_entry->proto;
-			temp += oal_ntohs(entry->phys_entry->sport);
-			temp += oal_ntohs(entry->phys_entry->dport);
-		}
-	}
-	else
-	{
-		NXP_LOG_ERROR("Unknown hash type requested\n");
-		return 0U;
-	}
-
-	if (htype & ADD_SRC_PHY)
-	{
-		/*	+ PHY_ID */
+    if (0U != ((uint8_t)htype & (uint8_t)ADD_SRC_PHY))
+    {
+        /*	+ PHY_ID */
 #if 0
-		temp += entry->phys_entry->inPhyPortNum;
+        temp += entry->phys_entry->inPhyPortNum;
 #else
-		NXP_LOG_ERROR("Unsupported hash algorithm\n");
+        NXP_LOG_ERROR("Unsupported hash algorithm\n");
 #endif /* 0 */
-	}
+    }
 
 	return (temp & hash_mask);
 }
@@ -423,7 +433,7 @@ static uint32_t pfe_rtable_entry_get_hash(pfe_rtable_entry_t *entry, pfe_rtable_
  * @retval		TRUE Entry belongs to hash table
  * @retval		FALSE Entry does not belong to hash table
  */
-static bool_t pfe_rtable_phys_entry_is_htable(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry)
+static bool_t pfe_rtable_phys_entry_is_htable(const pfe_rtable_t *rtable, const pfe_ct_rtable_entry_t *phys_entry)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == phys_entry)))
@@ -457,7 +467,7 @@ static bool_t pfe_rtable_phys_entry_is_htable(pfe_rtable_t *rtable, pfe_ct_rtabl
  * @retval		TRUE Entry belongs to the pool
  * @retval		FALSE Entry does not belong to the pool
  */
-static bool_t pfe_rtable_phys_entry_is_pool(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry)
+static bool_t pfe_rtable_phys_entry_is_pool(const pfe_rtable_t *rtable, const pfe_ct_rtable_entry_t *phys_entry)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == phys_entry)))
@@ -569,7 +579,7 @@ pfe_rtable_entry_t *pfe_rtable_entry_create(void)
 	}
 	else
 	{
-		memset(entry, 0, sizeof(pfe_rtable_entry_t));
+		(void)memset(entry, 0, sizeof(pfe_rtable_entry_t));
 		entry->temp_phys_entry = NULL;
 		entry->phys_entry = NULL;
 
@@ -582,7 +592,7 @@ pfe_rtable_entry_t *pfe_rtable_entry_create(void)
 		}
 		else
 		{
-			memset(entry->temp_phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
+			(void)memset(entry->temp_phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
 			entry->phys_entry = entry->temp_phys_entry;
 
 			/*	Set defaults */
@@ -597,7 +607,7 @@ pfe_rtable_entry_t *pfe_rtable_entry_create(void)
 			entry->child = NULL;
 		}
 
-		entry->temp_phys_entry->flag_ipv6 = IPV_INVALID;
+		entry->temp_phys_entry->flag_ipv6 = (uint8_t)IPV_INVALID;
 	}
 
 	return entry;
@@ -668,7 +678,7 @@ errno_t pfe_rtable_entry_set_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
  * @retval		EOK Success
  * @retval		EINVAL Invalid argument
  */
-errno_t pfe_rtable_entry_set_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr)
+errno_t pfe_rtable_entry_set_sip(pfe_rtable_entry_t *entry,const pfe_ip_addr_t *ip_addr)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == ip_addr)))
@@ -680,25 +690,25 @@ errno_t pfe_rtable_entry_set_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_ad
 
 	if (ip_addr->is_ipv4)
 	{
-		if ((entry->phys_entry->flag_ipv6 != IPV_INVALID) && (entry->phys_entry->flag_ipv6 != IPV4))
+		if ((entry->phys_entry->flag_ipv6 != (uint8_t)IPV_INVALID) && (entry->phys_entry->flag_ipv6 != (uint8_t)IPV4))
 		{
 			NXP_LOG_ERROR("IP version mismatch\n");
 			return EINVAL;
 		}
 
-		memcpy(&entry->phys_entry->u.v4.sip, &ip_addr->v4, 4);
-		entry->phys_entry->flag_ipv6 = IPV4;
+		(void)memcpy(&entry->phys_entry->u.v4.sip, &ip_addr->v4, 4);
+		entry->phys_entry->flag_ipv6 = (uint8_t)IPV4;
 	}
 	else
 	{
-		if ((entry->phys_entry->flag_ipv6 != IPV_INVALID) && (entry->phys_entry->flag_ipv6 != IPV6))
+		if ((entry->phys_entry->flag_ipv6 != (uint8_t)IPV_INVALID) && (entry->phys_entry->flag_ipv6 != (uint8_t)IPV6))
 		{
 			NXP_LOG_ERROR("IP version mismatch\n");
 			return EINVAL;
 		}
 
-		memcpy(&entry->phys_entry->u.v6.sip[0], &ip_addr->v6, 16);
-		entry->phys_entry->flag_ipv6 = IPV6;
+		(void)memcpy(&entry->phys_entry->u.v6.sip[0], &ip_addr->v6, 16);
+		entry->phys_entry->flag_ipv6 = (uint8_t)IPV6;
 	}
 
 	return EOK;
@@ -726,7 +736,7 @@ void pfe_rtable_entry_get_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr)
 		NXP_LOG_ERROR("Entry conversion failed\n");
 	}
 
-	memcpy(ip_addr, &tuple.src_ip, sizeof(pfe_ip_addr_t));
+	(void)memcpy(ip_addr, &tuple.src_ip, sizeof(pfe_ip_addr_t));
 }
 
 /**
@@ -736,7 +746,7 @@ void pfe_rtable_entry_get_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr)
  * @retval		EOK Success
  * @retval		EINVAL Invalid argument
  */
-errno_t pfe_rtable_entry_set_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr)
+errno_t pfe_rtable_entry_set_dip(pfe_rtable_entry_t *entry, const pfe_ip_addr_t *ip_addr)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == ip_addr)))
@@ -748,25 +758,25 @@ errno_t pfe_rtable_entry_set_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_ad
 
 	if (ip_addr->is_ipv4)
 	{
-		if ((entry->phys_entry->flag_ipv6 != IPV_INVALID) && (entry->phys_entry->flag_ipv6 != IPV4))
+		if ((entry->phys_entry->flag_ipv6 != (uint8_t)IPV_INVALID) && (entry->phys_entry->flag_ipv6 != (uint8_t)IPV4))
 		{
 			NXP_LOG_ERROR("IP version mismatch\n");
 			return EINVAL;
 		}
 
-		memcpy(&entry->phys_entry->u.v4.dip, &ip_addr->v4, 4);
-		entry->phys_entry->flag_ipv6 = IPV4;
+		(void)memcpy(&entry->phys_entry->u.v4.dip, &ip_addr->v4, 4);
+		entry->phys_entry->flag_ipv6 = (uint8_t)IPV4;
 	}
 	else
 	{
-		if ((entry->phys_entry->flag_ipv6 != IPV_INVALID) && (entry->phys_entry->flag_ipv6 != IPV6))
+		if ((entry->phys_entry->flag_ipv6 != (uint8_t)IPV_INVALID) && (entry->phys_entry->flag_ipv6 != (uint8_t)IPV6))
 		{
 			NXP_LOG_ERROR("IP version mismatch\n");
 			return EINVAL;
 		}
 
-		memcpy(&entry->phys_entry->u.v6.dip[0], &ip_addr->v6, 16);
-		entry->phys_entry->flag_ipv6 = IPV6;
+		(void)memcpy(&entry->phys_entry->u.v6.dip[0], &ip_addr->v6, 16);
+		entry->phys_entry->flag_ipv6 = (uint8_t)IPV6;
 	}
 
 	return EOK;
@@ -794,7 +804,7 @@ void pfe_rtable_entry_get_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr)
 		NXP_LOG_ERROR("Entry conversion failed\n");
 	}
 
-	memcpy(ip_addr, &tuple.dst_ip, sizeof(pfe_ip_addr_t));
+	(void)memcpy(ip_addr, &tuple.dst_ip, sizeof(pfe_ip_addr_t));
 }
 
 /**
@@ -820,7 +830,7 @@ void pfe_rtable_entry_set_sport(pfe_rtable_entry_t *entry, uint16_t sport)
  * @param[in]	entry The routing table entry instance
  * @return		The assigned source port number
  */
-uint16_t pfe_rtable_entry_get_sport(pfe_rtable_entry_t *entry)
+uint16_t pfe_rtable_entry_get_sport(const pfe_rtable_entry_t *entry)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
@@ -856,7 +866,7 @@ void pfe_rtable_entry_set_dport(pfe_rtable_entry_t *entry, uint16_t dport)
  * @param[in]	entry The routing table entry instance
  * @return		The assigned destination port number
  */
-uint16_t pfe_rtable_entry_get_dport(pfe_rtable_entry_t *entry)
+uint16_t pfe_rtable_entry_get_dport(const pfe_rtable_entry_t *entry)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
@@ -892,7 +902,7 @@ void pfe_rtable_entry_set_proto(pfe_rtable_entry_t *entry, uint8_t proto)
  * @param[in]	entry The routing table entry instance
  * @return		The assigned protocol number
  */
-uint8_t pfe_rtable_entry_get_proto(pfe_rtable_entry_t *entry)
+uint8_t pfe_rtable_entry_get_proto(const pfe_rtable_entry_t *entry)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
@@ -938,7 +948,7 @@ errno_t pfe_rtable_entry_set_dstif_id(pfe_rtable_entry_t *entry, pfe_ct_phy_if_i
  * @retval		EOK Success
  * @retval		EINVAL Invalid argument
  */
-errno_t pfe_rtable_entry_set_dstif(pfe_rtable_entry_t *entry, pfe_phy_if_t *iface)
+errno_t pfe_rtable_entry_set_dstif(pfe_rtable_entry_t *entry, const pfe_phy_if_t *iface)
 {
 	pfe_ct_phy_if_id_t if_id = PFE_PHY_IF_ID_INVALID;
 
@@ -965,7 +975,7 @@ errno_t pfe_rtable_entry_set_dstif(pfe_rtable_entry_t *entry, pfe_phy_if_t *ifac
  * @retval		EOK Success
  * @retval		EINVAL Invalid argument
  */
-errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *output_sip)
+errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, const pfe_ip_addr_t *output_sip)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == output_sip)))
@@ -975,15 +985,15 @@ errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if ((IPV_INVALID != entry->phys_entry->flag_ipv6) && (output_sip->is_ipv4))
+	if (((uint8_t)IPV_INVALID != entry->phys_entry->flag_ipv6) && (output_sip->is_ipv4))
 	{
-		memcpy(&entry->phys_entry->args.ipv.v4.sip, &output_sip->v4, 4);
-		entry->phys_entry->flag_ipv6 = IPV4;
+		(void)memcpy(&entry->phys_entry->args.ipv.v4.sip, &output_sip->v4, 4);
+		entry->phys_entry->flag_ipv6 = (uint8_t)IPV4;
 	}
-	else if ((IPV_INVALID != entry->phys_entry->flag_ipv6) && (!output_sip->is_ipv4))
+	else if (((uint8_t)IPV_INVALID != entry->phys_entry->flag_ipv6) && (!output_sip->is_ipv4))
 	{
-		memcpy(&entry->phys_entry->args.ipv.v6.sip[0], &output_sip->v6, 16);
-		entry->phys_entry->flag_ipv6 = IPV6;
+		(void)memcpy(&entry->phys_entry->args.ipv.v6.sip[0], &output_sip->v6, 16);
+		entry->phys_entry->flag_ipv6 = (uint8_t)IPV6;
 	}
 	else
 	{
@@ -991,7 +1001,7 @@ errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
 		return EINVAL;
 	}
 
-	entry->phys_entry->actions = oal_htonl(RT_ACT_CHANGE_SIP_ADDR);
+	entry->phys_entry->actions |= oal_htonl(RT_ACT_CHANGE_SIP_ADDR);
 
 	return EOK;
 }
@@ -1005,7 +1015,7 @@ errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
  * @retval		EOK Success
  * @retval		EINVAL Invalid argument
  */
-errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *output_dip)
+errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, const pfe_ip_addr_t *output_dip)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == output_dip)))
@@ -1015,15 +1025,15 @@ errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if ((IPV_INVALID != entry->phys_entry->flag_ipv6) && (output_dip->is_ipv4))
+	if (((uint8_t)IPV_INVALID != entry->phys_entry->flag_ipv6) && (output_dip->is_ipv4))
 	{
-		memcpy(&entry->phys_entry->args.ipv.v4.dip, &output_dip->v4, 4);
-		entry->phys_entry->flag_ipv6 = IPV4;
+		(void)memcpy(&entry->phys_entry->args.ipv.v4.dip, &output_dip->v4, 4);
+		entry->phys_entry->flag_ipv6 = (uint8_t)IPV4;
 	}
-	else if ((IPV_INVALID != entry->phys_entry->flag_ipv6) && (!output_dip->is_ipv4))
+	else if (((uint8_t)IPV_INVALID != entry->phys_entry->flag_ipv6) && (!output_dip->is_ipv4))
 	{
-		memcpy(&entry->phys_entry->args.ipv.v6.dip[0], &output_dip->v6, 16);
-		entry->phys_entry->flag_ipv6 = IPV6;
+		(void)memcpy(&entry->phys_entry->args.ipv.v6.dip[0], &output_dip->v6, 16);
+		entry->phys_entry->flag_ipv6 = (uint8_t)IPV6;
 	}
 	else
 	{
@@ -1031,7 +1041,7 @@ errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *o
 		return EINVAL;
 	}
 
-	entry->phys_entry->actions = oal_htonl(RT_ACT_CHANGE_DIP_ADDR);
+	entry->phys_entry->actions |= oal_htonl(RT_ACT_CHANGE_DIP_ADDR);
 
 	return EOK;
 }
@@ -1130,7 +1140,7 @@ void pfe_rtable_entry_remove_ttl_decrement(pfe_rtable_entry_t *entry)
  * @param[in]	smac The desired output source MAC address
  * @param[in]	dmac The desired output destination MAC address
  */
-void pfe_rtable_entry_set_out_mac_addrs(pfe_rtable_entry_t *entry, pfe_mac_addr_t smac, pfe_mac_addr_t dmac)
+void pfe_rtable_entry_set_out_mac_addrs(pfe_rtable_entry_t *entry, const pfe_mac_addr_t smac, const pfe_mac_addr_t dmac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
@@ -1140,8 +1150,8 @@ void pfe_rtable_entry_set_out_mac_addrs(pfe_rtable_entry_t *entry, pfe_mac_addr_
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	memcpy(entry->phys_entry->args.smac, smac, sizeof(pfe_mac_addr_t));
-	memcpy(entry->phys_entry->args.dmac, dmac, sizeof(pfe_mac_addr_t));
+	(void)memcpy(entry->phys_entry->args.smac, smac, sizeof(pfe_mac_addr_t));
+	(void)memcpy(entry->phys_entry->args.dmac, dmac, sizeof(pfe_mac_addr_t));
 	entry->phys_entry->actions |= oal_htonl(RT_ACT_ADD_ETH_HDR);
 }
 
@@ -1176,24 +1186,28 @@ void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan)
  * return		Non-zero VLAN ID (host endian) if VLAN manipulation has been
  *				requested, zero otherwise
  */
-uint16_t pfe_rtable_entry_get_out_vlan(pfe_rtable_entry_t *entry)
+uint16_t pfe_rtable_entry_get_out_vlan(const pfe_rtable_entry_t *entry)
 {
+    uint16_t ret = 0U;
+    
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
 	}
+    else
+    {
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (0U != (oal_ntohl(entry->phys_entry->actions) & RT_ACT_ADD_VLAN_HDR))
-	{
-		return oal_ntohs(entry->phys_entry->args.vlan);
-	}
-	else
-	{
-		return 0U;
-	}
+        if (0U != (oal_ntohl(entry->phys_entry->actions) & (uint32_t)RT_ACT_ADD_VLAN_HDR))
+        {
+            ret = oal_ntohs(entry->phys_entry->args.vlan);
+        }
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+    }
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+    return ret;
 }
 
 /**
@@ -1226,7 +1240,7 @@ void pfe_rtable_entry_set_out_inner_vlan(pfe_rtable_entry_t *entry, uint16_t vla
  */
 void pfe_rtable_entry_set_out_pppoe_sid(pfe_rtable_entry_t *entry, uint16_t sid)
 {
-	pfe_ct_route_actions_t flags;
+	uint32_t flags;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
@@ -1236,15 +1250,15 @@ void pfe_rtable_entry_set_out_pppoe_sid(pfe_rtable_entry_t *entry, uint16_t sid)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	flags = oal_ntohl(entry->phys_entry->actions);
+	flags = (pfe_ct_route_actions_t)(oal_ntohl(entry->phys_entry->actions));
 
-	if (0 != (flags & RT_ACT_ADD_VLAN1_HDR))
+	if (0U != (flags & (uint32_t)RT_ACT_ADD_VLAN1_HDR))
 	{
 		NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_PPPOE_HDR) must no be combined with PFE_RTABLE_ADD_VLAN1_HDR\n");
 		return;
 	}
 
-	if (0 == (flags & RT_ACT_ADD_ETH_HDR))
+	if (0U == (flags & (uint32_t)RT_ACT_ADD_ETH_HDR))
 	{
 		NXP_LOG_ERROR("Action (PFE_RTABLE_ADD_PPPOE_HDR) requires also the PFE_RTABLE_ADD_ETH_HDR flag set\n");
 		return;
@@ -1267,7 +1281,7 @@ void pfe_rtable_entry_set_id5t(pfe_rtable_entry_t *entry, uint32_t id5t)
 	entry->phys_entry->id5t = oal_htonl(id5t);   
 }
 
-errno_t pfe_rtable_entry_get_id5t(pfe_rtable_entry_t *entry, uint32_t *id5t)
+errno_t pfe_rtable_entry_get_id5t(const pfe_rtable_entry_t *entry, uint32_t *id5t)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
@@ -1318,7 +1332,10 @@ void pfe_rtable_entry_set_timeout(pfe_rtable_entry_t *entry, uint32_t timeout)
 
 	if (NULL != entry->rtable)
 	{
-		oal_mutex_lock(entry->rtable->lock);
+        if (unlikely(EOK != oal_mutex_lock(entry->rtable->lock)))
+        {
+            NXP_LOG_DEBUG("Mutex lock failed\n");
+        }
 	}
 
 	if (0xffffffffU == entry->timeout)
@@ -1345,7 +1362,10 @@ void pfe_rtable_entry_set_timeout(pfe_rtable_entry_t *entry, uint32_t timeout)
 
 	if (NULL != entry->rtable)
 	{
-		oal_mutex_unlock(entry->rtable->lock);
+        if (unlikely(EOK != oal_mutex_unlock(entry->rtable->lock)))
+        {
+            NXP_LOG_DEBUG("Mutex unlock failed\n");
+        }
 	}
 }
 
@@ -1375,7 +1395,7 @@ void pfe_rtable_entry_set_route_id(pfe_rtable_entry_t *entry, uint32_t route_id)
  * @retval		EOK Success
  * @retval		ENOENT No route ID associated with the entry
  */
-errno_t pfe_rtable_entry_get_route_id(pfe_rtable_entry_t *entry, uint32_t *route_id)
+errno_t pfe_rtable_entry_get_route_id(const pfe_rtable_entry_t *entry, uint32_t *route_id)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == route_id)))
@@ -1481,7 +1501,7 @@ void pfe_rtable_entry_set_child(pfe_rtable_entry_t *entry, pfe_rtable_entry_t *c
  * @param[in]	entry The routing table entry instance
  * @return		The associated routing table entry linked with the 'entry'. NULL if there is not link.
  */
-pfe_rtable_entry_t *pfe_rtable_entry_get_child(pfe_rtable_entry_t *entry)
+pfe_rtable_entry_t *pfe_rtable_entry_get_child(const pfe_rtable_entry_t *entry)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
@@ -1500,7 +1520,7 @@ pfe_rtable_entry_t *pfe_rtable_entry_get_child(pfe_rtable_entry_t *entry)
  * @retval		TRUE Entry is in a routing table
  * @retval		FALSE Entry is not in a routing table
  */
-static bool_t pfe_rtable_entry_is_in_table(pfe_rtable_entry_t *entry)
+static bool_t pfe_rtable_entry_is_in_table(const pfe_rtable_entry_t *entry)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
@@ -1549,7 +1569,7 @@ static bool_t pfe_rtable_entry_is_duplicate(pfe_rtable_t *rtable, pfe_rtable_ent
 	if (EOK != pfe_rtable_entry_to_5t(entry, &arg.five_tuple))
 	{
 		NXP_LOG_ERROR("Entry conversion failed\n");
-		return EINVAL;
+		return FALSE;
 	}
 
 	/*	Search for first matching entry */
@@ -1561,14 +1581,11 @@ static bool_t pfe_rtable_entry_is_duplicate(pfe_rtable_t *rtable, pfe_rtable_ent
 			/*	Get data */
 			entry2 = LLIST_Data(item, pfe_rtable_entry_t, list_entry);
 
-			if (NULL != entry)
-			{
-				if (TRUE == pfe_rtable_match_criterion(RTABLE_CRIT_BY_5_TUPLE, &arg, entry2))
-				{
-					match = TRUE;
-					break;
-				}
-			}
+            if (TRUE == pfe_rtable_match_criterion(RTABLE_CRIT_BY_5_TUPLE, &arg, entry2))
+            {
+                match = TRUE;
+                break;
+            }
 		}
 	}
 
@@ -1587,13 +1604,14 @@ static bool_t pfe_rtable_entry_is_duplicate(pfe_rtable_t *rtable, pfe_rtable_ent
  */
 errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 {
-	pfe_rtable_hash_type_t hash_type = (IPV4 == entry->phys_entry->flag_ipv6) ? IPV4_5T : IPV6_5T;
+	pfe_rtable_hash_type_t hash_type = ((uint8_t)IPV4 == entry->phys_entry->flag_ipv6) ? IPV4_5T : IPV6_5T;
 	uint32_t hash;
 	pfe_ct_rtable_entry_t *hash_table_va = (pfe_ct_rtable_entry_t *)rtable->htable_base_va;
 	pfe_ct_rtable_entry_t *new_phys_entry_va = NULL, *new_phys_entry_pa = NULL, *last_phys_entry_va = NULL;
+    errno_t ret;
 
 #if (TRUE == PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE)
-	uint32_t valid_tmp;
+	pfe_ct_rtable_flags_t valid_tmp;
 #endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1605,22 +1623,30 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Protect table accesses */
-	oal_mutex_lock(rtable->lock);
+	if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
+    {
+        NXP_LOG_DEBUG("Mutex lock failed\n");
+    }
 
 	/*	Check for duplicates */
 	if (TRUE == pfe_rtable_entry_is_duplicate(rtable, entry))
 	{
 		NXP_LOG_INFO("Entry already added\n");
-		oal_mutex_unlock(rtable->lock);
+        
+        if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+        {
+            NXP_LOG_DEBUG("Mutex unlock failed\n");
+        }
+
 		return EEXIST;
 	}
 
-	hash = pfe_rtable_entry_get_hash(entry, hash_type, (rtable->htable_size-1));
-	entry->temp_phys_entry->flags = 0U;
-	entry->temp_phys_entry->status &= ~RT_STATUS_ACTIVE;
+	hash = pfe_rtable_entry_get_hash(entry, hash_type, (rtable->htable_size - 1U));
+	entry->temp_phys_entry->flags = RT_FL_NONE;
+	entry->temp_phys_entry->status &= ~(uint8_t)RT_STATUS_ACTIVE;
 
 	/*	Allocate 'real' entry from hash heads or pool */
-	if (FALSE == !!(oal_ntohl(hash_table_va[hash].flags) & RT_FL_VALID))
+	if (0U == (oal_ntohl(hash_table_va[hash].flags) & (uint32_t)RT_FL_VALID))
 	{
 		new_phys_entry_va = &hash_table_va[hash];
 	}
@@ -1631,13 +1657,17 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 		new_phys_entry_va = fifo_get(rtable->pool_va);
 		if (NULL == new_phys_entry_va)
 		{
-			oal_mutex_unlock(rtable->lock);
+            if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+            {
+                NXP_LOG_DEBUG("Mutex unlock failed\n");
+            }
+
 			return ENOENT;
 		}
 	}
 
 	/*	Make sure the new entry is invalid */
-	new_phys_entry_va->flags = 0U;
+	new_phys_entry_va->flags = RT_FL_NONE;
 
 	/*	Get physical address */
 	new_phys_entry_pa = pfe_rtable_phys_entry_get_pa(rtable, new_phys_entry_va);
@@ -1667,7 +1697,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 #if (TRUE == PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE)
 		/*	Invalidate the last entry first */
 		valid_tmp = last_phys_entry_va->flags;
-		last_phys_entry_va->flags = 0U;
+		last_phys_entry_va->flags = RT_FL_NONE;
 
 		/*	Wait some time due to sync with firmware */
 		oal_time_usleep(1000U);
@@ -1686,7 +1716,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 	}
 
 	/*	Copy temporary entry into its destination (pool/hash entry) */
-	memcpy(new_phys_entry_va, entry->temp_phys_entry, sizeof(pfe_ct_rtable_entry_t));
+	(void)memcpy(new_phys_entry_va, entry->temp_phys_entry, sizeof(pfe_ct_rtable_entry_t));
 
 	/*	Remember the real pointer */
 	entry->phys_entry = new_phys_entry_va;
@@ -1701,8 +1731,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 	hal_wmb();
 
 	/*	Validate the new entry */
-	entry->phys_entry->flags = oal_htonl(RT_FL_VALID | ((IPV4 == entry->phys_entry->flag_ipv6) ? 0 : RT_FL_IPV6));
-
+	entry->phys_entry->flags = (pfe_ct_rtable_flags_t)oal_htonl((uint32_t)RT_FL_VALID | (((uint8_t)IPV4 == entry->phys_entry->flag_ipv6) ? 0U : (uint32_t)RT_FL_IPV6));
 	entry->prev = (NULL == last_phys_entry_va) ? NULL : pfe_rtable_get_by_phys_entry_va(rtable, last_phys_entry_va);
 	entry->next = NULL;
 	if (NULL != entry->prev)
@@ -1713,24 +1742,32 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 
 	LLIST_AddAtEnd(&entry->list_entry, &rtable->active_entries);
 
-	NXP_LOG_INFO("RTable entry added, hash: 0x%x\n", hash);
+	NXP_LOG_INFO("RTable entry added, hash: 0x%x\n", (uint_t)hash);
 
 	entry->rtable = rtable;
 
-	oal_mutex_unlock(rtable->lock);
+    if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+    {
+        NXP_LOG_DEBUG("Mutex unlock failed\n");
+    }
+
 	return EOK;
 
 free_and_fail:
-	if (NULL != new_phys_entry_va)
-	{
-		if (pfe_rtable_phys_entry_is_pool(rtable, new_phys_entry_va))
-		{
-			/*	Entry from the pool. Return it. */
-			fifo_put(rtable->pool_va, new_phys_entry_va);
-		}
-	}
-
-	oal_mutex_unlock(rtable->lock);
+    if (pfe_rtable_phys_entry_is_pool(rtable, new_phys_entry_va))
+    {
+        /*	Entry from the pool. Return it. */
+        ret = fifo_put(rtable->pool_va, new_phys_entry_va);
+        if (EOK != ret)
+        {
+            NXP_LOG_ERROR("Couldn't return routing table entry to the pool\n");
+        }
+    }
+    
+    if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+    {
+        NXP_LOG_DEBUG("Mutex unlock failed\n");
+    }
 
 	return EFAULT;
 }
@@ -1755,11 +1792,17 @@ errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Protect table accesses */
-	oal_mutex_lock(rtable->lock);
+	if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
+    {
+        NXP_LOG_DEBUG("Mutex lock failed\n");
+    }
 
 	ret = pfe_rtable_del_entry_nolock(rtable, entry);
-
-	oal_mutex_unlock(rtable->lock);
+    
+    if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+    {
+        NXP_LOG_DEBUG("Mutex unlock failed\n");
+    }
 
 	return ret;
 }
@@ -1774,7 +1817,9 @@ errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
  */
 static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 {
-	uint32_t valid_tmp;
+    pfe_ct_rtable_entry_t *next_phys_entry_pa = NULL;
+    errno_t ret;
+	pfe_ct_rtable_flags_t valid_tmp;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == entry)))
@@ -1792,7 +1837,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 	if (TRUE == pfe_rtable_phys_entry_is_htable(rtable, entry->phys_entry))
 	{
 		/*	Invalidate the found entry. This will disable the whole chain. */
-		entry->phys_entry->flags = 0U;
+		entry->phys_entry->flags = RT_FL_NONE;
 
 		if (NULL != entry->next)
 		{
@@ -1800,7 +1845,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 			/*	Invalidate also the next entry if any. This will prevent uncertainty
 				during copying next entry to the place of the found one. */
 			valid_tmp = entry->next->phys_entry->flags;
-			entry->next->phys_entry->flags = 0U;
+			entry->next->phys_entry->flags = RT_FL_NONE;
 
 			/*	Ensure that all previous writes has been done */
 			hal_wmb();
@@ -1810,13 +1855,14 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 #endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
 
 			/*	Replace hash table entry with next (pool) entry */
-			memcpy(entry->phys_entry, entry->next->phys_entry, sizeof(pfe_ct_rtable_entry_t));
+			(void)memcpy(entry->phys_entry, entry->next->phys_entry, sizeof(pfe_ct_rtable_entry_t));
 
 			/*	Clear the copied entry (next one) and return it back to the pool */
-			memset(entry->next->phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
+			(void)memset(entry->next->phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
 			if (TRUE == pfe_rtable_phys_entry_is_pool(rtable, entry->next->phys_entry))
 			{
-				if (EOK != fifo_put(rtable->pool_va, entry->next->phys_entry))
+                ret = fifo_put(rtable->pool_va, entry->next->phys_entry);
+				if (EOK != ret)
 				{
 					NXP_LOG_ERROR("Couldn't return routing table entry to the pool\n");
 				}
@@ -1828,7 +1874,8 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 
 			/*	Next entry now points to the copied physical one */
 			entry->next->phys_entry = entry->phys_entry;
-			entry->next->phys_entry->rt_orig = oal_htonl((uint32_t)((addr_t)pfe_rtable_phys_entry_get_pa(rtable, entry->next->phys_entry) & 0xffffffffU));
+            next_phys_entry_pa = pfe_rtable_phys_entry_get_pa(rtable, entry->next->phys_entry);
+			entry->next->phys_entry->rt_orig = oal_htonl((uint32_t)((addr_t)next_phys_entry_pa & 0xffffffffU));
 
 			/*	Remove entry from the list of active entries and ensure consistency
 			 	of get_first() and get_next() calls */
@@ -1863,7 +1910,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 			oal_time_usleep(1000);
 
 			/*	Zero-out the entry */
-			memset(entry->phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
+			(void)memset(entry->phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
 
 			/*	Remove entry from the list of active entries and ensure consistency
 				of get_first() and get_next() calls */
@@ -1884,10 +1931,10 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 #if (TRUE == PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE)
 		/*	Invalidate the previous entry */
 		valid_tmp = entry->prev->phys_entry->flags;
-		entry->prev->phys_entry->flags = 0U;
+		entry->prev->phys_entry->flags = RT_FL_NONE;
 
 		/*	Invalidate the found entry */
-		entry->phys_entry->flags = 0U;
+		entry->phys_entry->flags = RT_FL_NONE;
 
 		/*	Wait some time to sync with firmware */
 		oal_time_usleep(1000U);
@@ -1905,9 +1952,9 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 #endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
 
 		/*	Clear the found entry and return it back to the pool */
-		memset(entry->phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
-
-		if (EOK != fifo_put(rtable->pool_va, entry->phys_entry))
+		(void)memset(entry->phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
+        ret = fifo_put(rtable->pool_va, entry->phys_entry);
+		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("Couldn't return routing table entry to the pool\n");
 		}
@@ -1934,7 +1981,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 	}
 	else
 	{
-		NXP_LOG_ERROR("Wrong address (found rtable entry @ v0x%p)\n", entry->phys_entry);
+		NXP_LOG_ERROR("Wrong address (found rtable entry @ v0x%p)\n", (void *)entry->phys_entry);
 	}
 
 	entry->rtable = NULL;
@@ -1947,7 +1994,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
  * @param[in]	rtable The routing table instance
  * @note		Runs within the rtable worker thread context
  */
-static void rtable_do_timeouts(pfe_rtable_t *rtable)
+void pfe_rtable_do_timeouts(pfe_rtable_t *rtable)
 {
 	LLIST_t *item;
 	LLIST_t to_be_removed_list;
@@ -1963,7 +2010,10 @@ static void rtable_do_timeouts(pfe_rtable_t *rtable)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	oal_mutex_lock(rtable->lock);
+	if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
+    {
+        NXP_LOG_DEBUG("Mutex lock failed\n");
+    }
 
 	LLIST_Init(&to_be_removed_list);
 
@@ -1971,23 +2021,32 @@ static void rtable_do_timeouts(pfe_rtable_t *rtable)
 	LLIST_ForEach(item, &rtable->active_entries)
 	{
 		entry = LLIST_Data(item, pfe_rtable_entry_t, list_entry);
-		flags = entry->phys_entry->status;
+		flags = (uint8_t)entry->phys_entry->status;
 
 		if (0xffffffffU == entry->timeout)
 		{
 			continue;
 		}
 
-		if (0 != (RT_STATUS_ACTIVE & flags))
+		if (0U != ((uint8_t)RT_STATUS_ACTIVE & flags))
 		{
 			/*	Entry is active. Reset timeout and the active flag. */
 			entry->curr_timeout = entry->timeout;
-			entry->phys_entry->status &= ~RT_STATUS_ACTIVE;
+			entry->phys_entry->status &= ~(uint8_t)RT_STATUS_ACTIVE;
 		}
 		else
 		{
+			if (entry->curr_timeout >= PFE_RTABLE_CFG_TICK_PERIOD_SEC)
+			{
+				entry->curr_timeout -= PFE_RTABLE_CFG_TICK_PERIOD_SEC;
+			}
+			else
+			{
+				entry->curr_timeout = 0;
+			}
+			
 			/*	Entry is not active */
-			if (0 == entry->curr_timeout)
+			if (0U == entry->curr_timeout)
 			{
 				/*	Call user's callback if requested */
 				if (NULL != entry->callback)
@@ -1997,17 +2056,6 @@ static void rtable_do_timeouts(pfe_rtable_t *rtable)
 
 				/*	Collect entries to be removed */
 				LLIST_AddAtEnd(&entry->list_to_remove_entry, &to_be_removed_list);
-			}
-			else
-			{
-				if (entry->curr_timeout >= PFE_RTABLE_CFG_TICK_PERIOD_SEC)
-				{
-					entry->curr_timeout -= PFE_RTABLE_CFG_TICK_PERIOD_SEC;
-				}
-				else
-				{
-					entry->curr_timeout = 0;
-				}
 			}
 		}
 	}
@@ -2024,11 +2072,15 @@ static void rtable_do_timeouts(pfe_rtable_t *rtable)
 		}
 	}
 
-	oal_mutex_unlock(rtable->lock);
+    if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+    {
+        NXP_LOG_DEBUG("Mutex unlock failed\n");
+    }
 
 	return;
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR)
 /**
  * @brief		Worker function running within internal thread
  */
@@ -2057,17 +2109,23 @@ static void *rtable_worker_func(void *arg)
 		{
 			switch (msg.payload.code)
 			{
-				case SIG_WORKER_STOP:
+				case (int32_t)SIG_WORKER_STOP:
 				{
-					/*	Exit the thread */
-					oal_mbox_ack_msg(&msg);
-					return NULL;
+                    /* Exit the thread */
+                    oal_mbox_ack_msg(&msg);
+                    return NULL;
 				}
 
-				case SIG_TIMER_TICK:
+				case (int32_t)SIG_TIMER_TICK:
 				{
-					rtable_do_timeouts(rtable);
+					pfe_rtable_do_timeouts(rtable);
 					break;
+				}
+
+				default:
+				{
+                    /*Do Nothing*/
+                    break;
 				}
 			}
 		}
@@ -2077,6 +2135,7 @@ static void *rtable_worker_func(void *arg)
 
 	return NULL;
 }
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
 
 /**
  * @brief		Create routing table instance
@@ -2093,6 +2152,7 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 	pfe_rtable_t *rtable;
 	pfe_ct_rtable_entry_t *table_va;
 	uint32_t ii;
+    errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL_ADDR == htable_base_va) || (NULL_ADDR == pool_base_va) || (NULL == class)))
@@ -2111,7 +2171,7 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 	else
 	{
 		/*	Initialize the instance */
-		memset(rtable, 0, sizeof(pfe_rtable_t));
+		(void)memset(rtable, 0, sizeof(pfe_rtable_t));
 
 		/*	Create mutex */
 		rtable->lock = (oal_mutex_t *)oal_mm_malloc(sizeof(oal_mutex_t));
@@ -2123,91 +2183,95 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 		}
 		else
 		{
-			oal_mutex_init(rtable->lock);
-		}
+			if (EOK == oal_mutex_init(rtable->lock))
+            {
+                /*	Store properties */
+                rtable->htable_base_va = htable_base_va;
+                rtable->htable_base_pa = (addr_t)oal_mm_virt_to_phys_contig((void *)htable_base_va);
+                rtable->htable_size = htable_size;
+                rtable->htable_end_va = rtable->htable_base_va + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1U;
+                rtable->htable_end_pa = rtable->htable_base_pa + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1U;
 
-		/*	Store properties */
-		rtable->htable_base_va = htable_base_va;
-		rtable->htable_base_pa = (addr_t)oal_mm_virt_to_phys_contig((void *)htable_base_va);
-		rtable->htable_size = htable_size;
-		rtable->htable_end_va = rtable->htable_base_va + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
-		rtable->htable_end_pa = rtable->htable_base_pa + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
+                rtable->pool_base_va = pool_base_va;
+                rtable->pool_base_pa = rtable->htable_base_pa + (pool_base_va - htable_base_va);
+                rtable->pool_size = pool_size;
+                rtable->pool_end_va = rtable->pool_base_va + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1U;
+                rtable->pool_end_pa = rtable->pool_base_pa + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1U;
 
-		rtable->pool_base_va = pool_base_va;
-		rtable->pool_base_pa = rtable->htable_base_pa + (pool_base_va - htable_base_va);
-		rtable->pool_size = pool_size;
-		rtable->pool_end_va = rtable->pool_base_va + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
-		rtable->pool_end_pa = rtable->pool_base_pa + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1;
+                if ((NULL_ADDR == rtable->htable_base_va) || (NULL_ADDR == rtable->pool_base_va))
+                {
+                    NXP_LOG_ERROR("Can't map the table memory\n");
+                    goto free_and_fail;
+                }
+                else
+                {
+                    /*	Pre-compute conversion offsets */
+                    rtable->htable_va_pa_offset = rtable->htable_base_va - rtable->htable_base_pa;
+                    rtable->pool_va_pa_offset = rtable->pool_base_va - rtable->pool_base_pa;
+                }
 
-		if ((NULL_ADDR == rtable->htable_base_va) || (NULL_ADDR == rtable->pool_base_va))
-		{
-			NXP_LOG_ERROR("Can't map the table memory\n");
-			goto free_and_fail;
-		}
-		else
-		{
-			/*	Pre-compute conversion offsets */
-			rtable->htable_va_pa_offset = rtable->htable_base_va - rtable->htable_base_pa;
-			rtable->pool_va_pa_offset = rtable->pool_base_va - rtable->pool_base_pa;
-		}
+                /*	Configure the classifier */
+                if (EOK != pfe_class_set_rtable(class, rtable->htable_base_pa, rtable->htable_size, sizeof(pfe_ct_rtable_entry_t)))
+                {
+                    NXP_LOG_ERROR("Unable to set routing table address\n");
+                    goto free_and_fail;
+                }
 
-		/*	Configure the classifier */
-		if (EOK != pfe_class_set_rtable(class, rtable->htable_base_pa, rtable->htable_size, sizeof(pfe_ct_rtable_entry_t)))
-		{
-			NXP_LOG_ERROR("Unable to set routing table address\n");
-			goto free_and_fail;
-		}
+                /*	Initialize the table */
+                pfe_rtable_invalidate(rtable);
 
-		/*	Initialize the table */
-		pfe_rtable_invalidate(rtable);
+                /*	Create pool. No protection needed. */
+                rtable->pool_va = fifo_create(rtable->pool_size);
 
-		/*	Create pool. No protection needed. */
-		rtable->pool_va = fifo_create(rtable->pool_size);
+                if (NULL == rtable->pool_va)
+                {
+                    NXP_LOG_ERROR("Can't create pool\n");
+                    goto free_and_fail;
+                }
 
-		if (NULL == rtable->pool_va)
-		{
-			NXP_LOG_ERROR("Can't create pool\n");
-			goto free_and_fail;
-		}
+                /*	Fill the pool */
+                table_va = (pfe_ct_rtable_entry_t *)rtable->pool_base_va;
 
-		/*	Fill the pool */
-		table_va = (pfe_ct_rtable_entry_t *)rtable->pool_base_va;
+                for (ii=0U; ii<rtable->pool_size; ii++)
+                {
+                    ret = fifo_put(rtable->pool_va, (void *)&table_va[ii]);
+                    if (EOK != ret)
+                    {
+                        NXP_LOG_ERROR("Pool filling failed (VA pool)\n");
+                        goto free_and_fail;
+                    }
+                }
 
-		for (ii=0U; ii<rtable->pool_size; ii++)
-		{
-			if (EOK != fifo_put(rtable->pool_va, (void *)&table_va[ii]))
-			{
-				NXP_LOG_ERROR("Pool filling failed (VA pool)\n");
-				goto free_and_fail;
-			}
-		}
+                /*	Create list */
+                LLIST_Init(&rtable->active_entries);
 
-		/*	Create list */
-		LLIST_Init(&rtable->active_entries);
+        #if !defined(PFE_CFG_TARGET_OS_AUTOSAR)
+                /*	Create mbox */
+                rtable->mbox = oal_mbox_create();
+                if (NULL == rtable->mbox)
+                {
+                    NXP_LOG_ERROR("Mbox creation failed\n");
+                    goto free_and_fail;
+                }
 
-		/*	Create mbox */
-		rtable->mbox = oal_mbox_create();
-		if (NULL == rtable->mbox)
-		{
-			NXP_LOG_ERROR("Mbox creation failed\n");
-			goto free_and_fail;
-		}
-
-		/*	Create worker thread */
-		rtable->worker = oal_thread_create(&rtable_worker_func, rtable, "rtable worker", 0);
-		if (NULL == rtable->worker)
-		{
-			NXP_LOG_ERROR("Couldn't start worker thread\n");
-			goto free_and_fail;
-		}
-		else
-		{
-			if (EOK != oal_mbox_attach_timer(rtable->mbox, PFE_RTABLE_CFG_TICK_PERIOD_SEC * 1000, SIG_TIMER_TICK))
-			{
-				NXP_LOG_ERROR("Unable to attach timer\n");
-				goto free_and_fail;
-			}
-		}
+                /*	Create worker thread */
+                rtable->worker = oal_thread_create(&rtable_worker_func, rtable, "rtable worker", 0);
+                if (NULL == rtable->worker)
+                {
+                    NXP_LOG_ERROR("Couldn't start worker thread\n");
+                    goto free_and_fail;
+                }
+                else
+                {
+                    if (EOK != oal_mbox_attach_timer(rtable->mbox, (uint32_t)PFE_RTABLE_CFG_TICK_PERIOD_SEC * 1000U, SIG_TIMER_TICK))
+                    {
+                        NXP_LOG_ERROR("Unable to attach timer\n");
+                        goto free_and_fail;
+                    }
+                }
+        #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
+            }
+        }
 	}
 
 	return rtable;
@@ -2223,7 +2287,7 @@ free_and_fail:
 * @param[in]	rtable The routing table instance
 * @return		Total count of entries within the table 
 */
-uint32_t pfe_rtable_get_size(pfe_rtable_t *rtable)
+uint32_t pfe_rtable_get_size(const pfe_rtable_t *rtable)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == rtable))
@@ -2241,10 +2305,13 @@ uint32_t pfe_rtable_get_size(pfe_rtable_t *rtable)
  */
 void pfe_rtable_destroy(pfe_rtable_t *rtable)
 {
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR)
 	errno_t err;
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
 
 	if (NULL != rtable)
 	{
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR)
 		if (NULL != rtable->mbox)
 		{
 			oal_mbox_detach_timer(rtable->mbox);
@@ -2278,6 +2345,7 @@ void pfe_rtable_destroy(pfe_rtable_t *rtable)
 			oal_mbox_destroy(rtable->mbox);
 			rtable->mbox = NULL;
 		}
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
 
 		if (NULL_ADDR != rtable->htable_base_va)
 		{
@@ -2299,7 +2367,10 @@ void pfe_rtable_destroy(pfe_rtable_t *rtable)
 
 		if (NULL != rtable->lock)
 		{
-			oal_mutex_destroy(rtable->lock);
+			if (EOK != oal_mutex_destroy(rtable->lock))
+            {
+                NXP_LOG_ERROR("Failed to destroy rtable\n");
+            }
 			oal_mm_free(rtable->lock);
 			rtable->lock = NULL;
 		}
@@ -2323,7 +2394,7 @@ uint32_t pfe_rtable_get_entry_size(void)
  * @param[out]	tuple Pointer where the 5-tuple will be written
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_rtable_entry_to_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
+errno_t pfe_rtable_entry_to_5t(const pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == tuple)))
@@ -2334,21 +2405,21 @@ errno_t pfe_rtable_entry_to_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Clean the destination */
-	memset(tuple, 0, sizeof(pfe_5_tuple_t));
+	(void)memset(tuple, 0, sizeof(pfe_5_tuple_t));
 
-	if (IPV4 == entry->phys_entry->flag_ipv6)
+	if ((uint8_t)IPV4 == entry->phys_entry->flag_ipv6)
 	{
 		/*	SRC + DST IP */
-		memcpy(&tuple->src_ip.v4, &entry->phys_entry->u.v4.sip, 4);
-		memcpy(&tuple->dst_ip.v4, &entry->phys_entry->u.v4.dip, 4);
+		(void)memcpy(&tuple->src_ip.v4, &entry->phys_entry->u.v4.sip, 4);
+		(void)memcpy(&tuple->dst_ip.v4, &entry->phys_entry->u.v4.dip, 4);
 		tuple->src_ip.is_ipv4 = TRUE;
 		tuple->dst_ip.is_ipv4 = TRUE;
 	}
-	else if (IPV6 == entry->phys_entry->flag_ipv6)
+	else if ((uint8_t)IPV6 == entry->phys_entry->flag_ipv6)
 	{
 		/*	SRC + DST IP */
-		memcpy(&tuple->src_ip.v6, &entry->phys_entry->u.v6.sip[0], 16);
-		memcpy(&tuple->dst_ip.v6, &entry->phys_entry->u.v6.dip[0], 16);
+		(void)memcpy(&tuple->src_ip.v6, &entry->phys_entry->u.v6.sip[0], 16);
+		(void)memcpy(&tuple->dst_ip.v6, &entry->phys_entry->u.v6.dip[0], 16);
 		tuple->src_ip.is_ipv4 = FALSE;
 		tuple->dst_ip.is_ipv4 = FALSE;
 	}
@@ -2373,7 +2444,7 @@ errno_t pfe_rtable_entry_to_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
  * @param[out]	tuple Pointer where the 5-tuple will be written
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_rtable_entry_to_5t_out(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
+errno_t pfe_rtable_entry_to_5t_out(const pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == tuple)))
@@ -2384,21 +2455,21 @@ errno_t pfe_rtable_entry_to_5t_out(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tup
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Clean the destination */
-	memset(tuple, 0, sizeof(pfe_5_tuple_t));
+	(void)memset(tuple, 0, sizeof(pfe_5_tuple_t));
 
-	if (IPV6 == entry->phys_entry->flag_ipv6)
+	if ((uint8_t)IPV6 == entry->phys_entry->flag_ipv6)
 	{
 		/*	SRC + DST IP */
-		memcpy(&tuple->src_ip.v6, &entry->phys_entry->args.ipv.v6.sip[0], 16);
-		memcpy(&tuple->dst_ip.v6, &entry->phys_entry->args.ipv.v6.dip[0], 16);
+		(void)memcpy(&tuple->src_ip.v6, &entry->phys_entry->args.ipv.v6.sip[0], 16);
+		(void)memcpy(&tuple->dst_ip.v6, &entry->phys_entry->args.ipv.v6.dip[0], 16);
 		tuple->src_ip.is_ipv4 = FALSE;
 		tuple->dst_ip.is_ipv4 = FALSE;
 	}
 	else
 	{
 		/*	SRC + DST IP */
-		memcpy(&tuple->src_ip.v4, &entry->phys_entry->args.ipv.v4.sip, 4);
-		memcpy(&tuple->dst_ip.v4, &entry->phys_entry->args.ipv.v4.dip, 4);
+		(void)memcpy(&tuple->src_ip.v4, &entry->phys_entry->args.ipv.v4.sip, 4);
+		(void)memcpy(&tuple->dst_ip.v4, &entry->phys_entry->args.ipv.v4.dip, 4);
 		tuple->src_ip.is_ipv4 = TRUE;
 		tuple->dst_ip.is_ipv4 = TRUE;
 	}
@@ -2418,7 +2489,7 @@ errno_t pfe_rtable_entry_to_5t_out(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tup
  * @retval		TRUE Entry matches the criterion
  * @retval		FALSE Entry does not match the criterion
  */
-static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, pfe_rtable_criterion_arg_t *arg, pfe_rtable_entry_t *entry)
+static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, const pfe_rtable_criterion_arg_t *arg, pfe_rtable_entry_t *entry)
 {
 	bool_t match = FALSE;
 	pfe_5_tuple_t five_tuple;
@@ -2434,43 +2505,30 @@ static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, pfe_rt
 	switch (crit)
 	{
 		case RTABLE_CRIT_ALL:
-		{
 			match = TRUE;
 			break;
-		}
 
 		case RTABLE_CRIT_ALL_IPV4:
-		{
-			match = (IPV4 == entry->phys_entry->flag_ipv6);
+			match = ((uint8_t)IPV4 == entry->phys_entry->flag_ipv6);
 			break;
-		}
 
 		case RTABLE_CRIT_ALL_IPV6:
-		{
-			match = (IPV6 == entry->phys_entry->flag_ipv6);
+			match = ((uint8_t)IPV6 == entry->phys_entry->flag_ipv6);
 			break;
-		}
 
 		case RTABLE_CRIT_BY_DST_IF:
-		{
 			match = (pfe_phy_if_get_id(arg->iface) == (pfe_ct_phy_if_id_t)entry->phys_entry->e_phy_if);
 			break;
-		}
 
 		case RTABLE_CRIT_BY_ROUTE_ID:
-		{
 			match = (TRUE == entry->route_id_valid) && (arg->route_id == entry->route_id);
 			break;
-		}
 
 		case RTABLE_CRIT_BY_ID5T:
-		{
 			match = (arg->id5t == entry->phys_entry->id5t);
 			break;
-		}
 
 		case RTABLE_CRIT_BY_5_TUPLE:
-		{
 			if (EOK != pfe_rtable_entry_to_5t(entry, &five_tuple))
 			{
 				NXP_LOG_ERROR("Entry conversion failed\n");
@@ -2480,15 +2538,12 @@ static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, pfe_rt
 			{
 				match = (0 == memcmp(&five_tuple, &arg->five_tuple, sizeof(pfe_5_tuple_t)));
 			}
-
-			break;
-		}        
+			break;       
 
 		default:
-		{
 			NXP_LOG_ERROR("Unknown criterion\n");
 			match = FALSE;
-		}
+            break;
 	}
 
 	return match;
@@ -2507,8 +2562,9 @@ static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, pfe_rt
 pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_criterion_t crit, void *arg)
 {
 	LLIST_t *item;
-	pfe_rtable_entry_t *entry;
+	pfe_rtable_entry_t *entry = NULL;
 	bool_t match = FALSE;
+    bool_t known_crit = TRUE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == arg)))
@@ -2525,46 +2581,40 @@ pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_cr
 		case RTABLE_CRIT_ALL:
 		case RTABLE_CRIT_ALL_IPV4:
 		case RTABLE_CRIT_ALL_IPV6:
-		{
 			break;
-		}
 
 		case RTABLE_CRIT_BY_DST_IF:
-		{
 			rtable->cur_crit_arg.iface = (pfe_phy_if_t *)arg;
 			break;
-		}
 
 		case RTABLE_CRIT_BY_ROUTE_ID:
-		{
-			memcpy(&rtable->cur_crit_arg.route_id, arg, sizeof(uint32_t));
+			(void)memcpy(&rtable->cur_crit_arg.route_id, arg, sizeof(uint32_t));
 			break;
-		}
 
 		case RTABLE_CRIT_BY_ID5T:
-		{
-			memcpy(&rtable->cur_crit_arg.id5t, arg, sizeof(uint32_t));
+			(void)memcpy(&rtable->cur_crit_arg.id5t, arg, sizeof(uint32_t));
 			break;
-		}
 
 		case RTABLE_CRIT_BY_5_TUPLE:
-		{
-			memcpy(&rtable->cur_crit_arg.five_tuple, arg, sizeof(pfe_5_tuple_t));
+			(void)memcpy(&rtable->cur_crit_arg.five_tuple, arg, sizeof(pfe_5_tuple_t));
 			break;
-		}
 
 		default:
 		{
 			NXP_LOG_ERROR("Unknown criterion\n");
-			return NULL;
+            known_crit = FALSE;
+            break;
 		}
 	}
 
 	/*	Search for first matching entry */
-	if (FALSE == LLIST_IsEmpty(&rtable->active_entries))
+	if ((FALSE == LLIST_IsEmpty(&rtable->active_entries)) && (TRUE == known_crit))
 	{
 		/*	Protect table accesses */
-		oal_mutex_lock(rtable->lock);
+		if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
+        {
+            NXP_LOG_DEBUG("Mutex lock failed\n");
+        };
 
 		/*	Get first matching entry */
 		LLIST_ForEach(item, &rtable->active_entries)
@@ -2583,8 +2633,11 @@ pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_cr
 				}
 			}
 		}
-
-		oal_mutex_unlock(rtable->lock);
+        
+        if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+        {
+            NXP_LOG_DEBUG("Mutex unlock failed\n");
+        }
 	}
 
 	if (TRUE == match)
@@ -2626,7 +2679,10 @@ pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 	else
 	{
 		/*	Protect table accesses */
-		oal_mutex_lock(rtable->lock);
+        if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
+        {
+            NXP_LOG_DEBUG("Mutex lock failed\n");
+        }
 
 		while (rtable->cur_item != &rtable->active_entries)
 		{
@@ -2645,8 +2701,11 @@ pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 				}
 			}
 		}
-
-		oal_mutex_unlock(rtable->lock);
+        
+        if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+        {
+            NXP_LOG_DEBUG("Mutex unlock failed\n");
+        }
 	}
 
 	if (TRUE == match)
