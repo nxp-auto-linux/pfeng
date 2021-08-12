@@ -64,7 +64,7 @@ Requires properties for 'ethernet' subnode:
 
 Optional properties for 'ethernet' subnode:
 - fsl,pfeng-ihc : [master/slave only] Declares the interface for IHC traffic
-- fsl,pfeng-emac-router : [slave only] switch linked EMAC to ROUTER_OP mode
+- fsl,pfeng-emac-router : [slave only] switch linked EMAC to IF_OP_FLEX_ROUTER mode
 - local-mac-address : MAC address
 - phy-handle : phandle to the PHY device connected to this device.
 - fixed-link : Assume a fixed link. See fixed-link.txt in the same directory.

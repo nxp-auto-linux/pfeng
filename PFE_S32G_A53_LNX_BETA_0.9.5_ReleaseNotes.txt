@@ -136,13 +136,11 @@ What's Modified in BETA_0.9.5
 [AAVB-1602] - [PFE_PLATFORM] HIF NOCPY LMEM copy mode
 [AAVB-1872] - [PFE_PLATFORM] All buffers shall be returned at driver shutdown phase
 [AAVB-2086] - Move fci_msg_t definition to the fci_msg.h
-[AAVB-2191] - [PFE_PLATFORM] FCI should allow change of physical interface MAC address
 [AAVB-2205] - [PFE_QNX] Return provided buffers
 [AAVB-2328] - [PFE_LINUX] HIF traffic steering
 [AAVB-2827] - [PFE_DRV_LINUX] Aux Interface support
 [AAVB-3398] - [PFE_LINUX] Add support for multiple MAC unicast addreses
 [AAVB-3404] - [PFE_PLATFORM] Fast path router uses phyif MAC as default source address make this configurable
-[AAVB-3603] - [PFE_LINUX] Add unicast and multicast MAC addr filtering for the SLAVE driver
 [AAVB-3633] - [PFE_LINUX] STR: v2, netinterface config changes support
 
 # Improvement
@@ -153,11 +151,9 @@ What's Modified in BETA_0.9.5
 [AAVB-2511] - [PFE_PLATFORM][PFE_FW] Remove PE ID passing
 [AAVB-2700] - [PFE_LINUX] pfeng: follow SGMII configuration for PHY config
 [AAVB-2807] - [PFE_FW] HIF no copy/LMEM copy mode
-[AAVB-2866] - [PFE_DRV_LINUX] Map functional tests to requirements
 [AAVB-2938] - [PFE_PLATFORM] Static entry documentation update
 [AAVB-3066] - [PFE_LINUX] pfeng: move TXconf to NAPI
 [AAVB-3129] - [PFE_DRV_LINUX] Make FCI endpoint OS-independent - Linux replica
-[AAVB-3340] - [PFE_DRV_LINUX] libfci_cli: crazy numbers of warning during build
 [AAVB-3374] - [PFE_LINUX] STR: guard all necessary functions by pm_runtime_get_sync
 [AAVB-3420] - [PFE_PLATFORM] Update libFCI documentation with demo codes from libFCI_cli
 [AAVB-3431] - [PFE_PLATFORM] Remove compilation warnings

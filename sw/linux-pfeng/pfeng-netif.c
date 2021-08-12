@@ -427,6 +427,7 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 	return ret;
 }
 
+#ifdef PFE_CFG_PFE_MASTER
 static int pfeng_addr_sync(struct net_device *netdev, const u8 *addr)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
@@ -557,6 +558,9 @@ static void pfeng_netif_set_rx_mode(struct net_device *netdev)
 
 	return;
 }
+#else /* PFE_CFG_PFE_MASTER */
+#define pfeng_netif_set_rx_mode NULL
+#endif
 
 static int pfeng_netif_set_mac_address(struct net_device *netdev, void *p)
 {
@@ -986,7 +990,9 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 	}
 	netdev->hw_features |= NETIF_F_SG;
 	netdev->features = netdev->hw_features;
+#ifdef PFE_CFG_PFE_MASTER
 	netdev->priv_flags |= IFF_UNICAST_FLT;
+#endif
 
 	ret = register_netdev(netdev);
 	if (ret) {
@@ -1241,8 +1247,10 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 		if (ret)
 			netdev_warn(netdev, "Cannot enable EMAC: %d\n", ret);
 
+#ifdef PFE_CFG_PFE_MASTER
 		/* Restore RX mode: promisc & UC/MC addresses */
 		pfeng_netif_set_rx_mode(netdev);
+#endif
 
 		/* Restore EMAC pause and coalesce */
 		pfeng_ethtool_params_restore(netif);
