@@ -1,0 +1,2469 @@
+/* =========================================================================
+ *  (c) Copyright 2006-2016 Freescale Semiconductor, Inc.
+ *  Copyright 2017, 2019-2021 NXP
+ *
+ *  NXP Confidential. This software is owned or controlled by NXP and may only
+ *  be used strictly in accordance with the applicable license terms. By
+ *  expressly accepting such terms or by downloading, installing, activating
+ *  and/or otherwise using the software, you are agreeing that you have read,
+ *  and that you agree to comply with and are bound by, such license terms. If
+ *  you do not agree to be bound by the applicable license terms, then you may
+ *  not retain, install, activate or otherwise use the software.
+ *
+ *  This file contains sample code only. It is not part of the production code deliverables.
+ * ========================================================================= */
+
+#include <stdint.h>
+#include <stdio.h>
+
+#include "libfci_cli_common.h"
+#include "libfci_cli_def_cmds.h"
+#include "libfci_cli_def_opts.h"
+#include "libfci_cli_def_optarg_keywords.h"
+
+/* ==== TESTMODE vars ====================================================== */
+
+#if !defined(NDEBUG)
+/* empty */
+#endif
+
+/* ==== TYPEDEFS & DATA : aux symbols ====================================== */
+
+#define TXT_DECOR_CMD    "---- Command -------------------\n"
+#define TXT_DECOR_DESCR  "---- Description ---------------\n"
+#define TXT_DECOR_OPT    "---- Options -------------------\n"
+
+
+#define TXT_PHYIF_KEYWORDS  \
+        "  Only the following hardcoded PHYIF names are accepted:\n"  \
+        "    "  TXT_PHYIF__EMAC0  "\n"  \
+        "    "  TXT_PHYIF__EMAC1  "\n"  \
+        "    "  TXT_PHYIF__EMAC2  "\n"  \
+        "    "  TXT_PHYIF__UTIL   "\n"  \
+		"    "  TXT_PHYIF__HIF_NOCPY  "  (valid only if supported by a driver)"  "\n"  \
+        "    "  TXT_PHYIF__HIF0   "\n"  \
+        "    "  TXT_PHYIF__HIF1   "\n"  \
+        "    "  TXT_PHYIF__HIF2   "\n"  \
+        "    "  TXT_PHYIF__HIF3   "\n"
+
+
+#define TXT_OPTARGS__PHYIF         TXT_PHYIF__EMAC2
+#define TXT_OPTARGS__ON_OFF        TXT_ON_OFF__ON  "|"  TXT_ON_OFF__OFF
+#define TXT_OPTARGS__MAC_ADDR      "00:22:bc:45:de:67|35-47-ed-6c-28-b0"
+#define TXT_OPTARGS__BD_ACTIONS    TXT_BD_ACTION__PUNT  "|0-3"
+#define TXT_OPTARGS__MR            "MyMirrorRule"
+#define TXT_OPTARGS__FP_TABLE      "MyFpTable"
+#define TXT_OPTARGS__FP_RULE       "MyFpRule"
+#define TXT_OPTARGS__U8_DEC        "0-255"
+#define TXT_OPTARGS__U8_HEX        "0x00-0xFF"
+#define TXT_OPTARGS__U16_DEC       "0-65535"
+#define TXT_OPTARGS__U16_HEX       "0x00-0xFFFF"
+#define TXT_OPTARGS__U32_DEC       "0-4294967295"
+#define TXT_OPTARGS__U32_HEX       "0x00-0xFFFFFFFF"
+#define TXT_OPTARGS__I32_DEC       "-2147483648 - 2147483647"
+
+
+
+/* ==== TYPEDEFS & DATA : opt binds and descriptions ======================= */
+/*
+    Binding local symbols to help texts from 'def_opts.h' (and providing descriptions).
+    
+    Search for keyword 'OPT_LAST' to get to the bottom of the opt help text list.
+    Search for keyword 'CMD_LAST' to get to the bottom of the cmd help text list.
+    
+    
+    Description of symbols
+    ----------------------
+    TXT_OPT__xx         TXT_HELP__aa=<...>  Symbol representing the given cli opt in help texts (and example arguments if applicable).
+                                            'TXT_HELP__aa' is expected to be a cli opt help text symbol from 'def_opts.h'.
+                                            
+    TXT_OPTDESCR__xx    TXT_OPT__xx \ ...   Verbose description of the given cli opt.
+    
+*/
+
+#define TXT_OPT__IP4                    TXT_HELP__IP4
+#define TXT_OPTDESCR__IP4               TXT_HELP__IP4  "\n"  \
+                                        "  IPv4 variant of the operation.\n"
+
+#define TXT_OPT__IP6                    TXT_HELP__IP6
+#define TXT_OPTDESCR__IP6               TXT_HELP__IP6  "\n"  \
+                                        "  IPv6 variant of the operation.\n"
+
+#define TXT_OPT__ALL                    TXT_HELP__ALL
+#define TXT_OPTDESCR__ALL               TXT_HELP__ALL  "\n"  \
+                                        "  Bulk variant of the operation.\n"
+
+#define TXT_OPT__HELP                   TXT_HELP__HELP
+#define TXT_OPTDESCR__HELP              TXT_HELP__HELP  "\n"  \
+                                        "  Prints help\n"
+
+#define TXT_OPT__VERBOSE                TXT_HELP__VERBOSE
+#define TXT_OPTDESCR__VERBOSE           TXT_HELP__VERBOSE  "\n"  \
+                                        "  Verbose variant of the operation (more info).\n"
+
+#define TXT_OPT__VERSION                TXT_HELP__VERSION
+#define TXT_OPTDESCR__VERSION           TXT_HELP__VERSION  "\n"  \
+                                        "  Prints application version.\n"
+
+#define TXT_OPT__INTERFACE_LOGIF        TXT_HELP__INTERFACE  "=<logif_name>"
+#define TXT_OPTDESCR__INTERFACE_LOGIF   TXT_HELP__INTERFACE  "=<MyLogif>"  "\n"  \
+                                        "  Name of the target logical interface.\n"
+
+#define TXT_OPT__INTERFACE_PHYIF        TXT_HELP__INTERFACE  "=<phyif_name>"
+#define TXT_OPTDESCR__INTERFACE_PHYIF   TXT_HELP__INTERFACE  "=<"  TXT_OPTARGS__PHYIF  ">"  "\n"  \
+                                        "  Name of the target physical interface.\n"  \
+                                        TXT_PHYIF_KEYWORDS
+
+#define TXT_OPT__PARENT                 TXT_HELP__PARENT  "=<phyif_name>"
+#define TXT_OPTDESCR__PARENT            TXT_HELP__PARENT  "=<"  TXT_OPTARGS__PHYIF  ">"  "\n"  \
+                                        "  Name of the parent physical interface.\n"   \
+                                        TXT_PHYIF_KEYWORDS
+
+#define TXT_OPT__MIRROR                 TXT_HELP__MIRROR  "=<phyif_name>"
+#define TXT_OPTDESCR__MIRROR            TXT_HELP__MIRROR  "=<"  TXT_OPTARGS__PHYIF  ">"  "\n"  \
+                                        "  Name of the physical interface which shall receive a copy of traffic.\n"  \
+                                        "  Use empty string (\"\") to disable (clear).\n"
+
+#define TXT_OPT__MODE                   TXT_HELP__MODE  "=<if_mode>"
+#define TXT_OPTDESCR__MODE              TXT_HELP__MODE  "=<"  TXT_IF_MODE__BRIDGE  "|"  TXT_IF_MODE__ROUTER  "|...>"  "\n"  \
+                                        "  Operating mode of the physical interface.\n"          \
+                                        "  Interface modes:\n"                      \
+                                        "    "  TXT_IF_MODE__DEFAULT          "\n"  \
+                                        "    "  TXT_IF_MODE__BRIDGE           "\n"  \
+                                        "    "  TXT_IF_MODE__ROUTER           "\n"  \
+                                        "    "  TXT_IF_MODE__VLAN_BRIDGE      "\n"  \
+                                        "    "  TXT_IF_MODE__FLEXIBLE_ROUTER  "\n"  \
+                                        "    "  TXT_IF_MODE__L2L3_BRIDGE      "\n"  \
+                                        "    "  TXT_IF_MODE__L2L3_VLAN_BRIDGE "\n"
+
+#define TXT_OPT__BLOCK_STATE            TXT_HELP__BLOCK_STATE  "=<block_state>"
+#define TXT_OPTDESCR__BLOCK_STATE       TXT_HELP__BLOCK_STATE  "=<"  TXT_IF_BLOCK_STATE__LEARN_ONLY  "|"  TXT_IF_BLOCK_STATE__FW_ONLY  "|...>"  "\n"  \
+                                        "  Blocking state of the physical interface (learning and forwarding).\n"  \
+                                        "  Block states:\n"                           \
+                                        "    "  TXT_IF_BLOCK_STATE__NORMAL      "\n"  \
+                                        "    "  TXT_IF_BLOCK_STATE__BLOCKED     "\n"  \
+                                        "    "  TXT_IF_BLOCK_STATE__LEARN_ONLY  "\n"  \
+                                        "    "  TXT_IF_BLOCK_STATE__FW_ONLY     "\n"
+
+#define TXT_OPT__ENABLE_IF              TXT_HELP__ENABLE
+#define TXT_OPTDESCR__ENABLE_IF         TXT_HELP__ENABLE  "\n"  \
+                                        "  Enables (\"ups\") the interface.\n"
+
+#define TXT_OPT__ENABLE_FW              TXT_HELP__ENABLE
+#define TXT_OPTDESCR__ENABLE_FW         TXT_HELP__ENABLE  "\n"  \
+                                        "  Enables the given FW feature.\n"
+
+#define TXT_OPT__DISABLE_IF             TXT_HELP__DISABLE
+#define TXT_OPTDESCR__DISABLE_IF        TXT_HELP__DISABLE  "\n"  \
+                                        "  Disables (\"downs\") the interface.\n"
+
+#define TXT_OPT__DISABLE_FW             TXT_HELP__DISABLE
+#define TXT_OPTDESCR__DISABLE_FW        TXT_HELP__DISABLE  "\n"  \
+                                        "  Disables the given FW feature.\n"
+
+#define TXT_OPT__DISABLE_FF             TXT_HELP__DISABLE
+#define TXT_OPTDESCR__DISABLE_FF        TXT_HELP__DISABLE  "\n"  \
+                                        "  Disables global FlexibleFilter.\n"
+
+#define TXT_OPT__PROMISC_PHYIF          TXT_HELP__PROMISC  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__PROMISC_PHYIF     TXT_HELP__PROMISC  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                        "  Enables/disables promiscuous mode.\n"                 \
+                                        "  (accepts all traffic regardless of destination MAC)\n"
+
+#define TXT_OPT__PROMISC_LOGIF          TXT_HELP__PROMISC  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__PROMISC_LOGIF     TXT_HELP__PROMISC  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"    \
+                                        "  Enables/disables promiscuous mode.\n"                   \
+                                        "  (accepts all traffic regardless of active match rules)\n"
+
+#define TXT_OPT__LOADBALANCE            TXT_HELP__LOADBALANCE  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__LOADBALANCE       TXT_HELP__LOADBALANCE  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"      \
+                                        "  true  : interface is a member of a loadbalancing bucket.\n"   \
+                                        "  false : interface is NOT a member of a loadbalancing bucket.\n"
+
+#define TXT_OPT__MATCH_MODE             TXT_HELP__MATCH_MODE  "=<"  TXT_OR_AND__OR  "|"  TXT_OR_AND__AND  ">"
+#define TXT_OPTDESCR__MATCH_MODE        TXT_HELP__MATCH_MODE  "=<"  TXT_OR_AND__OR  "|"  TXT_OR_AND__AND  ">"  "\n"  \
+                                        "  Sets chaining mode of active match rules.\n"     \
+                                        "  Traffic passes matching process if:\n"           \
+                                        "    "  TXT_OR_AND__OR   "  : at least one active rule is satisfied\n"  \
+                                        "    "  TXT_OR_AND__AND  " : all active rules are satisfied\n"
+
+#define TXT_OPT__DISCARD_ON_MATCH       TXT_HELP__DISCARD_ON_MATCH  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__DISCARD_ON_MATCH  TXT_HELP__DISCARD_ON_MATCH  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"     \
+                                        "  If enabled, then end action of matching process is inverted:\n"   \
+                                        "    --> if traffic passes the matching process, it is discarded\n"  \
+                                        "    --> if traffic fails the matching process, it is accepted\n"
+
+#define TXT_OPT__EGRESS                 TXT_HELP__EGRESS  "=<list_of_phyifs>"
+#define TXT_OPTDESCR__EGRESS            TXT_HELP__EGRESS  "=<"  TXT_PHYIF__EMAC0  ","  TXT_PHYIF__HIF2  ",...>"  "\n"  \
+                                        "  Comma separated list of egresses (physical interfaces) which shall receive a copy of the accepted traffic.\n"  \
+                                        "  Use empty string (\"\") to disable (clear).\n"  \
+                                        TXT_PHYIF_KEYWORDS
+
+#define TXT_OPT__MATCH_RULES            TXT_HELP__MATCH_RULES  "=<list_of_rules>"
+#define TXT_OPTDESCR__MATCH_RULES       TXT_HELP__MATCH_RULES  "=<"  TXT_MATCH_RULE__TYPE_ETH  ","  TXT_MATCH_RULE__VLAN  ",...>"  "\n"  \
+                                        "  Comma separated list of match rules.\n"                \
+                                        "  Use empty string (\"\") to disable (clear).\n"         \
+                                        "  Some rules require additional command line options.\n" \
+                                        "  Match rules:\n"                        \
+                                        "    "  TXT_MATCH_RULE__TYPE_ETH    "\n"  \
+                                        "    "  TXT_MATCH_RULE__TYPE_VLAN   "\n"  \
+                                        "    "  TXT_MATCH_RULE__TYPE_PPPOE  "\n"  \
+                                        "    "  TXT_MATCH_RULE__TYPE_ARP    "\n"  \
+                                        "    "  TXT_MATCH_RULE__TYPE_MCAST  "\n"  \
+                                        "    "  TXT_MATCH_RULE__TYPE_IP4    "\n"  \
+                                        "    "  TXT_MATCH_RULE__TYPE_IP6    "\n"  \
+                                        "    "  TXT_MATCH_RULE__TYPE_IPX    "\n"  \
+                                        "    "  TXT_MATCH_RULE__TYPE_BCAST  "\n"  \
+                                        "    "  TXT_MATCH_RULE__TYPE_UDP    "\n"  \
+                                        "    "  TXT_MATCH_RULE__TYPE_TCP    "\n"  \
+                                        "    "  TXT_MATCH_RULE__TYPE_ICMP   "\n"  \
+                                        "    "  TXT_MATCH_RULE__TYPE_IGMP   "\n"  \
+                                        "    "  TXT_MATCH_RULE__VLAN        " ; requires <"  TXT_HELP__VLAN        ">\n"  \
+                                        "    "  TXT_MATCH_RULE__PROTOCOL    " ; requires <"  TXT_HELP__PROTOCOL    ">\n"  \
+                                        "    "  TXT_MATCH_RULE__SPORT       " ; requires <"  TXT_HELP__SPORT       ">\n"  \
+                                        "    "  TXT_MATCH_RULE__DPORT       " ; requires <"  TXT_HELP__DPORT       ">\n"  \
+                                        "    "  TXT_MATCH_RULE__SIP6        " ; requires <"  TXT_HELP__SIP6        ">\n"  \
+                                        "    "  TXT_MATCH_RULE__DIP6        " ; requires <"  TXT_HELP__DIP6        ">\n"  \
+                                        "    "  TXT_MATCH_RULE__SIP         " ; requires <"  TXT_HELP__SIP         ">\n"  \
+                                        "    "  TXT_MATCH_RULE__DIP         " ; requires <"  TXT_HELP__DIP         ">\n"  \
+                                        "    "  TXT_MATCH_RULE__ETHER_TYPE  " ; requires <"  TXT_HELP__ETHTYPE     ">\n"  \
+                                        "    "  TXT_MATCH_RULE__FP_TABLE0   " ; requires <"  TXT_HELP__TABLE0      ">\n"  \
+                                        "    "  TXT_MATCH_RULE__FP_TABLE1   " ; requires <"  TXT_HELP__TABLE1      ">\n"  \
+                                        "    "  TXT_MATCH_RULE__SMAC        " ; requires <"  TXT_HELP__SMAC        ">\n"  \
+                                        "    "  TXT_MATCH_RULE__DMAC        " ; requires <"  TXT_HELP__DMAC        ">\n"  \
+                                        "    "  TXT_MATCH_RULE__HIF_COOKIE  " ; requires <"  TXT_HELP__HIF_COOKIE  ">\n"
+
+#define TXT_OPT__VLAN                   TXT_HELP__VLAN  "=<id>" 
+#define TXT_OPTDESCR__VLAN              TXT_HELP__VLAN  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  VLAN ID\n"
+
+#define TXT_OPT__VLAN_BD                TXT_HELP__VLAN  "=<id>" 
+#define TXT_OPTDESCR__VLAN_BD           TXT_HELP__VLAN  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  VLAN ID (used as a bridge domain identifier)\n"
+
+#define TXT_OPT__R_VLAN                 TXT_HELP__R_VLAN  "=<id>" 
+#define TXT_OPTDESCR__R_VLAN            TXT_HELP__R_VLAN  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Reply direction: VLAN ID\n"
+
+#define TXT_OPT__PROTOCOL               TXT_HELP__PROTOCOL  "=<keyword|id>"
+#define TXT_OPTDESCR__PROTOCOL          TXT_HELP__PROTOCOL  "=<"  TXT_PROTOCOL__IPv6  "|"  TXT_OPTARGS__U8_DEC  "|"  TXT_OPTARGS__U8_HEX  ">"  "\n"  \
+                                        "  IANA Assigned Internet Protocol Number\n"  \
+                                        "  https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml\n"  \
+                                        "  Accepted input formats are protocol keyword or protocol ID.\n"               \
+                                        "  Protocols without keyword can be addressed only by protocol ID.\n"
+
+#define TXT_OPT__PROTOCOL_CNTKTMO       TXT_HELP__PROTOCOL  "=<"  TXT_PROTOCOL__TCP  "|"  TXT_PROTOCOL__UDP  "|0>"
+#define TXT_OPTDESCR__PROTOCOL_CNTKTMO  TXT_HELP__PROTOCOL  "=<"  TXT_PROTOCOL__TCP  "|"  TXT_PROTOCOL__UDP  "|0>"  "\n"  \
+                                        "  IANA Assigned Internet Protocol Number\n"    \
+                                        "  Only selected protocols are accepted by this command.\n"  \
+                                        "  The rest of protocols is summarily referred to as 'others' (value 0).\n"
+
+#define TXT_OPT__ETHTYPE                TXT_HELP__ETHTYPE  "=<id>"
+#define TXT_OPTDESCR__ETHTYPE           TXT_HELP__ETHTYPE  "=<"  TXT_OPTARGS__U16_DEC  "|"  TXT_OPTARGS__U16_HEX  ">"  "\n"  \
+                                        "  IANA \"EtherType number\" (IEEE 802)\n"     \
+                                        "  https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml\n"  \
+
+#define TXT_OPT__MAC                    TXT_HELP__MAC  "=<mac_addr>"
+#define TXT_OPTDESCR__MAC               TXT_HELP__MAC  "=<"  TXT_OPTARGS__MAC_ADDR  ">"  "\n"  \
+                                        "  MAC address\n"
+
+#define TXT_OPT__SMAC                   TXT_HELP__SMAC  "=<mac_addr>"
+#define TXT_OPTDESCR__SMAC              TXT_HELP__SMAC  "=<"  TXT_OPTARGS__MAC_ADDR  ">"  "\n"  \
+                                        "  Source MAC address\n"
+
+#define TXT_OPT__DMAC                   TXT_HELP__DMAC  "=<mac_addr>"
+#define TXT_OPTDESCR__DMAC              TXT_HELP__DMAC  "=<"  TXT_OPTARGS__MAC_ADDR  ">"  "\n"  \
+                                        "  Destination MAC address\n"
+
+#define TXT_OPT__SIP                    TXT_HELP__SIP  "=<ipv4|ipv6>"
+#define TXT_OPTDESCR__SIP               TXT_HELP__SIP  "=<12.126.31.7|fd00::1>"  "\n"  \
+                                        "  Source IP address\n"
+
+#define TXT_OPT__SIP_LOGIF              TXT_HELP__SIP  "=<ipv4>"
+#define TXT_OPTDESCR__SIP_LOGIF         TXT_HELP__SIP  "=<12.126.31.7>"  "\n"  \
+                                        "  Source IP address (only IPv4 is accepted)\n"
+
+#define TXT_OPT__DIP                    TXT_HELP__DIP  "=<ipv4|ipv6>"
+#define TXT_OPTDESCR__DIP               TXT_HELP__DIP  "=<132.16.20.3|fc62::5>"  "\n"  \
+                                        "  Destination IP address\n"
+
+#define TXT_OPT__DIP_LOGIF              TXT_HELP__DIP  "=<ipv4>"
+#define TXT_OPTDESCR__DIP_LOGIF         TXT_HELP__DIP  "=<132.16.20.3>"  "\n"  \
+                                        "  Destination IP address (only IPv4 is accepted)\n"
+
+#define TXT_OPT__R_SIP                  TXT_HELP__R_SIP  "=<ipv4|ipv6>"
+#define TXT_OPTDESCR__R_SIP             TXT_HELP__R_SIP  "=<13.125.30.2|fe51::7>"  "\n"  \
+                                        "  Reply direction: source IP address (used for NAT)\n"
+
+#define TXT_OPT__R_DIP                  TXT_HELP__R_DIP  "=<ipv4|ipv6>"
+#define TXT_OPTDESCR__R_DIP             TXT_HELP__R_DIP  "=<112.37.52.9|fd14::2>"  "\n"  \
+                                        "  Reply direction: destination IP address (used for NAT)\n"
+
+#define TXT_OPT__SIP6                   TXT_HELP__SIP6  "=<ipv6>"
+#define TXT_OPTDESCR__SIP6              TXT_HELP__SIP6  "=<fd00::1>"  "\n"  \
+                                        "  Source IP address (only IPv6 is accepted)\n"
+
+#define TXT_OPT__DIP6                   TXT_HELP__DIP6  "=<ipv6>"
+#define TXT_OPTDESCR__DIP6              TXT_HELP__DIP6  "=<fc62::5>"  "\n"  \
+                                        "  Destination IP address (only IPv6 is accepted)\n"
+
+#define TXT_OPT__SPORT                  TXT_HELP__SPORT  "=<port>"
+#define TXT_OPTDESCR__SPORT             TXT_HELP__SPORT  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Source port\n"
+
+#define TXT_OPT__DPORT                  TXT_HELP__DPORT  "=<port>"
+#define TXT_OPTDESCR__DPORT             TXT_HELP__DPORT  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Destination port\n"
+
+#define TXT_OPT__R_SPORT                TXT_HELP__R_SPORT  "=<port>"
+#define TXT_OPTDESCR__R_SPORT           TXT_HELP__R_SPORT  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Reply direction: source port (used for PAT)\n"
+
+#define TXT_OPT__R_DPORT                TXT_HELP__R_DPORT  "=<port>"
+#define TXT_OPTDESCR__R_DPORT           TXT_HELP__R_DPORT  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Reply direction: destination port (used for PAT)\n"
+
+#define TXT_OPT__HIF_COOKIE             TXT_HELP__HIF_COOKIE  "=<hex_value>"
+#define TXT_OPTDESCR__HIF_COOKIE        TXT_HELP__HIF_COOKIE  "=<"  TXT_OPTARGS__U32_HEX  ">"  "\n"  \
+                                        "  Can be used to recognize which HIF sent the traffic.\n"   \
+                                        "  PFE driver in the host OS must be specifically configured to allow use of this feature.\n"
+
+#define TXT_OPT__TIMEOUT_CNTKTMO        TXT_HELP__TIMEOUT  "=<seconds>"
+#define TXT_OPTDESCR__TIMEOUT_CNTKTMO   TXT_HELP__TIMEOUT  "=<"  TXT_OPTARGS__U32_DEC  ">"  "\n"  \
+                                        "  For TCP and 'others': Timeout in seconds.\n"  \
+                                        "  For UDP:\n"                                   \
+                                        "    --> If ["  TXT_HELP__TIMEOUT2  "] is NOT utilized, then\n"  \
+                                        "        this value is applied on all kinds of UDP conntracks.\n"     \
+                                        "    --> If ["  TXT_HELP__TIMEOUT2  "] IS utilized, then \n"     \
+                                        "        this value is applied only on bidirectional UDP conntracks.\n"
+
+#define TXT_OPT__TIMEOUT2_CNTKTMO       TXT_HELP__TIMEOUT2  "=<seconds>"
+#define TXT_OPTDESCR__TIMEOUT2_CNTKTMO  TXT_HELP__TIMEOUT2  "=<"  TXT_OPTARGS__U32_DEC  ">"  "\n"  \
+                                        "  Timeout in seconds.\n"  \
+                                        "  This value is applied only on unidirectional UDP conntracks.\n"
+
+#define TXT_OPT__UCAST_HIT              TXT_HELP__UCAST_HIT  "=<action>"
+#define TXT_OPTDESCR__UCAST_HIT         TXT_HELP__UCAST_HIT  "=<"  TXT_OPTARGS__BD_ACTIONS ">"  "\n"  \
+                                        "  Action to be taken when unicast packet's destination MAC matches some MAC table entry.\n"  \
+                                        "  Actions:\n"  \
+                                        "    "  TXT_BD_ACTION__FORWARD  "\n"  \
+                                        "    "  TXT_BD_ACTION__FLOOD    "\n"  \
+                                        "    "  TXT_BD_ACTION__PUNT     "\n"  \
+                                        "    "  TXT_BD_ACTION__DISCARD  "\n"
+
+#define TXT_OPT__UCAST_MISS             TXT_HELP__UCAST_MISS  "=<action>"
+#define TXT_OPTDESCR__UCAST_MISS        TXT_HELP__UCAST_MISS  "=<"  TXT_OPTARGS__BD_ACTIONS ">"  "\n"  \
+                                        "  Action to be taken when unicast packet's destination MAC does not match any MAC table entry.\n"  \
+                                        "  Possible actions:\n"  \
+                                        "    Same as actions of  ["  TXT_HELP__UCAST_HIT  "]\n"
+
+#define TXT_OPT__MCAST_HIT              TXT_HELP__MCAST_HIT  "=<action>"
+#define TXT_OPTDESCR__MCAST_HIT         TXT_HELP__MCAST_HIT  "=<"  TXT_OPTARGS__BD_ACTIONS ">"  "\n"  \
+                                        "  Action to be taken when multicast packet's destination MAC matches some MAC table entry.\n"  \
+                                        "  Possible actions:\n"  \
+                                        "    Same as actions of  ["  TXT_HELP__UCAST_HIT  "]\n"
+
+#define TXT_OPT__MCAST_MISS             TXT_HELP__MCAST_MISS  "=<action>"
+#define TXT_OPTDESCR__MCAST_MISS        TXT_HELP__MCAST_MISS  "=<"  TXT_OPTARGS__BD_ACTIONS ">"  "\n"  \
+                                        "  Action to be taken when multicast packet's destination MAC does not match any MAC table entry.\n"  \
+                                        "  Possible actions:\n"  \
+                                        "    Same as actions of  ["  TXT_HELP__UCAST_HIT  "]\n"
+
+#define TXT_OPT__TAG                    TXT_HELP__TAG  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__TAG               TXT_HELP__TAG  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                        "  Sets/unsets whether the traffic from the given interface has the VLAN tag retained/added ("  TXT_ON_OFF__ON  ")\n"  \
+                                        "  or has the VLAN tag removed ("  TXT_ON_OFF__OFF  ").\n"
+
+#define TXT_OPT__DEFAULT                TXT_HELP__DEFAULT
+#define TXT_OPTDESCR__DEFAULT           TXT_HELP__DEFAULT  "\n"  \
+                                        "  Sets the given bridge domain as a default bridge domain.\n"  \
+                                        "  Default bridge domain is used for packets which:\n"          \
+                                        "    --> don't have a VLAN TAG\n"                               \
+                                        "    --> have VLAN TAG matching the VLAN ID of the default domain.\n"
+
+#define TXT_OPT__FALLBACK               TXT_HELP__FALLBACK
+#define TXT_OPTDESCR__FALLBACK          TXT_HELP__FALLBACK  "\n"  \
+                                        "  Sets the given bridge domain as a fallback bridge domain.\n"             \
+                                        "  Fallback bridge domain is used for packets which do have a VLAN TAG,\n"  \
+                                        "  but their VLAN TAG does not match VLAN ID of any existing bridge domain.\n"
+
+#define TXT_OPT__4o6                    TXT_HELP__4o6
+#define TXT_OPTDESCR__4o6               TXT_HELP__4o6  "\n"  \
+                                        "  Specifies that the timeout is meant for IPv4 over IPv6 tunneling connections.\n"
+
+#define TXT_OPT__NO_REPLY               TXT_HELP__NO_REPLY
+#define TXT_OPTDESCR__NO_REPLY          TXT_HELP__NO_REPLY  "\n"  \
+                                        "  Specifies unidirectional conntrack - only the \"original direction\" route is created.\n"
+
+#define TXT_OPT__NO_ORIG                TXT_HELP__NO_ORIG
+#define TXT_OPTDESCR__NO_ORIG           TXT_HELP__NO_ORIG  "\n"  \
+                                        "  Specifies unidirectional conntrack - only the \"reply direction\" route is created.\n"
+
+#define TXT_OPT__ROUTE                  TXT_HELP__ROUTE  "=<id>"
+#define TXT_OPTDESCR__ROUTE             TXT_HELP__ROUTE  "=<"  TXT_OPTARGS__U32_DEC  ">"  "\n"  \
+                                        "  Route ID\n"
+
+#define TXT_OPT__R_ROUTE                TXT_HELP__R_ROUTE  "=<id>"
+#define TXT_OPTDESCR__R_ROUTE           TXT_HELP__R_ROUTE  "=<"  TXT_OPTARGS__U32_DEC  ">"  "\n"  \
+                                        "  Reply direction: route ID\n"
+
+#define TXT_OPT__INGRESS_MR0            TXT_HELP__INGRESS_MR0  "=<rule_name>"
+#define TXT_OPTDESCR__INGRESS_MR0       TXT_HELP__INGRESS_MR0  "=<"  TXT_OPTARGS__MR  ">"  "\n"  \
+                                        "  Mirror rule for the ingress mirror rule slot [0].\n"  \
+                                        "  Use empty string (\"\") to disable (clear).\n"
+
+#define TXT_OPT__INGRESS_MR1            TXT_HELP__INGRESS_MR1  "=<rule_name>"
+#define TXT_OPTDESCR__INGRESS_MR1       TXT_HELP__INGRESS_MR1  "=<"  TXT_OPTARGS__MR  ">"  "\n"  \
+                                        "  Mirror rule for the ingress mirror rule slot [1].\n"  \
+                                        "  Use empty string (\"\") to disable (clear).\n"
+
+#define TXT_OPT__EGRESS_MR0             TXT_HELP__EGRESS_MR0  "=<rule_name>"
+#define TXT_OPTDESCR__EGRESS_MR0        TXT_HELP__EGRESS_MR0  "=<"  TXT_OPTARGS__MR  ">"  "\n"  \
+                                        "  Mirror rule for the egress mirror rule slot [0].\n"  \
+                                        "  Use empty string (\"\") to disable (clear).\n"
+
+#define TXT_OPT__EGRESS_MR1             TXT_HELP__EGRESS_MR1  "=<rule_name>"
+#define TXT_OPTDESCR__EGRESS_MR1        TXT_HELP__EGRESS_MR1  "=<"  TXT_OPTARGS__MR  ">"  "\n"  \
+                                        "  Mirror rule for the egress mirror rule slot [1].\n"  \
+                                        "  Use empty string (\"\") to disable (clear).\n"
+
+#define TXT_OPT__FP_TABLE               TXT_HELP__TABLE  "=<table_name>"
+#define TXT_OPTDESCR__FP_TABLE          TXT_HELP__TABLE  "=<"  TXT_OPTARGS__FP_TABLE  ">"  "\n"  \
+                                        "  Name of a FlexibleParser table.\n"
+
+#define TXT_OPT__FLEXIBLE_FILTER        TXT_HELP__FLEXIBLE_FILTER  "=<table_name>"
+#define TXT_OPTDESCR__FLEXIBLE_FILTER   TXT_HELP__FLEXIBLE_FILTER  "=<"  TXT_OPTARGS__FP_TABLE  ">"  "\n"  \
+                                        "  Name of a FlexibleParser table which shall be set as a FlexibleFilter of the given physical interface.\n"  \
+                                        "  Use empty string (\"\") to disable (clear).\n"
+
+#define TXT_OPT__FP_TABLE0_LOGIF        TXT_HELP__TABLE0  "=<table_name>"
+#define TXT_OPTDESCR__FP_TABLE0_LOGIF   TXT_HELP__TABLE0  "=<"  TXT_OPTARGS__FP_TABLE  ">"  "\n"  \
+                                        "  Name of a FlexibleParser table for the parser slot [0].\n"  \
+
+#define TXT_OPT__FP_TABLE1_LOGIF        TXT_HELP__TABLE1  "=<table_name>"
+#define TXT_OPTDESCR__FP_TABLE1_LOGIF   TXT_HELP__TABLE1  "=<"  TXT_OPTARGS__FP_TABLE  ">"  "\n"  \
+                                        "  Name of a FlexibleParser table for the parser slot [1].\n"  \
+
+#define TXT_OPT__FP_RULE                TXT_HELP__RULE  "=<rule_name>"
+#define TXT_OPTDESCR__FP_RULE           TXT_HELP__RULE  "=<"  TXT_OPTARGS__FP_RULE  ">"  "\n"  \
+                                        "  Name of a FlexibleParser rule.\n"
+
+#define TXT_OPT__FP_NEXT_RULE           TXT_HELP__NEXT_RULE  "=<rule_name>"
+#define TXT_OPTDESCR__FP_NEXT_RULE      TXT_HELP__NEXT_RULE  "=<"  TXT_OPTARGS__FP_RULE  ">"  "\n"  \
+                                        "  Rule action: invoke the supplied FlexibleParser rule as the next processing rule.\n"
+
+#define TXT_OPT__DATA                   TXT_HELP__DATA  "=<hex_value>" 
+#define TXT_OPTDESCR__DATA              TXT_HELP__DATA  "=<"  TXT_OPTARGS__U32_HEX  ">"  "\n"  \
+                                        "  Expected data value (32bit hexadecimal).\n"
+
+#define TXT_OPT__MASK                   TXT_HELP__MASK  "=<hex_value>" 
+#define TXT_OPTDESCR__MASK              TXT_HELP__MASK  "=<"  TXT_OPTARGS__U32_HEX  ">"  "\n"  \
+                                        "  A bitmask to apply on processed data prior to data comparison (32bit hexadecimal).\n"
+
+#define TXT_OPT__LAYER                  TXT_HELP__LAYER  "=<L2|L3|L4>"
+#define TXT_OPTDESCR__LAYER             TXT_HELP__LAYER  "=<L2|L3|L4>"  "\n"  \
+                                        "  Base offset for further offset calculations.\n"  \
+                                        "  Possible base offsets:\n"                        \
+                                        "    "  TXT_OFFSET_FROM__L2  " : start from layer 2 header (from ETH frame header)\n"       \
+                                        "    "  TXT_OFFSET_FROM__L3  " : start from layer 3 header (e.g. from IP packet header)\n"  \
+                                        "    "  TXT_OFFSET_FROM__L4  " : start from layer 4 header (e.g. from TCP segment header)\n"
+
+#define TXT_OPT__OFFSET_FP              TXT_HELP__OFFSET  "=<value>"
+#define TXT_OPTDESCR__OFFSET_FP         TXT_HELP__OFFSET  "=<"  TXT_OPTARGS__U16_DEC  "|"  TXT_OPTARGS__U16_HEX  ">"  "\n"  \
+                                        "  Offset to the inspected data within the packet (added to the layer base offset).\n"
+
+#define TXT_OPT__INVERT_FP              TXT_HELP__INVERT
+#define TXT_OPTDESCR__INVERT_FP         TXT_HELP__INVERT  "\n"  \
+                                        "  Invert the result of a rule's matching process.\n"  \
+                                        "  If a raw data comparison yields 'true' but this flag is set, then "  \
+                                        "  the final result of a matching process will be 'false' (and vice versa).\n"
+
+#define TXT_OPT__ACCEPT_FP              TXT_HELP__ACCEPT
+#define TXT_OPTDESCR__ACCEPT_FP         TXT_HELP__ACCEPT  "\n"  \
+                                        "  Rule action: accept the packet\n"
+
+#define TXT_OPT__REJECT_FP              TXT_HELP__REJECT
+#define TXT_OPTDESCR__REJECT_FP         TXT_HELP__REJECT  "\n"  \
+                                        "  Rule action: reject the packet\n"
+
+#define TXT_OPT__POSITION_INSADD        TXT_HELP__POSITION  "=<value>"
+#define TXT_OPTDESCR__POSITION_INSADD   TXT_HELP__POSITION  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Index where to insert the item.\n"                       \
+                                        "  (hint: indexing starts from the position 0)\n"           \
+                                        "  If this option is not utilized, then the item is automatically\n"  \
+                                        "  inserted as a last item of the table.\n"
+
+#define TXT_OPT__POSITION_REMDEL        TXT_HELP__POSITION  "=<value>"
+#define TXT_OPTDESCR__POSITION_REMDEL   TXT_HELP__POSITION  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Index of the target item to destroy.\n"  \
+                                        "  (hint: indexing starts from position 0)\n"
+
+#define TXT_OPT__POSITION_PRINT         TXT_HELP__POSITION  "=<value>"
+#define TXT_OPTDESCR__POSITION_PRINT    TXT_HELP__POSITION  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Index of the first item to print.\n"  \
+                                        "  Default value is 0 (start from the very first item of the table).\n"
+
+#define TXT_OPT__COUNT_PRINT            TXT_HELP__COUNT  "=<value>"
+#define TXT_OPTDESCR__COUNT_PRINT       TXT_HELP__COUNT  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Count of items to print.\n"  \
+                                        "  Default value is 0 (print all available items).\n"
+
+#define TXT_OPT__SAD                    TXT_HELP__SAD  "=<idx>"
+#define TXT_OPTDESCR__SAD               TXT_HELP__SAD  "=<"  TXT_OPTARGS__U32_DEC  ">"  "\n"  \
+                                        "  Index into SAD (Security Association Database).\n"
+
+#define TXT_OPT__SPD_ACTION             TXT_HELP__SPD_ACTION  "=<action>"
+#define TXT_OPTDESCR__SPD_ACTION        TXT_HELP__SPD_ACTION  "=<BYPASS|1-4>"  "\n"  \
+                                        "  Action to be done on traffic which matches SPD criteria.\n"  \
+                                        "  Actions:\n"                         \
+                                        "    "  TXT_SPD_ACTION__DISCARD  "\n"  \
+                                        "    "  TXT_SPD_ACTION__BYPASS   "\n"  \
+                                        "    "  TXT_SPD_ACTION__ENCODE   " ; requires <"  TXT_HELP__SAD  ">\n"  \
+                                        "    "  TXT_SPD_ACTION__DECODE   " ; requires <"  TXT_HELP__SPI  ">\n"
+
+#define TXT_OPT__SPI                    TXT_HELP__SPI  "=<hex_value>"
+#define TXT_OPTDESCR__SPI               TXT_HELP__SPI  "=<"  TXT_OPTARGS__U32_HEX  ">"  "\n"  \
+                                        "  Security Parameter Index\n"
+
+#define TXT_OPT__VLAN_CONF              TXT_HELP__VLAN_CONF  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__VLAN_CONF         TXT_HELP__VLAN_CONF  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"                   \
+                                        "  Enables/disables a strict VLAN conformance check.\n"                     \
+                                        "  When enabled, the interface automatically discards all traffic that \n"  \
+                                        "  is not strictly IEEE 802.1Q compliant.\n"
+
+#define TXT_OPT__PTP_CONF               TXT_HELP__PTP_CONF  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__PTP_CONF          TXT_HELP__PTP_CONF  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"        \
+                                        "  Enables/disables a strict PTP conformance check.\n"          \
+                                        "  When enabled, the interface automatically discards all traffic that \n"  \
+                                        "  is not strictly IEEE 802.1AS compliant.\n"
+
+#define TXT_OPT__PTP_PROMISC            TXT_HELP__PTP_PROMISC  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__PTP_PROMISC       TXT_HELP__PTP_PROMISC  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                        "  Enables/disables acceptance of PTP traffic even if ["  TXT_HELP__VLAN_CONF  "] flag is active.\n"
+
+#define TXT_OPT__LOOPBACK               TXT_HELP__LOOPBACK  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__LOOPBACK          TXT_HELP__LOOPBACK  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                        "  Enables/disables loopback mode of the interface.\n"
+
+#define TXT_OPT__QINQ                   TXT_HELP__QINQ  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__QINQ              TXT_HELP__QINQ  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                        "  Enables/disables processing of Q-in-Q traffic.\n"  \
+                                        "  If disabled, then traffic with multiple VLAN tags is automatically discarded.\n"
+
+#define TXT_OPT__LOCAL_STENT            TXT_HELP__LOCAL  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__LOCAL_STENT       TXT_HELP__LOCAL  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                        "  Makes the static entry a LOCAL entry.\n"  \
+                                        "  If this flag is set, then: \n"            \
+                                        "    --> forwarding list is ignored \n"      \
+                                        "    --> if traffic's destination MAC matches the MAC of this static entry, then \n"  \
+                                        "        the traffic is passed to the IP router.\n"  \
+                                        "        (requires L2L3 mode on the ingress physical interface)\n"
+
+#define TXT_OPT__DISCARD_ON_MATCH_SRC       TXT_HELP__DISCARD_ON_MATCH_SRC  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__DISCARD_ON_MATCH_SRC  TXT_HELP__DISCARD_ON_MATCH_SRC  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                            "  Discard traffic if its source MAC matches the MAC of this static entry.\n"
+
+#define TXT_OPT__DISCARD_ON_MATCH_DST       TXT_HELP__DISCARD_ON_MATCH_DST  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__DISCARD_ON_MATCH_DST  TXT_HELP__DISCARD_ON_MATCH_DST  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                            "  Discard traffic if its destination MAC matches the MAC of this static entry.\n"
+
+#define TXT_OPT__FEATURE_FW             TXT_HELP__FEATURE  "=<feature_name>"
+#define TXT_OPTDESCR__FEATURE_FW        TXT_HELP__FEATURE  "=<ingress_vlan>"  "\n"  \
+                                        "  Name of a FW feature.\n"
+
+#define TXT_OPT__STATIC                 TXT_HELP__STATIC
+#define TXT_OPTDESCR__STATIC            TXT_HELP__STATIC  "\n"  \
+                                        "  Apply only on static entries.\n"
+
+#define TXT_OPT__DYNAMIC                TXT_HELP__DYNAMIC
+#define TXT_OPTDESCR__DYNAMIC           TXT_HELP__DYNAMIC  "\n"  \
+                                        "  Apply only on dynamic (learned) entries.\n"
+
+#define TXT_OPT__QUE                    TXT_HELP__QUE  "=<id>"
+#define TXT_OPTDESCR__QUE               TXT_HELP__QUE  "=<0-7>"  "\n"  \
+                                        "  Queue ID\n"
+
+#define TXT_OPT__SCH                    TXT_HELP__SCH  "=<id>"
+#define TXT_OPTDESCR__SCH               TXT_HELP__SCH  "=<0|1>"  "\n"  \
+                                        "  Scheduler ID\n"
+
+#define TXT_OPT__SHP                    TXT_HELP__SHP  "=<id>"
+#define TXT_OPTDESCR__SHP               TXT_HELP__SHP  "=<0-3>"  "\n"  \
+                                        "  Shaper ID\n"
+
+#define TXT_OPT__QUE_MODE               TXT_HELP__QUE_MODE  "=<mode>"
+#define TXT_OPTDESCR__QUE_MODE          TXT_HELP__QUE_MODE  "=<"  TXT_QUE_MODE__TAIL_DROP  ">"  "\n"  \
+                                        "  Queue mode\n"  \
+                                        "  Modes:\n"      \
+                                        "    "  TXT_QUE_MODE__DISABLED   "\n"  \
+                                        "    "  TXT_QUE_MODE__DEFAULT    "\n"  \
+                                        "    "  TXT_QUE_MODE__TAIL_DROP  "\n"  \
+                                        "    "  TXT_QUE_MODE__WRED       "\n"
+
+#define TXT_OPT__SCH_MODE               TXT_HELP__SCH_MODE  "=<mode>"
+#define TXT_OPTDESCR__SCH_MODE          TXT_HELP__SCH_MODE  "=<"  TXT_SCH_MODE__DISABLED  "|"  TXT_SCH_MODE__DATA_RATE  "|"  TXT_SCH_MODE__PACKET_RATE  ">"  "\n"  \
+                                        "  Scheduler mode\n"
+
+#define TXT_OPT__SHP_MODE               TXT_HELP__SHP_MODE  "=<mode>"
+#define TXT_OPTDESCR__SHP_MODE          TXT_HELP__SHP_MODE  "=<"  TXT_SHP_MODE__DISABLED  "|"  TXT_SHP_MODE__DATA_RATE  "|"  TXT_SHP_MODE__PACKET_RATE  ">"  "\n"  \
+                                        "  Shaper mode\n"
+
+#define TXT_OPT__THMIN                  TXT_HELP__THMIN  "=<value>"
+#define TXT_OPTDESCR__THMIN             TXT_HELP__THMIN  "=<0-255>"  "\n"  \
+                                        "  Minimal threshold value. Meaningful only for the following que modes:\n"  \
+                                        "    "  TXT_QUE_MODE__WRED  ": Number of packets in the queue where the lowest drop probability zone starts.\n"
+
+#define TXT_OPT__THMAX                  TXT_HELP__THMAX  "=<value>"
+#define TXT_OPTDESCR__THMAX             TXT_HELP__THMAX  "=<0-255>"  "\n"  \
+                                        "  Maximal threshold value. Meaningful only for the following que modes:\n"  \
+                                        "    "  TXT_QUE_MODE__TAIL_DROP  ": Max allowed number of packets in the queue.\n"  \
+                                        "    "  TXT_QUE_MODE__WRED       ": Number of packets in the queue above which the drop probability is always 100%.\n"
+
+#define TXT_OPT__ZPROB                  TXT_HELP__ZPROB  "=<list_of_percentages>"
+#define TXT_OPTDESCR__ZPROB             TXT_HELP__ZPROB  "=<10,30,K,50,...>"  "\n"  \
+                                        "  Comma separated list of percentages.\n"  \
+                                        "  Drop probabilities for probability zones. Meaningful only for queue mode "  TXT_QUE_MODE__WRED  ".\n"  \
+                                        "  Position of a value in the list corresponds with a zone (from zone [0] up to zone [N]).\n"  \
+                                        "  Zones which are not touched (when provided list is too short) and zones which are marked with 'K' (keep) are left unchanged.\n"  \
+                                        "  NOTE: Percentages are stored in a compressed format. Expect a certain inaccuracy of stored data (around +/- 3 units)."
+
+#define TXT_OPT__SCH_ALGO               TXT_HELP__SCH_ALGO  "=<algorithm>"
+#define TXT_OPTDESCR__SCH_ALGO          TXT_HELP__SCH_ALGO  "=<"  TXT_SCH_ALGO__DWRR  ">"  "\n"  \
+                                        "  Scheduler selection algorithm\n"  \
+                                        "  Algorithms:\n"  \
+                                        "    "  TXT_SCH_ALGO__PQ    "    (Priority Queue)\n"  \
+                                        "    "  TXT_SCH_ALGO__DWRR  "  (Deficit Weighted Round Robin)\n"  \
+                                        "    "  TXT_SCH_ALGO__RR    "    (Round Robin)\n"  \
+                                        "    "  TXT_SCH_ALGO__WRR   "   (Weighted Round Robin)\n"
+
+#define TXT_OPT__SCH_IN                 TXT_HELP__SCH_IN  "=<list_of_inputs>"
+#define TXT_OPTDESCR__SCH_IN            TXT_HELP__SCH_IN  "=<"  TXT_SCH_IN__QUE1  ":10,"  TXT_SCH_IN__QUE3  ":243,D,K,...>"  "\n"  \
+                                        "  Comma separated list of input sources and their weights.\n"  \
+                                        "  Input sources:\n"  \
+                                        "    "  TXT_SCH_IN__KEEP      "  (to keep the given scheduler input untouched)\n"  \
+                                        "    "  TXT_SCH_IN__DISABLED  "  (to disable the given scheduler input)\n"         \
+                                        "    "  TXT_SCH_IN__QUE0      "\n"  \
+                                        "    "  TXT_SCH_IN__QUE1      "\n"  \
+                                        "    "  TXT_SCH_IN__QUE2      "\n"  \
+                                        "    "  TXT_SCH_IN__QUE3      "\n"  \
+                                        "    "  TXT_SCH_IN__QUE4      "\n"  \
+                                        "    "  TXT_SCH_IN__QUE5      "\n"  \
+                                        "    "  TXT_SCH_IN__QUE6      "\n"  \
+                                        "    "  TXT_SCH_IN__QUE7      "\n"  \
+                                        "    "  TXT_SCH_IN__SCH0_OUT  "\n"
+
+#define TXT_OPT__SHP_POS                TXT_HELP__SHP_POS  "=<position>"
+#define TXT_OPTDESCR__SHP_POS           TXT_HELP__SHP_POS  "=<"  TXT_SHP_POS__SCH1_IN3  ">"  "\n"  \
+                                        "  Position of a shaper within the QoS configuration.\n"   \
+                                        "  Positions:\n"  \
+                                        "    "  TXT_SHP_POS__DISABLED  "\n"  \
+                                        "    "  TXT_SHP_POS__SCH0_IN0  ", "  TXT_SHP_POS__SCH0_IN1  " ... "  TXT_SHP_POS__SCH0_IN7  "\n"  \
+                                        "    "  TXT_SHP_POS__SCH1_IN0  ", "  TXT_SHP_POS__SCH1_IN1  " ... "  TXT_SHP_POS__SCH1_IN7  "\n"  \
+                                        "    "  TXT_SHP_POS__SCH1_OUT  "\n"
+
+#define TXT_OPT__ISL                    TXT_HELP__ISL  "=<value>"
+#define TXT_OPTDESCR__ISL               TXT_HELP__ISL  "=<"  TXT_OPTARGS__U32_DEC  ">"  "\n"  \
+                                        "  Idle slope [units per second].\n"  \
+                                        "  Units depend on currently set ["  TXT_HELP__SHP_MODE  "]:\n"  \
+                                        "    [bits per second]    (inaccuracy +/- 2400 units) for "  TXT_SHP_MODE__DATA_RATE    "\n"  \
+                                        "    [packets per second] (inaccuracy +/-  300 units) for "  TXT_SHP_MODE__PACKET_RATE  "\n"  \
+                                        "  NOTE: Idle slope is stored in a compressed format. Expect a certain inaccuracy of stored data.\n"
+
+#define TXT_OPT__CRMIN                  TXT_HELP__CRMIN  "=<value>"
+#define TXT_OPTDESCR__CRMIN             TXT_HELP__CRMIN  "=<"  TXT_OPTARGS__I32_DEC  ">"  "\n"  \
+                                        "  Minimal credit.\n"  \
+                                        "  Units depend on currently set ["  TXT_HELP__SHP_MODE  "]:\n"  \
+                                        "    [bytes]   for "  TXT_SHP_MODE__DATA_RATE    "\n"  \
+                                        "    [packets] for "  TXT_SHP_MODE__PACKET_RATE  "\n"
+
+#define TXT_OPT__CRMAX                  TXT_HELP__CRMAX  "=<value>"
+#define TXT_OPTDESCR__CRMAX             TXT_HELP__CRMAX  "=<"  TXT_OPTARGS__I32_DEC  ">"  "\n"  \
+                                        "  Maximal credit.\n"  \
+                                        "  Units depend on currently set ["  TXT_HELP__SHP_MODE  "]:\n"  \
+                                        "    [bytes]   for "  TXT_SHP_MODE__DATA_RATE    "\n"  \
+                                        "    [packets] for "  TXT_SHP_MODE__PACKET_RATE  "\n"
+
+#define TXT_OPT__TTL_DECR               TXT_HELP__TTL_DECR  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__TTL_DECR          TXT_HELP__TTL_DECR  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                        "  Enable/disable TTL decrement.\n"
+
+#define TXT_OPT__DISCARD_IF_TTL_BELOW_2       TXT_HELP__DISCARD_IF_TTL_BELOW_2  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__DISCARD_IF_TTL_BELOW_2  TXT_HELP__DISCARD_IF_TTL_BELOW_2  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                              "  Applicable only for interface modes which decrement TTL value of a packet.\n"  \
+                                              "  If the packet has TTL<2, then:\n"  \
+                                              "    "  TXT_ON_OFF__ON   "  : discard the packet\n"  \
+                                              "    "  TXT_ON_OFF__OFF  " : send the packet to a host\n"
+
+
+
+
+/*
+    Sanity check for opt help texts. When new opt is added, create a help text for the opt and remove its symbol from here.
+    And don't forget to check the pairing! ^_^
+*/
+#if (defined(OPT_102_TXT_HELP) || defined(OPT_103_TXT_HELP) || defined(OPT_104_TXT_HELP) || \
+     defined(OPT_105_TXT_HELP) || defined(OPT_106_TXT_HELP) || defined(OPT_107_TXT_HELP) || defined(OPT_108_TXT_HELP) || defined(OPT_109_TXT_HELP) || \
+     defined(OPT_110_TXT_HELP) || defined(OPT_111_TXT_HELP) || defined(OPT_112_TXT_HELP) || defined(OPT_113_TXT_HELP) || defined(OPT_114_TXT_HELP) || \
+     defined(OPT_115_TXT_HELP) || defined(OPT_116_TXT_HELP) || defined(OPT_117_TXT_HELP) || defined(OPT_118_TXT_HELP) || defined(OPT_119_TXT_HELP) || \
+     defined(OPT_120_TXT_HELP) || defined(OPT_121_TXT_HELP) || defined(OPT_122_TXT_HELP) || defined(OPT_123_TXT_HELP) || defined(OPT_124_TXT_HELP) || \
+     defined(OPT_125_TXT_HELP) || defined(OPT_126_TXT_HELP) || defined(OPT_127_TXT_HELP) || defined(OPT_128_TXT_HELP) || defined(OPT_129_TXT_HELP) || \
+     defined(OPT_130_TXT_HELP) || defined(OPT_131_TXT_HELP) || defined(OPT_132_TXT_HELP) || defined(OPT_133_TXT_HELP) || defined(OPT_134_TXT_HELP) || \
+     defined(OPT_135_TXT_HELP) || defined(OPT_136_TXT_HELP) || defined(OPT_137_TXT_HELP) || defined(OPT_138_TXT_HELP) || defined(OPT_139_TXT_HELP) || \
+     defined(OPT_140_TXT_HELP) || defined(OPT_141_TXT_HELP) || defined(OPT_142_TXT_HELP) || defined(OPT_143_TXT_HELP) || defined(OPT_144_TXT_HELP) || \
+     defined(OPT_145_TXT_HELP) || defined(OPT_146_TXT_HELP) || defined(OPT_147_TXT_HELP) || defined(OPT_148_TXT_HELP) || defined(OPT_149_TXT_HELP) || \
+     defined(OPT_150_TXT_HELP) || defined(OPT_151_TXT_HELP) || defined(OPT_152_TXT_HELP) || defined(OPT_153_TXT_HELP) || defined(OPT_154_TXT_HELP) || \
+     defined(OPT_155_TXT_HELP) || defined(OPT_156_TXT_HELP) || defined(OPT_157_TXT_HELP) || defined(OPT_158_TXT_HELP) || defined(OPT_159_TXT_HELP) || \
+     defined(OPT_160_TXT_HELP) || defined(OPT_161_TXT_HELP) || defined(OPT_162_TXT_HELP) || defined(OPT_163_TXT_HELP) || defined(OPT_164_TXT_HELP) || \
+     defined(OPT_165_TXT_HELP) || defined(OPT_166_TXT_HELP) || defined(OPT_167_TXT_HELP) || defined(OPT_168_TXT_HELP) || defined(OPT_169_TXT_HELP) || \
+     defined(OPT_170_TXT_HELP) || defined(OPT_171_TXT_HELP) || defined(OPT_172_TXT_HELP) || defined(OPT_173_TXT_HELP) || defined(OPT_174_TXT_HELP) || \
+     defined(OPT_175_TXT_HELP) || defined(OPT_176_TXT_HELP) || defined(OPT_177_TXT_HELP) || defined(OPT_178_TXT_HELP) || defined(OPT_179_TXT_HELP) || \
+     defined(OPT_180_TXT_HELP) || defined(OPT_181_TXT_HELP) || defined(OPT_182_TXT_HELP) || defined(OPT_183_TXT_HELP) || defined(OPT_184_TXT_HELP) || \
+     defined(OPT_185_TXT_HELP) || defined(OPT_186_TXT_HELP) || defined(OPT_187_TXT_HELP) || defined(OPT_188_TXT_HELP) || defined(OPT_189_TXT_HELP) || \
+     defined(OPT_190_TXT_HELP) || defined(OPT_191_TXT_HELP) || defined(OPT_192_TXT_HELP) || defined(OPT_193_TXT_HELP) || defined(OPT_194_TXT_HELP) || \
+     defined(OPT_195_TXT_HELP) || defined(OPT_196_TXT_HELP) || defined(OPT_197_TXT_HELP) || defined(OPT_198_TXT_HELP) || defined(OPT_199_TXT_HELP))
+#error Add help text for the new opt! (and remove the opt from this preprocessor check)
+#endif
+
+/* OPT_LAST (keep this at the bottom of the opt help text list) */
+
+/* ==== TYPEDEFS & DATA : cmd help texts =================================== */
+
+static const char *const txt_help_phyif_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] phyif-print"         "   ",
+    "["   TXT_OPT__VERBOSE          "]  ",
+    "\n",
+    ""    "[2] phyif-print"         "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "["   TXT_OPT__VERBOSE          "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print parameters of all existing physical interfaces.",
+    "\n",
+    ""    "[2] Print parameters of a selected physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__VERBOSE,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_phyif_update[] =
+{
+    TXT_DECOR_CMD,
+    ""    "phyif-update"                   "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF         ">  ",
+    "[["  TXT_OPT__ENABLE_IF               "]|["  TXT_OPT__DISABLE_IF  "]]  ",
+    "["   TXT_OPT__PROMISC_PHYIF           "]  ",
+    "["   TXT_OPT__LOADBALANCE             "]  ",
+    "["   TXT_OPT__MODE                    "]  ",
+    "["   TXT_OPT__BLOCK_STATE             "]  ",
+    "["   TXT_OPT__FLEXIBLE_FILTER         "]  ",
+    "[["  TXT_OPT__MIRROR                  "]  ",
+    "["   TXT_OPT__VLAN_CONF               "]  ",
+    "["   TXT_OPT__PTP_CONF                "]  ",
+    "["   TXT_OPT__PTP_PROMISC             "]  ",
+    "["   TXT_OPT__QINQ                    "]  ",
+    "["   TXT_OPT__DISCARD_IF_TTL_BELOW_2  "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Update parameters of a physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__ENABLE_IF,
+    TXT_OPTDESCR__DISABLE_IF,
+    TXT_OPTDESCR__PROMISC_PHYIF,
+    TXT_OPTDESCR__LOADBALANCE,
+    TXT_OPTDESCR__MODE,
+    TXT_OPTDESCR__BLOCK_STATE,
+    TXT_OPTDESCR__FLEXIBLE_FILTER,
+    TXT_OPTDESCR__MIRROR,
+    TXT_OPTDESCR__VLAN_CONF,
+    TXT_OPTDESCR__PTP_CONF,
+    TXT_OPTDESCR__PTP_PROMISC,
+    TXT_OPTDESCR__QINQ,
+    TXT_OPTDESCR__DISCARD_IF_TTL_BELOW_2,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_logif_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] logif-print"         "   ",
+    "["   TXT_OPT__VERBOSE          "]  ",
+    "\n",
+    ""    "[2] logif-print"         "   ",
+    "<"   TXT_OPT__INTERFACE_LOGIF  ">  ",
+    "["   TXT_OPT__VERBOSE          "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print parameters of all existing logical interfaces.",
+    "\n",
+    ""    "[2] Print parameters of a selected logical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_LOGIF,
+    TXT_OPTDESCR__VERBOSE,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_logif_update[] =
+{
+    TXT_DECOR_CMD,
+    ""    "logif-update"             "   ",
+    "<"   TXT_OPT__INTERFACE_LOGIF   ">  ",
+    "[["  TXT_OPT__ENABLE_IF         "]|["  TXT_OPT__DISABLE_IF  "]]  ",
+    "["   TXT_OPT__PROMISC_LOGIF     "]  ",
+    "["   TXT_OPT__LOOPBACK          "]  ",
+    "["   TXT_OPT__EGRESS            "]  ",
+    "["   TXT_OPT__MATCH_MODE        "]  ",
+    "["   TXT_OPT__DISCARD_ON_MATCH  "]  ",
+    "["   TXT_OPT__MATCH_RULES       "]  ",
+    "[<rule-specific options (only if applicable)>]",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Update parameters of a logical interface."
+    "\n"
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_LOGIF,
+    TXT_OPTDESCR__ENABLE_IF,
+    TXT_OPTDESCR__DISABLE_IF,
+    TXT_OPTDESCR__PROMISC_LOGIF,
+    TXT_OPTDESCR__LOOPBACK,
+    TXT_OPTDESCR__EGRESS,
+    TXT_OPTDESCR__MATCH_MODE,
+    TXT_OPTDESCR__DISCARD_ON_MATCH,
+    TXT_OPTDESCR__VLAN,
+    TXT_OPTDESCR__PROTOCOL,
+    TXT_OPTDESCR__SPORT,
+    TXT_OPTDESCR__DPORT,
+    TXT_OPTDESCR__SIP6,
+    TXT_OPTDESCR__DIP6,
+    TXT_OPTDESCR__SIP_LOGIF,
+    TXT_OPTDESCR__DIP_LOGIF,
+    TXT_OPTDESCR__ETHTYPE,
+    TXT_OPTDESCR__FP_TABLE0_LOGIF,
+    TXT_OPTDESCR__FP_TABLE1_LOGIF,
+    TXT_OPTDESCR__SMAC,
+    TXT_OPTDESCR__DMAC,
+    TXT_OPTDESCR__HIF_COOKIE,
+    TXT_OPTDESCR__MATCH_RULES,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_logif_add[] =
+{
+    TXT_DECOR_CMD,
+    ""    "logif-add"               "   ",
+    "<"   TXT_OPT__INTERFACE_LOGIF  ">  ",
+    "<"   TXT_OPT__PARENT           ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Create a new logical interface."
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_LOGIF,
+    TXT_OPTDESCR__PARENT,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_logif_del[] =
+{
+    TXT_DECOR_CMD,
+    ""    "logif-del"               "   ",
+    "<"   TXT_OPT__INTERFACE_LOGIF  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Destroy (delete) the target logical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_LOGIF,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_bd_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] bd-print"    "   ",
+    "["   TXT_OPT__VERBOSE  "]  ",
+    "\n",
+    ""    "[2] bd-print"    "   ",
+    "<"   TXT_OPT__VLAN_BD  ">  ",
+    "["   TXT_OPT__VERBOSE  "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print parameters of all existing bridge domains.",
+    "\n",
+    ""    "[2] Print parameters of a selected bridge domain.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__VLAN_BD,
+    TXT_OPTDESCR__VERBOSE,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_bd_update[] =
+{
+    TXT_DECOR_CMD,
+    ""   "bd-update"          "   ",
+    "<"  TXT_OPT__VLAN_BD     ">  ",
+    "["  TXT_OPT__UCAST_HIT   "]  ",
+    "["  TXT_OPT__UCAST_MISS  "]  ",
+    "["  TXT_OPT__MCAST_HIT   "]  ",
+    "["  TXT_OPT__MCAST_MISS  "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""   "Update parameters of a bridge domain.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__VLAN_BD,
+    TXT_OPTDESCR__UCAST_HIT,
+    TXT_OPTDESCR__UCAST_MISS,
+    TXT_OPTDESCR__MCAST_HIT,
+    TXT_OPTDESCR__MCAST_MISS,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_bd_add[] =
+{
+    TXT_DECOR_CMD,
+    ""    "bd-add"          "   ",
+    "<"   TXT_OPT__VLAN_BD  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Create a new bridge domain.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__VLAN_BD,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_bd_del[] =
+{
+    TXT_DECOR_CMD,
+    ""    "bd-del"          "   ",
+    "<"   TXT_OPT__VLAN_BD  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Destroy (delete) the target bridge domain.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__VLAN_BD,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_bd_insif[] =
+{
+    TXT_DECOR_CMD,
+    ""    "bd-insif"                "   ",
+    "<"   TXT_OPT__VLAN_BD          ">  ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "["   TXT_OPT__TAG              "]  ",
+    "\n",
+    TXT_DECOR_DESCR
+    ""    "Insert physical interface into a bridge domain.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__VLAN_BD,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__TAG,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_bd_remif[] =
+{
+    TXT_DECOR_CMD,
+    ""    "bd-remif"                "   ",
+    "<"   TXT_OPT__VLAN_BD          ">  ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Remove physical interface from a bridge domain.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__VLAN_BD,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_bd_flush[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] bd-flush"    "   ",
+    "<"   TXT_OPT__ALL      ">  ",
+    "\n",
+    ""    "[2] bd-flush"    "   ",
+    "<"   TXT_OPT__STATIC   ">  ",
+    "\n",
+    ""    "[3] bd-flush"    "   ",
+    "<"   TXT_OPT__DYNAMIC  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Flush all MAC table entries of all bridge domains.",
+    "\n",
+    ""    "[2] Flush static MAC table entries of all bridge domains.",
+    "\n",
+    ""    "[3] Flush dynamic (learned) MAC table entries of all bridge domains.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__ALL,
+    TXT_OPTDESCR__STATIC,
+    TXT_OPTDESCR__DYNAMIC,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_bd_stent_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] bd-stent-print"  "   ",
+    "\n",
+    ""    "[2] bd-stent-print"  "   ",
+    "<"   TXT_OPT__VLAN_BD      ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print all existing static entries (regardless of bridge domain affiliation).",
+    "\n",
+    ""    "[2] Print static entries associated with a particular bridge domain.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__VLAN_BD,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_bd_stent_update[] =
+{
+    TXT_DECOR_CMD,
+    ""    "bd-stent-update"              "   ",
+    "<"   TXT_OPT__VLAN_BD               ">  ",
+    "<"   TXT_OPT__MAC                   ">  ",
+    "["   TXT_OPT__EGRESS                "]  ",
+    "["   TXT_OPT__LOCAL_STENT           "]  ",
+    "["   TXT_OPT__DISCARD_ON_MATCH_SRC  "]  ",
+    "["   TXT_OPT__DISCARD_ON_MATCH_DST  "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Update parameters of a static entry.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__VLAN_BD,
+    TXT_OPTDESCR__MAC,
+    TXT_OPTDESCR__EGRESS,
+    TXT_OPTDESCR__LOCAL_STENT,
+    TXT_OPTDESCR__DISCARD_ON_MATCH_SRC,
+    TXT_OPTDESCR__DISCARD_ON_MATCH_DST,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_bd_stent_add[] =
+{
+    TXT_DECOR_CMD,
+    ""    "bd-stent-add"    "   ",
+    "<"   TXT_OPT__VLAN_BD  ">  ",
+    "<"   TXT_OPT__MAC      ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Create a new static entry.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__VLAN_BD,
+    TXT_OPTDESCR__MAC,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_bd_stent_del[] =
+{
+    TXT_DECOR_CMD,
+    ""    "bd-stent-del"    "   ",
+    "<"   TXT_OPT__VLAN_BD  ">  ",
+    "<"   TXT_OPT__MAC      ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Destroy (delete) the target static entry.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__VLAN_BD,
+    TXT_OPTDESCR__MAC,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_fptable_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "fptable-print"          "   ",
+    "<"   TXT_OPT__FP_TABLE        ">  ",
+    "["   TXT_OPT__POSITION_PRINT  "]  ",
+    "["   TXT_OPT__COUNT_PRINT     "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Print content of a FlexibleParser table.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FP_TABLE,
+    TXT_OPTDESCR__POSITION_PRINT,
+    TXT_OPTDESCR__COUNT_PRINT,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_fptable_add[] =
+{
+    TXT_DECOR_CMD,
+    ""    "fptable-add"      "   ",
+    "<"   TXT_OPT__FP_TABLE  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Create a new FlexibleParser table.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FP_TABLE,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_fptable_del[] =
+{
+    TXT_DECOR_CMD,
+    ""    "fptable-del"      "   ",
+    "<"   TXT_OPT__FP_TABLE  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Destroy (delete) the target FlexibleParser table.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FP_TABLE,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_fptable_insrule[] =
+{
+    TXT_DECOR_CMD,
+    ""    "fptable-insrule"         "   ",
+    "<"   TXT_OPT__FP_TABLE         ">  ",
+    "<"   TXT_OPT__FP_RULE          ">  ",
+    "["   TXT_OPT__POSITION_INSADD  "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Insert FlexibleParser rule into a FlexibleParser table.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FP_TABLE,
+    TXT_OPTDESCR__FP_RULE,
+    TXT_OPTDESCR__POSITION_INSADD,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_fptable_remrule[] =
+{
+    TXT_DECOR_CMD,
+    ""    "fptable-remrule"   "   ",
+    "<"   TXT_OPT__FP_TABLE   ">  ",
+    "<"   TXT_OPT__FP_RULE    ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Remove FlexibleParser rule from a FlexibleParser table.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FP_TABLE,
+    TXT_OPTDESCR__FP_RULE,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_fprule_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] fprule-print"       "   ",
+    "["   TXT_OPT__POSITION_PRINT  "]  ",
+    "["   TXT_OPT__COUNT_PRINT     "]  ",
+    "\n",
+    ""    "[2] fprule-print"       "   ",
+    "<"   TXT_OPT__FP_RULE         ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print all existing FlexibleParser rules (regardless of table affiliation).",
+    "\n",
+    ""    "[2] Print a selected FlexibleParser rule.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FP_RULE,
+    TXT_OPTDESCR__POSITION_PRINT,
+    TXT_OPTDESCR__COUNT_PRINT,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_fprule_add[] =
+{
+    TXT_DECOR_CMD,
+    ""    "fprule-add"         "   ",
+    "<"   TXT_OPT__FP_RULE     ">  ",
+    "<"   TXT_OPT__DATA        ">  ",
+    "<"   TXT_OPT__MASK        ">  ",
+    "<"   TXT_OPT__OFFSET_FP   ">  ",
+    "<"   TXT_OPT__LAYER       ">  ",
+    "["   TXT_OPT__INVERT_FP   "]  ",
+    "<<"  TXT_OPT__ACCEPT_FP   ">|<"  TXT_OPT__REJECT_FP  ">|<"  TXT_OPT__FP_NEXT_RULE  ">>  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Create a new FlexibleParser rule."
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FP_RULE,
+    TXT_OPTDESCR__DATA,
+    TXT_OPTDESCR__MASK,
+    TXT_OPTDESCR__OFFSET_FP,
+    TXT_OPTDESCR__LAYER,
+    TXT_OPTDESCR__INVERT_FP,
+    TXT_OPTDESCR__ACCEPT_FP,
+    TXT_OPTDESCR__REJECT_FP,
+    TXT_OPTDESCR__FP_NEXT_RULE,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_fprule_del[] =
+{
+    TXT_DECOR_CMD,
+    ""    "fprule-del"      "   ",
+    "<"   TXT_OPT__FP_RULE  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Destroy (delete) the target FlexibleParser rule.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FP_RULE,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_route_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] route-print"  "   ",
+    "\n",
+    ""    "[2] route-print"  "   ",
+    "<"   TXT_OPT__IP4       ">  ",
+    "\n",
+    ""    "[3] route-print"  "   ",
+    "<"   TXT_OPT__IP6       ">  ",
+    "\n",
+    ""    "[4] route-print"  "   ",
+    "<"   TXT_OPT__ROUTE     ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print parameters of all routes.",
+    "\n",
+    ""    "[2] Print parameters of all IPv4 routes.",
+    "\n",
+    ""    "[3] Print parameters of all IPv6 routes.",
+    "\n",
+    ""    "[4] Print parameters of a selected route.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__IP4,
+    TXT_OPTDESCR__IP6,
+    TXT_OPTDESCR__ROUTE,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_route_add[] =
+{
+    TXT_DECOR_CMD,
+    ""    "route-add"               "   ",
+    "<"   TXT_OPT__ROUTE            ">  ",
+    "<<"  TXT_OPT__IP4              ">|<"  TXT_OPT__IP6  ">  ",
+    "<"   TXT_OPT__DMAC             ">  ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "["   TXT_OPT__SMAC             "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Create a new route.",
+    "\n"
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__ROUTE,
+    TXT_OPTDESCR__IP4,
+    TXT_OPTDESCR__IP6,
+    TXT_OPTDESCR__DMAC,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__SMAC,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_route_del[] =
+{
+    TXT_DECOR_CMD,
+    ""    "route-del"     "   ",
+    "<"   TXT_OPT__ROUTE  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Destroy the target route.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__ROUTE,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_cntk_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] cntk_print"  "   ",
+    "\n",
+    ""    "[2] cntk-print"  "   ",
+    "<"   TXT_OPT__IP4      ">  ",
+    "\n",
+    ""    "[3] cntk-print"  "   ",
+    "<"   TXT_OPT__IP6      ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print parameters of all conntracks.",
+    "\n",
+    ""    "[2] Print parameters of all IPv4 conntracks.",
+    "\n",
+    ""    "[3] Print parameters of all IPv6 conntracks.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__IP4,
+    TXT_OPTDESCR__IP6,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_cntk_update[] =
+{
+    TXT_DECOR_CMD,
+    ""    "cntk-update"      "   ",
+    "<"   TXT_OPT__PROTOCOL  ">  ",
+    "<"   TXT_OPT__SIP       ">  ",
+    "<"   TXT_OPT__DIP       ">  ",
+    "<"   TXT_OPT__SPORT     ">  ",
+    "<"   TXT_OPT__DPORT     ">  ",
+    "["   TXT_OPT__TTL_DECR  "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Update parameters of a conntrack. Only TTL decrement flag can be updated.\n",
+    ""    "(the other parameters are used to identify the target conntrack)",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__PROTOCOL,
+    TXT_OPTDESCR__SIP,
+    TXT_OPTDESCR__DIP,
+    TXT_OPTDESCR__SPORT,
+    TXT_OPTDESCR__DPORT,
+    TXT_OPTDESCR__TTL_DECR,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_cntk_add[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] cntk-add"      "   ",
+    "<"   TXT_OPT__PROTOCOL   ">  ",
+    "<"   TXT_OPT__SIP        ">  ",
+    "<"   TXT_OPT__DIP        ">  ",
+    "<"   TXT_OPT__SPORT      ">  ",
+    "<"   TXT_OPT__DPORT      ">  ",
+    "<"   TXT_OPT__ROUTE      ">  ",
+    "["   TXT_OPT__VLAN       "]  ",
+    "["   TXT_OPT__TTL_DECR   "]  ",
+    "[["  TXT_OPT__NO_REPLY   "]|["  TXT_OPT__NO_ORIG  "]  ",
+    "\n",
+    ""    "[2] cntk-add"      "   ",
+    "<"   TXT_OPT__PROTOCOL   ">  ",
+    "<"   TXT_OPT__SIP        ">  ",
+    "["   TXT_OPT__R_SIP      "]  ",
+    "<"   TXT_OPT__DIP        ">  ",
+    "["   TXT_OPT__R_DIP      "]  ",
+    "<"   TXT_OPT__SPORT      ">  ",
+    "["   TXT_OPT__R_SPORT    "]  ",
+    "<"   TXT_OPT__DPORT      ">  ",
+    "["   TXT_OPT__R_DPORT    "]  ",
+    "<"   TXT_OPT__ROUTE      ">  ",
+    "["   TXT_OPT__R_ROUTE    "]  ",
+    "["   TXT_OPT__VLAN       "]  ",
+    "["   TXT_OPT__R_VLAN     "]  ",
+    "["   TXT_OPT__TTL_DECR   "]  ",
+    "[["  TXT_OPT__NO_REPLY   "]|["  TXT_OPT__NO_ORIG  "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Create a new simple conntrack.\n"
+    ""    "    Supplied IP addresses must be either all IPv4, or all IPv6."
+    "\n",
+    ""    "[2] Create a new conntrack with NAT and/or PAT.\n"
+    ""    "    Supplied IP addresses must be either all IPv4, or all IPv6."
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__PROTOCOL,
+    TXT_OPTDESCR__SIP,
+    TXT_OPTDESCR__R_SIP,
+    TXT_OPTDESCR__DIP,
+    TXT_OPTDESCR__R_DIP,
+    TXT_OPTDESCR__SPORT,
+    TXT_OPTDESCR__R_SPORT,
+    TXT_OPTDESCR__DPORT,
+    TXT_OPTDESCR__R_DPORT,
+    TXT_OPTDESCR__ROUTE,
+    TXT_OPTDESCR__R_ROUTE,
+    TXT_OPTDESCR__VLAN,
+    TXT_OPTDESCR__R_VLAN,
+    TXT_OPTDESCR__TTL_DECR,
+    TXT_OPTDESCR__NO_REPLY,
+    TXT_OPTDESCR__NO_ORIG,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_cntk_del[] =
+{
+    TXT_DECOR_CMD,
+    ""    "cntk-del"         "   ",
+    "<"   TXT_OPT__PROTOCOL  ">  ",
+    "<"   TXT_OPT__SIP       ">  ",
+    "<"   TXT_OPT__DIP       ">  ",
+    "<"   TXT_OPT__SPORT     ">  ",
+    "<"   TXT_OPT__DPORT     ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Destroy the target conntrack.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__PROTOCOL,
+    TXT_OPTDESCR__SIP,
+    TXT_OPTDESCR__DIP,
+    TXT_OPTDESCR__SPORT,
+    TXT_OPTDESCR__DPORT,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_cntk_timeout[] =
+{
+    TXT_DECOR_CMD,
+    ""    "cntk-timeout"             "   ",
+    "<"   TXT_OPT__PROTOCOL_CNTKTMO  ">  ",
+    "<"   TXT_OPT__TIMEOUT_CNTKTMO   ">  ",
+    "["   TXT_OPT__TIMEOUT2_CNTKTMO  "]  ",
+    "["   TXT_OPT__4o6               "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    "Set timeout of IPv4 conntracks.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__PROTOCOL_CNTKTMO,
+    TXT_OPTDESCR__TIMEOUT_CNTKTMO,
+    TXT_OPTDESCR__TIMEOUT2_CNTKTMO,
+    TXT_OPTDESCR__4o6,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_route_and_cntk_reset[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] route-and-cntk-reset"  "   ",
+    "<"   TXT_OPT__ALL                ">  ",
+    "\n",
+    ""    "[2] route-and-cntk-reset"  "   ",
+    "<"   TXT_OPT__IP4                ">  ",
+    "\n",
+    ""    "[3] route-and-cntk-reset"  "   ",
+    "<"   TXT_OPT__IP6                ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Reset (clear) all routes & conntracks.",
+    "\n",
+    ""    "[2] Reset (clear) only IPv4 routes & conntracks.",
+    "\n",
+    ""    "[3] Reset (clear) only IPv6 routes & conntracks.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__ALL,
+    TXT_OPTDESCR__IP4,
+    TXT_OPTDESCR__IP6,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_spd_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "spd-print"               "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "["   TXT_OPT__POSITION_PRINT   "]  ",
+    "["   TXT_OPT__COUNT_PRINT      "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Print all SecurityPolicies of the given physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__POSITION_PRINT,
+    TXT_OPTDESCR__COUNT_PRINT,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_spd_add[] =
+{
+    TXT_DECOR_CMD,
+    ""    "spd-add"                 "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "<"   TXT_OPT__PROTOCOL         ">  ",
+    "<"   TXT_OPT__SIP              ">  ",
+    "<"   TXT_OPT__DIP              ">  ",
+    "["   TXT_OPT__SPORT            "]  ",
+    "["   TXT_OPT__DPORT            "]  ",
+    "["   TXT_OPT__POSITION_INSADD  "]  ",
+    "<"   TXT_OPT__SPD_ACTION       ">  ",
+    "[<action-specific options (only if applicable)>]",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Create a new SecurityPolicy and insert it into SPD of the given physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__PROTOCOL,
+    TXT_OPTDESCR__SIP,
+    TXT_OPTDESCR__DIP,
+    TXT_OPTDESCR__SPORT,
+    TXT_OPTDESCR__DPORT,
+    TXT_OPTDESCR__POSITION_INSADD,
+    TXT_OPTDESCR__SAD,
+    TXT_OPTDESCR__SPI,
+    TXT_OPTDESCR__SPD_ACTION,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_spd_del[] =
+{
+    TXT_DECOR_CMD,
+    ""    "spd-del"                 "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "<"   TXT_OPT__POSITION_REMDEL  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Destroy the target SecurityPolicy and remove it from SPD of the given physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__POSITION_REMDEL,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_fwfeat_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] fwfeat-print"   "   ",
+    "\n",
+    ""    "[2] fwfeat-print"   "   ",
+    "<"   TXT_OPT__FEATURE_FW  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print all existing FW features.",
+    "\n",
+    ""    "[2] Print a selected FW feature.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FEATURE_FW,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_fwfeat_set[] =
+{
+    TXT_DECOR_CMD,
+    ""    "fwfeat-set"         "   ",
+    "<"   TXT_OPT__FEATURE_FW  ">  ",
+    "<<"  TXT_OPT__ENABLE_FW   ">|<"  TXT_OPT__DISABLE_FW  ">>  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Enable or disable a FW feature.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FEATURE_FW,
+    TXT_OPTDESCR__ENABLE_FW,
+    TXT_OPTDESCR__DISABLE_FW,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_qos_que_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] qos-que-print"       "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "\n",
+    ""    "[2] qos-que-print"       "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "["   TXT_OPT__QUE              "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print all QoS queues of the given physical interface.",
+    "\n",
+    ""    "[2] Print a selected QoS queue of the given physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__QUE,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_qos_que_update[] =
+{
+    TXT_DECOR_CMD,
+    ""    "qos-que-update"          "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "<"   TXT_OPT__QUE              ">  ",
+    "["   TXT_OPT__QUE_MODE         "]  ",
+    "["   TXT_OPT__THMIN            "]  ",
+    "["   TXT_OPT__THMAX            "]  ",
+    "["   TXT_OPT__ZPROB            "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Update parameters of a QoS queue.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__QUE,
+    TXT_OPTDESCR__QUE_MODE,
+    TXT_OPTDESCR__THMIN,
+    TXT_OPTDESCR__THMAX,
+    TXT_OPTDESCR__ZPROB,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_qos_sch_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] qos-sch-print"       "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "\n",
+    ""    "[2] qos-sch-print"       "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "["   TXT_OPT__SCH              "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print all QoS schedulers of the given physical interface.",
+    "\n",
+    ""    "[2] Print a selected QoS scheduler of the given physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__SCH,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_qos_sch_update[] =
+{
+    TXT_DECOR_CMD,
+    ""    "qos-sch-update"          "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "<"   TXT_OPT__SCH              ">  ",
+    "["   TXT_OPT__SCH_MODE         "]  ",
+    "["   TXT_OPT__SCH_ALGO         "]  ",
+    "["   TXT_OPT__SCH_IN           "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Update parameters of a QoS scheduler.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__SCH,
+    TXT_OPTDESCR__SCH_MODE,
+    TXT_OPTDESCR__SCH_ALGO,
+    TXT_OPTDESCR__SCH_IN,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_qos_shp_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] qos-shp-print"       "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "\n",
+    ""    "[2] qos-shp-print"       "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "["   TXT_OPT__SHP              "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print all QoS shapers of the given physical interface.",
+    "\n",
+    ""    "[2] Print a selected QoS shaper of the given physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__SHP,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_qos_shp_update[] =
+{
+    TXT_DECOR_CMD,
+    ""    "qos-shp-update"          "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "<"   TXT_OPT__SHP              ">  ",
+    "["   TXT_OPT__SHP_MODE         "]  ",
+    "["   TXT_OPT__SHP_POS          "]  ",
+    "["   TXT_OPT__ISL              "]  ",
+    "["   TXT_OPT__CRMIN            "]  ",
+    "["   TXT_OPT__CRMAX            "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Update parameters of a QoS shaper.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__SHP,
+    TXT_OPTDESCR__SHP_MODE,
+    TXT_OPTDESCR__SHP_POS,
+    TXT_OPTDESCR__ISL,
+    TXT_OPTDESCR__CRMIN,
+    TXT_OPTDESCR__CRMAX,
+    "\n",
+    
+    NULL
+};
+
+
+
+
+
+
+
+
+/* CMD_LAST (keep this at the bottom of the cmd help text list) */
+
+/* special case of text array - list all available cmds */
+static const char *const txt_help_no_command[] =
+{
+  /* CMD_00_NO_COMMAND */
+  "General help\n"
+  "------------\n"
+  "Run the app with '<command> --help' to get a detailed info (and a list of valid options) for the given command.\n"
+  "Command list:\n",
+
+#ifdef CMD_01_ENUM_NAME
+ "  "  CMD_01_CLI_TXT  "\n",
+#endif
+#ifdef CMD_02_ENUM_NAME
+ "  "  CMD_02_CLI_TXT  "\n",
+#endif
+#ifdef CMD_03_ENUM_NAME
+ "  "  CMD_03_CLI_TXT  "\n",
+#endif
+#ifdef CMD_04_ENUM_NAME
+ "  "  CMD_04_CLI_TXT  "\n",
+#endif
+#ifdef CMD_05_ENUM_NAME
+ "  "  CMD_05_CLI_TXT  "\n",
+#endif
+#ifdef CMD_06_ENUM_NAME
+ "  "  CMD_06_CLI_TXT  "\n",
+#endif
+#ifdef CMD_07_ENUM_NAME
+ "  "  CMD_07_CLI_TXT  "\n",
+#endif
+#ifdef CMD_08_ENUM_NAME
+ "  "  CMD_08_CLI_TXT  "\n",
+#endif
+#ifdef CMD_09_ENUM_NAME
+ "  "  CMD_09_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_10_ENUM_NAME
+ "  "  CMD_10_CLI_TXT  "\n",
+#endif
+#ifdef CMD_11_ENUM_NAME
+ "  "  CMD_11_CLI_TXT  "\n",
+#endif
+#ifdef CMD_12_ENUM_NAME
+ "  "  CMD_12_CLI_TXT  "\n",
+#endif
+#ifdef CMD_13_ENUM_NAME
+ "  "  CMD_13_CLI_TXT  "\n",
+#endif
+#ifdef CMD_14_ENUM_NAME
+ "  "  CMD_14_CLI_TXT  "\n",
+#endif
+#ifdef CMD_15_ENUM_NAME
+ "  "  CMD_15_CLI_TXT  "\n",
+#endif
+#ifdef CMD_16_ENUM_NAME
+ "  "  CMD_16_CLI_TXT  "\n",
+#endif
+#ifdef CMD_17_ENUM_NAME
+ "  "  CMD_17_CLI_TXT  "\n",
+#endif
+#ifdef CMD_18_ENUM_NAME
+ "  "  CMD_18_CLI_TXT  "\n",
+#endif
+#ifdef CMD_19_ENUM_NAME
+ "  "  CMD_19_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_20_ENUM_NAME
+ "  "  CMD_20_CLI_TXT  "\n",
+#endif
+#ifdef CMD_21_ENUM_NAME
+ "  "  CMD_21_CLI_TXT  "\n",
+#endif
+#ifdef CMD_22_ENUM_NAME
+ "  "  CMD_22_CLI_TXT  "\n",
+#endif
+#ifdef CMD_23_ENUM_NAME
+ "  "  CMD_23_CLI_TXT  "\n",
+#endif
+#ifdef CMD_24_ENUM_NAME
+ "  "  CMD_24_CLI_TXT  "\n",
+#endif
+#ifdef CMD_25_ENUM_NAME
+ "  "  CMD_25_CLI_TXT  "\n",
+#endif
+#ifdef CMD_26_ENUM_NAME
+ "  "  CMD_26_CLI_TXT  "\n",
+#endif
+#ifdef CMD_27_ENUM_NAME
+ "  "  CMD_27_CLI_TXT  "\n",
+#endif
+#ifdef CMD_28_ENUM_NAME
+ "  "  CMD_28_CLI_TXT  "\n",
+#endif
+#ifdef CMD_29_ENUM_NAME
+ "  "  CMD_29_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_30_ENUM_NAME
+ "  "  CMD_30_CLI_TXT  "\n",
+#endif
+#ifdef CMD_31_ENUM_NAME
+ "  "  CMD_31_CLI_TXT  "\n",
+#endif
+#ifdef CMD_32_ENUM_NAME
+ "  "  CMD_32_CLI_TXT  "\n",
+#endif
+#ifdef CMD_33_ENUM_NAME
+ "  "  CMD_33_CLI_TXT  "\n",
+#endif
+#ifdef CMD_34_ENUM_NAME
+ "  "  CMD_34_CLI_TXT  "\n",
+#endif
+#ifdef CMD_35_ENUM_NAME
+ "  "  CMD_35_CLI_TXT  "\n",
+#endif
+#ifdef CMD_36_ENUM_NAME
+ "  "  CMD_36_CLI_TXT  "\n",
+#endif
+#ifdef CMD_37_ENUM_NAME
+ "  "  CMD_37_CLI_TXT  "\n",
+#endif
+#ifdef CMD_38_ENUM_NAME
+ "  "  CMD_38_CLI_TXT  "\n",
+#endif
+#ifdef CMD_39_ENUM_NAME
+ "  "  CMD_39_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_40_ENUM_NAME
+ "  "  CMD_40_CLI_TXT  "\n",
+#endif
+#ifdef CMD_41_ENUM_NAME
+ "  "  CMD_41_CLI_TXT  "\n",
+#endif
+#ifdef CMD_42_ENUM_NAME
+ "  "  CMD_42_CLI_TXT  "\n",
+#endif
+#ifdef CMD_43_ENUM_NAME
+ "  "  CMD_43_CLI_TXT  "\n",
+#endif
+#ifdef CMD_44_ENUM_NAME
+ "  "  CMD_44_CLI_TXT  "\n",
+#endif
+#ifdef CMD_45_ENUM_NAME
+ "  "  CMD_45_CLI_TXT  "\n",
+#endif
+#ifdef CMD_46_ENUM_NAME
+ "  "  CMD_46_CLI_TXT  "\n",
+#endif
+#ifdef CMD_47_ENUM_NAME
+ "  "  CMD_47_CLI_TXT  "\n",
+#endif
+#ifdef CMD_48_ENUM_NAME
+ "  "  CMD_48_CLI_TXT  "\n",
+#endif
+#ifdef CMD_49_ENUM_NAME
+ "  "  CMD_49_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_50_ENUM_NAME
+ "  "  CMD_50_CLI_TXT  "\n",
+#endif
+#ifdef CMD_51_ENUM_NAME
+ "  "  CMD_51_CLI_TXT  "\n",
+#endif
+#ifdef CMD_52_ENUM_NAME
+ "  "  CMD_52_CLI_TXT  "\n",
+#endif
+#ifdef CMD_53_ENUM_NAME
+ "  "  CMD_53_CLI_TXT  "\n",
+#endif
+#ifdef CMD_54_ENUM_NAME
+ "  "  CMD_54_CLI_TXT  "\n",
+#endif
+#ifdef CMD_55_ENUM_NAME
+ "  "  CMD_55_CLI_TXT  "\n",
+#endif
+#ifdef CMD_56_ENUM_NAME
+ "  "  CMD_56_CLI_TXT  "\n",
+#endif
+#ifdef CMD_57_ENUM_NAME
+ "  "  CMD_57_CLI_TXT  "\n",
+#endif
+#ifdef CMD_58_ENUM_NAME
+ "  "  CMD_58_CLI_TXT  "\n",
+#endif
+#ifdef CMD_59_ENUM_NAME
+ "  "  CMD_59_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_60_ENUM_NAME
+ "  "  CMD_60_CLI_TXT  "\n",
+#endif
+#ifdef CMD_61_ENUM_NAME
+ "  "  CMD_61_CLI_TXT  "\n",
+#endif
+#ifdef CMD_62_ENUM_NAME
+ "  "  CMD_62_CLI_TXT  "\n",
+#endif
+#ifdef CMD_63_ENUM_NAME
+ "  "  CMD_63_CLI_TXT  "\n",
+#endif
+#ifdef CMD_64_ENUM_NAME
+ "  "  CMD_64_CLI_TXT  "\n",
+#endif
+#ifdef CMD_65_ENUM_NAME
+ "  "  CMD_65_CLI_TXT  "\n",
+#endif
+#ifdef CMD_66_ENUM_NAME
+ "  "  CMD_66_CLI_TXT  "\n",
+#endif
+#ifdef CMD_67_ENUM_NAME
+ "  "  CMD_67_CLI_TXT  "\n",
+#endif
+#ifdef CMD_68_ENUM_NAME
+ "  "  CMD_68_CLI_TXT  "\n",
+#endif
+#ifdef CMD_69_ENUM_NAME
+ "  "  CMD_69_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_70_ENUM_NAME
+ "  "  CMD_70_CLI_TXT  "\n",
+#endif
+#ifdef CMD_71_ENUM_NAME
+ "  "  CMD_71_CLI_TXT  "\n",
+#endif
+#ifdef CMD_72_ENUM_NAME
+ "  "  CMD_72_CLI_TXT  "\n",
+#endif
+#ifdef CMD_73_ENUM_NAME
+ "  "  CMD_73_CLI_TXT  "\n",
+#endif
+#ifdef CMD_74_ENUM_NAME
+ "  "  CMD_74_CLI_TXT  "\n",
+#endif
+#ifdef CMD_75_ENUM_NAME
+ "  "  CMD_75_CLI_TXT  "\n",
+#endif
+#ifdef CMD_76_ENUM_NAME
+ "  "  CMD_76_CLI_TXT  "\n",
+#endif
+#ifdef CMD_77_ENUM_NAME
+ "  "  CMD_77_CLI_TXT  "\n",
+#endif
+#ifdef CMD_78_ENUM_NAME
+ "  "  CMD_78_CLI_TXT  "\n",
+#endif
+#ifdef CMD_79_ENUM_NAME
+ "  "  CMD_79_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_80_ENUM_NAME
+ "  "  CMD_80_CLI_TXT  "\n",
+#endif
+#ifdef CMD_81_ENUM_NAME
+ "  "  CMD_81_CLI_TXT  "\n",
+#endif
+#ifdef CMD_82_ENUM_NAME
+ "  "  CMD_82_CLI_TXT  "\n",
+#endif
+#ifdef CMD_83_ENUM_NAME
+ "  "  CMD_83_CLI_TXT  "\n",
+#endif
+#ifdef CMD_84_ENUM_NAME
+ "  "  CMD_84_CLI_TXT  "\n",
+#endif
+#ifdef CMD_85_ENUM_NAME
+ "  "  CMD_85_CLI_TXT  "\n",
+#endif
+#ifdef CMD_86_ENUM_NAME
+ "  "  CMD_86_CLI_TXT  "\n",
+#endif
+#ifdef CMD_87_ENUM_NAME
+ "  "  CMD_87_CLI_TXT  "\n",
+#endif
+#ifdef CMD_88_ENUM_NAME
+ "  "  CMD_88_CLI_TXT  "\n",
+#endif
+#ifdef CMD_89_ENUM_NAME
+ "  "  CMD_89_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_90_ENUM_NAME
+ "  "  CMD_90_CLI_TXT  "\n",
+#endif
+#ifdef CMD_91_ENUM_NAME
+ "  "  CMD_91_CLI_TXT  "\n",
+#endif
+#ifdef CMD_92_ENUM_NAME
+ "  "  CMD_92_CLI_TXT  "\n",
+#endif
+#ifdef CMD_93_ENUM_NAME
+ "  "  CMD_93_CLI_TXT  "\n",
+#endif
+#ifdef CMD_94_ENUM_NAME
+ "  "  CMD_94_CLI_TXT  "\n",
+#endif
+#ifdef CMD_95_ENUM_NAME
+ "  "  CMD_95_CLI_TXT  "\n",
+#endif
+#ifdef CMD_96_ENUM_NAME
+ "  "  CMD_96_CLI_TXT  "\n",
+#endif
+#ifdef CMD_97_ENUM_NAME
+ "  "  CMD_97_CLI_TXT  "\n",
+#endif
+#ifdef CMD_98_ENUM_NAME
+ "  "  CMD_98_CLI_TXT  "\n",
+#endif
+#ifdef CMD_99_ENUM_NAME
+ "  "  CMD_99_CLI_TXT  "\n",
+#endif
+
+    "\n",
+    NULL
+};
+
+
+/* array of help texts (indexed by 'cmd_t') */
+static const char *const *const txt_helps[] = 
+{
+    txt_help_no_command,  /* CMD_00_NO_COMMAND */
+    
+#ifdef CMD_01_ENUM_NAME
+       CMD_01_HELP,
+#endif
+#ifdef CMD_02_ENUM_NAME
+       CMD_02_HELP,
+#endif
+#ifdef CMD_03_ENUM_NAME
+       CMD_03_HELP,
+#endif
+#ifdef CMD_04_ENUM_NAME
+       CMD_04_HELP,
+#endif
+#ifdef CMD_05_ENUM_NAME
+       CMD_05_HELP,
+#endif
+#ifdef CMD_06_ENUM_NAME
+       CMD_06_HELP,
+#endif
+#ifdef CMD_07_ENUM_NAME
+       CMD_07_HELP,
+#endif
+#ifdef CMD_08_ENUM_NAME
+       CMD_08_HELP,
+#endif
+#ifdef CMD_09_ENUM_NAME
+       CMD_09_HELP,
+#endif
+
+#ifdef CMD_10_ENUM_NAME
+       CMD_10_HELP,
+#endif
+#ifdef CMD_11_ENUM_NAME
+       CMD_11_HELP,
+#endif
+#ifdef CMD_12_ENUM_NAME
+       CMD_12_HELP,
+#endif
+#ifdef CMD_13_ENUM_NAME
+       CMD_13_HELP,
+#endif
+#ifdef CMD_14_ENUM_NAME
+       CMD_14_HELP,
+#endif
+#ifdef CMD_15_ENUM_NAME
+       CMD_15_HELP,
+#endif
+#ifdef CMD_16_ENUM_NAME
+       CMD_16_HELP,
+#endif
+#ifdef CMD_17_ENUM_NAME
+       CMD_17_HELP,
+#endif
+#ifdef CMD_18_ENUM_NAME
+       CMD_18_HELP,
+#endif
+#ifdef CMD_19_ENUM_NAME
+       CMD_19_HELP,
+#endif
+
+#ifdef CMD_20_ENUM_NAME
+       CMD_20_HELP,
+#endif
+#ifdef CMD_21_ENUM_NAME
+       CMD_21_HELP,
+#endif
+#ifdef CMD_22_ENUM_NAME
+       CMD_22_HELP,
+#endif
+#ifdef CMD_23_ENUM_NAME
+       CMD_23_HELP,
+#endif
+#ifdef CMD_24_ENUM_NAME
+       CMD_24_HELP,
+#endif
+#ifdef CMD_25_ENUM_NAME
+       CMD_25_HELP,
+#endif
+#ifdef CMD_26_ENUM_NAME
+       CMD_26_HELP,
+#endif
+#ifdef CMD_27_ENUM_NAME
+       CMD_27_HELP,
+#endif
+#ifdef CMD_28_ENUM_NAME
+       CMD_28_HELP,
+#endif
+#ifdef CMD_29_ENUM_NAME
+       CMD_29_HELP,
+#endif
+
+#ifdef CMD_30_ENUM_NAME
+       CMD_30_HELP,
+#endif
+#ifdef CMD_31_ENUM_NAME
+       CMD_31_HELP,
+#endif
+#ifdef CMD_32_ENUM_NAME
+       CMD_32_HELP,
+#endif
+#ifdef CMD_33_ENUM_NAME
+       CMD_33_HELP,
+#endif
+#ifdef CMD_34_ENUM_NAME
+       CMD_34_HELP,
+#endif
+#ifdef CMD_35_ENUM_NAME
+       CMD_35_HELP,
+#endif
+#ifdef CMD_36_ENUM_NAME
+       CMD_36_HELP,
+#endif
+#ifdef CMD_37_ENUM_NAME
+       CMD_37_HELP,
+#endif
+#ifdef CMD_38_ENUM_NAME
+       CMD_38_HELP,
+#endif
+#ifdef CMD_39_ENUM_NAME
+       CMD_39_HELP,
+#endif
+
+#ifdef CMD_40_ENUM_NAME
+       CMD_40_HELP,
+#endif
+#ifdef CMD_41_ENUM_NAME
+       CMD_41_HELP,
+#endif
+#ifdef CMD_42_ENUM_NAME
+       CMD_42_HELP,
+#endif
+#ifdef CMD_43_ENUM_NAME
+       CMD_43_HELP,
+#endif
+#ifdef CMD_44_ENUM_NAME
+       CMD_44_HELP,
+#endif
+#ifdef CMD_45_ENUM_NAME
+       CMD_45_HELP,
+#endif
+#ifdef CMD_46_ENUM_NAME
+       CMD_46_HELP,
+#endif
+#ifdef CMD_47_ENUM_NAME
+       CMD_47_HELP,
+#endif
+#ifdef CMD_48_ENUM_NAME
+       CMD_48_HELP,
+#endif
+#ifdef CMD_49_ENUM_NAME
+       CMD_49_HELP,
+#endif
+
+#ifdef CMD_50_ENUM_NAME
+       CMD_50_HELP,
+#endif
+#ifdef CMD_51_ENUM_NAME
+       CMD_51_HELP,
+#endif
+#ifdef CMD_52_ENUM_NAME
+       CMD_52_HELP,
+#endif
+#ifdef CMD_53_ENUM_NAME
+       CMD_53_HELP,
+#endif
+#ifdef CMD_54_ENUM_NAME
+       CMD_54_HELP,
+#endif
+#ifdef CMD_55_ENUM_NAME
+       CMD_55_HELP,
+#endif
+#ifdef CMD_56_ENUM_NAME
+       CMD_56_HELP,
+#endif
+#ifdef CMD_57_ENUM_NAME
+       CMD_57_HELP,
+#endif
+#ifdef CMD_58_ENUM_NAME
+       CMD_58_HELP,
+#endif
+#ifdef CMD_59_ENUM_NAME
+       CMD_59_HELP,
+#endif
+
+#ifdef CMD_60_ENUM_NAME
+       CMD_60_HELP,
+#endif
+#ifdef CMD_61_ENUM_NAME
+       CMD_61_HELP,
+#endif
+#ifdef CMD_62_ENUM_NAME
+       CMD_62_HELP,
+#endif
+#ifdef CMD_63_ENUM_NAME
+       CMD_63_HELP,
+#endif
+#ifdef CMD_64_ENUM_NAME
+       CMD_64_HELP,
+#endif
+#ifdef CMD_65_ENUM_NAME
+       CMD_65_HELP,
+#endif
+#ifdef CMD_66_ENUM_NAME
+       CMD_66_HELP,
+#endif
+#ifdef CMD_67_ENUM_NAME
+       CMD_67_HELP,
+#endif
+#ifdef CMD_68_ENUM_NAME
+       CMD_68_HELP,
+#endif
+#ifdef CMD_69_ENUM_NAME
+       CMD_69_HELP,
+#endif
+
+#ifdef CMD_70_ENUM_NAME
+       CMD_70_HELP,
+#endif
+#ifdef CMD_71_ENUM_NAME
+       CMD_71_HELP,
+#endif
+#ifdef CMD_72_ENUM_NAME
+       CMD_72_HELP,
+#endif
+#ifdef CMD_73_ENUM_NAME
+       CMD_73_HELP,
+#endif
+#ifdef CMD_74_ENUM_NAME
+       CMD_74_HELP,
+#endif
+#ifdef CMD_75_ENUM_NAME
+       CMD_75_HELP,
+#endif
+#ifdef CMD_76_ENUM_NAME
+       CMD_76_HELP,
+#endif
+#ifdef CMD_77_ENUM_NAME
+       CMD_77_HELP,
+#endif
+#ifdef CMD_78_ENUM_NAME
+       CMD_78_HELP,
+#endif
+#ifdef CMD_79_ENUM_NAME
+       CMD_79_HELP,
+#endif
+
+#ifdef CMD_80_ENUM_NAME
+       CMD_80_HELP,
+#endif
+#ifdef CMD_81_ENUM_NAME
+       CMD_81_HELP,
+#endif
+#ifdef CMD_82_ENUM_NAME
+       CMD_82_HELP,
+#endif
+#ifdef CMD_83_ENUM_NAME
+       CMD_83_HELP,
+#endif
+#ifdef CMD_84_ENUM_NAME
+       CMD_84_HELP,
+#endif
+#ifdef CMD_85_ENUM_NAME
+       CMD_85_HELP,
+#endif
+#ifdef CMD_86_ENUM_NAME
+       CMD_86_HELP,
+#endif
+#ifdef CMD_87_ENUM_NAME
+       CMD_87_HELP,
+#endif
+#ifdef CMD_88_ENUM_NAME
+       CMD_88_HELP,
+#endif
+#ifdef CMD_89_ENUM_NAME
+       CMD_89_HELP,
+#endif
+
+#ifdef CMD_90_ENUM_NAME
+       CMD_90_HELP,
+#endif
+#ifdef CMD_91_ENUM_NAME
+       CMD_91_HELP,
+#endif
+#ifdef CMD_92_ENUM_NAME
+       CMD_92_HELP,
+#endif
+#ifdef CMD_93_ENUM_NAME
+       CMD_93_HELP,
+#endif
+#ifdef CMD_94_ENUM_NAME
+       CMD_94_HELP,
+#endif
+#ifdef CMD_95_ENUM_NAME
+       CMD_95_HELP,
+#endif
+#ifdef CMD_96_ENUM_NAME
+       CMD_96_HELP,
+#endif
+#ifdef CMD_97_ENUM_NAME
+       CMD_97_HELP,
+#endif
+#ifdef CMD_98_ENUM_NAME
+       CMD_98_HELP,
+#endif
+#ifdef CMD_99_ENUM_NAME
+       CMD_99_HELP,
+#endif
+};
+
+/* ==== PUBLIC FUNCTIONS =================================================== */
+
+void cli_print_help(uint16_t cmd)
+{
+    const char *const p_txt_invalid[] =
+    {
+        "__INVALID_ITEM__",
+        NULL        
+    };
+    
+    const char *const *const p_txt_help = (cli_cmd_is_not_valid(cmd) ? (p_txt_invalid) : (txt_helps[cmd]));
+    uint16_t i = UINT16_MAX;
+    while ((128u > (++i)) && (NULL != p_txt_help[i]))  /* limits of 128 is just to prevent endless loop in case of some problem */
+    {
+        printf("%s", p_txt_help[i]);
+    }
+}
+
+/* ==== TESTMODE constants ================================================= */
+
+#if !defined(NDEBUG)
+/* empty */
+#endif
+
+/* ========================================================================= */

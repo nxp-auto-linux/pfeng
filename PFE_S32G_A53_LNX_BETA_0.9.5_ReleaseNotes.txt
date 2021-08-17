@@ -8,6 +8,18 @@ Copyright (C) 2018-2021 NXP
 ****************************************************************************************************
 
 ========================================================
+What is new in this release
+========================================================
+This release has BETA quality status in terms of testing and quality documentation.
+
+The main goals of this release are:
+1) provide an improved Suspend to RAM (STR) feature support,
+2) introduce the AUX interface feature implementation.
+
+The release includes also other features (i.e. MAC unicast filtering) and many improvements,
+as well as an important number of bug fixes (see detailed list below).
+
+========================================================
 Installation
 ========================================================
 Install the package into the desired directory and follow the enclosed user manual.
@@ -33,8 +45,6 @@ Release Specifics:
     - Evaluation board: S32G-VNP-EVB
         S32GRV-PLATEVB 700-30081
         X-S32G-PROCEVB-S 700-32170
-
-- This release has BETA quality status in terms of testing and quality documentation
 
 ========================================================
 Supported Features:
@@ -91,26 +101,51 @@ Compatible firmware: BLN_PFE-FW_S32G_RTM_1.0.0
 What's Modified in BETA_0.9.5
 ========================================================
 
+# New Feature
+
+[AAVB-2328] - [PFE_LINUX] HIF traffic steering
+[AAVB-2827] - [PFE_LINUX] Aux interface support
+[AAVB-3398] - [PFE_LINUX] Add support for multiple MAC unicast addresses (MAC unicast filtering)
+[AAVB-3633] - [PFE_LINUX] Improved suspend to RAM (STR) support - restore net device configs
+
 # Bug
 
-[AAVB-2149] - [PFE_LINUX]Promiscuous mode not working
+[AAVB-2149] - [PFE_LINUX] Promiscuous mode not working
 [AAVB-2320] - [PFE_LINUX] pfeng: mtu setting doesn't work of value < 68
+[AAVB-2973] - [PFE_LINUX] Configured Bridge outputs periodic backtrace dumps
+[AAVB-3187] - [PFE_LINUX] Observed zero throughput results for slow path bi-directional tests
+[AAVB-3196] - [PFE_LINUX] each pfeX interface should be found by of_find_net_device_by_node
+[AAVB-3375] - [PFE_LINUX] "ERR: No timer was running" on rmmod
+[AAVB-3496] - [PFE_LINUX] sw bridged traffic gets damaged on output
+[AAVB-3580] - [PFE_LINUX] Transition to IDEX_REQ_STATE_TRANSMITTED failed
+[AAVB-3611] - [PFE_LINUX] Replace pfe_log_if_*() MAC filtering API with pfe_phy_if_*() equivalent
+[AAVB-3639] - [PFE_LINUX] linux interface in PFENG_LOGIF_MODE_TX_CLASS mode don't work
+[AAVB-3671] - [PFE_LINUX][PFE_PLATFORM] use-after-free in _raw_spin_lock_irqsave
+
+# Improvement
+
+[AAVB-2700] - [PFE_LINUX] pfeng: follow SGMII configuration for PHY config
+[AAVB-2866] - [PFE_DRV_LINUX] Map functional tests to requirements
+[AAVB-3066] - [PFE_LINUX] Move TX confirmation processing to NAPI
+[AAVB-3340] - [PFE_LINUX] libfci_cli: Fix build warnings
+[AAVB-3374] - [PFE_LINUX] STR: guard all necessary functions by pm_runtime_get_sync
+[AAVB-3451] - [PFE_LINUX] use-case: run driver w/o u-boot dependency
+[AAVB-3636] - [PFE_LINUX] Configure hif channel interrupt affinity hint to distribute interrupt load
+
+
+# PFE Platform changes (Common code among multiple drivers)
+## PFE Platform - New Feature
+[AAVB-1602] - [PFE_PLATFORM] HIF NOCPY LMEM copy mode
+[AAVB-3404] - [PFE_PLATFORM] Fast path router uses phyif MAC as default source address make this configurable
+
+## PFE Platform - Bug
 [AAVB-2326] - [PFE_PLATFORM] Logical interface 'discard' API missing in slave variant
-[AAVB-2445] - [ALB 25.0]Observed zero throughput numbers for Rx traffic while measuring IPerf3 UDP self termination traffic for 1518B frame size.
-[AAVB-2448] - Observed "Zero Throughput numbers" while measuring IPv4/IPv6 routing Bi-directional RAW/UDP traffic
-[AAVB-2695] - [ALB 27.0] [Regression]: Observed "0" throughput number for IPv4 64B while measuring Slow path routing performance
-[AAVB-2973] - [PFE_DRV_LINUX] Configured Bridge outputs periodic backtrace
-[AAVB-3187] - [BSP28]Observed zero throughput results for slow path bi-directional tests using spirent
-[AAVB-3192] - [BSP28] Observed zero throughput results while measuring IPerf3 UDP bi-directional ROUTING throughput results.
-[AAVB-3196] - [PFE_DRV_LINUX] each pfeX interface should be found by of_find_net_device_by_node
-[AAVB-3197] - [PFE_DRV_LINUX] pinctrl-0/pinctrl-names properties are ignored
-[AAVB-3375] - [PFE][Linux] "ERR: No timer was running" on rmmod
-[AAVB-3377] - [PFE_DRV_QNX][PFE_PLATFORM] Driver reports a couple of build errors when PFE_CFG_NULL_ARG_CHECK is enabled
+[AAVB-3377] - [PFE_PLATFORM] Driver reports a couple of build errors when PFE_CFG_NULL_ARG_CHECK is enabled
 [AAVB-3378] - [PFE_PLATFORM] SIP/DIP replacement flags rewrite other flags.
 [AAVB-3380] - [PFE_PLATFORM] Rx interrupt coalescing configuration failed
 [AAVB-3385] - [PFE_PLATFORM] libFCI: FW feature struct has too small buffer for some FW feature names
 [AAVB-3406] - [PFE_PLATFORM] Incorrect return value when reading QoS shaper idle slope
-[AAVB-3414] - [PFE_PLATFORM] Memory leak when mac address is already in db.
+[AAVB-3414] - [PFE_PLATFORM] Memory leak when mac address is already in db
 [AAVB-3415] - [PFE_PLATFORM] MAC database memory leak when MAC addr addition fails
 [AAVB-3417] - [PFE_PLATFORM] libFCI: Missing ntoh() conversions in conntrack handling
 [AAVB-3418] - [PFE_PLATFORM] libFCI: Wrong return value of ".vlan" and ".vlan_reply" fields in IPv4 conntracks
@@ -119,48 +154,23 @@ What's Modified in BETA_0.9.5
 [AAVB-3458] - [PFE_PLATFORM] Forwarding list of MAC static entry is not propagated to HW
 [AAVB-3478] - [PFE_PLATFORM] IDEX buffers not allocated from a controlled pool
 [AAVB-3482] - [PFE_PLATFORM] FCI: HIF_NOCPY is skipped when updating a logical interface
-[AAVB-3496] - [PFE_LINUX] sw bridged traffic gets damaged on output
-[AAVB-3527] - [PFE_PLATFORM] Platform doesn't clear all states on destroy (issue for suspend)
 [AAVB-3570] - [PFE_PLATFORM] pfe_idex_rpc not callable from atomic context
 [AAVB-3574] - [PFE_PLATFORM] Type pfe_ip_addr_t in pfe_rtable.h is too large
 [AAVB-3578] - [PFE_PLATFORM] pfe_idex_rpc RPC transport time-out when enabling MAC filtering on slave
 [AAVB-3579] - [PFE_PLATFORM] Physical interface flags are set incorrectly
-[AAVB-3580] - [PFE_LINUX] Transition to IDEX_REQ_STATE_TRANSMITTED failed
-[AAVB-3611] - [PFE_LINUX] Replace pfe_log_if_*() MAC filtering API with pfe_phy_if_*() equivalent
-[AAVB-3639] - [PFE_LINUX] linux interface in PFENG_LOGIF_MODE_TX_CLASS mode don't work
 [AAVB-3658] - [PFE_PLATFORM] HIF NOCPY - Buffer descriptors wrap mechanism does not work
-[AAVB-3671] - [PFE_PLATFORM][PFE_LINUX]use-after-free in _raw_spin_lock_irqsave
 
-# New Feature
-
-[AAVB-1602] - [PFE_PLATFORM] HIF NOCPY LMEM copy mode
-[AAVB-1872] - [PFE_PLATFORM] All buffers shall be returned at driver shutdown phase
-[AAVB-2086] - Move fci_msg_t definition to the fci_msg.h
-[AAVB-2205] - [PFE_QNX] Return provided buffers
-[AAVB-2328] - [PFE_LINUX] HIF traffic steering
-[AAVB-2827] - [PFE_DRV_LINUX] Aux Interface support
-[AAVB-3398] - [PFE_LINUX] Add support for multiple MAC unicast addreses
-[AAVB-3404] - [PFE_PLATFORM] Fast path router uses phyif MAC as default source address make this configurable
-[AAVB-3633] - [PFE_LINUX] STR: v2, netinterface config changes support
-
-# Improvement
-
+## PFE Platform - Improvement
 [AAVB-1645] - [PFE_PLATFORM] Interrupt dispatchers
+[AAVB-2086] - [PFE_PLATFORM] Move fci_msg_t definition to the fci_msg.h
 [AAVB-2304] - [PFE_PLATFORM] Allow to set the physical interface to promiscuous mode via FCI
 [AAVB-2350] - [PFE_PLATFORM] Add FCI usage examples, stage 3
 [AAVB-2511] - [PFE_PLATFORM][PFE_FW] Remove PE ID passing
-[AAVB-2700] - [PFE_LINUX] pfeng: follow SGMII configuration for PHY config
 [AAVB-2807] - [PFE_FW] HIF no copy/LMEM copy mode
 [AAVB-2938] - [PFE_PLATFORM] Static entry documentation update
-[AAVB-3066] - [PFE_LINUX] pfeng: move TXconf to NAPI
-[AAVB-3129] - [PFE_DRV_LINUX] Make FCI endpoint OS-independent - Linux replica
-[AAVB-3374] - [PFE_LINUX] STR: guard all necessary functions by pm_runtime_get_sync
-[AAVB-3420] - [PFE_PLATFORM] Update libFCI documentation with demo codes from libFCI_cli
 [AAVB-3431] - [PFE_PLATFORM] Remove compilation warnings
-[AAVB-3451] - [PFE_LINUX] use-case: run driver w/o u-boot dependency
 [AAVB-3467] - [PFE_PLATFORM] Disable PFE_CFG_HIF_NOCPY_SUPPORT in PFE SLAVE mode
 [AAVB-3471] - [PFE_PLATFORM] Optimize PE memory access locks
-[AAVB-3636] - [PFE_LINUX] Configure hif channel interrupt affinity hint to distribute interrupt load
 [AAVB-3649] - [PFE_PLATFORM] libfci_cli: Add rebuilding of libfci library to libfci_cli makefile
 [AAVB-3669] - [PFE_PLATFORM] Fix master/slave to work again
 

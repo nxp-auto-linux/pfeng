@@ -41,3 +41,8 @@ Component:              FCI
 Component:              ct_assert.h
     Description:        Compile-time assert implementation
     License:            GNU All-Permissive License
+
+Component:              LIBFCI_CLI
+    Location:           sw/libfci_cli/
+    Description:        Example FCI config tool
+    License:            BSD-3
