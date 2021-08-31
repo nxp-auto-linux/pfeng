@@ -40,7 +40,7 @@ Release Specifics:
     - Geany IDE version 1.37
     - editor VIM - Vi IMproved 8.2
     - NXP Auto Linux BSP 30
-    - GCC 9.2.0
+    - GCC 10.2
 - This release was developed and tested using:
     - Evaluation board: S32G-VNP-EVB
         S32GRV-PLATEVB 700-30081
@@ -75,6 +75,7 @@ Directory Structure:
 - sw/pfe_platform/ library sources (dependency for linux-pfeng)
 - sw/fci/ library sources (dependency for linux-pfeng)
 - sw/xfci/libfci/ library sources (FCI library and dependency for linux-pfeng)
+- sw/libfci_cli/ example utility libfci_cli sources
 - doc/ user's manual, FCI API Reference manual and device-tree
 - PFE_S32G_A53_LNX_BETA_0.9.5_ReleaseNotes.txt: this file
 - LICENSE-GPL2.txt: License text file
@@ -111,7 +112,6 @@ What's Modified in BETA_0.9.5
 # Bug
 
 [AAVB-2149] - [PFE_LINUX] Promiscuous mode not working
-[AAVB-2320] - [PFE_LINUX] pfeng: mtu setting doesn't work of value < 68
 [AAVB-2973] - [PFE_LINUX] Configured Bridge outputs periodic backtrace dumps
 [AAVB-3187] - [PFE_LINUX] Observed zero throughput results for slow path bi-directional tests
 [AAVB-3196] - [PFE_LINUX] each pfeX interface should be found by of_find_net_device_by_node
@@ -125,7 +125,6 @@ What's Modified in BETA_0.9.5
 # Improvement
 
 [AAVB-2700] - [PFE_LINUX] pfeng: follow SGMII configuration for PHY config
-[AAVB-2866] - [PFE_DRV_LINUX] Map functional tests to requirements
 [AAVB-3066] - [PFE_LINUX] Move TX confirmation processing to NAPI
 [AAVB-3340] - [PFE_LINUX] libfci_cli: Fix build warnings
 [AAVB-3374] - [PFE_LINUX] STR: guard all necessary functions by pm_runtime_get_sync
@@ -133,12 +132,14 @@ What's Modified in BETA_0.9.5
 [AAVB-3636] - [PFE_LINUX] Configure hif channel interrupt affinity hint to distribute interrupt load
 
 
-# PFE Platform changes (Common code among multiple drivers)
-## PFE Platform - New Feature
+## PFE Platform changes (Common code among multiple drivers)
+
+# PFE Platform - New Feature
 [AAVB-1602] - [PFE_PLATFORM] HIF NOCPY LMEM copy mode
+[AAVB-1872] - [PFE_PLATFORM] All buffers shall be returned at driver shutdown phase
 [AAVB-3404] - [PFE_PLATFORM] Fast path router uses phyif MAC as default source address make this configurable
 
-## PFE Platform - Bug
+# PFE Platform - Bug
 [AAVB-2326] - [PFE_PLATFORM] Logical interface 'discard' API missing in slave variant
 [AAVB-3377] - [PFE_PLATFORM] Driver reports a couple of build errors when PFE_CFG_NULL_ARG_CHECK is enabled
 [AAVB-3378] - [PFE_PLATFORM] SIP/DIP replacement flags rewrite other flags.
@@ -159,8 +160,9 @@ What's Modified in BETA_0.9.5
 [AAVB-3578] - [PFE_PLATFORM] pfe_idex_rpc RPC transport time-out when enabling MAC filtering on slave
 [AAVB-3579] - [PFE_PLATFORM] Physical interface flags are set incorrectly
 [AAVB-3658] - [PFE_PLATFORM] HIF NOCPY - Buffer descriptors wrap mechanism does not work
+[AAVB-3667] - [PFE_PLATFORM] pfe_tmu_sch_get_bound_sch_output returns wrong value
 
-## PFE Platform - Improvement
+# PFE Platform - Improvement
 [AAVB-1645] - [PFE_PLATFORM] Interrupt dispatchers
 [AAVB-2086] - [PFE_PLATFORM] Move fci_msg_t definition to the fci_msg.h
 [AAVB-2304] - [PFE_PLATFORM] Allow to set the physical interface to promiscuous mode via FCI
