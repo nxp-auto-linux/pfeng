@@ -41,7 +41,11 @@
 
 #include "pfe_ct.h"
 #include "pfe_log_if.h"
+#if defined(PFE_CFG_TARGET_OS_LINUX)
+#include "pfe_hif_chnl_linux.h"
+#else
 #include "pfe_hif_chnl.h"
+#endif
 
 #ifdef PFE_CFG_IEEE1588_SUPPORT
 #include "pfe_hif_ptp.h"
@@ -65,7 +69,7 @@ enum
  *			instance creation time (pfe_hif_drv_client_register()) but it is
  *			limited by this (HIF_DRV_CLIENT_QUEUES_MAX) value.
  */
-#define HIF_DRV_CLIENT_QUEUES_MAX	1U
+#define HIF_DRV_CLIENT_QUEUES_MAX	8U
 
 /**
  * @brief	Scatter-Gather list length
@@ -176,10 +180,6 @@ typedef struct
 {
 	uint32_t size;						/*	Number of valid 'items' entries */
 
-#ifdef PFE_CFG_HIF_TX_FIFO_FIX
-	uint32_t total_bytes;				/*	Total data length (sum of items[0..size].len) in number of bytes */
-#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
-
 	struct
 	{
 		void *data_pa;					/*	Pointer to buffer (PA) */
@@ -254,7 +254,8 @@ pfe_hif_drv_client_t * pfe_hif_drv_ihc_client_register(pfe_hif_drv_t *hif_drv, p
 
 /*	AUX API */
 #ifdef PFE_CFG_MC_HIF
-pfe_hif_drv_client_t * pfe_hif_drv_aux_client_register(pfe_hif_drv_t *hif_drv, pfe_hif_drv_client_event_handler handler, void *priv);
+pfe_hif_drv_client_t * pfe_hif_drv_aux_client_register(pfe_hif_drv_t *hif_drv, uint32_t txq_num, uint32_t rxq_num,
+		pfe_hif_drv_client_event_handler handler, void *priv);
 #endif /*PFE_CFG_MC_HIF*/
 
 

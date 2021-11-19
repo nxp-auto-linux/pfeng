@@ -20,12 +20,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
 static void pfe_bmu_cfg_clear_buf_cnt_memory(addr_t base_va, uint32_t cnt)
 {
 	uint32_t ii;
@@ -240,7 +234,7 @@ errno_t pfe_bmu_cfg_reset(addr_t base_va)
 		}
 		else
 		{
-			oal_time_usleep(1000);
+			oal_time_usleep(10U);
 		}
 	}
 

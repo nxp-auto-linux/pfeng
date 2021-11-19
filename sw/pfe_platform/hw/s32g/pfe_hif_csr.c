@@ -13,16 +13,11 @@
 #include "pfe_cbus.h"
 #include "pfe_hif_csr.h"
 #include "pfe_platform_cfg.h"
+#include "pfe_feature_mgr.h"
 
 #ifndef PFE_CBUS_H_
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
-
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
 
 /**
  * @brief	Control the buffer descriptor fetch
@@ -317,88 +312,41 @@ errno_t pfe_hif_chnl_cfg_isr(addr_t base_va, uint32_t channel_id, pfe_hif_chnl_e
 	{
 		if ((reg_src & reg_en & BDP_RD_CSR_RX_TIMEOUT_CH_INT) != 0U)
 		{
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("BDP_RD_CSR_RX_TIMEOUT_CH%u_INT. Interrupt disabled.\n", (uint_t)channel_id);
-#else
-			NXP_LOG_INFO("BDP_RD_CSR_RX_TIMEOUT_CH%u_INT\n", (uint_t)channel_id);
-#endif /* PFE_CFG_IP_VERSION */
 		}
 
 		if ((reg_src & reg_en & BDP_WR_CSR_RX_TIMEOUT_CH_INT) != 0U)
 		{
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("BDP_WR_CSR_RX_TIMEOUT_CH%u_INT. Interrupt disabled.\n", (uint_t)channel_id);
-#else
-			NXP_LOG_INFO("BDP_WR_CSR_RX_TIMEOUT_CH%u_INT\n", (uint_t)channel_id);
-#endif /* PFE_CFG_IP_VERSION */
 		}
 
 		if ((reg_src & reg_en & BDP_RD_CSR_TX_TIMEOUT_CH_INT) != 0U)
 		{
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("BDP_RD_CSR_TX_TIMEOUT_CH%u_INT. Interrupt disabled.\n", (uint_t)channel_id);
-#else
-			NXP_LOG_INFO("BDP_RD_CSR_TX_TIMEOUT_CH%u_INT\n", (uint_t)channel_id);
-#endif /* PFE_CFG_IP_VERSION */
 		}
 
 		if ((reg_src & reg_en & BDP_WR_CSR_TX_TIMEOUT_CH_INT) != 0U)
 		{
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("BDP_WR_CSR_TX_TIMEOUT_CH%u_INT. Interrupt disabled.\n", (uint_t)channel_id);
-#else
-			NXP_LOG_INFO("BDP_WR_CSR_TX_TIMEOUT_CH%u_INT\n", (uint_t)channel_id);
-#endif /* PFE_CFG_IP_VERSION */
 		}
 
 		if ((reg_src & reg_en & DXR_CSR_RX_TIMEOUT_CH_INT) != 0U)
 		{
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("DXR_CSR_RX_TIMEOUT_CH%u_INT. Interrupt disabled.\n", (uint_t)channel_id);
-#else
-			NXP_LOG_INFO("DXR_CSR_RX_TIMEOUT_CH%u_INT\n", (uint_t)channel_id);
-#endif /* PFE_CFG_IP_VERSION */
 		}
 
 		if ((reg_src & reg_en & DXR_CSR_TX_TIMEOUT_CH_INT) != 0U)
 		{
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 			/*	AAVB-2144 */
 			NXP_LOG_INFO("DXR_CSR_TX_TIMEOUT_CH%u_INT. Interrupt disabled.\n", (uint_t)channel_id);
-#else
-			NXP_LOG_INFO("DXR_CSR_TX_TIMEOUT_CH%u_INT\n", (uint_t)channel_id);
-#endif /* PFE_CFG_IP_VERSION */
 		}
 
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 		/*	Don't re-enable these interrupts. See AAVB-2144. */
-#else
-		/*	Enable timeout interrupts */
-		reg_en = hal_read32(base_va + HIF_CHn_INT_EN(channel_id));
-		reg_en |= BDP_RD_CSR_RX_TIMEOUT_CH_INT|BDP_WR_CSR_RX_TIMEOUT_CH_INT;
-		reg_en |= BDP_RD_CSR_TX_TIMEOUT_CH_INT|BDP_WR_CSR_TX_TIMEOUT_CH_INT;
-		reg_en |= DXR_CSR_RX_TIMEOUT_CH_INT|DXR_CSR_TX_TIMEOUT_CH_INT;
-		hal_write32(reg_en, base_va + HIF_CHn_INT_EN(channel_id));
-#endif /* PFE_CFG_IP_VERSION */
 
 		ret = EOK;
 	}
@@ -472,6 +420,7 @@ void pfe_hif_chnl_cfg_fini(addr_t base_va, uint32_t channel_id)
  */
 errno_t pfe_hif_cfg_init(addr_t base_va)
 {
+#ifdef PFE_CFG_PFE_MASTER
 	uint32_t ii = 0u;
 
 	/*	Disable and clear HIF interrupts. Channel interrupts are
@@ -483,17 +432,20 @@ errno_t pfe_hif_cfg_init(addr_t base_va)
 	hal_write32(0xffffffffU, base_va + HIF_TX_FIFO_ERR_INT_SRC);
 	hal_write32(0xffffffffU, base_va + HIF_RX_FIFO_ERR_INT_SRC);
 
-	/*	SOFT RESET */
-	hal_write32(0xfu, base_va + HIF_SOFT_RESET);
-	while (hal_read32(base_va + HIF_SOFT_RESET) != 0U)
+	if (FALSE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
 	{
-		if (++ii > 1000u)
+		/*	SOFT RESET */
+		hal_write32(0xfu, base_va + HIF_SOFT_RESET);
+		while (hal_read32(base_va + HIF_SOFT_RESET) != 0U)
 		{
-			return ETIMEDOUT;
-		}
-		else
-		{
-			oal_time_usleep(1000);
+			if (++ii > 1000u)
+			{
+				return ETIMEDOUT;
+			}
+			else
+			{
+				oal_time_usleep(1000);
+			}
 		}
 	}
 
@@ -532,6 +484,7 @@ errno_t pfe_hif_cfg_init(addr_t base_va)
 	hal_write32(0xffffffffU & ~(HIF_ERR_INT), base_va + HIF_ERR_INT_EN);
 	hal_write32(0xffffffffU & ~(HIF_TX_FIFO_ERR_INT), base_va + HIF_TX_FIFO_ERR_INT_EN);
 	hal_write32(0xffffffffU  & ~(HIF_RX_FIFO_ERR_INT), base_va + HIF_RX_FIFO_ERR_INT_EN);
+#endif /* PFE_CFG_PFE_MASTER */
 
 	return EOK;
 }
@@ -584,9 +537,6 @@ void pfe_hif_chnl_cfg_tx_enable(addr_t base_va, uint32_t channel_id)
 	reg |= TX_DMA_ENABLE;
 	hal_write32(reg, base_va + HIF_CTRL_CHn(channel_id));
 
-	/*	Enable TX IRQ */
-	pfe_hif_chnl_cfg_tx_irq_unmask(base_va, channel_id);
-
 #if (TRUE == PFE_HIF_CFG_USE_BD_POLLING)
 	pfe_hif_chnl_cfg_tx_dma_start(base_va, channel_id);
 #endif /* PFE_HIF_CFG_USE_BD_POLLING */
@@ -638,8 +588,6 @@ void pfe_hif_chnl_cfg_rx_enable(addr_t base_va, uint32_t channel_id)
 
 	reg |= RX_DMA_ENABLE;
 	hal_write32(reg, base_va + HIF_CTRL_CHn(channel_id));
-
-	pfe_hif_chnl_cfg_rx_irq_unmask(base_va, channel_id);
 
 #if (FALSE == PFE_HIF_CFG_USE_BD_POLLING)
 	pfe_hif_chnl_cfg_rx_dma_start(base_va, channel_id);
@@ -1101,6 +1049,32 @@ uint32_t pfe_hif_chnl_cfg_get_tx_cnt(addr_t base_va, uint32_t channel_id)
 uint32_t pfe_hif_chnl_cfg_get_rx_cnt(addr_t base_va, uint32_t channel_id)
 {
 	return hal_read32(base_va + HIF_TX_PKT_CNT2_CHn(channel_id));
+}
+
+/**
+ * @brief		Set HIF channel LTC setting
+ * @details		The LTC setting for HIF channel.
+ * 				WARNING: Hijacked use for Master detect feature
+ * @param[in]	base_va Base address of HIF channel register space (virtual)
+ * @param[in]	channel_id Channel identifier
+ * @param[in]	val The 8bits value
+ */
+errno_t pfe_hif_chnl_cfg_ltc_set(addr_t base_va, uint32_t channel_id, uint8_t val)
+{
+	hal_write32(val, base_va + HIF_LTC_MAX_PKT_CHn_ADDR(channel_id));
+	return EOK;
+}
+
+/**
+ * @brief		Get HIF channel LTC setting
+ * @details		Read the LTC setting for HIF channel.
+ * 				WARNING: Hijacked use for Master detect feature
+ * @param[in]	base_va Base address of HIF channel register space (virtual)
+ * @param[in]	channel_id Channel identifier
+ */
+uint32_t pfe_hif_chnl_cfg_ltc_get(addr_t base_va, uint32_t channel_id)
+{
+	return hal_read32(base_va + HIF_LTC_MAX_PKT_CHn_ADDR(channel_id));
 }
 
 /**

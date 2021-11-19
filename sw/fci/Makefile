@@ -67,6 +67,7 @@ SRCS += src/fci_fw_features.c
 SRCS += src/fci_flexible_filter.c
 SRCS += src/fci_spd.c
 SRCS += src/fci_qos.c
+SRCS += src/fci_mirror.c
 ifeq ($(TARGET_OS),QNX)
 SRCS += src/fci_core_qnx.c
 endif

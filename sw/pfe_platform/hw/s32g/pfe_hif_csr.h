@@ -16,12 +16,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
 #define HIF_VERSION							(0x00U)
 #define HIF_TX_POLL_CTRL					(0x04U)
 #define HIF_RX_POLL_CTRL					(0x08U)
@@ -291,5 +285,7 @@ uint32_t pfe_hif_chnl_cfg_get_text_stat(addr_t base_va, uint32_t channel_id, cha
 uint32_t pfe_hif_chnl_cfg_get_tx_cnt(addr_t base_va, uint32_t channel_id);
 uint32_t pfe_hif_chnl_cfg_get_rx_cnt(addr_t base_va, uint32_t channel_id);
 uint32_t pfe_hif_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+errno_t pfe_hif_chnl_cfg_ltc_set(addr_t base_va, uint32_t channel_id, uint8_t val);
+uint32_t pfe_hif_chnl_cfg_ltc_get(addr_t base_va, uint32_t channel_id);
 
 #endif /* PFE_HIF_CSR_H_ */

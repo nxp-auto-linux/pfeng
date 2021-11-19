@@ -30,7 +30,7 @@ __attribute__((hot)) errno_t fifo_get_fill_level(const fifo_t *const fifo, uint3
 
 __attribute__((hot)) errno_t fifo_get_free_space(const fifo_t *const fifo, uint32_t *free_space)
 {
-	uint32_t ret;
+	uint32_t ret = 0U;
 	errno_t err;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)

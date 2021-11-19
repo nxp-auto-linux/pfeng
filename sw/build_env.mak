@@ -62,8 +62,6 @@ export PFE_CFG_HIF_NOCPY_SUPPORT?=1
 export PFE_CFG_CSUM_ALL_FRAMES?=0
 #HIF sequence number check. 1 - enable, 0 - disable
 export PFE_CFG_HIF_SEQNUM_CHECK?=0
-#IP version
-export PFE_CFG_IP_VERSION?=PFE_CFG_IP_VERSION_NPU_7_14a
 #QNX only: When enabled cache maintenance is not performed on buffers.
 export PFE_CFG_BUFFERS_COHERENT?=1
 #Build of rtable feature. 1 - enable, 0 - disable
@@ -169,12 +167,6 @@ ifeq ($(PFE_CFG_PFE_MASTER),0)
   export PFE_CFG_FCI_ENABLE=0
 endif
 
-#Include HIF TX FIFO fix. This is SW workaround for HIF stall issue.
-ifeq ($(PFE_CFG_IP_VERSION),PFE_CFG_IP_VERSION_NPU_7_14)
-  export PFE_CFG_HIF_TX_FIFO_FIX=1
-else
-  export PFE_CFG_HIF_TX_FIFO_FIX=0
-endif
 #Set default verbosity level for sysfs. Valid values are from 1 to 10.
 export PFE_CFG_VERBOSITY_LEVEL?=4
 
@@ -234,12 +226,6 @@ endif
 
 ifneq ($(PFE_CFG_HIF_SEQNUM_CHECK),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_SEQNUM_CHECK
-endif
-
-ifneq ($(PFE_CFG_IP_VERSION),)
-GLOBAL_CCFLAGS+=-DPFE_CFG_IP_VERSION=$(PFE_CFG_IP_VERSION)
-else
-$(error IP version must be set)
 endif
 
 ifneq ($(PFE_CFG_BUFFERS_COHERENT),0)

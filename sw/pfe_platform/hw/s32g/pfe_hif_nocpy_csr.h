@@ -16,12 +16,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
 #define HIF_NOCPY_VERSION			(0x00U)
 #define HIF_NOCPY_TX_CTRL			(0x04U)
 #define HIF_NOCPY_TX_CURR_BD_ADDR	(0x08U)
@@ -58,10 +52,9 @@
 #define BDP_CSR_TX_CBD_INT			(1U << 3)
 #define BDP_CSR_TX_PKT_INT			(1U << 4)
 
-errno_t pfe_hif_nocpy_cfg_isr(addr_t base_va);
+errno_t pfe_hif_nocpy_cfg_isr(addr_t base_va, pfe_hif_chnl_event_t *events);
 void pfe_hif_nocpy_cfg_irq_mask(addr_t base_va);
 void pfe_hif_nocpy_cfg_irq_unmask(addr_t base_va);
-errno_t pfe_hif_nocpy_cfg_set_cbk(pfe_hif_chnl_event_t event, pfe_hif_chnl_cbk_t cbk, void *arg);
 errno_t pfe_hif_nocpy_cfg_init(addr_t base_va);
 void pfe_hif_nocpy_cfg_fini(addr_t base_va);
 void pfe_hif_nocpy_cfg_tx_enable(addr_t base_va);

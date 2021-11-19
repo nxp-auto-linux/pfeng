@@ -33,17 +33,13 @@
 #include "pfe_hif_drv.h"
 
 #ifdef PFE_CFG_PFE_MASTER
-#if (PFE_CFG_IP_VERSION < PFE_CFG_IP_VERSION_NPU_7_14a)
-#define PFENG_DRIVER_NAME		"pfeng-cut1"
-#else
 #define PFENG_DRIVER_NAME		"pfeng"
-#endif /* PFE_CFG_IP_VERSION_NPU_7_14a */
 #elif PFE_CFG_PFE_SLAVE
 #define PFENG_DRIVER_NAME		"pfeng-slave"
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"BETA 0.9.5"
+#define PFENG_DRIVER_VERSION		"BETA 0.9.6"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
@@ -65,10 +61,14 @@ static const pfe_ct_phy_if_id_t pfeng_hif_ids[] = {
 	PFE_PHY_IF_ID_HIF0,
 	PFE_PHY_IF_ID_HIF1,
 	PFE_PHY_IF_ID_HIF2,
-	PFE_PHY_IF_ID_HIF3
+	PFE_PHY_IF_ID_HIF3,
+	/* HIF NOCPY is unsupported, the id can be used
+	 * only for addressing master IDEX HIF channel
+	 */
+	PFE_PHY_IF_ID_HIF_NOCPY
 };
 
-#define PFENG_PFE_HIF_CHANNELS		(ARRAY_SIZE(pfeng_hif_ids))
+#define PFENG_PFE_HIF_CHANNELS		(ARRAY_SIZE(pfeng_hif_ids) - 1)
 #define PFENG_PFE_EMACS			(ARRAY_SIZE(pfeng_emac_ids))
 
 /* LOGIF mode variants */
@@ -218,6 +218,10 @@ struct pfeng_hif_chnl {
 	u32				cfg_rx_coalesce_usecs;
 };
 
+/* leave out one BD to ensure minimum gap */
+#define PFE_TXBDS_NEEDED(val)	((val) + 1)
+#define PFE_TXBDS_MAX_NEEDED	PFE_TXBDS_NEEDED(MAX_SKB_FRAGS + 1)
+
 static inline void pfeng_hif_shared_chnl_lock_tx(struct pfeng_hif_chnl *chnl)
 {
 	if (unlikely((chnl->cl_mode == PFENG_HIF_MODE_SHARED) || chnl->ihc))
@@ -280,6 +284,7 @@ struct pfeng_priv {
 	struct work_struct		ihc_tx_work;
 	DECLARE_KFIFO_PTR(ihc_tx_fifo, struct sk_buff *);
 #ifdef PFE_CFG_PFE_SLAVE
+	struct task_struct		*deferred_probe_task;
 	struct workqueue_struct		*ihc_slave_wq;
 #endif /* PFE_CFG_PFE_SLAVE */
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
@@ -296,6 +301,10 @@ struct pfeng_priv {
 /* fw */
 int pfeng_fw_load(struct pfeng_priv *priv, const char *fw_class_name, const char *fw_util_name);
 void pfeng_fw_free(struct pfeng_priv *priv);
+
+/* dt */
+int pfeng_dt_create_config(struct pfeng_priv *priv);
+int pfeng_dt_release_config(struct pfeng_priv *priv);
 
 /* debugfs */
 int pfeng_debugfs_create(struct pfeng_priv *priv);
@@ -323,12 +332,13 @@ void pfeng_ihc_tx_work_handler(struct work_struct *work);
 int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl);
 void pfeng_bman_pool_destroy(struct pfeng_hif_chnl *chnl);
 int pfeng_hif_chnl_fill_rx_buffers(struct pfeng_hif_chnl *chnl);
-int pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_hif_chnl *chnl, void *va_addr, addr_t pa_addr, u32 size, struct sk_buff *skb, u8 flags);
+void pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_hif_chnl *chnl, void *va_addr, addr_t pa_addr, u32 size, struct sk_buff *skb, u8 flags, int i);
 u8 pfeng_hif_chnl_txconf_get_flag(struct pfeng_hif_chnl *chnl);
 struct sk_buff *pfeng_hif_chnl_txconf_get_skbuf(struct pfeng_hif_chnl *chnl);
-int pfeng_hif_chnl_txconf_unroll_map_full(struct pfeng_hif_chnl *chnl, u32 idx, u32 nfrags);
-int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_budget);
-bool pfeng_hif_chnl_txconf_check(struct pfeng_hif_chnl *chnl, u32 elems);
+void pfeng_hif_chnl_txconf_unroll_map_full(struct pfeng_hif_chnl *chnl, int i);
+void pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_budget);
+int pfeng_hif_chnl_txbd_unused(struct pfeng_hif_chnl *chnl);
+void pfeng_hif_chnl_txconf_update_wr_idx(struct pfeng_hif_chnl *chnl, int count);
 
 /* netif */
 int pfeng_netif_create(struct pfeng_priv *priv);

@@ -317,7 +317,121 @@ static const char *const txt_shp_pos[] =
 };
 #define SHP_POS_LN  CALC_LN(txt_shp_pos) 
 
+/* based on element order of 'fpp_modify_actions_t' */
+/* WARNING: elements of 'fpp_modify_actions_t' are bitmasks, and thus CANNOT directly index this array */
+static const char *const txt_modify_actions[] = 
+{
+    TXT_MODIFY_ACTION__XXX_RES0_XXX,
+    TXT_MODIFY_ACTION__ADD_VLAN_HDR
+};
+#define MODIFY_ACTIONS_LN  CALC_LN(txt_modify_actions)
 
+/* indexed by Ingress QoS WRED queue type (see doxygen for 'fpp_iqos_queue_t') */
+static const char *const txt_pol_wred_ques[] = 
+{
+    TXT_POL_WRED_QUE__DMEM,
+    TXT_POL_WRED_QUE__LMEM,
+    TXT_POL_WRED_QUE__RXF
+};
+#define POL_WRED_QUES_LN  CALC_LN(txt_pol_wred_ques) 
+
+/* indexed by Ingress QoS shaper type (see doxygen for 'fpp_iqos_shp_type_t') */
+static const char *const txt_pol_shp_types[] = 
+{
+    TXT_POL_SHP_TYPE__PORT,
+    TXT_POL_SHP_TYPE__BCAST,
+    TXT_POL_SHP_TYPE__MCAST
+};
+#define POL_SHP_TYPES_LN  CALC_LN(txt_pol_shp_types) 
+
+/* indexed by Ingress QoS shaper rate mode (see doxygen for 'fpp_iqos_shp_rate_mode_t') */
+static const char *const txt_pol_shp_modes[] = 
+{
+    TXT_POL_SHP_MODE__DATA,
+    TXT_POL_SHP_MODE__PACKET
+};
+#define POL_SHP_MODES_LN  CALC_LN(txt_pol_shp_modes) 
+
+/* indexed by Ingress QoS flow actions (see doxygen for 'fpp_iqos_flow_action_t') */
+static const char *const txt_pol_flow_actions[] = 
+{
+    TXT_POL_FLOW_ACTION__MANAGED,
+    TXT_POL_FLOW_ACTION__DROP,
+    TXT_POL_FLOW_ACTION__RESERVED
+};
+#define POL_FLOW_ACTIONS_LN  CALC_LN(txt_pol_flow_actions) 
+
+/* based on element order of 'fpp_iqos_flow_type_t' */
+/* WARNING: elements of 'fpp_iqos_flow_type_t' are bitmasks, and thus CANNOT directly index this array */
+static const char *const txt_pol_flow_types1[] = 
+{
+    TXT_POL_FLOW_TYPE1__TYPE_ETH,
+    TXT_POL_FLOW_TYPE1__TYPE_PPPOE,
+    TXT_POL_FLOW_TYPE1__TYPE_ARP,
+    TXT_POL_FLOW_TYPE1__TYPE_IP4,
+    TXT_POL_FLOW_TYPE1__TYPE_IP6,
+    TXT_POL_FLOW_TYPE1__TYPE_IPX,
+    TXT_POL_FLOW_TYPE1__TYPE_MCAST,
+    TXT_POL_FLOW_TYPE1__TYPE_BCAST,
+    TXT_POL_FLOW_TYPE1__TYPE_VLAN
+};
+#define POL_FLOW_TYPES1_LN  CALC_LN(txt_pol_flow_types1) 
+
+/* based on element order of 'fpp_iqos_flow_arg_type_t' */
+/* WARNING: elements of 'fpp_iqos_flow_arg_type_t' are bitmasks, and thus CANNOT directly index this array */
+static const char *const txt_pol_flow_types2[] = 
+{
+    TXT_POL_FLOW_TYPE2__VLAN,
+    TXT_POL_FLOW_TYPE2__TOS,
+    TXT_POL_FLOW_TYPE2__PROTOCOL,
+    TXT_POL_FLOW_TYPE2__SIP,
+    TXT_POL_FLOW_TYPE2__DIP,
+    TXT_POL_FLOW_TYPE2__SPORT,
+    TXT_POL_FLOW_TYPE2__DPORT
+};
+#define POL_FLOW_TYPES2_LN  CALC_LN(txt_pol_flow_types2) 
+
+/* array for 32bit bitmask, merging both 'fpp_iqos_flow_type_t' and 'fpp_iqos_flow_arg_type_t' into one bitset */
+/* HACK: 'fpp_iqos_flow_type_t' maps to lower 16 bits ; 'fpp_iqos_flow_arg_type_t' maps to higher 16 bits */
+static const char *const txt_pol_flow_types32[] = 
+{
+    /* fpp_iqos_flow_type_t */
+    TXT_POL_FLOW_TYPE1__TYPE_ETH,
+    TXT_POL_FLOW_TYPE1__TYPE_PPPOE,
+    TXT_POL_FLOW_TYPE1__TYPE_ARP,
+    TXT_POL_FLOW_TYPE1__TYPE_IP4,
+    TXT_POL_FLOW_TYPE1__TYPE_IP6,
+    TXT_POL_FLOW_TYPE1__TYPE_IPX,
+    TXT_POL_FLOW_TYPE1__TYPE_MCAST,
+    TXT_POL_FLOW_TYPE1__TYPE_BCAST,
+    TXT_POL_FLOW_TYPE1__TYPE_VLAN,
+    "__XXX_res09_XXX__",
+    "__XXX_res10_XXX__",
+    "__XXX_res11_XXX__",
+    "__XXX_res12_XXX__",
+    "__XXX_res13_XXX__",
+    "__XXX_res14_XXX__",
+    "__XXX_res15_XXX__",
+    
+    /* fpp_iqos_flow_arg_type_t */
+    TXT_POL_FLOW_TYPE2__VLAN,
+    TXT_POL_FLOW_TYPE2__TOS,
+    TXT_POL_FLOW_TYPE2__PROTOCOL,
+    TXT_POL_FLOW_TYPE2__SIP,
+    TXT_POL_FLOW_TYPE2__DIP,
+    TXT_POL_FLOW_TYPE2__SPORT,
+    TXT_POL_FLOW_TYPE2__DPORT,
+    "__XXX_res23_XXX__",
+    "__XXX_res24_XXX__",
+    "__XXX_res25_XXX__",
+    "__XXX_res26_XXX__",
+    "__XXX_res27_XXX__",
+    "__XXX_res28_XXX__",
+    "__XXX_res29_XXX__",
+    "__XXX_res30_XXX__",
+    "__XXX_res31_XXX__"
+};
+#define POL_FLOW_TYPES32_LN  CALC_LN(txt_pol_flow_types32) 
 
 /* ==== PRIVATE FUNCTIONS ================================================== */
 
@@ -606,6 +720,86 @@ int cli_txt2value_shp_pos(uint8_t* p_rtn_value, const char* p_txt)
 }
 
 
+const char* cli_value2txt_modify_action(uint8_t value)
+{
+    return ((MODIFY_ACTIONS_LN <= value) ? (TXT_INVALID_ITEM) : (txt_modify_actions[value]));
+}
+int cli_txt2value_modify_action(uint8_t* p_rtn_value, const char* p_txt)
+{
+    return txt2value(p_rtn_value, p_txt, txt_modify_actions, MODIFY_ACTIONS_LN, 0u);
+}
+
+
+const char* cli_value2txt_pol_wred_que(uint8_t value)
+{
+    return ((POL_WRED_QUES_LN <= value) ? (TXT_INVALID_ITEM) : (txt_pol_wred_ques[value]));
+}
+int cli_txt2value_pol_wred_que(uint8_t* p_rtn_value, const char* p_txt)
+{
+    return txt2value(p_rtn_value, p_txt, txt_pol_wred_ques, POL_WRED_QUES_LN, 0u);
+}
+
+
+const char* cli_value2txt_pol_shp_type(uint8_t value)
+{
+    return ((POL_SHP_TYPES_LN <= value) ? (TXT_INVALID_ITEM) : (txt_pol_shp_types[value]));
+}
+int cli_txt2value_pol_shp_type(uint8_t* p_rtn_value, const char* p_txt)
+{
+    return txt2value(p_rtn_value, p_txt, txt_pol_shp_types, POL_SHP_TYPES_LN, 0u);
+}
+
+
+const char* cli_value2txt_pol_shp_mode(uint8_t value)
+{
+    return ((POL_SHP_MODES_LN <= value) ? (TXT_INVALID_ITEM) : (txt_pol_shp_modes[value]));
+}
+int cli_txt2value_pol_shp_mode(uint8_t* p_rtn_value, const char* p_txt)
+{
+    return txt2value(p_rtn_value, p_txt, txt_pol_shp_modes, POL_SHP_MODES_LN, 0u);
+}
+
+
+const char* cli_value2txt_pol_flow_action(uint8_t value)
+{
+    return ((POL_FLOW_ACTIONS_LN <= value) ? (TXT_INVALID_ITEM) : (txt_pol_flow_actions[value]));
+}
+int cli_txt2value_pol_flow_action(uint8_t* p_rtn_value, const char* p_txt)
+{
+    return txt2value(p_rtn_value, p_txt, txt_pol_flow_actions, POL_FLOW_ACTIONS_LN, 0u);
+}
+
+
+const char* cli_value2txt_pol_flow_type1(uint8_t value)
+{
+    return ((POL_FLOW_TYPES1_LN <= value) ? (TXT_INVALID_ITEM) : (txt_pol_flow_types1[value]));
+}
+int cli_txt2value_pol_flow_type1(uint8_t* p_rtn_value, const char* p_txt)
+{
+    return txt2value(p_rtn_value, p_txt, txt_pol_flow_types1, POL_FLOW_TYPES1_LN, 0u);
+}
+
+
+const char* cli_value2txt_pol_flow_type2(uint8_t value)
+{
+    return ((POL_FLOW_TYPES2_LN <= value) ? (TXT_INVALID_ITEM) : (txt_pol_flow_types2[value]));
+}
+int cli_txt2value_pol_flow_type2(uint8_t* p_rtn_value, const char* p_txt)
+{
+    return txt2value(p_rtn_value, p_txt, txt_pol_flow_types2, POL_FLOW_TYPES2_LN, 0u);
+}
+
+
+const char* cli_value2txt_pol_flow_type32(uint8_t value)
+{
+    return ((POL_FLOW_TYPES32_LN <= value) ? (TXT_INVALID_ITEM) : (txt_pol_flow_types32[value]));
+}
+int cli_txt2value_pol_flow_type32(uint8_t* p_rtn_value, const char* p_txt)
+{
+    return txt2value(p_rtn_value, p_txt, txt_pol_flow_types32, POL_FLOW_TYPES32_LN, 0u);
+}
+
+
 /* ==== TESTMODE constants ================================================= */
 
 #if !defined(NDEBUG)
@@ -627,6 +821,14 @@ const uint8_t TEST_defkws__sch_algos_ln        = SCH_ALGOS_LN;
 const uint8_t TEST_defkws__sch_ins_ln          = SCH_INS_LN_;
 const uint8_t TEST_defkws__shp_modes_ln        = SHP_MODES_LN;
 const uint8_t TEST_defkws__shp_pos_ln          = SHP_POS_LN;
+const uint8_t TEST_defkws__modify_actions_ln   = MODIFY_ACTIONS_LN;
+const uint8_t TEST_defkws__pol_wred_ques_ln    = POL_WRED_QUES_LN;
+const uint8_t TEST_defkws__pol_shp_types_ln    = POL_SHP_TYPES_LN;
+const uint8_t TEST_defkws__pol_shp_modes_ln    = POL_SHP_MODES_LN;
+const uint8_t TEST_defkws__pol_flow_actions_ln = POL_FLOW_ACTIONS_LN;
+const uint8_t TEST_defkws__pol_flow_types1_ln  = POL_FLOW_TYPES1_LN;
+const uint8_t TEST_defkws__pol_flow_types2_ln  = POL_FLOW_TYPES2_LN;
+const uint8_t TEST_defkws__pol_flow_types32_ln = POL_FLOW_TYPES32_LN;
 #endif
 
 /* ========================================================================= */

@@ -17,12 +17,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
 #define CLASS_VERSION				(CBUS_CLASS_CSR_BASE_ADDR + 0x000U)
 #define CLASS_TX_CTRL				(CBUS_CLASS_CSR_BASE_ADDR + 0x004U)
 #define CLASS_INQ_PKTPTR			(CBUS_CLASS_CSR_BASE_ADDR + 0x010U)
@@ -350,5 +344,7 @@ void pfe_class_cfg_disable(addr_t base_va);
 uint32_t pfe_class_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtable_len, uint32_t entry_size);
 void pfe_class_cfg_set_def_vlan(addr_t base_va, uint16_t vlan);
+void pfe_class_cfg_rtable_lookup_enable(const addr_t base_va);
+void pfe_class_cfg_rtable_lookup_disable(const addr_t base_va);
 
 #endif /* PFE_CLASS_CSR_H_ */

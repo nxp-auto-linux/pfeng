@@ -208,13 +208,13 @@ static struct pfeng_hif_chnl *pfeng_netif_map_tx_channel(struct pfeng_netif *net
 static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
-	errno_t ret = -EINVAL;
-	unsigned int plen;
 	u32 nfrags = skb_shinfo(skb)->nr_frags;
-	dma_addr_t des = 0;
-	int f, ref_num = 0, refid = -1;
 	struct pfeng_hif_chnl *chnl;
 	pfe_ct_hif_tx_hdr_t *tx_hdr;
+	unsigned int plen;
+	dma_addr_t dma;
+	int f, i = 1;
+	errno_t ret;
 
 	/* Get mapped HIF channel */
 	chnl = pfeng_netif_map_tx_channel(netif, skb);
@@ -232,15 +232,8 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	/* Protect shared HIF channel resource */
 	pfeng_hif_shared_chnl_lock_tx(chnl);
 
-#ifdef PFE_CFG_HIF_TX_FIFO_FIX
-	if (unlikely(FALSE == pfe_hif_chnl_can_accept_tx_data(chnl->priv, skb_pagelen(skb) + PFENG_TX_PKT_HEADER_SIZE))) {
-		net_err_ratelimited("%s: Packet overlimited.\n", netdev->name);
-		goto busy_drop;
-	}
-#endif /* PFE_CFG_HIF_TX_FIFO_FIX */
-
 	/* Check for ring space */
-	if (unlikely(!pfe_hif_chnl_can_accept_tx_num(chnl->priv, nfrags + 1))) {
+	if (unlikely(pfeng_hif_chnl_txbd_unused(chnl) < PFE_TXBDS_NEEDED(nfrags + 1))) {
 		netif_stop_subqueue(netdev, skb->queue_mapping);
 		chnl->queues_stopped = true;
 		goto busy_drop;
@@ -288,9 +281,8 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 
 	/* HW timestamping */
 	if (unlikely((skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) &&
-		     (netif->tshw_cfg.tx_type == HWTSTAMP_TX_ON))) {
-
-		ref_num = pfeng_hwts_store_tx_ref(netif, skb);
+		    (netif->tshw_cfg.tx_type == HWTSTAMP_TX_ON))) {
+		int ref_num = pfeng_hwts_store_tx_ref(netif, skb);
 
 		if(likely(-ENOMEM != ref_num)) {
 			/* Tell stack to wait for hw timestamp */
@@ -304,53 +296,50 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	}
 
 	/* Fill linear part of packet */
-	des = dma_map_single(netif->dev, skb->data, plen, DMA_TO_DEVICE);
-	if (unlikely(dma_mapping_error(netif->dev, des))) {
+	dma = dma_map_single(netif->dev, skb->data, plen, DMA_TO_DEVICE);
+	if (unlikely(dma_mapping_error(netif->dev, dma))) {
 		net_err_ratelimited("%s: Frame mapping failed. Packet dropped.\n", netdev->name);
 		goto busy_drop;
 	}
-	refid = pfeng_hif_chnl_txconf_put_map_frag(chnl, skb->data, des, plen, skb, PFENG_MAP_PKT_NORMAL);
-	/* Increment to be able to pass number 0 */
-	refid++;
+
+	/* store the linear part info */
+	pfeng_hif_chnl_txconf_put_map_frag(chnl, skb->data, dma, plen, skb, PFENG_MAP_PKT_NORMAL, 0);
 
 	/* Software tx time stamp */
 	skb_tx_timestamp(skb);
 
 	/* Put linear part */
-	ret = pfe_hif_chnl_tx(chnl->priv, (void *)des, skb->data, plen, !nfrags);
+	ret = pfe_hif_chnl_tx(chnl->priv, (void *)dma, skb->data, plen, !nfrags);
 	if (unlikely(EOK != ret)) {
-		net_err_ratelimited("%s: HIF channel tx failed. Packet dropped. Error %d\n", netdev->name, ret);
-		pfeng_hif_chnl_txconf_unroll_map_full(chnl, refid - 1, 0);
-		goto busy_drop;
+		net_err_ratelimited("%s: HIF channel tx failed. Packet dropped. Error %d\n",
+				    netdev->name, ret);
+		goto busy_drop_unroll;
 	}
 
 	/* Process frags */
 	for (f = 0; f < nfrags; f++) {
 		skb_frag_t *frag = &skb_shinfo(skb)->frags[f];
-
 		plen = skb_frag_size(frag);
-		if (!plen) {
-			nfrags--;
-			continue;
+
+		dma = skb_frag_dma_map(netif->dev, frag, 0, plen, DMA_TO_DEVICE);
+		if (dma_mapping_error(netif->dev, dma)) {
+			net_err_ratelimited("%s: Fragment mapping failed. Packet dropped. Error %d\n",
+					    netdev->name, dma_mapping_error(netif->dev, dma));
+			goto busy_drop_unroll;
 		}
 
-		des = skb_frag_dma_map(netif->dev, frag, 0, plen, DMA_TO_DEVICE);
-		if (dma_mapping_error(netif->dev, des)) {
-			net_err_ratelimited("%s: Fragment mapping failed. Packet dropped. Error %d\n", netdev->name, dma_mapping_error(netif->dev, des));
-			pfeng_hif_chnl_txconf_unroll_map_full(chnl, refid - 1, f);
-			goto busy_drop;
-		}
-
-		ret = pfe_hif_chnl_tx(chnl->priv, (void *)des, frag, plen, (f + 1) >= nfrags);
+		ret = pfe_hif_chnl_tx(chnl->priv, (void *)dma, frag, plen, f == nfrags - 1);
 		if (unlikely(EOK != ret)) {
-			net_err_ratelimited("%s: HIF channel frag tx failed. Packet dropped. Error %d\n", netdev->name, ret);
-			pfeng_hif_chnl_txconf_unroll_map_full(chnl, refid - 1, f);
-			goto busy_drop;
+			net_err_ratelimited("%s: HIF channel frag tx failed. Packet dropped. Error %d\n",
+					    netdev->name, ret);
+			goto busy_drop_unroll;
 		}
 
-		pfeng_hif_chnl_txconf_put_map_frag(chnl, frag, des, plen, NULL, PFENG_MAP_PKT_NORMAL);
+		pfeng_hif_chnl_txconf_put_map_frag(chnl, frag, dma, plen, NULL, PFENG_MAP_PKT_NORMAL, i);
+		i++;
 	}
 
+	pfeng_hif_chnl_txconf_update_wr_idx(chnl, nfrags + 1);
 	pfeng_hif_shared_chnl_unlock_tx(chnl);
 
 	netdev->stats.tx_packets++;
@@ -358,6 +347,8 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 
 	return NETDEV_TX_OK;
 
+busy_drop_unroll:
+	pfeng_hif_chnl_txconf_unroll_map_full(chnl, i - 1);
 busy_drop:
 	pfeng_hif_shared_chnl_unlock_tx(chnl);
 
@@ -751,11 +742,13 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 					goto err;
 				}
 			}
+#ifdef PFE_CFG_PFE_MASTER
 			ret = pfe_log_if_promisc_enable(emac->logif_emac);
 			if (ret) {
 				netdev_err(netdev, "Can't set EMAC Logif promiscuous mode\n");
 				goto err;
 			}
+#endif /* PFE_CFG_PFE_MASTER */
 			netdev_dbg(netdev, "EMAC Logif created: %s @%px\n", netif->cfg->name, emac->logif_emac);
 		} else
 			netdev_dbg(netdev, "EMAC Logif reused: %s @%px\n", netif->cfg->name, emac->logif_emac);

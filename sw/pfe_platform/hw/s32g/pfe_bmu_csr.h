@@ -16,12 +16,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
 #define BMU_VERSION					0x000U
 #define BMU_CTRL					0x004U
 #define BMU_UCAST_CONFIG			0x008U

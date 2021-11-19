@@ -37,7 +37,6 @@ static void pfe_tmu_init(const pfe_tmu_t *tmu, const pfe_tmu_cfg_t *cfg)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	pfe_tmu_disable(tmu);
-	oal_time_msleep(10);
 
 	if (EOK != pfe_tmu_cfg_init(tmu->cbus_base_va, cfg))
 	{
@@ -82,6 +81,9 @@ pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cf
 
 	/*	Issue block reset */
 	pfe_tmu_reset(tmu);
+
+	/* Initialize reclaim memory */
+	pfe_tmu_reclaim_init(cbus_base_va);
 
 	/*	Disable the TMU */
 	pfe_tmu_disable(tmu);

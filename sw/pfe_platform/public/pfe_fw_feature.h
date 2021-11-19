@@ -21,11 +21,13 @@ errno_t pfe_fw_feature_set_string_base(pfe_fw_feature_t *feature, const char *st
 errno_t pfe_fw_feature_set_dmem_funcs(pfe_fw_feature_t *feature, dmem_read_func_t read_func, dmem_write_func_t write_func, void *data);
 errno_t pfe_fw_feature_get_name(const pfe_fw_feature_t *feature, const char **name);
 errno_t pfe_fw_feature_get_desc(const pfe_fw_feature_t *feature, const char **desc);
-errno_t pfe_fw_feature_get_variant(const pfe_fw_feature_t *feature, uint8_t *variant);
+errno_t pfe_fw_feature_get_flags(const pfe_fw_feature_t *feature, pfe_ct_feature_flags_t *flags);
 errno_t pfe_fw_feature_get_def_val(const pfe_fw_feature_t *feature, uint8_t *def_val);
 errno_t pfe_fw_feature_get_val(const pfe_fw_feature_t *feature, uint8_t *val);
 bool_t pfe_fw_feature_enabled(const pfe_fw_feature_t *feature);
 errno_t pfe_fw_feature_set_val(const pfe_fw_feature_t *feature, uint8_t val);
+bool_t pfe_fw_feature_is_in_class(const pfe_fw_feature_t *feature);
+bool_t pfe_fw_feature_is_in_util(const pfe_fw_feature_t *feature);
 
 #endif
 

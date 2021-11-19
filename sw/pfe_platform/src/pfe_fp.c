@@ -30,7 +30,7 @@ void pfe_fp_init(void)
 *          function. The table is reference by the returned DMEM address.
 * @return 0 on failure or the DMEM address of the table.
 */
-uint32_t pfe_fp_create_table(pfe_class_t *class, uint8_t rules_count)
+uint32_t pfe_fp_create_table(pfe_class_t *class, uint16_t rules_count)
 {
     addr_t addr;
     uint32_t size;
@@ -70,7 +70,7 @@ uint32_t pfe_fp_create_table(pfe_class_t *class, uint8_t rules_count)
 * @details Function writes the rule at specified position in the previously created table.
 * @return 0 on failure otherwise the DMEM address of the rule.
 */
-uint32_t pfe_fp_table_write_rule(pfe_class_t *class, uint32_t table_address, const pfe_ct_fp_rule_t *rule, uint8_t position)
+uint32_t pfe_fp_table_write_rule(pfe_class_t *class, uint32_t table_address, const pfe_ct_fp_rule_t *rule, uint16_t position)
 {
     pfe_ct_fp_rule_t temp;
     addr_t addr;

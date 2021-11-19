@@ -106,7 +106,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
 		return EPERM;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-    /* Important to initialize to avoid buffer overflows */    
+    /* Important to initialize to avoid buffer overflows */
 	if (*reply_len < sizeof(fpp_fp_table_cmd_t))
 	{
 		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fp_table_cmd_t)\n");
@@ -161,7 +161,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
         }
         case FPP_ACTION_UNUSE_RULE:
         {
-            fci_fp_db_remove_rule_from_table((char_t *)fp_cmd->table_info.t.rule_name);
+            ret = fci_fp_db_remove_rule_from_table((char_t *)fp_cmd->table_info.t.rule_name);
             if(EOK == ret)
             {
                 *fci_ret = FPP_ERR_OK;

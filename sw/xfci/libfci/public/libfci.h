@@ -8,35 +8,36 @@
  * ========================================================================= */
 
 /**
- * @defgroup    dxgrLibFCI LibFCI
- * @brief       This is the Fast Control Interface available to host applications to
+ * @defgroup    dxgrLibFCI  LibFCI
+ * @brief       This is Fast Control Interface available for host applications to
  *              communicate with the networking engine.
  * @details     The FCI is intended to provide a generic configuration and monitoring interface
- *              to networking acceleration HW. Provided API shall remain the same within all
+ *              for the networking acceleration HW. Provided API shall remain the same within all
  *              HW/OS-specific implementations to keep dependent applications portable across
  *              various systems.
  *
  *              The LibFCI is not directly touching the HW. Instead, it only passes commands to
- *              dedicated software component (OS/HW-specific endpoint) and receives return values.
+ *              a dedicated software component (OS/HW-specific endpoint) and receives return values.
  *              The endpoint is then responsible for HW configuration. This approach supports
- *              kernel-user space deployment where user space contains only API and the logic is
+ *              a kernel-user space deployment where the user space contains only API and the logic is
  *              implemented in kernel.
  *
  *              Implementation uses appropriate transport mechanism to pass data between
- *              LibFCI user and the endpoint. For reference, in Linux netlink socket will be used,
- *              in QNX it will be a message.
+ *              LibFCI user and the endpoint. For reference: in Linux a netlink socket is used;
+ *              in QNX a message is used.
  *
- *              Usage scenario example - FCI command execution:
- *              -# User calls @ref fci_open() to get the @ref FCI_CLIENT instance, use FCI_GROUP_NONE
- *                 as multicast group mask.
- *              -# User calls @ref fci_cmd() to send a command with arguments to the endpoint.
- *              -# Endpoint receives the command and performs requested actions.
- *              -# Endpoint generates response and sends it back to the client.
- *              -# Client receives the response and informs the caller.
- *              -# User calls @ref fci_close() to finalize the @ref FCI_CLIENT instance.
+ * @section     how_to_use  How to use the FCI API
+ * @subsection  fciuse_cmd Sending FCI commands
+ *              -# Call @ref fci_open() to get an @ref FCI_CLIENT instance, using @ref FCI_GROUP_NONE
+ *                 as a multicast group mask. This opens a connection to an FCI endpoint.
+ *              -# Call @ref fci_write() or @ref fci_query() to send a command to the endpoint. <br> See @ref fci_cs.
+ *                 - Endpoint receives the command and executes requested actions.
+ *                 - Endpoint generates a response and sends it back to the client.
+ *              -# [optional] Repeat the previous step to send all requested FCI commands.
+ *              -# Call @ref fci_close() to finalize the @ref FCI_CLIENT instance.
  *
  * @if INCLUDE_ASYNC_DESC
- *              Usage scenario example - asynchronous message processing:
+ * @subsection  fciuse_msg  Asynchronous message processing
  *              -# User calls @ref fci_open() to get the @ref FCI_CLIENT instance. It is
  *                 important to set @ref FCI_GROUP_CATCH bit in multicast group mask.
  *              -# User calls @ref fci_register_cb() to register custom function for handling
@@ -51,34 +52,36 @@
  *              -# User calls fci_close() to finalize the @ref FCI_CLIENT instance.
  * @endif
  *
- * @section a_and_d Acronyms and Definitions
- *              - <b>Physical Interface:</b> Interface physically able to send and receive data
- *                (EMAC, HIF). Physical interfaces are pre-defined and can't be added or removed in
- *                runtime. Every physical interface has associated a @b default logical interface and
- *                set of properties like classification algorithm.
- *              - <b>Logical Interface:</b> Extension of physical interface defined by set of rules
- *                which describes Ethernet traffic. Intended to be used to dispatch traffic being
- *                received via particular physical interfaces using 1:N association i.e. traffic
- *                received by a physical interface can be classified and distributed to N logical
- *                interfaces. These can be either connected to SW stack running in host system or
- *                just used to distribute traffic to an arbitrary physical interface(s). Logical
- *                interfaces are dynamic objects and can be created and destroyed in runtime.
- *              - <b>Classification Algorithm:</b> Way how ingress traffic is being processed by
- *                the PFE firmware.
- *              - <b>Route:</b> Routes are representing direction where matching traffic shall be
- *                forwarded to. Every route specifies egress physical interface and MAC address
- *                of next network node.
- *              - <b>Conntrack:</b> "Tracked connection", a data structure containing information
- *                about a connection. In context of this document it always refers
- *                to an IP connection (TCP, UDP, other). Term is equal to 'routing table entry'.
- *                Conntracks contain reference to routes which shall be used in case when a packet
- *                is matching the conntrack properties.
+ * @section     a_and_d  Acronyms and Definitions
+ *              - <b>PFE:</b> <br>
+ *                Packet Forwarding Engine. A dedicated HW component (networking accelerator) 
+ *                which is configured by this FCI API.
+ *              - <b>NBO:</b> <br>
+ *                Network Byte Order. When working with values or properties which are stored in [NBO], 
+ *                consider using appropriate endianess conversion functions.
+ *              - <b>L2/L3/L4:</b> <br>
+ *                Layers of the OSI model.
+ *              - <b>Physical Interface:</b> <br>
+ *                See @ref mgmt_phyif.
+ *              - <b>Logical Interface:</b> <br> 
+ *                See @ref mgmt_logif.
+ *              - <b>Classification Algorithm:</b> <br>
+ *                Method how ingress traffic is processed by the PFE firmware.
+ *              - <b>Route:</b> <br> @anchor ref__route
+ *                In the context of PFE, a route represents a direction where the matching 
+ *                traffic shall be forwarded to. Every route specifies an egress physical interface
+ *                and a MAC address of the next network node.
+ *              - <b>Conntrack:</b> <br> @anchor ref__conntrack
+ *                "Tracked connection", a data structure with information about a connection.
+ *                In the context of PFE, it always refers to an IP connection (TCP, UDP, other).
+ *                The term is equal to a 'routing table entry'. Each conntrack is linked with some @b route.
+ *                The route is used to forward traffic that matches the conntrack's properties.
  *
- * @section lfs Functions Summary
+ * @section     lfs  Functions Summary
  *              - @ref fci_open() <br>
- *                <i>Connect to endpoint and create client instance.</i>
+ *                <i>Connect to endpoint and create a client instance.</i>
  *              - @ref fci_close() <br>
- *                <i>Close connection and destroy the client instance.</i>
+ *                <i>Close a connection to endpoint and destroy the client instance.</i>
  *              - @ref fci_write() <br>
  *                <i>Execute FCI command without data response.</i>
  *              - @ref fci_cmd() <br>
@@ -88,47 +91,51 @@
  *              - @ref fci_catch() <br>
  *                <i>Poll for and process received asynchronous messages.</i>
  *              - @ref fci_register_cb() <br>
- *                <i>Register callback to be called in case of received message.</i>
+ *                <i>Register a callback to be called in case of a received message.</i>
  *
- * @section fci_cs Commands Summary
+ * @section     fci_cs  Commands Summary
  *              - @ref FPP_CMD_PHY_IF <br>
  *                <i>Management of physical interfaces.</i>
  *              - @ref FPP_CMD_LOG_IF <br>
  *                <i>Management of logical interfaces.</i>
  *              - @ref FPP_CMD_IF_LOCK_SESSION <br>
- *                <i>Get exclusive access to interfaces.</i>
+ *                <i>Get exclusive access to interface database.</i>
  *              - @ref FPP_CMD_IF_UNLOCK_SESSION <br>
- *                <i>Cancel exclusive access to interfaces.</i>
+ *                <i>Cancel exclusive access to interface database.</i>
+ *              - @ref FPP_CMD_IF_MAC <br>
+ *                <i>Management of interface MAC addresses.</i>
+ *              - @ref FPP_CMD_MIRROR <br>
+ *                <i>Management of interface mirroring rules.</i>
  *              - @ref FPP_CMD_L2_BD <br>
- *                <i>L2 bridge domains management.</i>
+ *                <i>Management of L2 bridge domains.</i>
+ *              - @ref FPP_CMD_L2_STATIC_ENT <br>
+ *                <i>Management of L2 static entries.</i>
  *              - @ref FPP_CMD_L2_FLUSH_LEARNED <br>
- *                <i>Remove all learned MAC table entries.</i>
+ *                <i>Remove all dynamically learned MAC table entries.</i>
  *              - @ref FPP_CMD_L2_FLUSH_STATIC <br>
  *                <i>Remove all static MAC table entries.</i>
  *              - @ref FPP_CMD_L2_FLUSH_ALL <br>
  *                <i>Remove all MAC table entries.</i>
  *              - @ref FPP_CMD_FP_TABLE <br>
- *                <i>Administration of @ref flex_parser tables.</i>
+ *                <i>Management of @ref flex_parser tables.</i>
  *              - @ref FPP_CMD_FP_RULE <br>
- *                <i>Administration of @ref flex_parser rules.</i>
- *              - @ref FPP_CMD_FP_FLEXIBLE_FILTER <br>
- *                <i>Utilization of @ref flex_parser to filter out (drop) frames.</i>
+ *                <i>Management of @ref flex_parser rules.</i>
  *              - @ref FPP_CMD_IPV4_RESET <br>
- *                <i>Reset IPv4 (routes, conntracks, ...).</i>
+ *                <i>Remove all IPv4 routes and conntracks.</i>
  *              - @ref FPP_CMD_IPV6_RESET <br>
- *                <i>Reset IPv6 (routes, conntracks, ...).</i>
+ *                <i>Remove all IPv6 routes and conntracks.</i>
  *              - @ref FPP_CMD_IP_ROUTE <br>
  *                <i>Management of IP routes.</i>
  *              - @ref FPP_CMD_IPV4_CONNTRACK <br>
- *                <i>Management of IPv4 connections.</i>
+ *                <i>Management of IPv4 conntracks.</i>
  *              - @ref FPP_CMD_IPV6_CONNTRACK <br>
- *                <i>Management of IPv6 connections.</i>
+ *                <i>Management of IPv6 conntracks.</i>
  *              - @ref FPP_CMD_IPV4_SET_TIMEOUT <br>
- *                <i>Configuration of connection timeouts.</i>
+ *                <i>Configuration of conntrack timeouts.</i>
  *              - @ref FPP_CMD_DATA_BUF_PUT <br>
  *                <i>Send arbitrary data to the accelerator.</i>
  *              - @ref FPP_CMD_SPD <br>
- *                <i>Configure the IPsec offload.</i>
+ *                <i>Management of the IPsec offload.</i>
  *              - @ref FPP_CMD_QOS_QUEUE <br>
  *                <i>Management of @ref egress_qos queues.</i>
  *              - @ref FPP_CMD_QOS_SCHEDULER <br>
@@ -136,545 +143,814 @@
  *              - @ref FPP_CMD_QOS_SHAPER <br>
  *                <i>Management of @ref egress_qos shapers.</i>
  *
- * @section cbks Events summary
+ * @section     cbks  Events summary
  * @if FCI_EVENTS_IMPLEMENTED
  *              - @ref FPP_CMD_IPV4_CONNTRACK_CHANGE <br>
- *                <i>Endpoint reports event related to IPv4 connection.</i>
+ *                <i>Endpoint reports events related to IPv4 conntracks.</i>
  *              - @ref FPP_CMD_IPV6_CONNTRACK_CHANGE <br>
- *                <i>Endpoint reports event related to IPv6 connection.</i>
+ *                <i>Endpoint reports events related to IPv6 conntracks.</i>
  * @endif
  *              - @ref FPP_CMD_DATA_BUF_AVAIL <br>
- *                <i>Network accelerator sends a data buffer to host.</i>
+ *                <i>Network accelerator sends a data buffer to a host.</i>
  *
- * @section if_mgmt Interface Management
- *              Physical Interface
- *              ------------------
- *              Physical interfaces are static objects and are defined at startup.
- *              LibFCI client can get a list of currently available physical interfaces using query
- *              option of the @ref FPP_CMD_PHY_IF command. Every physical interface contains
- *              a list of logical interfaces. Without any configuration all physical interfaces are
- *              in default operation mode. It means that all ingress traffic is processed using only
- *              associated @b default logical interface. Default logical interface is always the tail
- *              of the list of associated logical interfaces. When new logical interface is associated,
- *              it is placed at head position of the list so the default one remains on tail. User
- *              can change the used classification algorithm via update option of the
- *              @ref FPP_CMD_PHY_IF command.
+ * @section     if_mgmt  Interface Management
+ * @subsection  mgmt_phyif  Physical Interface
+ *              Physical interfaces are static objects (defined at startup), which represent hardware
+ *              interfaces of PFE. They are used by PFE for ingress/egress of network traffic. 
  *
- *              Here are supported operations related to physical interfaces:
+ *              Physical interfaces have several configurable properties. See @ref FPP_CMD_PHY_IF 
+ *              and @ref fpp_phy_if_cmd_t. Among all these properties, a `.mode` property
+ *              is especially important. Mode of a physical interface specifies which classification 
+ *              algorithm shall be applied on ingress traffic of the interface.
+ *
+ *              Every physical interface can have a list of logical interfaces.
+ *              By default, all physical interfaces are in a default mode (@ref FPP_IF_OP_DEFAULT).
+ *              In the default mode, ingress traffic of a given physical interface is processed using
+ *              only the associated @b default @ref mgmt_logif.
+ *
+ *              <br>
+ *              Supported FCI operations related to physical interfaces:
  *
  *              To @b list available physical interfaces:
- *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
- *              -# Read first interface via @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_QUERY.
- *              -# Read next interface(s) via @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_QUERY_CONT.
- *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ *              -# Lock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_LOCK_SESSION)
+ *              -# Read out properties of physical interface(s).
+ *                 <br> (@ref FPP_CMD_PHY_IF + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
+ *              -# Unlock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_UNLOCK_SESSION)
  *
- *              To @b modify a physical interface (read-modify-write):
- *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
- *              -# Read interface properties via @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_QUERY +
- *                 @ref FPP_ACTION_QUERY_CONT.
- *              -# Modify desired properties.
- *              -# Write modifications using @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
- *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ *              To @b modify properties of a physical interface (read-modify-write):
+ *              -# Lock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_LOCK_SESSION)
+ *              -# Read out properties of the target physical interface.
+ *                 <br> (@ref FPP_CMD_PHY_IF + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
+ *              -# Locally modify the properties. See fpp_phy_if_cmd_t.
+ *              -# Write the modified properties back to PFE.
+ *                 <br> (@ref FPP_CMD_PHY_IF + FPP_ACTION_UPDATE)
+ *              -# Unlock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_UNLOCK_SESSION)
  *
- *              Logical Interface
- *              -----------------
- *              Logical interfaces specify traffic endpoints. They are connected to respective
- *              physical interfaces and contain information about which traffic can they accept
- *              and how the accepted traffic shall be processed (where, resp. to which @b physical
- *              interface(s) the matching traffic shall be forwarded). For example, there can be two
- *              logical interfaces associated with an EMAC1, one accepting traffic with VLAN ID = 10
- *              and the second one accepting all remaining traffic. First one can be configured to
- *              forward the matching traffic to EMAC1 and the second one to drop the rest.
+ *              <br>
+ *              Hardcoded physical interface names and physical interface IDs:
+ *              | name     | ID | comment                                                |
+ *              | -------- | -- | ------------------------------------------------------ |
+ *              | emac0    | 0  | Representation of real physical ports connected to PFE.
+ *              | emac1    | 1  | ^
+ *              | emac2    | 2  | ^
+ *              | ---      | -- | ---reserved---
+ *              | util     | 5  | Special internal port for communication with the util firmware. <br> (fully functional only with the PREMIUM firmware)
+ *              | hif0     | 6  | Host Interfaces. Used for traffic forwarding between PFE and a host.
+ *              | hif1     | 7  | ^
+ *              | hif2     | 8  | ^
+ *              | hif3     | 9  | ^
  *
- *              Logical interfaces can be created and destroyed in runtime using actions related
- *              to the @ref FPP_CMD_LOG_IF command. Note that first created logical interface
- *              on a physical interface becomes the default one (tail). All subsequent logical
- *              interfaces are added at head position of list of interfaces.
+ *              MAC address management
+ *              ----------------------
+ *              @b Emac physical interfaces can have multiple MAC addresses. This can be used
+ *              for MAC address filtering - emac physical interfaces can be configured to accept traffic
+ *              intended for several different recipients (several different destination MAC addresses).
  *
- *              \image latex flexible_router.eps "Configuration Example" width=7cm
- *              The example shows scenario when physical interface EMAC1 is configured in
- *              @ref FPP_IF_OP_FLEXIBLE_ROUTER operation mode:
- *              -# Packet is received via EMAC1 port of the PFE.
- *              -# Classifier walks through list of Logical Interfaces associated with the ingress
- *                 Physical Interface. Every Logical Interface contains a set of classification rules
- *                 (see @ref fpp_if_m_rules_t) the classification process is using to match the ingress
- *                 packet. Note that the list is searched from head to tail, where tail is the default
- *                 logical interface.
- *              -# Information about matching Logical Interface and Physical Interface is passed to
- *                 the Routing and Forwarding Algorithm. The algorithm reads the Logical Interface
- *                 and retrieves forwarding properties.
- *              -# The matching Logical Interface is configured to forward the packet to EMAC2 and
- *                 HIF so the forwarding algorithm ensures that. Optionally, here the packet can be
- *                 modified according to interface setup (VLAN insertion, source MAC address
- *                 replacement, ...).
- *              -# Packet is physically transmitted via dedicated interfaces. Packet replica sent
- *                 to HIF carries metadata describing the matching Logical and Physical interface
- *                 so the host driver can easily dispatch the traffic.
+ *              To @b add a new MAC address to emac physical interface:
+ *              -# Lock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_LOCK_SESSION)
+ *              -# Add a new MAC address to emac physical interface.
+ *                 <br> (@ref FPP_CMD_IF_MAC + FPP_ACTION_REGISTER)
+ *              -# Unlock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_UNLOCK_SESSION)
  *
- *              Here are supported operations related to logical interfaces:
+ *              To @b remove a MAC address from emac physical interface:
+ *              -# Lock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_LOCK_SESSION)
+ *              -# Remove the MAC address from emac physical interface.
+ *                 <br> (@ref FPP_CMD_IF_MAC + FPP_ACTION_DEREGISTER)
+ *              -# Unlock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_UNLOCK_SESSION)
  *
- *              To @b create new logical interface:
- *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
- *              -# Create logical interface via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_REGISTER.
- *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ *              To @b list MAC addresses of emac physical interface:
+ *              -# Lock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_LOCK_SESSION)
+ *              -# Read out MAC address(es) of the target emac physical interface.
+ *                 <br> (@ref FPP_CMD_IF_MAC + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
+ *              -# Unlock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_UNLOCK_SESSION)
+ *
+ *              Mirroring rules management
+ *              --------------------------
+ *              Physical interfaces can be configured to mirror their ingress or egress traffic.
+ *              Configuration data for mirroring are managed as separate entities - mirroring rules.
+ *
+ *              To @b create a new mirroring rule:
+ *              <br> (@ref FPP_CMD_MIRROR + FPP_ACTION_REGISTER)
+ *
+ *              To @b assign a mirroring rule to a physical interface:
+ *              <br> Write name of the desired mirror rule in `.rx_mirrors[i]` or `.tx_mirrors[i]` property 
+ *                   of the physical interface. Use steps described in @ref mgmt_phyif, section @b modify.
+ *
+ *              To @b update a mirroring rule:
+ *              <br> (@ref FPP_CMD_MIRROR + FPP_ACTION_UPDATE)
+ *
+ *              To @b list available mirroring rules:
+ *              <br> (@ref FPP_CMD_MIRROR + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
+ *
+ * @subsection  mgmt_logif  Logical Interface
+ *              Logical interfaces are dynamic objects (definable at runtime) which represent traffic endpoints.
+ *              They are associated with their respective parent physical interfaces. Logical interfaces
+ *              can be used for the following purposes:
+ *              - To forward traffic from PFE to a host.
+ *              - To forward traffic or its replicas between physical interfaces (1:N distribution).
+ *              - To serve as classification & forwarding rules for @ref flex_router.
+ *
+ *              Logical interfaces have several configurable properties. See @ref FPP_CMD_LOG_IF 
+ *              and @ref fpp_log_if_cmd_t.
+ *
+ *              Logical interfaces can be created and destroyed at runtime. Every @e physical interface
+ *              can have a list of associated @e logical interfaces. The very first logical interface
+ *              in the list (tail position) is considered the @b default logical interface of the given 
+ *              physical interface. New logical interfaces are always added to the top of the list (head position),
+ *              creating a sequence which is ordered from the head (the newest one) back to the tail (the default one).
+ *              This forms a classification sequence, which is important if the parent physical interface 
+ *              operates in the Flexible Router mode.
+ *
+ *              Similar to physical interfaces, the logical interfaces can be set to a @b promiscuous mode.
+ *              For logical interfaces, a promiscuous mode means a logical interface will accept all
+ *              ingress traffic it is asked to classify, regardless of the interface's active match rules.
+ *
+ *              <br>
+ *              Supported operations related to logical interfaces:
+ *
+ *              To @b create a new logical interface in PFE:
+ *              -# Lock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_LOCK_SESSION)
+ *              -# Create a new logical interface.
+ *                 <br> (@ref FPP_CMD_LOG_IF + FPP_ACTION_REGISTER)
+ *              -# Unlock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_UNLOCK_SESSION)
+ *
+ *              To @b remove a logical interface from PFE:
+ *              -# Lock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_LOCK_SESSION)
+ *              -# Remove the logical interface.
+ *                 <br> (@ref FPP_CMD_LOG_IF + FPP_ACTION_DEREGISTER)
+ *              -# Unlock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_UNLOCK_SESSION)
  *
  *              To @b list available logical interfaces:
- *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
- *              -# Read first interface via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_QUERY.
- *              -# Read next interface(s) via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_QUERY_CONT.
- *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ *              -# Lock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_LOCK_SESSION)
+ *              -# Read out properties of logical interface(s).
+ *                 <br> (@ref FPP_CMD_LOG_IF + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
+ *              -# Unlock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_UNLOCK_SESSION)
  *
- *              To @b modify an interface (read-modify-write):
- *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
- *              -# Read interface properties via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_QUERY +
- *                 @ref FPP_ACTION_QUERY_CONT.
- *              -# Modify desired properties.
- *              -# Write modifications using @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_UPDATE.
- *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ *              To @b modify properties of a logical interface (read-modify-write):
+ *              -# Lock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_LOCK_SESSION)
+ *              -# Read out properties of the target logical interface.
+ *                 <br> (@ref FPP_CMD_LOG_IF + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
+ *              -# Locally modify the properties. See fpp_log_if_cmd_t.
+ *              -# Write the modified properties back to PFE.
+ *                 <br> (@ref FPP_CMD_LOG_IF + FPP_ACTION_UPDATE)
+ *              -# Unlock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_UNLOCK_SESSION)
  *
- *              To @b remove logical interface:
- *              -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
- *              -# Remove logical interface via @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_DEREGISTER.
- *              -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
- *
- * @section feature Features
- * @subsection l3_router IPv4/IPv6 Router (TCP/UDP)
+ * @section     features  Features
+ * @subsection  l3_router  IPv4/IPv6 Router (TCP/UDP)
  *              Introduction
  *              ------------
- *              The IPv4/IPv6 Forwarder is a dedicated feature to offload the host CPU from tasks
- *              related to forwarding of specific IP traffic between physical interfaces. Normally,
- *              the ingress IP traffic is passed to the host CPU running TCP/IP stack which is responsible
- *              for routing of the packets. Once the stack identifies that a packet does not belong to any
- *              of local IP endpoints it performs lookup in routing table to determine how to process such
- *              traffic. If the routing table contains entry associated with the packet (5-tuple search)
- *              the stack modifies and forwards the packet to another interface to reach its intended
- *              destination node. The PFE can be configured to identify flows which do not need to enter
- *              the host CPU using its internal routing table, and to ensure that the right packets are
- *              forwarded to the right destination interfaces.
+ *              IPv4/IPv6 Router is a dedicated feature to offload a host from tasks
+ *              related to forwarding of specific IP packets between physical interfaces.
+ *              Without the offload, IP packets are passed to the host's TCP/IP stack and 
+ *              the host is responsible for routing of packets. That is "slow path" routing.
+ *              PFE can be configured to provide "fast path" routing, identifying IP packets
+ *              which can be forwarded directly by PFE (using its internal routing table)
+ *              without host intervention.
  *
  *              Configuration
  *              -------------
- *              The FCI contains mechanisms to setup particular Physical Interfaces to start classifying
- *              packets using Router classification algorithm as well as to manage PFE routing tables.
- *              The router configuration then consists of following steps:
- *              -# Optionally use @ref FPP_CMD_IPV4_RESET or @ref FPP_CMD_IPV6_RESET to initialize the
- *                 router. All previous configuration changes will be discarded.
- *              -# Create one or more routes (@ref FPP_CMD_IP_ROUTE + @ref FPP_ACTION_REGISTER). Once
- *                 created, every route has an unique identifier. Creating route on an physical
- *                 interface causes switch of operation mode of that interface to @ref FPP_IF_OP_ROUTER.
- *              -# Create one or more IPv4 routing table entries (@ref FPP_CMD_IPV4_CONNTRACK +
- *                 @ref FPP_ACTION_REGISTER).
- *              -# Create one or more IPv6 routing table entries (@ref FPP_CMD_IPV6_CONNTRACK +
- *                 @ref FPP_ACTION_REGISTER).
- *              -# Set desired physical interface(s) to router mode @ref FPP_IF_OP_ROUTER using
- *                 @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE. This selects interfaces which
- *                 will use routing algorithm to classify ingress traffic.
- *              -# Enable physical interface(s) by setting the @ref FPP_IF_ENABLED flag via the
- *                 @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
- *              -# Optionally change MAC address(es) via @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
+ *              -# [optional] Reset the Router.
+ *                 <br> This clears all existing IPv4/IPv6 routes and conntracks in PFE.
+ *                 <br> (@ref FPP_CMD_IPV4_RESET)
+ *                 <br> (@ref FPP_CMD_IPV6_RESET)
+ *              -# Create one or more IPv4/IPv6 routes.
+ *                 <br> (@ref FPP_CMD_IP_ROUTE + FPP_ACTION_REGISTER)
+ *              -# Create one or more IPv4/IPv6 conntracks.
+ *                 <br> (@ref FPP_CMD_IPV4_CONNTRACK + FPP_ACTION_REGISTER)
+ *                 <br> (@ref FPP_CMD_IPV6_CONNTRACK + FPP_ACTION_REGISTER)
+ *              -# Configure the physical interfaces which shall classify their ingress traffic 
+ *                 by the Router classification algorithm. Use steps described in
+ *                 @ref mgmt_phyif (section @b modify) and do the following for each desired physical interface:
+ *                 - Set mode of the interface to @ref FPP_IF_OP_ROUTER.
+ *                 - Enable the interface by setting the flag @ref FPP_IF_ENABLED.
  *
- *              From this point the traffic matching created conntracks is processed according to
- *              conntrack properties (e.g. NAT) and fast-forwarded to configured physical interfaces.
- *              Conntracks are subject of aging. When no traffic has been seen for specified time
- *              period (see @ref FPP_CMD_IPV4_SET_TIMEOUT) the conntracks are removed.
+ *              Once the Router is operational, all ingress IP packets of the Router-configured physical 
+ *              interfaces are matched against existing conntracks using a 5-tuple match (protocol, source IP,
+ *              destination IP, source port, destination port). If a packet matches some existing conntrack,
+ *              it is processed and modified according to conntrack's properties (destination MAC, NAT, PAT, etc.)
+ *              and then gets fast-forwarded to an egress physical interface as specified by the conntrack's route.
  *
- *              Routes and conntracks can be listed using query commands:
- *              - @ref FPP_CMD_IP_ROUTE + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
- *              - @ref FPP_CMD_IPV4_CONNTRACK + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
- *              - @ref FPP_CMD_IPV6_CONNTRACK + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
+ *              Additional operations
+ *              ---------------------
+ *              Conntracks are subjected to aging. If no matching packets are detected on a conntrack
+ *              for a specified time period, the conntrack is automatically removed from PFE.
+ *              To @b set the @b timeout period, use the following command (shared for both 
+ *              IPv4 and IPv6 conntracks):
+ *              <br> (@ref FPP_CMD_IPV4_SET_TIMEOUT)
  *
- *              When conntrack or route are no more required, they can be deleted via corresponding
- *              command:
- *              - @ref FPP_CMD_IP_ROUTE + @ref FPP_ACTION_DEREGISTER,
- *              - @ref FPP_CMD_IPV4_CONNTRACK + @ref FPP_ACTION_DEREGISTER, and
- *              - @ref FPP_CMD_IPV6_CONNTRACK + @ref FPP_ACTION_DEREGISTER.
+ *              <br>
+ *              To @b remove a route or a conntrack:
+ *              - (@ref FPP_CMD_IP_ROUTE + FPP_ACTION_DEREGISTER)
+ *              - (@ref FPP_CMD_IPV4_CONNTRACK + FPP_ACTION_DEREGISTER)
+ *              - (@ref FPP_CMD_IPV6_CONNTRACK + FPP_ACTION_DEREGISTER)
  *
- *              Deleting route causes deleting all associated conntracks. When the latest route on
- *              an interface is deleted, the interface is put to default operation mode
- *              @ref FPP_IF_OP_DEFAULT.
+ *              <small>
+ *              Note: <br>
+ *              Removing a route which is used by some conntracks causes the associated connntracks 
+ *              to be removed as well.
+ *              </small> <br>
  *
- *              The conntracks are created default with TTL decrement option. That option can be 
- *              changed using update command:
- *              - @ref FPP_CMD_IPV4_CONNTRACK + @ref FPP_ACTION_UPDATE, and
- *              - @ref FPP_CMD_IPV6_CONNTRACK + @ref FPP_ACTION_UPDATE.
+ *              To @b list available routes or conntracks:
+ *              - (@ref FPP_CMD_IP_ROUTE + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
+ *              - (@ref FPP_CMD_IPV4_CONNTRACK + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
+ *              - (@ref FPP_CMD_IPV6_CONNTRACK + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
  *
- * @subsection l2_bridge L2 Bridge (Switch)
+ *              By default, PFE conntracks decrement TTL of processed IP packets. This behavior can be
+ *              set/unset for individual conntracks by their flag @ref CTCMD_FLAGS_TTL_DECREMENT.
+ *              To @b modify an already existing conntrack:
+ *              - (@ref FPP_CMD_IPV4_CONNTRACK + FPP_ACTION_UPDATE)
+ *              - (@ref FPP_CMD_IPV6_CONNTRACK + FPP_ACTION_UPDATE)
+ *
+ *              Examples
+ *              --------
+ *              @ref demo_feature_router_simple.c, @ref demo_feature_router_nat.c
+ *
+ * @subsection  l2_bridge  L2 Bridge (Switch)
  *              Introduction
  *              ------------
- *              The L2 Bridge functionality covers forwarding of packets based on MAC addresses. It
- *              provides possibility to move bridging-related tasks from host CPU to the PFE and thus
- *              offloads the host-based networking stack. The L2 Bridge feature represents a network
- *              switch device implementing following functionality:
- *              - <b>MAC table and address learning:</b>
- *                The L2 bridging functionality is based on determining to which interface an ingress
- *                packet shall be forwarded. For this purpose a network switch device implements so
- *                called bridging table (MAC table) which is searched to get target interface for each
- *                packet entering the switch. If received source MAC address does not match any MAC
- *                table entry then a new entry, containing the Physical Interface which the packet has
- *                been received on, is added - learned. Destination MAC address of an ingress packet
- *                is then used to search the table to determine the target interface.
- *              - <b>Static entries:</b>
- *                Bridge table can also contain static entry that are not aged. This entry is otherwise
- *                the same as standard entry. The main usage of static entry is to configure
- *                bridge in forward only mode and configure all entries manually. In this case only
- *                predetermined traffic matching to the static entries will be forwarded.
+ *              L2 Bridge is a dedicated feature to offload a host from tasks related
+ *              to MAC address-based forwarding of Ethernet frames. PFE can be configured 
+ *              to act as a network switch, implementing the following functionality:
+ *              - <b>MAC table:</b>
+ *                L2 Bridge uses its own MAC table to keep track of encountered MAC addresses.
+ *                Each MAC table entry consists of a MAC address and a physical interface 
+ *                which should be used to reach the given MAC address. MAC table entries can 
+ *                be dynamic (learned) or static.
+ *              - <b>MAC address learning:</b>
+ *                L2 Bridge is capable of automatically adding (learning) new MAC table entries from
+ *                ingress frames with new (not yet encountered) source MAC addresses.
  *              - <b>Aging:</b>
- *                Each MAC table entry gets default timeout value once learned. In time this timeout is
- *                being decreased until zero is reached. Entries with zero timeout value are automatically
- *                removed from the table. The timeout value is re-set each time the corresponding table
- *                entry is used to process a packet. The static entries are not affected by aging.
+ *                MAC table entries are subjected to aging. If a MAC table entry is not used for
+ *                a certain (hardcoded) time period, it is automatically removed from the MAC table.
+ *                Static entries are not affected by aging.
+ *              - <b>Static entries:</b>
+ *                It is possible to manually add static (non-aging) entries to the MAC table.
+ *                Static entries can be used as a part of L2 Bridge forward-only configuration
+ *                (with MAC learning disabled). With such a setup, only a predetermined
+ *                traffic (matching the static entries) will be forwarded.
+ *              - <b>Blocking states of physical interfaces:</b>
+ *                Each physical interface which is configured to be a part of the L2 Bridge can
+ *                be finetuned to allow/deny MAC learning or frame forwarding of its ingress traffic.
+ *                See @ref fpp_phy_if_block_state_t.
  *              - <b>Port migration:</b>
- *                When a MAC address is seen on one interface of the switch and an entry has been created,
- *                it is automatically updated when the MAC address is seen on another interface.
+ *                If there is already a learned MAC table entry (a MAC address + a target physical interface)
+ *                and the MAC address is detected on another interface, then the entry is automatically
+ *                updated (new target physical interface is set).
  *              - <b>VLAN Awareness:</b>
- *                The bridge implements VLAN table. This table is used to implement VLAN-based policies
- *                like Ingress and Egress port membership. Feature includes configurable VLAN tagging
- *                and un-tagging functionality per bridge interface (Physical Interface). The bridge
- *                utilizes PFE HW accelerators to perform MAC and VLAN table lookup thus this operation
- *                is highly optimized. Host CPU SW is only responsible for correct bridge configuration
- *                using the dedicated API.
+ *                The L2 Bridge uses its own VLAN table to support VLAN-based policies
+ *                like Ingress or Egress port membership. It also supports configuration of bridge
+ *                domain ports (represented by physical interfaces) to provide VLAN tagging and 
+ *                untagging services, effectively allowing creation of access / trunk ports.
+ *
+ *              The L2 Bridge utilizes PFE HW accelerators to perform highly optimized MAC and VLAN
+ *              table lookups. Host is responsible only for the initial bridge configuration via
+ *              the FCI API.
  *
  *              L2 Bridge VLAN Awareness and Domains
- *              --------------------------
- *              The VLAN awareness is based on entities called Bridge Domains (BD) which are visible to
- *              both classifier firmware, and the driver, and are used to abstract particular VLANs.
- *              Every BD contains configurable set of properties:
+ *              ------------------------------------
+ *              The VLAN awareness is based on entities called Bridge Domains (BD), which are visible to
+ *              both the classifier firmware and the driver. BDs are used to abstract particular VLANs.
+ *              Every BD has a configurable set of properties (see @ref fpp_l2_bd_cmd_t):
  *              - Associated VLAN ID.
- *              - Set of Physical Interfaces which are members of the domain.
- *              - Information about which of the member interfaces are ’tagged’ or ’untagged’.
- *              - Instruction how to process matching uni-cast packets (forward, flood, discard, ...).
- *              - Instruction how to process matching multi-cast packets.
+ *              - Set of physical interfaces which represent ports of the BD.
+ *              - Information about which ports are tagged or untagged.
+ *                - Tagged port adds a VLAN tag to egressed frames if they are not VLAN tagged, or keeps 
+ *                  the tag of the frames intact if they are already VLAN tagged.
+ *                - Untagged port removes the VLAN tag from egressed frames if the frames are VLAN tagged.
+ *              - Instruction how to process matching uni-cast frames. 
+ *              - Instruction how to process matching multi-cast frames. 
  *
- *              The L2 Bridge then consists of multiple BD types:
- *              - <b>The Default BD:</b>
- *                Default domain is used by the classification process when a packet has been received
- *                with default VLAN ID. This can happen either if the packet does not contain VLAN tag
- *                or the VLAN tag is equal to the default VLAN configured within the bridge.
- *              - <b>The Fall-back BD:</b>
- *                This domain is used when packet with an unknown VLAN ID (does not match any standard
- *                or default domain) is received in @ref FPP_IF_OP_VLAN_BRIDGE mode. It is also used
- *                as representation of simple L2 bridge when VLAN awareness is disabled (in case of
- *                the @ref FPP_IF_OP_BRIDGE mode).
- *              - <b>Set of particular Standard BDs:</b>
- *                Standard domain. Specifies what to do when packet with VLAN ID matching the Standard
- *                BD is received.
+ *              The L2 Bridge recognizes several BD types:
+ *              - <b>Default BD:</b> @anchor ref__default_bd
+ *                Factory default VLAN ID of this bridge domain is @b 1.
+ *                - For a VLAN-aware Bridge, this domain is used to process ingress frames which
+ *                  either have a VLAN tag equal to the Default BD's VLAN ID, or don't have 
+ *                  a VLAN tag at all (untagged Ethernet frames).
+ *                - For a simple (non-VLAN aware) Bridge, this domain is used as a representation
+ *                  of the simple bridge.
+ *              - <b>Fall-back BD:</b>
+ *                This domain is used by a VLAN-aware Bridge to process ingress frames which 
+ *                have an unknown VLAN tag. Unknown VLAN tag means that the VLAN tag does not 
+ *                match any existing standard BD nor the default BD.
+ *              - <b>Standard BD:</b>
+ *                Standard user-defined bridge domains. Used by a VLAN-aware Bridge. These BDs
+ *                process ingress frames which have a VLAN tag that matches the BD's VLAN ID.
  *
- *              Configuration (Bridge Domain)
- *              ----------------------------
- *              Here are steps needed to configure VLAN-aware switch:
- *              -# Optionally get list of available physical interfaces and their IDs. See the
- *                 @ref if_mgmt.
- *              -# Create a bridge domain (VLAN domain) (@ref FPP_CMD_L2_BD +
- *                 @ref FPP_ACTION_REGISTER).
- *              -# Configure domain hit/miss actions (@ref FPP_CMD_L2_BD + @ref FPP_ACTION_UPDATE)
- *                 to let the bridge know how to process matching traffic.
- *              -# Add physical interfaces as members of that domain (@ref FPP_CMD_L2_BD +
- *                 @ref FPP_ACTION_UPDATE). Adding interface to a bridge domain causes switch of its
- *                 operation mode to @ref FPP_IF_OP_VLAN_BRIDGE and enabling promiscuous mode on MAC
- *                 level. There is also a preconfigured default domain that identifies with VLAN 1.
- *              -# Set physical interface(s) to VLAN bridge mode @ref FPP_IF_OP_VLAN_BRIDGE using
- *                 @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
- *              -# Set promiscuous mode and enable physical interface(s) by setting the
- *                 @ref FPP_IF_ENABLED and @ref FPP_IF_PROMISC flags via the @ref FPP_CMD_PHY_IF +
- *                 @ref FPP_ACTION_UPDATE.
+ *              Configuration (VLAN-aware Bridge)
+ *              ---------------------------------
+ *              -# Create a bridge domain (VLAN domain).
+ *                 <br> (@ref FPP_CMD_L2_BD + FPP_ACTION_REGISTER)
+ *              -# Configure hit/miss actions of the bridge domain.
+ *                 <br> (@ref FPP_CMD_L2_BD + FPP_ACTION_UPDATE)
+ *              -# Configure which physical interfaces are considered members (ports) of the bridge domain.
+ *                 Also specify which ports are VLAN tagged and which ports are not.
+ *                 <br> (@ref FPP_CMD_L2_BD + FPP_ACTION_UPDATE)
+ *              -# Repeat previous steps to create all required bridge domains (VLAN domains).
+ *                 Physical interfaces can be members of multiple bridge domains.
+ *              -# Configure the physical interfaces which shall classify their ingress traffic
+ *                 by the VLAN-aware Bridge classification algorithm. Use steps described in
+ *                 @ref mgmt_phyif (section @b modify) and do the following for each desired physical interface:
+ *                 - Set mode of the interface to @ref FPP_IF_OP_VLAN_BRIDGE.
+ *                 - Enable the promiscuous mode by setting the flag @ref FPP_IF_PROMISC.
+ *                 - Enable the interface by setting the flag @ref FPP_IF_ENABLED.
  *
- *              For simple, non-VLAN aware switch do:
- *              -# Optionally get list of available physical interfaces and their IDs. See the
- *                 @ref if_mgmt.
- *              -# Add physical interfaces as members of fall-back BD (@ref FPP_CMD_L2_BD +
- *                 @ref FPP_ACTION_UPDATE). The fall-back BD is identified by VLAN 0 and exists
- *                 automatically.
- *              -# Configure domain hit/miss actions (@ref FPP_CMD_L2_BD + @ref FPP_ACTION_UPDATE)
- *                 to let the bridge know how to process matching traffic.
- *              -# Set physical interface(s) to simple bridge mode @ref FPP_IF_OP_BRIDGE using
- *                 @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
- *              -# Set promiscuous mode and enable physical interface(s) by setting the
- *                 @ref FPP_IF_ENABLED and @ref FPP_IF_PROMISC flags via the @ref FPP_CMD_PHY_IF +
- *                 @ref FPP_ACTION_UPDATE.
+ *              Configuration (simple non-VLAN aware Bridge)
+ *              --------------------------------------------
+ *              -# Configure hit/miss actions of the @link ref__default_bd Default BD @endlink.
+ *                 <br> (@ref FPP_CMD_L2_BD + FPP_ACTION_UPDATE)
+ *              -# Configure which physical interfaces are considered members (ports) of the Default BD.
+ *                 <br> (@ref FPP_CMD_L2_BD + FPP_ACTION_UPDATE)
+ *              -# Configure the physical interfaces which shall classify their ingress traffic
+ *                 by the simple (non-VLAN aware) Bridge classification algorithm. Use steps described in
+ *                 @ref mgmt_phyif (section @b modify) and do the following for each desired physical interface:
+ *                 - Set mode of the interface to @ref FPP_IF_OP_BRIDGE.
+ *                 - Enable the promiscuous mode by setting the flag @ref FPP_IF_PROMISC.
+ *                 - Enable the interface by setting the flag @ref FPP_IF_ENABLED.
  *
- *              Once interfaces are in bridge domain, all ingress traffic is processed according
- *              to bridge domain setup. Unknown source MAC addresses are being learned and after
- *              specified time period without traffic are being aged.
+ *              Once the L2 Bridge is operational, ingress Ethernet frames of the Bridge-configured
+ *              physical interfaces are processed according to setup of bridge domains. In case of 
+ *              a VLAN-aware Bridge, VLAN tag of every ingress frame is inspected and the frame is then 
+ *              processed by an appropriate bridge domain. In case of a simple (non-VLAN aware) Bridge,
+ *              all ingress frames are always processed by the default BD.
  *
- *              An interface can be added to or removed from BD at any time via
- *              @ref FPP_CMD_L2_BD + @ref FPP_ACTION_UPDATE. When interface is removed
- *              from all bridge domains (is not associated with any BD), its operation mode is
- *              automatically switched to @ref FPP_IF_OP_DEFAULT and MAC promiscuous mode is disabled.
+ *              Additional operations
+ *              ---------------------
+ *              To @b remove a bridge domain:
+ *              <br> (@ref FPP_CMD_L2_BD + FPP_ACTION_DEREGISTER)
  *
- *              List of available bridge domains with their properties can be retrieved using
- *              @ref FPP_CMD_L2_BD + @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
+ *              <small>
+ *              Note: <br>
+ *              Default BD and Fall-back BD cannot be removed.
+ *              </small> <br>
  *
- *              Static mac entries can be added once the bridge domain is configured. To add or update use
- *              @ref FPP_CMD_L2_STATIC_ENT + @ref FPP_ACTION_REGISTER + @ref FPP_ACTION_UPDATE.
- *              A static entry can be deleted using @ref FPP_CMD_L2_STATIC_ENT + @ref FPP_ACTION_DEREGISTER
- *              or all entries using @ref FPP_CMD_L2_FLUSH_STATIC.
+ *              To @b list available bridge domains:
+ *              <br> (@ref FPP_CMD_L2_BD + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
  *
+ *              To @b modify properties of a bridge domain (read-modify-write):
+ *              -# Read properties of the target bridge domain.
+ *                 <br> (@ref FPP_CMD_L2_BD + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
+ *              -# Locally modify the properties. See fpp_l2_bd_cmd_t.
+ *              -# Write the modified properties back to PFE.
+ *                 <br> (@ref FPP_CMD_L2_BD + FPP_ACTION_UPDATE)
  *
- * @subsection l2l3_bridge L2L3 Bridge
- *             Introduction
- *             ------------
- *             The L2L3 Bridge is an extension of the available L2 bridge and IPv4/IPv6 Router algorithms.
- *             It requires both algorithms to be configured and (at least one) static entry with local
- *             MAC address flag being set, which denotes that the MAC address belongs to the IP Router.
+ *              Operations related to MAC table static entries
+ *              ----------------------------------------------
+ *              To @b create a new static entry:
+ *              <br> (@ref FPP_CMD_L2_STATIC_ENT + FPP_ACTION_REGISTER)
  *
- *             Whenever a frame arrives it is checked against the local MAC addresses and it is passed
- *             to the IP Router algorithm when the frame destination address equals to one of local MAC
- *             addresses. Otherwise, it is passed to the L2 bridge.
+ *              To @b remove a static entry:
+ *              <br> (@ref FPP_CMD_L2_STATIC_ENT + FPP_ACTION_DEREGISTER)
  *
- *             Note that static entry forward list is ignored when the frame is passed to the IP router.
+ *              To @b list available static entries:
+ *              <br> (@ref FPP_CMD_L2_STATIC_ENT + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
  *
- *             Configuration
- *             -------------
- *             To run the L2L3 Bridge mode
- *             -# Configure L2 Bridge and IP Router algorithms as described in respective sections.
- *             -# Create at least one static entry with local address flag being set.
- *             -# Set physical interface(s) to L2L3 Bridge mode using
- *                 @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE.
+ *              To @b modify properties of a static entry (read-modify-write):
+ *              -# Read properties of the target static entry.
+ *                 <br> (@ref FPP_CMD_L2_STATIC_ENT + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
+ *              -# Locally modify the properties. See fpp_l2_static_ent_cmd_t.
+ *              -# Write the modified properties back to PFE.
+ *                 <br> (@ref FPP_CMD_L2_STATIC_ENT + FPP_ACTION_UPDATE)
  *
- * @subsection flex_parser Flexible Parser
- *             Introduction
- *             ------------
- *             The Flexible Parser is PFE firmware-based feature allowing user to extend standard
- *             ingress packet classification process by set of customizable classification rules.
- *             According to the rules the Flexible Parser can mark frames as ACCEPTED or REJECTED.
- *             The rules are configurable by user and exist in form of tables. Every classification
- *             table entry consist of following fields:
- *             - 32-bit Data field to be compared with value from the ingress frame.
- *             - 32-bit Mask field (active bits are ’1’) specifying which bits of the data field will
- *                be used to perform the comparison.
- *             - 16-bit Configuration field specifying rule properties including the offset to the frame
- *               data which shall be compared.
+ *              To @b flush all static entries in PFE:
+ *              <br> (@ref FPP_CMD_L2_FLUSH_STATIC)
  *
- *             The number of entries within the table is configurable by user. The table is processed
- *             sequentially starting from entry index 0 until the last one is reached or classification
- *             is terminated by a rule configuration. When none of rules has decided that the packet
- *             shall be accepted or rejected the default result is REJECT.
+ *              Examples
+ *              --------
+ *              @ref demo_feature_L2_bridge_simple.c, @ref demo_feature_L2_bridge_vlan.c
  *
- *             Example
- *             -------
- *             This is example of how Flexible Parser table can be configured. Every row contains single
- *             rule and processing starts with rule 0. ACCEPT/REJECT means that the classification is
- *             terminated with given result, CONTINUE means that next rule (sequentially) will be
- *             evaluated. CONTINUE with N says that next rule to be evaluated is N. Evaluation of the
- *             latest rule not resulting in ACCEPT or REJECT results in REJECT.
+ * @subsection  l2l3_bridge  L2L3 Bridge
+ *              Introduction
+ *              ------------
+ *              L2L3 Bridge is an extension of the L2 Bridge and IP Router features. 
+ *              It allows both features to be simultaneously available on a physical interface.
+ *              Traffic with specific destination MAC addresses is passed to the IP Router.
+ *              The rest is handled by the L2 Bridge.
  *
- *             Rule|Flags                         |Mask |Next|Condition
- *             ----|------------------------------|-----|----|-----------------------------------------
- *             0   |FP_FL_INVERT<br>FP_FL_REJECT  |!= 0 |n/a |if ((PacketData&Mask) != (RuleData&Mask))<br> then REJECT<br> else CONTINUE
- *             1   |FP_FL_ACCEPT                  |!= 0 |n/a |if ((PacketData&Mask) == (RuleData&Mask))<br> then ACCEPT<br> else CONTINUE
- *             2   | -                            |!= 0 |4   |if ((PacketData&Mask) == (RuleData&Mask))<br> then CONTINUE with 4<br> else CONTINUE
- *             3   |FP_FL_REJECT                  |= 0  |n/a |REJECT
- *             4   |FP_FL_INVERT                  |!= 0 |6   |if ((PacketData&Mask) != (RuleData&Mask))<br> then CONTINUE with 6<br> else CONTINUE
- *             5   |FP_FL_ACCEPT                  |= 0  |n/a |ACCEPT
- *             6   |FP_FL_INVERT<br>FP_FL_ACCEPT  |!= 0 |n/a |if ((PacketData&Mask) != (RuleData&Mask))<br> then ACCEPT<br> else CONTINUE
- *             7   |FP_FL_REJECT                  |= 0  |n/a |REJECT
+ *              Configuration
+ *              -------------
+ *              -# Configure @ref l3_router.
+ *              -# Configure @ref l2_bridge.
+ *              -# Create at least one MAC table static entry with the 'local' flag. Note that
+ *                 if a static entry is configured as local, then its egress list is ignored.
+ *                   - In case of a simple (non-VLAN aware) L2L3 Bridge, all 'local' static entries
+ *                     should belong to the @link ref__default_bd Default BD @endlink.
+ *                   - In case of VLAN-aware L2L3 Bridge, 'local' static entries must have
+ *                     a correct VLAN (and MAC address) in order to properly match the ingress traffic.
  *
- *             Configuration
- *             -------------
- *             -# Create a Flexible Parser table using @ref FPP_CMD_FP_TABLE + @ref FPP_ACTION_REGISTER.
- *             -# Create one or multiple rules with @ref FPP_CMD_FP_RULE + @ref FPP_ACTION_REGISTER.
- *             -# Assing rules to tables via @ref FPP_CMD_FP_TABLE + @ref FPP_ACTION_USE_RULE.
- *                Rules can be removed from table with @ref FPP_ACTION_UNUSE_RULE.
+ *                 <br> (@ref FPP_CMD_L2_STATIC_ENT + FPP_ACTION_REGISTER)
+ *                 <br> (@ref FPP_CMD_L2_STATIC_ENT + FPP_ACTION_UPDATE)
+ *              -# Configure the physical interfaces which shall classify their ingress traffic
+ *                 by the L2L3 Bridge classification algorithm. Use steps described in
+ *                 @ref mgmt_phyif (section @b modify) and do the following for each desired physical interface:
+ *                 - Set mode of the interface either to @ref FPP_IF_OP_L2L3_BRIDGE or to @ref FPP_IF_OP_L2L3_VLAN_BRIDGE.
+ *                 - Enable the promiscuous mode by setting the flag @ref FPP_IF_PROMISC.
+ *                 - Enable the interface by setting the flag @ref FPP_IF_ENABLED.
  *
- *             Created table can be used for instance as argument of @ref flex_router. When not needed
- *             the table can be deleted with @ref FPP_CMD_FP_TABLE + @ref FPP_ACTION_DEREGISTER
- *             and particular rules with @ref FPP_CMD_FP_RULE + @ref FPP_ACTION_DEREGISTER. This
- *             cleanup should be always considered since tables and rules are stored in limited PFE
- *             internal memory.
+ *              Once the L2L3 Bridge is operational, it checks the ingress traffic of 
+ *              L2L3 Bridge-configured physical interfaces against 'local' static entries 
+ *              in the L2 Bridge MAC table. If traffic's destination MAC matches a MAC address 
+ *              of some 'local' static entry, then the traffic is passed to the IP Router.
+ *              Otherwise the traffic is passed to the L2 Bridge.
  *
- *             Flexible parser classification introduces performance penalty which is proportional
- *             to number of rules and complexity of the table.
+ *              Examples
+ *              --------
+ *              @ref demo_feature_L2L3_bridge_simple.c, @ref demo_feature_L2L3_bridge_vlan.c
  *
- * @subsection flex_router Flexible Router
- *             Introduction
- *             ------------
- *             Flexible router specifies behavior when ingress packets are classified and routed
- *             according to custom rules different from standard L2 Bridge (Switch) or IPv4/IPv6
- *             Router processing. Feature allows definition of packet distribution rules using physical
- *             and logical interfaces. The classification hierarchy is given by ingress physical
- *             interface containing a configurable set of logical interfaces. Every time a packet is
- *             received via the respective physical interface, which is configured to use the Flexible
- *             Router classification, a walk through the list of associated logical interfaces is
- *             performed. Every logical interface is used to match the packet using interface-specific
- *             rules (@ref fpp_if_m_rules_t). In case of match the matching packet is processed
- *             according to the interface configuration (e.g. forwarded via specific physical
- *             interface(s), dropped, sent to host, ...). In case when more rules are specified, the
- *             logical interface can be configured to apply logical AND or OR to get the match result.
- *             Please see the example within @ref if_mgmt.
+ * @subsection  flex_parser  Flexible Parser
+ *              Introduction
+ *              ------------
+ *              Flexible Parser is a PFE firmware-based feature which can classify ingress traffic
+ *              according to a set of custom classification rules. The feature is intended to be used
+ *              as an extension of other PFE features/classification algorithms. Flexible Parser consists 
+ *              of the following elements:
+ *              - <b>FP rule:</b>
+ *                A classification rule. See @ref FPP_CMD_FP_RULE.
+ *                FP rules inspect content of Ethernet frames. Based on the inspection result
+ *                (whether the condition of a rule is satisfied or not), a next step of the Flexible Parser 
+ *                classification process is taken.
+ *              - <b>FP table:</b> @anchor ref__fp_table 
+ *                An ordered set of FP rules. See @ref FPP_CMD_FP_TABLE. These tables can be assigned 
+ *                as extensions of other PFE features/classification algorithms. Namely, they can be used 
+ *                as an argument for:
+ *                - Flexible Filter of a physical interface. See @ref fpp_phy_if_cmd_t (`.ftable`).
+ *                  Flexible Filter acts as a traffic filter, pre-emptively discarding ingress traffic
+ *                  which is rejected by the associated FP table. Accepted traffic is then processed
+ *                  according to mode of the physical interface.
+ *                - @ref FPP_IF_MATCH_FP0 / @ref FPP_IF_MATCH_FP1 match rules of a logical interface.
+ *                  See @ref flex_router.
  *
- *             Configuration
- *             -------------
- *             -# Lock interface database with @ref FPP_CMD_IF_LOCK_SESSION.
- *             -# Use @ref FPP_CMD_PHY_IF + @ref FPP_ACTION_UPDATE to set a physical interface(s)
- *                to @ref FPP_IF_OP_FLEXIBLE_ROUTER operation mode.
- *             -# Use @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_REGISTER to create new logical
- *                interface(s) if needed.
- *             -# Optionally, if @ref flex_parser is desired to be used as a classification rule,
- *                create table(s) according to @ref flex_parser description.
- *             -# Configure existing logical interface(s) (set match rules and arguments) via
- *                @ref FPP_CMD_LOG_IF + @ref FPP_ACTION_UPDATE.
- *             -# Unlock interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
+ *              Flexible Parser classification introduces a performance penalty which is proportional to a count
+ *              of rules and complexity of a used table. Always consider whether the use of this feature is 
+ *              really necessary. If it is necessary, then try to use FP tables with as few rules as possible.
  *
- *             Note that Flexible Router can be used to implement certain form of @ref l3_router as
- *             well as @ref l2_bridge. Such usage is of course not recommended since both mentioned
- *             features exist as fully optimized implementation and usage of Flexible Router this way
- *             would pointlessly affect forwarding performance.
+ *              Configuration
+ *              -------------
+ *              -# Create one or multiple FP rules.
+ *                 <br> (@ref FPP_CMD_FP_RULE + FPP_ACTION_REGISTER)
+ *              -# Create one or multiple FP tables.
+ *                 <br> (@ref FPP_CMD_FP_TABLE + FPP_ACTION_REGISTER)
+ *              -# Assign rules to tables. Each rule can be assigned only to one table.
+ *                 <br> (@ref FPP_CMD_FP_TABLE + FPP_ACTION_USE_RULE)
+ *              -# [optional] If required, an FP rule can be removed from an FP table.
+ *                 The rule can be then assigned to a different table.
+ *                 <br> (@ref FPP_CMD_FP_TABLE + FPP_ACTION_UNUSE_RULE)
+ *              -# Use FP tables wherever they are required. See @link ref__fp_table FP table @endlink.
  *
- * @subsection ipsec_offload IPsec Offload
- *             Introduction
- *             ------------
- *             The IPsec offload feature is a premium one and requires a special premium firmware version
- *             to be available for use. It allows the chosen IP frames to be transparently encoded by the IPsec and
- *             IPsec frames to be transparently decoded without the CPU intervention using just the PFE and HSE engines.
+ *              @b WARNING: <br>
+ *              Do not modify FP tables which are already in use! Always first remove the FP table
+ *              from use, then modify it (add/delete/rearrange rules), then put it back to its use.
+ *              Failure to adhere to this warning will result in an undefined behavior of Flexible Parser.
+ *              <br>
  *
- *             The SPD database needs to be established on an interface which contains entries describing frame
- *             match criteria together with the SA ID reference to the SA established within the HSE describing
- *             the IPsec processing criteria. Frames matching the criteria are then processed by the HSE according
- *             to the chosen SA and returned for the classification via physical interface of UTIL PE. Normal
- *             classification follows the IPsec processing thus the decrypted packets can be e.g. routed.
+ *              Once an FP table is configured and put to use, it will start classifying the ingress traffic
+ *              in whatever role it was assigned to (see @link ref__fp_table FP table @endlink).
+ *              Classification always starts from the very first rule of the table (index 0). Normally,
+ *              rules of the table are evaluated sequentially till the traffic is either accepted, rejected,
+ *              or the end of the table is reached. If the end of the table is reached and the traffic is 
+ *              still not accepted nor rejected, then Flexible Parser automatically rejects it.
  *
- *             Configuration
- *             -------------
- *             -# Use (repeatedly) the @ref FPP_CMD_SPD command with FPP_ACTION_REGISTER action to set the SPD entries
- *             -# Optionally the @ref FPP_CMD_SPD command with FPP_ACTION_DEREGISTER action can be used to delete SPD entries
+ *              Based on the action of an FP rule, it is possible to make a jump from the currently
+ *              evaluated rule to any other rule in the same table. This can be used in some complex scenarios.
  *
- *             The HSE also requires the configuration via interfaces of the HSE firmware which is out of the scope of this
- *             document. The SAs referenced within the SPD entries must exist prior creation of the respective SPD entry.
+ *              @b WARNING: <br>
+ *              It is prohibited to use jumps to create loops. Failure to adhere to this warning 
+ *              will result in an undefined behavior of Flexible Parser.
  *
- * @subsection egress_qos Egress QoS
- *             Introduction
- *             ------------
- *             The egress QoS allows user to prioritize, aggregate and shape traffic intended to
- *             leave the accelerator via physical interface. Each physical interface contains dedicated
- *             QoS block with specific number of schedulers, shapers and queues.
- *             @if S32G2
- *                Following applies for the S32G2/PFE:
- *                - Number of queues: 8
- *                - Maximum queue depth: 255
- *                - Probability zones per queue: 8
- *                - Number of schedulers: 2
- *                - Number of scheduler inputs: 8
- *                - Allowed data sources which can be connected to the scheduler inputs:
+ *              Additional operations
+ *              ---------------------
+ *              It is advised to always remove rules and tables which are not needed, because these
+ *              unused objects would needlessly occupy limited internal memory of PFE. To @b remove
+ *              an FP rule or an FP table:
+ *              - (@ref FPP_CMD_FP_RULE + FPP_ACTION_DEREGISTER)
+ *              - (@ref FPP_CMD_FP_TABLE + FPP_ACTION_DEREGISTER)
  *
- *                  Source|Description
- *                  ------|----------------------
- *                  0 - 7 | Queue 0 - 7
- *                  8     | Output of Scheduler 0
- *                  255   | Invalid
+ *              To @b list FP rules or FP tables:
+ *              - (@ref FPP_CMD_FP_RULE + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
+ *              - (@ref FPP_CMD_FP_TABLE + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
  *
- *                - Number of shapers: 4
- *                - Allowed shaper positions:
+ *              FP table example
+ *              ----------------
+ *              This is an example of how a Flexible Parser table can look like.
+ *              - Every row is one FP rule.
+ *              - The classification process starts from the rule 0.
+ *              - ACCEPT/REJECT means the classification is terminated with the given result.
+ *              - CONTINUE means that the next rule in a sequence (next row) shall be evaluated.
+ *              - NEXT_RULE <name> means that the next rule to evaluate shall be the rule <name>.
+ *              - FrameData is an inspected value from an ingress Ethernet frame.
+ *                Each rule can inspect a different value from the frame.
+ *                See @ref FPP_CMD_FP_RULE and @ref fpp_fp_rule_props_t, fields `.offset` and `.offset_from`.
+ *              - RuleData is a template value inside the FP rule. It is compared with the inspected value 
+ *                from the ingress Ethernet frame.
+ *              - Mask is a bitmask specifying which bits of the RuleData and FrameData shall be compared
+ *                (the rest of the bits is ignored).
  *
- *                  Position  |Description
- *                  ----------|------------------------------------------
- *                  0         | Output of Scheduler 1 (QoS master output)
- *                  1 - 8     | Input 0 - 7 of Scheduler 1
- *                  9 - 16    | Input 0 - 7 of Scheduler 0
- *                  255       | Invalid, Shaper disconnected
+ *               i | Rule   | Flags                          | Mask | Condition of the rule + actions
+ *              ---|--------|--------------------------------|------|------------------------------------------
+ *               0 | MyR_01 | @b FP_INVERT <br> FP_REJECT    | != 0 | if ((FrameData & Mask) @b != (RuleData & Mask)) <br> then REJECT <br> else CONTINUE
+ *               1 | MyR_02 |    FP_ACCEPT                   | != 0 | if ((FrameData & Mask)==(RuleData & Mask)) <br> then ACCEPT <br> else CONTINUE
+ *               2 | MyR_03 |    FP_NEXT_RULE                | != 0 | if ((FrameData & Mask)==(RuleData & Mask)) <br> then NEXT_RULE MyR_11 <br> else CONTINUE
+ *               3 | MyR_0r |    FP_REJECT                   | == 0 | REJECT
+ *               4 | MyR_11 | @b FP_INVERT <br> FP_NEXT_RULE | != 0 | if ((FrameData & Mask) @b != (RuleData & Mask)) <br> then NEXT_RULE MyR_21 <br> else CONTINUE
+ *               5 | MyR_1a |    FP_ACCEPT                   | == 0 | ACCEPT
+ *               6 | MyR_21 | @b FP_INVERT <br> FP_ACCEPT    | != 0 | if ((FrameData & Mask) @b != (RuleData & Mask)) <br> then ACCEPT <br> else CONTINUE
+ *               7 | MyR_2r |    FP_REJECT                   | == 0 | REJECT
  *
- *                  Note that only shapers connected to a common scheduler inputs are aware
- *                  of each other and do share the 'conflicting transmission' signal.
+ *              Examples
+ *              --------
+ *              @ref demo_feature_flexible_filter.c
  *
- *                Configuration
- *                -------------
- *                By default, the egress QoS topology looks like this:
- *                @verbatim
-                           SCH1
-                           (RR)
-                        +--------+
-                  Q0--->| 0      |
-                  Q1--->| 1      |
-                  Q2--->| 2      |
-                  Q3--->| 3      +--->
-                  Q4--->| 4      |
-                  ...   | ...    |
-                  Q7--->| 7      |
-                        +--------+
-                  @endverbatim
- *                meaning that all queues are connected to Scheduler 1 and the scheduler discipline
- *                is set to Round Robin. Rate mode is set to Data Rate (bps). Queues are in Tail Drop
- *                Mode.
+ * @subsection  flex_router  Flexible Router
+ *              Introduction
+ *              ------------
+ *              Flexible Router is a PFE firmware-based feature which uses logical interfaces
+ *              (and their match rules) to classify ingress traffic. Replicas of the accepted traffic
+ *              can be forwarded to one or multiple physical interfaces.
  *
- *                To <b> list queue </b> properties:
- *                -# Read queue properties via @ref FPP_CMD_QOS_QUEUE + @ref FPP_ACTION_QUERY.
+ *              Flexible Router classification introduces a performance penalty which is proportional to a count
+ *              of used logical interfaces (and their match rules). Always consider whether the use of this feature
+ *              is really necessary. If it is necessary, then try to use as few logical interfaces as possible.
  *
- *                To <b> list scheduler </b> properties:
- *                -# Read scheduler properties via @ref FPP_CMD_QOS_SCHEDULER + @ref FPP_ACTION_QUERY.
+ *              Configuration
+ *              -------------
+ *              -# Lock the interface database.
+ *                 <br> (@ref FPP_CMD_IF_LOCK_SESSION)
+ *              -# Create one or multiple logical interfaces. See @ref mgmt_logif for more info.
+ *                 For Flexible Router purposes, pay attention to the order of logical interfaces.
+ *                 <br> (@ref FPP_CMD_LOG_IF + FPP_ACTION_REGISTER)
+ *              -# Configure the logical interfaces. Use steps described in
+ *                 @ref mgmt_logif (section @b modify) and do the following for each desired logical interface:
+ *                 - [optional] Set interface properties such as egress, match rules and match rule arguments.
+ *                 - [optional] If multiple match rules are used, then set or clear the flag
+ *                   @ref FPP_IF_MATCH_OR in order to specify a logical relation between the rules.
+ *                 - Enable the interface by setting the flag @ref FPP_IF_ENABLED.
+ *              -# Configure the physical interfaces which shall classify their ingress traffic
+ *                 by the Flexible Router classification algorithm. Use steps described in
+ *                 @ref mgmt_phyif (section @b modify) and do the following for each desired physical interface:
+ *                 - Set mode of the interface to @ref FPP_IF_OP_FLEXIBLE_ROUTER.
+ *                 - Enable the interface by setting the flag @ref FPP_IF_ENABLED.
+ *              -# Unlock the interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
  *
- *                To <b> list shaper </b> properties:
- *                -# Read shaper properties via @ref FPP_CMD_QOS_SHAPER + @ref FPP_ACTION_QUERY.
+ *              Once the Flexible Router is operational, it classifies the ingress traffic of
+ *              Flexible Router-configured physical interfaces. The process is based on the 
+ *              classification sequence of logical interfaces (see @ref mgmt_logif). Classifier walks 
+ *              through the sequence from the head position back to tail, matching the ingress 
+ *              traffic against match rules of logical interfaces which are in the sequence.
+ *              If a match is found (traffic conforms with match rules of the given logical interface),
+ *              then the traffic is processed according to the interface's configuration (forwarded, 
+ *              dropped, sent to a host, etc.).
  *
- *                To <b> modify queue </b> properties:
- *                -# Read scheduler properties via @ref FPP_CMD_QOS_QUEUE + @ref FPP_ACTION_QUERY.
- *                -# Modify desired properties.
- *                -# Write modifications using @ref FPP_CMD_QOS_QUEUE + @ref FPP_ACTION_UPDATE.
+ *              Configuration example
+ *              ---------------------
+ *              This example shows a scenario where emac1 physical interface is configured in
+ *              the @ref FPP_IF_OP_FLEXIBLE_ROUTER mode. Goal is to classify ingress traffic
+ *              on emac1 interface. If the traffic matches classification criteria,
+ *              a replica of the traffic is egressed through both emac2 and hif0 interfaces.
+ *              <br>
+ *              @image latex flexible_router.eps "Configuration Example" width=7cm
+ *              -# Traffic is ingressed (received) through emac1 port of PFE.
+ *              -# Classifier walks through the list of logical interfaces associated with the emac1
+ *                 physical interface.
+ *              -# If some logical interface accepts the traffic, then information about the matching 
+ *                 logical interface (and its parent physical interface) is passed to the Routing and 
+ *                 Forwarding Algorithm. Algorithm reads the logical interface and retrieves forwarding properties.
+ *              -# Traffic is forwarded by the Routing and Forwarding Algorithm based on the provided information.
+ *                 In this example, the logical interface specified that a replica of the traffic shall be 
+ *                 forwarded to both emac2 and hif0 interfaces.
+ *              -# Traffic is transmitted via physical interfaces.
  *
- *                To <b> modify scheduler </b> properties (read-modify-write):
- *                -# Read scheduler properties via @ref FPP_CMD_QOS_SCHEDULER + @ref FPP_ACTION_QUERY.
- *                -# Modify desired properties.
- *                -# Write modifications using @ref FPP_CMD_QOS_SCHEDULER + @ref FPP_ACTION_UPDATE.
+ *              Examples
+ *              --------
+ *              @ref demo_feature_flexible_router.c
  *
- *                To <b> modify shaper </b> properties (read-modify-write):
- *                -# Read shaper properties via @ref FPP_CMD_QOS_SHAPER + @ref FPP_ACTION_QUERY.
- *                -# Modify desired properties.
- *                -# Write modifications using @ref FPP_CMD_QOS_SCHEDULER + @ref FPP_ACTION_UPDATE.
+ * @subsection  ipsec_offload IPsec Offload
+ *              Introduction
+ *              ------------
+ *              The IPsec offload feature is a premium one and requires a special premium firmware version
+ *              to be available for use. It allows the chosen IP frames to be transparently encoded by the IPsec and
+ *              IPsec frames to be transparently decoded without the CPU intervention using just the PFE and HSE engines.
  *
- *                To <b> change QoS topology </b> to following example form:
- *                @verbatim
-                           SCH0
-                           (WRR)
-                        +--------+
-                  Q0--->| 0      |           SCH1
-                  Q1--->| 1      |           (PQ)
-                  Q2--->| 2      |        +--------+
-                  Q3--->| 3      +------->| 0      |
-                  Q4--->| 4      |        | 1      |
-                        | ...    |        | 2      |
-                        | 7      |        | 3      +--->
-                        +--------+        | ...    |
-                                    Q6--->| 6      |
-                                    Q7--->| 7      |
-                                          +--------+
-                  @endverbatim
- *                -# Please see the @ref FPP_CMD_QOS_SCHEDULER for full C example
- *                (@ref fpp_cmd_qos_scheduler.c).
+ *              @b WARNING: <br>
+ *              The IPsec offload feature is available only for some Premium versions of PFE firmware.
+ *              The feature should @b not be used with a firmware which does not support it.
+ *              Failure to adhere to this warning will result in an undefined behavior of PFE.
+ *              <br>
  *
- *                To <b> add traffic shapers </b>:
- *                @verbatim
-                           SCH0
-                           (WRR)
-                        +--------+
-                  Q0--->| 0      |               SCH1
-                  Q1--->| 1      |               (PQ)
-                  Q2--->| 2      |            +--------+
-                  Q3--->| 3      +--->SHP0--->| 0      |
-                  Q4--->| 4      |            | 1      |
-                        | ...    |            | 2      |
-                        | 7      |            | 3      +--->SHP2--->
-                        +--------+            | ...    |
-                                 Q6---SHP1--->| 6      |
-                                 Q7---------->| 7      |
-                                              +--------+
-                  @endverbatim
- *                -# Please see the @ref FPP_CMD_QOS_SHAPER for full C example
- *                (@ref fpp_cmd_qos_shaper.c).
- *             @else
- *                Device is unknown...
- *             @endif
+ *              The SPD database needs to be established on an interface which contains entries describing frame
+ *              match criteria together with the SA ID reference to the SA established within the HSE describing
+ *              the IPsec processing criteria. Frames matching the criteria are then processed by the HSE according
+ *              to the chosen SA and returned for the classification via physical interface of UTIL PE. Normal
+ *              classification follows the IPsec processing thus the decrypted packets can be e.g. routed.
+ *
+ *              <br>Supported operations related to the IPsec offload:
+ *
+ *              To @b create a new SPD entry in the SPD table of a physical interface:
+ *              <br> (@ref FPP_CMD_SPD + FPP_ACTION_REGISTER)
+ *
+ *              To @b remove an SPD entry from the SPD table of a physical interface:
+ *              <br> (@ref FPP_CMD_SPD + FPP_ACTION_DEREGISTER)
+ *
+ *              To @b list existing SPD entries from the SPD table of a physical interface:
+ *              <br> (@ref FPP_CMD_SPD + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)    
+ *
+ *              The HSE also requires the configuration via interfaces of the HSE firmware which is out of the scope of this
+ *              document. The SAs referenced within the SPD entries must exist prior creation of the respective SPD entry.
+ *
+ *              Examples
+ *              --------
+ *              @ref demo_feature_spd.c
+ *
+ * @subsection  egress_qos Egress QoS
+ *              Introduction
+ *              ------------
+ *              The egress QoS allows user to prioritize, aggregate and shape traffic intended to
+ *              leave the accelerator through some @link mgmt_phyif physical interface @endlink.
+ *              Egress QoS is implemented as follows:
+ *              - Each @b emac physical interface has its own QoS block.
+ *              - All @b hif physical interfaces share one common QoS block.    
+ *
+ *              Every QoS block has a platform-specific number of queues, schedulers and shapers.
+ *
+ *              @if S32G2
+ *                The following applies for each @b S32G2/PFE QoS block:
+ *                - @b Queues:
+ *                     - Number of queues: 8
+ *                     - Maximum queue depth: 255
+ *                     - Probability zones per queue: 8    
+ *                       <small><br>
+ *                       Queues of @b hif interfaces:    
+ *                       Every hif interface has only @b 2 queues, indexed as follows:
+ *                         - [0] : low priority queue (L)
+ *                         - [1] : high priority queue (H)
+ *
+ *                       Use only these indexes if hif queues are configured via FCI commands.
+ *                       </small>
+ *
+ *                - @b Schedulers:
+ *                     - Number of schedulers: 2
+ *                     - Number of scheduler inputs: 8
+ *                     - Traffic sources which can be connected to scheduler inputs:    
+ *                       (see @link fpp_qos_scheduler_cmd_t @endlink.input_src)
+ *                         Source|Description
+ *                         ------|----------------------
+ *                         0 - 7 | Queue 0 - 7
+ *                         8     | Output of Scheduler 0
+ *                         255   | Invalid (nothing connected)
+ *
+ *                - @b Shapers:
+ *                     - Number of shapers: 4
+ *                     - Shaper positions:    
+ *                       (see @link fpp_qos_shaper_cmd_t @endlink.position)
+ *                         Position  |Description
+ *                         ----------|------------------------------------------
+ *                         0         | Output of Scheduler 1 (QoS master output)
+ *                         1 - 8     | Input 0 - 7 of Scheduler 1
+ *                         9 - 16    | Input 0 - 7 of Scheduler 0
+ *                         255       | Invalid (shaper disconnected)
+ *                     Note that only shapers connected to common scheduler inputs are aware
+ *                     of each other and do share the 'conflicting transmission' signal.
+ *              @endif
+ *
+ *              Traffic queueing algorithm
+ *              --------------------------
+ *              The following pseudocode explains traffic queueing algorithm of PFE:
+ *              @code{.c}
+ *              .............................................  
+ *              get_queue_for_packet(pkt)
+ *              {
+ *                queue = 0;
+ *                  
+ *                if (pkt.hasVlanTag)
+ *                {
+ *                  queue = pkt.VlanHdr.PCP;
+ *                }
+ *                else
+ *                {
+ *                  if (pkt.isIPv4)
+ *                  {
+ *                    queue = (pkt.IPv4Hdr.DSCP) / 8;
+ *                  }
+ *                  if (pkt.isIPv6)
+ *                  {
+ *                    queue = (pkt.IPv6Hdr.TrafficClass.DS) / 8;
+ *                  }
+ *                }
+ *                  
+ *                return queue;
+ *              }
+ *              .............................................  
+ *              @endcode
+ *
+ *              <small>
+ *              @b Note:    
+ *              Hif interfaces have only two queues. Their queueing algorithm is similar to the 
+ *              aforementioned pseudocode, but is modified to produce only two results:
+ *                - 0 : traffic belongs to the hif's low priority queue.
+ *                - 1 : traffic belongs to the hif's high priority queue.
+ *
+ *              </small>
+ *
+ *              Configuration
+ *              -------------
+ *              By default, the egress QoS topology looks like this:
+ *              @verbatim
+                         SCH1
+                         (RR)
+                      +--------+
+                Q0--->| 0      |
+                Q1--->| 1      |
+                Q2--->| 2      |
+                Q3--->| 3      +--->
+                Q4--->| 4      |
+                ...   | ...    |
+                Q7--->| 7      |
+                      +--------+
+                @endverbatim
+ *
+ *              All queues are connected to Scheduler 1 and the scheduler discipline
+ *              is set to Round Robin. Rate mode is set to Data Rate (bps). Queues are 
+ *              in Tail Drop mode.
+ *
+ *              To <b> list QoS queue </b> properties:
+ *              -# Read QoS queue properties.
+ *                 <br> (@ref FPP_CMD_QOS_QUEUE + FPP_ACTION_QUERY)
+ *
+ *              To <b> list QoS scheduler </b> properties:
+ *              -# Read QoS scheduler properties.
+ *                 <br> (@ref FPP_CMD_QOS_SCHEDULER + FPP_ACTION_QUERY)
+ *
+ *              To <b> list QoS shaper </b> properties:
+ *              -# Read QoS shaper properties.
+ *                 <br> (@ref FPP_CMD_QOS_SHAPER + FPP_ACTION_QUERY)
+ *
+ *              To <b> modify QoS queue </b> properties (read-modify-write):
+ *              -# Read QoS queue properties.
+ *                 <br> (@ref FPP_CMD_QOS_QUEUE + FPP_ACTION_QUERY)
+ *              -# Locally modify the properties. See fpp_qos_queue_cmd_t.
+ *              -# Write the modified properties back to PFE.
+ *                 <br> (@ref FPP_CMD_QOS_QUEUE + FPP_ACTION_UPDATE)
+ *
+ *              To <b> modify QoS scheduler </b> properties (read-modify-write):
+ *              -# Read QoS scheduler properties.
+ *                 <br> (@ref FPP_CMD_QOS_SCHEDULER + FPP_ACTION_QUERY)
+ *              -# Locally modify the properties. See fpp_qos_scheduler_cmd_t.
+ *              -# Write the modified properties back to PFE.
+ *                 <br> (@ref FPP_CMD_QOS_SCHEDULER + FPP_ACTION_UPDATE)
+ *
+ *              To <b> modify QoS shaper </b> properties (read-modify-write):
+ *              -# Read QoS shaper properties.
+ *                 <br> (@ref FPP_CMD_QOS_SHAPER + FPP_ACTION_QUERY)
+ *              -# Locally modify the properties. See fpp_qos_shaper_cmd_t.
+ *              -# Write the modified properties back to PFE.
+ *                 <br> (@ref FPP_CMD_QOS_SHAPER + FPP_ACTION_UPDATE)
+ *
+ *              Examples
+ *              --------
+ *              @ref demo_feature_qos.c
  *
  */
 
 /**
- * @example fpp_cmd_phy_if.c
- * @example fpp_cmd_log_if.c
- * @example fpp_cmd_ip_route.c
- * @example fpp_cmd_ipv4_conntrack.c
- * @example fpp_cmd_ipv6_conntrack.c
- * @example fpp_cmd_qos_queue.c
- * @example fpp_cmd_qos_scheduler.c
- * @example fpp_cmd_qos_shaper.c
- * @example fpp_cmd_l2_bd.c
- * @example fpp_cmd_fp_table.c
+ * @example demo_feature_physical_interface.c
+ * @example demo_feature_L2_bridge_simple.c
+ * @example demo_feature_L2_bridge_vlan.c
+ * @example demo_feature_router_simple.c
+ * @example demo_feature_router_nat.c
+ * @example demo_feature_L2L3_bridge_simple.c
+ * @example demo_feature_L2L3_bridge_vlan.c
+ * @example demo_feature_flexible_filter.c
+ * @example demo_feature_flexible_router.c
+ * @example demo_feature_spd.c
+ * @example demo_feature_qos.c
+ * 
+ * @example demo_common.c
+ * @example demo_phy_if.c
+ * @example demo_log_if.c
+ * @example demo_if_mac.c
+ * @example demo_mirror.c
+ * @example demo_l2_bd.c
+ * @example demo_fp.c
+ * @example demo_rt_ct.c
+ * @example demo_spd.c
+ * @example demo_qos.c
+ * @example demo_fwfeat.c
  */
 
 /**
@@ -696,6 +972,32 @@
 #ifndef FALSE
 #define FALSE 0
 #endif /* FALSE */
+
+
+/**
+ * @def         CTCMD_FLAGS_ORIG_DISABLED
+ * @brief       Disable connection originator.
+ * @details      <!-- empty, but is needed by Doxygen generator -->
+ * @hideinitializer
+ */
+#define CTCMD_FLAGS_ORIG_DISABLED           (1U << 0)
+
+/**
+ * @def         CTCMD_FLAGS_REP_DISABLED
+ * @brief       Disable connection replier.
+ * @details     Used to create uni-directional connections (see @ref FPP_CMD_IPV4_CONNTRACK,
+ *              @ref FPP_CMD_IPV4_CONNTRACK)
+ * @hideinitializer
+ */
+#define CTCMD_FLAGS_REP_DISABLED            (1U << 1)
+
+/**
+ * @def         CTCMD_FLAGS_TTL_DECREMENT
+ * @brief       Enable TTL decrement
+ * @details     Used to decrement TTL field when the pkt is routed
+ * @hideinitializer
+ */
+#define CTCMD_FLAGS_TTL_DECREMENT            (1U << 2)
 
 
 /* TODO put to config file: */
@@ -753,30 +1055,6 @@
      */
     #define FPP_CMD_IPV6_CONNTRACK_CHANGE   0x0415u
 #endif /* FCI_CFG_FORCE_LEGACY_API */
-
-/**
- * @def CTCMD_FLAGS_ORIG_DISABLED
- * @brief Disable connection originator
- * @hideinitializer
- */
-#define CTCMD_FLAGS_ORIG_DISABLED           (1U << 0)
-
-/**
- * @def         CTCMD_FLAGS_REP_DISABLED
- * @brief       Disable connection replier
- * @details     Used to create uni-directional connections (see @ref FPP_CMD_IPV4_CONNTRACK,
- *              @ref FPP_CMD_IPV4_CONNTRACK)
- * @hideinitializer
- */
-#define CTCMD_FLAGS_REP_DISABLED            (1U << 1)
-
-/**
- * @def         CTCMD_FLAGS_TTL_DECREMENT
- * @brief       Enable TTL decrement
- * @details     Used to decrement TTL field when the pkt is routed
- * @hideinitializer
- */
-#define CTCMD_FLAGS_TTL_DECREMENT            (1U << 2)
 
 
 /**

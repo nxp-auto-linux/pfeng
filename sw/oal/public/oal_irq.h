@@ -135,14 +135,6 @@ errno_t oal_irq_unmask(oal_irq_t *irq);
  */
 int32_t oal_irq_get_id(const oal_irq_t *irq);
 
-/**
- * @brief		Get IRQ flags
- * @param[in]	irq The IRQ instance
- * @param[out]	flags Pointer to write interrupt type flags to
- * @return		EOK if success, error code otherwise
- */
-errno_t oal_irq_get_flags(const oal_irq_t *irq, oal_irq_flags_t *flags);
-
 bool_t oal_irq_in_atomic(void);
 
 #endif /* OAL_IRQ_H_ */

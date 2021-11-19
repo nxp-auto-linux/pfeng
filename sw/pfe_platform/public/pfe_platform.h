@@ -21,7 +21,9 @@
 #include "pfe_tmu.h"
 #include "pfe_util.h"
 #include "pfe_hif.h"
+#if !defined(PFE_CFG_TARGET_OS_LINUX)
 #include "pfe_hif_nocpy.h"
+#endif
 #include "pfe_safety.h"
 #include "pfe_emac.h"
 #if defined(PFE_CFG_L2BRIDGE_ENABLE)
@@ -78,6 +80,7 @@ typedef struct
 	uint32_t rtable_hash_size;	/* Size (number of entries) of hash area within routing table */
 	uint32_t rtable_collision_size;	/* Size (number of entries) of collision area within routing table */
 	uint16_t vlan_id;	/* VLAN ID used for L2 Bridge configuration */
+	uint16_t vlan_stats_size;	/*VLAN stats size(number of vlan entry) used to collect info from firmware */
 } pfe_platform_config_t;
 
 typedef struct

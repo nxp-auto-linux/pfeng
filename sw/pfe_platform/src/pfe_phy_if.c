@@ -18,6 +18,7 @@
 #include "pfe_ct.h"
 #include "pfe_phy_if.h"
 #include "linked_list.h"
+#include "pfe_feature_mgr.h"
 
 typedef enum
 {
@@ -129,6 +130,7 @@ static uint32_t pfe_phy_if_stat_to_str(const pfe_ct_phy_if_stats_t *stat, char *
 		return 0U;
 	}
 #endif
+
 	len += oal_util_snprintf(buf + len, buf_len - len, "Ingress frames:   %u\n", oal_ntohl(stat->ingress));
 	len += oal_util_snprintf(buf + len, buf_len - len, "Egress frames:    %u\n", oal_ntohl(stat->egress));
 	len += oal_util_snprintf(buf + len, buf_len - len, "Malformed frames: %u\n", oal_ntohl(stat->malformed));
@@ -147,6 +149,7 @@ static uint32_t pfe_phy_if_stat_to_str(const pfe_ct_phy_if_stats_t *stat, char *
  */
 pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const char_t *name)
 {
+	uint32_t i;
 	pfe_phy_if_t *iface;
 	pfe_ct_class_mmap_t pfe_pe_mmap = {0U};
 
@@ -216,8 +219,12 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 		/*	Initialize the interface structure in classifier */
 		iface->phy_if_class.id = id;
 		iface->phy_if_class.block_state = IF_BS_FORWARDING;
-		iface->phy_if_class.mirror = PFE_PHY_IF_ID_INVALID;
-		iface->phy_if_class.flags = (pfe_ct_if_flags_t)oal_htonl(IF_FL_ALLOW_Q_IN_Q|IF_FL_FF_ALL_TCP|IF_FL_ENABLED);
+		for(i = 0U; i < PFE_CT_MIRRORS_COUNT; i++)
+		{
+			iface->phy_if_class.rx_mirrors[i] = 0;
+			iface->phy_if_class.tx_mirrors[i] = 0;
+		}
+		iface->phy_if_class.flags = (pfe_ct_if_flags_t)oal_htonl((uint32_t)IF_FL_ALLOW_Q_IN_Q|(uint32_t)IF_FL_FF_ALL_TCP);
 
 		/* Be sure that statistics are zeroed (endianness doesn't mater for this) */
 		iface->phy_if_class.phy_stats.ingress	= 0;
@@ -774,6 +781,7 @@ errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t blo
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
 		NXP_LOG_DEBUG("mutex lock failed\n");
@@ -818,6 +826,7 @@ errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *bl
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
 		NXP_LOG_DEBUG("mutex lock failed\n");
@@ -907,74 +916,6 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 	}
 
 	return ret;
-}
-
-/**
- * @brief Set mirroring on the given interface
- * @param[in] iface The interface which traffic shall be mirrored
- * @param[in] mirror The ID of the interface which shall send out the mirrored traffic.
- *                   The value PFE_PHY_IF_ID_INVALID disables the feature.
- * @return EOK on success or an error code.
- */
-errno_t pfe_phy_if_set_mirroring(pfe_phy_if_t *iface, pfe_ct_phy_if_id_t mirror)
-{
-	pfe_ct_class_mmap_t mmap;
-	errno_t ret;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	Get memory map */
-	ret = pfe_class_get_mmap(iface->class, 0, &mmap);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("Can't get memory map\n");
-		return EINVAL;
-	}
-
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-
-	iface->phy_if_class.mirror = mirror;
-
-	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("Can't write PHY IF structure to classifier\n");
-		ret = EINVAL;
-	}
-
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-	return ret;
-}
-
-/**
- * @brief Get mirroring configuration on the given interface
- * @param[in] iface The interface which traffic shall be mirrored
- * @return The ID of the interface where is the traffic mirrored
- *         (PFE_PHY_IF_ID_INVALID if is disabled).
- */
-pfe_ct_phy_if_id_t pfe_phy_if_get_mirroring(const pfe_phy_if_t *iface)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return PFE_PHY_IF_ID_INVALID;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	return iface->phy_if_class.mirror;
-
 }
 
 /**
@@ -1196,7 +1137,7 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		return ret;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
@@ -1294,7 +1235,7 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 		{
 			/*	HW configuration failure. Backup flags and disable the instance. */
 			tmp = iface->phy_if_class.flags;
-			iface->phy_if_class.flags &= (pfe_ct_if_flags_t)oal_htonl(~IF_FL_ENABLED);
+			iface->phy_if_class.flags &= (pfe_ct_if_flags_t)oal_htonl(~(uint32_t)IF_FL_ENABLED);
 			ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 			if (EOK != ret)
 			{
@@ -1344,7 +1285,7 @@ static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 
 	/*	Disable interface instance. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
-	iface->phy_if_class.flags &= (pfe_ct_if_flags_t)oal_htonl(~IF_FL_ENABLED);
+	iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & oal_htonl(~(uint32_t)IF_FL_ENABLED));
 	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
@@ -1437,6 +1378,19 @@ static errno_t pfe_phy_if_set_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags_t
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
+	/*	For selected flags: check that the underlying FW feature is available (enabled) in FW */
+	const char* feat_name = ((IF_FL_VLAN_CONF_CHECK == flag) ? ("vlan_conf_check") : 
+							((IF_FL_PTP_CONF_CHECK == flag) ? ("ptp_conf_check") : (NULL)));
+	if (NULL != feat_name)
+	{
+		if (FALSE == pfe_feature_mgr_is_available(feat_name))
+		{
+			NXP_LOG_INFO("Feature '%s' is not available (not enabled in FW).\n", feat_name);
+			return EPERM;
+		}
+	}
+
+	/* Set the flag. */
 	tmp = iface->phy_if_class.flags;
 	iface->phy_if_class.flags |= oal_htonl(flag);
 	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
@@ -1469,8 +1423,21 @@ static errno_t pfe_phy_if_clear_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
+	/*	For selected flags: check that the underlying FW feature is available (enabled) in FW */
+	const char* feat_name = ((IF_FL_VLAN_CONF_CHECK == flag) ? ("vlan_conf_check") : 
+							((IF_FL_PTP_CONF_CHECK == flag) ? ("ptp_conf_check") : (NULL)));
+	if (NULL != feat_name)
+	{
+		if (FALSE == pfe_feature_mgr_is_available(feat_name))
+		{
+			NXP_LOG_INFO("Feature '%s' is not available (not enabled in FW).\n", feat_name);
+			return EPERM;
+		}
+	}
+
+	/* Set the flag. */
 	tmp = iface->phy_if_class.flags;
-	iface->phy_if_class.flags &= oal_htonl(~flag);
+	iface->phy_if_class.flags &= oal_htonl(~(uint32_t)flag);
 	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
@@ -1614,7 +1581,7 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		return ret;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
@@ -1629,6 +1596,7 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 	{
 		NXP_LOG_DEBUG("mutex unlock failed\n");
 	}
+
 	return ret;
 }
 
@@ -1658,7 +1626,7 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 
 	/*      Enable instance loopback mode. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
-	iface->phy_if_class.flags |= oal_htonl(IF_FL_LOOPBACK);
+	iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp | oal_htonl(IF_FL_LOOPBACK));
 	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
@@ -1745,7 +1713,7 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 
 	/*      Disable instance loopback mode. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
-	iface->phy_if_class.flags &= (pfe_ct_if_flags_t)oal_htonl(~IF_FL_LOOPBACK);
+	iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & oal_htonl(~(uint32_t)IF_FL_LOOPBACK));
 	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
@@ -1814,7 +1782,7 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 
 	/*	Enable instance promiscuous mode. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
-	iface->phy_if_class.flags |= oal_htonl(IF_FL_PROMISC);
+	iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp | oal_htonl(IF_FL_PROMISC));
 	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
@@ -1883,7 +1851,7 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 
 	/*	Disable instance promiscuous mode. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
-	iface->phy_if_class.flags &= (pfe_ct_if_flags_t)oal_htonl(~IF_FL_PROMISC);
+	iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & oal_htonl(~(uint32_t)IF_FL_PROMISC));
 	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
@@ -2009,7 +1977,7 @@ errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
 
 	/*	Disable instance loadbalance mode. Backup flags and write the changes. */
 	tmp = iface->phy_if_class.flags;
-	iface->phy_if_class.flags &= (pfe_ct_if_flags_t)oal_htonl(~IF_FL_LOAD_BALANCE);
+	iface->phy_if_class.flags &= (pfe_ct_if_flags_t)oal_htonl(~(uint32_t)IF_FL_LOAD_BALANCE);
 	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 	if (EOK != ret)
 	{
@@ -2206,7 +2174,7 @@ errno_t pfe_phy_if_set_tx_flow_control(pfe_phy_if_t *iface, bool_t tx_ena)
 	}
 	if (NULL == iface->port.instance)
 	{
-		/*      No HW block associated */
+		/*		No HW block associated */
 		;
 	}
 	else
@@ -2344,7 +2312,7 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 		else if (PFE_PHY_IF_HIF == iface->type)
 		{
 			/*	HIF does not offer MAC filtering ability */
-			;
+			ret = EINVAL;
 		}
 		else
 		{
@@ -2413,6 +2381,13 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 				if (EOK != ret)
 				{
 					NXP_LOG_ERROR("Unable to del MAC address: %d\n", ret);
+
+					/* Removal of MAC address from emac failed, put it back to DB */
+					ret = pfe_mac_db_add_addr(iface->mac_db, addr, owner);
+					if (EOK != ret)
+					{
+						NXP_LOG_ERROR("Unable to put back the MAC address into phy_if MAC database: %d\n", ret);
+					}
 					ret = ENOENT;
 				}
 			}
@@ -2420,7 +2395,7 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 		else if (PFE_PHY_IF_HIF == iface->type)
 		{
 			/*	HIF does not offer MAC filtering ability */
-			;
+			ret = EINVAL;
 		}
 		else
 		{
@@ -2461,14 +2436,17 @@ pfe_mac_db_t *pfe_phy_if_get_mac_db(const pfe_phy_if_t *iface)
 }
 
 /**
- * @brief		Get MAC address
- * @param[in]	iface The interface instance
- * @param[out]	addr The MAC address will be written here
+ * @brief		Reinit MAC address query and get the first MAC address from mac addr db.
+ * @param[in]	iface The interface instance.
+ * @param[out]	addr The MAC address will be written here.
+ * @param[in]	crit All, Owner, Type or Owner&Type criterion
+ * @param[in]	type Required type of MAC address (Broadcast, Multicast, Unicast, ANY) criterion
+ * @param[in]	owner The identification of driver instance
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  * @retval		ENOENT No address found
  */
-errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
+errno_t pfe_phy_if_get_mac_addr_first(pfe_phy_if_t *iface, pfe_mac_addr_t addr, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner)
 {
 	errno_t ret = EOK;
 
@@ -2489,13 +2467,13 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 	if (NULL == iface->port.instance)
 	{
 		/*	No HW block associated */
-		;
+		ret = ENOENT;
 	}
 	else
 	{
 		if (PFE_PHY_IF_EMAC == iface->type)
 		{
-			ret = pfe_mac_db_get_first_addr(iface->mac_db, MAC_DB_CRIT_ALL, PFE_TYPE_ANY, PFE_CFG_LOCAL_IF, addr);
+			ret = pfe_mac_db_get_first_addr(iface->mac_db, crit, type, owner, addr);
 			if(EOK != ret)
 			{
 				NXP_LOG_WARNING("%s: Unable to get MAC address: %d\n", iface->name, ret);
@@ -2504,12 +2482,76 @@ errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 		else if (PFE_PHY_IF_HIF == iface->type)
 		{
 			/*	HIF does not have MAC address storage (yet) */
-			(void)memset(addr, 0, sizeof(pfe_mac_addr_t));
+			ret = ENOENT;
 		}
 		else
 		{
 			/*	Unknown type, nothing to verify */
-			;
+			ret = EINVAL;
+		}
+	}
+
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Get the next MAC address from mac addr db.
+ * @param[in]	iface The interface instance.
+ * @param[out]	addr The MAC address will be written here.
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ * @retval		ENOENT No address found
+ *
+ * @note		Call pfe_phy_if_get_mac_addr_first() to initiate a query session.
+ *				Then repeatedly call this function till there are no more MAC addresses to get.
+ */
+errno_t pfe_phy_if_get_mac_addr_next(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
+{
+	errno_t ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+
+	/*	Get MAC address from associated HW block */
+	if (NULL == iface->port.instance)
+	{
+		/*	No HW block associated */
+		ret = ENOENT;
+	}
+	else
+	{
+		if (PFE_PHY_IF_EMAC == iface->type)
+		{
+			ret = pfe_mac_db_get_next_addr(iface->mac_db, addr);
+			if(EOK != ret)
+			{
+				NXP_LOG_WARNING("%s: Unable to get MAC address: %d\n", iface->name, ret);
+			}
+		}
+		else if (PFE_PHY_IF_HIF == iface->type)
+		{
+			/*	HIF does not have MAC address storage (yet) */
+			ret = ENOENT;
+		}
+		else
+		{
+			/*	Unknown type, nothing to verify */
+			ret = EINVAL;
 		}
 	}
 
@@ -2779,6 +2821,144 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 	stat->malformed	= oal_htonl(stat->malformed);
 
 	return ret;
+}
+
+/**
+ * @brief Configures the selected RX mirror of the given interface
+ * @param[in] iface Interface to be configured
+ * @param[in] sel Selector of the RX mirror (0 to PFE_CT_MIRRORS_COUNT - 1)
+ * @param[in] mirror Mirror to be configured.
+ *                   Value NULL disables the selected RX mirror
+ *  @return EOK when success or error code otherwise
+ */
+errno_t pfe_phy_if_set_rx_mirror(pfe_phy_if_t *iface, uint32_t sel, pfe_mirror_t *mirror)
+{
+    errno_t ret = EOK;
+    uint32_t tmp;
+    uint32_t address = 0U;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+    if(sel >= PFE_CT_MIRRORS_COUNT)
+    {
+        return EINVAL;
+    }
+    if(NULL != mirror)
+    {
+        address = pfe_mirror_get_address(mirror);
+    }
+    /* Update configuration */
+    tmp = iface->phy_if_class.rx_mirrors[sel]; /* Backup */
+    iface->phy_if_class.rx_mirrors[sel] = oal_htonl(address);
+    /* Propagate the change into the classifier */
+    ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
+    if(EOK != ret)
+    {  /* Restore */
+       iface->phy_if_class.rx_mirrors[sel] = tmp;
+    }
+    return ret;
+}
+
+/**
+ * @brief Configures the selected TX mirror of the given interface
+ * @param[in] iface Interface to be configured
+ * @param[in] sel Selector of the TX mirror (0 to PFE_CT_MIRRORS_COUNT - 1)
+ * @param[in] mirror Mirror to be configured.
+ *                   Value NULL disables the selected RX mirror
+ *  @return EOK when success or error code otherwise
+ */
+errno_t pfe_phy_if_set_tx_mirror(pfe_phy_if_t *iface, uint32_t sel, pfe_mirror_t *mirror)
+{
+    errno_t ret = EOK;
+    uint32_t tmp;
+    uint32_t address = 0U;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+    if(sel >= PFE_CT_MIRRORS_COUNT)
+    {
+        return EINVAL;
+    }
+    if(NULL != mirror)
+    {
+        address = pfe_mirror_get_address(mirror);
+    }
+
+    /* Update configuration */
+    tmp = iface->phy_if_class.tx_mirrors[sel]; /* Backup */
+    iface->phy_if_class.tx_mirrors[sel] = oal_htonl(address);
+    /* Propagate the change into the classifier */
+    ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
+    if(EOK != ret)
+    {  /* Restore */
+       iface->phy_if_class.tx_mirrors[sel] = tmp;
+    }
+
+    return ret;
+}
+
+/**
+ * @brief Returns the selected TX mirror of the given interface
+ * @param[in] iface Interface to be queried
+ * @param[in] sel Selector of the TX mirror (0 to PFE_CT_MIRRORS_COUNT - 1)
+ * @return The mirror reference or NULL if no mirror is configured
+ */
+pfe_mirror_t *pfe_phy_if_get_tx_mirror(pfe_phy_if_t *iface, uint32_t sel)
+{
+    uint32_t address;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+    if(sel >= PFE_CT_MIRRORS_COUNT)
+    {
+        return NULL;
+    }
+    address = oal_ntohl(iface->phy_if_class.tx_mirrors[sel]);
+    return pfe_mirror_get_first(MIRROR_BY_PHYS_ADDR, (void *)(addr_t)address);
+}
+
+/**
+ * @brief Returns address of the selected RX mirror of the given interface
+ * @param[in] iface Interface to be queried
+ * @param[in] sel Selector of the RX mirror (0 to PFE_CT_MIRRORS_COUNT - 1)
+ * @return The mirror reference or NULL if no mirror is configured
+ */
+pfe_mirror_t *pfe_phy_if_get_rx_mirror(pfe_phy_if_t *iface, uint32_t sel)
+{
+    uint32_t address;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+    if(sel >= PFE_CT_MIRRORS_COUNT)
+    {
+        return NULL;
+    }
+    address = oal_ntohl(iface->phy_if_class.rx_mirrors[sel]);
+    return pfe_mirror_get_first(MIRROR_BY_PHYS_ADDR, (void *)(addr_t)address);
 }
 
 /**

@@ -165,25 +165,71 @@ errno_t pfe_fw_feature_get_desc(const pfe_fw_feature_t *feature, const char **de
 }
 
 /**
- * @brief Reads the configuration variant used by the firmware
- * @param[in] Feature to be read
- * @param[out] variant The read variant code 
+ * @brief Reads the flags of the feature
+ * @param[in] feature Feature to be read
+ * @param[out] flags Value of the feature flags
  * @return EOK or an error code. 
- * @details The variants are always disabled (0), always enabled (1), configured by driver (2).
  */
-errno_t pfe_fw_feature_get_variant(const pfe_fw_feature_t *feature, uint8_t *variant)
+errno_t pfe_fw_feature_get_flags(const pfe_fw_feature_t *feature, pfe_ct_feature_flags_t *flags)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL==variant)))
+	if (unlikely((NULL == feature)||(NULL==flags)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */  
-    *variant = feature->ll_data->variant;
+    *flags = feature->ll_data->flags;
     return EOK;
     
 }
+
+/**
+ * @brief Checks whether the feature is available in Class
+ * @param[in] feature Feature to check
+ * @retval TRUE Feature is implemented in Class
+ * @retval FALSE Feature is not implemented in Class
+ */
+bool_t pfe_fw_feature_is_in_class(const pfe_fw_feature_t *feature)
+{
+    pfe_ct_feature_flags_t flags;
+    flags = F_NONE;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == feature))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */     
+    
+    (void)pfe_fw_feature_get_flags(feature, &flags);
+    
+    return (F_NONE == (flags & F_CLASS))? FALSE : TRUE;
+}
+
+/**
+ * @brief Checks whether the feature is available in Util
+ * @param[in] feature Feature to check
+ * @retval TRUE Feature is implemented in Util
+ * @retval FALSE Feature is not implemented in Util
+ */
+bool_t pfe_fw_feature_is_in_util(const pfe_fw_feature_t *feature)
+{
+    pfe_ct_feature_flags_t flags;
+    flags = F_NONE;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == feature))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */     
+    
+    (void)pfe_fw_feature_get_flags(feature, &flags);
+    
+    return (F_NONE == (flags & F_UTIL))? FALSE : TRUE;
+}
+
 
 /**
  * @brief Reads the default value of the feature i.e. initial value set by the FW

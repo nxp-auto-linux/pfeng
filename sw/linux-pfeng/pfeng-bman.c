@@ -46,19 +46,18 @@ struct pfeng_tx_map {
 	void				*va_addr;
 	addr_t				pa_addr;
 	u32				size;
-	bool				pages;
 	struct sk_buff			*skb;
 	u8				flags;
 };
 
 struct pfeng_tx_chnl_pool {
-	u32				depth;
+	int				rd_idx;
+	int				wr_idx;
+	int				idx_mask;
+	int				depth;
 
 	/* mappings for hif_drv tx ring */
 	struct pfeng_tx_map		*tx_tbl;
-	u32				rd_idx;
-	u32				wr_idx;
-	u32				idx_mask;
 };
 
 int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl)
@@ -105,7 +104,7 @@ int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl)
 	}
 	tx_pool->rd_idx = 0;
 	tx_pool->wr_idx = 0;
-	tx_pool->idx_mask = pfe_hif_chnl_get_tx_fifo_depth(chnl->priv) - 1;
+	tx_pool->idx_mask = tx_pool->depth - 1;
 
 	chnl->bman.tx_pool = tx_pool;
 
@@ -144,24 +143,24 @@ void pfeng_bman_pool_destroy(struct pfeng_hif_chnl *chnl)
 	return;
 }
 
-bool pfeng_hif_chnl_txconf_check(struct pfeng_hif_chnl *chnl, u32 elems)
+int pfeng_hif_chnl_txbd_unused(struct pfeng_hif_chnl *chnl)
 {
 	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;
-	u32 idx = pool->wr_idx;
+	int wr_idx = READ_ONCE(pool->wr_idx);
+	int rd_idx = READ_ONCE(pool->rd_idx);
 
-	if(unlikely(elems >= pool->depth))
-		return false;
+	if (likely(wr_idx >= rd_idx))
+		return pool->depth - wr_idx + rd_idx - 1;
 
-	/* Check if last element is free */
-	idx = (pool->wr_idx + elems) & pool->idx_mask;
-	return !pool->tx_tbl[idx].size;
+	return rd_idx - wr_idx - 1;
 }
 
-int pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_hif_chnl *chnl, void *va_addr, addr_t pa_addr, u32 size, struct sk_buff *skb, u8 flags)
+void pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_hif_chnl *chnl, void *va_addr, addr_t pa_addr, u32 size, struct sk_buff *skb, u8 flags, int i)
 {
 	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;
-	u32 idx = pool->wr_idx;
+	int idx = pool->wr_idx;
 
+	idx = (idx + i) & pool->idx_mask;
 	pool->tx_tbl[idx].va_addr = va_addr;
 	pool->tx_tbl[idx].pa_addr = pa_addr;
 	pool->tx_tbl[idx].size = size;
@@ -169,16 +168,21 @@ int pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_hif_chnl *chnl, void *va_add
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	pool->tx_tbl[idx].flags = flags;
 #endif
+}
 
-	pool->wr_idx = (pool->wr_idx + 1) & pool->idx_mask;
+void pfeng_hif_chnl_txconf_update_wr_idx(struct pfeng_hif_chnl *chnl, int count)
+{
+	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;
+	int wr_idx = pool->wr_idx;
 
-	return idx;
+	wr_idx = (wr_idx + count) & pool->idx_mask;
+	WRITE_ONCE(pool->wr_idx, wr_idx);
 }
 
 u8 pfeng_hif_chnl_txconf_get_flag(struct pfeng_hif_chnl *chnl)
 {
 	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;
-	u32 idx = pool->rd_idx;
+	int idx = pool->rd_idx;
 
 	return pool->tx_tbl[idx].flags;
 }
@@ -186,18 +190,20 @@ u8 pfeng_hif_chnl_txconf_get_flag(struct pfeng_hif_chnl *chnl)
 struct sk_buff *pfeng_hif_chnl_txconf_get_skbuf(struct pfeng_hif_chnl *chnl)
 {
 	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;
-	u32 idx = pool->rd_idx;
+	int idx = pool->rd_idx;
 
 	return pool->tx_tbl[idx].skb;
 }
 
-int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_budget)
+void pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_budget)
 {
 	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;
-	u32 idx = pool->rd_idx;
-	struct sk_buff *skb = pool->tx_tbl[idx].skb;
-	u32 nfrags;
+	int idx = READ_ONCE(pool->rd_idx);
+	int idx_mask = pool->idx_mask;
+	struct sk_buff *skb;
+	int nfrags;
 
+	skb = pool->tx_tbl[idx].skb;
 	BUG_ON(!skb);
 
 	nfrags = skb_shinfo(skb)->nr_frags;
@@ -207,43 +213,36 @@ int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_bu
 	pool->tx_tbl[idx].size = 0;
 
 	/* Unmap frags */
-	idx = (idx + 1) & pool->idx_mask;
+	idx = (idx + 1) & idx_mask;
 	while (nfrags--) {
 		dma_unmap_page(chnl->dev, pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].size, DMA_TO_DEVICE);
 		pool->tx_tbl[idx].size = 0;
 
-		idx = (idx + 1) & pool->idx_mask;
+		idx = (idx + 1) & idx_mask;
 	}
-	pool->rd_idx = idx;
+	WRITE_ONCE(pool->rd_idx, idx);
 
 	napi_consume_skb(skb, napi_budget);
-
-	return 0;
 }
 
-int pfeng_hif_chnl_txconf_unroll_map_full(struct pfeng_hif_chnl *chnl, u32 idx, u32 nfrags)
+void pfeng_hif_chnl_txconf_unroll_map_full(struct pfeng_hif_chnl *chnl, int i)
 {
 	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;
-	struct sk_buff *skb = pool->tx_tbl[idx].skb;
+	int idx = READ_ONCE(pool->wr_idx);
 
-	BUG_ON(!skb);
-
-	/* Unmap frags. Unrolling from last to first */
-	idx = (pool->wr_idx - 1) & pool->idx_mask;
-	while (nfrags--) {
+	/* unrolling from last to first */
+	idx += i;
+	while (i) {
 		dma_unmap_page(chnl->dev, pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].size, DMA_TO_DEVICE);
 		pool->tx_tbl[idx].size = 0;
 
-		idx = (idx - 1) & pool->idx_mask;
+		idx = (idx > 0) ? idx - 1 : pool->depth - 1;
+		i--;
 	}
 
 	/* Unmap linear part */
 	dma_unmap_single_attrs(chnl->dev, pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].size, DMA_TO_DEVICE, 0);
 	pool->tx_tbl[idx].size = 0;
-
-	pool->wr_idx = idx;
-
-	return 0;
 }
 
 static inline int pfeng_bman_rx_chnl_pool_unused(struct pfeng_rx_chnl_pool *pool)

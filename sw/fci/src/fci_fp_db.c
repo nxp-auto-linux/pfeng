@@ -70,7 +70,7 @@ typedef struct
 struct fci_fp_table_tag
 {
     char_t *name;              /* Table identifier */
-    uint8_t rule_count;        /* Number of rules in the table */
+    uint16_t rule_count;       /* Number of rules in the table */
     uint32_t dmem_addr;        /* Address where the table was written into DMEM */
     pfe_class_t *class;
     LLIST_t db_entry;          /* Global database link */
@@ -170,8 +170,14 @@ static fci_fp_rule_t *fci_fp_rule_get_first(fci_fp_rule_db_t *db, fci_fp_rule_cr
     fci_fp_rule_t *rule;
     bool_t match = FALSE;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    if (unlikely((NULL == db) || (NULL == arg)))
+    if (unlikely(NULL == db))
     {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return NULL;
+    }
+    if (unlikely((FP_RULE_CRIT_ALL != crit) && (NULL == arg)))
+    {
+        /*  All criterions except FP_RULE_CRIT_ALL require non-NULL argument */
         NXP_LOG_ERROR("NULL argument received\n");
         return NULL;
     }
@@ -384,8 +390,14 @@ static fci_fp_table_t *fci_fp_table_get_first(fci_fp_table_db_t *db, fci_fp_tabl
     fci_fp_table_t *table;
     bool_t match = FALSE;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    if (unlikely((NULL == db) || (NULL == arg)))
+    if (unlikely(NULL == db))
     {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return NULL;
+    }
+    if (unlikely((FP_TABLE_CRIT_ALL != crit) && (NULL == arg)))
+    {
+        /*  All criterions except FP_TABLE_CRIT_ALL require non-NULL argument */
         NXP_LOG_ERROR("NULL argument received\n");
         return NULL;
     }

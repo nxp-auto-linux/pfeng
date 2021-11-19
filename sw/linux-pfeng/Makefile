@@ -14,7 +14,6 @@ TARGET_OS := LINUX
 ARCH := arm64
 PLATFORM ?= aarch64-fsl-linux
 PFE_CFG_MULTI_INSTANCE_SUPPORT ?= 0
-PFE_CFG_IP_VERSION ?= PFE_CFG_IP_VERSION_NPU_7_14a
 PFE_CFG_LINUX_TRACE ?= 0
 PFE_CFG_HIF_USE_BD_TRIGGER ?= 1
 PFE_CFG_BD_MEM = "pfe-bdr-pool"
@@ -71,20 +70,14 @@ ifneq ($(PFE_CFG_FCI_ENABLE),0)
 pfeng-objs-libs += ../fci/fci.o
 endif
 
-pfeng-objs-core := pfeng-drv.o pfeng-debugfs.o pfeng-hif.o pfeng-bman.o pfeng-netif.o pfeng-ethtool.o pfeng-hwts.o
+pfeng-objs-core := pfeng-debugfs.o pfeng-hif.o pfeng-bman.o pfeng-netif.o pfeng-ethtool.o pfeng-hwts.o pfeng-dt.o
 
 ifneq ($(PFE_CFG_PFE_MASTER),0)
-pfeng-objs := $(pfeng-objs-libs) $(pfeng-objs-core) pfeng-fw.o pfeng-mdio.o pfeng-phylink.o pfeng-ptp.o
+pfeng-objs := $(pfeng-objs-libs) $(pfeng-objs-core) pfeng-drv.o pfeng-fw.o pfeng-mdio.o pfeng-phylink.o pfeng-ptp.o
 obj-m += pfeng.o
 else
-pfeng-slave-objs := $(pfeng-objs-libs) $(pfeng-objs-core)
+pfeng-slave-objs := $(pfeng-objs-libs) $(pfeng-objs-core) pfeng-slave-drv.o
 obj-m += pfeng-slave.o
-endif
-
-ifeq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),1)
-ifeq ($(PFE_CFG_IP_VERSION),PFE_CFG_IP_VERSION_NPU_7_14)
-$(error "Unsupported combination: Multi-instance is not supported on cut 1.1 silicon!")
-endif
 endif
 
 .PHONY: all drv-build drv-clean libfci-build libfci-clean

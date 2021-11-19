@@ -556,7 +556,7 @@ static errno_t fci_connections_ipv4_cmd_to_entry(fpp_ct_cmd_t *ct_cmd, pfe_rtabl
 
 	if (0U != ct_cmd->vlan)
 	{
-		pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct_cmd->vlan));
+		pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct_cmd->vlan), TRUE);
 	}
 
 	/*	Return interface */
@@ -626,7 +626,7 @@ static errno_t fci_connections_ipv4_cmd_to_rep_entry(fpp_ct_cmd_t *ct_cmd, pfe_r
 
 	if (0U != ct_cmd->vlan_reply)
 	{
-		pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct_cmd->vlan_reply));
+		pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct_cmd->vlan_reply), TRUE);
 	}
 
 	/*	Return interface */
@@ -693,7 +693,7 @@ static errno_t fci_connections_ipv6_cmd_to_entry(fpp_ct6_cmd_t *ct6_cmd, pfe_rta
 
 	if (0U != ct6_cmd->vlan)
 	{
-		pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct6_cmd->vlan));
+		pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct6_cmd->vlan), TRUE);
 	}
 
 	/*	Return interface */
@@ -763,7 +763,7 @@ static errno_t fci_connections_ipv6_cmd_to_rep_entry(fpp_ct6_cmd_t *ct6_cmd, pfe
 
 	if (0U != ct6_cmd->vlan_reply)
 	{
-		pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct6_cmd->vlan_reply));
+		pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct6_cmd->vlan_reply), TRUE);
 	}
 
 	/*	Return interface */

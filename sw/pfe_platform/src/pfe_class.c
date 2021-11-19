@@ -23,6 +23,8 @@
 
 /* Configures size of the dmem heap allocator chunk (the smallest allocated memory size)
 * The size is actually 2^configured value: 1 means 2, 2 means 4, 3 means 8, 4 means 16 etc.
+* Do not configure less than 8 bytes (value 3) to avoid alignment problems when allocating structures
+* containing uint64_t.
 */
 #define PFE_CLASS_HEAP_CHUNK_SIZE 4
 
@@ -120,14 +122,8 @@ errno_t pfe_class_isr(const pfe_class_t *class)
  */
 void pfe_class_irq_mask(const pfe_class_t *class)
 {
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	/*	Intentionally empty */
 	(void)class;
-#else
-	#error Not supported yet
-#endif /* PFE_CFG_IP_VERSION */
 }
 
 /**
@@ -136,14 +132,8 @@ void pfe_class_irq_mask(const pfe_class_t *class)
  */
 void pfe_class_irq_unmask(const pfe_class_t *class)
 {
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	/*	Intentionally empty */
 	(void)class;
-#else
-	#error Not supported yet
-#endif /* PFE_CFG_IP_VERSION */
 }
 
 /**
@@ -429,7 +419,6 @@ void pfe_class_disable(pfe_class_t *class)
  */
 errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
 {
-	uint32_t ii;
 	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -445,16 +434,10 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	ret = EINVAL;
-	for (ii=0U; ii<class->pe_num; ii++)
+	ret = pfe_pe_load_firmware(class->pe, class->pe_num, elf);
+	if (EOK != ret)
 	{
-		ret = pfe_pe_load_firmware(class->pe[ii], elf);
-
-		if (EOK != ret)
-		{
-			NXP_LOG_ERROR("Classifier firmware loading the PE %u failed: %d\n", (uint_t)ii, ret);
-			break;
-		}
+		NXP_LOG_ERROR("Classifier firmware loading the PE failed: %d\n", ret);
 	}
 
 	if (EOK == ret)
@@ -765,45 +748,6 @@ errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst_ptr, addr_t src
 }
 
 /**
- * @brief		Read data from PMEM to host memory
- * @param[in]	class The classifier instance
- * @param[in]	pe_idx PE index
- * @param[in]	dst_ptr Destination address within host memory (virtual)
- * @param[in]	src_addr Source address within PMEM (physical)
- * @param[in]	len Number of bytes to be read
- * @return		EOK or error code in case of failure
- */
-errno_t pfe_class_read_pmem(pfe_class_t *class, uint32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class) || (NULL == dst_ptr)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (pe_idx >= class->pe_num)
-	{
-		return EINVAL;
-	}
-
-	if (EOK != oal_mutex_lock(&class->mutex))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-
-	pfe_pe_memcpy_from_imem_to_host_32(class->pe[pe_idx], dst_ptr, src_addr, len);
-
-	if (EOK != oal_mutex_unlock(&class->mutex))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-
-	return EOK;
-}
-
-/**
  * @brief		Destroy classifier instance
  * @param[in]	class The classifier instance
  */
@@ -815,26 +759,27 @@ void pfe_class_destroy(pfe_class_t *class)
 	{
 		pfe_class_disable(class);
 
-		for (ii=0U; ii<class->pe_num; ii++)
+		pfe_pe_destroy(class->pe, (uint8_t)class->pe_num);
+
+		if (NULL != class->pe)
 		{
-			pfe_pe_destroy(class->pe[ii]);
-			class->pe[ii] = NULL;
+			oal_mm_free(class->pe);
 		}
 
-        if(NULL != class->fw_features)
-        {
-            for(ii = 0U; ii < class->fw_features_count; ii++)
-            {
-                if(NULL != class->fw_features[ii])
-                {
-                    pfe_fw_feature_destroy(class->fw_features[ii]);
-                    class->fw_features[ii] = NULL;
-                }
-            }
-            oal_mm_free(class->fw_features);
-            class->fw_features = NULL;
-            class->fw_features_count = 0U;
-        }
+		if(NULL != class->fw_features)
+		{
+			for(ii = 0U; ii < class->fw_features_count; ii++)
+			{
+				if(NULL != class->fw_features[ii])
+				{
+					pfe_fw_feature_destroy(class->fw_features[ii]);
+					class->fw_features[ii] = NULL;
+				}
+			}
+			oal_mm_free(class->fw_features);
+			class->fw_features = NULL;
+			class->fw_features_count = 0U;
+		}
 
 		class->pe_num = 0U;
 		if (NULL != class->heap_context)
@@ -1211,6 +1156,78 @@ uint32_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
 }
 
 /**
+ * @brief		Get class algo statistics
+ * @param[in]	class
+ * @param[out]	stat Statistic structure
+ * @retval		EOK Success
+ * @retval		NOMEM Not possible to allocate memory for read
+ */
+errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
+{
+	pfe_ct_pe_mmap_t mmap;
+	uint32_t i = 0;
+	errno_t ret = EOK;
+	uint32_t buff_len = 0;
+	pfe_ct_classify_stats_t * stats = NULL;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == class) || (NULL == stat)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	(void)memset(stat,0,sizeof(pfe_ct_classify_stats_t));
+
+	/* Prepare memory */
+	buff_len = sizeof(pfe_ct_classify_stats_t) * pfe_class_get_num_of_pes(class);
+	stats = oal_mm_malloc(buff_len);
+	if(NULL == stats)
+	{
+		return ENOMEM;
+	}
+	
+	/* Get the memory map - all PEs share the same memory map
+	   therefore we can read arbitrary one (in this case 0U) */
+	ret = pfe_pe_get_mmap(class->pe[0U], &mmap);
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Cannot get PE memory map\n");
+		oal_mm_free(stats);
+		return ret;
+	}
+
+	/* Gather memory from all PEs*/
+	ret = pfe_class_gather_read_dmem(class, stats, oal_ntohl(mmap.class_pe.classification_stats), buff_len, sizeof(pfe_ct_classify_stats_t));
+
+	/* Calculate total statistics */
+	for(i = 0U; i < pfe_class_get_num_of_pes(class); i++)
+	{
+		pfe_class_alg_stats_endian(&stats[i].flexible_router);
+		pfe_class_alg_stats_endian(&stats[i].ip_router);
+		pfe_class_alg_stats_endian(&stats[i].l2_bridge);
+		pfe_class_alg_stats_endian(&stats[i].vlan_bridge);
+		pfe_class_alg_stats_endian(&stats[i].log_if);
+		pfe_class_alg_stats_endian(&stats[i].hif_to_hif);
+		pfe_class_flexi_parser_stats_endian(&stats[i].flexible_filter);
+	
+		pfe_class_sum_pe_algo_stats(&stat->flexible_router, &stats[i].flexible_router);
+		pfe_class_sum_pe_algo_stats(&stat->ip_router, &stats[i].ip_router);
+		pfe_class_sum_pe_algo_stats(&stat->l2_bridge, &stats[i].l2_bridge);
+		pfe_class_sum_pe_algo_stats(&stat->vlan_bridge, &stats[i].vlan_bridge);
+		pfe_class_sum_pe_algo_stats(&stat->log_if, &stats[i].log_if);
+		pfe_class_sum_pe_algo_stats(&stat->hif_to_hif, &stats[i].hif_to_hif);
+		pfe_class_sum_flexi_parser_stats(&stat->flexible_filter, &stats[i].flexible_filter);
+	}
+	
+	oal_mm_free(stats);
+
+	return ret;
+}
+
+
+/**
  * @brief		Return CLASS runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	class 		The CLASS instance
@@ -1227,7 +1244,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	errno_t ret = EOK;
 	uint32_t ii, j;
 	pfe_ct_pe_stats_t *pe_stats;
-	pfe_ct_classify_stats_t *c_alg_stats;
+	pfe_ct_classify_stats_t c_alg_stats;
 	pfe_ct_version_t fw_ver;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1267,23 +1284,12 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 
 	(void)memset(pe_stats, 0, sizeof(pfe_ct_pe_stats_t) * (class->pe_num + 1U));
 
-	c_alg_stats = oal_mm_malloc(sizeof(pfe_ct_classify_stats_t) * (class->pe_num + 1U));
-	if (NULL == c_alg_stats)
-	{
-		NXP_LOG_ERROR("Memory allocation failed\n");
-		oal_mm_free(pe_stats);
-		return len;
-	}
-
-	(void)memset(c_alg_stats, 0, sizeof(pfe_ct_classify_stats_t) * (class->pe_num + 1U));
-
 	/* Get the memory map - all PEs share the same memory map
 	   therefore we can read arbitrary one (in this case 0U) */
 	ret = pfe_pe_get_mmap(class->pe[0U], &mmap);
 	if (EOK != ret)
 	{
 		NXP_LOG_ERROR("Cannot get PE memory map\n");
-		oal_mm_free(c_alg_stats);
 		oal_mm_free(pe_stats);
 		return len;
 	}
@@ -1305,11 +1311,6 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	   - leave 1st position in allocated memory empty for sums */
 	for (ii = 0U; ii < class->pe_num; ii++)
 	{
-		(void)pfe_pe_get_classify_stats_nolock(
-							class->pe[ii],
-							oal_ntohl(mmap.class_pe.classification_stats),
-							&c_alg_stats[ii + 1U]);
-
 		(void)pfe_pe_get_pe_stats_nolock(
 					class->pe[ii],
 					oal_ntohl(mmap.class_pe.pe_stats),
@@ -1326,6 +1327,17 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		}
 	}
 
+	if (EOK != oal_mutex_unlock(&class->mutex))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+
+	ret = pfe_class_get_stats(class, &c_alg_stats);
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Cannot get class statistics\n");
+	}
+
 	/* Process gathered info from all PEs
 	   - convert endians
 	   - done separately to minimize time when PEs are locked
@@ -1333,14 +1345,6 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	*/
 	for (ii = 0U; ii < class->pe_num; ii++)
 	{
-		/* First convert endians */
-		pfe_class_alg_stats_endian(&c_alg_stats[ii + 1U].flexible_router);
-		pfe_class_alg_stats_endian(&c_alg_stats[ii + 1U].ip_router);
-		pfe_class_alg_stats_endian(&c_alg_stats[ii + 1U].l2_bridge);
-		pfe_class_alg_stats_endian(&c_alg_stats[ii + 1U].vlan_bridge);
-		pfe_class_alg_stats_endian(&c_alg_stats[ii + 1U].log_if);
-		pfe_class_alg_stats_endian(&c_alg_stats[ii + 1U].hif_to_hif);
-		pfe_class_flexi_parser_stats_endian(&c_alg_stats[ii + 1U].flexible_filter);
 		pfe_class_pe_stats_endian(&pe_stats[ii + 1U]);
 
 		/* Calculate sums */
@@ -1352,14 +1356,6 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		{
 			pe_stats[0].replicas[j] += pe_stats[ii + 1U].replicas[j];
 		}
-
-		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].flexible_router, &c_alg_stats[ii + 1U].flexible_router);
-		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].ip_router, &c_alg_stats[ii + 1U].ip_router);
-		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].l2_bridge, &c_alg_stats[ii + 1U].l2_bridge);
-		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].vlan_bridge, &c_alg_stats[ii + 1U].vlan_bridge);
-		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].log_if, &c_alg_stats[ii + 1U].log_if);
-		pfe_class_sum_pe_algo_stats(&c_alg_stats[0U].hif_to_hif, &c_alg_stats[ii + 1U].hif_to_hif);
-		pfe_class_sum_flexi_parser_stats(&c_alg_stats[0U].flexible_filter, &c_alg_stats[ii + 1U].flexible_filter);
 	}
 
 	/* Print results */
@@ -1383,31 +1379,25 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	len += oal_util_snprintf(buf + len, buf_len - len, "Frames with HIF_TX_INJECT: %u\n", pe_stats[0].injected);
 
 	len += oal_util_snprintf(buf + len, buf_len - len, "- Flexible router -\n");
-	len += pfe_class_stat_to_str(&c_alg_stats[0U].flexible_router, buf + len, buf_len - len, verb_level);
+	len += pfe_class_stat_to_str(&c_alg_stats.flexible_router, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- IP Router -\n");
-	len += pfe_class_stat_to_str(&c_alg_stats[0U].ip_router, buf + len, buf_len - len, verb_level);
+	len += pfe_class_stat_to_str(&c_alg_stats.ip_router, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- L2 Bridge -\n");
-	len += pfe_class_stat_to_str(&c_alg_stats[0U].l2_bridge, buf + len, buf_len - len, verb_level);
+	len += pfe_class_stat_to_str(&c_alg_stats.l2_bridge, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- VLAN Bridge -\n");
-	len += pfe_class_stat_to_str(&c_alg_stats[0U].vlan_bridge, buf + len, buf_len - len, verb_level);
+	len += pfe_class_stat_to_str(&c_alg_stats.vlan_bridge, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- Logical Interfaces -\n");
-	len += pfe_class_stat_to_str(&c_alg_stats[0U].log_if, buf + len, buf_len - len, verb_level);
+	len += pfe_class_stat_to_str(&c_alg_stats.log_if, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- InterHIF -\n");
-	len += pfe_class_stat_to_str(&c_alg_stats[0U].hif_to_hif, buf + len, buf_len - len, verb_level);
+	len += pfe_class_stat_to_str(&c_alg_stats.hif_to_hif, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- Global Flexible filter -\n");
-	len += pfe_class_fp_stat_to_str(&c_alg_stats[0U].flexible_filter, buf + len, buf_len - len, verb_level);
+	len += pfe_class_fp_stat_to_str(&c_alg_stats.flexible_filter, buf + len, buf_len - len, verb_level);
 
 	len += oal_util_snprintf(buf + len, buf_len - len, "\nDMEM heap\n---------\n");
 	len += blalloc_get_text_statistics(class->heap_context, buf + len, buf_len - len, verb_level);
 
 	/* Free allocated memory */
-	oal_mm_free(c_alg_stats);
 	oal_mm_free(pe_stats);
-
-	if (EOK != oal_mutex_unlock(&class->mutex))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
 
 	return len;
 }
@@ -1431,3 +1421,22 @@ errno_t pfe_class_get_fw_version(const pfe_class_t *class, pfe_ct_version_t *ver
 
 	return EOK;
 }
+
+/**
+* @brief 		Enable HW lookup of routing table
+* @param[in] 	class The classifier instance
+*/
+void pfe_class_rtable_lookup_enable(const pfe_class_t *class)
+{
+	pfe_class_cfg_rtable_lookup_enable(class->cbus_base_va);
+}
+
+/**
+* @brief 		Disable HW lookup of routing table
+* @param[in] 	class The classifier instance
+*/
+void pfe_class_rtable_lookup_disable(const pfe_class_t *class)
+{
+	pfe_class_cfg_rtable_lookup_disable(class->cbus_base_va);
+}
+

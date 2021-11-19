@@ -285,7 +285,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 				idex_req = (pfe_idex_request_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
 
 #ifdef IDEX_CFG_VERBOSE
-				NXP_LOG_DEBUG("Request %u received\n", oal_ntohl(idex_req->seqnum));
+				NXP_LOG_DEBUG("Request %u received\n", (uint_t)oal_ntohl(idex_req->seqnum));
 #endif /* IDEX_CFG_VERBOSE */
 
 				switch (idex_req->type)
@@ -325,7 +325,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 						else
 						{
 #ifdef IDEX_CFG_VERBOSE
-							NXP_LOG_DEBUG("RPC callback not found, request %u ignored\n", oal_ntohl(idex_req->seqnum));
+							NXP_LOG_DEBUG("RPC callback not found, request %u ignored\n", (uint_t)oal_ntohl(idex_req->seqnum));
 #endif /* IDEX_CFG_VERBOSE */
 						}
 
@@ -350,7 +350,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 				idex_resp = (pfe_idex_response_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
 
 #ifdef IDEX_CFG_VERBOSE
-				NXP_LOG_DEBUG("Response %u received\n", oal_ntohl(idex_resp->seqnum));
+				NXP_LOG_DEBUG("Response %u received\n", (uint_t)oal_ntohl(idex_resp->seqnum));
 #endif /* IDEX_CFG_VERBOSE */
 
 				/*	Matching request found. Check type. */
@@ -429,7 +429,7 @@ static void pfe_idex_do_tx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 				pfe_idex_request_t *req_header = (pfe_idex_request_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
 
 		#ifdef IDEX_CFG_VERBOSE
-				NXP_LOG_DEBUG("Request %u transmitted\n", oal_ntohl(req_header->seqnum));
+				NXP_LOG_DEBUG("Request %u transmitted\n", (uint_t)oal_ntohl(req_header->seqnum));
 		#endif /* IDEX_CFG_VERBOSE */
 
 				/*	Change request state */
@@ -452,7 +452,7 @@ static void pfe_idex_do_tx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 		#ifdef IDEX_CFG_VERBOSE
 				pfe_idex_response_t *resp_header = (pfe_idex_response_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
 
-				NXP_LOG_DEBUG("Response %u transmitted\n", oal_ntohl(resp_header->seqnum));
+				NXP_LOG_DEBUG("Response %u transmitted\n", (uint_t)oal_ntohl(resp_header->seqnum));
 		#endif /* IDEX_CFG_VERBOSE */
 
 				/*	Responses are released immediately once transmitted */
@@ -628,7 +628,7 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
 	(void)memcpy(payload, data, data_len);
 
 #ifdef IDEX_CFG_VERBOSE
-	NXP_LOG_DEBUG("Sending response %u\n", oal_ntohl(seqnum));
+	NXP_LOG_DEBUG("Sending response %u\n", (uint_t)oal_ntohl(seqnum));
 #endif /* IDEX_CFG_VERBOSE */
 
 	/*	Send it out within IDEX frame */
@@ -712,7 +712,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 
 	/*	3.) Send the request */
 #ifdef IDEX_CFG_VERBOSE
-	NXP_LOG_DEBUG("Sending IDEX request %u\n", oal_ntohl(req->seqnum));
+	NXP_LOG_DEBUG("Sending IDEX request %u\n", (uint_t)oal_ntohl(req->seqnum));
 #endif /* IDEX_CFG_VERBOSE */
 
 	/*	Send it out as payload of IDEX frame */
@@ -770,19 +770,19 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 		if (0U == timeout_us)
 		{
 #ifdef IDEX_CFG_VERY_VERBOSE
-			NXP_LOG_DEBUG("IDEX request %u timed-out\n", oal_ntohl(req->seqnum));
+			NXP_LOG_DEBUG("IDEX request %u timed-out\n", (uint_t)oal_ntohl(req->seqnum));
 
 			if (IDEX_REQ_STATE_COMMITTED == req->state)
 			{
-				NXP_LOG_DEBUG("Request %u not transmitted\n", oal_ntohl(req->seqnum));
+				NXP_LOG_DEBUG("Request %u not transmitted\n", (uint_t)oal_ntohl(req->seqnum));
 			}
 			else if (IDEX_REQ_STATE_TRANSMITTED == req->state)
 			{
-				NXP_LOG_DEBUG("Request %u not responded\n", oal_ntohl(req->seqnum));
+				NXP_LOG_DEBUG("Request %u not responded\n", (uint_t)oal_ntohl(req->seqnum));
 			}
 			else
 			{
-				NXP_LOG_DEBUG("Request %u state is: %d\n", oal_ntohl(req->seqnum), req->state);
+				NXP_LOG_DEBUG("Request %u state is: %d\n", (uint_t)oal_ntohl(req->seqnum), req->state);
 			}
 #endif /* IDEX_CFG_VERY_VERBOSE */
 			ret = ETIMEDOUT;

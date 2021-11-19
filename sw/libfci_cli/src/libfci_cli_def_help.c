@@ -55,18 +55,29 @@
         "    "  TXT_PHYIF__EMAC1  "\n"  \
         "    "  TXT_PHYIF__EMAC2  "\n"  \
         "    "  TXT_PHYIF__UTIL   "\n"  \
-		"    "  TXT_PHYIF__HIF_NOCPY  "  (valid only if supported by a driver)"  "\n"  \
+        "    "  TXT_PHYIF__HIF_NOCPY  "  (valid only if supported by a driver)"  "\n"  \
         "    "  TXT_PHYIF__HIF0   "\n"  \
         "    "  TXT_PHYIF__HIF1   "\n"  \
         "    "  TXT_PHYIF__HIF2   "\n"  \
         "    "  TXT_PHYIF__HIF3   "\n"
+
+#define TXT_PHYIF_KEYWORDS_EMAC  \
+        "  Only the following hardcoded PHYIF names are accepted:\n"  \
+        "    "  TXT_PHYIF__EMAC0  "\n"  \
+        "    "  TXT_PHYIF__EMAC1  "\n"  \
+        "    "  TXT_PHYIF__EMAC2  "\n"  \
+
+#define TXT_IQOS_WRED_RANGES  \
+        "    "  TXT_POL_WRED_QUE__DMEM  ": 0-8192  \n"  \
+        "    "  TXT_POL_WRED_QUE__LMEM  ": 0-512   \n"  \
+        "    "  TXT_POL_WRED_QUE__RXF   ":  0-512  \n"  \
 
 
 #define TXT_OPTARGS__PHYIF         TXT_PHYIF__EMAC2
 #define TXT_OPTARGS__ON_OFF        TXT_ON_OFF__ON  "|"  TXT_ON_OFF__OFF
 #define TXT_OPTARGS__MAC_ADDR      "00:22:bc:45:de:67|35-47-ed-6c-28-b0"
 #define TXT_OPTARGS__BD_ACTIONS    TXT_BD_ACTION__PUNT  "|0-3"
-#define TXT_OPTARGS__MR            "MyMirrorRule"
+#define TXT_OPTARGS__MIRROR        "MyMirrorRule"
 #define TXT_OPTARGS__FP_TABLE      "MyFpTable"
 #define TXT_OPTARGS__FP_RULE       "MyFpRule"
 #define TXT_OPTARGS__U8_DEC        "0-255"
@@ -76,7 +87,6 @@
 #define TXT_OPTARGS__U32_DEC       "0-4294967295"
 #define TXT_OPTARGS__U32_HEX       "0x00-0xFFFFFFFF"
 #define TXT_OPTARGS__I32_DEC       "-2147483648 - 2147483647"
-
 
 
 /* ==== TYPEDEFS & DATA : opt binds and descriptions ======================= */
@@ -129,15 +139,19 @@
                                         "  Name of the target physical interface.\n"  \
                                         TXT_PHYIF_KEYWORDS
 
+#define TXT_OPT__INTERFACE_PHYIF_EMAC       TXT_HELP__INTERFACE  "=<phyif_name>"
+#define TXT_OPTDESCR__INTERFACE_PHYIF_EMAC  TXT_HELP__INTERFACE  "=<"  TXT_OPTARGS__PHYIF  ">"  "\n"  \
+                                            "  Name of the target physical interface.\n"  \
+                                            TXT_PHYIF_KEYWORDS_EMAC
+
 #define TXT_OPT__PARENT                 TXT_HELP__PARENT  "=<phyif_name>"
 #define TXT_OPTDESCR__PARENT            TXT_HELP__PARENT  "=<"  TXT_OPTARGS__PHYIF  ">"  "\n"  \
                                         "  Name of the parent physical interface.\n"   \
                                         TXT_PHYIF_KEYWORDS
 
 #define TXT_OPT__MIRROR                 TXT_HELP__MIRROR  "=<phyif_name>"
-#define TXT_OPTDESCR__MIRROR            TXT_HELP__MIRROR  "=<"  TXT_OPTARGS__PHYIF  ">"  "\n"  \
-                                        "  Name of the physical interface which shall receive a copy of traffic.\n"  \
-                                        "  Use empty string (\"\") to disable (clear).\n"
+#define TXT_OPTDESCR__MIRROR            TXT_HELP__MIRROR  "=<"  TXT_OPTARGS__MIRROR  ">"  "\n"  \
+                                        "  Name of the mirroring rule.\n"
 
 #define TXT_OPT__MODE                   TXT_HELP__MODE  "=<if_mode>"
 #define TXT_OPTDESCR__MODE              TXT_HELP__MODE  "=<"  TXT_IF_MODE__BRIDGE  "|"  TXT_IF_MODE__ROUTER  "|...>"  "\n"  \
@@ -160,21 +174,21 @@
                                         "    "  TXT_IF_BLOCK_STATE__LEARN_ONLY  "\n"  \
                                         "    "  TXT_IF_BLOCK_STATE__FW_ONLY     "\n"
 
+#define TXT_OPT__ENABLE                 TXT_HELP__ENABLE
+#define TXT_OPTDESCR__ENABLE            TXT_HELP__ENABLE  "\n"  \
+                                        "  Enables the given feature.\n"
+
 #define TXT_OPT__ENABLE_IF              TXT_HELP__ENABLE
 #define TXT_OPTDESCR__ENABLE_IF         TXT_HELP__ENABLE  "\n"  \
                                         "  Enables (\"ups\") the interface.\n"
 
-#define TXT_OPT__ENABLE_FW              TXT_HELP__ENABLE
-#define TXT_OPTDESCR__ENABLE_FW         TXT_HELP__ENABLE  "\n"  \
-                                        "  Enables the given FW feature.\n"
+#define TXT_OPT__DISABLE                TXT_HELP__DISABLE
+#define TXT_OPTDESCR__DISABLE           TXT_HELP__DISABLE  "\n"  \
+                                        "  Disables the given feature.\n"
 
 #define TXT_OPT__DISABLE_IF             TXT_HELP__DISABLE
 #define TXT_OPTDESCR__DISABLE_IF        TXT_HELP__DISABLE  "\n"  \
                                         "  Disables (\"downs\") the interface.\n"
-
-#define TXT_OPT__DISABLE_FW             TXT_HELP__DISABLE
-#define TXT_OPTDESCR__DISABLE_FW        TXT_HELP__DISABLE  "\n"  \
-                                        "  Disables the given FW feature.\n"
 
 #define TXT_OPT__DISABLE_FF             TXT_HELP__DISABLE
 #define TXT_OPTDESCR__DISABLE_FF        TXT_HELP__DISABLE  "\n"  \
@@ -189,11 +203,6 @@
 #define TXT_OPTDESCR__PROMISC_LOGIF     TXT_HELP__PROMISC  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"    \
                                         "  Enables/disables promiscuous mode.\n"                   \
                                         "  (accepts all traffic regardless of active match rules)\n"
-
-#define TXT_OPT__LOADBALANCE            TXT_HELP__LOADBALANCE  "=<"  TXT_OPTARGS__ON_OFF  ">"
-#define TXT_OPTDESCR__LOADBALANCE       TXT_HELP__LOADBALANCE  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"      \
-                                        "  true  : interface is a member of a loadbalancing bucket.\n"   \
-                                        "  false : interface is NOT a member of a loadbalancing bucket.\n"
 
 #define TXT_OPT__MATCH_MODE             TXT_HELP__MATCH_MODE  "=<"  TXT_OR_AND__OR  "|"  TXT_OR_AND__AND  ">"
 #define TXT_OPTDESCR__MATCH_MODE        TXT_HELP__MATCH_MODE  "=<"  TXT_OR_AND__OR  "|"  TXT_OR_AND__AND  ">"  "\n"  \
@@ -345,12 +354,7 @@
 
 #define TXT_OPT__TIMEOUT_CNTKTMO        TXT_HELP__TIMEOUT  "=<seconds>"
 #define TXT_OPTDESCR__TIMEOUT_CNTKTMO   TXT_HELP__TIMEOUT  "=<"  TXT_OPTARGS__U32_DEC  ">"  "\n"  \
-                                        "  For TCP and 'others': Timeout in seconds.\n"  \
-                                        "  For UDP:\n"                                   \
-                                        "    --> If ["  TXT_HELP__TIMEOUT2  "] is NOT utilized, then\n"  \
-                                        "        this value is applied on all kinds of UDP conntracks.\n"     \
-                                        "    --> If ["  TXT_HELP__TIMEOUT2  "] IS utilized, then \n"     \
-                                        "        this value is applied only on bidirectional UDP conntracks.\n"
+                                        "  Timeout in seconds.\n"
 
 #define TXT_OPT__TIMEOUT2_CNTKTMO       TXT_HELP__TIMEOUT2  "=<seconds>"
 #define TXT_OPTDESCR__TIMEOUT2_CNTKTMO  TXT_HELP__TIMEOUT2  "=<"  TXT_OPTARGS__U32_DEC  ">"  "\n"  \
@@ -422,24 +426,24 @@
 #define TXT_OPTDESCR__R_ROUTE           TXT_HELP__R_ROUTE  "=<"  TXT_OPTARGS__U32_DEC  ">"  "\n"  \
                                         "  Reply direction: route ID\n"
 
-#define TXT_OPT__INGRESS_MR0            TXT_HELP__INGRESS_MR0  "=<rule_name>"
-#define TXT_OPTDESCR__INGRESS_MR0       TXT_HELP__INGRESS_MR0  "=<"  TXT_OPTARGS__MR  ">"  "\n"  \
-                                        "  Mirror rule for the ingress mirror rule slot [0].\n"  \
+#define TXT_OPT__RX_MIRROR0             TXT_HELP__RX_MIRROR0  "=<rule_name>"
+#define TXT_OPTDESCR__RX_MIRROR0        TXT_HELP__RX_MIRROR0  "=<"  TXT_OPTARGS__MIRROR  ">"  "\n"  \
+                                        "  Mirroring rule for the rx slot [0].\n"                   \
                                         "  Use empty string (\"\") to disable (clear).\n"
 
-#define TXT_OPT__INGRESS_MR1            TXT_HELP__INGRESS_MR1  "=<rule_name>"
-#define TXT_OPTDESCR__INGRESS_MR1       TXT_HELP__INGRESS_MR1  "=<"  TXT_OPTARGS__MR  ">"  "\n"  \
-                                        "  Mirror rule for the ingress mirror rule slot [1].\n"  \
+#define TXT_OPT__RX_MIRROR1             TXT_HELP__RX_MIRROR1  "=<rule_name>"
+#define TXT_OPTDESCR__RX_MIRROR1        TXT_HELP__RX_MIRROR1  "=<"  TXT_OPTARGS__MIRROR  ">"  "\n"  \
+                                        "  Mirroring rule for the rx slot [1].\n"                   \
                                         "  Use empty string (\"\") to disable (clear).\n"
 
-#define TXT_OPT__EGRESS_MR0             TXT_HELP__EGRESS_MR0  "=<rule_name>"
-#define TXT_OPTDESCR__EGRESS_MR0        TXT_HELP__EGRESS_MR0  "=<"  TXT_OPTARGS__MR  ">"  "\n"  \
-                                        "  Mirror rule for the egress mirror rule slot [0].\n"  \
+#define TXT_OPT__TX_MIRROR0             TXT_HELP__TX_MIRROR0  "=<rule_name>"
+#define TXT_OPTDESCR__TX_MIRROR0        TXT_HELP__TX_MIRROR0  "=<"  TXT_OPTARGS__MIRROR  ">"  "\n"  \
+                                        "  Mirroring rule for the tx slot [0].\n"                   \
                                         "  Use empty string (\"\") to disable (clear).\n"
 
-#define TXT_OPT__EGRESS_MR1             TXT_HELP__EGRESS_MR1  "=<rule_name>"
-#define TXT_OPTDESCR__EGRESS_MR1        TXT_HELP__EGRESS_MR1  "=<"  TXT_OPTARGS__MR  ">"  "\n"  \
-                                        "  Mirror rule for the egress mirror rule slot [1].\n"  \
+#define TXT_OPT__TX_MIRROR1             TXT_HELP__TX_MIRROR1  "=<rule_name>"
+#define TXT_OPTDESCR__TX_MIRROR1        TXT_HELP__TX_MIRROR1  "=<"  TXT_OPTARGS__MIRROR  ">"  "\n"  \
+                                        "  Mirroring rule for the tx slot [1].\n"                   \
                                         "  Use empty string (\"\") to disable (clear).\n"
 
 #define TXT_OPT__FP_TABLE               TXT_HELP__TABLE  "=<table_name>"
@@ -448,7 +452,7 @@
 
 #define TXT_OPT__FLEXIBLE_FILTER        TXT_HELP__FLEXIBLE_FILTER  "=<table_name>"
 #define TXT_OPTDESCR__FLEXIBLE_FILTER   TXT_HELP__FLEXIBLE_FILTER  "=<"  TXT_OPTARGS__FP_TABLE  ">"  "\n"  \
-                                        "  Name of a FlexibleParser table which shall be set as a FlexibleFilter of the given physical interface.\n"  \
+                                        "  Name of a FlexibleParser table which shall be used as a filter (FlexibleFilter).\n"  \
                                         "  Use empty string (\"\") to disable (clear).\n"
 
 #define TXT_OPT__FP_TABLE0_LOGIF        TXT_HELP__TABLE0  "=<table_name>"
@@ -506,7 +510,7 @@
                                         "  Index where to insert the item.\n"                       \
                                         "  (hint: indexing starts from the position 0)\n"           \
                                         "  If this option is not utilized, then the item is automatically\n"  \
-                                        "  inserted as a last item of the table.\n"
+                                        "  inserted as the last item of the table.\n"
 
 #define TXT_OPT__POSITION_REMDEL        TXT_HELP__POSITION  "=<value>"
 #define TXT_OPTDESCR__POSITION_REMDEL   TXT_HELP__POSITION  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
@@ -517,6 +521,23 @@
 #define TXT_OPTDESCR__POSITION_PRINT    TXT_HELP__POSITION  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
                                         "  Index of the first item to print.\n"  \
                                         "  Default value is 0 (start from the very first item of the table).\n"
+
+#define TXT_OPT__POSITION_INSADD_IQOS_FLOW       TXT_HELP__POSITION  "=<value>"
+#define TXT_OPTDESCR__POSITION_INSADD_IQOS_FLOW  TXT_HELP__POSITION  "=<"  TXT_OPTARGS__U8_DEC  ">"  "\n"  \
+                                                 "  Index where to insert the item.\n"                     \
+                                                 "  (hint: indexing starts from the position 0)\n"         \
+                                                 "  If this option is not utilized, then the item is automatically\n"  \
+                                                 "  inserted as the last item of the table.\n"
+
+#define TXT_OPT__POSITION_REMDEL_IQOS_FLOW       TXT_HELP__POSITION  "=<value>"
+#define TXT_OPTDESCR__POSITION_REMDEL_IQOS_FLOW  TXT_HELP__POSITION  "=<"  TXT_OPTARGS__U8_DEC  ">"  "\n"  \
+                                                 "  Index of the target item to destroy.\n"  \
+                                                 "  (hint: indexing starts from position 0)\n"
+
+#define TXT_OPT__POSITION_PRINT_IQOS_FLOW        TXT_HELP__POSITION  "=<value>"
+#define TXT_OPTDESCR__POSITION_PRINT_IQOS_FLOW   TXT_HELP__POSITION  "=<"  TXT_OPTARGS__U8_DEC  ">"  "\n"  \
+                                                 "  Index of the item to print.\n"  \
+                                                 "  Default value is 0 (start from the very first item of the table).\n"
 
 #define TXT_OPT__COUNT_PRINT            TXT_HELP__COUNT  "=<value>"
 #define TXT_OPTDESCR__COUNT_PRINT       TXT_HELP__COUNT  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
@@ -586,6 +607,10 @@
 #define TXT_OPTDESCR__FEATURE_FW        TXT_HELP__FEATURE  "=<ingress_vlan>"  "\n"  \
                                         "  Name of a FW feature.\n"
 
+#define TXT_OPT__FEATURE_DEMO           TXT_HELP__FEATURE  "=<feature_name>"
+#define TXT_OPTDESCR__FEATURE_DEMO      TXT_HELP__FEATURE  "=<L2_bridge_simple>"  "\n"  \
+                                        "  Name of a demo scenario for a PFE feature.\n"
+
 #define TXT_OPT__STATIC                 TXT_HELP__STATIC
 #define TXT_OPTDESCR__STATIC            TXT_HELP__STATIC  "\n"  \
                                         "  Apply only on static entries.\n"
@@ -623,16 +648,37 @@
 #define TXT_OPTDESCR__SHP_MODE          TXT_HELP__SHP_MODE  "=<"  TXT_SHP_MODE__DISABLED  "|"  TXT_SHP_MODE__DATA_RATE  "|"  TXT_SHP_MODE__PACKET_RATE  ">"  "\n"  \
                                         "  Shaper mode\n"
 
-#define TXT_OPT__THMIN                  TXT_HELP__THMIN  "=<value>"
-#define TXT_OPTDESCR__THMIN             TXT_HELP__THMIN  "=<0-255>"  "\n"  \
+#define TXT_OPT__SHP_MODE_IQOS          TXT_HELP__SHP_MODE  "=<mode>"
+#define TXT_OPTDESCR__SHP_MODE_IQOS     TXT_HELP__SHP_MODE  "=<"  TXT_SHP_MODE__DATA_RATE  "|"  TXT_SHP_MODE__PACKET_RATE  ">"  "\n"  \
+                                        "  Shaper mode\n"
+
+#define TXT_OPT__THMIN_EQOS             TXT_HELP__THMIN  "=<value>"
+#define TXT_OPTDESCR__THMIN_EQOS        TXT_HELP__THMIN  "=<0-255>"  "\n"  \
                                         "  Minimal threshold value. Meaningful only for the following que modes:\n"  \
                                         "    "  TXT_QUE_MODE__WRED  ": Number of packets in the queue where the lowest drop probability zone starts.\n"
 
-#define TXT_OPT__THMAX                  TXT_HELP__THMAX  "=<value>"
-#define TXT_OPTDESCR__THMAX             TXT_HELP__THMAX  "=<0-255>"  "\n"  \
+#define TXT_OPT__THMIN_IQOS_WRED        TXT_HELP__THMIN  "=<value>"
+#define TXT_OPTDESCR__THMIN_IQOS_WRED   TXT_HELP__THMIN  "=<queue type dependent>"  "\n"  \
+                                        "  Minimal threshold value - number of packets in the queue where the lowest drop probability zone starts.\n"  \
+                                        "  Range depends on wred queue type:\n"  \
+                                        TXT_IQOS_WRED_RANGES
+
+#define TXT_OPT__THMAX_EQOS             TXT_HELP__THMAX  "=<value>"
+#define TXT_OPTDESCR__THMAX_EQOS        TXT_HELP__THMAX  "=<0-255>"  "\n"  \
                                         "  Maximal threshold value. Meaningful only for the following que modes:\n"  \
                                         "    "  TXT_QUE_MODE__TAIL_DROP  ": Max allowed number of packets in the queue.\n"  \
                                         "    "  TXT_QUE_MODE__WRED       ": Number of packets in the queue above which the drop probability is always 100%.\n"
+
+#define TXT_OPT__THMAX_IQOS_WRED        TXT_HELP__THMAX  "=<value>"
+#define TXT_OPTDESCR__THMAX_IQOS_WRED   TXT_HELP__THMAX  "=<queue type dependent>"  "\n"  \
+                                        "  Maximal threshold value - number of packets in the queue above which the drop probability"  \
+                                        "  for Unmanaged and Managed traffic is always 100%. Reserved traffic is still accepted.\n"    \
+                                        "  Range depends on wred queue type (see "  TXT_HELP__THMIN  ").\n"
+
+#define TXT_OPT__THFULL_IQOS_WRED       TXT_HELP__THFULL  "=<value>"
+#define TXT_OPTDESCR__THFULL_IQOS_WRED  TXT_HELP__THFULL  "=<queue type dependent>"  "\n"  \
+                                        "  Queue length - number of packets in the queue above which all traffic (even the Reserved traffic) is dropped.\n"  \
+                                        "  Range depends on wred queue type (see "  TXT_HELP__THMIN  ").\n"
 
 #define TXT_OPT__ZPROB                  TXT_HELP__ZPROB  "=<list_of_percentages>"
 #define TXT_OPTDESCR__ZPROB             TXT_HELP__ZPROB  "=<10,30,K,50,...>"  "\n"  \
@@ -640,7 +686,15 @@
                                         "  Drop probabilities for probability zones. Meaningful only for queue mode "  TXT_QUE_MODE__WRED  ".\n"  \
                                         "  Position of a value in the list corresponds with a zone (from zone [0] up to zone [N]).\n"  \
                                         "  Zones which are not touched (when provided list is too short) and zones which are marked with 'K' (keep) are left unchanged.\n"  \
-                                        "  NOTE: Percentages are stored in a compressed format. Expect a certain inaccuracy of stored data (around +/- 3 units)."
+                                        "  NOTE: Percentages are stored in a compressed format. Expect a certain inaccuracy of stored data (around +/- 3 %)."
+
+#define TXT_OPT__ZPROB_IQOS_WRED        TXT_HELP__ZPROB  "=<list_of_percentages>"
+#define TXT_OPTDESCR__ZPROB_IQOS_WRED   TXT_HELP__ZPROB  "=<10,30,K,50,...>"  "\n"  \
+                                        "  Comma separated list of percentages.\n"  \
+                                        "  Drop probabilities for probability zones.\n"  \
+                                        "  Position of a value in the list corresponds with a zone (from zone [0] up to zone [N]).\n"  \
+                                        "  Zones which are not touched (when provided list is too short) and zones which are marked with 'K' (keep) are left unchanged.\n"  \
+                                        "  NOTE: Percentages are stored in a compressed format. Expect a certain inaccuracy of stored data (around +/- 6 %)."
 
 #define TXT_OPT__SCH_ALGO               TXT_HELP__SCH_ALGO  "=<algorithm>"
 #define TXT_OPTDESCR__SCH_ALGO          TXT_HELP__SCH_ALGO  "=<"  TXT_SCH_ALGO__DWRR  ">"  "\n"  \
@@ -709,6 +763,98 @@
                                               "    "  TXT_ON_OFF__ON   "  : discard the packet\n"  \
                                               "    "  TXT_ON_OFF__OFF  " : send the packet to a host\n"
 
+#define TXT_OPT__MODIFY_ACTIONS         TXT_HELP__MODIFY_ACTIONS  "=<list_of_actions>"
+#define TXT_OPTDESCR__MODIFY_ACTIONS    TXT_HELP__MODIFY_ACTIONS  "=<"  TXT_MODIFY_ACTION__ADD_VLAN_HDR  ">"  "\n"  \
+                                        "  Comma separated list of modify actions. Mirrored traffic is modified according to chosen actions.\n"  \
+                                        "  Use empty string (\"\") to disable (clear).\n"            \
+                                        "  Some actions require additional command line options.\n"  \
+                                        "  Modify actions:\n"  \
+                                        "    "  TXT_MODIFY_ACTION__ADD_VLAN_HDR  " ; requires <"  TXT_HELP__VLAN  ">\n"
+
+#define TXT_OPT__WRED_QUE_IQOS          TXT_HELP__WRED_QUE  "=<queue_type>"
+#define TXT_OPTDESCR__WRED_QUE_IQOS     TXT_HELP__WRED_QUE  "=<"  TXT_POL_WRED_QUE__DMEM  ">"  "\n"  \
+                                        "  Queue type for Ingress QoS WRED. Available types:    \n"  \
+                                        "    "  TXT_POL_WRED_QUE__DMEM  "\n"  \
+                                        "    "  TXT_POL_WRED_QUE__LMEM  "\n"  \
+                                        "    "  TXT_POL_WRED_QUE__RXF   "\n"
+
+#define TXT_OPT__SHP_TYPE_IQOS          TXT_HELP__SHP_TYPE  "=<shaper_type>"
+#define TXT_OPTDESCR__SHP_TYPE_IQOS     TXT_HELP__SHP_TYPE  "=<"  TXT_POL_SHP_TYPE__PORT  ">"  "\n"  \
+                                        "  Shaper type for Ingress QoS shaper. Available types:    \n"  \
+                                        "    "  TXT_POL_SHP_TYPE__PORT   "\n"  \
+                                        "    "  TXT_POL_SHP_TYPE__BCAST  "\n"  \
+                                        "    "  TXT_POL_SHP_TYPE__MCAST  "\n"
+
+#define TXT_OPT__FLOW_ACTION_IQOS       TXT_HELP__FLOW_ACTION  "=<action>"
+#define TXT_OPTDESCR__FLOW_ACTION_IQOS  TXT_HELP__FLOW_ACTION  "=<"  TXT_POL_WRED_QUE__DMEM  ">"  "\n"  \
+                                        "  Action to do if the processed packet matches criteria of the given Ingress QoS flow.\n"  \
+                                        "  Actions:\n"  \
+                                        "    "  TXT_POL_FLOW_ACTION__RESERVED  " : packet is classified as Reserved traffic.\n"  \
+                                        "    "  TXT_POL_FLOW_ACTION__MANAGED   " : packet is classified as Managed traffic.\n"  \
+                                        "    "  TXT_POL_FLOW_ACTION__DROP      " : packet is dropped.\n"
+
+#define TXT_OPT__FLOW_TYPES             TXT_HELP__FLOW_TYPES  "=<list_of_rules>"
+#define TXT_OPTDESCR__FLOW_TYPES        TXT_HELP__FLOW_TYPES  "=<"  TXT_POL_FLOW_TYPE1__TYPE_ETH  ","  TXT_POL_FLOW_TYPE2__TOS  ",...>"  "\n"  \
+                                        "  Comma separated list of flow types (match rules for Ingress QoS flow).\n"  \
+                                        "  Use empty string (\"\") to disable (clear).\n"         \
+                                        "  Some rules require additional command line options.\n" \
+                                        "  Flow types:\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE1__TYPE_ETH    "\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE1__TYPE_PPPOE  "\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE1__TYPE_ARP    "\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE1__TYPE_IP4    "\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE1__TYPE_IP6    "\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE1__TYPE_IPX    "\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE1__TYPE_MCAST  "\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE1__TYPE_BCAST  "\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE1__TYPE_VLAN   "\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE2__VLAN        " ; requires <"  TXT_HELP__VLAN        "> and <"  TXT_HELP__VLAN_MASK      ">\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE2__TOS         " ; requires <"  TXT_HELP__TOS         "> and <"  TXT_HELP__TOS_MASK       ">\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE2__PROTOCOL    " ; requires <"  TXT_HELP__PROTOCOL    "> and <"  TXT_HELP__PROTOCOL_MASK  ">\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE2__SIP         " ; requires <"  TXT_HELP__SIP         "> and <"  TXT_HELP__SIP_PFX        ">\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE2__DIP         " ; requires <"  TXT_HELP__DIP         "> and <"  TXT_HELP__DIP_PFX        ">\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE2__SPORT       " ; requires <"  TXT_HELP__SPORT_MIN   "> and <"  TXT_HELP__SPORT_MAX      ">\n"  \
+                                        "    "  TXT_POL_FLOW_TYPE2__DPORT       " ; requires <"  TXT_HELP__DPORT_MIN   "> and <"  TXT_HELP__DPORT_MAX      ">\n"
+
+#define TXT_OPT__TOS                    TXT_HELP__TOS  "=<hex_value>"
+#define TXT_OPTDESCR__TOS               TXT_HELP__TOS  "=<"  TXT_OPTARGS__U8_HEX  ">"  "\n"  \
+                                        "  Type of Service / Traffic Class. \n"
+
+#define TXT_OPT__SPORT_MIN              TXT_HELP__SPORT_MIN  "=<port>"
+#define TXT_OPTDESCR__SPORT_MIN         TXT_HELP__SPORT_MIN  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Source port range - minimal port\n"
+
+#define TXT_OPT__SPORT_MAX              TXT_HELP__SPORT_MAX  "=<port>"
+#define TXT_OPTDESCR__SPORT_MAX         TXT_HELP__SPORT_MAX  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Source port range - maximal port\n"
+
+#define TXT_OPT__DPORT_MIN              TXT_HELP__DPORT_MIN  "=<port>"
+#define TXT_OPTDESCR__DPORT_MIN         TXT_HELP__DPORT_MIN  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Destination port range - minimal port\n"
+
+#define TXT_OPT__DPORT_MAX              TXT_HELP__DPORT_MAX  "=<port>"
+#define TXT_OPTDESCR__DPORT_MAX         TXT_HELP__DPORT_MAX  "=<"  TXT_OPTARGS__U16_DEC  ">"  "\n"  \
+                                        "  Destination port range - maximal port\n"
+
+#define TXT_OPT__VLAN_MASK              TXT_HELP__VLAN_MASK  "=<hex_value>" 
+#define TXT_OPTDESCR__VLAN_MASK         TXT_HELP__VLAN_MASK  "=<"  TXT_OPTARGS__U16_HEX  ">"  "\n"  \
+                                        "  A bitmask for comparison of VLAN.\n"
+
+#define TXT_OPT__TOS_MASK               TXT_HELP__TOS_MASK  "=<hex_value>" 
+#define TXT_OPTDESCR__TOS_MASK          TXT_HELP__TOS_MASK  "=<"  TXT_OPTARGS__U8_HEX  ">"  "\n"  \
+                                        "  A bitmask for comparison of TOS field.\n"
+
+#define TXT_OPT__PROTOCOL_MASK          TXT_HELP__PROTOCOL_MASK  "=<hex_value>" 
+#define TXT_OPTDESCR__PROTOCOL_MASK     TXT_HELP__PROTOCOL_MASK  "=<"  TXT_OPTARGS__U8_HEX  ">"  "\n"  \
+                                        "  A bitmask for comparison of PROTOCOL field.\n"
+
+#define TXT_OPT__SIP_PFX                TXT_HELP__SIP_PFX  "=<value>" 
+#define TXT_OPTDESCR__SIP_PFX           TXT_HELP__SIP_PFX  "=<0-32>"  "\n"  \
+                                        "  Network prefix for SIP field.\n"
+
+#define TXT_OPT__DIP_PFX                TXT_HELP__DIP_PFX  "=<value>" 
+#define TXT_OPTDESCR__DIP_PFX           TXT_HELP__DIP_PFX  "=<0-32>"  "\n"  \
+                                        "  Network prefix for DIP field.\n"
 
 
 
@@ -716,10 +862,7 @@
     Sanity check for opt help texts. When new opt is added, create a help text for the opt and remove its symbol from here.
     And don't forget to check the pairing! ^_^
 */
-#if (defined(OPT_102_TXT_HELP) || defined(OPT_103_TXT_HELP) || defined(OPT_104_TXT_HELP) || \
-     defined(OPT_105_TXT_HELP) || defined(OPT_106_TXT_HELP) || defined(OPT_107_TXT_HELP) || defined(OPT_108_TXT_HELP) || defined(OPT_109_TXT_HELP) || \
-     defined(OPT_110_TXT_HELP) || defined(OPT_111_TXT_HELP) || defined(OPT_112_TXT_HELP) || defined(OPT_113_TXT_HELP) || defined(OPT_114_TXT_HELP) || \
-     defined(OPT_115_TXT_HELP) || defined(OPT_116_TXT_HELP) || defined(OPT_117_TXT_HELP) || defined(OPT_118_TXT_HELP) || defined(OPT_119_TXT_HELP) || \
+#if (defined(OPT_118_TXT_HELP) || defined(OPT_119_TXT_HELP) || \
      defined(OPT_120_TXT_HELP) || defined(OPT_121_TXT_HELP) || defined(OPT_122_TXT_HELP) || defined(OPT_123_TXT_HELP) || defined(OPT_124_TXT_HELP) || \
      defined(OPT_125_TXT_HELP) || defined(OPT_126_TXT_HELP) || defined(OPT_127_TXT_HELP) || defined(OPT_128_TXT_HELP) || defined(OPT_129_TXT_HELP) || \
      defined(OPT_130_TXT_HELP) || defined(OPT_131_TXT_HELP) || defined(OPT_132_TXT_HELP) || defined(OPT_133_TXT_HELP) || defined(OPT_134_TXT_HELP) || \
@@ -773,11 +916,13 @@ static const char *const txt_help_phyif_update[] =
     "<"   TXT_OPT__INTERFACE_PHYIF         ">  ",
     "[["  TXT_OPT__ENABLE_IF               "]|["  TXT_OPT__DISABLE_IF  "]]  ",
     "["   TXT_OPT__PROMISC_PHYIF           "]  ",
-    "["   TXT_OPT__LOADBALANCE             "]  ",
     "["   TXT_OPT__MODE                    "]  ",
     "["   TXT_OPT__BLOCK_STATE             "]  ",
     "["   TXT_OPT__FLEXIBLE_FILTER         "]  ",
-    "[["  TXT_OPT__MIRROR                  "]  ",
+    "["   TXT_OPT__RX_MIRROR0              "]  ",
+    "["   TXT_OPT__RX_MIRROR1              "]  ",
+    "["   TXT_OPT__TX_MIRROR0              "]  ",
+    "["   TXT_OPT__TX_MIRROR1              "]  ",
     "["   TXT_OPT__VLAN_CONF               "]  ",
     "["   TXT_OPT__PTP_CONF                "]  ",
     "["   TXT_OPT__PTP_PROMISC             "]  ",
@@ -792,16 +937,70 @@ static const char *const txt_help_phyif_update[] =
     TXT_OPTDESCR__ENABLE_IF,
     TXT_OPTDESCR__DISABLE_IF,
     TXT_OPTDESCR__PROMISC_PHYIF,
-    TXT_OPTDESCR__LOADBALANCE,
     TXT_OPTDESCR__MODE,
     TXT_OPTDESCR__BLOCK_STATE,
     TXT_OPTDESCR__FLEXIBLE_FILTER,
-    TXT_OPTDESCR__MIRROR,
+    TXT_OPTDESCR__RX_MIRROR0,
+    TXT_OPTDESCR__RX_MIRROR1,
+    TXT_OPTDESCR__TX_MIRROR0,
+    TXT_OPTDESCR__TX_MIRROR1,
     TXT_OPTDESCR__VLAN_CONF,
     TXT_OPTDESCR__PTP_CONF,
     TXT_OPTDESCR__PTP_PROMISC,
     TXT_OPTDESCR__QINQ,
     TXT_OPTDESCR__DISCARD_IF_TTL_BELOW_2,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_phyif_mac_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "phyif-mac-print"             "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Print MAC addresses of a physical interface.\n",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EMAC,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_phyif_mac_add[] =
+{
+    TXT_DECOR_CMD,
+    ""    "phyif-mac-add"               "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC  ">  ",
+    "<"   TXT_OPT__MAC                  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Add MAC address to a physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EMAC,
+    TXT_OPTDESCR__MAC,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_phyif_mac_del[] =
+{
+    TXT_DECOR_CMD,
+    ""    "phyif-mac-del"               "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC  ">  ",
+    "<"   TXT_OPT__MAC                  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Delete MAC address from a physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EMAC,
+    TXT_OPTDESCR__MAC,
     "\n",
     
     NULL
@@ -905,6 +1104,86 @@ static const char *const txt_help_logif_del[] =
     "\n",
     TXT_DECOR_OPT,
     TXT_OPTDESCR__INTERFACE_LOGIF,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_mirror_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "mirror-print"   "   ",
+    "["   TXT_OPT__MIRROR  "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print parameters of all existing mirroring rules.",
+    "\n",
+    ""    "[2] Print parameters of a selected mirroring rule.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__MIRROR,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_mirror_update[] =
+{
+    TXT_DECOR_CMD,
+    ""    "mirror-update"           "   ",
+    "<"   TXT_OPT__MIRROR           ">  ",
+    "["   TXT_OPT__INTERFACE_PHYIF  "]  ",
+    "["   TXT_OPT__FLEXIBLE_FILTER  "]  ",
+    "["   TXT_OPT__MODIFY_ACTIONS   "]  ",
+    "[<rule-specific options (only if applicable)>]",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""   "Update parameters of a mirroring rule.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__MIRROR,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__FLEXIBLE_FILTER,
+    TXT_OPTDESCR__MODIFY_ACTIONS,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_mirror_add[] =
+{
+    TXT_DECOR_CMD,
+    ""    "mirror-add"              "   ",
+    "<"   TXT_OPT__MIRROR           ">  ",
+    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
+    "["   TXT_OPT__FLEXIBLE_FILTER  "]  ",
+    "["   TXT_OPT__MODIFY_ACTIONS   "]  ",
+    "[<rule-specific options (only if applicable)>]",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""   "Create (and configure) a new mirroring rule.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__MIRROR,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__FLEXIBLE_FILTER,
+    TXT_OPTDESCR__MODIFY_ACTIONS,
+    "\n",
+    
+    NULL
+};
+
+static const char *const txt_help_mirror_del[] =
+{
+    TXT_DECOR_CMD,
+    ""    "mirror-del"              "   ",
+    "<"   TXT_OPT__MIRROR           ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Destroy (delete) the target mirroring rule.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__MIRROR,
     "\n",
     
     NULL
@@ -1513,17 +1792,13 @@ static const char* txt_help_cntk_timeout[] =
     ""    "cntk-timeout"             "   ",
     "<"   TXT_OPT__PROTOCOL_CNTKTMO  ">  ",
     "<"   TXT_OPT__TIMEOUT_CNTKTMO   ">  ",
-    "["   TXT_OPT__TIMEOUT2_CNTKTMO  "]  ",
-    "["   TXT_OPT__4o6               "]  ",
     "\n",
     TXT_DECOR_DESCR,
-    "Set timeout of IPv4 conntracks.",
+    "Set timeout of conntracks.",
     "\n",
     TXT_DECOR_OPT,
     TXT_OPTDESCR__PROTOCOL_CNTKTMO,
     TXT_OPTDESCR__TIMEOUT_CNTKTMO,
-    TXT_OPTDESCR__TIMEOUT2_CNTKTMO,
-    TXT_OPTDESCR__4o6,
     "\n",
     
     NULL
@@ -1653,15 +1928,15 @@ static const char* txt_help_fwfeat_set[] =
     TXT_DECOR_CMD,
     ""    "fwfeat-set"         "   ",
     "<"   TXT_OPT__FEATURE_FW  ">  ",
-    "<<"  TXT_OPT__ENABLE_FW   ">|<"  TXT_OPT__DISABLE_FW  ">>  ",
+    "<<"  TXT_OPT__ENABLE      ">|<"  TXT_OPT__DISABLE  ">>  ",
     "\n",
     TXT_DECOR_DESCR,
     ""    "Enable or disable a FW feature.",
     "\n",
     TXT_DECOR_OPT,
     TXT_OPTDESCR__FEATURE_FW,
-    TXT_OPTDESCR__ENABLE_FW,
-    TXT_OPTDESCR__DISABLE_FW,
+    TXT_OPTDESCR__ENABLE,
+    TXT_OPTDESCR__DISABLE,
     "\n",
     
     NULL
@@ -1697,8 +1972,8 @@ static const char* txt_help_qos_que_update[] =
     "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
     "<"   TXT_OPT__QUE              ">  ",
     "["   TXT_OPT__QUE_MODE         "]  ",
-    "["   TXT_OPT__THMIN            "]  ",
-    "["   TXT_OPT__THMAX            "]  ",
+    "["   TXT_OPT__THMIN_EQOS       "]  ",
+    "["   TXT_OPT__THMAX_EQOS       "]  ",
     "["   TXT_OPT__ZPROB            "]  ",
     "\n",
     TXT_DECOR_DESCR,
@@ -1708,8 +1983,8 @@ static const char* txt_help_qos_que_update[] =
     TXT_OPTDESCR__INTERFACE_PHYIF,
     TXT_OPTDESCR__QUE,
     TXT_OPTDESCR__QUE_MODE,
-    TXT_OPTDESCR__THMIN,
-    TXT_OPTDESCR__THMAX,
+    TXT_OPTDESCR__THMIN_EQOS,
+    TXT_OPTDESCR__THMAX_EQOS,
     TXT_OPTDESCR__ZPROB,
     "\n",
     
@@ -1814,9 +2089,255 @@ static const char* txt_help_qos_shp_update[] =
     NULL
 };
 
+static const char* txt_help_qos_pol_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "qos-pol-print"                "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Print summary of Ingress QoS policer configuration for the given physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EMAC,
+    "\n",
+    
+    NULL
+};
 
+static const char* txt_help_qos_pol_set[] =
+{
+    TXT_DECOR_CMD,
+    ""    "qos-pol-set"                  "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC  ">  ",
+    "<<"  TXT_OPT__ENABLE                ">|<"  TXT_OPT__DISABLE  ">>  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Enable or disable Ingress QoS policer block.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EMAC,
+    TXT_OPTDESCR__ENABLE,
+    TXT_OPTDESCR__DISABLE,
+    "\n",
+    
+    NULL
+};
 
+static const char* txt_help_qos_pol_wred_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] qos-pol-wred-print"       "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC  ">  ",
+    "\n",
+    ""    "[2] qos-pol-wred-print"       "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC  ">  ",
+    "<"   TXT_OPT__WRED_QUE_IQOS         ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print all Ingress QoS wreds of the given physical interface.",
+    "\n",
+    ""    "[2] Print a selected Ingress QoS wred of the given physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EMAC,
+    TXT_OPTDESCR__WRED_QUE_IQOS,
+    "\n",
+    
+    NULL
+};
 
+static const char* txt_help_qos_pol_wred_update[] =
+{
+    TXT_DECOR_CMD,
+    ""    "qos-pol-wred-update"          "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC  ">  ",
+    "<"   TXT_OPT__WRED_QUE_IQOS         ">  ",
+    "[["  TXT_OPT__ENABLE                ">|<"  TXT_OPT__DISABLE  "]]  ",
+    "["   TXT_OPT__THMIN_IQOS_WRED       "]  ",
+    "["   TXT_OPT__THMAX_IQOS_WRED       "]  ",
+    "["   TXT_OPT__THFULL_IQOS_WRED      "]  ",
+    "["   TXT_OPT__ZPROB_IQOS_WRED       "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Update parameters of a QoS queue.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EMAC,
+    TXT_OPTDESCR__WRED_QUE_IQOS,
+    TXT_OPTDESCR__ENABLE,
+    TXT_OPTDESCR__DISABLE,
+    TXT_OPTDESCR__THMIN_IQOS_WRED,
+    TXT_OPTDESCR__THMAX_IQOS_WRED,
+    TXT_OPTDESCR__THFULL_IQOS_WRED,
+    TXT_OPTDESCR__ZPROB_IQOS_WRED,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_qos_pol_shp_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] qos-pol-shp-print"        "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC  ">  ",
+    "\n",
+    ""    "[2] qos-pol-shp-print"        "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC  ">  ",
+    "["   TXT_OPT__SHP                   "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print all Ingress QoS shapers of the given physical interface.",
+    "\n",
+    ""    "[2] Print a selected Ingress QoS shaper of the given physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EMAC,
+    TXT_OPTDESCR__SHP,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_qos_pol_shp_update[] =
+{
+    TXT_DECOR_CMD,
+    ""    "qos-pol-shp-update"           "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC  ">  ",
+    "<"   TXT_OPT__SHP                   ">  ",
+    "["   TXT_OPT__SHP_MODE_IQOS         "]  ",
+    "["   TXT_OPT__SHP_TYPE_IQOS         "]  ",
+    "[["  TXT_OPT__ENABLE                ">|<"  TXT_OPT__DISABLE  "]]  ",
+    "["   TXT_OPT__ISL                   "]  ",
+    "["   TXT_OPT__CRMIN                 "]  ",
+    "["   TXT_OPT__CRMAX                 "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Update parameters of Ingress QoS shaper.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EMAC,
+    TXT_OPTDESCR__SHP,
+    TXT_OPTDESCR__SHP_MODE_IQOS,
+    TXT_OPTDESCR__SHP_TYPE_IQOS,
+    TXT_OPTDESCR__ENABLE,
+    TXT_OPTDESCR__DISABLE,
+    TXT_OPTDESCR__ISL,
+    TXT_OPTDESCR__CRMIN,
+    TXT_OPTDESCR__CRMAX,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_qos_pol_flow_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] qos-pol-flow-print"           "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC      ">  ",
+    "\n",
+    ""    "[2] qos-pol-flow-print"           "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC      ">  ",
+    "["   TXT_OPT__POSITION_PRINT_IQOS_FLOW  "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print all Ingress QoS flows of the given physical interface.",
+    "\n",
+    ""    "[2] Print a selected Ingress QoS flow of the given physical interface.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EMAC,
+    TXT_OPTDESCR__POSITION_PRINT_IQOS_FLOW,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_qos_pol_flow_add[] =
+{
+    TXT_DECOR_CMD,
+    ""    "qos-pol-flow-add"                  "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC       ">  ",
+    "["   TXT_OPT__POSITION_INSADD_IQOS_FLOW  "]  ",
+    "["   TXT_OPT__FLOW_ACTION_IQOS           "]  ",
+    "["   TXT_OPT__FLOW_TYPES                 "]  ",
+    "[<flow-specific options (only if applicable)>]",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Create a new Ingress QoS flow.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EMAC,
+    TXT_OPTDESCR__POSITION_INSADD_IQOS_FLOW,
+    TXT_OPTDESCR__FLOW_ACTION_IQOS,
+    TXT_OPTDESCR__VLAN,
+    TXT_OPTDESCR__VLAN_MASK,
+    TXT_OPTDESCR__TOS,
+    TXT_OPTDESCR__TOS_MASK,
+    TXT_OPTDESCR__PROTOCOL,
+    TXT_OPTDESCR__PROTOCOL_MASK,
+    TXT_OPTDESCR__SIP,
+    TXT_OPTDESCR__SIP_PFX,
+    TXT_OPTDESCR__DIP,
+    TXT_OPTDESCR__DIP_PFX,
+    TXT_OPTDESCR__SPORT_MIN,
+    TXT_OPTDESCR__SPORT_MAX,
+    TXT_OPTDESCR__DPORT_MIN,
+    TXT_OPTDESCR__DPORT_MAX,
+    TXT_OPTDESCR__FLOW_TYPES,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_qos_pol_flow_del[] =
+{
+    TXT_DECOR_CMD,
+    ""    "qos-pol-flow-del"                  "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EMAC       ">  ",
+    "<"   TXT_OPT__POSITION_REMDEL_IQOS_FLOW  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Destroy the target Ingress QoS flow.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__POSITION_REMDEL_IQOS_FLOW,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_demo_feature_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "demo-feature-print"  "   ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Print all available demo scenarios for PFE feature configuration.",
+    "\n",
+    TXT_DECOR_OPT,
+    "no options\n",
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_demo_feature_run[] =
+{
+    TXT_DECOR_CMD,
+    ""    "demo-feature-run"     "   ",
+    "<"   TXT_OPT__FEATURE_DEMO  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Run the requested demo scenario. Demo scenarios show how to configure PFE features.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FEATURE_DEMO,
+    "\n",
+    
+    NULL
+};
 
 
 

@@ -67,8 +67,7 @@ rwildcard = $(wildcard $(addprefix $1/*.,$2)) $(foreach d,$(wildcard $1/*),$(cal
 
 #Source list
 ifeq ($(PFE_CFG_PFE_MASTER),0)
-SRCS =	src/pfe_class.c \
-		src/pfe_hif_chnl.c \
+SRCS =		src/pfe_hif_chnl.c \
 		src/pfe_hif_ring.c \
 		src/pfe_hif.c \
 		src/pfe_idex.c \
@@ -80,6 +79,7 @@ SRCS =	src/pfe_class.c \
 else
 SRCS =	src/pfe_bmu.c \
 		src/pfe_class.c \
+		src/pfe_mirror.c \
 		src/pfe_emac.c \
 		src/pfe_gpi.c \
 		src/pfe_hif_chnl.c \
@@ -99,7 +99,9 @@ SRCS =	src/pfe_bmu.c \
 		src/pfe_util.c \
 		src/pfe_fp.c \
 		src/pfe_flexible_filter.c \
+		src/pfe_feature_mgr.c \
 		src/pfe_fw_feature.c \
+		src/pfe_hw_feature.c \
 		src/pfe_spd.c \
 		src/pfe_spd_acc.c \
 		src/pfe_mac_db.c
@@ -172,8 +174,8 @@ ccflags-y += $(GLOBAL_CCFLAGS)
 ccflags-y += -Werror
 
 ifeq ($(PFE_CFG_PFE_MASTER),0)
-pfe_platform-y := src/pfe_hif_chnl.o \
-		src/pfe_hif_ring.o \
+pfe_platform-y := src/pfe_hif_chnl_linux.o \
+		src/pfe_hif_ring_linux.o \
 		src/pfe_hif.o \
 		src/pfe_log_if_slave.o \
 		src/pfe_if_db.o \
@@ -183,20 +185,24 @@ pfe_platform-y := src/pfe_hif_chnl.o \
 else
 pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_class.o \
+	src/pfe_mirror.o \
 	src/pfe_flexible_filter.o \
+	src/pfe_feature_mgr.o \
 	src/pfe_fw_feature.o \
+	src/pfe_hw_feature.o \
 	src/pfe_fp.o \
 	src/pfe_emac.o \
 	src/pfe_gpi.o \
 	src/pfe_hif.o \
-	src/pfe_hif_chnl.o \
-	src/pfe_hif_ring.o \
+	src/pfe_hif_chnl_linux.o \
+	src/pfe_hif_ring_linux.o \
 	src/pfe_pe.o \
 	src/pfe_tmu.o \
 	src/pfe_util.o \
 	src/pfe_phy_if.o \
 	src/pfe_log_if.o \
 	src/pfe_if_db.o \
+	src/pfe_wdt.o \
 	src/pfe_safety.o \
 	src/pfe_spd.o \
 	src/pfe_spd_acc.o \
@@ -211,8 +217,9 @@ ifeq ($(PFE_CFG_L2BRIDGE_ENABLE),1)
 endif
 endif
 
-
-
+ifeq ($(PFE_CFG_PFE_MASTER),0)
+pfe_platform-y += hw/$(TARGET_HW)/pfe_hif_csr.o
+else
 pfe_platform-y += src/pfe_bmu.o \
 	hw/$(TARGET_HW)/pfe_bmu_csr.o \
 	hw/$(TARGET_HW)/pfe_emac_csr.o \
@@ -221,11 +228,8 @@ pfe_platform-y += src/pfe_bmu.o \
 	hw/$(TARGET_HW)/pfe_class_csr.o \
 	hw/$(TARGET_HW)/pfe_gpi_csr.o \
 	hw/$(TARGET_HW)/pfe_tmu_csr.o \
+	hw/$(TARGET_HW)/pfe_wdt_csr.o \
 	hw/$(TARGET_HW)/pfe_safety_csr.o
-
-ifneq ($(PFE_CFG_IP_VERSION),PFE_CFG_IP_VERSION_FPGA_5_0_4)
-pfe_platform-y += hw/$(TARGET_HW)/pfe_wdt_csr.o
-pfe_platform-y += src/pfe_wdt.o
 endif
 
 ifeq ($(PFE_CFG_PFE_MASTER),0)

@@ -486,7 +486,7 @@ out:
 }
 #endif /* PFE_CFG_PFE_MASTER */
 
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a)
+#if defined(PFE_CFG_PFE_MASTER) || defined(PFE_CFG_LINUX_RES_MEM_ENABLE)
 static int pfeng_reserved_bdr_pool_region_init(struct device *dev, int idx, struct gen_pool **pool_alloc)
 {
 	struct device_node *mem_node;
@@ -555,7 +555,7 @@ errno_t oal_mm_init(const void *devh)
 	struct gen_pool *pool_alloc = NULL;
 	struct reserved_mem *rmem = NULL;
 	int idx = 0;
-	int ret;
+	__maybe_unused int ret;
 
 #ifdef PFE_CFG_PFE_MASTER
 	/* BMU2 region is required by MASTER only */
@@ -569,19 +569,25 @@ errno_t oal_mm_init(const void *devh)
 		idx++;
 #endif /* PFE_CFG_PFE_MASTER */
 
+#if defined(PFE_CFG_PFE_MASTER) || defined(PFE_CFG_LINUX_RES_MEM_ENABLE)
 	ret = of_reserved_mem_device_init_by_idx(dev, dev->of_node, idx);
 	if (ret) {
 		dev_err(dev, "shared-dma-pool reservation failed. Error %d\n", ret);
 		return -ENOMEM;
 	}
+#else
+		dev_info(dev, "shared-dma-pool reserved region skipped\n");
+#endif
 	idx++;
 
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a)
+#if defined(PFE_CFG_PFE_MASTER) || defined(PFE_CFG_LINUX_RES_MEM_ENABLE)
 	ret = pfeng_reserved_bdr_pool_region_init(dev, idx, &pool_alloc);
 	if (ret) {
 		dev_err(dev, "BDR pool reservation failed. Error %d\n", ret);
 		return -ENOMEM;
 	}
+#else
+		dev_info(dev, "pfe-bdr-pool reserved region skipped\n"); 
 #endif
 
 	if (pool_alloc) {

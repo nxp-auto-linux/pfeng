@@ -33,13 +33,19 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+
 #include "libfci_cli_common.h"
 #include "libfci_cli_def_opts.h"
 #include "libfci_cli_print_helpers.h"
 #include "libfci_cli_def_optarg_keywords.h"
 #include "libfci_cli_cmds_fp.h"
 
-#include "libfci_interface/fci_fp.h"
+/*
+    NOTE:
+    The "demo_" functions are libFCI abstractions.
+    The "demo_" prefix was chosen because these functions are used as demos in FCI API Reference. 
+*/
+#include "libfci_demo/demo_fp.h"
 
 /* ==== TESTMODE vars ====================================================== */
 
@@ -61,9 +67,9 @@ static void fprule_header_print(unsigned int indent)
            "%-*s|=======|=================|============|============|========|=============|========|===========================|\n", indent, "", indent, "");
 }
 
-static int fprule_print_aux(const fpp_fp_rule_props_t* p_rule_props, uint16_t position, unsigned int indent)
+static int fprule_print_aux(const fpp_fp_rule_cmd_t* p_rule, uint16_t position, unsigned int indent)
 {
-    assert(NULL != p_rule_props);
+    assert(NULL != p_rule);
     
     if (stt_do_header_print)
     {
@@ -72,22 +78,27 @@ static int fprule_print_aux(const fpp_fp_rule_props_t* p_rule_props, uint16_t po
     }
     
     printf("%-*s| %5"PRIu16" | %-15s | 0x%08"PRIX32" | 0x%08"PRIX32" |  %5"PRIu16" | %-11s | %-6s | %-9s %-15s |\n", indent, "",
-           position, (p_rule_props->rule_name), (p_rule_props->data), (p_rule_props->mask),
-           (p_rule_props->offset), cli_value2txt_offset_from(p_rule_props->offset_from),
-           cli_value2txt_on_off(p_rule_props->invert), cli_value2txt_match_action(p_rule_props->match_action),
-           (p_rule_props->next_rule_name));
+           position,
+           demo_fp_rule_ld_get_name(p_rule),
+           demo_fp_rule_ld_get_data(p_rule), 
+           demo_fp_rule_ld_get_mask(p_rule),
+           demo_fp_rule_ld_get_offset(p_rule),
+           cli_value2txt_offset_from(demo_fp_rule_ld_get_offset_from(p_rule)),
+           cli_value2txt_on_off(demo_fp_rule_ld_is_invert(p_rule)), 
+           cli_value2txt_match_action(demo_fp_rule_ld_get_match_action(p_rule)),
+           demo_fp_rule_ld_get_next_name(p_rule));
     
     return (FPP_ERR_OK);
 }
 
-static inline int fptable_rule_print(const fpp_fp_rule_props_t* p_rule_props, uint16_t position)
+static inline int fptable_rule_print(const fpp_fp_rule_cmd_t* p_rule, uint16_t position)
 {
-    return fprule_print_aux(p_rule_props, position, 2u);
+    return fprule_print_aux(p_rule, position, 2u);
 }
 
-static inline int fprule_print(const fpp_fp_rule_props_t* p_rule_props, uint16_t position)
+static inline int fprule_print(const fpp_fp_rule_cmd_t* p_rule, uint16_t position)
 {
-    return fprule_print_aux(p_rule_props, position, 0u);
+    return fprule_print_aux(p_rule, position, 0u);
 }
 
 /* ==== PUBLIC FUNCTIONS : fptable ========================================= */
@@ -101,7 +112,10 @@ int cli_cmd_fptable_print(const cli_cmdargs_t *p_cmdargs)
     int rtn = CLI_ERR;
     
     /* check for mandatory opts */
-    const mandopt_t mandopts[] = {{OPT_TABLE, NULL, (p_cmdargs->table0_name.is_valid)}};
+    const mandopt_t mandopts[] = 
+    {
+        {OPT_TABLE, NULL, (p_cmdargs->table0_name.is_valid)}
+    };
     rtn = cli_mandopt_check(mandopts, MANDOPTS_CALC_LN(mandopts));
     
     /* exec */
@@ -110,7 +124,7 @@ int cli_cmd_fptable_print(const cli_cmdargs_t *p_cmdargs)
         const uint16_t pos = ((p_cmdargs->offset.is_valid) ? (p_cmdargs->offset.value) : (0u));
         const uint16_t cnt = ((p_cmdargs->count_ethtype.is_valid) ? (p_cmdargs->count_ethtype.value) : (0u));
         stt_do_header_print = true;
-        rtn = fci_fp_table_print(cli_p_cl, fptable_rule_print, (p_cmdargs->table0_name.txt), pos, cnt);
+        rtn = demo_fp_table_print(cli_p_cl, fptable_rule_print, (p_cmdargs->table0_name.txt), pos, cnt);
     }
     
     return (rtn);
@@ -125,13 +139,16 @@ int cli_cmd_fptable_add(const cli_cmdargs_t *p_cmdargs)
     int rtn = CLI_ERR;
     
     /* check for mandatory opts */
-    const mandopt_t mandopts[] = {{OPT_TABLE, NULL, (p_cmdargs->table0_name.is_valid)}};
+    const mandopt_t mandopts[] = 
+    {
+        {OPT_TABLE, NULL, (p_cmdargs->table0_name.is_valid)}
+    };
     rtn = cli_mandopt_check(mandopts, MANDOPTS_CALC_LN(mandopts));
     
-    /*  exec  */
+    /* exec */
     if (FPP_ERR_OK == rtn)
     {
-        rtn = fci_fp_table_add(cli_p_cl, (p_cmdargs->table0_name.txt));
+        rtn = demo_fp_table_add(cli_p_cl, (p_cmdargs->table0_name.txt));
     }
     
     return (rtn);
@@ -146,13 +163,16 @@ int cli_cmd_fptable_del(const cli_cmdargs_t *p_cmdargs)
     int rtn = CLI_ERR;
     
     /* check for mandatory opts */
-    const mandopt_t mandopts[] = {{OPT_TABLE, NULL, (p_cmdargs->table0_name.is_valid)}};
+    const mandopt_t mandopts[] = 
+    {
+        {OPT_TABLE, NULL, (p_cmdargs->table0_name.is_valid)}
+    };
     rtn = cli_mandopt_check(mandopts, MANDOPTS_CALC_LN(mandopts));
     
     /* exec */
     if (FPP_ERR_OK == rtn)
     {
-        rtn = fci_fp_table_del(cli_p_cl, (p_cmdargs->table0_name.txt));
+        rtn = demo_fp_table_del(cli_p_cl, (p_cmdargs->table0_name.txt));
     }
     
     return (rtn);
@@ -178,7 +198,7 @@ int cli_cmd_fptable_insrule(const cli_cmdargs_t *p_cmdargs)
     if (FPP_ERR_OK == rtn)
     {
         const uint16_t pos = ((p_cmdargs->offset.is_valid) ? (p_cmdargs->offset.value) : (UINT16_MAX));
-        rtn = fci_fp_table_insert_rule(cli_p_cl, (p_cmdargs->table0_name.txt), (p_cmdargs->ruleA0_name.txt), pos);
+        rtn = demo_fp_table_insert_rule(cli_p_cl, (p_cmdargs->table0_name.txt), (p_cmdargs->ruleA0_name.txt), pos);
     }
     
     return (rtn);
@@ -203,7 +223,7 @@ int cli_cmd_fptable_remrule(const cli_cmdargs_t *p_cmdargs)
     /* exec */
     if (FPP_ERR_OK == rtn)
     {
-        rtn = fci_fp_table_remove_rule(cli_p_cl, (p_cmdargs->table0_name.txt), (p_cmdargs->ruleA0_name.txt));
+        rtn = demo_fp_table_remove_rule(cli_p_cl, (p_cmdargs->table0_name.txt), (p_cmdargs->ruleA0_name.txt));
     }
     
     return (rtn);
@@ -228,11 +248,11 @@ int cli_cmd_fprule_print(const cli_cmdargs_t *p_cmdargs)
     {
         /* print a single rule */
         uint16_t idx = 0u;
-        rtn = fci_fp_rule_get_by_name(cli_p_cl, &fprule, &idx, (p_cmdargs->ruleA0_name.txt));
+        rtn = demo_fp_rule_get_by_name(cli_p_cl, &fprule, &idx, (p_cmdargs->ruleA0_name.txt));
         if (FPP_ERR_OK == rtn)
         {
             stt_do_header_print = true;
-            rtn = fprule_print(&(fprule.r), idx);
+            rtn = fprule_print(&fprule, idx);
         }
     }
     else
@@ -241,7 +261,7 @@ int cli_cmd_fprule_print(const cli_cmdargs_t *p_cmdargs)
         const uint16_t pos = ((p_cmdargs->offset.is_valid) ? (p_cmdargs->offset.value) : (0u));
         const uint16_t cnt = ((p_cmdargs->count_ethtype.is_valid) ? (p_cmdargs->count_ethtype.value) : (0u));
         stt_do_header_print = true;
-        rtn = fci_fp_rule_print_all(cli_p_cl, fprule_print, pos, cnt);
+        rtn = demo_fp_rule_print_all(cli_p_cl, fprule_print, pos, cnt);
     }
 
     return (rtn);
@@ -275,37 +295,29 @@ int cli_cmd_fprule_add(const cli_cmdargs_t *p_cmdargs)
     /* modify local data */
     if (FPP_ERR_OK == rtn)
     {
-        if (FPP_ERR_OK == rtn)
-        {
-            rtn = fci_fp_rule_ld_set_data(&fprule, (p_cmdargs->data_hifc_sad.value));
-        }
-        if (FPP_ERR_OK == rtn)
-        {
-            rtn = fci_fp_rule_ld_set_mask(&fprule, (p_cmdargs->mask_spi.value));
-        }
-        if (FPP_ERR_OK == rtn)
-        {
-            rtn = fci_fp_rule_ld_set_offset(&fprule, (p_cmdargs->offset.value), (p_cmdargs->layer.value));
-        }
-        if (FPP_ERR_OK == rtn)
+        demo_fp_rule_ld_set_data(&fprule, (p_cmdargs->data_hifc_sad.value));
+        demo_fp_rule_ld_set_mask(&fprule, (p_cmdargs->mask_spi.value));
+        demo_fp_rule_ld_set_offset(&fprule, (p_cmdargs->offset.value), (p_cmdargs->layer.value));
+        
         {
             fpp_fp_rule_match_action_t match_action = ((p_cmdargs->accept.is_valid) ? (FP_ACCEPT) :
                                                       ((p_cmdargs->ruleB0_name.is_valid) ? (FP_NEXT_RULE) : 
                                                        (FP_REJECT)));
             const char* p_txt = ((p_cmdargs->ruleB0_name.is_valid) ? (p_cmdargs->ruleB0_name.txt) : (NULL));
-            rtn = fci_fp_rule_ld_set_match_action(&fprule, match_action, p_txt);
+            demo_fp_rule_ld_set_match_action(&fprule, match_action, p_txt);
         }
         
-        if ((FPP_ERR_OK == rtn) && (p_cmdargs->invert.is_valid))  /* this one is optional, hence validity check */
+        /* this param is optional, hence the validity check */
+        if (p_cmdargs->invert.is_valid)  
         {
-            rtn = fci_fp_rule_ld_set_invert(&fprule, (p_cmdargs->invert.is_valid));
+            demo_fp_rule_ld_set_invert(&fprule, (p_cmdargs->invert.is_valid));
         }
     }
     
     /* exec */
     if (FPP_ERR_OK == rtn)
     {
-        rtn = fci_fp_rule_add(cli_p_cl, (p_cmdargs->ruleA0_name.txt), &fprule);
+        rtn = demo_fp_rule_add(cli_p_cl, (p_cmdargs->ruleA0_name.txt), &fprule);
     }
     
     return (rtn);
@@ -320,13 +332,16 @@ int cli_cmd_fprule_del(const cli_cmdargs_t *p_cmdargs)
     int rtn = CLI_ERR;
     
     /* check for mandatory opts */
-    const mandopt_t mandopts[] = {{OPT_RULE, NULL, (p_cmdargs->ruleA0_name.is_valid)}};
+    const mandopt_t mandopts[] = 
+    {
+        {OPT_RULE, NULL, (p_cmdargs->ruleA0_name.is_valid)}
+    };
     rtn = cli_mandopt_check(mandopts, MANDOPTS_CALC_LN(mandopts));
     
     /* exec */
     if (FPP_ERR_OK == rtn)
     {
-        rtn = fci_fp_rule_del(cli_p_cl, (p_cmdargs->ruleA0_name.txt));
+        rtn = demo_fp_rule_del(cli_p_cl, (p_cmdargs->ruleA0_name.txt));
     }
     
     return (rtn);

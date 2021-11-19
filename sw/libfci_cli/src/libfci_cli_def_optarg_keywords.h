@@ -320,7 +320,6 @@ extern const uint8_t SPD_ACTIONS__MAX;
 #define TXT_SCH_IN__DISABLED  "D"
 #define TXT_SCH_IN__KEEP      "K"
 
-
 /* indexed by shaper mode IDs (see doxygen for 'fpp_qos_shaper_cmd_t.mode') */
 #define TXT_SHP_MODE__DISABLED     "DISABLED"
 #define TXT_SHP_MODE__DATA_RATE    "DATA_RATE"
@@ -347,6 +346,51 @@ extern const uint8_t SPD_ACTIONS__MAX;
     /* special elements; these are a part of shaper position IDs, but are NOT indexed by shaper position IDs */
 #define TXT_SHP_POS__DISABLED  "DISABLED"
 
+/* based on element order of 'fpp_modify_actions_t' */
+/* WARNING: elements of 'fpp_modify_actions_t' are bitmasks, and thus CANNOT directly index this array */
+#define TXT_MODIFY_ACTION__XXX_RES0_XXX  "__XXX_res0_XXX__"
+#define TXT_MODIFY_ACTION__ADD_VLAN_HDR  "ADD_VLAN_HDR"
+
+/* indexed by Ingress QoS WRED queue (see doxygen for 'fpp_iqos_queue_t') */
+#define TXT_POL_WRED_QUE__DMEM  "DMEM"
+#define TXT_POL_WRED_QUE__LMEM  "LMEM"
+#define TXT_POL_WRED_QUE__RXF   "RXF"
+
+/* indexed by Ingress QoS shaper type (see doxygen for 'fpp_iqos_shp_type_t') */
+#define TXT_POL_SHP_TYPE__PORT   "PORT"
+#define TXT_POL_SHP_TYPE__BCAST  "BCAST"
+#define TXT_POL_SHP_TYPE__MCAST  "MCAST"
+
+/* indexed by Ingress QoS shaper rate mode (see doxygen for 'fpp_iqos_shp_rate_mode_t') */
+#define TXT_POL_SHP_MODE__DATA    TXT_SHP_MODE__DATA_RATE
+#define TXT_POL_SHP_MODE__PACKET  TXT_SHP_MODE__PACKET_RATE
+
+/* indexed by Ingress QoS flow actions (see doxygen for 'fpp_iqos_flow_action_t') */
+#define TXT_POL_FLOW_ACTION__MANAGED    "MANAGED"
+#define TXT_POL_FLOW_ACTION__DROP       "DROP"
+#define TXT_POL_FLOW_ACTION__RESERVED   "RESERVED"
+
+/* based on element order of 'fpp_iqos_flow_type_t' */
+/* WARNING: elements of 'fpp_iqos_flow_type_t' are bitmasks, and thus CANNOT directly index this array */
+#define TXT_POL_FLOW_TYPE1__TYPE_ETH    TXT_MATCH_RULE__TYPE_ETH
+#define TXT_POL_FLOW_TYPE1__TYPE_PPPOE  TXT_MATCH_RULE__TYPE_PPPOE
+#define TXT_POL_FLOW_TYPE1__TYPE_ARP    TXT_MATCH_RULE__TYPE_ARP
+#define TXT_POL_FLOW_TYPE1__TYPE_IP4    TXT_MATCH_RULE__TYPE_IP4
+#define TXT_POL_FLOW_TYPE1__TYPE_IP6    TXT_MATCH_RULE__TYPE_IP6
+#define TXT_POL_FLOW_TYPE1__TYPE_IPX    TXT_MATCH_RULE__TYPE_IPX
+#define TXT_POL_FLOW_TYPE1__TYPE_MCAST  TXT_MATCH_RULE__TYPE_MCAST
+#define TXT_POL_FLOW_TYPE1__TYPE_BCAST  TXT_MATCH_RULE__TYPE_BCAST
+#define TXT_POL_FLOW_TYPE1__TYPE_VLAN   TXT_MATCH_RULE__TYPE_VLAN
+
+/* based on element order of 'fpp_iqos_flow_arg_type_t' */
+/* WARNING: elements of 'fpp_iqos_flow_arg_type_t' are bitmasks, and thus CANNOT directly index this array */
+#define TXT_POL_FLOW_TYPE2__VLAN        TXT_MATCH_RULE__VLAN
+#define TXT_POL_FLOW_TYPE2__TOS         "TOS"
+#define TXT_POL_FLOW_TYPE2__PROTOCOL    TXT_MATCH_RULE__PROTOCOL
+#define TXT_POL_FLOW_TYPE2__SIP         TXT_MATCH_RULE__SIP
+#define TXT_POL_FLOW_TYPE2__DIP         TXT_MATCH_RULE__DIP
+#define TXT_POL_FLOW_TYPE2__SPORT       TXT_MATCH_RULE__SPORT
+#define TXT_POL_FLOW_TYPE2__DPORT       TXT_MATCH_RULE__DPORT
 
 
 /* ==== PUBLIC FUNCTIONS =================================================== */
@@ -411,6 +455,29 @@ bool        cli_shp_pos_is_not_dis(uint8_t value);
 const char* cli_value2txt_shp_pos(uint8_t value);
 int         cli_txt2value_shp_pos(uint8_t* p_rtn_value, const char* p_txt);
 
+const char* cli_value2txt_modify_action(uint8_t value);
+int         cli_txt2value_modify_action(uint8_t* p_rtn_value, const char* p_txt);
+
+const char* cli_value2txt_pol_wred_que(uint8_t value);
+int         cli_txt2value_pol_wred_que(uint8_t* p_rtn_value, const char* p_txt);
+
+const char* cli_value2txt_pol_shp_type(uint8_t value);
+int         cli_txt2value_pol_shp_type(uint8_t* p_rtn_value, const char* p_txt);
+
+const char* cli_value2txt_pol_shp_mode(uint8_t value);
+int         cli_txt2value_pol_shp_mode(uint8_t* p_rtn_value, const char* p_txt);
+
+const char* cli_value2txt_pol_flow_action(uint8_t value);
+int         cli_txt2value_pol_flow_action(uint8_t* p_rtn_value, const char* p_txt);
+
+const char* cli_value2txt_pol_flow_type1(uint8_t value);
+int         cli_txt2value_pol_flow_type1(uint8_t* p_rtn_value, const char* p_txt);
+
+const char* cli_value2txt_pol_flow_type2(uint8_t value);
+int         cli_txt2value_pol_flow_type2(uint8_t* p_rtn_value, const char* p_txt);
+
+const char* cli_value2txt_pol_flow_type32(uint8_t value);
+int         cli_txt2value_pol_flow_type32(uint8_t* p_rtn_value, const char* p_txt);
 
 /* ========================================================================= */
 

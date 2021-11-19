@@ -33,568 +33,1047 @@
 #define FPP_ERR_ENTRY_NOT_FOUND					0xf104
 #define FPP_ERR_INTERNAL_FAILURE				0xffff
 
+/* Size limit for the strings specifying mirror name. */
+#define MIRROR_NAME_SIZE 16
+
 /**
- * @def FPP_CMD_PHY_IF
- * @brief FCI command for working with physical interfaces.
- * @note Command is defined as extension of the legacy fpp.h.
- * @details Interfaces are needed to be known to FCI to support insertion of routes and conntracks.
- *          Command can be used to get operation mode, mac address and operation flags (enabled, promisc).
- * @details Command can be used with various `.action` values:
- *          - @c FPP_ACTION_UPDATE: Updates properties of an existing physical interface.
- *          - @c FPP_ACTION_QUERY: Gets head of list of existing physical interfaces properties.
- *          - @c FPP_ACTION_QUERY_CONT: Gets next item from list of existing physical interfaces. Shall
- * 				be called after @ref FPP_ACTION_QUERY was called. On each call it replies with properties
- *              of the next interface in the list.
+ * @def         FPP_CMD_PHY_IF
+ * @brief       FCI command for management of physical interfaces.
+ * @details     Related topics: @ref mgmt_phyif
+ * @details     Related data types: @ref fpp_phy_if_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Modify properties of a physical interface.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) a physical interface query session and get properties 
+ *                   of the first physical interface from the internal list of physical interfaces.
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get properties of the next physical interface 
+ *                   from the list. Intended to be called in a loop (to iterate through the list).
  *
- * @note Precondition to use the query is to atomically lock the access with @ref FPP_CMD_IF_LOCK_SESSION.
+ * @note
+ * All operations with physical interfaces require exclusive lock of the interface database.
+ * See @ref FPP_CMD_IF_LOCK_SESSION.
  *
- * Command Argument Type: @ref fpp_phy_if_cmd_t
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Modify properties of a physical interface. It is recommended to use the read-modify-write
+ * approach (see @ref mgmt_phyif). Some properties cannot be modified (see fpp_phy_if_cmd_t).
+ * @code{.c}
+ *  .............................................  
+ *  fpp_phy_if_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_UPDATE,  // Action
+ *    .name   = "...",              // Interface name (see chapter Physical Interface)
+ *    
+ *    ... = ...  // Properties (data fields) to be updated, and their new (modified) values.
+ *               // Some properties cannot be modified (see fpp_phy_if_cmd_t).
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_PHY_IF, sizeof(fpp_phy_if_cmd_t), 
+ *                                         (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
+ * @endcode
  *
- * Action FPP_ACTION_UPDATE
- * --------------------------
- * Update interface properties. Set fpp_phy_if_cmd_t.action to @ref FPP_ACTION_UPDATE and fpp_phy_if_cmd_t.name
- * to name of the desired interface to be updated. Rest of the fpp_phy_if_cmd_t members will be considered
- * to be used as the new interface properties. It is recommended to use read-modify-write approach in
- * combination with @ref FPP_ACTION_QUERY and @ref FPP_ACTION_QUERY_CONT.
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of a physical interface.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_phy_if_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY  // Action
+ *  };
+ *    
+ *  fpp_phy_if_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_PHY_IF,
+ *                  sizeof(fpp_phy_if_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the first physical interface from 
+ *  //  the internal list of physical interfaces.
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_PHY_IF,
+ *                  sizeof(fpp_phy_if_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the next physical interface from 
+ *  //  the internal list of physical interfaces.
+ *  .............................................  
+ * @endcode   
  *
- * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
- * -------------------------------------------------
- * Get interface properties. Set fpp_phy_if_cmd_t.action to @ref FPP_ACTION_QUERY to get first interface from
- * the list of physical interfaces or @ref FPP_ACTION_QUERY_CONT to get subsequent entries. Response data
- * type for query commands is of type @ref fpp_phy_if_cmd_t.
- *
- * For operation modes see @ref fpp_phy_if_op_mode_t. For operation flags see @ref fpp_if_flags_t.
- *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Success.
- *     - @c FPP_ERR_IF_ENTRY_NOT_FOUND: Last entry in the query session.
- *     - @c FPP_ERR_IF_WRONG_SESSION_ID: Someone else is already working with the interfaces.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_IF_ENTRY_NOT_FOUND
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the physical interface query session (no more interfaces).
+ *        - For other ACTIONs: Unknown (nonexistent) physical interface was requested.
+ * - @c FPP_ERR_IF_WRONG_SESSION_ID <br>
+ *        Some other client has the interface database locked for exclusive access.
+ * - @c FPP_ERR_MIRROR_NOT_FOUND <br>
+ *        Unknown (nonexistent) mirroring rule in the `.rx_mirrors` or `.tx_mirrors` property.
+ * - @c FPP_ERR_FW_FEATURE_NOT_AVAILABLE <br>
+ *        Attempted to modify properties which are not available (not enabled in FW).
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
 #define FPP_CMD_PHY_IF					0xf100
 
 /**
- * @def FPP_CMD_LOG_IF
- * @brief FCI command for working with logical interfaces
- * @note    Command is defined as extension of the legacy fpp.h.
- * @details Command can be used to update match rules of logical interface or for adding egress interfaces.
- *          It can also update operational flags (enabled, promisc, match).
- *          Following values of `.action` are supported:
- *          - @c FPP_ACTION_REGISTER: Creates a new logical interface.
- *          - @c FPP_ACTION_DEREGISTER: Destroys an existing logical interface.
- *          - @c FPP_ACTION_UPDATE: Updates properties of an existing logical interface.
- *          - @c FPP_ACTION_QUERY: Gets head of list of existing logical interfaces parameters.
- *          - @c FPP_ACTION_QUERY_CONT: Gets next item from list of existing logical interfaces. Shall
- *            be called after @ref FPP_ACTION_QUERY was called. On each call it replies with properties
- *            of the next interface.
+ * @def         FPP_CMD_LOG_IF
+ * @brief       FCI command for management of logical interfaces.
+ * @details     Related topics: @ref mgmt_logif
+ * @details     Related data types: @ref fpp_log_if_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_REGISTER <br>
+ *                   Create a new logical interface.
+ *              - @c FPP_ACTION_DEREGISTER <br>
+ *                   Remove (destroy) an existing logical interface.
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Modify properties of a logical interface.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) a logical interface query session and get properties 
+ *                   of the first logical interface from the internal collective list of all 
+ *                   logical interfaces (regardless of physical interface affiliation).
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get properties of the next logical interface 
+ *                   from the list. Intended to be called in a loop (to iterate through the list).
  *
- * Precondition to use the query is to atomic lock the access with @ref FPP_CMD_IF_LOCK_SESSION.
+ * @note
+ * All operations with logical interfaces require exclusive lock of the interface database.
+ * See @ref FPP_CMD_IF_LOCK_SESSION.
  *
- * Command Argument Type: @ref fpp_log_if_cmd_t
- *
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * To create a new logical interface the @ref FPP_CMD_LOG_IF command expects following values to be set
- * in the command argument structure:
+ * FPP_ACTION_REGISTER
+ * -------------------
+ * Create a new logical interface. The newly created interface is by default disabled and 
+ * without any configuration. For configuration, see the following FPP_ACTION_UPDATE.
  * @code{.c}
- *   fpp_log_if_cmd_t cmd_data =
- *   {
- *     .action = FPP_ACTION_REGISTER,   // Register new logical interface
- *     .name = "logif1",                // Name of the new logical interface
- *     .parent_name = "emac0"           // Name of the parent physical interface
- *   };
+ *  .............................................  
+ *  fpp_log_if_cmd_t cmd_to_fci = 
+ *  {
+ *    .action      = FPP_ACTION_REGISTER,  // Action
+ *    .name        = "...",                // Interface name (user-defined)
+ *    .parent_name = "..."                 // Parent physical interface name
+ *                                         // (see chapter Physical Interface)
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_LOG_IF, sizeof(fpp_log_if_cmd_t), 
+ *                                         (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
- * The interface <i>logif1</i> will be created as child of <i>emac0</i> without any configuration
- * and disabled. Names of available physical interfaces can be obtained via @ref FPP_CMD_PHY_IF +
- * @ref FPP_ACTION_QUERY + @ref FPP_ACTION_QUERY_CONT.
+ * @warning Do not create multiple logical interfaces with the same name.
  *
- * Action FPP_ACTION_DEREGISTER
- * ----------------------------
- * Items to be set in command argument structure to remove a logical interface:
+ * FPP_ACTION_DEREGISTER
+ * ---------------------
+ * Remove (destroy) an existing logical interface.
  * @code{.c}
- *   fpp_log_if_cmd_t cmd_data =
- *   {
- *     .action = FPP_ACTION_DEREGISTER,   // Destroy an existing logical interface
- *     .name = "logif1",                  // Name of the logical interface to destroy
- *   };
+ *  .............................................  
+ *  fpp_log_if_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_DEREGISTER,  // Action
+ *    .name   = "..."                   // Name of an existing logical interface.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_LOG_IF, sizeof(fpp_log_if_cmd_t), 
+ *                                         (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Action FPP_ACTION_UPDATE
- * ------------------------
- * To update logical interface properties just set fpp_log_if_cmd_t.action to @ref FPP_ACTION_UPDATE and
- * fpp_log_if_cmd_t.name to the name of logical interface which you wish to update. Rest of the
- * fpp_log_if_cmd_t structure members will be considered to be used as the new interface properties. It
- * is recommended to use read-modify-write approach in combination with @ref FPP_ACTION_QUERY and @ref
- * FPP_ACTION_QUERY_CONT.
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Modify properties of a logical interface. It is recommended to use the read-modify-write
+ * approach (see @ref mgmt_logif). Some properties cannot be modified (see fpp_log_if_cmd_t).
+ * @code{.c}
+ *  .............................................  
+ *  fpp_log_if_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_UPDATE,  // Action
+ *    .name   = "...",              // Name of an existing logical interface.
+ *    
+ *    ... = ...  // Properties (data fields) to be updated, and their new (modified) values.
+ *               // Some properties cannot be modified (see fpp_log_if_cmd_t).
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_LOG_IF, sizeof(fpp_log_if_cmd_t), 
+ *                                         (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
+ * @endcode
  *
- * For match rules see (@ref fpp_if_m_rules_t). For match rules arguments see (@ref fpp_if_m_args_t).
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of a logical interface.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_log_if_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY  // Action
+ *  };
+ *    
+ *  fpp_log_if_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_LOG_IF,
+ *                  sizeof(fpp_log_if_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the first logical interface from 
+ *  //  the internal collective list of all logical interfaces.
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_LOG_IF,
+ *                  sizeof(fpp_log_if_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the next logical interface from 
+ *  //  the internal collective list of all logical interfaces.
+ *  .............................................  
+ * @endcode 
  *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Update successful.
- *     - @c FPP_ERR_IF_ENTRY_NOT_FOUND: If corresponding logical interface doesn't exit.
- *     - @c FPP_ERR_IF_RESOURCE_ALREADY_LOCKED: Someone else is already configuring the interfaces.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
- *
- * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
- * -------------------------------------------------
- * Get interface properties. Set fpp_log_if_cmd_t.action to @ref FPP_ACTION_QUERY to get first interface
- * from the list of all logical interfaces or @ref FPP_ACTION_QUERY_CONT to get subsequent entries.
- * Response data type for query commands is of type fpp_log_if_cmd_t.
- *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Success.
- *     - @c FPP_ERR_IF_ENTRY_NOT_FOUND: Last entry in the query session.
- *     - @c FPP_ERR_IF_WRONG_SESSION_ID: Someone else is already working with the interfaces.
- *     - @c FPP_ERR_IF_MATCH_UPDATE_FAILED: Update of match flags has failed.
- *     - @c FPP_ERR_IF_EGRESS_UPDATE_FAILED: Update of egress interfaces has failed.
- *     - @c FPP_ERR_IF_EGRESS_DOESNT_EXIST: Egress interface provided in command doesn't exist.
- *     - @c FPP_ERR_IF_OP_FLAGS_UPDATE_FAILED: Operation flags update has failed (PROMISC/ENABLE/MATCH).
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_IF_ENTRY_NOT_FOUND
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the logical interface query session (no more interfaces).
+ *        - For other ACTIONs: Unknown (nonexistent) logical interface was requested.
+ * - @c FPP_ERR_IF_ENTRY_ALREADY_REGISTERED <br>
+ *        Requested logical interface already exists (is already registered).
+ * - @c FPP_ERR_IF_WRONG_SESSION_ID <br>
+ *        Some other client has the interface database locked for exclusive access.
+ * - @c FPP_ERR_IF_RESOURCE_ALREADY_LOCKED <br>
+ *        Same as FPP_ERR_IF_WRONG_SESSION_ID.
+ * - @c FPP_ERR_IF_MATCH_UPDATE_FAILED <br>
+ *        Update of match flags has failed.
+ * - @c FPP_ERR_IF_EGRESS_UPDATE_FAILED <br>
+ *        Update of the `.egress` bitset has failed.
+ * - @c FPP_ERR_IF_EGRESS_DOESNT_EXIST <br>
+ *        Invalid (nonexistent) egress physical interface in the `.egress` bitset.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
 #define FPP_CMD_LOG_IF					0xf101
 
 /**
- * @def FPP_ERR_IF_ENTRY_ALREADY_REGISTERED
+ * @def         FPP_ERR_IF_ENTRY_ALREADY_REGISTERED
  * @hideinitializer
  */
 #define FPP_ERR_IF_ENTRY_ALREADY_REGISTERED		0xf103
 
 /**
- * @def FPP_ERR_IF_ENTRY_NOT_FOUND
+ * @def         FPP_ERR_IF_ENTRY_NOT_FOUND
  * @hideinitializer
  */
 #define FPP_ERR_IF_ENTRY_NOT_FOUND				0xf104
 
 /**
- * @def FPP_ERR_IF_EGRESS_DOESNT_EXIST
+ * @def         FPP_ERR_IF_EGRESS_DOESNT_EXIST
  * @hideinitializer
  */
 #define FPP_ERR_IF_EGRESS_DOESNT_EXIST			0xf105
 
 /**
- * @def FPP_ERR_IF_EGRESS_UPDATE_FAILED
+ * @def         FPP_ERR_IF_EGRESS_UPDATE_FAILED
  * @hideinitializer
  */
 #define FPP_ERR_IF_EGRESS_UPDATE_FAILED			0xf106
 
 /**
- * @def FPP_ERR_IF_MATCH_UPDATE_FAILED
+ * @def         FPP_ERR_IF_MATCH_UPDATE_FAILED
  * @hideinitializer
  */
 #define FPP_ERR_IF_MATCH_UPDATE_FAILED			0xf107
 
 /**
- * @def FPP_ERR_IF_OP_UPDATE_FAILED
+ * @def         FPP_ERR_IF_OP_UPDATE_FAILED
  * @hideinitializer
  */
 #define FPP_ERR_IF_OP_UPDATE_FAILED				0xf108
 
 /**
- * @def FPP_ERR_IF_OP_CANNOT_CREATE
+ * @def         FPP_ERR_IF_OP_CANNOT_CREATE
  * @hideinitializer
  */
 #define FPP_ERR_IF_OP_CANNOT_CREATE				0xf109
 
 /**
- * @def FPP_ERR_IF_RESOURCE_ALREADY_LOCKED
+ * @def         FPP_ERR_IF_NOT_SUPPORTED
+ * @hideinitializer
+ */
+#define FPP_ERR_IF_NOT_SUPPORTED				0xf117
+
+/**
+ * @def         FPP_ERR_IF_RESOURCE_ALREADY_LOCKED
  * @hideinitializer
  */
 #define FPP_ERR_IF_RESOURCE_ALREADY_LOCKED		0xf110
 
 /**
- * @def FPP_ERR_IF_WRONG_SESSION_ID
+ * @def         FPP_ERR_IF_WRONG_SESSION_ID
  * @hideinitializer
  */
 #define FPP_ERR_IF_WRONG_SESSION_ID				0xf111
 
 /**
- * @def		FPP_CMD_IF_LOCK_SESSION
- * @brief	FCI command to perform lock on interface database.
- * @details	The reason for it is guaranteed atomic operation between fci/rpc/platform.
+ * @def         FPP_CMD_IF_LOCK_SESSION
+ * @brief       FCI command to get exclusive access to interface database.
+ * @details     Related topics: @ref mgmt_phyif, @ref mgmt_logif, @ref flex_router
+ * @details     Supported `.action` values: ---
+ * <br>
+ * @code{.c}
+ *  .............................................  
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IF_LOCK_SESSION, 0, NULL); 
+ *  .............................................  
+ * @endcode
  *
- * @note	Command is defined as extension of the legacy fpp.h.
- *
- * Possible command return values are:
- *     -  FPP_ERR_OK: Lock successful
- *     -  FPP_ERR_IF_RESOURCE_ALREADY_LOCKED: Database was already locked by someone else
+ * Command return values
+ * ---------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_IF_RESOURCE_ALREADY_LOCKED <br>
+ *        Some other client has the interface database locked for exclusive access.
  *
  * @hideinitializer
  */
 #define FPP_CMD_IF_LOCK_SESSION					0x0015
 
 /**
- * @def		FPP_CMD_IF_UNLOCK_SESSION
- * @brief	FCI command to perform unlock on interface database.
- * @details	The reason for it is guaranteed atomic operation between fci/rpc/platform.
+ * @def         FPP_CMD_IF_UNLOCK_SESSION
+ * @brief       FCI command to cancel exclusive access to interface database.
+ * @details     Related topics: @ref mgmt_phyif, @ref mgmt_logif, @ref flex_router
+ * @details     Supported `.action` values: ---
+ * <br>
+ * @code{.c}
+ *  .............................................  
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IF_UNLOCK_SESSION, 0, NULL); 
+ *  .............................................  
+ * @endcode
  *
- * @note	Command is defined as extension of the legacy fpp.h.
+ * Command return values
+ * ---------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_IF_WRONG_SESSION_ID <br>
+ *        Either the database is not locked, or it is currently locked by some other client.
  *
- * Possible command return values are:
- *     -  FPP_ERR_OK: Lock successful
- *     -  FPP_ERR_IF_WRONG_SESSION_ID: The lock wasn't locked or was locked in different
- *     									 session and will not be unlocked.
  * @hideinitializer
  */
 #define FPP_CMD_IF_UNLOCK_SESSION				0x0016
 
 /**
- * @brief	Interface flags
+ * @brief       Interface flags
+ * @details     Related data types: @ref fpp_phy_if_cmd_t, @ref fpp_log_if_cmd_t
+ * @details     Some of these flags are applicable only for physical interfaces [phyif], 
+ *              some are applicable only for logical interfaces [logif] and some are applicable 
+ *              for both [phyif,logif].
  */
 typedef enum CAL_PACKED
 {
-	FPP_IF_ENABLED = (1 << 0),			/*!< If set, interface is enabled */
-	FPP_IF_PROMISC = (1 << 1),			/*!< If set, interface is promiscuous */
-	FPP_IF_MATCH_OR = (1 << 3),			/*!< Result of match is logical OR of rules, else AND */
-	FPP_IF_DISCARD = (1 << 4),			/*!< Discard matching frames */
-	FPP_IF_MIRROR = (1 << 5),			/*!< If set mirroring is enabled */
-	FPP_IF_LOADBALANCE = (1 << 6),		/*!< If set interface is part of loadbalance bucket */
-	FPP_IF_VLAN_CONF_CHECK = (1 << 7),	/*!< Enable/Disable VLAN conformance check */
-	FPP_IF_PTP_CONF_CHECK = (1 << 8),	/*!< Enable/Disable PTP conformance check */
-	FPP_IF_PTP_PROMISC = (1 << 9),		/*!< Enable/Disable PTP promiscuous mode */
-	FPP_IF_LOOPBACK = (1 << 10),		/*!< If set, loopback mode is enabled */
-	FPP_IF_ALLOW_Q_IN_Q = (1 << 11),	/*!< If set, QinQ traffic is accepted */
-	FPP_IF_DISCARD_TTL = (1 << 12),		/*!< Discard packet with TTL<2 instead of passing to default logical interface */
-	FPP_IF_MAX = (int)(1U << 31U)
+    FPP_IF_ENABLED = (1 << 0),          /**< [phyif,logif] <br> 
+                                             If set, the interface is enabled. */
+    FPP_IF_PROMISC = (1 << 1),          /**< [phyif,logif] <br> 
+                                             If set, the interface is configured as promiscuous.
+                                             - promiscuous phyif: all ingress traffic is accepted, regardless of destination MAC.
+                                             - promiscuous logif: all inspected traffic is accepted, regardless of active match rules. */
+    FPP_IF_MATCH_OR = (1 << 3),         /**< [logif] <br> 
+                                             If multiple match rules are active and this flag is set,
+                                             then the final result of a match process is a logical OR of the rules.
+                                             If this flag is @b not set, then the final result is a logical AND of the rules. */
+    FPP_IF_DISCARD = (1 << 4),          /**< [logif] <br> 
+                                             If set, discard matching frames. */
+    FPP_IF_MIRROR = (1 << 5),           /* DEPRECATED. Do not use.
+                                             [phyif] <br> 
+                                             If set, mirroring is enabled. */
+    FPP_IF_LOADBALANCE = (1 << 6),      /* DEPRECATED. Do not use.
+                                             [phyif] <br> 
+                                             If set, the interface is a part of a loadbalance bucket. */
+    FPP_IF_VLAN_CONF_CHECK = (1 << 7),  /**< [phyif] <br> 
+                                             If set, the interface enforces a strict VLAN conformance check. */
+    FPP_IF_PTP_CONF_CHECK = (1 << 8),   /**< [phyif] <br> 
+                                             If set, the interface enforces a strict PTP conformance check. */
+    FPP_IF_PTP_PROMISC = (1 << 9),      /**< [phyif] <br> 
+                                             If set, then PTP traffic is accepted even if the FPP_IF_VLAN_CONF_CHECK is set. */
+    FPP_IF_LOOPBACK = (1 << 10),        /**< [logif] <br> 
+                                             If set, a loopback mode is enabled. */
+    FPP_IF_ALLOW_Q_IN_Q = (1 << 11),    /**< [phyif] <br> 
+                                             If set, the interface accepts QinQ-tagged traffic. */
+    FPP_IF_DISCARD_TTL = (1 << 12),     /**< [phyif] <br> 
+                                             If set, then packets with TTL<2 are automatically discarded.
+                                             If @b not set, then packets with TTL<2 are passed to the default logical interface. */
+    FPP_IF_MAX = (int)(1U << 31U)
 } fpp_if_flags_t;
 
 /**
- * @typedef fpp_phy_if_op_mode_t
- * @brief	Physical if modes
+ * @brief       Physical interface operation mode.
+ * @details     Related data types: @ref fpp_phy_if_cmd_t
  */
 typedef enum CAL_PACKED
 {
-	FPP_IF_OP_DEFAULT = 0,			/*!< Default operational mode */
-	FPP_IF_OP_BRIDGE = 1,			/*!< L2 bridge */
-	FPP_IF_OP_ROUTER = 2,			/*!< L3 router */
-	FPP_IF_OP_VLAN_BRIDGE = 3,		/*!< L2 bridge with VLAN */
-	FPP_IF_OP_FLEXIBLE_ROUTER = 4,	/*!< Flexible router */
-	FPP_IF_OP_L2L3_BRIDGE = 5,		/*!< L2 bridge and L3 router combination*/
-	FPP_IF_OP_L2L3_VLAN_BRIDGE = 6,	/*!< L2 Vlan bridge and L3 router combination*/
+    FPP_IF_OP_DEFAULT = 0,          /**< Default operation mode */
+    FPP_IF_OP_BRIDGE = 1,           /**< @ref l2_bridge, simple (non-VLAN aware) version */
+    FPP_IF_OP_ROUTER = 2,           /**< @ref l3_router */
+    FPP_IF_OP_VLAN_BRIDGE = 3,      /**< @ref l2_bridge, VLAN-aware version */
+    FPP_IF_OP_FLEXIBLE_ROUTER = 4,  /**< @ref flex_router */
+    FPP_IF_OP_L2L3_BRIDGE = 5,      /**< @ref l2l3_bridge, simple (non-VLAN aware) version */
+    FPP_IF_OP_L2L3_VLAN_BRIDGE = 6, /**< @ref l2l3_bridge, VLAN-aware version */
 } fpp_phy_if_op_mode_t;
 
 /**
- * @brief	Match rules. Can be combined using bitwise OR.
+ * @brief       Match rules.
+ * @details     Related data types: @ref fpp_log_if_cmd_t, @ref fpp_if_m_args_t
+ * @note        L2/L3/L4 are layers of the OSI model.
  */
 typedef enum CAL_PACKED
 {
-	FPP_IF_MATCH_TYPE_ETH = (1 << 0),		/**< Match ETH Packets */
-	FPP_IF_MATCH_TYPE_VLAN = (1 << 1),		/**< Match VLAN Tagged Packets */
-	FPP_IF_MATCH_TYPE_PPPOE = (1 << 2),		/**< Match PPPoE Packets */
-	FPP_IF_MATCH_TYPE_ARP = (1 << 3),		/**< Match ARP Packets */
-	FPP_IF_MATCH_TYPE_MCAST = (1 << 4),		/**< Match Multicast (L2) Packets */
-	FPP_IF_MATCH_TYPE_IPV4 = (1 << 5),		/**< Match IPv4 Packets */
-	FPP_IF_MATCH_TYPE_IPV6 = (1 << 6),		/**< Match IPv6 Packets */
-	FPP_IF_MATCH_RESERVED7 = (1 << 7),		/**< Reserved */
-	FPP_IF_MATCH_RESERVED8 = (1 << 8),		/**< Reserved */
-	FPP_IF_MATCH_TYPE_IPX = (1 << 9),		/**< Match IPX Packets */
-	FPP_IF_MATCH_TYPE_BCAST = (1 << 10),	/**< Match Broadcast (L2) Packets */
-	FPP_IF_MATCH_TYPE_UDP = (1 << 11),		/**< Match UDP Packets */
-	FPP_IF_MATCH_TYPE_TCP = (1 << 12),		/**< Match TCP Packets */
-	FPP_IF_MATCH_TYPE_ICMP = (1 << 13),		/**< Match ICMP Packets */
-	FPP_IF_MATCH_TYPE_IGMP = (1 << 14),		/**< Match IGMP Packets */
-	FPP_IF_MATCH_VLAN = (1 << 15),			/**< Match VLAN ID */
-	FPP_IF_MATCH_PROTO = (1 << 16),			/**< Match IP Protocol */
-	FPP_IF_MATCH_SPORT = (1 << 20),			/**< Match L4 Source Port */
-	FPP_IF_MATCH_DPORT = (1 << 21),			/**< Match L4 Destination Port */
-	FPP_IF_MATCH_SIP6 = (1 << 22),			/**< Match Source IPv6 Address */
-	FPP_IF_MATCH_DIP6 = (1 << 23),			/**< Match Destination IPv6 Address */
-	FPP_IF_MATCH_SIP = (1 << 24),			/**< Match Source IPv4 Address */
-	FPP_IF_MATCH_DIP = (1 << 25),			/**< Match Destination IPv4 Address */
-	FPP_IF_MATCH_ETHTYPE = (1 << 26),		/**< Match EtherType */
-	FPP_IF_MATCH_FP0 = (1 << 27),			/**< Match Packets Accepted by Flexible Parser 0 */
-	FPP_IF_MATCH_FP1 = (1 << 28),			/**< Match Packets Accepted by Flexible Parser 1 */
-	FPP_IF_MATCH_SMAC = (1 << 29),			/**< Match Source MAC Address */
-	FPP_IF_MATCH_DMAC = (1 << 30),			/**< Match Destination MAC Address */
-	FPP_IF_MATCH_HIF_COOKIE = (int)(1U << 31U),	/**< Match HIF header cookie value */
-	/* Ensure proper size */
-	FPP_IF_MATCH_MAX = (int)(1U << 31U)
+    FPP_IF_MATCH_TYPE_ETH = (1 << 0),     /**< Match ETH packets */
+    FPP_IF_MATCH_TYPE_VLAN = (1 << 1),    /**< Match VLAN tagged packets */
+    FPP_IF_MATCH_TYPE_PPPOE = (1 << 2),   /**< Match PPPoE packets */
+    FPP_IF_MATCH_TYPE_ARP = (1 << 3),     /**< Match ARP packets */
+    FPP_IF_MATCH_TYPE_MCAST = (1 << 4),   /**< Match multicast (L2) packets */
+    FPP_IF_MATCH_TYPE_IPV4 = (1 << 5),    /**< Match IPv4 packets */
+    FPP_IF_MATCH_TYPE_IPV6 = (1 << 6),    /**< Match IPv6 packets */
+    FPP_IF_MATCH_RESERVED7 = (1 << 7),    /**< Reserved */
+    FPP_IF_MATCH_RESERVED8 = (1 << 8),    /**< Reserved */
+    FPP_IF_MATCH_TYPE_IPX = (1 << 9),     /**< Match IPX packets */
+    FPP_IF_MATCH_TYPE_BCAST = (1 << 10),  /**< Match L2 broadcast packets */
+    FPP_IF_MATCH_TYPE_UDP = (1 << 11),    /**< Match UDP packets */
+    FPP_IF_MATCH_TYPE_TCP = (1 << 12),    /**< Match TCP packets */
+    FPP_IF_MATCH_TYPE_ICMP = (1 << 13),   /**< Match ICMP packets */
+    FPP_IF_MATCH_TYPE_IGMP = (1 << 14),   /**< Match IGMP packets */
+    FPP_IF_MATCH_VLAN = (1 << 15),        /**< Match VLAN ID (see fpp_if_m_args_t) */
+    FPP_IF_MATCH_PROTO = (1 << 16),       /**< Match IP Protocol Number (protocol ID) See fpp_if_m_args_t. */
+    FPP_IF_MATCH_SPORT = (1 << 20),       /**< Match L4 source port (see fpp_if_m_args_t) */
+    FPP_IF_MATCH_DPORT = (1 << 21),       /**< Match L4 destination port (see fpp_if_m_args_t) */
+    FPP_IF_MATCH_SIP6 = (1 << 22),        /**< Match source IPv6 address (see fpp_if_m_args_t) */
+    FPP_IF_MATCH_DIP6 = (1 << 23),        /**< Match destination IPv6 address (see fpp_if_m_args_t) */
+    FPP_IF_MATCH_SIP = (1 << 24),         /**< Match source IPv4 address (see fpp_if_m_args_t) */
+    FPP_IF_MATCH_DIP = (1 << 25),         /**< Match destination IPv4 address (see fpp_if_m_args_t) */
+    FPP_IF_MATCH_ETHTYPE = (1 << 26),     /**< Match EtherType (see fpp_if_m_args_t) */
+    FPP_IF_MATCH_FP0 = (1 << 27),         /**< Match Ethernet frames accepted by Flexible Parser 0 (see fpp_if_m_args_t) */
+    FPP_IF_MATCH_FP1 = (1 << 28),         /**< Match Ethernet frames accepted by Flexible Parser 1 (see fpp_if_m_args_t) */
+    FPP_IF_MATCH_SMAC = (1 << 29),        /**< Match source MAC address (see fpp_if_m_args_t) */
+    FPP_IF_MATCH_DMAC = (1 << 30),        /**< Match destination MAC address (see fpp_if_m_args_t) */
+    FPP_IF_MATCH_HIF_COOKIE = (int)(1U << 31U),  /**< Match HIF header cookie. HIF header cookie is a part of internal overhead data.
+                                                      It is attached to traffic data by a host's PFE driver. */
+    
+    /* Ensure proper size */
+    FPP_IF_MATCH_MAX = (int)(1U << 31U)
 } fpp_if_m_rules_t;
 
 /**
- * @brief	Match rules arguments.
- * @details Every value corresponds to specified match rule (@ref fpp_if_m_rules_t).
+ * @brief       Match rules arguments.
+ * @details     Related data types: @ref fpp_log_if_cmd_t, @ref fpp_if_m_rules_t
+ * @details     Each value is an argument for some match rule.
+ * @note        Some values are in a network byte order [NBO].
+ *
+ * @snippet     fpp_ext.h  fpp_if_m_args_t
  */
+/* [fpp_if_m_args_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
-	/** VLAN ID (@ref FPP_IF_MATCH_VLAN) */
-	uint16_t vlan;
-	/** EtherType (@ref FPP_IF_MATCH_ETHTYPE) */
-	uint16_t ethtype;
-	/** L4 source port number (@ref FPP_IF_MATCH_SPORT) */
-	uint16_t sport;
-	/** L4 destination port number (@ref FPP_IF_MATCH_DPORT) */
-	uint16_t dport;
-	/* Source and destination addresses */
-	struct
-	{
-		/**	IPv4 source and destination address (@ref FPP_IF_MATCH_SIP, @ref FPP_IF_MATCH_DIP) */
-		struct
-		{
-			uint32_t sip;
-			uint32_t dip;
-		} v4;
-
-		/**	IPv6 source and destination address (@ref FPP_IF_MATCH_SIP6, @ref FPP_IF_MATCH_DIP6) */
-		struct
-		{
-			uint32_t sip[4];
-			uint32_t dip[4];
-		} v6;
-	} ipv;
-	/** IP protocol (@ref FPP_IF_MATCH_PROTO) */
-	uint8_t proto;
-	/** Source MAC Address (@ref FPP_IF_MATCH_SMAC) */
-	uint8_t smac[6];
-	/** Destination MAC Address (@ref FPP_IF_MATCH_DMAC) */
-	uint8_t dmac[6];
-	/** Flexible Parser table 0 (@ref FPP_IF_MATCH_FP0) */
-	char fp_table0[16];
-	/** Flexible Parser table 1 (@ref FPP_IF_MATCH_FP1) */
-	char fp_table1[16];
-	/** HIF header cookie (@ref FPP_IF_MATCH_HIF_COOKIE) */
-	uint32_t hif_cookie;
+    uint16_t vlan;     /*< VLAN ID. [NBO]. See FPP_IF_MATCH_VLAN. */
+    uint16_t ethtype;  /*< EtherType. [NBO]. See FPP_IF_MATCH_ETHTYPE. */
+    uint16_t sport;    /*< L4 source port. [NBO]. See FPP_IF_MATCH_SPORT. */
+    uint16_t dport;    /*< L4 destination port [NBO]. See FPP_IF_MATCH_DPORT. */
+    
+    /* Source and destination IP addresses */
+    struct
+    {
+        struct
+        {
+            uint32_t sip;     /*< IPv4 source address. [NBO]. See FPP_IF_MATCH_SIP. */
+            uint32_t dip;     /*< IPv4 destination address. [NBO]. See FPP_IF_MATCH_DIP. */
+        } v4;
+    
+        struct
+        {
+            uint32_t sip[4];  /*< IPv6 source address. [NBO]. See FPP_IF_MATCH_SIP6. */
+            uint32_t dip[4];  /*< IPv6 destination address. [NBO]. See FPP_IF_MATCH_DIP6. */
+        } v6;
+    } ipv;
+    
+    uint8_t proto;        /*< IP Protocol Number (protocol ID). See FPP_IF_MATCH_PROTO. */
+    uint8_t smac[6];      /*< Source MAC Address. See FPP_IF_MATCH_SMAC. */
+    uint8_t dmac[6];      /*< Destination MAC Address. See FPP_IF_MATCH_DMAC. */
+    char fp_table0[16];   /*< Flexible Parser table 0 (name). See FPP_IF_MATCH_FP0. */
+    char fp_table1[16];   /*< Flexible Parser table 1 (name). See FPP_IF_MATCH_FP1. */
+    uint32_t hif_cookie;  /*< HIF header cookie. [NBO]. See FPP_IF_MATCH_HIF_COOKIE. */
 } fpp_if_m_args_t;
+/* [fpp_if_m_args_t] */
 
 /**
- * @brief	Physical interface statistics
- * @details Statistics used by physical interfaces (EMAC, HIF).
- * @note All statistics counters are in network byte order.
+ * @brief       Physical interface statistics.
+ * @details     Related data types: @ref fpp_phy_if_cmd_t
+ * @note        @b All values are in a network byte order [@b NBO].
+ *
+ * @snippet     fpp_ext.h  fpp_phy_if_stats_t
  */
+/* [fpp_phy_if_stats_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
-	uint32_t ingress;	/*!< Number of ingress frames for the given interface  */
-	uint32_t egress;	/*!< Number of egress frames for the given interface */
-	uint32_t malformed;	/*!< Number of ingress frames with detected error (i.e. checksum) */
-	uint32_t discarded;	/*!< Number of ingress frames which were discarded */
+    uint32_t ingress;    /*< Count of ingress frames for the given interface. */
+    uint32_t egress;     /*< Count of egress frames for the given interface. */
+    uint32_t malformed;  /*< Count of ingress frames with detected error (e.g. checksum). */
+    uint32_t discarded;  /*< Count of ingress frames which were discarded. */
 } fpp_phy_if_stats_t;
+/* [fpp_phy_if_stats_t] */
 
 /**
- * @brief	Algorithm statistics
- * @details Statistics used by algorithms in class (eg. log ifs).
- * @note All statistics counters are in network byte order.
+ * @brief       Logical interface statistics.
+ * @details     Related data types: @ref fpp_log_if_cmd_t
+ * @note        @b All values are in a network byte order [@b NBO].
+ *
+ * @snippet     fpp_ext.h  fpp_algo_stats_t
  */
+/* [fpp_algo_stats_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
-	uint32_t processed;	/*!< Number of frames processed regardless the result */
-	uint32_t accepted;	/*!< Number of frames matching the selection criteria */
-	uint32_t rejected;	/*!< Number of frames not matching the selection criteria */
-	uint32_t discarded;	/*!< Number of frames marked to be dropped */
+    uint32_t processed;  /*< Count of frames processed (regardless of the result). */
+    uint32_t accepted;   /*< Count of frames matching the selection criteria. */
+    uint32_t rejected;   /*< Count of frames not matching the selection criteria. */
+    uint32_t discarded;  /*< Count of frames marked to be dropped. */
 } fpp_algo_stats_t;
+/* [fpp_algo_stats_t] */
 
 /**
- * @brief	Interface blocking state
+ * @brief       Physical interface blocking state.
+ * @details     Related data types: @ref fpp_phy_if_cmd_t
+ * @details     Used when a physical interface is configured in a Bridge-like mode.    
+ *              See @ref l2_bridge and @ref l2l3_bridge. Affects the following Bridge-related 
+ *              capabilities of a physical interface:
+ *              - Learning of MAC addresses from the interface's ingress traffic.
+ *              - Forwarding of the interface's ingress traffic.
  */
 typedef enum CAL_PACKED
 {
-	BS_NORMAL = 0,		/*!< Learning and forwarding enabled */
-	BS_BLOCKED = 1,		/*!< Learning and forwarding disabled */
-	BS_LEARN_ONLY = 2,	/*!< Learning enabled, forwarding disabled */
-	BS_FORWARD_ONLY = 3	/*!< Learning disabled, forwarding enabled */
+    BS_NORMAL = 0,       /**< Learning and forwarding enabled. */
+    BS_BLOCKED = 1,      /**< Learning and forwarding disabled. */
+    BS_LEARN_ONLY = 2,   /**< Learning enabled, forwarding disabled. */
+    BS_FORWARD_ONLY = 3  /**< Learning disabled, forwarding enabled. */
 } fpp_phy_if_block_state_t;
 
+/* Number of mirrors which can be configured per rx/tx on a physical interface.
+   The value is equal to the number supported by the firmware. */
+#define FPP_MIRRORS_CNT 2U
+
 /**
- * @brief		Data structure to be used for physical interface commands
- * @details		Usage:
- * 				- As command buffer in functions @ref fci_write, @ref fci_query or
- * 				  @ref fci_cmd, with @ref FPP_CMD_PHY_IF command.
- * 				- As reply buffer in functions @ref fci_query or @ref fci_cmd,
- * 				  with @ref FPP_CMD_PHY_IF command.
+ * @brief       Data structure for a physical interface.
+ * @details     Related FCI commands: @ref FPP_CMD_PHY_IF
+ * @note        - Some values are in a network byte order [NBO].
+ * @note        - Some values cannot be modified by FPP_ACTION_UPDATE [ro].
+ *
+ * @snippet     fpp_ext.h  fpp_phy_if_cmd_t
  */
+/* [fpp_phy_if_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
-	uint16_t action;			/**< Action */
-	char name[IFNAMSIZ];		/**< Interface name */
-	uint32_t id;				/**< Interface ID (network endian) */
-	fpp_if_flags_t flags;		/**< Interface flags (network endian) */
-	fpp_phy_if_op_mode_t mode;	/**< Phy if mode (network endian) */
-	fpp_phy_if_block_state_t block_state;	/**< Phy if block state */
-	fpp_phy_if_stats_t	stats;	/**< Physical interface statistics */
-	uint8_t mac_addr[6];		/**< Phy if MAC (network endian) */
-	char mirror[IFNAMSIZ];		/**< Name of interface to mirror the traffic to */
-	/**	Table to be used to filter ingress traffic. See @ref FPP_CMD_FP_TABLE. If
-	 	here is non-empty string then the filter is enabled. Empty string disables
-	 	the filter. */
-	char ftable[16];
+    uint16_t action;            /*< Action */
+    char name[IFNAMSIZ];        /*< Interface name. [ro] */
+    uint32_t id;                /*< Interface ID. [NBO,ro] */
+    fpp_if_flags_t flags;       /*< Interface flags. [NBO]. A bitset. */
+    fpp_phy_if_op_mode_t mode;  /*< Interface mode. */
+    fpp_phy_if_block_state_t block_state;  /*< Interface blocking state. */
+    fpp_phy_if_stats_t stats;   /*< Physical interface statistics. [ro] */
+    
+    /* Names of associated mirroring rules for ingress traffic. See FPP_CMD_MIRROR.
+       Empty string at given position == position is disabled. */
+    char rx_mirrors[FPP_MIRRORS_CNT][MIRROR_NAME_SIZE];
+    
+    /* Names of associated mirroring rules for egress traffic. See FPP_CMD_MIRROR.
+       Empty string at given position == position is disabled. */
+    char tx_mirrors[FPP_MIRRORS_CNT][MIRROR_NAME_SIZE];
+    
+    char ftable[16];    /*< Name of a Flexible Parser table which shall be used 
+                            as a Flexible Filter of this physical interface.
+                            Empty string == Flexible filter is disabled. 
+                            See Flexible Parser for more info. */
 } fpp_phy_if_cmd_t;
+/* [fpp_phy_if_cmd_t] */
 
 /**
- * @brief		Data structure to be used for logical interface commands
- * @details		Usage:
- * 				- As command buffer in functions @ref fci_write, @ref fci_query or
- * 				  @ref fci_cmd, with @ref FPP_CMD_LOG_IF command.
- * 				- As reply buffer in functions @ref fci_query or @ref fci_cmd,
- * 				  with @ref FPP_CMD_LOG_IF command.
+ * @brief       Data structure for a logical interface.
+ * @details     Related FCI commands: @ref FPP_CMD_LOG_IF
+ * @note        - Some values are in a network byte order [NBO].
+ * @note        - Some values cannot be modified by FPP_ACTION_UPDATE [ro].
+ *
+ * @snippet     fpp_ext.h  fpp_log_if_cmd_t
  */
+/* [fpp_log_if_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
-	uint16_t action;			/**< Action */
-	uint8_t res[2];				/* Additional 2B to ensure correct alignment */
-	char name[IFNAMSIZ];		/**< Interface name */
-	uint32_t id;				/**< Interface ID (network endian) */
-	char parent_name[IFNAMSIZ];	/**< Parent physical interface name */
-	uint32_t parent_id;			/**< Parent physical interface ID (network endian) */
-	uint32_t egress;			/**< Egress interfaces in the form of mask (to get egress id: egress & (1 < id))
-								   must be stored in network order (network endian) */
-	fpp_if_flags_t flags;		/**< Interface flags from query or flags to be set (network endian) */
-	fpp_if_m_rules_t match;		/**< Match rules from query or match rules to be set (network endian) */
-	fpp_if_m_args_t CAL_PACKED_ALIGNED(4) arguments;	/**< Arguments for match rules (network endian) */
-	fpp_algo_stats_t CAL_PACKED_ALIGNED(4) stats;		/**< Logical interface statistics */
+    uint16_t action;            /*< Action */
+    uint8_t res[2];             /*< RESERVED (do not use) */
+    char name[IFNAMSIZ];        /*< Interface name. [ro] */
+    uint32_t id;                /*< Interface ID. [NBO,ro] */
+    char parent_name[IFNAMSIZ]; /*< Parent physical interface name. [ro] */
+    uint32_t parent_id;         /*< Parent physical interface ID. [NBO,ro] */
+    
+    uint32_t egress;            /*< Egress physical interfaces. [NBO]. A bitset.
+                                    Each physical interface is represented by a bitflag. 
+                                    Conversion between a physical interface ID and a corr-
+                                    esponding bitflag is (1uL << "physical interface ID"). */
+    
+    fpp_if_flags_t flags;       /*< Interface flags. [NBO]. A bitset. */
+    fpp_if_m_rules_t match;     /*< Match rules. [NBO]. A bitset. */
+    fpp_if_m_args_t CAL_PACKED_ALIGNED(4) arguments;  /*< Match rules arguments. */
+    fpp_algo_stats_t CAL_PACKED_ALIGNED(4) stats;     /*< Logical interface statistics [ro] */
 } fpp_log_if_cmd_t;
+/* [fpp_log_if_cmd_t] */
 
 /**
- * @def FPP_CMD_L2_BD
- * @brief VLAN-based L2 bridge domain management
- * @details Bridge domain can be used to include a set of physical interfaces and isolate them
- *          from another domains using VLAN. Command can be used with various `.action` values:
- *          - @c FPP_ACTION_REGISTER: Create a new bridge domain.
- *          - @c FPP_ACTION_DEREGISTER: Delete bridge domain.
- *          - @c FPP_ACTION_UPDATE: Update a bridge domain meaning that will rewrite domain properties except of VLAN ID.
- *          - @c FPP_ACTION_QUERY: Gets head of list of registered domains.
- *          - @c FPP_ACTION_QUERY_CONT: Get next item from list of registered domains. Shall be called after
- *               @c FPP_ACTION_QUERY was called. On each call it replies with parameters of next domain.
- *               It returns @c FPP_ERR_RT_ENTRY_NOT_FOUND when no more entries exist.
+ * @def         FPP_CMD_IF_MAC
+ * @brief       FCI command for management of interface MAC addresses.
+ * @details     Related topics: @ref mgmt_phyif
+ * @details     Related data types: @ref fpp_if_mac_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_REGISTER <br>
+ *                   Add a new MAC address to an interface.
+ *              - @c FPP_ACTION_DEREGISTER <br>
+ *                   Remove an existing MAC address from an interface.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) a MAC address query session and get
+ *                   the first MAC address of the requested interface.
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get the next MAC address
+ *                   of the requested interface. Intended to be called in a loop 
+ *                   (to iterate through the list).
  *
- * Command Argument Type: @ref fpp_l2_bd_cmd_t
+ * @note
+ * All operations with interface MAC addresses require exclusive lock of the interface database.
+ * See @ref FPP_CMD_IF_LOCK_SESSION.
  *
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * Items to be set in command argument structure:
+ * @note
+ * MAC address management is available only for @b emac physical interfaces.
+ *
+ * FPP_ACTION_REGISTER
+ * -------------------
+ * Add a new MAC address to emac physical interface.
  * @code{.c}
- *   fpp_l2_bd_cmd_t cmd_data =
- *   {
- *     // Register new bridge domain
- *     .action = FPP_ACTION_REGISTER,
- *     // VLAN ID associated with the domain (network endian)
- *     .vlan = ...,
- *     // Action to be taken when destination MAC address (uni-cast) of a packet
- *     // matching the domain is found in the MAC table: 0 - Forward, 1 - Flood,
- *     // 2 - Punt, 3 - Discard
- *     .ucast_hit = ...,
- *     // Action to be taken when destination MAC address (uni-cast) of a packet
- *     // matching the domain is not found in the MAC table.
- *     .ucast_miss = ...,
- *     // Multicast hit action
- *     .mcast_hit = ...,
- *     // Multicast miss action
- *     .mcast_miss = ...
- *   };
+ *  .............................................  
+ *  fpp_if_mac_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_REGISTER,  // Action
+ *    .name   = "...",                // Physical interface name
+ *    .mac    = {...}                 // Physical interface MAC
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IF_MAC, sizeof(fpp_if_mac_cmd_t), 
+ *                                         (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Domain added.
- *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Unexpected argument.
- *     - @c FPP_ERR_L2_BD_ALREADY_REGISTERED: Given domain already registered.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
- *
- *
- * Action FPP_ACTION_DEREGISTER
- * --------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_DEREGISTER
+ * ---------------------
+ * Remove an existing MAC address from emac physical interface.
  * @code{.c}
- *   fpp_l2_bd_cmd_t cmd_data =
- *   {
- *     // Delete bridge domain
- *     .action = FPP_ACTION_DEREGISTER,
- *     // VLAN ID associated with the domain to be deleted (network endian)
- *     .vlan = ...,
- *   };
+ *  .............................................  
+ *  fpp_if_mac_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_DEREGISTER,  // Action
+ *    .name   = "...",                  // Physical interface name
+ *    .mac    = {...}                   // Physical interface MAC
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IF_MAC, sizeof(fpp_if_mac_cmd_t), 
+ *                                         (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Domain removed.
- *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Unexpected argument.
- *     - @c FPP_ERR_L2_BD_NOT_FOUND: Given domain not found.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
- *
- * Action FPP_ACTION_UPDATE
- * --------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get MAC addresses of a requested emac physical interface.
  * @code{.c}
- *   fpp_l2_bd_cmd_t cmd_data =
- *   {
- *     // Update bridge domain
- *     .action = FPP_ACTION_UPDATE,
- *     // VLAN ID associated with the domain to be updated (network endian)
- *     .vlan = ...,
- *     // New unicast hit action (0 - Forward, 1 - Flood, 2 - Punt, 3 - Discard)
- *     .ucast_hit = ...,
- *     // New unicast miss action
- *     .ucast_miss = ...,
- *     // New multicast hit action
- *     .mcast_hit = ...,
- *     // New multicast miss action
- *     .mcast_miss = ...,
- *     // New port list (network endian). Bitmask where every set bit represents
- *     // ID of physical interface being member of the domain. For instance bit
- *     // (1 << 3), if set, says that interface with ID=3 is member of the domain.
- *     // Only valid interface IDs are accepted by the command. If flag is set,
- *     // interface is added to the domain. If flag is not set and interface
- *     // has been previously added, it is removed. The IDs are given by the
- *     // related FCI endpoint and related networking HW. Interface IDs can be
- *     // obtained via FPP_CMD_PHY_IF.
- *     .if_list = ...,
- *     // Flags marking interfaces listed in @c if_list to be 'tagged' or
- *     // 'untagged' (network endian). If respective flag is set, corresponding
- *     // interface within the @c if_list is treated as 'untagged' meaning that
- *     // the VLAN tag will be removed. Otherwise it is configured as 'tagged'.
- *     // Note that only interfaces listed within the @c if_list are taken into
- *     // account.
- *     .untag_if_list = ...,
- *   };
+ *  .............................................  
+ *  fpp_if_mac_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY  // Action
+ *    .name   = "...",            // Physical interface name
+ *  };
+ *    
+ *  fpp_if_mac_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_IF_MAC,
+ *                  sizeof(fpp_if_mac_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds the first MAC address of the requested physical interface.
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_IF_MAC,
+ *                  sizeof(fpp_if_mac_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds the next MAC address of the requested physical interface.
+ *  .............................................  
+ * @endcode 
+ *
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_IF_MAC_NOT_FOUND
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the MAC address query session (no more MAC addresses).
+ *        - For other ACTIONs: Unknown (nonexistent) MAC address was requested.
+ * - @c FPP_ERR_IF_MAC_ALREADY_REGISTERED <br>
+ *        Requested MAC address already exists (is already registered).
+ * - @c FPP_ERR_IF_ENTRY_NOT_FOUND <br>
+ *        Unknown (nonexistent) physical interface was requested.
+ * - @c FPP_ERR_IF_NOT_SUPPORTED <br>
+ *        Requested physical interface does not support MAC address management.
+ * - @c FPP_ERR_IF_WRONG_SESSION_ID <br>
+ *        Some other client has the interface database locked for exclusive access.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
+ * 
+ * @hideinitializer
+ */
+#define FPP_CMD_IF_MAC							0xf120
+
+#define FPP_ERR_IF_MAC_ALREADY_REGISTERED		0xf121
+#define FPP_ERR_IF_MAC_NOT_FOUND				0xf122
+
+/**
+ * @brief       Data structure for interface MAC address.
+ * @details     Related FCI commands: @ref FPP_CMD_IF_MAC
+ *
+ * @snippet     fpp_ext.h  fpp_if_mac_cmd_t
+ */
+/* [fpp_if_mac_cmd_t] */
+typedef struct CAL_PACKED_ALIGNED(2)
+{
+    uint16_t action;      /*< Action */
+    char name[IFNAMSIZ];  /*< Physical interface name. */
+    uint8_t mac[6];       /*< Physical interface MAC. */
+} fpp_if_mac_cmd_t;
+/* [fpp_if_mac_cmd_t] */
+
+/**
+ * @def         FPP_CMD_MIRROR
+ * @brief       FCI command for management of interface mirroring rules.
+ * @details     Related topics: @ref if_mgmt
+ * @details     Related data types: @ref fpp_mirror_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_REGISTER <br>
+ *                   Create a new mirroring rule.
+ *              - @c FPP_ACTION_DEREGISTER <br>
+ *                   Remove (destroy) an existing mirroring rule.
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Modify properties of a mirroring rule.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) a mirroring rule query session and get properties 
+ *                   of the first mirroring rule from the internal list of mirroring rules.
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get properties of the next mirroring rule
+ *                   from the list. Intended to be called in a loop (to iterate through the list).
+ *
+ * FPP_ACTION_REGISTER
+ * -------------------
+ * Create a new mirroring rule. When creating a new mirroring rule, it is also possible to 
+ * simultaneously set its properties (using the same rules which apply to @ref FPP_ACTION_UPDATE).
+ * @code{.c}
+ *  .............................................  
+ *  fpp_mirror_cmd_t cmd_to_fci = 
+ *  {
+ *    .action        = FPP_ACTION_REGISTER, // Action
+ *    .name          = "...",               // Name of the mirroring rule.
+ *    .egress_phy_if = "...",               // Name of the physical interface where to mirror.
+ *      
+ *    // optional
+ *    ... = ...  // Properties (data fields) to be updated, and their new (modified) values.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_MIRROR, sizeof(fpp_mirror_cmd_t), 
+ *                                         (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Domain updated.
- *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Unexpected argument.
- *     - @c FPP_ERR_L2_BD_NOT_FOUND: Given domain not found.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
- *
- * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
- * -------------------------------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_DEREGISTER
+ * ---------------------
+ * Remove (destroy) an existing mirroring rule.
  * @code{.c}
- *   fpp_l2_bd_cmd_t cmd_data =
- *   {
- *     .action = ...    // Either FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT
- *   };
+ *  .............................................  
+ *  fpp_mirror_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_DEREGISTER,  // Action
+ *    .name   = "...",                  // Name of the mirroring rule.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_MIRROR, sizeof(fpp_mirror_cmd_t), 
+ *                                         (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Response data type for queries: @ref fpp_l2_bd_cmd_t
- *
- * Response data provided (all values in network byte order):
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Modify properties of a mirroring rule. It is recommended to use the read-modify-write
+ * approach. Some properties cannot be modified (see fpp_mirror_cmd_t).
  * @code{.c}
- *     // VLAN ID associated with domain (network endian)
- *     rsp_data.vlan;
- *     // Action to be taken when destination MAC address (uni-cast) of a packet
- *     // matching the domain is found in the MAC table: 0 - Forward, 1 - Flood,
- *     // 2 - Punt, 3 - Discard
- *     rsp_data.ucast_hit;
- *     // Action to be taken when destination MAC address (uni-cast) of a packet
- *     // matching the domain is not found in the MAC table.
- *     rsp_data.ucast_miss;
- *     // Multicast hit action.
- *     rsp_data.mcast_hit;
- *     // Multicast miss action.
- *     rsp_data.mcast_miss;
- *     // Bitmask where every set bit represents ID of physical interface being member
- *     // of the domain. For instance bit (1 << 3), if set, says that interface with ID=3
- *     // is member of the domain.
- *     rsp_data.if_list;
- *     // Similar to @c if_list but this interfaces are configured to be VLAN 'untagged'.
- *     rsp_data.untag_if_list;
- *     // See the fpp_l2_bd_flags_t.
- *     rsp_data.flags;
+ *  .............................................  
+ *  fpp_mirror_cmd_t cmd_to_fci = 
+ *  {
+ *    .action        = FPP_ACTION_REGISTER, // Action
+ *    .name          = "...",               // Name of the mirroring rule.
+ *    
+ *    ... = ...  // Properties (data fields) to be updated, and their new (modified) values.
+ *               // Some properties cannot be modified (see fpp_mirror_cmd_t).
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_MIRROR, sizeof(fpp_mirror_cmd_t), 
+ *                                         (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Response buffer written.
- *     - @c FPP_ERR_L2_BD_NOT_FOUND: No more entries.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of a mirroring rule.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_mirror_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY  // Action
+ *  };
+ *    
+ *  fpp_mirror_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_MIRROR,
+ *                  sizeof(fpp_mirror_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the first mirroring rule from 
+ *  //  the internal list of mirroring rules.
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_MIRROR,
+ *                  sizeof(fpp_mirror_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the next mirroring rule from 
+ *  //  the internal list of mirroring rules.
+ *  .............................................  
+ * @endcode 
  *
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_MIRROR_NOT_FOUND
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the mirroring rule query session (no more mirroring rules).
+ *        - For other ACTIONs: Unknown (nonexistent) mirroring rule was requested.
+ * - @c FPP_ERR_MIRROR_ALREADY_REGISTERED <br>
+ *        Requested mirroring rule already exists (is already registered).
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Unexpected value of some property.
+ * - @c FPP_ERR_IF_ENTRY_NOT_FOUND <br>
+ *        Unknown (nonexistent) physical interface in the `.egress_phy_if` property.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
+ * 
+ * @hideinitializer
+ */
+#define FPP_CMD_MIRROR						0xf130
+
+#define FPP_ERR_MIRROR_ALREADY_REGISTERED	0xf131
+#define FPP_ERR_MIRROR_NOT_FOUND			0xf132
+
+/**
+ * @brief       Mirroring rule modification actions.
+ * @details     Related data types: @ref fpp_mirror_cmd_t, @ref fpp_modify_args_t
+ */
+typedef enum CAL_PACKED
+{
+    MODIFY_ACT_NONE = 0U,                   /**< No action to be done. */
+    MODIFY_ACT_ADD_VLAN_HDR = (1U << 1),    /**< Construct/Update outer VLAN Header. */
+    
+    /* Ensure proper size */
+    MODIFY_ACT_INVALID = (int)(1U << 31)
+} fpp_modify_actions_t;
+
+/**
+ * @brief       Arguments for mirroring rule modification actions.
+ * @details     Related data types: @ref fpp_mirror_cmd_t, @ref fpp_modify_actions_t
+ * @note        Some values are in a network byte order [NBO].
+ *
+ * @snippet     fpp_ext.h  fpp_modify_args_t
+ */
+/* [fpp_modify_args_t] */
+typedef struct CAL_PACKED_ALIGNED(2)
+{
+    uint16_t vlan;  /*< VLAN ID to be used by MODIFY_ACT_ADD_VLAN_HDR. [NBO] */
+} fpp_modify_args_t;
+/* [fpp_modify_args_t] */
+
+/**
+ * @brief       Data structure for interface mirroring rule.
+ * @details     Related FCI commands: @ref FPP_CMD_MIRROR
+ * @note        - Some values are in a network byte order [NBO].
+ * @note        - Some values cannot be modified by FPP_ACTION_UPDATE [ro].
+ *
+ * @snippet     fpp_ext.h  fpp_mirror_cmd_t
+ */
+/* [fpp_mirror_cmd_t] */
+typedef struct CAL_PACKED_ALIGNED(4)
+{
+    uint16_t action;               /*< Action */
+    char name[MIRROR_NAME_SIZE];   /*< Name of the mirroring rule. [ro] */
+    char egress_phy_if[IFNAMSIZ];  /*< Name of the physical interface where to mirror. */
+    
+    char filter_table_name[16];	   /*< Name of a Flexible Parser table that can be used
+                                       to filter which frames to mirror.
+                                       Empty string == disabled (no filtering).
+                                       See Flexible Parser for more info. */
+    
+    fpp_modify_actions_t m_actions;  /*< Modifications to be done on mirrored frame. [NBO] */
+    fpp_modify_args_t    m_args;     /*< Configuration values (arguments) for m_actions. */
+} fpp_mirror_cmd_t;
+/* [fpp_mirror_cmd_t] */
+
+/**
+ * @def         FPP_CMD_L2_BD
+ * @brief       FCI command for management of L2 bridge domains.
+ * @details     Related topics: @ref l2_bridge, @ref l2l3_bridge
+ * @details     Related data types: @ref fpp_l2_bd_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_REGISTER <br>
+ *                   Create a new bridge domain.
+ *              - @c FPP_ACTION_DEREGISTER <br>
+ *                   Remove (destroy) an existing bridge domain.
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Modify properties of a bridge domain.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) a bridge domain query session and get properties 
+ *                   of the first bridge domain from the internal list of bridge domains.
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get properties of the next bridge domain
+ *                   from the list. Intended to be called in a loop (to iterate through the list).
+ *
+ * FPP_ACTION_REGISTER
+ * -------------------
+ * Create a new bridge domain. When creating a new bridge domain, it is also possible to 
+ * simultaneously set its properties (using the same rules which apply to @ref FPP_ACTION_UPDATE).
+ * @code{.c}
+ *  .............................................  
+ *  fpp_l2_bd_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_REGISTER,  // Action
+ *    .vlan   = ...,                  // VLAN ID of a new bridge domain. [NBO] (user-defined)
+ *    
+ *    ... = ...  // Properties (data fields) to be updated, and their new (modified) values.
+ *               // Some properties cannot be modified (see fpp_l2_bd_cmd_t).
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_L2_BD, sizeof(fpp_l2_bd_cmd_t), 
+ *                                        (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
+ * @endcode
+ *
+ * FPP_ACTION_DEREGISTER
+ * ---------------------
+ * Remove (destroy) an existing bridge domain.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_l2_bd_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_DEREGISTER,  // Action
+ *    .vlan   = ...,                    // VLAN ID of an existing bridge domain. [NBO]
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_L2_BD, sizeof(fpp_l2_bd_cmd_t), 
+ *                                        (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
+ * @endcode
+ *
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Modify properties of a logical interface. It is recommended to use the read-modify-write
+ * approach. Some properties cannot be modified (see fpp_l2_bd_cmd_t).
+ * @code{.c}
+ *  .............................................  
+ *  fpp_l2_bd_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_UPDATE,  // Action
+ *    .vlan   = ...,                // VLAN ID of an existing bridge domain. [NBO]
+ *    
+ *    ... = ...  // Properties (data fields) to be updated, and their new (modified) values.
+ *               // Some properties cannot be modified (see fpp_l2_bd_cmd_t).
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_L2_BD, sizeof(fpp_l2_bd_cmd_t), 
+ *                                        (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
+ * @endcode
+ *
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of a bridge domain.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_l2_bd_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY  // Action
+ *  };
+ *    
+ *  fpp_l2_bd_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_L2_BD,
+ *                  sizeof(fpp_l2_bd_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the first bridge domain from 
+ *  //  the internal list of bridge domains.
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_L2_BD,
+ *                  sizeof(fpp_l2_bd_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the next bridge domain from 
+ *  //  the internal list of bridge domains.
+ *  .............................................  
+ * @endcode 
+ *
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_L2_BD_NOT_FOUND
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the bridge domain query session (no more bridge domains).
+ *        - For other ACTIONs: Unknown (nonexistent) bridge domain was requested.
+ * - @c FPP_ERR_L2_BD_ALREADY_REGISTERED <br>
+ *        Requested bridge domain already exists (is already registered).
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Unexpected value of some property.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
+ * 
  * @hideinitializer
  */
 #define FPP_CMD_L2_BD						0xf200
@@ -603,463 +1082,591 @@ typedef struct CAL_PACKED_ALIGNED(4)
 #define FPP_ERR_L2_BD_NOT_FOUND				0xf202
 
 /**
- * @brief	L2 bridge domain flags
+ * @brief       L2 bridge domain flags
+ * @details     Related data types: @ref fpp_l2_bd_cmd_t
  */
 typedef enum CAL_PACKED
 {
-	FPP_L2_BD_DEFAULT = (1 << 0),	/*!< Domain type is default */
-	FPP_L2_BD_FALLBACK = (1 << 1)	/*!< Domain type is fallback */
+    FPP_L2_BD_DEFAULT = (1 << 0),   /*!< Domain type is default */
+    FPP_L2_BD_FALLBACK = (1 << 1)   /*!< Domain type is fallback */
 } fpp_l2_bd_flags_t;
 
 /**
- * @brief   Data structure to be used for command buffer for L2 bridge domain control commands
- * @details It can be used:
- *          - for command buffer in functions @ref fci_write or @ref fci_cmd,
- *            with commands: @ref FPP_CMD_L2_BD.
+ * @brief       Data structure for L2 bridge domain.
+ * @details     Related FCI commands: @ref FPP_CMD_L2_BD
+ * @details     Bridge domain actions (what to do with a frame):
+ *              | value | meaning |
+ *              |-------|---------|
+ *              | 0     | Forward |
+ *              | 1     | Flood   |
+ *              | 2     | Punt    |
+ *              | 3     | Discard |
+ *
+ * @note        - Some values are in a network byte order [NBO].
+ * @note        - Some values cannot be modified by FPP_ACTION_UPDATE [ro].
+ *
+ * @snippet     fpp_ext.h  fpp_l2_bd_cmd_t
  */
+/* [fpp_l2_bd_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(2)
 {
-	/**	Action to be executed (register, unregister, query, ...) */
-	uint16_t action;
-	/**	VLAN ID associated with the bridge domain (network endian) */
-	uint16_t vlan;
-	/**	Action to be taken when destination MAC address (uni-cast) of a packet matching the domain
-		is found in the MAC table (network endian): 0 - Forward, 1 - Flood, 2 - Punt, 3 - Discard */
-	uint8_t ucast_hit;
-	/**	Action to be taken when destination MAC address (uni-cast) of a packet matching the domain
-		is not found in the MAC table */
-	uint8_t ucast_miss;
-	/**	Multicast hit action */
-	uint8_t mcast_hit;
-	/**	Multicast miss action */
-	uint8_t mcast_miss;
-	/**	Port list (network endian). Bitmask where every set bit represents ID of physical interface
-		being member of the domain. For instance bit (1 « 3), if set, says that interface with ID=3
-		is member of the domain. Only valid interface IDs are accepted by the command. If flag is set,
-		interface is added to the domain. If flag is not set and interface has been previously added,
-		it is removed. The IDs are given by the related FCI endpoint and related networking HW. Interface
-		IDs can be obtained via FPP_CMD_PHY_IF. */
-	uint32_t if_list;
-	/**	Flags marking interfaces listed in @c if_list to be 'tagged' or 'untagged' (network endian).
-		If respective flag is set, corresponding interface within the @c if_list is treated as 'untagged'
-		meaning that the VLAN tag will be removed. Otherwise it is configured as 'tagged'. Note that
-		only interfaces listed within the @c if_list are taken into account. */
-	uint32_t untag_if_list;
-	/**	See the @ref fpp_l2_bd_flags_t */
-	fpp_l2_bd_flags_t flags;
+    uint16_t action;    /*< Action */
+    uint16_t vlan;      /*< Bridge domain VLAN ID. [NBO,ro] */
+    
+    uint8_t ucast_hit;  /*< Bridge domain action when the destination MAC of an inspected 
+                            frame is an unicast MAC and it matches some entry in the 
+                            Bridge MAC table. */
+    
+    uint8_t ucast_miss; /*< Bridge domain action when the destination MAC of an inspected 
+                            frame is an unicast MAC and it does NOT match any entry in the 
+                            Bridge MAC table. */
+    
+    uint8_t mcast_hit;  /*< Similar to ucast_hit, but for frames which have a multicast 
+                            destination MAC address. */
+    
+    uint8_t mcast_miss; /*< Similar to ucast_miss, but for frames which have a multicast 
+                            destination MAC address. */
+    
+    uint32_t if_list;   /*< Bridge domain ports. [NBO]. A bitset.
+                            Ports are represented by physical interface bitflags.
+                            If a bitflag of some physical interface is set here, the interface
+                            is then considered a port of the given bridge domain.
+                            Conversion between a physical interface ID and a corresponding
+                            bitflag is (1uL << "physical interface ID"). */
+    
+    uint32_t untag_if_list; /*< A bitset [NBO], denoting which bridge domain ports from 
+                                '.if_list' are considered untagged (their egress frames 
+                                have the VLAN tag removed).
+                                Ports which are present in both the '.if_list' bitset and 
+                                this bitset are considered untagged.
+                                Ports which are present only in the '.if_list' bitset are
+                                considered tagged. */
+    
+    fpp_l2_bd_flags_t flags;  /*< Bridge domain flags [NBO,ro] */
 } fpp_l2_bd_cmd_t;
+/* [fpp_l2_bd_cmd_t] */
 
 /**
- * @def FPP_CMD_L2_STATIC_ENT
- * @brief VLAN-based L2 bridge static entry management
- * @note When using this command MAC entry learning should be disabled.
- * @details Command can be used with various `.action` values:
- *          - @c FPP_ACTION_REGISTER: Create a new static entry.
- *          - @c FPP_ACTION_DEREGISTER: Delete static entry.
- *          - @c FPP_ACTION_UPDATE: Update static entry. It is possible to update forward list only.
- *          - @c FPP_ACTION_QUERY: Gets head of list of registered static entries.
- *          - @c FPP_ACTION_QUERY_CONT: Get next item from list of static entries. Shall be called after
- *               @c FPP_ACTION_QUERY was called. On each call it replies with parameters of next domain.
- *               It returns @c FPP_ERR_RT_ENTRY_NOT_FOUND when no more entries exist.
+ * @def         FPP_CMD_L2_STATIC_ENT
+ * @brief       FCI command for management of L2 static entries.
+ * @details     Related topics: @ref l2_bridge, @ref l2l3_bridge
+ * @details     Related data types: @ref fpp_l2_static_ent_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_REGISTER <br>
+ *                   Create a new static entry.
+ *              - @c FPP_ACTION_DEREGISTER <br>
+ *                   Remove (destroy) an existing static entry.
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Modify properties of a static entry.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) static entry query session and get properties 
+ *                   of the first static entry from the internal collective list of all 
+ *                   L2 static entries (regardless of bridge domain affiliation).
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get properties of the next static entry
+ *                   from the list. Intended to be called in a loop (to iterate through the list).
  *
- * Command Argument Type: @ref fpp_l2_static_ent_cmd_t
+ * @note
+ * When using this command, it is recommended to disable dynamic learning of MAC addresses on all 
+ * physical interfaces which are configured to be a part of @ref l2_bridge or @ref l2l3_bridge.
+ * See @ref FPP_CMD_PHY_IF and @ref fpp_phy_if_block_state_t.
  *
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_REGISTER
+ * -------------------
+ * Create a new L2 static entry.
  * @code{.c}
- *   fpp_l2_static_ent_cmd_t cmd_data =
- *   {
- *     // Register new static entry
- *     .action = FPP_ACTION_REGISTER,
- *     // VLAN ID associated with the domain (network endian)
- *     .vlan = ...,
- *     // MAC address
- *     .mac = {...} ;
- *     //Forward list (network endian). Bitmask where traffic matching source MAC will be forwarded to.
- *     //The bitmask itself is constructed by setting bit corresponding to the egress ID of physical.
- *     // For instance bit (1 « 3), if set, says that all traffic matching configured source MAC
- *     //will be transmitted to physical interface ID=3. If flag is set, given physical interface will be used to
- *     //transmit matching traffic. If flag is cleared and interface has been previously added, all new matching traffic will not
- *     //be transmitted to this interface. The IDs are given by the related FCI endpoint and related networking HW.
- *     //Interface IDs can be obtained via FPP_CMD_PHY_IF.
- *     .forward_list = ..,
- *     // Configure the static entry as Local MAC address for L2L3 Bridge mode
- *     .local = 1
- *     // Do not discard frames sent from the MAC address
- *     .src_discard = 0
- *     // Do not discard frames sent to the MAC address
- *     .dst_discard = 0
- *   };
+ *  .............................................  
+ *  fpp_l2_static_ent_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_REGISTER,  // Action
+ *    .vlan   = ...,                  // VLAN ID of an associated bridge domain. [NBO]
+ *    .mac    = ...,                  // Static entry MAC address.
+ *    .forward_list = ...             // Egress physical interfaces. [NBO]
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_L2_STATIC_ENT, sizeof(fpp_l2_static_ent_cmd_t), 
+ *                                                (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Static entry added.
- *     - @c FPP_ERR_L2_STATIC_ENT_ALREADY_REGISTERED: Given static entry already registered.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
- *
- *
- * Action FPP_ACTION_DEREGISTER
- * --------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_DEREGISTER
+ * ---------------------
+ * Remove (destroy) an existing L2 static entry.
  * @code{.c}
- *   fpp_l2_static_ent_cmd_t cmd_data =
- *   {
- *     // Delete bridge domain
- *     .action = FPP_ACTION_DEREGISTER,
- *     // VLAN ID associated with the domain (network endian)
- *     .vlan = ...,
- *     // MAC address
- *     .mac = {...} ;
- *   };
+ *  .............................................  
+ *  fpp_l2_static_ent_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_DEREGISTER,  // Action
+ *    .vlan   = ...,                    // VLAN ID of an associated bridge domain. [NBO]
+ *    .mac    = ...                     // Static entry MAC address.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_L2_STATIC_ENT, sizeof(fpp_l2_static_ent_cmd_t), 
+ *                                                (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Static entry removed.
- *     - @c FPP_ERR_L2_STATIC_EN_NOT_FOUND: Given  static entry not found.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
- *
- * Action FPP_ACTION_UPDATE
- * --------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Modify properties of L2 static entry. It is recommended to use the read-modify-write
+ * approach. Some properties cannot be modified (see fpp_l2_static_ent_cmd_t).
  * @code{.c}
- *   fpp_l2_static_ent_cmd_t cmd_data =
- *   {
- *     // Register new static entry
- *     .action = FPP_ACTION_REGISTER,
- *     // VLAN ID associated with the domain (network endian). This VLAN+MAC have to be already registered for update.
- *     .vlan = ...,
- *     // MAC address. This VLAN+MAC have to be already registered for update.
- *     .mac = {...},
- *     //Forward list (network endian). Bitmask where traffic matching source MAC will be forwarded to.
- *     //The bitmask itself is constructed by setting bit corresponding to the egress ID of physical.
- *     // For instance bit (1 « 3), if set, says that all traffic matching configured source MAC
- *     //will be transmitted to physical interface ID=3. If flag is set, given physical interface will be used to
- *     //transmit matching traffic. If flag is cleared and interface has been previously added, all new matching traffic will not
- *     //be transmitted to this interface. The IDs are given by the related FCI endpoint and related networking HW.
- *     //Interface IDs can be obtained via FPP_CMD_PHY_IF.
- *     .forward_list = ..,
- *     // Configure the static entry as Local MAC address for L2L3 Bridge mode
- *     .local = 1
- *   };
+ *  .............................................  
+ *  fpp_l2_static_ent_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_UPDATE,  // Action
+ *    .vlan   = ...,                // VLAN ID of an associated bridge domain. [NBO]
+ *    .mac    = ...,                // Static entry MAC address.
+ *    
+ *    ... = ...  // Properties (data fields) to be updated, and their new (modified) values.
+ *               // Some properties cannot be modified (see fpp_l2_static_ent_cmd_t).
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_L2_STATIC_ENT, sizeof(fpp_l2_static_ent_cmd_t), 
+ *                                                (unsigned short*)(&cmd_to_fci));
+ *  ............................................. 
  * @endcode
  *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Static entry updated.
- *     - @c FPP_ERR_L2_STATIC_EN_NOT_FOUND: Given static entry not found.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
- *
- * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
- * -------------------------------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of L2 static entry.
  * @code{.c}
- *   fpp_l2_static_ent_cmd_t cmd_data =
- *   {
- *     .action = ...    // Either FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT
- *   };
- * @endcode
+ *  .............................................  
+ *  fpp_l2_static_ent_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY  // Action
+ *  };
+ *    
+ *  fpp_l2_static_ent_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_L2_STATIC_ENT,
+ *                  sizeof(fpp_l2_static_ent_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the first static entry from
+ *  //  the internal collective list of all static entries.
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_L2_STATIC_ENT,
+ *                  sizeof(fpp_l2_static_ent_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the next static entry from 
+ *  //  the internal collective list of all static entries.
+ *  .............................................  
+ * @endcode 
  *
- * Response data type for queries: @ref fpp_l2_static_ent_cmd_t
- *
- * Response data provided (all values in network byte order):
- * @code{.c}
- *     // Register new static entry
- *     .action = FPP_ACTION_REGISTER,
- *     // VLAN ID associated with the domain (network endian)
- *     .vlan = ...,
- *     // MAC address
- *     .mac = {...} ;
- *     //Forward list (network endian).
- *     .forward_list = ..;
- *     // Is the static entry used as Local MAC address for L2L3 Bridge mode
- *     .local = ... ; //1 = yes, 0 = no
-
- * @endcode
- *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Response buffer written.
- *     - @c FPP_ERR_L2_STATIC_EN_NOT_FOUND: No more entries.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_L2_STATIC_EN_NOT_FOUND
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the L2 static entry query session (no more L2 static entries).
+ *        - For other ACTIONs: Unknown (nonexistent) L2 static entry was requested.
+ * - @c FPP_ERR_L2_STATIC_ENT_ALREADY_REGISTERED <br>
+ *        Requested L2 static entry already exists (is already registered).
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
-
 #define FPP_CMD_L2_STATIC_ENT						0xf340
+
 #define FPP_ERR_L2_STATIC_ENT_ALREADY_REGISTERED	0xf341
 #define FPP_ERR_L2_STATIC_EN_NOT_FOUND				0xf342
 
+/**
+ * @brief       Data structure for L2 static entry.
+ * @details     Related FCI commands: @ref FPP_CMD_L2_STATIC_ENT
+ * @note        - Some values are in a network byte order [NBO].
+ * @note        - Some values cannot be modified by FPP_ACTION_UPDATE [ro].
+ *
+ * @snippet     fpp_ext.h  fpp_l2_static_ent_cmd_t
+ */
+/* [fpp_l2_static_ent_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
-	/**	Action to be executed (register, unregister, query, ...) */
-	uint16_t action;
-	/**	VLAN ID associated with the mac address (network endian). If the vlan shouldn't be matched
-	    this field should be configured to default vlan.*/
-	uint16_t vlan;
-	/** MAC Address */
-	uint8_t mac[6];
-	/** Forward list (network endian). Bitmask where traffic matching source MAC will be forwarded to.
-	    The bitmask itself is constructed by setting bit corresponding to the egress ID of physical.
-	    For instance bit (1 « 3), if set, says that all traffic matching configured source MAC
-	    will be transmitted to physical interface ID=3. If flag is set, given physical interface will be used to
-	    transmit matching traffic. If flag is cleared and interface has been previously added, all new matching traffic will not
-	    be transmitted to this interface. The IDs are given by the related FCI endpoint and related networking HW.
-	    Interface IDs can be obtained via FPP_CMD_PHY_IF. */
-	uint32_t forward_list;
-	/** Local MAC address (1 = true, 0 = false). The forward list is ignored and the frames with corresponding destination
-        MAC address are passed to the IP router algorithm when the value is 1 and the ingress physical interface is configured
-        into the L2L3 bridge mode. Other traffic is handle by L2 bridge algorithm. */
-	uint8_t local;
-	/** Frames with this destination MAC address (and VLAN tag) shall be discarded (1 = enable, 0 = disable). */
-	uint8_t dst_discard;
-	/** Frames with this source MAC address (and VLAN tag) shall be discarded (1 = enable, 0 = disable). */
-	uint8_t src_discard;
+    uint16_t action;        /*< Action */
+    
+    uint16_t vlan;          /*< VLAN ID of an associated bridge domain. [NBO,ro] 
+                                VLAN-aware static entries are applied only on frames 
+                                which have a matching VLAN tag.
+                                For non-VLAN aware static entries, use VLAN ID of 
+                                the Default BD (Default Bridge Domain). */
+    
+    uint8_t mac[6];         /*< Static entry MAC address. [ro] */
+    
+    uint32_t forward_list;  /*< Egress physical interfaces. [NBO]. A bitset.
+                                Frames with matching destination MAC address (and VLAN tag)
+                                are forwarded through all physical interfaces which are a part
+                                of this bitset. Physical interfaces are represented by 
+                                bitflags. Conversion between a physical interface ID and 
+                                a corresponding bitflag is (1uL << "physical interface ID").*/
+    
+    uint8_t local;          /*< Local MAC address. (0 == false, 1 == true)
+                                A part of L2L3 Bridge feature. If true, then the forward list 
+                                of such a static entry is ignored and frames with 
+                                a corresponding destination MAC address are passed to 
+                                the IP router algorithm. See chapter about L2L3 Bridge. */
+    
+    uint8_t dst_discard;    /*< Frames with matching destination MAC address (and VLAN tag)
+                                shall be discarded. (0 == disabled, 1 == enabled) */
+    
+    uint8_t src_discard;    /*< Frames with matching source MAC address (and VLAN tag)
+                                shall be discarded. (0 == disabled, 1 == enabled) */
 } fpp_l2_static_ent_cmd_t;
+/* [fpp_l2_static_ent_cmd_t] */
 
 /**
- * @def FPP_CMD_L2_FLUSH_LEARNED
- * @brief FCI command to flush learned MAC table entries
- * @details	Command will remove all adresses from the L2 bridge MAC table
- *          which were added within the learning process.
+ * @def         FPP_CMD_L2_FLUSH_LEARNED
+ * @brief       FCI command to remove all dynamically learned MAC table entries.
+ * @details     Related topics: @ref l2_bridge, @ref l2l3_bridge
+ * @details     Supported `.action` values: ---
+ * <br>
+ * @code{.c}
+ *  .............................................  
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_L2_FLUSH_LEARNED, 0, NULL); 
+ *  .............................................  
+ * @endcode
  *
- * Possible command return values are:
- *     -  FPP_ERR_OK: Flush successful.
- *     -  FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ * Command return values
+ * ---------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
 #define FPP_CMD_L2_FLUSH_LEARNED					0xf380
 
 /**
- * @def FPP_CMD_L2_FLUSH_STATIC
- * @brief FCI command to flush static MAC table entries
- * @details	Command will remove all addresses from the L2 bridge MAC table
- *          which were added as static entries via @ref FPP_CMD_L2_STATIC_ENT.
+ * @def         FPP_CMD_L2_FLUSH_STATIC
+ * @brief       FCI command to remove all static MAC table entries.
+ * @details     Related topics: @ref l2_bridge, @ref l2l3_bridge, @ref FPP_CMD_L2_STATIC_ENT
+ * @details     Supported `.action` values: ---
+ * <br>
+ * @code{.c}
+ *  .............................................  
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_L2_FLUSH_STATIC, 0, NULL); 
+ *  .............................................  
+ * @endcode
  *
- * Possible command return values are:
- *     -  FPP_ERR_OK: Flush successful.
- *     -  FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ * Command return values
+ * ---------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
 #define FPP_CMD_L2_FLUSH_STATIC						0xf390
 
 /**
- * @def FPP_CMD_L2_FLUSH_ALL
- * @brief FCI command to flush all MAC table entries
- * @details	Command will remove all addresses from the L2 bridge MAC table.
+ * @def         FPP_CMD_L2_FLUSH_ALL
+ * @brief       FCI command to remove all MAC table entries (clear the whole MAC table).
+ * @details     Related topics: @ref l2_bridge, @ref l2l3_bridge
+ * @details     Supported `.action` values: ---
+ * <br>
+ * @code{.c}
+ *  .............................................  
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_L2_FLUSH_ALL, 0, NULL); 
+ *  .............................................  
+ * @endcode
  *
- * Possible command return values are:
- *     -  FPP_ERR_OK: Flush successful.
- *     -  FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ * Command return values
+ * ---------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
 #define FPP_CMD_L2_FLUSH_ALL						0xf3a0
 
 /**
- * @def FPP_CMD_FP_TABLE
- * @brief Administers the Flexible Parser tables
- * @details The Flexible Parser table is an ordered set of Flexible Parser rules which
- *          are matched in the order of appearance until match occurs or end of the table
- *          is reached. The following actions can be done on the table:
- *          - @c FPP_ACTION_REGISTER: Create a new table with a given name.
- *          - @c FPP_ACTION_DEREGISTER: Destroy an existing table.
- *          - @c FPP_ACTION_USE_RULE: Add a rule into the table at specified position.
- *          - @c FPP_ACTION_UNUSE_RULE: Remove a rule from the table.
- *          - @c FPP_ACTION_QUERY: Return the first rule in the table.
- *          - @c FPP_ACTION_QUERY_CONT: Return the next rule in the table.
+ * @def         FPP_CMD_FP_TABLE
+ * @brief       FCI command for management of Flexible Parser tables.
+ * @details     Related topics: @ref flex_parser
+ * @details     Related data types: @ref fpp_fp_table_cmd_t, @ref fpp_fp_rule_props_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_REGISTER <br>
+ *                   Create a new FP table.
+ *              - @c FPP_ACTION_DEREGISTER <br>
+ *                   Remove (destroy) an existing FP table.
+ *              - @c FPP_ACTION_USE_RULE <br>
+ *                   Insert an FP rule into an FP table at the specified position.
+ *              - @c FPP_ACTION_UNUSE_RULE <br>
+ *                   Remove an FP rule from an FP table.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) an FP table query session and get properties 
+ *                   of the first FP @b rule from the requested FP table.
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get properties of the next FP @b rule
+ *                   from the requested FP table. Intended to be called in a loop 
+ *                   (to iterate through the requested FP table).
  *
- * The Flexible Parser starts processing the table from the 1st rule in the table. If there is no match
- * the Flexible Parser always continues with the rule following the currently processed rule.
- * The processing ends once rule match happens and the rule action is one of the FP_ACCEPT
- * or FP_REJECT and the respective value is returned.
- * REJECT is also returned after the last rule in the table was processed without any match.
- * The Flexible Parser may branch to arbitrary rule in the table if some rule matches and the
- * action is FP_NEXT_RULE. Note that loops are forbidden.
- *
- * See the FPP_CMD_FP_RULE and @ref fpp_fp_rule_props_t for the detailed description
- * of how the rules are being matched.
- *
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_REGISTER
+ * -------------------
+ * Create a new FP table.
  * @code{.c}
- *   fpp_fp_table_cmd_t cmd_data =
- *   {
- *      .action = FPP_ACTION_REGISTER,    // Add a new table
- *      .t.table_name = "table_name",     // Unique up-to-15-character table identifier
- *   };
+ *  .............................................  
+ *  fpp_fp_table_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_REGISTER,    // Action
+ *    .table_info.t.table_name = "..."  // Name of a new FP table.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_FP_TABLE, sizeof(fpp_fp_table_cmd_t), 
+ *                                                  (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Action FPP_ACTION_DEREGISTER
- * ----------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_DEREGISTER
+ * ---------------------
+ * Remove (destroy) an existing FP table.
  * @code{.c}
- *   fpp_fp_table_cmd_t cmd_data =
- *   {
- *      .action = FPP_ACTION_DEREGISTER,  // Remove an existing table
- *      .t.table_name = "table_name",     // Identifier of the table to be destroyed
- *   };
+ *  .............................................  
+ *  fpp_fp_table_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_DEREGISTER,  // Action
+ *    .table_info.t.table_name = "..."  // Name of an existing FP table.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_FP_TABLE, sizeof(fpp_fp_table_cmd_t), 
+ *                                                  (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
+ * @endcode
+ * @note FP table cannot be destroyed if it is in use by some PFE feature.
+ *       First remove the table from use, then destroy it.
+ *
+ * FPP_ACTION_USE_RULE
+ * -------------------
+ * Insert an FP rule at the specified position in an FP table.
+ * - If there are already some rules in the table, they are shifted accordingly to make room
+ *   for the newly inserted rule.
+ * - If the desired position is greater than the count of all rules in the table, the newly 
+ *   inserted rule is placed as the last rule of the table.
+ * 
+ * @code{.c}
+ *  .............................................  
+ *  fpp_fp_table_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_USE_RULE,     // Action
+ *    .table_info.t.table_name = "...",  // Name of an existing FP table.
+ *    .table_info.t.rule_name  = "...",  // Name of an existing FP rule.
+ *    .table_info.t.position   = ...     // Desired position of the rule in the table.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_FP_TABLE, sizeof(fpp_fp_table_cmd_t), 
+ *                                                  (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
+ * @endcode
+ * @note Each FP rule can be assigned only to one FP table (cannot be simultaneously a member of multiple FP tables).
+ *
+ * FPP_ACTION_UNUSE_RULE
+ * ---------------------
+ * Remove an FP rule from an FP table.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_fp_table_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_UNUSE_RULE,   // Action
+ *    .table_info.t.table_name = "...",  // Name of an existing FP table.
+ *    .table_info.t.rule_name  = "...",  // Name of an FP rule which is a member of the table.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_FP_TABLE, sizeof(fpp_fp_table_cmd_t), 
+ *                                                  (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Action FPP_ACTION_USE_RULE
- * --------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of an FP @b rule from the requested FP table.
+ * Query result (properties of the @b rule) is stored in the member `.table_info.r`.
  * @code{.c}
- *   fpp_fp_table_cmd_t cmd_data =
- *   {
- *      .action = FPP_ACTION_USE_RULE,    // Add existing rule into specified table
- *      .t.table_name = "table_name",     // Identifier of the table to add the rule
- *      .t.rule_name = "rule_name",       // Identifier of the rule to be added into the table
- *      .t.position = ...                 // Desired position of the rule within the table
- *   };
- * @endcode
- * @note Single rule can be member of only one table.
- *
- * Action FPP_ACTION_UNUSE_RULE
- * ----------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_flexible_parser_table_cmd cmd_data =
- *   {
- *      .action = FPP_ACTION_UNUSE_RULE,  // Remove an existing rule from a table
- *      .t.rule_name = "rule_name",       // Identifier of the rule to be removed from the table
- *   };
- * @endcode
- *
- * Action FPP_ACTION_QUERY
- * -----------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_flexible_parser_table_cmd cmd_data =
- *   {
- *      .action = FPP_ACTION_QUERY,       // Start query of the table rules
- *      .t.table_name = "table_name",     // Identifier of the table to be queried
- *   };
- * @endcode
- *
- * Response data type for queries: @ref fpp_fp_rule_cmd_t
- *
- * Response data provided:
- * @code{.c}
- *   rsp_data.r.name;             // Name of the rule
- *   rsp_data.r.data;             // Expected data value (network endian)
- *   rsp_data.r.mask;             // Mask to be applied on frame data (network endian)
- *   rsp_data.r.offset;           // Offset of the data in the frame (network endian)
- *   rsp_data.r.invert;           // Invert match or not
- *   rsp_data.r.match_action;     // Action to be done on match
- *   rsp_data.r.next_rule_name;   // Next rule to be examined if match_action == FP_NEXT_RULE
- * @endcode
- * @note All data is provided in the network byte order.
- *
- * Action FPP_ACTION_QUERY_CONT
- * ----------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_flexible_parser_table_cmd cmd_data =
- *   {
- *      .action = FPP_ACTION_QUERY_CONT,    // Continue query of the table rules by the next rule
- *      .t.table_name = "table_name",       // Identifier of the table to be queried
- *   };
- * @endcode
- *
- * Response data is provided in the same form as for FPP_ACTION_QUERY action.
- *
+ *  .............................................  
+ *  fpp_fp_table_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY         // Action
+ *    .table_info.t.table_name = "...",  // Name of an existing FP table.
+ *  };
+ *    
+ *  fpp_fp_table_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_FP_TABLE,
+ *                  sizeof(fpp_fp_table_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci.table_info.r' now holds properties of the first FP rule from
+ *  //  the requested FP table.
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_FP_TABLE,
+ *                  sizeof(fpp_fp_table_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci.table_info.r' now holds properties of the next FP rule from 
+ *  //  the requested FP table.
+ *  .............................................  
+ * @endcode 
+ * @note There is currently no way to read a list of existing FP tables from PFE.
+ * 
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c ENOENT @c (-2)
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the FP table query session (no more FP @b rules in the requested table).
+ *        - For other ACTIONs: Unknown (nonexistent) FP table was requested.
+ * - @c EEXIST @c (-17) <br>
+ *        Requested FP table already exists (is already registered).
+ * - @c EACCES @c (-13) <br>
+ *        Requested FP table cannot be destroyed (is probably in use by some PFE feature).
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Unexpected value of some property.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
+ * 
  * @hideinitializer
  */
 #define FPP_CMD_FP_TABLE						0xf220
 
 /**
- * @def FPP_CMD_FP_RULE
- * @brief Administers the Flexible Parser rules
- * @details Each Flexible Parser rule consists of a condition specified by @c data, @c mask and @c offset triplet and
- *          action to be performed. If 32-bit frame data at given @c offset masked by @c mask is equal to the specified
- *          @c data masked by the same @c mask then the condition is true. An invert flag may be set to invert the condition
- *          result. The rule action may be either @c accept, @c reject or @c next_rule which means to continue with a specified rule.
+ * @def         FPP_CMD_FP_RULE
+ * @brief       FCI command for management of Flexible Parser rules.
+ * @details     Related topics: @ref flex_parser
+ * @details     Related data types: @ref fpp_fp_rule_cmd_t, @ref fpp_fp_rule_props_t
+ * @details     Each FP rule consists of a condition specified by the following properties:
+ *              `.data`, `.mask` and `.offset` + `.offset_from`. FP rule then works as follows: 
+ *              32-bit data value from the inspected Ethernet frame (at given @c offset_from + 
+ *              @c offset position, masked by the @c mask) is compared with the @c data value 
+ *              (masked by the same @c mask). If the values are equal, then condition of the FP rule 
+ *              is true. An invert flag may be set to invert the condition result.
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_REGISTER <br>
+ *                   Create a new FP rule.
+ *              - @c FPP_ACTION_DEREGISTER <br>
+ *                   Remove (destroy) an existing FP rule.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) an FP rule query session and get properties 
+ *                   of the first FP rule from the internal collective list of all 
+ *                   FP rules (regardless of FP table affiliation).
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get properties of the next FP rule
+ *                   from the list. Intended to be called in a loop (to iterate through the list).
  *
- *          The rule administering command may be one of the following actions:
- *           - @c FPP_ACTION_REGISTER: Create a new rule.
- *           - @c FPP_ACTION_DEREGISTER: Delete an existing rule.
- *           - @c FPP_ACTION_QUERY: Return the first rule (among all existing rules).
- *           - @c FPP_ACTION_QUERY_CONT: Return the next rule.
- *
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_REGISTER
+ * -------------------
+ * Create a new FP rule. For detailed info about FP rule properties, see fpp_fp_rule_cmd_t.
  * @code{.c}
- *   fpp_fp_rule_cmd_t cmd_data =
- *   {
- *      // Creates a new rule
- *      .action = FPP_ACTION_REGISTER,
- *      // Unique up-to-15-character rule identifier
- *      .r.rule_name = "rule_name",
- *      // 32-bit data to match with the frame data at given offset (network endian)
- *      .r.data = htonl(0x08000000),
- *      // 32-bit mask to apply on the frame data and .r.data before comparison (network endian)
- *      .r.mask = htonl(0xFFFF0000),
- *      // Offset of the frame data to be compared (network endian)
- *      .r.offset = htonl(12),
- *      // Invert match or not (values 0 or 1)
- *      .r.invert = 0,
- *      // How to calculate the offset
- *      .r.match_action = FP_OFFSET_FROM_L2_HEADER,
- *      // Action to be done on match
- *      .r.offset_from = FP_ACCEPT,
- *      // Identifier of the next rule to use when match_action == FP_NEXT_RULE
- *      .r.next_rule_name = "rule_name2"
- *   };
- * @endcode
- * This example is used to match and accept all IPv4 frames (16-bit value 0x0800 at bytes 12 and 13,
- * when starting bytes counting from 0).
- * @note All values are specified in the network byte order.
- * @warning It is forbidden to create rule loops using the @a next_rule feature.
- *
- * Action FPP_ACTION_DEREGISTER
- * ----------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_fp_rule_cmd_t cmd_data =
- *   {
- *      .action = FPP_ACTION_DEREGISTER,   // Deletes an existing rule
- *      .r.rule_name = "rule_name",        // Identifier of the rule to be deleted
- *   };
+ *  .............................................  
+ *  fpp_fp_rule_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_REGISTER,  // Action
+ *    .r.rule_name = "...",           // Rule name. A string of up to 15 characters + '\0'.
+ *    .r.data      = ...,             // Expected data. [NBO]
+ *    .r.mask      = ...,             // Bitmask. [NBO]
+ *    .r.offset    = ...,             // Offset (in bytes). [NBO]
+ *    .r.invert    = ...,             // Invert the match result.
+ *    
+ *    .r.next_rule_name = "...",      // Name of the FP rule to jump to if '.match_action' ==
+ *                                    // FP_NEXT_RULE. Set all-zero if unused.
+ *    
+ *    .r.match_action = ...,          // Action to do if the inspected frame matches
+ *                                    // the FP rule criteria.
+ *    
+ *    .r.offset_from = ...            // Header for offset calculation.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_FP_RULE, sizeof(fpp_fp_rule_cmd_t), 
+ *                                                 (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Action FPP_ACTION_QUERY
- * -----------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_DEREGISTER
+ * ---------------------
+ * Remove (destroy) an existing FP rule.
  * @code{.c}
- *   fpp_flexible_parser_rule_cmd cmd_data =
- *   {
- *      .action = FPP_ACTION_QUERY       // Start the rules query
- *   };
+ *  .............................................  
+ *  fpp_fp_rule_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_DEREGISTER,  // Action
+ *    .r.rule_name = "...",             // Name of an existing FP rule.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_FP_RULE, sizeof(fpp_fp_rule_cmd_t), 
+ *                                                 (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
+ * @note FP rule cannot be destroyed if it is a member of some FP table.
+ *       First remove the rule from the table, then destroy the rule.
  *
- * Response data type for queries: @ref fpp_fp_rule_cmd_t
- *
- * Response data provided:
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of an FP rule. Query result is stored in the member `.r`.
  * @code{.c}
- *   rsp_data.r.name;             // Name of the rule
- *   rsp_data.r.data;             // Expected data value (network endian)
- *   rsp_data.r.mask;             // Mask to be applied on frame data (network endian)
- *   rsp_data.r.offset;           // Offset of the data in the frame (network endian)
- *   rsp_data.r.invert;           // Invert match or not
- *   rsp_data.r.match_action;     // Action to be done on match
- *   rsp_data.r.next_rule_name;   // Next rule to be examined if match_action == FP_NEXT_RULE
- * @endcode
- * @note All data is provided in the network byte order.
+ *  .............................................  
+ *  fpp_fp_rule_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY  // Action
+ *  };
+ *    
+ *  fpp_fp_rule_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_FP_RULE,
+ *                  sizeof(fpp_fp_rule_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci.r' now holds properties of the first FP rule from
+ *  //  the internal collective list of all FP rules.
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_FP_RULE,
+ *                  sizeof(fpp_fp_rule_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci.r' now holds properties of the next FP rule from 
+ *  //  the internal collective list of all FP rules.
+ *  .............................................  
+ * @endcode 
  *
- * Action FPP_ACTION_QUERY_CONT
- * ----------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_flexible_parser_rule_cmd cmd_data =
- *   {
- *      .action = FPP_ACTION_QUERY_CONT    // Continue with the rules query
- *   };
- * @endcode
- *
- * Response data is provided in the same form as for FPP_ACTION_QUERY action.
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c ENOENT @c (-2)
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the FP rule query session (no more FP rules).
+ *        - For other ACTIONs: Unknown (nonexistent) FP rule was requested.
+ * - @c EEXIST @c (-17) <br>
+ *        Requested FP rule already exists (is already registered).
+ * - @c EACCES @c (-13) <br>
+ *        Requested FP rule cannot be destroyed (is probably a member of some FP table).
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Unexpected value of some property.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
@@ -1068,106 +1675,128 @@ typedef struct CAL_PACKED_ALIGNED(4)
 #define FPP_ERR_FP_RULE_NOT_FOUND			0xf222
 
 /**
- * @def FPP_ACTION_USE_RULE
- * @brief Flexible Parser specific 'use' action for FPP_CMD_FP_TABLE.
+ * @def     FPP_ACTION_USE_RULE
+ * @brief   Flexible Parser specific 'use' action for FPP_CMD_FP_TABLE.
  * @hideinitializer
  */
 #define FPP_ACTION_USE_RULE 10
 
 /**
- * @def FPP_ACTION_UNUSE_RULE
- * @brief Flexible Parser specific 'unuse' action for FPP_CMD_FP_TABLE.
+ * @def     FPP_ACTION_UNUSE_RULE
+ * @brief   Flexible Parser specific 'unuse' action for FPP_CMD_FP_TABLE.
  * @hideinitializer
  */
 #define FPP_ACTION_UNUSE_RULE 11
 
 /**
- * @brief Specifies the Flexible Parser result on the rule match
+ * @brief       Action to do with an inspected Ethernet frame if the frame matches FP rule criteria.
+ * @details     Related data types: @ref fpp_fp_rule_props_t
+ * @details     Exact meaning of FP_ACCEPT and FP_REJECT (what happens with the inspected frame)
+ *              depends on the context in which the parent FP table is used. See @ref flex_parser.
+ *              Generally (without any further logic inversions), FP_ACCEPT means the frame is
+ *              accepted and processed by PFE, while FP_REJECT means the frame is discarded.
  */
 typedef enum CAL_PACKED
 {
-    FP_ACCEPT,   /**< Flexible parser result on rule match is ACCEPT */
-    FP_REJECT,   /**< Flexible parser result on rule match is REJECT */
-    FP_NEXT_RULE /**< On rule match continue matching by the specified rule */
+    FP_ACCEPT,    /**< Flexible Parser accepts the frame. */
+    FP_REJECT,    /**< Flexible Parser rejects the frame. */
+    FP_NEXT_RULE  /**< Flexible Parser continues with the matching process, but jumps to 
+                       a specific FP rule in the FP table. */
 } fpp_fp_rule_match_action_t;
 
 /**
- * @brief Specifies how to calculate the frame data offset
- * @details The offset may be calculated either from the L2, L3 or L4 header beginning.
- *          The L2 header beginning is also the Ethernet frame beginning because the Ethernet
- *          frame begins with the L2 header. This offset is always valid however if the L3 or
- *          L4 header is not recognized then the rule is always skipped as not-matching.
+ * @brief       Header for offset calculation.
+ * @details     Related data types: @ref fpp_fp_rule_props_t <br>
+ * @details     Offset can be calculated either from the L2, L3 or L4 header beginning.
+ *              The L2 header is also the beginning of an Ethernet frame.
+ * @details     L2 header is always a valid header for offset calculation. Other headers may be missing
+ *              in some Ethernet frames. If an FP rule expects L3/L4 header (for offset calculation) 
+ *              but the given header is missing in the inspected Ethernet frame, then the result 
+ *              of the matching process is "frame does not match FP rule criteria".
  */
 typedef enum CAL_PACKED
 {
-    FP_OFFSET_FROM_L2_HEADER = 2, /**< Calculate offset from the L2 header (frame beginning) */
-    FP_OFFSET_FROM_L3_HEADER = 3, /**< Calculate offset from the L3 header */
-    FP_OFFSET_FROM_L4_HEADER = 4  /**< Calculate offset from the L4 header */
+    FP_OFFSET_FROM_L2_HEADER = 2,  /**< Calculate offset from the L2 header (frame beginning). */
+    FP_OFFSET_FROM_L3_HEADER = 3,  /**< Calculate offset from the L3 header. */
+    FP_OFFSET_FROM_L4_HEADER = 4   /**< Calculate offset from the L4 header. */
 } fpp_fp_offset_from_t;
 
 /**
- * @brief Properties of the Flexible parser rule
- * @details The rule match can be described as:
- * @code{.c}
- *  ((frame_data[offset] & mask) == (data & mask)) ? match = true : match = false;
- *  match = (invert ? !match : match);
- * @endcode
- * Value of match being equal to true causes:
- * - Flexible Parser to stop and return ACCEPT
- * - Flexible Parser to stop and return REJECT
- * - Flexible Parser to set the next rule to rule specified in next_rule_name
+ * @brief       Properties of an FP rule (Flexible Parser rule).
+ * @details     Related data types: @ref fpp_fp_table_cmd_t, @ref fpp_fp_rule_cmd_t
+ * @note        Some values are in a network byte order [NBO].
+ *
+ * @snippet     fpp_ext.h  fpp_fp_rule_props_t
  */
+/* [fpp_fp_rule_props_t] */
 typedef struct CAL_PACKED
 {
-	/*	Unique identifier of the rule. It is a string up to 15 characters + '\0' */
-    uint8_t rule_name[16];
-	/*	Expected data (network endian) to be found in the frame to match the rule. */
-    uint32_t data;
-	/*	Mask (network endian) to be applied on both expected data and frame data */
-    uint32_t mask;
-	/*	Offset (network endian) of the data in the frame (from L2, L3, or L4 header
-		- see @c offset_from) */
-    uint16_t offset;
-	/*	Invert the match result after match is calculated */
-    uint8_t invert;
-	/*	Specifies a rule to continue matching if this rule matches and the @c match_action
-		is @c FP_NEXT_RULE */
-    uint8_t next_rule_name[16];
-	/*	Specifies the Flexible Parser behavior on rule match */
-    fpp_fp_rule_match_action_t match_action;
-	/*	Specifies layer from which header beginning is @c offset calculated */
-    fpp_fp_offset_from_t offset_from;
+    uint8_t rule_name[16];  /*< Rule name. A string of up to 15 characters + '\0'. */
+    
+    uint32_t data;          /*< Expected data. [NBO]. This value is expected to be found
+                                at the specified offset in the inspected Ethernet frame. */
+    
+    uint32_t mask;          /*< Bitmask [NBO], selecting which bits of a 32bit value shall
+                                be used for data comparison. This bitmask is applied on both
+                                '.data' value and the inspected value for the frame. */
+    
+    uint16_t offset;        /*< Offset (in bytes) of the inspected value in the frame. [NBO]
+                                This offset is calculated from the '.offset_from' header. */
+    
+    uint8_t invert;         /*< Invert the match result before match action is selected. */
+    
+    uint8_t next_rule_name[16];  /*< Name of the FP rule to jump to if '.match_action' ==
+                                     FP_NEXT_RULE. Set all-zero if unused. This next rule must
+                                     be in the same FP table (cannot jump across tables). */
+    
+    fpp_fp_rule_match_action_t match_action;  /*< Action to do if the inspected frame 
+                                                  matches the FP rule criteria. */
+    
+    fpp_fp_offset_from_t offset_from;  /*< Header for offset calculation. */
 } fpp_fp_rule_props_t;
+/* [fpp_fp_rule_props_t] */
 
 /**
- * @brief Arguments for the FPP_CMD_FP_RULE command
+ * @brief       Data structure for an FP rule.
+ * @details     Related FCI commands: @ref FPP_CMD_FP_RULE
+ *
+ * @snippet     fpp_ext.h  fpp_fp_rule_cmd_t
  */
+/* [fpp_fp_rule_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(2)
 {
-    uint16_t action;        /**< Action to be done */
-    fpp_fp_rule_props_t r;  /**< Parameters of the rule */
+    uint16_t action;        /*< Action */
+    fpp_fp_rule_props_t r;  /*< Properties of the rule. */
 } fpp_fp_rule_cmd_t;
+/* [fpp_fp_rule_cmd_t] */
 
 /**
- * @brief Arguments for the FPP_CMD_FP_TABLE command
+ * @brief       Data structure for an FP table.
+ * @details     Related FCI commands: @ref FPP_CMD_FP_TABLE
+ * @note        Some values are in a network byte order [NBO].
+ *
+ * @snippet     fpp_ext.h  fpp_fp_table_cmd_t
  */
+/* [fpp_fp_table_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(2)
 {
-    uint16_t action;                  /**< Action to be done */
+    uint16_t action;                 /*< Action */
     union
     {
         struct
         {
-            uint8_t table_name[16];   /**< Name of the table to be administered by the action */
-            uint8_t rule_name[16];    /**< Name of the rule to be added/removed to/from the table */
-            uint16_t position;        /**< Position where to add rule (network endian) */
+            uint8_t table_name[16];  /*< Name of the FP table to be administered. */
+            uint8_t rule_name[16];   /*< Name of the FP rule to be added/removed. */
+            uint16_t position;       /*< Position in the table where to add the rule. [NBO] */
         } t;
-        fpp_fp_rule_props_t r; /**< Properties of the rule - used as query result */
+        fpp_fp_rule_props_t r;       /*< Query result - properties of a rule from the table */
     } table_info;
 } fpp_fp_table_cmd_t;
-
+/* [fpp_fp_table_cmd_t] */
 
 /**
+ * @cond DOXYGEN__EXCLUDE_THIS_FROM_REFERENCE_MANUAL
+ *
  * @def FPP_CMD_FP_FLEXIBLE_FILTER
  * @brief Uses flexible parser to filter out frames from further processing.
  * @details Allows registration of a Flexible Parser table (see @ref FPP_CMD_FP_TABLE) as a
@@ -1205,12 +1834,18 @@ typedef struct CAL_PACKED_ALIGNED(2)
  * @endcode
  *
  * @hideinitializer
+ *
+ * @endcond
  */
 #define FPP_CMD_FP_FLEXIBLE_FILTER 0xf225
 
-/*
-* @brief Arguments for the FPP_CMD_FP_FLEXIBLE_FILTER command
-*/
+/**
+ * @cond DOXYGEN__EXCLUDE_THIS_FROM_REFERENCE_MANUAL
+ *
+ * @brief Arguments for the FPP_CMD_FP_FLEXIBLE_FILTER command
+ *
+ * @endcond
+ */
 typedef struct CAL_PACKED
 {
     uint16_t action;         /**< Action to be done on Flexible Filter */
@@ -1277,172 +1912,269 @@ typedef struct CAL_PACKED
 } fpp_buf_cmd_t;
 
 /**
- * @def FPP_CMD_SPD
- * @brief Configures the SPD (Security Policy Database) for IPsec
- * @note The feature is available only for some Premium firmware versions and it shall not be used
- *       with firmware not supporting the IPsec to avoid undefined behavior.
- * @details The command is connected with @c fpp_spd_cmd_t type and allows complete SPD management
- *          which involves insertion of an entry at a given position (@c FPP_ACTION_REGISTER), removal
- *          of an entry at a given position (@c FPP_ACTION_DEREGISTER) and reading the database data
- *          (@c FPP_ACTION_QUERY and @c FPP_ACTION_QUERY_CONT).
+ * @def         FPP_CMD_SPD
+ * @brief       FCI command for management of the IPsec offload (SPD entries).
+ * @details     Related topics: @ref ipsec_offload
+ * @details     Related data types: @ref fpp_spd_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_REGISTER <br>
+ *                   Create a new SPD entry.
+ *              - @c FPP_ACTION_DEREGISTER <br>
+ *                   Remove (destroy) an existing SPD entry.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) an SPD entry query session and get properties 
+ *                   of the first SPD entry from the SPD database of a target physical interface.
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get properties of the next SPD entry
+ *                   from the SPD database of the target physical interface.
+ *                   Intended to be called in a loop (to iterate through the database).
  *
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * The FPP_ACTION_REGISTER action adds an entry at a given position into the SPD belonging
- * to a given physical interface. The SPD is created if the entry is the 1st one and the position
- * is ignored in such case. Creation of the SPD enables the IPsec processing for given interface.
+ *              @b WARNING: <br>
+ *              The IPsec offload feature is available only for some Premium versions of PFE firmware.
+ *              The feature should @b not be used with a firmware which does not support it.
+ *              Failure to adhere to this warning will result in an undefined behavior of PFE.
  *
- * Items to be set in command argument structure:
+ * FPP_ACTION_REGISTER
+ * -------------------
+ * Create a new SPD entry in the SPD database of a target physical interface.
  * @code{.c}
- *   fpp_spd_cmd_t cmd_data =
- *   {
- *      // Set the new rule in SPD
- *      .action = FPP_ACTION_REGISTER,
- *      // Name of the physical interface which SPD shall be modified
- *      .name = "emac0",
- *      // Add as a 4th rule (1st rule used position 0), current 4th rule will follow the newly added rule
- *      .position = 3,
- *      // Set the traffic matching criteria
- *      .saddr = 0xC0A80101, //192.168.1.1
- *      .daddr = 0xC0A80102, //192.168.1.2
- *      .protocol = 17,      //UDP
- *      .sport = 0,          //Source port - not set, see the .flags
- *      .dport = 0,          //Destination port - not set, see the .flags
- *      // Set ports as opaque i.e. ignored, missing FPP_SPD_FLAG_IPv6 means IPv4 traffic
- *      .flags = FPP_SPD_FLAG_SPORT_OPAQUE | FPP_SPD_FLAG_DPORT_OPAQUE
- *      .spi = 1,            //SPI to match in ESP or AH header (used only for action FPP_SPD_ACTION_PROCESS_DECODE)
- *      // Set action for matching traffic
- *      .spd_action = FPP_SPD_ACTION_PROCESS_DECODE, //Do IPsec decoding
- *      .sa_id = 1,          //HSE SAD entry ID to be used to process the traffic
- *   }
+ *  .............................................  
+ *  fpp_spd_cmd_t cmd_to_fci = 
+ *  {
+ *    .action   = FPP_ACTION_REGISTER,  // Action
+ *      
+ *    .name     = "...",  // Physical interface name (see chapter Physical Interface).
+ *    .flags    =  ...,   // SPD entry flags. A bitset.
+ *    .position =  ...,   // Entry position. [NBO]
+ *    .saddr    = {...},  // Source IP address. [NBO]
+ *    .daddr    = {...},  // Destination IP address. [NBO]
+ *      
+ *    .sport    =  ...,   // Source port. [NBO]
+ *                        // Optional (does not have to be set). See '.flags'.
+ *      
+ *    .dport    =  ...,   // Destination port. [NBO]
+ *                        // Optional (does not have to be set). See '.flags'.
+ *      
+ *    .protocol =  ...,   // IANA IP Protocol Number (protocol ID).
+ *      
+ *    .sa_id    =  ...,   // SAD entry identifier for HSE. [NBO]
+ *                        // Used only when '.spd_action' == SPD_ACT_PROCESS_ENCODE). 
+ *      
+ *    .spi      =  ...    // SPI to match in the ingress traffic. [NBO]
+ *                        // Used only when '.spd_action' == SPD_ACT_PROCESS_DECODE).
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(cliet, FPP_CMD_SPD, sizeof(fpp_spd_cmd_t), 
+ *                                     (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Action FPP_ACTION_DEREGISTER
- * ----------------------------
- * The FPP_ACTION_DEREGISTER action removes an entry at a given position in the SPD belonging
- * to a given physical interface. The SPD is destroyed if the entry is the last one which disables
- * the IPsec support on the given interface.
- *
- * Items to be set in command argument structure:
+ * FPP_ACTION_DEREGISTER
+ * ---------------------
+ * Remove (destroy) an existing SPD entry.
  * @code{.c}
- *   fpp_flexible_filter_cmd_t cmd_data =
- *   {
- *      // Disable the Flexible Filter
- *      .action = FPP_ACTION_DEREGISTER,
- *      // Name of the physical interface which SPD shall be modified
- *      .name = "emac0",
- *      // Remove the 4th rule (1st rule used position 0)
- *      .position = 3,
- *   }
+ *  .............................................  
+ *  fpp_spd_cmd_t cmd_to_fci = 
+ *  {
+ *    .action   = FPP_ACTION_DEREGISTER,  // Action
+ *    .name     = "...",  // Physical interface name (see chapter Physical Interface).
+ *    .position =  ...,   // Entry position. [NBO]
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(cliet, FPP_CMD_SPD, sizeof(fpp_spd_cmd_t), 
+ *                                     (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Action FPP_ACTION_QUERY
- * -----------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of an SPD entry.
  * @code{.c}
- *   fpp_spd_cmd_t cmd_data =
- *   {
- *      .action = FPP_ACTION_QUERY       // Start the rules query
- *      // Name of the physical interface which SPD shall be queried
- *      .name = "emac0",
- *   };
+ *  .............................................  
+ *  fpp_spd_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY  // Action
+ *    .name   = "...",  // Physical interface name (see chapter Physical Interface).
+ *  };
+ *    
+ *  fpp_spd_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_SPD,
+ *                  sizeof(fpp_spd_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the first SPD entry from 
+ *  //  the SPD database of the target physical interface..
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_SPD,
+ *                  sizeof(fpp_spd_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the next SPD entry from 
+ *  //  the SPD database of the target physical interface.
+ *  .............................................  
  * @endcode
  *
- * Response data type for queries: @ref fpp_spd_cmd_t
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_IF_ENTRY_NOT_FOUND
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the SPD entry query session (no more SPD entries).
+ *        - For other ACTIONs: Unknown (nonexistent) SPD entry was requested.
+ * - @c FPP_ERR_FW_FEATURE_NOT_AVAILABLE <br>
+ *        The feature is not available (not enabled in FW).
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
- * Response data provided has the same format as FPP_ACTION_REGISTER action.
- * @note All data is provided in the network byte order.
- *
- * Action FPP_ACTION_QUERY_CONT
- * ----------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_spd_cmd_t cmd_data =
- *   {
- *      .action = FPP_ACTION_QUERY_CONT    // Continue with the rules query
- *      // Name of the physical interface which SPD shall be queried
- *      .name = "emac0",
- *   };
- * @endcode
  * @hideinitializer
  */
 #define FPP_CMD_SPD 0xf226
 
 /**
-* @brief Sets the action to be done for frames matching the SPD entry criteria
-*/
+ * @brief       Action to be done for frames matching the SPD entry criteria.
+ * @details     Related data types: @ref fpp_spd_cmd_t
+ */
 typedef enum CAL_PACKED
 {
-	FPP_SPD_ACTION_INVALID = 0U,	/* Undefined action - do not set this one */
-	FPP_SPD_ACTION_DISCARD,			/* Discard the frame */
-	FPP_SPD_ACTION_BYPASS,			/* Bypass IPsec and forward normally */
-	FPP_SPD_ACTION_PROCESS_ENCODE,	/* Process IPsec */
-	FPP_SPD_ACTION_PROCESS_DECODE	/* Process IPsec */
+    FPP_SPD_ACTION_INVALID = 0U,    /**< RESERVED (do not use) */
+    FPP_SPD_ACTION_DISCARD,         /**< Discard the frame. */
+    FPP_SPD_ACTION_BYPASS,          /**< Bypass IPsec and forward normally. */
+    FPP_SPD_ACTION_PROCESS_ENCODE,  /**< Send to HSE for encoding. */
+    FPP_SPD_ACTION_PROCESS_DECODE   /**< Send to HSE for decoding. */
 } fpp_spd_action_t;
 
 /**
-* @brief Flags values to be used in fpp_spd_cmd_t structure .flags field.
-*/
+ * @brief       Flags for SPD entry.
+ * @details     Related data types: @ref fpp_spd_cmd_t
+ */
 typedef enum CAL_PACKED
 {
-	FPP_SPD_FLAG_IPv6 = (1U << 1U),			/* IPv4 if not set, IPv6 if set */
-	FPP_SPD_FLAG_SPORT_OPAQUE = (1U << 2U),	/* Do not match Source PORT */
-	FPP_SPD_FLAG_DPORT_OPAQUE = (1U << 3U),	/* Do not match Destination PORT */
+    FPP_SPD_FLAG_IPv6 = (1U << 1U),         /**< IPv4 if this flag @b not set. IPv6 if set. */
+    FPP_SPD_FLAG_SPORT_OPAQUE = (1U << 2U), /**< Do @b not match @c fpp_spd_cmd_t.sport. */
+    FPP_SPD_FLAG_DPORT_OPAQUE = (1U << 3U), /**< Do @b not match @c fpp_spd_cmd_t.dport. */
 } fpp_spd_flags_t;
 
 /**
- * @brief Argument structure for the FPP_CMD_SPD command
+ * @brief       Data structure for an SPD entry.
+ * @details     Related FCI commands: @ref FPP_CMD_SPD
+ * @note        Some values are in a network byte order [NBO].
+ * @note        HSE is a Hardware Security Engine, a separate HW accelerator.
+ *              Its configuration is outside the scope of this document.
+ *
+ * @snippet     fpp_ext.h  fpp_spd_cmd_t
  */
+/* [fpp_spd_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
-	uint16_t action;			/**< Action */
-	char name[IFNAMSIZ];		/**< Interface name */
-	fpp_spd_flags_t flags;
-	uint16_t position;			/**< Rule position (0 = 1st one, X = insert before Xth rule, if X > count then add as a last one) */
-	uint32_t saddr[4];			/**< Source IP address (IPv4 uses only 1st word) */
-	uint32_t daddr[4];			/**< Destination IP address (IPv4 uses only 1st word) */
-	uint16_t sport;				/**< Source port */
-	uint16_t dport;				/**< Destination port */
-	uint8_t protocol;			/**< Protocol ID: TCP, UDP */
-	uint32_t sa_id;				/**< SAD entry identifier (used only for actions SPD_ACT_PROCESS_ENCODE) */
-	uint32_t spi;				/**< SPI to match if action is FPP_SPD_ACTION_PROCESS_DECODE */
-	fpp_spd_action_t spd_action;	/**< Action to be done on the frame */
+    uint16_t action;        /*< Action */
+    char name[IFNAMSIZ];    /*< Physical interface name. */
+    fpp_spd_flags_t flags;  /*< SPD entry flags. A bitset. */
+    
+    uint16_t position;      /*< Entry position. [NBO]
+                                0 : insert as the first entry of the SPD table.
+                                N : insert as the Nth entry of the SPD table, starting from 0.
+                                Entries are inserted (not overwritten). Already existing 
+                                entries are shifted to make room for the newly inserted one.
+                                If (N > current count of SPD entries) then the new entry
+                                gets inserted as the last entry of the SPD table. */
+    
+    uint32_t saddr[4];      /*< Source IP address. [NBO]
+                                IPv4 uses only element [0]. Address type is set in '.flags' */
+    
+    uint32_t daddr[4];      /*< Destination IP address. [NBO]
+                                IPv4 uses only element [0]. Address type is set in '.flags' */
+    
+    uint16_t sport;         /*< Source port. [NBO]
+                                Optional (does not have to be set). See '.flags' */
+    
+    uint16_t dport;         /*< Destination port. [NBO]
+                                Optional (does not have to be set). See '.flags' */
+                                
+    uint8_t protocol;       /*< IANA IP Protocol Number (protocol ID). */
+    
+    uint32_t sa_id;         /*< SAD entry identifier for HSE. [NBO]
+                                Used only when '.spd_action' == SPD_ACT_PROCESS_ENCODE).
+                                Corresponding SAD entry must exist in HSE. */
+                                
+    uint32_t spi;           /*< SPI to match in the ingress traffic. [NBO]
+                                Used only when '.spd_action' == SPD_ACT_PROCESS_DECODE). */
+    
+    fpp_spd_action_t spd_action;  /*< Action to be done on the frame. */
 } fpp_spd_cmd_t;
+/* [fpp_spd_cmd_t] */
 
 /**
- * @def FPP_CMD_QOS_QUEUE
- * @brief Management of QoS queues
- * @details Command can be used with following `.action` values:
- *          - @c FPP_ACTION_UPDATE: Update queue configuration
- *          - @c FPP_ACTION_QUERY: Get queue properties
+ * @def         FPP_CMD_QOS_QUEUE
+ * @brief       FCI command for management of Egress QoS queues.
+ * @details     Related topics: @ref egress_qos
+ * @details     Related data types: @ref fpp_qos_queue_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Modify properties of Egress QoS queue.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Get properties of a target Egress QoS queue.
  *
- * Command Argument Type: @ref fpp_qos_queue_cmd_t
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Modify properties of an Egress QoS queue.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_qos_queue_cmd_t cmd_to_fci = 
+ *  {
+ *    .action  = FPP_ACTION_UPDATE,  // Action
+ *    .if_name = "...",              // Physical interface name.
+ *    .id      =  ...,               // Queue ID.
+ *      
+ *    ... = ...  // Properties (data fields) to be updated, and their new (modified) values.
+ *               // Some properties cannot be modified (see fpp_qos_queue_cmd_t).
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_QOS_QUEUE, sizeof(fpp_qos_queue_cmd_t), 
+ *                                            (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
+ * @endcode
  *
- * Action FPP_ACTION_UPDATE
- * ------------------------
- * To update queue properties just set
- *   - `fpp_qos_queue_cmd_t.action` to @ref FPP_ACTION_QUERY
- *   - `fpp_qos_queue_cmd_t.if_name` to name of the physical interface and
- *   - `fpp_qos_queue_cmd_t.id` to the queue ID.
+ * FPP_ACTION_QUERY
+ * ----------------
+ * Get properties of a target Egress QoS queue.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_qos_queue_cmd_t cmd_to_fci = 
+ *  {
+ *    .action  = FPP_ACTION_QUERY  // Action
+ *    .if_name = "...",            // Physical interface name.
+ *    .id      =  ...              // Queue ID.
+ *  };
+ *    
+ *  fpp_qos_queue_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_QOS_QUEUE,
+ *                  sizeof(fpp_qos_queue_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the target Egress QoS queue.
+ *  .............................................  
+ * @endcode 
  *
- * Rest of the fpp_qos_queue_cmd_t structure members will be considered to be used as the new
- * queue properties. It is recommended to use read-modify-write approach in combination with
- * @ref FPP_ACTION_QUERY.
- *
- * Action FPP_ACTION_QUERY
- * -----------------------
- * Get current queue properties. Set
- *   - `fpp_qos_queue_cmd_t.action` to @ref FPP_ACTION_QUERY
- *   - `fpp_qos_queue_cmd_t.if_name` to name of the physical interface and
- *   - `fpp_qos_queue_cmd_t.id` to the queue ID.
- *
- * Response data type for the query command is fpp_qos_scheduler_cmd_t.
- *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Success.
- *     - @c FPP_ERR_QUEUE_NOT_FOUND: Queue not found.
- *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Invalid argument/value.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+  * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_QOS_QUEUE_NOT_FOUND <br>
+ *        Unknown (nonexistent) Egress QoS queue was requested.
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Unexpected value of some property.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
@@ -1455,81 +2187,121 @@ typedef struct CAL_PACKED_ALIGNED(4)
 #define FPP_ERR_QOS_QUEUE_NOT_FOUND	0xf401
 
 /**
- * @brief Argument of the @ref FPP_CMD_QOS_QUEUE command.
+ * @brief       Data structure for QoS queue.
+ * @details     Related FCI commands: @ref FPP_CMD_QOS_QUEUE
+ * @details     Related topics: @ref egress_qos
+ * @note        - Some values are in a network byte order [NBO].
+ * @note        - Some values cannot be modified by FPP_ACTION_UPDATE [ro].
+ *
+ * @snippet     fpp_ext.h  fpp_qos_queue_cmd_t
  */
+/* [fpp_qos_queue_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
-	/**	Action */
-	uint16_t action;
-	/**	Interface name */
-	char if_name[IFNAMSIZ];
-	/**	Queue ID. IDs start with 0 and maximum value depends on the number of
-		available queues within the given interface `.if_name`. See @ref egress_qos. */
-	uint8_t id;
-	/**	Queue mode:
-		- 0 - Disabled. Queue will drop all packets.
-		- 1 - Default. HW implementation-specific. Normally not used.
-		- 2 - Tail drop
-		- 3 - WRED */
-	uint8_t mode;
-	/**	Minimum threshold (network endian). Value is `.mode`-specific:
-		- Disabled, Default: n/a
-		- Tail drop: n/a
-		- WRED: Threshold in number of packets in the queue at which the WRED lowest
-				drop probability zone starts, i.e. if queue fill level is below
-				this threshold the drop probability is 0%.
-	*/
-	uint32_t min;
-	/**	Maximum threshold (network endian). Value is `.mode`-specific:
-		- Disabled, Default: n/a
-		- Tail drop: The queue length in number of packets. Queue length
-					 is the number of packets the queue can accommodate before
-					 drops will occur.
-		- WRED: Threshold in number of packets in the queue at which the WRED highest
-				drop probability zone ends, i.e. if queue fill level is above this
-				threshold the drop probability is 100%.
-	*/
-	uint32_t max;
-	/** WRED drop probabilities for all probability zones in [%]. The lowest probability zone
-		is `.zprob[0]`. Only valid for `.mode = WRED`. Value 255 means 'invalid'. Number of zones
-		per queue is implementation-specific. See the @ref egress_qos. */
-	uint8_t zprob[32];
+    uint16_t action;         /*< Action */
+    char if_name[IFNAMSIZ];  /*< Physical interface name. [ro] */
+    
+    uint8_t id;         /*< Queue ID. [ro]
+                            minimal ID == 0
+                            maximal ID is implementation defined. See Egress QoS. */
+    
+    uint8_t mode;       /*< Queue mode: 
+                            0 == Disabled. Queue will drop all packets.
+                            1 == Default. HW implementation-specific. Normally not used.
+                            2 == Tail drop
+                            3 == WRED */
+    
+    uint32_t min;       /*< Minimum threshold. [NBO]. Value is `.mode`-specific:
+                            - Disabled, Default: n/a
+                            - Tail drop: n/a
+                            - WRED: Threshold in number of packets in the queue at which 
+                                    the WRED lowest drop probability zone starts. 
+                                    While the queue fill level is below this threshold, 
+                                    the drop probability is 0%. */
+    
+    uint32_t max;       /*< Maximum threshold. [NBO]. Value is `.mode`-specific: 
+                            - Disabled, Default: n/a
+                            - Tail drop: The queue length in number of packets. Queue length
+                                         is the number of packets the queue can accommodate 
+                                         before drops will occur.
+                            - WRED: Threshold in number of packets in the queue at which 
+                                    the WRED highest drop probability zone ends.
+                                    While the queue fill level is above this threshold,
+                                    the drop probability is 100%. */
+    
+    uint8_t zprob[32];  /*< WRED drop probabilities for all probability zones in [%]. 
+                            The lowest probability zone is `.zprob[0]`. Only valid for 
+                            `.mode = WRED`. Value 255 means 'invalid'. Number of zones
+                            per queue is implementation-specific. See Egress QoS. */
 } fpp_qos_queue_cmd_t;
+/* [fpp_qos_queue_cmd_t] */
 
 /**
- * @def FPP_CMD_QOS_SCHEDULER
- * @brief Management of QoS scheduler
- * @details Command can be used with following `.action` values:
- *          - @c FPP_ACTION_UPDATE: Update scheduler configuration
- *          - @c FPP_ACTION_QUERY: Get scheduler properties
+ * @def         FPP_CMD_QOS_SCHEDULER
+ * @brief       FCI command for management of Egress QoS schedulers.
+ * @details     Related topics: @ref egress_qos
+ * @details     Related data types: @ref fpp_qos_scheduler_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Modify properties of Egress QoS scheduler.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Get properties of a target Egress QoS scheduler.
  *
- * Command Argument Type: @ref fpp_qos_scheduler_cmd_t
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Modify properties of an Egress QoS scheduler.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_qos_scheduler_cmd_t cmd_to_fci = 
+ *  {
+ *    .action  = FPP_ACTION_UPDATE,  // Action
+ *    .if_name = "...",              // Physical interface name.
+ *    .id      =  ...,               // Scheduler ID.
+ *      
+ *    ... = ...  // Properties (data fields) to be updated, and their new (modified) values.
+ *               // Some properties cannot be modified (see fpp_qos_scheduler_cmd_t).
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_QOS_SCHEDULER, sizeof(fpp_qos_scheduler_cmd_t), 
+ *                                                (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
+ * @endcode
  *
- * Action FPP_ACTION_UPDATE
- * ------------------------
- * To update scheduler properties just set
- *   - `fpp_qos_scheduler_cmd_t.action` to @ref FPP_ACTION_QUERY
- *   - `fpp_qos_scheduler_cmd_t.if_name` to name of the physical interface and
- *   - `fpp_qos_scheduler_cmd_t.id` to the scheduler ID.
+ * FPP_ACTION_QUERY
+ * ----------------
+ * Get properties of a target Egress QoS scheduler.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_qos_scheduler_cmd_t cmd_to_fci = 
+ *  {
+ *    .action  = FPP_ACTION_QUERY  // Action
+ *    .if_name = "...",            // Physical interface name.
+ *    .id      =  ...              // Scheduler ID.
+ *  };
+ *    
+ *  fpp_qos_scheduler_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_QOS_SCHEDULER,
+ *                  sizeof(fpp_qos_scheduler_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the target Egress QoS scheduler.
+ *  .............................................  
+ * @endcode 
  *
- * Rest of the fpp_qos_scheduler_cmd_t structure members will be considered to be used as the new
- * scheduler properties. It is recommended to use read-modify-write approach in combination with
- * @ref FPP_ACTION_QUERY.
- *
- * Action FPP_ACTION_QUERY
- * -----------------------
- * Get current scheduler properties. Set
- *   - `fpp_qos_scheduler_cmd_t.action` to @ref FPP_ACTION_QUERY
- *   - `fpp_qos_scheduler_cmd_t.if_name` to name of the physical interface and
- *   - `fpp_qos_scheduler_cmd_t.id` to the scheduler ID.
- *
- * Response data type for the query command is fpp_qos_scheduler_cmd_t.
- *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Success.
- *     - @c FPP_ERR_SCHEDULER_NOT_FOUND: Scheduler not found.
- *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Invalid argument/value.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_QOS_SCHEDULER_NOT_FOUND <br>
+ *        Unknown (nonexistent) Egress QoS scheduler was requested.
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Unexpected value of some property.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
@@ -1542,77 +2314,117 @@ typedef struct CAL_PACKED_ALIGNED(4)
 #define FPP_ERR_QOS_SCHEDULER_NOT_FOUND	0xf411
 
 /**
- * @brief Argument of the @ref FPP_CMD_QOS_SCHEDULER command.
+ * @brief       Data structure for QoS scheduler.
+ * @details     Related FCI commands: @ref FPP_CMD_QOS_SCHEDULER
+ * @details     Related topics: @ref egress_qos
+ * @note        - Some values are in a network byte order [NBO].
+ * @note        - Some values cannot be modified by FPP_ACTION_UPDATE [ro].
+ *
+ * @snippet     fpp_ext.h  fpp_qos_scheduler_cmd_t
  */
+/* [fpp_qos_scheduler_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
-	/**	Action */
-	uint16_t action;
-	/**	Name of physical interface owning the scheduler */
-	char if_name[IFNAMSIZ];
-	/**	Scheduler ID. IDs start with 0 and maximum value depends on the number of
-		available schedulers within the given interface `.if_name`. See @ref egress_qos. */
-	uint8_t id;
-	/**	Scheduler mode:
-		- 0 - Scheduler disabled
-		- 1 - Data rate (payload length)
-		- 2 - Packet rate (number of packets) */
-	uint8_t mode;
-	/**	Scheduler algorithm:
-			- 0 - PQ (Priority Queue). Input with the highest priority
-				  is serviced first. Input 0 has the @b lowest priority.
-			- 1 - DWRR (Deficit Weighted Round Robin)
-			- 2 - RR (Round Robin)
-			- 3 - WRR (Weighted Round Robin) */
-	uint8_t algo;
-	/**	Input enable bitfield (network endian). When a bit `n` is
-		set it means that scheduler input `n` is enabled and connected
-		to traffic source defined by `.source[n]`. Number of inputs is
-		implementation-specific. See the @ref egress_qos. */
-	uint32_t input_en;
-	/**	Input weight (network endian). Scheduler algorithm-specific:
-			- PQ, RR - n/a
-			- WRR, DWRR - Weight in units given by scheduler `.mode` */
-	uint32_t input_w[32];
-	/**	Traffic source ID per scheduler input. Scheduler traffic sources
-		are implementation-specific. See the @ref egress_qos. */
-	uint8_t input_src[32];
+    uint16_t action;        /*< Action */
+    char if_name[IFNAMSIZ]; /*< Physial interface name. [ro] */
+    
+    uint8_t id;             /*< Scheduler ID. [ro]
+                                minimal ID == 0
+                                maximal ID is implementation defined. See Egress QoS. */
+    
+    uint8_t mode;           /*< Scheduler mode: 
+                                0 == Scheduler disabled
+                                1 == Data rate (payload length)
+                                2 == Packet rate (number of packets) */
+    
+    uint8_t algo;           /*< Scheduler algorithm:
+                                0 == PQ (Priority Queue). Input with the highest priority
+                                     is serviced first. Input 0 has the @b lowest priority.
+                                1 == DWRR (Deficit Weighted Round Robin).
+                                2 == RR (Round Robin).
+                                3 == WRR (Weighted Round Robin). */
+    
+    uint32_t input_en;      /*< Input enable bitfield. [NBO]
+                                When a bit `n` is set it means that scheduler input `n`
+                                is enabled and connected to traffic source defined by 
+                                `.source[n]`. Number of inputs is implementation-specific.
+                                See Egress QoS. */
+    
+    uint32_t input_w[32];   /*< Input weight. [NBO]. Scheduler algorithm-specific:
+                                - PQ, RR - n/a
+                                - WRR, DWRR - Weight in units given by `.mode` */
+    
+    uint8_t input_src[32];  /*< Traffic source for each scheduler input. Traffic sources
+                                are implementation-specific. See Egress QoS. */
 } fpp_qos_scheduler_cmd_t;
+/* [fpp_qos_scheduler_cmd_t] */
 
 /**
- * @def FPP_CMD_QOS_SHAPER
- * @brief Management of QoS shaper
- * @details Command can be used with following `.action` values:
- *          - @c FPP_ACTION_UPDATE: Update scheduler configuration
- *          - @c FPP_ACTION_QUERY: Get scheduler properties
+ * @def         FPP_CMD_QOS_SHAPER
+ * @brief       FCI command for management of Egress QoS shapers.
+ * @details     Related topics: @ref egress_qos
+ * @details     Related data types: @ref fpp_qos_shaper_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Modify properties of Egress QoS shaper.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Get properties of a target Egress QoS shaper.
  *
- * Command Argument Type: @ref fpp_qos_shaper_cmd_t
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Modify properties of an Egress QoS shaper.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_qos_shaper_cmd_t cmd_to_fci = 
+ *  {
+ *    .action  = FPP_ACTION_UPDATE,  // Action
+ *    .if_name = "...",              // Physical interface name.
+ *    .id      =  ...,               // Shaper ID.
+ *      
+ *    ... = ...  // Properties (data fields) to be updated, and their new (modified) values.
+ *               // Some properties cannot be modified (see fpp_qos_shaper_cmd_t).
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_QOS_SHAPER, sizeof(fpp_qos_shaper_cmd_t), 
+ *                                             (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
+ * @endcode
  *
- * Action FPP_ACTION_UPDATE
- * ------------------------
- * To update scheduler properties just set
- *   - `fpp_qos_shaper_cmd_t.action` to @ref FPP_ACTION_QUERY
- *   - `fpp_qos_shaper_cmd_t.if_name` to name of the physical interface and
- *   - `fpp_qos_shaper_cmd_t.id` to the shaper ID.
+ * FPP_ACTION_QUERY
+ * ----------------
+ * Get properties of a target Egress QoS shaper.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_qos_shaper_cmd_t cmd_to_fci = 
+ *  {
+ *    .action  = FPP_ACTION_QUERY  // Action
+ *    .if_name = "...",            // Physical interface name.
+ *    .id      =  ...,             // Shaper ID.
+ *  };
+ *    
+ *  fpp_qos_shaper_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_QOS_SHAPER,
+ *                  sizeof(fpp_qos_shaper_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the target Egress QoS shaper.
+ *  .............................................  
+ * @endcode 
  *
- * Rest of the fpp_qos_shaper_cmd_t structure members will be considered to be used as the new
- * shaper properties. It is recommended to use read-modify-write approach in combination with
- * @ref FPP_ACTION_QUERY.
- *
- * Action FPP_ACTION_QUERY
- * -----------------------
- * Get current scheduler properties. Set
- *   - `fpp_qos_shaper_cmd_t.action` to @ref FPP_ACTION_QUERY
- *   - `fpp_qos_shaper_cmd_t.if_name` to name of the physical interface and
- *   - `fpp_qos_shaper_cmd_t.id` to the shaper ID.
- *
- * Response data type for the query command is fpp_qos_shaper_cmd_t.
- *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Success.
- *     - @c FPP_ERR_SHAPER_NOT_FOUND: Shaper not found.
- *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Invalid argument/value.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_QOS_SHAPER_NOT_FOUND <br>
+ *        Unknown (nonexistent) Egress QoS shaper was requested.
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Unexpected value of some property.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
@@ -1625,84 +2437,774 @@ typedef struct CAL_PACKED_ALIGNED(4)
 #define FPP_ERR_QOS_SHAPER_NOT_FOUND	0xf421
 
 /**
- * @brief Argument of the @ref FPP_CMD_QOS_SHAPER command.
+ * @brief       Data structure for QoS shaper.
+ * @details     Related FCI commands: @ref FPP_CMD_QOS_SHAPER
+ * @details     Related topics: @ref egress_qos
+ * @note        - Some values are in a network byte order [NBO].
+ * @note        - Some values cannot be modified by FPP_ACTION_UPDATE [ro].
+ *
+ * @snippet     fpp_ext.h  fpp_qos_shaper_cmd_t
  */
+/* [fpp_qos_shaper_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
-	/**	Action */
-	uint16_t action;
-	/**	Interface name */
-	char if_name[IFNAMSIZ];
-	/**	Shaper ID. IDs start with 0 and maximum value depends on the number of
-		available shapers within the given interface `.if_name`. See @ref egress_qos. */
-	uint8_t id;
-	/**	Position of the shaper */
-	uint8_t position;
-	/**	Idle slope in units per second (network endian) */
-	uint32_t isl;
-	/**	Max credit (network endian) */
-	int32_t max_credit;
-	/**	Min credit (network endian) */
-	int32_t min_credit;
-	/**	Shaper mode:
-		- 0 - Shaper disabled
-		- 1 - Data rate. The `isl` is in units of bits-per-second and
-			  `max_credit` with `min_credit` are numbers of bytes.
-		- 2 - Packet rate. The `isl` is in units of packets-per-second
-			  and `max_credit` with `min_credit` are number of packets.*/
-	uint8_t mode;
+    uint16_t action;        /*< Action */
+    char if_name[IFNAMSIZ]; /*< Physial interface name. [ro] */
+    
+    uint8_t id;             /*< Shaper ID. [ro] 
+                                minimal ID == 0
+                                maximal ID is implementation defined. See Egress QoS. */
+    
+    uint8_t position;       /*< Position of the shaper.
+                                Positions are implementation defined. See Egress QoS. */
+    
+    uint32_t isl;           /*< Idle slope in units per second (see `.mode`). [NBO] */
+    int32_t max_credit;     /*< Max credit. [NBO] */
+    int32_t min_credit;     /*< Min credit. [NBO] */
+    
+    uint8_t mode;           /*< Shaper mode:
+                                0 == Shaper disabled
+                                1 == Data rate.
+                                     `.isl` is in bits-per-second.
+                                     `.max_credit` and `.min_credit` are in number of bytes.
+                                2 == Packet rate.
+                                     `isl` is in packets-per-second.
+                                     `.max_credit` and `.min_credit` are in number of packets.
+                                */
 } fpp_qos_shaper_cmd_t;
-
+/* [fpp_qos_shaper_cmd_t] */
 
 /**
- * @def FPP_CMD_FW_FEATURE
- * @brief Management of configurable firmware features
- * @details Command can be used with following `.action` values:
- *          - @c FPP_ACTION_UPDATE: Enable or disable the firmware feature
- *          - @c FPP_ACTION_QUERY: Get information about available features
+ * @def         FPP_CMD_QOS_POLICER
+ * @brief       Global Ingress QoS (policer) hardware module enable / disable command.
+ * @details     Related topics: @ref ingress_qos
+ * @details     Related data types: @ref fpp_qos_policer_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Toggle enable / disable status of the Ingress QoS block.
+ *                   If the block is already enabled, the enable action does nothing.
+ *                   If the block was previously disabled, the enable action will reset
+ *                   the block configuration to a default initial state. This includes
+ *                   clearing the flow classification table, and resetting of WRED and
+ *                   rate shaping configurations.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Retrieve enable / disable status of the policer.
  *
- * Command Argument Type: @ref fpp_fw_features_cmd_t
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Toggle enable / disable status of the Ingress QoS hardware block for the given 'emac' interface.
  *
- * Action FPP_ACTION_UPDATE
- * ------------------------
- * To enable/disable the selected feature set
- *   - `fpp_fw_features_cmd_t.action` to @ref FPP_ACTION_UPDATE
- *   - `fpp_fw_features_cmd_t.name` to name of the selected feature
- *   - `fpp_fw_features_cmd_t.val` to 0 to disable or 1 to enable the feature.
+ * @code{.c}
+ *  .............................................
+ *  fpp_qos_policer_cmd_t cmd_to_fci =
+ *  {
+ *    .action  = FPP_ACTION_UPDATE,
+ *    .if_name = "...",              // Physical interface name for 'emac' (emac<0-2>).[ro]
+ *    .enable = ...                  // 1 to enable, 0 to disable Ingress QoS.
+ *  };
  *
- * Rest of the fpp_fw_features_cmd_t structure members will be ignored.
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_QOS_POLICER, sizeof(fpp_qos_policer_cmd_t),
+ *                  (unsigned short*)(&cmd_to_fci));
+ *  .............................................
+ * @endcode
  *
- * Action FPP_ACTION_QUERY
- * -----------------------
- * To get information about features set:
- *   - `fpp_fw_features_cmd_t.action` to @ref FPP_ACTION_QUERY or @ref FPP_ACTION_QUERY_CONT
- * Response data type for the query command is fpp_fw_features_cmd_t.
+ * FPP_ACTION_QUERY
+ * ----------------
+ * Get the enable / disable status of the Ingress QoS hardware block for the given 'emac' interface.
+ * @code{.c}
+ *  .............................................
+ *  fpp_qos_policer_cmd_t cmd_to_fci =
+ *  {
+ *    .action  = FPP_ACTION_QUERY,
+ *    .if_name = "...",            // Physical interface name for 'emac' (emac<0-2>).[ro]
+ *  };
  *
- * Possible command return values are:
- *     - @c FPP_ERR_OK: Success.
- *     - @c FPP_ERR_WRONG_COMMAND_PARAM: Invalid argument/value.
- *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure.
- *     - @c FPP_ERR_ENTRY_NOT_FOUND: No more entries.
+ *  fpp_qos_policer_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u;
+ *
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_QOS_POLICER,
+ *                  sizeof(fpp_qos_policer_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *
+ *  // 'reply_from_fci' now holds the '.enable' field set accordingly.
+ *  .............................................
+ * @endcode
+ *
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Wrong physical interface provided (i.e. non-'emac'), or other
+ *        unexpected value.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure during update.
  *
  * @hideinitializer
  */
-#define FPP_CMD_FW_FEATURE 0xf227
+
+#define FPP_CMD_QOS_POLICER 0xf430
+
+/* [fpp_qos_policer_cmd_t] */
+typedef struct CAL_PACKED_ALIGNED(4)
+{
+    uint16_t action;
+    char if_name[IFNAMSIZ]; /*< Supports only 'emac' interfaces. Returns FPP_ERR_WRONG_COMMAND_PARAM
+                                if other physical interfaces provided. [ro] */
+    uint8_t enable;         /*< Ingress QoS hardware block (policer) enable / disable toggle.
+                                The hardware block configuration will be reset to its initial
+                                state after disabling it. This includes clearing the flow
+                                classification table, and resetting of WRED and rate shaping
+                                configurations.
+                                On query, it returns the state of the hardware block:
+                                0 == disabled, 1 == enabled.
+                             */
+} fpp_qos_policer_cmd_t;
+/* [fpp_qos_policer_cmd_t] */
+
+/**
+ * @def         FPP_CMD_QOS_POLICER_FLOW
+ * @brief       Manages the classification of ingress packet flows.
+ * @details     Related topics: @ref ingress_qos
+ * @details     Related data types: @ref fpp_qos_policer_flow_cmd_t, @ref fpp_iqos_flow_spec_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_REGISTER <br>
+ *                   Add a flow to the Ingress QoS flow classification table.
+ *              - @c FPP_ACTION_DEREGISTER <br>
+ *                   Remove the entry specified by `.id` from the Ingress QoS
+ *                   flow classification table.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate a flow entry table query session. Returns the
+ *                   properties of the first available flow entry from the table.
+ *              - @c FPP_ACTION_QUERY_CONT <br>
+ *                   Continue the query session and get the properties of the next
+ *                   available flow entry from the table. To be called from a loop
+ *                   to iterate through all the flows of the table.
+ *
+ * FPP_ACTION_REGISTER
+ * -------------------
+ * Add a packet flow specification to the Ingress QoS flow classification table and specify
+ * the action the policer should take for the packets from the given flow: mark as Managed,
+ * mark as Reserved, or Drop.
+ *
+ * @code{.c}
+ *  .............................................
+ *  fpp_qos_policer_flow_cmd_t cmd_to_fci =
+ *  {
+ *    .action  = FPP_ACTION_REGISTER,
+ *    .if_name = "...",              // Physical interface name for 'emac' (emac<0-2>). [ro]
+ *    .id      =  ...,               // Entry position in the classification table. [ro]
+ *                                   // A new entry can overwrite an existing one.
+ *                                   // Valid values range from 0 to table size - 1.
+ *                                   // ID can also have the value of 0xFF to request the next
+ *                                   // free entry starting from 0 if available, and if not available
+ *                                   // the command returns FPP_ERR_QOS_POLICER_FLOW_TABLE_FULL.
+ *    .flow    = {...}               // Flow specification structure, see @ref fpp_iqos_flow_spec_t.
+ *  };
+ *
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_QOS_POLICER_FLOW, sizeof(fpp_qos_policer_flow_cmd_t),
+ *                  (unsigned short*)(&cmd_to_fci));
+ *  .............................................
+ * @endcode
+ *
+ * FPP_ACTION_QUERY
+ * ----------------
+ * Get the properties of the Ingress QoS flow classification table entry specified by `.id`.
+ * @code{.c}
+ *  .............................................
+ *  fpp_qos_policer_flow_cmd_t cmd_to_fci =
+ *  {
+ *    .action  = FPP_ACTION_QUERY,
+ *    .if_name = "...",            // Physical interface name.
+ *    .id = ...,                   // Entry position in the table, from 0 to table size - 1.
+ *  };
+ *
+ *  fpp_qos_policer_flow_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u;
+ *
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_QOS_POLICER_FLOW,
+ *                  sizeof(fpp_qos_policer_flow_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *
+ *  // 'reply_from_fci' now holds the content of the first available (i.e. active)
+ *  //  table entry.
+ *
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_QOS_POLICER_FLOW,
+ *                  sizeof(fpp_qos_policer_flow_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *
+ *  // 'reply_from_fci' now holds properties of the next available table entry from
+ *  //  the Ingress QoS classification flow table of the target physical interface.
+ *  .............................................
+ * @endcode
+ *
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Wrong physical interface provided (i.e. non-'emac'), or other unexpected value.
+ * - @c FPP_ERR_QOS_POLICER_FLOW_NOT_FOUND <br>
+ *        Returned when FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT reaches end of table.
+ * - @c FPP_ERR_QOS_POLICER_FLOW_TABLE_FULL <br>
+ *        Returned when table full if registering with id == FPP_IQOS_FLOW_TABLE_SIZE.
+ * - @c FPP_ERR_QOS_POL_ENTRY_RANGE <br>
+ *        Provided entry id out of range.
+ *
+ * @hideinitializer
+ */
+
+#define FPP_CMD_QOS_POLICER_FLOW            0xf440
+
+#define FPP_ERR_QOS_POLICER_FLOW_TABLE_FULL 0xf441
+#define FPP_ERR_QOS_POLICER_FLOW_NOT_FOUND  0xf442
+
+/**
+ * @brief       Flags for flow types to match.
+ * @details     Related data types: @ref fpp_qos_policer_flow_cmd_t
+ */
+typedef enum CAL_PACKED
+{
+    FPP_IQOS_FLOW_TYPE_ETH = (1 << 0),     /**< match ETH packets */
+    FPP_IQOS_FLOW_TYPE_PPPOE = (1 << 1),   /**< match PPPoE packets */
+    FPP_IQOS_FLOW_TYPE_ARP = (1 << 2),     /**< match ARP packets */
+    FPP_IQOS_FLOW_TYPE_IPV4 = (1 << 3),    /**< match IPv4 packets */
+    FPP_IQOS_FLOW_TYPE_IPV6 = (1 << 4),    /**< match IPv6 packets */
+    FPP_IQOS_FLOW_TYPE_IPX = (1 << 5),     /**< match IPX packets */
+    FPP_IQOS_FLOW_TYPE_MCAST = (1 << 6),   /**< match multicast (L2) packets */
+    FPP_IQOS_FLOW_TYPE_BCAST = (1 << 7),   /**< match L2 broadcast packets */
+    FPP_IQOS_FLOW_TYPE_VLAN = (1 << 8),    /**< match VLAN tagged packets */
+
+    FPP_IQOS_FLOW_TYPE_MAX = FPP_IQOS_FLOW_TYPE_VLAN,
+    /* Ensure proper size */
+    FPP_IQOS_FLOW_TYPE_MAX_ = (uint16_t)(1U << 15U)
+} fpp_iqos_flow_type_t;
+
+/**
+ * @brief       Flags for packet header field arguments to match.
+ * @details     Related data types: @ref fpp_qos_policer_flow_cmd_t
+ */
+typedef enum CAL_PACKED
+{
+    FPP_IQOS_ARG_VLAN = (1 << 0),     /**< match on VLAN ID range arguments */
+    FPP_IQOS_ARG_TOS = (1 << 1),      /**< match on TOS range arguments */
+    FPP_IQOS_ARG_L4PROTO = (1 << 2),  /**< match on L4 PROTO range arguments */
+    FPP_IQOS_ARG_SIP = (1 << 3),      /**< match on source IPv4/IPv6 address range arguments */
+    FPP_IQOS_ARG_DIP = (1 << 4),      /**< match on destination IPv4/IPv6 address range arguments */
+    FPP_IQOS_ARG_SPORT = (1 << 5),    /**< match on L4 source port range arguments */
+    FPP_IQOS_ARG_DPORT = (1 << 6),    /**< match on L4 destination port range arguments */
+
+    FPP_IQOS_ARG_MAX = FPP_IQOS_ARG_DPORT,
+    /* Ensure proper size */
+    FPP_IQOS_ARG_MAX_ = (uint16_t)(1U << 15U)
+} fpp_iqos_flow_arg_type_t;
+
+#define FPP_IQOS_VLAN_ID_MASK 0xFFF
+#define FPP_IQOS_TOS_MASK     0xFF
+#define FPP_IQOS_L4PROTO_MASK 0xFF
+#define FPP_IQOS_SDIP_MASK    0x3F
+
+/**
+ * @brief       Header field arguments to match.
+ * @details     Related data types: @ref fpp_qos_policer_flow_cmd_t, @ref fpp_iqos_flow_spec_t
+ * @details     Each value is an argument for some match rule.
+ * @note        Some values are in a network byte order [NBO].
+ */
+/* [fpp_iqos_flow_args_t] */
+typedef struct CAL_PACKED_ALIGNED(4)
+{
+    uint16_t vlan;      /*< VLAN ID (12b). [NBO] */
+    uint16_t vlan_m;    /*< VLAN ID mask (12b). [NBO] */
+    uint8_t tos;        /*< TOS field for IPv4, TCLASS for IPv6 (8b). */
+    uint8_t tos_m;      /*< TOS mask (8b). */
+    uint8_t l4proto;    /*< L4 protocol field for IPv4 and IPv6 (8b). */
+    uint8_t l4proto_m;  /*< L4 protocol mask (8b). */
+    uint32_t sip;       /*< Source IP address for IPv4 and IPv6 (32b). [NBO] */
+    uint32_t dip;       /*< Destination IP address for IPv4 and IPv6 (32b). [NBO] */
+    uint8_t sip_m;      /*< Source IP address mask, "6 bit encoded". */
+    uint8_t dip_m;      /*< Destination IP address mask, "6 bit encoded". */
+    uint16_t sport_max; /*< Max L4 source port (16b). [NBO] */
+    uint16_t sport_min; /*< Min L4 source port (16b). [NBO] */
+    uint16_t dport_max; /*< Max L4 destination port (16b). [NBO] */
+    uint16_t dport_min; /*< Min L4 destination port (16b). [NBO] */
+} fpp_iqos_flow_args_t;
+/* [fpp_iqos_flow_args_t] */
+
+/**
+ * @brief       Action to be done for matched flows.
+ * @details     Related data types: @ref fpp_qos_policer_flow_cmd_t
+ */
+typedef enum CAL_PACKED
+{
+    FPP_IQOS_FLOW_MANAGED = 0,  /**< Mark flow as Managed. Default action on flow match. */
+    FPP_IQOS_FLOW_DROP,         /**< Drop flow. */
+    FPP_IQOS_FLOW_RESERVED,     /**< Mark flow as Reserved. */
+
+    FPP_IQOS_FLOW_COUNT         /* must be last */
+} fpp_iqos_flow_action_t;
+
+/**
+ * @brief       Flow classification specification stucture.
+ * @details     Related data types: @ref fpp_qos_policer_flow_cmd_t
+ * @details     Each value is an argument for some match rule.
+ * @note        Some values are in a network byte order [NBO].
+ */
+/* [fpp_iqos_flow_spec_t] */
+typedef struct CAL_PACKED_ALIGNED(4)
+{
+    fpp_iqos_flow_type_t type_mask;         /*< Mask of flow types to match. [NBO] */
+    fpp_iqos_flow_arg_type_t arg_type_mask; /*< Mask on header field arguments to match [NBO] */
+    fpp_iqos_flow_args_t CAL_PACKED_ALIGNED(4) args; /*< Stuct of header field arguments to match,
+                                                         as indicated by @arg_type_mask.
+                                                      */
+    fpp_iqos_flow_action_t action;          /*< Actions to be performed on matched flows. */
+} fpp_iqos_flow_spec_t;
+/* [fpp_iqos_flow_spec_t] */
+
+/**
+ * @brief       Data structure for a Ingress QoS flow classification entry.
+ * @details     Related FCI commands: @ref FPP_CMD_QOS_POLICER_FLOW
+ * @details     Related topics: @ref ingress_qos
+ *
+ * @snippet     fpp_ext.h  fpp_qos_policer_flow_cmd_t
+ */
+/* [fpp_qos_policer_flow_cmd_t] */
+typedef struct CAL_PACKED_ALIGNED(4)
+{
+    uint16_t action;
+    char if_name[IFNAMSIZ]; /*< Physical interface name for 'emac' (emac<0-2>). [ro] */
+    uint8_t id;             /*< Classification entry position in table. [ro]
+                                minimal ID == 0
+                                maximal ID is implementation defined. See Ingress QoS.
+                                For FPP_ACTION_REGISTER, the value of 0xFF means "don't care",
+                                and the driver will choose the next available position starting
+                                from 0, or will return FPP_ERR_QOS_POLICER_FLOW_TABLE_FULL if
+                                not available.
+                            */
+    fpp_iqos_flow_spec_t CAL_PACKED_ALIGNED(4) flow; /*< Flow specification. */
+} fpp_qos_policer_flow_cmd_t;
+/* [fpp_qos_policer_flow_cmd_t] */
+
+/**
+ * @def         FPP_CMD_QOS_POLICER_WRED
+ * @brief       Configure WRED (Weighted Early Random Detection) policing for a given ingress queue.
+ * @details     Related topics: @ref ingress_qos
+ * @details     Related data types: @ref fpp_qos_policer_wred_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Update WRED hardware configuration.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Retrieve the WRED configuration from hardware.
+ *
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Configure queue thresholds and probability zones for dropping packets based on the priority
+ * assigned to each packet flow by the ingress classifier.  The 'unmanaged' flows have the lowest
+ * priority, and packets from these flows are the first to be dropped by the WRED algorithm.
+ * The higher priority flows are registered in the classifier entry table and marked as either
+ * 'Managed' or 'Reserved', the latter having the highest priority.
+ *
+ * @code{.c}
+ *  .............................................
+ *  fpp_qos_policer_wred_cmd_t cmd_to_fci =
+ *  {
+ *    .action  = FPP_ACTION_UPDATE,
+ *    .if_name = "...",              // Physical interface name for 'emac' (emac<0-2>).[ro]
+ *    .queue = ...,                  // Select the hardware queue for WRED policing (DMEM, LMEM, RXF).[ro]
+ *    .enable = ...,                 // Enable / disable the WRED queue (1 to enable, 0 to disable).
+ *    .thr[] = {...},                // Provide min, max, and full WRED threaholds for given queue, or use
+ *                                      defaults.
+ *    .zprob[] = {...},              // Provide probabilities in increments of 1/16 for each drop zone, or
+ *                                      use defaults.
+ *  };
+ *
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_QOS_POLICER_WRED, sizeof(fpp_qos_policer_wred_cmd_t),
+ *                  (unsigned short*)(&cmd_to_fci));
+ *  .............................................
+ * @endcode
+ *
+ * FPP_ACTION_QUERY
+ * ----------------
+ * Retrieve the WRED configuration from hardware for the given ingress queue of a physical interface.
+ * @code{.c}
+ *  .............................................
+ *  fpp_qos_policer_wred_cmd_t cmd_to_fci =
+ *  {
+ *    .action  = FPP_ACTION_QUERY,
+ *    .if_name = "...",            // Physical interface name for 'emac' (emac<0-2>).[ro]
+ *    .queue = ...,                // Target WRED queue. [ro]
+ *    .enable = ...,               // Returns the enabled / disabled status of the queue.
+ *    .thr[] = ...,                // Returns the hardware programmed WRED thresholds.
+ *    .zprob[] = ...,              // Returns the hardware programmed WRED probability values for each zone.
+ *  };
+ *
+ *  fpp_qos_policer_wred_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u;
+ *
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_QOS_POLICER_WRED,
+ *                  sizeof(fpp_qos_policer_wred_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *
+ *  // 'reply_from_fci' now holds the '.enable' field set accordingly.
+ *  .............................................
+ * @endcode
+ *
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Wrong physical interface provided (i.e. non-'emac'), or other
+ *        unexpected value.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure during update.
+ *
+ * @hideinitializer
+ */
+
+#define FPP_CMD_QOS_POLICER_WRED            0xf450
+
+/**
+ * @brief       Ingress queues subject to WRED policing.
+ * @details     Related data types: @ref fpp_qos_policer_wred_cmd_t
+ */
+typedef enum CAL_PACKED
+{
+    FPP_IQOS_Q_DMEM = 0,/**< select DMEM for WRED configuration */
+    FPP_IQOS_Q_LMEM,    /**< select LMEM for WRED configuration */
+    FPP_IQOS_Q_RXF,     /**< select RXF for WRED configuration */
+
+    FPP_IQOS_Q_COUNT    /* must be last */
+} fpp_iqos_queue_t;
+
+/**
+ * @brief       Supported probability zones.
+ * @details     Related data types: @ref fpp_qos_policer_wred_cmd_t
+ */
+typedef enum CAL_PACKED
+{
+    FPP_IQOS_WRED_ZONE1 = 0,   /**< WRED probability zone1 */
+    FPP_IQOS_WRED_ZONE2,       /**< WRED probability zone2 */
+    FPP_IQOS_WRED_ZONE3,       /**< WRED probability zone3 */
+    FPP_IQOS_WRED_ZONE4,       /**< WRED probability zone4 */
+
+    FPP_IQOS_WRED_ZONES_COUNT  /* must be last */
+} fpp_iqos_wred_zone_t;
+
+/**
+ * @brief       Supported thershold types.
+ * @details     Related data types: @ref fpp_qos_policer_wred_cmd_t
+ */
+typedef enum CAL_PACKED
+{
+    FPP_IQOS_WRED_MIN_THR = 0, /**< WRED queue min threshold, drop 'unmanaged' by prob zone */
+    FPP_IQOS_WRED_MAX_THR,     /**< WRED queue max threshold, drop 'managed' */
+    FPP_IQOS_WRED_FULL_THR,    /**< WRED queue full threshold, drop all */
+
+    FPP_IQOS_WRED_THR_COUNT    /* must be last */
+} fpp_iqos_wred_thr_t;
+
+/**
+ * @brief       Data structure for Ingress QoS WRED policing configuration.
+ * @details     Related FCI commands: @ref FPP_CMD_QOS_POLICER_WRED
+ * @details     Related topics: @ref ingress_qos
+ *
+ * @snippet     fpp_ext.h  fpp_qos_policer_wred_cmd_t
+ */
+/* [fpp_qos_policer_wred_cmd_t] */
+typedef struct CAL_PACKED_ALIGNED(4)
+{
+    uint16_t action;
+    char if_name[IFNAMSIZ];  /*< Physical interface name for 'emac' (emac<0-2>). [ro] */
+    fpp_iqos_queue_t queue;  /*< Target ingress queue for WRED configuration. [ro] */
+    uint8_t enable;          /*< WRED queue enable / disable toggle.
+                                 The hardware block configuration will be reset to its
+                                 initial state after disabling it.
+                                 On query, it returns the state of the hardware block:
+                                 0 == disabled, 1 == enabled.
+                             */
+    uint16_t thr[FPP_IQOS_WRED_THR_COUNT];    /*< WRED thresholds (in number of buffers).
+                                                  The lowest threshold starts at 0. Max values
+                                                  are implementation defined, see Ingress QOS.
+                                                  Value 0xFFFF means preserve the hardware
+                                                  configured value. [NBO]
+                                               */
+    uint8_t zprob[FPP_IQOS_WRED_ZONES_COUNT]; /*< WRED drop probabilities for all probability
+                                                  zones, in increments of 1/16.
+                                                  The lowest probability zone starts at 0.
+                                                  Value 255 means preserve the H/W configured value.
+                                               */
+} fpp_qos_policer_wred_cmd_t;
+/* [fpp_qos_policer_wred_cmd_t] */
+
+/**
+ * @def         FPP_CMD_QOS_POLICER_SHP
+ * @brief       Enable and configure an ingress traffic shaper.
+ * @details     Related topics: @ref ingress_qos
+ * @details     Related data types: @ref fpp_qos_policer_shp_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Update rate shaping hardware configuration.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Retrieve rate shaping configuration from hardware.
+ *
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Configure the ingress IEEE 802.1Q Credit Base Shaper specified by ID
+ * for a given physical interface.
+ *
+ * @code{.c}
+ *  .............................................
+ *  fpp_qos_policer_shp_cmd_t cmd_to_fci =
+ *  {
+ *    .action  = FPP_ACTION_UPDATE,
+ *    .if_name = "...",              // Physical interface name for 'emac' (emac<0-2>).[ro]
+ *    .id = ...,                     // ID of the ingress rate shaper to be configured.[ro]
+ *    .enable = ...,                 // Enable / disable the shaper (1 to enable, 0 to disable).
+ *    .type = ...,                   // Type of traffic to be shaped: all (port level), bcast, or mcast.
+ *    .mode = ...,                   // Data rate measurement units: bps, or pps.
+ *    .isl = ...,                    // Desired data rate in units as specified by `.mode`.
+ *    .max_credit = ...,             // IEEE 802.1Q CBS hiCredit and loCredit values (max and min)
+ *    .min_credit = ...,             // based on chosen shaper mode.
+ *  };
+ *
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_QOS_POLICER_SHP, sizeof(fpp_qos_policer_shp_cmd_t),
+ *                  (unsigned short*)(&cmd_to_fci));
+ *  .............................................
+ * @endcode
+ *
+ * FPP_ACTION_QUERY
+ * ----------------
+ * Retrieve the hardware configuration for the ingress shaper specified by ID, for a physical interface.
+ *
+ * @code{.c}
+ *  .............................................
+ *  fpp_qos_policer_shp_cmd_t cmd_to_fci =
+ *  {
+ *    .action  = FPP_ACTION_QUERY,
+ *    .if_name = "...",            // Physical interface name for 'emac' (emac<0-2>).[ro]
+ *    .id = ...,                   // Shaper ID.[ro]
+ *    .enable = ...,               // Returns the enabled / disabled status of the shaper.
+ *    .type = ...,                 // Returns the shaper type.
+ *    .mode = ...,                 // Returns the shaper mode.
+ *    .isl = ...,                  // Returns the CBS parameters as programmed in the hardware
+ *    .max_credit = ...,           // idleSlope (in `.isl`), hiCredit (in `.max_credit`),
+ *    .min_credit = ...,           // loCredit (in `.min_credit`).
+ *  };
+ *
+ *  fpp_qos_policer_shp_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u;
+ *
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_QOS_POLICER_WRED,
+ *                  sizeof(fpp_qos_policer_shp_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *
+ *  // 'reply_from_fci' now holds the '.enable' field set accordingly.
+ *  .............................................
+ * @endcode
+ *
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Wrong physical interface provided (i.e. non-'emac'), or other
+ *        unexpected value.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure during update.
+ *
+ * @hideinitializer
+ */
+
+#define FPP_CMD_QOS_POLICER_SHP             0xf460
+
+/**
+ * @brief       Supported rate policing shaper types.
+ * @details     Related data types: @ref fpp_qos_policer_shp_cmd_t
+ */
+typedef enum CAL_PACKED
+{
+    FPP_IQOS_SHP_PORT_LEVEL = 0,    /**< port level data rate shaper */
+    FPP_IQOS_SHP_BCAST,             /**< shaper for broadcast packets */
+    FPP_IQOS_SHP_MCAST,             /**< shaper for multicast packets */
+
+    FPP_IQOS_SHP_TYPE_COUNT         /* must be last */
+} fpp_iqos_shp_type_t;
+
+/**
+ * @brief       Supported rate policing modes.
+ * @details     Related data types: @ref fpp_qos_policer_shp_cmd_t
+ */
+typedef enum CAL_PACKED
+{
+    FPP_IQOS_SHP_BPS = 0,          /**< specify data rate in bits per second */
+    FPP_IQOS_SHP_PPS,              /**< specify data rate in packets per second */
+
+    FPP_IQOS_SHP_RATE_MODE_COUNT   /* must be last */
+} fpp_iqos_shp_rate_mode_t;
+
+/**
+ * @brief       Data structure for Ingress QoS rate shaping configuration.
+ * @details     Related FCI commands: @ref FPP_CMD_QOS_POLICER_SHP
+ * @details     Related topics: @ref ingress_qos
+ *
+ * @snippet     fpp_ext.h  fpp_qos_policer_shp_cmd_t
+ */
+/* [fpp_qos_policer_shp_cmd_t] */
+typedef struct CAL_PACKED_ALIGNED(4)
+{
+    uint16_t action;
+    char if_name[IFNAMSIZ]; /*< Physical interface name for 'emac' (emac<0-2>). [ro] */
+    uint8_t id;             /*< ID of the ingress rate shaper. [ro]
+                                Ranging from 0 to implementation defined. See Ingress QOS.
+                             */
+    uint8_t enable;         /*< Shaper hardware block enable / disable toggle.
+                                The hardware block configuration will be reset to its initial
+                                state after disabling it.
+                                On query, it returns the state of the hardware block:
+                                0 == disabled, 1 == enabled.
+                             */
+    fpp_iqos_shp_type_t type; /*< Rate policing shaper type (see @ref fpp_iqos_shp_type_t):
+                                  port level, broadcast traffic, or multicast traffic.
+                               */
+    fpp_iqos_shp_rate_mode_t mode; /*< Data rate measurement units (@ref fpp_iqos_shp_rate_mode_t):
+                                       bps, or pps.
+                                    */
+    uint32_t isl;           /*< Idle slope in units per second (see `.mode`). [NBO] */
+    int32_t max_credit;     /*< Max credit value that can be accumulated, depends on `mode`. [NBO] */
+    int32_t min_credit;     /*< Min credit value that can be accumulated, depends on `mode`.
+                                Must be negative. [NBO]
+                             */
+} fpp_qos_policer_shp_cmd_t;
+/* [fpp_qos_policer_shp_cmd_t] */
+
+/**
+ * @def         FPP_CMD_FW_FEATURE
+ * @brief       FCI command for management of configurable FW features.
+ * @details     Related topics: ---
+ * @details     Related data types: @ref fpp_fw_features_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Enable/disable a FW feature.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) a FW feature query session and get properties 
+ *                   of the first FW feature from the internal list of FW features.
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get properties of the next FW feature
+ *                   from the list. Intended to be called in a loop (to iterate through the list).
+ *
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Enable/disable a FW feature.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_fw_features_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_UPDATE,  // Action
+ *    .val    = ...                 // 0 == disabled ; 1 == enabled
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_FW_FEATURE, sizeof(fpp_fw_features_cmd_t), 
+ *                                             (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
+ * @endcode
+ *
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of a FW feature.
+ * @code{.c}
+ *  .............................................  
+ *  fpp_fw_features_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY  // Action
+ *  };
+ *    
+ *  fpp_fw_features_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_FW_FEATURE,
+ *                  sizeof(fpp_fw_features_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the first FW feature from 
+ *  //  the internal list of FW features.
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_FW_FEATURE,
+ *                  sizeof(fpp_fw_features_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the next FW feature from 
+ *  //  the internal list of FW features.
+ *  .............................................  
+ * @endcode 
+ *
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c ENOENT @c (-2)
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the FW feature query session (no more FW features).
+ *        - For other ACTIONs: Unknown (nonexistent) FW feature was requested.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
+ *
+ * @hideinitializer
+ */
+#define FPP_CMD_FW_FEATURE					0xf250
+#define FPP_ERR_FW_FEATURE_NOT_FOUND		0xf251
+#define FPP_ERR_FW_FEATURE_NOT_AVAILABLE	0xf252
 #define FPP_FEATURE_NAME_SIZE 32
 #define FPP_FEATURE_DESC_SIZE 128
 
 /**
- * @brief Argument of the @ref FPP_CMD_FW_FEATURE command.
+* @brief Feature flags
+* @details
+* Flags combinations:
+* F_PRESENT is missing - the feature is not available
+* F_PRESENT is set and F_RUNTIME is missing - the feature is always enabled (cannot be disabled)
+* F_PRESENT is set and F_RUNTIME is set - the feature can be enabled/disable at runtime, enabled state must be read out of DMEM 
+*/
+typedef enum __attribute__((packed))
+{
+    FEAT_NONE = 0U,
+    FEAT_PRESENT = (1U << 0U),     /* Feature not available if not set */
+    FEAT_RUNTIME = (1U << 1U),     /* Feature can be enabled/disabled at runtime */
+} fpp_fw_feature_flags_t;
+
+/**
+ * @brief       Data structure for FW feature setting.
+ * @details     Related FCI commands: @ref FPP_CMD_FW_FEATURE
+ * @note        Some values cannot be modified by FPP_ACTION_UPDATE [ro].
+ *
+ * @snippet     fpp_ext.h  fpp_fw_features_cmd_t
  */
+/* [fpp_fw_features_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(2)
 {
-    uint16_t action;                       /**< Action to be done */
-    char name[FPP_FEATURE_NAME_SIZE + 1];  /**< Feature name (only queries, cannot be modified) */
-    char desc[FPP_FEATURE_DESC_SIZE + 1];  /**< Feature description (only queries, cannot be modified) */
-    uint8_t val;                           /**< Value update: to be set / query: which is currently set for the feature */
-    uint8_t variant;                       /**< Feature configuration variant 0=always disabled, 1=always enabled, 2=configurable */
-    uint8_t def_val;                       /**< Default value for configurable variant */
-    uint8_t reserved;                      /**< Reserved value */
+    uint16_t action;                       /*< Action */
+    char name[FPP_FEATURE_NAME_SIZE + 1];  /*< Feature name. [ro] */
+    char desc[FPP_FEATURE_DESC_SIZE + 1];  /*< Feature description. [ro] */
+    
+    uint8_t val;        /*< Feature current state.
+                            0 == disabled ; 1 == enabled */
+    
+    fpp_fw_feature_flags_t flags;  /*< Feature configuration variant. [ro] */
+    uint8_t def_val;               /*< Factory default value of the '.val' property. [ro] */
+    uint8_t reserved;              /*< RESERVED (do not use) */
 } fpp_fw_features_cmd_t;
+/* [fpp_fw_features_cmd_t] */
 
 #endif /* FPP_EXT_H_ */
 

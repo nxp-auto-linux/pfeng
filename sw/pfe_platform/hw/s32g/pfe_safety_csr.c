@@ -13,12 +13,6 @@
 #include "pfe_cbus.h"
 #include "pfe_safety_csr.h"
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
 #define WSP_SAFETY_INT_SRC_NUMBER   28U
 #define TRIG_EN_INTERRUPTS_CHECK   (MASTER1_INT | MASTER2_INT | MASTER3_INT | MASTER4_INT | \
 									EMAC_CBUS_INT | EMAC_DBUS_INT | CLASS_CBUS_INT | CLASS_DBUS_INT | \

@@ -218,317 +218,492 @@ typedef enum {
 #define FPP_ERR_CT_ENTRY_NOT_FOUND			101
 
 /**
- * @brief Specifies FCI command for working with IPv4 tracked connections
- * @details This command can be used with various values of `.action`:
- *          - @c FPP_ACTION_REGISTER: Defines a connection and binds it to previously created route(s).
- *          - @c FPP_ACTION_DEREGISTER: Deletes previously defined connection.
- *          - @c FPP_ACTION_UPDATE: Updates properties of previously defined connection.
- *          - @c FPP_ACTION_QUERY: Gets parameters of existing connection. It creates a snapshot of all active
- *            conntrack entries and replies with first of them.
- *          - @c FPP_ACTION_QUERY_CONT: Shall be called periodically after @c FPP_ACTION_QUERY was called. On each
- *            call it replies with parameters of next connection. It returns @c FPP_ERR_CT_ENTRY_NOT_FOUND when no more
- *            entries exist.
+ * @addtogroup  dxgrLibFCI
+ * @{
+ */
+
+/**
+ * @def         FPP_CMD_IPV4_CONNTRACK
+ * @brief       FCI command for management of IPv4 conntracks.
+ * @details     Related topics: @ref l3_router
+ * @details     Related data types: @ref fpp_ct_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_REGISTER <br>
+ *                   Create a new IPv4 conntrack and bind it to previously created route(s).
+ *              - @c FPP_ACTION_DEREGISTER <br>
+ *                   Remove (destroy) an existing IPv4 conntrack.
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Modify properties of IPv4 conntrack.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) IPv4 conntrack query session and get properties 
+ *                   of the first IPv4 conntrack from the internal list of IPv4 conntracks.
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get properties of the next IPv4 conntrack
+ *                   from the list. Intended to be called in a loop (to iterate through the list).
  *
- * Command Argument Type: @ref fpp_ct_cmd_t
- *
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_REGISTER
+ * -------------------
+ * Create a new IPv4 conntrack.
  * @code{.c}
- *   fpp_ct_cmd_t cmd_data =
- *   {
- *     // Register new conntrack
- *     .action = FPP_ACTION_REGISTER,
- *     // Source IPv4 address (network endian)
- *     .saddr = ...,
- *     // Destination IPv4 address (network endian)
- *     .daddr = ...,
- *     // Source port (network endian)
- *     .sport = ...,
- *     // Destination port (network endian)
- *     .dport = ...,
- *     // Reply source IPv4 address (network endian). Used for NAT, otherwise equals .daddr
- *     .saddr_reply = ...,
- *     // Reply destination IPv4 address (network endian). Used for NAT, otherwise equals .saddr
- *     .daddr_reply = ...,
- *     // Reply source port (network endian). Used for NAT, otherwise equals .dport
- *     .sport_reply = ...,
- *     // Reply destination port (network endian). Used for NAT, otherwise equals .sport
- *     .dport_reply = ...,
- *     // IP protocol ID (17=UDP, 6=TCP, ...)
- *     .protocol = ...,
- *     // Bidirectional/Single direction (network endian)
- *     .flags = ...,
- *     // ID of route previously created with .FPP_CMD_IP_ROUTE command (network endian)
- *     .route_id = ...,
- *     // ID of reply route previously created with .FPP_CMD_IP_ROUTE command (network endian)
- *     .route_id_reply = ...,
- *     // VLAN tag in normal direction. If non-zero then it is added to routed traffic which
- *     // is untagged. If the routed traffic is tagged, then the outer tag will be replaced.
- *     .vlan = ...,
- *     // VLAN tag in reply direction. Same meaning as .vlan.
- *     .vlan_reply = ...
- *   };
+ *  .............................................  
+ *  fpp_ct_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_REGISTER,  // Action
+ *      
+ *    .saddr = ...,        // 'orig' direction: Source IP address. [NBO]
+ *    .daddr = ...,        // 'orig' direction: Destination IP address. [NBO]
+ *    .sport = ...,        // 'orig' direction: Source port. [NBO]
+ *    .dport = ...,        // 'orig' direction: Destination port. [NBO]
+ *      
+ *    .saddr_reply = ...,  // 'reply' direction: Source IP address. [NBO]
+ *                         // Used for NAT, otherwise equals '.daddr'.
+ *      
+ *    .daddr_reply = ...,  // 'reply' direction: Destination IP address.
+ *                         // Used for NAT, otherwise equals '.saddr'.
+ *      
+ *    .sport_reply = ...,  // 'reply' direction: Source port. [NBO]
+ *                         // Used for NAT, otherwise equals '.dport'.
+ *      
+ *    .dport_reply = ...,  // 'reply' direction: Destination port. [NBO]
+ *                         // Used for NAT, otherwise equals '.sport'.
+ *      
+ *    .protocol = ...,     // IANA IP Protocol Number (protocol ID). [NBO]
+ *      
+ *    .flags = ...,        // Flags. A bitset. [NBO]
+ *      
+ *    .route_id = ...,     // 'orig' direction: ID of an associated route. [NBO]
+ *                         // See FPP_CMD_IP_ROUTE.
+ *      
+ *    .route_id_reply = ...,  // 'reply' direction: ID of an associated route. [NBO]
+ *                            // See FPP_CMD_IP_ROUTE.
+ *      
+ *    .vlan = ...,         // 'orig' direction: VLAN tag. [NBO]
+ *                         // If non-zero, then this VLAN tag is added to the routed packet.
+ *                         // If the packet already has a VLAN tag, then its tag is replaced.
+ *      
+ *    .vlan_reply = ...    // 'reply' direction: VLAN tag. [NBO]
+ *                         // If non-zero, then this VLAN tag is added to the routed packet.
+ *                         // If the packet already has a VLAN tag, then its tag is replaced.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IPV4_CONNTRACK, sizeof(fpp_ct_cmd_t), 
+ *                                                 (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
+ * <b>orig and reply direction</b><br>
  * By default the connection is created as bi-directional. It means that two routing table entries
- * are created at once: one for standard flow given by .saddr, .daddr, .sport, .dport, and .protocol
- * and one for reverse flow defined by .saddr_reply, .daddr_reply, .sport_reply and .dport_reply. To
- * create uni-directional connection, either:
- * - set `.flags |= CTCMD_FLAGS_REP_DISABLED` and don't set @c route_id_reply, or
- * - set `.flags |= CTCMD_FLAGS_ORIG_DISABLED` and don't set @c route_id.
+ * are created at once:
+ *   - one for standard flow ('orig' direction), defined by `.protocol`, `.saddr`, `.daddr`, 
+ *     `.sport`, and `.dport`
+ *   - one for reverse flow ('reply' direction), defined by `.protocol`, `.saddr_reply`, `.daddr_reply`,
+ *     `.sport_reply` and `.dport_reply`.
+ * 
+ * To create an uni-directional connection (only one routing table entry), set one of these flags 
+ * (@b never both) when configuring a conntrack:
+ * - 'orig' direction only:  `.flags |= CTCMD_FLAGS_REP_DISABLED`, and @b don't set `.route_id_reply`.
+ * - 'reply' direction only: `.flags |= CTCMD_FLAGS_ORIG_DISABLED`, and @b don't set `.route_id`.
  *
- * To configure NAT-ed connection, set reply addresses and/or ports different than original
- * addresses and ports. To achieve NAPT (also called PAT), use @c daddr_reply, @c dport_reply,
- *  @c saddr_reply, and @c sport_reply:
- * -# `daddr_reply != saddr`: Source address of packets in original direction will be changed
- *    from @c saddr to @c daddr_reply. In case of bi-directional connection, destination address
- *    of packets in reply direction will be changed from @c daddr_reply to @c saddr.
- * -# `dport_reply != sport`: Source port of packets in original direction will be changed
- *    from @c sport to @c dport_reply. In case of bi-directional connection, destination port of
- *    packets in reply direction will be changed from @c dport_reply to @c sport.
- * -# `saddr_reply != daddr`: Destination address of packets in original direction will be changed
- *    from @c daddr to @c saddr_reply. In case of bi-directional connection, source address of
- *    packets in reply direction will be changed from @c saddr_reply to @c daddr.
- * -# `sport_reply != dport`: Destination port of packets in original direction will be changed
- *    from @c dport to @c sport_reply. In case of bi-directional connection, source port of packets
- *    in reply direction will be changed from @c sport_reply to @c dport.
+ * <b>NAT and NAPT/PAT</b><br>
+ * To configure NAT or NAPT/PAT connection, set 'reply' IP addresses and ports to different values
+ * than 'orig' IP addresses and ports.
+ * -# `.daddr_reply != .saddr`: Source address of packets in the 'orig' direction will be changed
+ *    from `.saddr` to `daddr_reply`. In case of a bi-directional connection, destination address
+ *    of packets in the 'reply' direction will be changed from `.daddr_reply` to `.saddr`.
+ * -# `.saddr_reply != .daddr`: Destination address of packets in the 'orig' direction will be changed
+ *    from `.daddr` to `.saddr_reply`. In case of a bi-directional connection, source address of
+ *    packets in the 'reply' direction will be changed from `.saddr_reply` to `.daddr`.
+ * -# `.dport_reply != .sport`: Source port of packets in the 'orig' direction will be changed
+ *    from `.sport` to `.dport_reply. In case of a bi-directional connection, destination port of
+ *    packets in the 'reply' direction will be changed from `.dport_reply` to `.sport`.
+ * -# `.sport_reply != .dport`: Destination port of packets in the 'orig' direction will be changed
+ *    from `.dport` to `.sport_reply`. In case of a bi-directional connection, source port of packets
+ *    in the 'reply' direction will be changed from `.sport_reply` to `.dport`.
  *
- * To disable port numbers check, just set both `.sport` and `.dport` to zero. This allows routing
- * using only IP addresses and protocol number.
+ * <b>Disable port checking</b><br>
+ * It is possible to leave out ports from matching process of a particular conntrack.
+ * To do so, configure the conntrack's `.sport` and `.dport` to zero.
+ * This allows routing based only on 3-tuple (protocol, source IP, destination IP).
  *
- * Action FPP_ACTION_DEREGISTER
- * ----------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_DEREGISTER
+ * ---------------------
+ * Remove (destroy) an existing IPv4 conntrack. 'Orig' properties are mandatory for this action.
+ * 'Reply' properties are optional.
  * @code{.c}
- *   fpp_ct_cmd_t cmd_data =
- *   {
- *     .action = FPP_ACTION_DEREGISTER, // Deregister previously created conntrack
- *     .saddr = ...,                    // Source IPv4 address (network endian)
- *     .daddr = ...,                    // Destination IPv4 address (network endian)
- *     .sport = ...,                    // Source port (network endian)
- *     .dport = ...,                    // Destination port (network endian)
- *     .saddr_reply = ...,              // Reply source IPv4 address (network endian)
- *     .daddr_reply = ...,              // Reply destination IPv4 address (network endian)
- *     .sport_reply = ...,              // Reply source port (network endian)
- *     .dport_reply = ...,              // Reply destination port (network endian)
- *     .protocol = ...,                 // IP protocol ID
- *   };
+ *  .............................................  
+ *  fpp_ct_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_DEREGISTER,  // Action
+ *      
+ *    // Identification of the target conntrack.
+ *    .saddr = ...,        // 'orig' direction: Source IP address. [NBO]
+ *    .daddr = ...,        // 'orig' direction: Destination IP address. [NBO]
+ *    .sport = ...,        // 'orig' direction: Source port. [NBO]
+ *    .dport = ...         // 'orig' direction: Destination port. [NBO]
+ *    .protocol = ...,     // IANA IP Protocol Number (protocol ID). [NBO]
+ *      
+ *    .saddr_reply = ...,  // 'reply' direction: Source IP address. [NBO]
+ *                         // Used for NAT, otherwise equals '.daddr'.
+ *      
+ *    .daddr_reply = ...,  // 'reply' direction: Destination IP address.
+ *                         // Used for NAT, otherwise equals '.saddr'.
+ *      
+ *    .sport_reply = ...,  // 'reply' direction: Source port. [NBO]
+ *                         // Used for NAT, otherwise equals '.dport'.
+ *      
+ *    .dport_reply = ...,  // 'reply' direction: Destination port. [NBO]
+ *                         // Used for NAT, otherwise equals '.sport'.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IPV4_CONNTRACK, sizeof(fpp_ct_cmd_t), 
+ *                                                 (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Action FPP_ACTION_UPDATE
- * ----------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Modify properties of an IPv4 conntrack.
  * @code{.c}
- *   fpp_ct_cmd_t cmd_data =
- *   {
- *     .action = FPP_ACTION_UPDATE,    // Update previously created conntrack
- *     .saddr = ...,                    // Source IPv4 address (network endian)
- *     .daddr = ...,                    // Destination IPv4 address (network endian)
- *     .sport = ...,                    // Source port (network endian)
- *     .dport = ...,                    // Destination port (network endian)
- *     .protocol = ...,                 // IP protocol ID
- *     .flags = CTCMD_FLAGS_TTL_DECREMENT, // Only TTL decrement can be updated
- *   };
+ *  .............................................  
+ *  fpp_ct_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_UPDATE,  // Action
+ *      
+ *    // Identification of the target conntrack.
+ *    .saddr = ...,     // 'orig' direction: Source IP address. [NBO]
+ *    .daddr = ...,     // 'orig' direction: Destination IP address. [NBO]
+ *    .sport = ...,     // 'orig' direction: Source port. [NBO]
+ *    .dport = ...,     // 'orig' direction: Destination port. [NBO]
+ *    .protocol = ...,  // IANA IP Protocol Number (protocol ID). [NBO]
+ *      
+ *    // Modification of the target conntrack.
+ *    .flags |= ntohs(CTCMD_FLAGS_TTL_DECREMENT)  // The only modification available: 
+ *                                                // set/unset TTL decrement flag.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IPV4_CONNTRACK, sizeof(fpp_ct_cmd_t), 
+ *                                                 (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
- * -------------------------------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of an IPv4 conntrack.
  * @code{.c}
- *   fpp_ct_cmd_t cmd_data =
- *   {
- *     .action = ...     // Either FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT
- *   };
+ *  .............................................  
+ *  fpp_ct_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY  // Action
+ *  };
+ *    
+ *  fpp_ct_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_IPV4_CONNTRACK,
+ *                  sizeof(fpp_ct_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the first IPv4 conntrack from 
+ *  //  the internal list of IPv4 conntracks.
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_IPV4_CONNTRACK,
+ *                  sizeof(fpp_ct_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the next IPv4 conntrack from 
+ *  //  the internal list of IPv4 conntracks.
+ *  .............................................  
  * @endcode
  *
- * Response data type for queries: @ref fpp_ct_cmd_t
- *
- * Response data provided:
- * @code{.c}
- *     rsp_data.saddr;         // Source IPv4 address (network endian)
- *     rsp_data.daddr;         // Destination IPv4 address (network endian)
- *     rsp_data.sport;         // Source port (network endian)
- *     rsp_data.dport;         // Destination port (network endian)
- *     rsp_data.saddr_reply;   // Reply source IPv4 address (network endian)
- *     rsp_data.daddr_reply;   // Reply destination IPv4 address (network endian)
- *     rsp_data.sport_reply;   // Reply source port (network endian)
- *     rsp_data.dport_reply;   // Reply destination port (network endian)
- *     rsp_data.protocol;      // IP protocol ID (17=UDP, 6=TCP, ...)
- * @endcode
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_CT_ENTRY_NOT_FOUND
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the IPv4 conntrack query session (no more IPv4 conntracks).
+ *        - For other ACTIONs: Unknown (nonexistent) IPv4 conntrack was requested.
+ * - @c FPP_ERR_CT_ENTRY_ALREADY_REGISTERED <br>
+ *        Requested IPv4 conntrack already exists (is already registered).
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Unexpected value of some property (probably nonexistent route).
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
 #define FPP_CMD_IPV4_CONNTRACK				0x0314
 
 /**
- * @brief Specifies FCI command for working with IPv6 tracked connections
- * @details This command can be used with various values of `.action`:
- *          - @c FPP_ACTION_REGISTER: Defines a connection and binds it to previously created route(s).
- *          - @c FPP_ACTION_DEREGISTER: Deletes previously defined connection.
- *          - @c FPP_ACTION_UPDATE: Updates properties of previously defined connection.
- *          - @c FPP_ACTION_QUERY: Gets parameters of existing connection. It creates a snapshot of all active
- *            conntrack entries and replies with first of them.
- *          - @c FPP_ACTION_QUERY_CONT: Shall be called periodically after @c FPP_ACTION_QUERY was called. On each
- *            call it replies with parameters of next connection. It returns @c FPP_ERR_CT_ENTRY_NOT_FOUND when no more
- *            entries exist.
+ * @def         FPP_CMD_IPV6_CONNTRACK
+ * @brief       FCI command for management of IPv6 conntracks.
+ * @details     Related topics: @ref l3_router
+ * @details     Related data types: @ref fpp_ct6_cmd_t
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_REGISTER <br>
+ *                   Create a new IPv6 conntrack and bind it to previously created route(s).
+ *              - @c FPP_ACTION_DEREGISTER <br>
+ *                   Remove (destroy) an existing IPv6 conntrack.
+ *              - @c FPP_ACTION_UPDATE <br>
+ *                   Modify properties of IPv6 conntrack.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) IPv6 conntrack query session and get properties 
+ *                   of the first IPv6 conntrack from the internal list of IPv6 conntracks.
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get properties of the next IPv6 conntrack
+ *                   from the list. Intended to be called in a loop (to iterate through the list).
  *
- * Command Argument Type: @ref fpp_ct6_cmd_t
- *
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_REGISTER
+ * -------------------
+ * Create a new IPv6 conntrack.
  * @code{.c}
- *   fpp_ct6_cmd_t cmd_data =
- *   {
- *     // Register new conntrack
- *     .action = FPP_ACTION_REGISTER,
- *     // Source IPv6 address, (network endian)
- *     .saddr[0..3] = ...,
- *     // Destination IPv6 address, (network endian)
- *     .daddr[0..3] = ...,
- *     // Source port (network endian)
- *     .sport = ...,
- *     // Destination port (network endian)
- *     .dport = ...,
- *     // Reply source IPv6 address (network endian). Used for NAT, otherwise equals .daddr
- *     .saddr_reply[0..3] = ...,
- *     // Reply destination IPv6 address (network endian). Used for NAT, otherwise equals .saddr
- *     .daddr_reply[0..3] = ...,
- *     // Reply source port (network endian). Used for NAT, otherwise equals .dport
- *     .sport_reply = ...,
- *     // Reply destination port (network endian). Used for NAT, otherwise equals .sport
- *     .dport_reply = ...,
- *     // IP protocol ID (17=UDP, 6=TCP, ...)
- *     .protocol = ...,
- *     // Bidirectional/Single direction (network endian)
- *     .flags = ...,
- *     // ID of route previously created with .FPP_CMD_IP_ROUTE command (network endian)
- *     .route_id = ...,
- *     // ID of reply route previously created with .FPP_CMD_IP_ROUTE command (network endian)
- *     .route_id_reply = ...,
- *     // VLAN tag in normal direction. If non-zero then it is added to routed traffic which
- *     // is untagged. If the routed traffic is tagged, then the outer tag will be replaced.
- *     .vlan = ...,
- *     // VLAN tag in reply direction. Same meaning as .vlan.
- *     .vlan_reply = ...
- *   };
+ *  .............................................  
+ *  fpp_ct6_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_REGISTER,  // Action
+ *      
+ *    .saddr = {...},         // 'orig' direction: Source IP address. [NBO]
+ *    .daddr = {...},         // 'orig' direction: Destination IP address. [NBO]
+ *    .sport =  ...,          // 'orig' direction: Source port. [NBO]
+ *    .dport =  ...,          // 'orig' direction: Destination port. [NBO]
+ *      
+ *    .saddr_reply = {...},   // 'reply' direction: Source IP address. [NBO]
+ *                            // Used for NAT, otherwise equals '.daddr'.
+ *      
+ *    .daddr_reply = {...},   // 'reply' direction: Destination IP address.
+ *                            // Used for NAT, otherwise equals '.saddr'.
+ *      
+ *    .sport_reply = ...,     // 'reply' direction: Source port. [NBO]
+ *                            // Used for NAT, otherwise equals '.dport'.
+ *      
+ *    .dport_reply = ...,     // 'reply' direction: Destination port. [NBO]
+ *                            // Used for NAT, otherwise equals '.sport'.
+ *      
+ *    .protocol = ...,        // IANA IP Protocol Number (protocol ID). [NBO]
+ *      
+ *    .flags = ...,           // Flags. A bitset. [NBO]
+ *      
+ *    .route_id = ...,        // 'orig' direction: ID of an associated route. [NBO]
+ *                            // See FPP_CMD_IP_ROUTE.
+ *      
+ *    .route_id_reply = ...,  // 'reply' direction: ID of an associated route. [NBO]
+ *                            // See FPP_CMD_IP_ROUTE.
+ *      
+ *    .vlan = ...,         // 'orig' direction: VLAN tag. [NBO]
+ *                         // If non-zero, then this VLAN tag is added to the routed packet.
+ *                         // If the packet already has a VLAN tag, then its tag is replaced.
+ *      
+ *    .vlan_reply = ...    // 'reply' direction: VLAN tag. [NBO]
+ *                         // If non-zero, then this VLAN tag is added to the routed packet.
+ *                         // If the packet already has a VLAN tag, then its tag is replaced.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IPV6_CONNTRACK, sizeof(fpp_ct6_cmd_t), 
+ *                                                 (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
- *
+ * <b>orig and reply direction</b><br>
  * By default the connection is created as bi-directional. It means that two routing table entries
- * are created at once: one for standard flow given by .saddr, .daddr, .sport, .dport, and .protocol
- * and one for reverse flow defined by .saddr_reply, .daddr_reply, .sport_reply and .dport_reply. To
- * create uni-directional connection, either:
- * - set `.flags |= CTCMD_FLAGS_REP_DISABLED` and don't set @c route_id_reply, or
- * - set `.flags |= CTCMD_FLAGS_ORIG_DISABLED` and don't set @c route_id.
+ * are created at once:
+ *   - one for standard flow ('orig' direction), defined by `.protocol`, `.saddr`, `.daddr`, 
+ *     `.sport`, and `.dport`
+ *   - one for reverse flow ('reply' direction), defined by `.protocol`, `.saddr_reply`, `.daddr_reply`,
+ *     `.sport_reply` and `.dport_reply`.
+ * 
+ * To create an uni-directional connection (only one routing table entry), set one of these flags 
+ * (@b never both) when configuring a conntrack:
+ * - 'orig' direction only:  `.flags |= CTCMD_FLAGS_REP_DISABLED`, and @b don't set `.route_id_reply`.
+ * - 'reply' direction only: `.flags |= CTCMD_FLAGS_ORIG_DISABLED`, and @b don't set `.route_id`.
  *
- * To configure NAT-ed connection, set reply addresses and/or ports different than original
- * addresses and ports. To achieve NAPT (also called PAT), use @c daddr_reply, @c dport_reply,
- *  @c saddr_reply, and @c sport_reply:
- * -# `daddr_reply != saddr`: Source address of packets in original direction will be changed
- *    from @c saddr to @c daddr_reply. In case of bi-directional connection, destination address
- *    of packets in reply direction will be changed from @c daddr_reply to @c saddr.
- * -# `dport_reply != sport`: Source port of packets in original direction will be changed
- *    from @c sport to @c dport_reply. In case of bi-directional connection, destination port of
- *    packets in reply direction will be changed from @c dport_reply to @c sport.
- * -# `saddr_reply != daddr`: Destination address of packets in original direction will be changed
- *    from @c daddr to @c saddr_reply. In case of bi-directional connection, source address of
- *    packets in reply direction will be changed from @c saddr_reply to @c daddr.
- * -# `sport_reply != dport`: Destination port of packets in original direction will be changed
- *    from @c dport to @c sport_reply. In case of bi-directional connection, source port of packets
- *    in reply direction will be changed from @c sport_reply to @c dport.
+ * <b>NAT and NAPT/PAT</b><br>
+ * To configure NAT or NAPT/PAT connection, set 'reply' IP addresses and ports to different values
+ * than 'orig' IP addresses and ports.
+ * -# `.daddr_reply != .saddr`: Source address of packets in the 'orig' direction will be changed
+ *    from `.saddr` to `daddr_reply`. In case of a bi-directional connection, destination address
+ *    of packets in the 'reply' direction will be changed from `.daddr_reply` to `.saddr`.
+ * -# `.saddr_reply != .daddr`: Destination address of packets in the 'orig' direction will be changed
+ *    from `.daddr` to `.saddr_reply`. In case of a bi-directional connection, source address of
+ *    packets in the 'reply' direction will be changed from `.saddr_reply` to `.daddr`.
+ * -# `.dport_reply != .sport`: Source port of packets in the 'orig' direction will be changed
+ *    from `.sport` to `.dport_reply. In case of a bi-directional connection, destination port of
+ *    packets in the 'reply' direction will be changed from `.dport_reply` to `.sport`.
+ * -# `.sport_reply != .dport`: Destination port of packets in the 'orig' direction will be changed
+ *    from `.dport` to `.sport_reply`. In case of a bi-directional connection, source port of packets
+ *    in the 'reply' direction will be changed from `.sport_reply` to `.dport`.
  *
- * To disable port numbers check, just set both `.sport` and `.dport` to zero. This allows routing
- * using only IP addresses and protocol number.
+ * <b>Disable port checking</b><br>
+ * It is possible to leave out ports from matching process of a particular conntrack.
+ * To do so, configure the conntrack's `.sport` and `.dport` to zero.
+ * This allows routing based only on 3-tuple (protocol, source IP, destination IP).
  *
- * Action FPP_ACTION_DEREGISTER
- * ----------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_DEREGISTER
+ * ---------------------
+ * Remove (destroy) an existing IPv6 conntrack. 'Orig' properties are mandatory for this action.
+ * 'Reply' properties are optional.
  * @code{.c}
- *   fpp_ct6_cmd_t cmd_data =
- *   {
- *     .action = FPP_ACTION_DEREGISTER, // Deregister previously created conntrack
- *     .saddr[0..3] = ...,              // Source IPv6 address, (network endian)
- *     .daddr[0..3] = ...,              // Destination IPv6 address, (network endian)
- *     .sport = ...,                    // Source port (network endian)
- *     .dport = ...,                    // Destination port (network endian)
- *     .saddr_reply[0..3] = ...,        // Reply source IPv6 address (network endian)
- *     .daddr_reply[0..3] = ...,        // Reply destination IPv6 address (network endian)
- *     .sport_reply = ...,              // Reply source port (network endian)
- *     .dport_reply = ...,              // Reply destination port (network endian)
- *     .protocol = ...,                 // IP protocol ID
- *   };
+ *  .............................................  
+ *  fpp_ct6_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_DEREGISTER,  // Action
+ *      
+ *    // Identification of the target conntrack.
+ *    .saddr = {...},        // 'orig' direction: Source IP address. [NBO]
+ *    .daddr = {...},        // 'orig' direction: Destination IP address. [NBO]
+ *    .sport =  ...,         // 'orig' direction: Source port. [NBO]
+ *    .dport =  ...          // 'orig' direction: Destination port. [NBO]
+ *    .protocol = ...,       // IANA IP Protocol Number (protocol ID). [NBO]
+ *      
+ *    .saddr_reply = {...},  // 'reply' direction: Source IP address. [NBO]
+ *                           // Used for NAT, otherwise equals '.daddr'.
+ *      
+ *    .daddr_reply = {...},  // 'reply' direction: Destination IP address.
+ *                           // Used for NAT, otherwise equals '.saddr'.
+ *      
+ *    .sport_reply = ...,    // 'reply' direction: Source port. [NBO]
+ *                           // Used for NAT, otherwise equals '.dport'.
+ *      
+ *    .dport_reply = ...,    // 'reply' direction: Destination port. [NBO]
+ *                           // Used for NAT, otherwise equals '.sport'.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IPV6_CONNTRACK, sizeof(fpp_ct6_cmd_t), 
+ *                                                 (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Action FPP_ACTION_UPDATE
- * ----------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_UPDATE
+ * -----------------
+ * Modify properties of an IPv6 conntrack.
  * @code{.c}
- *   fpp_ct_cmd_t cmd_data =
- *   {
- *     .action = FPP_ACTION_UPDATE,     // Update previously created conntrack
- *     .saddr[0..3] = ...,              // Source IPv6 address, (network endian)
- *     .daddr[0..3] = ...,              // Destination IPv6 address, (network endian)
- *     .sport = ...,                    // Source port (network endian)
- *     .dport = ...,                    // Destination port (network endian)
- *     .protocol = ...,                 // IP protocol ID
- *     .flags = CTCMD_FLAGS_TTL_DECREMENT, // Only TTL decrement can be updated
- *   };
+ *  .............................................  
+ *  fpp_ct6_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_UPDATE,  // Action
+ *      
+ *    // Identification of the target conntrack.
+ *    .saddr = {...},   // 'orig' direction: Source IP address. [NBO]
+ *    .daddr = {...},   // 'orig' direction: Destination IP address. [NBO]
+ *    .sport =  ...,    // 'orig' direction: Source port. [NBO]
+ *    .dport =  ...,    // 'orig' direction: Destination port. [NBO]
+ *    .protocol = ...,  // IANA IP Protocol Number (protocol ID). [NBO]
+ *      
+ *    // Modification of the target conntrack.
+ *    .flags |= ntohs(CTCMD_FLAGS_TTL_DECREMENT)  // The only modification available: 
+ *                                                // set/unset TTL decrement flag.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IPV6_CONNTRACK, sizeof(fpp_ct6_cmd_t), 
+ *                                                 (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
- * -------------------------------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of an IPv6 conntrack.
  * @code{.c}
- *   fpp_ct6_cmd_t cmd_data =
- *   {
- *     .action = ...     // Either FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT
- *   };
+ *  .............................................  
+ *  fpp_ct6_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY  // Action
+ *  };
+ *    
+ *  fpp_ct6_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_IPV6_CONNTRACK,
+ *                  sizeof(fpp_ct6_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the first IPv6 conntrack from 
+ *  //  the internal list of IPv6 conntracks.
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_IPV6_CONNTRACK,
+ *                  sizeof(fpp_ct6_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the next IPv6 conntrack from 
+ *  //  the internal list of IPv6 conntracks.
+ *  .............................................  
  * @endcode
  *
- * Response data type for queries: @ref fpp_ct6_cmd_t
- *
- * Response data provided (all values in network byte order):
- * @code{.c}
- *     rsp_data.saddr;         // Source IPv6 address (network endian)
- *     rsp_data.daddr;         // Destination IPv6 address (network endian)
- *     rsp_data.sport;         // Source port (network endian)
- *     rsp_data.dport;         // Destination port (network endian)
- *     rsp_data.saddr_reply;   // Reply source IPv6 address (network endian)
- *     rsp_data.daddr_reply;   // Reply destination IPv6 address (network endian)
- *     rsp_data.sport_reply;   // Reply source port (network endian)
- *     rsp_data.dport_reply;   // Reply destination port (network endian)
- *     rsp_data.protocol;      // IP protocol ID (17=UDP, 6=TCP, ...)
- * @endcode
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_CT_ENTRY_NOT_FOUND
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the IPv6 conntrack query session (no more IPv6 conntracks).
+ *        - For other ACTIONs: Unknown (nonexistent) IPv6 conntrack was requested.
+ * - @c FPP_ERR_CT_ENTRY_ALREADY_REGISTERED <br>
+ *        Requested IPv6 conntrack already exists (is already registered).
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Unexpected value of some property (probably nonexistent route).
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
 #define FPP_CMD_IPV6_CONNTRACK          		0x0414
 
 /**
- * @brief       Data structure used in various functions for conntrack management
- * @details     It can be used:
- *              - for command buffer in functions @ref fci_write, @ref fci_query or
- *                @ref fci_cmd, with @ref FPP_CMD_IPV4_CONNTRACK command.
+ * @brief       Data structure for IPv4 conntrack.
+ * @details     Related FCI commands: @ref FPP_CMD_IPV4_CONNTRACK, @ref FPP_CMD_IP_ROUTE
+ * @details     See @ref l3_router for detailed explanation how to create conntracks.
+ *
+ * @note        Some values are in a network byte order [NBO].
+ *
+ * @snippet     fpp.h  fpp_ct_cmd_t
  */
+/* [fpp_ct_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(4) {
-	uint16_t action;			/**< Action to perform */
-	uint16_t rsvd0;
-	uint32_t saddr;				/**< Source IP address */
-	uint32_t daddr;				/**< Destination IP address */
-	uint16_t sport;				/**< Source port */
-	uint16_t dport;				/**< Destination port */
-	uint32_t saddr_reply;		/**< Source IP address in 'reply' direction */
-	uint32_t daddr_reply;		/**< Destination IP address in 'reply' direction */
-	uint16_t sport_reply;		/**< Source port in 'reply' direction */
-	uint16_t dport_reply;		/**< Destination port in 'reply' direction */
-	uint16_t protocol;			/**< Protocol ID: TCP, UDP */
-	uint16_t flags;				/**< Flags. See @ref FPP_CMD_IPV4_CONNTRACK. */
-	uint32_t fwmark;
-	uint32_t route_id;			/**< Associated route ID. See @ref FPP_CMD_IP_ROUTE. */
-	uint32_t route_id_reply;	/**< Route for 'reply' direction. Applicable only for bi-directional connections. */
-	uint16_t vlan;				/**< VLAN tag. If non-zero, then it will be added to the routed packet. */
-	uint16_t vlan_reply;		/**< VLAN tag in reply direction. If non-zero, then it will be added to the routed packet. */
+    uint16_t action;          /*< Action */
+    uint16_t rsvd0;           /*< RESERVED (do not use) */
+    
+    uint32_t saddr;           /*< 'orig' direction: Source IP address. [NBO] */
+    uint32_t daddr;           /*< 'orig' direction: Destination IP address. [NBO] */
+    uint16_t sport;           /*< 'orig' direction: Source port. [NBO] */
+    uint16_t dport;           /*< 'orig' direction: Destination port. [NBO] */
+    
+    uint32_t saddr_reply;     /*< 'reply' direction: Source IP address. [NBO] 
+                                   Used for NAT, otherwise equals '.daddr'. */
+    
+    uint32_t daddr_reply;     /*< 'reply' direction: Destination IP address. [NBO]
+                                   Used for NAT, otherwise equals '.saddr'. */
+    
+    uint16_t sport_reply;     /*< 'reply' direction: Source port. [NBO]
+                                   Used for NAT, otherwise equals '.dport'. */
+    
+    uint16_t dport_reply;     /*< 'reply' direction: Destination port. [NBO] 
+                                   Used for NAT, otherwise equals '.sport'. */
+    
+    uint16_t protocol;        /*< IANA IP Protocol Number (protocol ID). [NBO] */
+    uint16_t flags;           /*< Flags. A bitset. [NBO]. See FPP_CMD_IPV4_CONNTRACK. */
+    uint32_t fwmark;          /*< RESERVED (do not use) */
+    
+    uint32_t route_id;        /*< 'orig' direction: ID of an associated route. [NBO]
+                                  See FPP_CMD_IP_ROUTE. */
+    
+    uint32_t route_id_reply;  /*< 'reply' direction: ID of an associated route. [NBO]
+                                  See FPP_CMD_IP_ROUTE. */
+    
+    uint16_t vlan;            /*< 'orig' direction: VLAN tag. [NBO]
+                                  If non-zero, then this VLAN tag is added to the routed
+                                  packet. If the packet already has a VLAN tag, then its tag
+                                  is replaced. */
+    
+    uint16_t vlan_reply;      /*< 'reply' direction: VLAN tag. [NBO]
+                                  If non-zero, then this VLAN tag is added to the routed
+                                  packet. If the packet already has a VLAN tag, then its tag
+                                  is replaced. */
 } fpp_ct_cmd_t;
+/* [fpp_ct_cmd_t] */
 
 typedef struct CAL_PACKED {
 	uint16_t action;                       /*Action to perform*/
@@ -560,30 +735,57 @@ typedef struct CAL_PACKED {
 } fpp_ct_ex_cmd_t;
 
 /**
- * @brief       Data structure used in various functions for IPv6 conntrack management
- * @details     It can be used:
- *              - for command buffer in functions @ref fci_write, @ref fci_query or
- *                @ref fci_cmd, with @ref FPP_CMD_IPV6_CONNTRACK command.
+ * @brief       Data structure for IPv6 conntrack.
+ * @details     Related FCI commands: @ref FPP_CMD_IPV6_CONNTRACK, @ref FPP_CMD_IP_ROUTE
+ * @details     See @ref l3_router for detailed explanation how to create conntracks.
+ *
+ * @note        Some values are in a network byte order [NBO].
+ *
+ * @snippet     fpp.h  fpp_ct6_cmd_t
  */
+/* [fpp_ct6_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(4) {
-	uint16_t action;			/**< Action to perform */
-	uint16_t rsvd1;
-	uint32_t saddr[4];			/**< Source IP address */
-	uint32_t daddr[4];			/**< Destination IP address */
-	uint16_t sport;				/**< Source port */
-	uint16_t dport;				/**< Destination port */
-	uint32_t saddr_reply[4];	/**< Source IP address in 'reply' direction */
-	uint32_t daddr_reply[4];	/**< Destination IP address in 'reply' direction */
-	uint16_t sport_reply;		/**< Source port in 'reply' direction */
-	uint16_t dport_reply;		/**< Destination port in 'reply' direction */
-	uint16_t protocol;			/**< Protocol ID: TCP, UDP */
-	uint16_t flags;				/**< Flags. See @ref FPP_CMD_IPV6_CONNTRACK. */
-	uint32_t fwmark;
-	uint32_t route_id;			/**< Associated route ID. See @ref FPP_CMD_IP_ROUTE. */
-	uint32_t route_id_reply;	/**< Route for 'reply' direction. Applicable only for bi-directional connections. */
-	uint16_t vlan;				/**< VLAN tag. If non-zero, then it will be added to the routed packet. */
-	uint16_t vlan_reply;		/**< VLAN tag in reply direction. If non-zero, then it will be added to the routed packet. */
+    uint16_t action;          /*< Action */
+    uint16_t rsvd1;           /*< RESERVED (do not use) */
+    
+    uint32_t saddr[4];        /*< 'orig' direction: Source IP address. [NBO] */
+    uint32_t daddr[4];        /*< 'orig' direction: Destination IP address. [NBO] */
+    uint16_t sport;           /*< 'orig' direction: Source port. [NBO] */
+    uint16_t dport;           /*< 'orig' direction: Destination port. [NBO] */
+    
+    uint32_t saddr_reply[4];  /*< 'reply' direction: Source IP address. [NBO] 
+                                   Used for NAT, otherwise equals '.daddr'. */
+    
+    uint32_t daddr_reply[4];  /*< 'reply' direction: Destination IP address. [NBO]
+                                   Used for NAT, otherwise equals '.saddr'. */
+    
+    uint16_t sport_reply;     /*< 'reply' direction: Source port. [NBO]
+                                   Used for NAT, otherwise equals '.dport'. */
+    
+    uint16_t dport_reply;     /*< 'reply' direction: Destination port. [NBO] 
+                                   Used for NAT, otherwise equals '.sport'. */
+    
+    uint16_t protocol;        /*< IANA IP Protocol Number (protocol ID). [NBO] */
+    uint16_t flags;           /*< Flags. A bitset. [NBO. See FPP_CMD_IPV4_CONNTRACK. */
+    uint32_t fwmark;          /*< RESERVED (do not use) */
+    
+    uint32_t route_id;        /*< 'orig' direction: ID of an associated route. [NBO]
+                                  See FPP_CMD_IP_ROUTE. */
+    
+    uint32_t route_id_reply;  /*< 'reply' direction: ID of an associated route. [NBO]
+                                  See FPP_CMD_IP_ROUTE. */
+    
+    uint16_t vlan;            /*< 'orig' direction: VLAN tag. [NBO]
+                                  If non-zero, then this VLAN tag is added to the routed
+                                  packet. If the packet already has a VLAN tag, then its tag
+                                  is replaced. */
+    
+    uint16_t vlan_reply;      /*< 'reply' direction: VLAN tag. [NBO]
+                                  If non-zero, then this VLAN tag is added to the routed
+                                  packet. If the packet already has a VLAN tag, then its tag
+                                  is replaced. */
 } fpp_ct6_cmd_t;
+/* [fpp_ct6_cmd_t] */
 
 typedef struct CAL_PACKED {
 	uint16_t action;                       /*Action to perform*/
@@ -611,81 +813,144 @@ typedef struct CAL_PACKED {
 	uint32_t tunnel_route_id_reply;
 } fpp_ct6_ex_cmd_t;
 
+/** @}*/
+
 /*--------------------------------------- IP ---------------------------------*/ 
 #define FPP_ERR_RT_ENTRY_ALREADY_REGISTERED		200
 #define FPP_ERR_RT_ENTRY_NOT_FOUND			201
 
 /**
- * @brief Specifies FCI command for working with routes
- * @details Routes are representing direction where matching traffic shall be forwarded to. Every
- * 			route specifies egress physical interface and MAC address of next network node.
- *          This command can be used with various values of `.action`:
- *          - @c FPP_ACTION_REGISTER: Defines a new route.
- *          - @c FPP_ACTION_DEREGISTER: Deletes previously defined route.
- *          - @c FPP_ACTION_QUERY: Gets parameters of existing routes. It creates a snapshot of all active
- *            route entries and replies with first of them.
- *          - @c FPP_ACTION_QUERY_CONT: Shall be called periodically after @c FPP_ACTION_QUERY was called. On each
- *            call it replies with parameters of next route. It returns @c FPP_ERR_RT_ENTRY_NOT_FOUND when no more
- *            entries exist.
+ * @addtogroup  dxgrLibFCI
+ * @{
+ */
+
+/**
+ * @def         FPP_CMD_IP_ROUTE
+ * @brief       FCI command for management of IP routes.
+ * @details     Related topics: @ref l3_router
+ * @details     Related data types: @ref fpp_rt_cmd_t
+ * @details     In the context of PFE, a route represents a direction where the matching 
+ *              traffic shall be forwarded to. Every route specifies an egress physical interface
+ *              and a MAC address of the next network node.
+ * @details     Supported `.action` values:
+ *              - @c FPP_ACTION_REGISTER <br>
+ *                   Create a new route.
+ *              - @c FPP_ACTION_DEREGISTER <br>
+ *                   Remove (destroy) an existing route.
+ *              - @c FPP_ACTION_QUERY <br>
+ *                   Initiate (or reinitiate) a route query session and get properties 
+ *                   of the first route from the internal collective list of all routes
+ *                   (regardless of IP type nor conntrack affiliation).
+ *              - @c FPP_ACTION_QUERY_CONT <br> 
+ *                   Continue the query session and get properties of the next route
+ *                   from the list. Intended to be called in a loop (to iterate through the list).
  *
- * Command Argument Type: @ref fpp_rt_cmd_t
- *
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_REGISTER
+ * -------------------
+ * Create a new route. For detailed info about route properties, see fpp_rt_cmd_t.
  * @code{.c}
- *   fpp_rt_cmd_t cmd_data =
- *   {
- *     .action = FPP_ACTION_REGISTER, // Register new route
- *     .src_mac = ...,                // Source MAC address (network endian). 
- *                                    // If left unset (all-zero), then MAC of the egress interface is used.
- *     .dst_mac = ...,                // Destination MAC address (network endian)
- *     .output_device = ...,          // Name of egress interface (name of physical interface)
- *     .id = ...                      // Chosen number will be used as unique route identifier (network endian)
- *     .flags = ...,                  // 1 for IPv4 addressing, 2 for IPv6 (network endian)
- *   };
+ *  .............................................  
+ *  fpp_rt_cmd_t cmd_to_fci = 
+ *  {
+ *    .action  = FPP_ACTION_REGISTER,  // Action
+ *    .src_mac = ...,                  // Source MAC address.
+ *    .dst_mac = ...,                  // Destination MAC address.
+ *    .output_device = ...,            // Name of the egress physical interface.
+ *    .id    = ...,                    // Route ID. [NBO]. User-defined.
+ *    .flags = ...                     // Flags. [NBO]. 1 for IPv4 routes, 2 for IPv6 routes.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IP_ROUTE, sizeof(fpp_rt_cmd_t), 
+ *                                           (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Action FPP_ACTION_DEREGISTER
- * ----------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_DEREGISTER
+ * ---------------------
+ * Remove (destroy) an existing route.
  * @code{.c}
- *   fpp_rt_cmd_t cmd_data =
- *   {
- *     .action = FPP_ACTION_DEREGISTER, // Deregister a route
- *     .id = ...                        // Unique route identifier (network endian)
- *   };
+ *  .............................................  
+ *  fpp_rt_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_DEREGISTER,  // Action
+ *    .id     = ...                     // Route ID. [NBO]. User-defined.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IP_ROUTE, sizeof(fpp_rt_cmd_t), 
+ *                                           (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * Action FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
- * -------------------------------------------------
- * Items to be set in command argument structure:
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of a route.
  * @code{.c}
- *   fpp_rt_cmd_t cmd_data =
- *   {
- *     .action = ...     // Either FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT
- *   };
- * @endcode
+ *  .............................................  
+ *  fpp_rt_cmd_t cmd_to_fci = 
+ *  {
+ *    .action = FPP_ACTION_QUERY  // Action
+ *  };
+ *    
+ *  fpp_rt_cmd_t reply_from_fci = {0};
+ *  unsigned short reply_length = 0u; 
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_query(client, FPP_CMD_IP_ROUTE,
+ *                  sizeof(fpp_rt_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the first route from 
+ *  //  the internal collective list of all routes.
+ *    
+ *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
+ *  rtn = fci_query(client, FPP_CMD_IP_ROUTE,
+ *                  sizeof(fpp_rt_cmd_t), (unsigned short*)(&cmd_to_fci),
+ *                  &reply_length, (unsigned short*)(&reply_from_fci));
+ *    
+ *  // 'reply_from_fci' now holds properties of the next route from 
+ *  //  the internal collective list of all routes.
+ *  .............................................  
+ * @endcode 
  *
- * Response data provided (@ref fpp_rt_cmd_t):
- * @code{.c}
- *     rsp_data.src_mac;        // Source MAC address
- *     rsp_data.dst_mac;        // Destination MAC address
- *     rsp_data.output_device;  // Output device name
- *     rsp_data.id;             // Route ID (network endian)
- *     srp_data.flags;          // Flags (network endian)
- * @endcode
+ * Command return values (for all applicable ACTIONs)
+ * --------------------------------------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_RT_ENTRY_NOT_FOUND
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the route query session (no more routes).
+ *        - For other ACTIONs: Unknown (nonexistent) route was requested.
+ * - @c FPP_ERR_RT_ENTRY_ALREADY_REGISTERED <br>
+ *        Requested route already exists (is already registered).
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Unexpected value of some property.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
 #define FPP_CMD_IP_ROUTE			0x0313
 
 /**
- * @brief Specifies FCI command that clears all IPv4 routes (see @ref FPP_CMD_IP_ROUTE)
- *        and conntracks (see @ref FPP_CMD_IPV4_CONNTRACK)
- * @details This command uses no arguments.
+ * @def         FPP_CMD_IPV4_RESET
+ * @brief       FCI command to remove all IPv4 routes and conntracks. 
+ * @details     Related topics: @ref l3_router, @ref FPP_CMD_IP_ROUTE, <br> @ref FPP_CMD_IPV4_CONNTRACK
+ * @details     Supported `.action` values: ---
+ * <br>
+ * @code{.c}
+ *  .............................................  
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IPV4_RESET, 0, NULL); 
+ *  .............................................  
+ * @endcode
  *
- * Command Argument Type: none (cmd_buf = NULL; cmd_len = 0;)
+ * Command return values
+ * ---------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
@@ -693,38 +958,64 @@ typedef struct CAL_PACKED {
 #define FPP_CMD_IP_ROUTE_CHANGE			0x0318
 
 /**
- * @brief Specifies FCI command that clears all IPv6 routes (see @ref FPP_CMD_IP_ROUTE)
- *        and conntracks (see @ref FPP_CMD_IPV6_CONNTRACK)
- * @details This command uses no arguments.
+ * @def         FPP_CMD_IPV6_RESET
+ * @brief       FCI command to remove all IPv6 routes and conntracks. 
+ * @details     Related topics: @ref l3_router, @ref FPP_CMD_IP_ROUTE, <br> @ref FPP_CMD_IPV6_CONNTRACK
+ * @details     Supported `.action` values: ---
+ * <br>
+ * @code{.c}
+ *  .............................................  
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IPV6_RESET, 0, NULL); 
+ *  .............................................  
+ * @endcode
  *
- * Command Argument Type: none (cmd_buf = NULL; cmd_len = 0;)
+ * Command return values
+ * ---------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
 #define FPP_CMD_IPV6_RESET				0x0416
 
 /**
- * @brief       Structure representing the command to add or remove a route
- * @details     Data structure to be used for command buffer for route commands. It
- * 				can be used:
- *              - as command buffer in functions @ref fci_write, @ref fci_query or
- *                @ref fci_cmd, with @ref FPP_CMD_IP_ROUTE command.
- *              - as reply buffer in functions @ref fci_query or @ref fci_cmd,
- *                with @ref FPP_CMD_IP_ROUTE command.
+ * @brief       Data structure for a route.
+ * @details     Related FCI commands: @ref FPP_CMD_IP_ROUTE
+ * @note        Some values are in a network byte order [NBO].
+ *
+ * @snippet     fpp.h  fpp_rt_cmd_t
  */
+/* [fpp_rt_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(4) {
-	uint16_t action;					/**< Action to perform */
-	uint16_t mtu;
-	uint8_t src_mac[6];					/**< Source MAC address (network endian) */
-	uint8_t dst_mac[6];					/**< Destination MAC address (network endian) */
-	uint16_t pad;						
-	char	  output_device[IFNAMSIZ];	/**< Name of egress physical interface */
-	char	  input_device[IFNAMSIZ];
-	char	  underlying_input_device[IFNAMSIZ];
-	uint32_t id;						/**< Unique route identifier */
-	uint32_t flags;						/**< Flags (network endian). 1 for IPv4 route, 2 for IPv6. */
-	uint32_t dst_addr[4];
+    uint16_t action;        /*< Action */
+    uint16_t mtu;           /*< RESERVED (do not use) */
+    
+    uint8_t src_mac[6];     /*< Source MAC address. When a packet is routed, this address 
+                                is set as the source MAC address of the packet. If left
+                                unset (all-zero), then PFE automatically uses MAC address
+                                of the associated physical interface (.output_device). */
+    
+    uint8_t dst_mac[6];     /*< Destination MAC address. When a packet is routed, this address
+                                is set as the destination MAC address of the packet. */
+    
+    uint16_t pad;           /*< RESERVED (do not use) */
+    
+    char output_device[IFNAMSIZ];   /*< Name of the egress physical interface. 
+                                        When a packet is routed, it is egressed
+                                        through this physical interface. */
+    
+    char input_device[IFNAMSIZ];            /*< RESERVED (do not use) */
+    char underlying_input_device[IFNAMSIZ]; /*< RESERVED (do not use) */
+    
+    uint32_t id;            /*< Route ID. [NBO]. Unique route identifier. */
+    uint32_t flags;         /*< Flags. [NBO]. 1 for IPv4 routes, 2 for IPv6 routes. */
+    
+    uint32_t dst_addr[4];   /*< RESERVED (do not use) */
 } fpp_rt_cmd_t;
+/* [fpp_rt_cmd_t] */
 
 #define FPP_IP_ROUTE_6o4	(1<<0)
 #define FPP_IP_ROUTE_4o6	(1<<1)
@@ -734,6 +1025,8 @@ typedef struct {
 	uint16_t pre_frag_en;
 	uint16_t rsvd;
 } __attribute__((__packed__)) fpp_ipsec_cmd_t;
+
+/** @}*/
 
 /* ----------------------------------- RTP ----------------------------------*/
 #define FPP_ERR_RTP_STATS_MAX_ENTRIES			1230
@@ -1956,34 +2249,56 @@ typedef struct {
 #endif
 
 /*--------------------------------- Timeout ---------------------------------*/
+
 /**
- * @brief Specifies FCI command for setting timeouts of conntracks
- * @details This command sets timeout for conntracks based on protocol. Three kinds
- * of protocols are distinguished: TCP, UDP and others. For each of them timeout can
- * be set independently. For UDP it is possible to set different value for bidirectional
- * and single-directional connection. Default timeout value is 5 days for TCP, 300s for
- * UDP and 240s for others.
- *
- * Newly created connections are being created with new timeout values already set.
- * Previously created connections have their timeout updated with first received packet.
- *
- * Command Argument Type: @ref fpp_timeout_cmd_t
- *
- * Items to be set in command argument structure:
+ * @addtogroup  dxgrLibFCI
+ * @{
+ */
+
+/**
+ * @def         FPP_CMD_IPV4_SET_TIMEOUT
+ * @brief       FCI command for configuration of conntrack timeouts.
+ * @details     Related topics: @ref l3_router
+ * @details     Related data types: @ref fpp_timeout_cmd_t
+ * @details     @ref FPP_CMD_IPV4_SET_TIMEOUT sets default timeout for @b both @ref FPP_CMD_IPV4_CONNTRACK 
+ *              and @ref FPP_CMD_IPV6_CONNTRACK.
+ * @details     This command allows for configuration of conntrack default timeout periods. 
+ *              Three protocol groups are distinguished: `TCP (6)`, `UDP (17)` and `others` 
+ *              (all other protocols; usually represented by 0).
+ *              Timeout can be set independently for each of these groups.
+ * @details     Factory-default timeout values are:
+ *                - 5 days for `TCP`
+ *                - 300 seconds for `UDP`
+ *                - 240 seconds for `others`
+ * @details     If these timeouts are updated (changed), then all newly created conntracks 
+ *              are created with updated timeout values. Conntracks which were created before 
+ *              the change have their timeout updated with the first received packet after the change.
+ * @details     Supported `.action` values: ---
+ * <br>
  * @code{.c}
- *   fpp_timeout_cmd_t cmd_data =
- *   {
- *     // IP protocol to be affected. Either 17 for UDP, 6 for TCP or 0 for others.
- *     .protocol;
- *     // Use 0 for normal connections, 1 for 4over6 IP tunnel connections.
- *     .sam_4o6_timeout;
- *     // Timeout value in seconds.
- *     .timeout_value1;
- *     // Optional timeout value which is valid only for UDP connections. If the value is set
- *     // (non zero), then it affects unidirectional UDP connections only.
- *     .timeout_value2;
- *   };
+ *  .............................................  
+ *  fpp_timeout_cmd_t cmd_to_fci = 
+ *  {
+ *    .protocol = ...,       // IP Protocol Number (protocol ID). [NBO]
+ *                           // The only accepted values are 6 (TCP), 17 (UDP) or 0 (others).
+ *    
+ *    .timeout_value1 = ...  // Timeout value in seconds. [NBO]
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_IPV4_SET_TIMEOUT, sizeof(fpp_timeout_cmd_t), 
+ *                                                   (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
+ *
+ *
+ * Command return values
+ * ---------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
+ *
  * @hideinitializer
  */
 #define FPP_CMD_IPV4_SET_TIMEOUT	0x0319
@@ -1994,22 +2309,33 @@ typedef struct {
 #define FPP_CMD_IPV6_FRAGTIMEOUT	0x0433
 
 /**
- * @brief       Timeout command argument
- * @details     Data structure to be used for command buffer for timeout settings. It can be used:
- *              - for command buffer in functions @ref fci_write, @ref fci_query or
- *                @ref fci_cmd, with @ref FPP_CMD_IPV4_SET_TIMEOUT command.
+ * @brief       Data structure for conntrack timeout setting.
+ * @details     Related FCI commands: @ref FPP_CMD_IPV4_SET_TIMEOUT
+ * @details     @ref FPP_CMD_IPV4_SET_TIMEOUT sets timeout for @b both @ref FPP_CMD_IPV4_CONNTRACK 
+ *              and @ref FPP_CMD_IPV6_CONNTRACK.
+ *
+ * @note        Some values are in a network byte order [NBO].
+ *
+ * @snippet     fpp.h  fpp_timeout_cmd_t
  */
+/* [fpp_timeout_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(4) {
-	uint16_t	protocol;
-	uint16_t	sam_4o6_timeout;
-	uint32_t	timeout_value1;
-	uint32_t	timeout_value2;
+    uint16_t    protocol;         /*< IP Protocol Number (protocol ID). [NBO]
+                                      The only accepted values are 6 (TCP), 17 (UDP) or
+                                      0 (others). */
+    
+    uint16_t    sam_4o6_timeout;  /*< RESERVED (do not use) */
+    uint32_t    timeout_value1;   /*< Timeout value in seconds. [NBO] */
+    uint32_t    timeout_value2;   /*< RESERVED (do not use) */
 } fpp_timeout_cmd_t;
+/* [fpp_timeout_cmd_t] */
 
 typedef struct {
 	uint16_t	timeout;
 	uint16_t	mode;
 } __attribute__((__packed__)) fpp_frag_timeout_cmd_t;
+
+/** @}*/
 
 /*---------------------------------------PKTCAP---------------------------------*/
 #define FPP_CMD_PKTCAP_IFSTATUS				0x0d02

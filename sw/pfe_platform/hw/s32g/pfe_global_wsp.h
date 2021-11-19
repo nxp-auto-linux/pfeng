@@ -14,12 +14,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
 #define WSP_VERSION				(0x00U)
 #define WSP_CLASS_PE_CNT		(0x04U)
 #define WSP_PE_IMEM_DMEM_SIZE	(0x08U)
@@ -43,8 +37,6 @@
 #define WSP_SAFETY_INT_EN		(0x50U)
 #define WDT_INT_EN				(0x54U)
 
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 #define CLASS_WDT_INT_EN		(0x58U)
 #define UPE_WDT_INT_EN			(0x5cU)
 #define HGPI_WDT_INT_EN			(0x60U)
@@ -62,16 +54,6 @@
 #define WDT_TIMER_VAL_3			(0x90U)
 #define WDT_TIMER_VAL_4			(0x94U)
 #define WSP_DBUG_BUS1			(0x98U)
-#endif /* PFE_CFG_IP_VERSION_NPU_7_14 */
-
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4)
-#define WDT_INT_SRC				(0x58U)
-#define WDT_TIMER_VAL_1			(0x5cU)
-#define WDT_TIMER_VAL_2			(0x60U)
-#define WDT_TIMER_VAL_3			(0x64U)
-#define WDT_TIMER_VAL_4			(0x68U)
-#define WSP_DBUG_BUS1			(0x70U)
-#endif /* PFE_CFG_IP_VERSION_FPGA_5_0_4 */
 
 /*	WDT_IN_EN bits */
 #define WDT_INT_EN_BIT					(1UL << 0U)

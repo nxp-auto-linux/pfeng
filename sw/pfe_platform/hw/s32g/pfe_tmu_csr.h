@@ -16,12 +16,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
 #define TMU_VERSION					(CBUS_TMU_CSR_BASE_ADDR + 0x000U)
 #define TMU_INQ_WATERMARK			(CBUS_TMU_CSR_BASE_ADDR + 0x004U)
 #define TMU_PHY_INQ_PKTPTR			(CBUS_TMU_CSR_BASE_ADDR + 0x008U)
@@ -200,6 +194,8 @@
 #define TLITE_SHP_INVALID_POS	0x1fU
 #define TLITE_SCH_INVALID_INPUT 0xffU
 
+#define TLITE_INQ_FIFODEPTH		256U
+
 /*	Implementation of the pfe_tmu_phy_cfg_t */
 struct pfe_tmu_phy_cfg_tag
 {
@@ -247,6 +243,7 @@ errno_t pfe_tmu_sch_cfg_bind_queue(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, 
 uint8_t pfe_tmu_sch_cfg_get_bound_queue(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
 
 errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg);
+void pfe_tmu_reclaim_init(addr_t cbus_base_va);
 void pfe_tmu_cfg_reset(addr_t cbus_base_va);
 void pfe_tmu_cfg_enable(addr_t cbus_base_va);
 void pfe_tmu_cfg_disable(addr_t cbus_base_va);

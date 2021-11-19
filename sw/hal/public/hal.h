@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -22,6 +22,12 @@
 
 #ifndef HAL_H_
 #define HAL_H_
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+/* requires only for hal_ip_ready API */
+#include "oal_types.h"
+#include "oal_mm.h"
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 #if defined(__ghs__)
 	#define hal_nop()       __asm(" nop")
@@ -55,19 +61,16 @@
 #define hal_write32(val, addr) \
 							do {	\
 								(*(volatile uint32_t *)(addr) = ((uint32_t)(val)));	\
-								hal_nop();	\
 							} while (0!=0)
 
 #define hal_write16(val, addr) \
 							do {	\
 									(*(volatile uint16_t *)(addr) = ((uint16_t)(val)));	\
-									hal_nop();	\
 							} while (0!=0)
 
 #define hal_write8(val, addr) \
 							do {	\
 									(*(volatile uint8_t *)(addr) = ((uint8_t)(val)));	\
-									hal_nop();	\
 							} while (0!=0)
 
 #define hal_read32(addr)	(*(volatile uint32_t *)(addr))
@@ -127,6 +130,65 @@
  * @brief	Specify cache line size in number of bytes.
  */
 #define	HAL_CACHE_LINE_SIZE	64U
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+/**
+ * @brief Control register
+ * @note The register which is used for Master-detect signalization
+ * @warning We hijacked GPR:GENCTRL4 register, using 16 higher bits,
+ *          low 16 bits remains untouched for security reason
+ */
+#define PFE_IP_READY_CTRL_REG	(0x4007CAECU)
+#define CTRL_REG_LEN			4U
+
+#define BIT_IP_READY			16U
+#define IP_READY				(1U << BIT_IP_READY)
+
+/**
+ * @brief Set IP-ready flag
+ */
+__attribute__((unused)) static void hal_ip_ready_set(bool_t on)
+{
+	uint32_t *ctrlreg = (uint32_t *)oal_mm_dev_map((void *)PFE_IP_READY_CTRL_REG, CTRL_REG_LEN);
+	uint32_t val;
+
+	if (NULL != ctrlreg)
+	{
+		val = hal_read32(ctrlreg);
+		if (TRUE == on)
+		{
+			val |= IP_READY;
+		}
+		else
+		{
+			val &= ~IP_READY;
+		}
+		hal_write32(val, ctrlreg);
+
+		oal_mm_dev_unmap(ctrlreg, CTRL_REG_LEN);
+	}
+}
+
+/**
+ * @brief Return status of IP-ready flag
+ * @return True if IP-ready
+ */
+__attribute__((unused)) static bool_t hal_ip_ready_get(void)
+{
+	uint32_t *ctrlreg = (uint32_t *)oal_mm_dev_map((void *)PFE_IP_READY_CTRL_REG, CTRL_REG_LEN);
+	uint32_t val = 0U;
+
+	if (NULL != ctrlreg)
+	{
+		val = hal_read32(ctrlreg);
+		val &= IP_READY;
+
+		oal_mm_dev_unmap(ctrlreg, CTRL_REG_LEN);
+	}
+
+	return (0U != val);
+}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 #endif /* HAL_H_ */
 

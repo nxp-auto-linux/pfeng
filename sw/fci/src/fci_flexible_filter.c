@@ -14,6 +14,7 @@
 #include "fci_internal.h"
 #include "pfe_class.h"
 #include "pfe_flexible_filter.h"
+#include "pfe_feature_mgr.h"
 
 #ifdef PFE_CFG_FCI_ENABLE
 
@@ -61,7 +62,16 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
 		/*	No data written to reply buffer (yet) */
 		*reply_len = 0U;
 	}     
-    
+
+	/*	Check that the FW feature is available (enabled) in FW */
+	if (FALSE == pfe_feature_mgr_is_available("g_flex_filter"))
+	{
+		/* Unavailable feature. Respond with FCI error code. */
+		NXP_LOG_ERROR("Feature 'g_flex_filter' is not available (not enabled in FW).\n");
+		*fci_ret = FPP_ERR_FW_FEATURE_NOT_AVAILABLE;
+		return EOK;
+	}
+
     switch (fp_cmd->action)
 	{
 		case FPP_ACTION_REGISTER:

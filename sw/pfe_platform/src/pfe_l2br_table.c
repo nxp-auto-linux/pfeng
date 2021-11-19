@@ -1372,10 +1372,14 @@ errno_t pfe_l2br_table_flush(pfe_l2br_table_t *l2br)
  * @brief		Destroy L2 bridge table instance
  * @param[in]	l2br The L2 bridge table instance
  */
-void pfe_l2br_table_destroy(const pfe_l2br_table_t *l2br)
+void pfe_l2br_table_destroy(pfe_l2br_table_t *l2br)
 {
 	if (NULL != l2br)
 	{
+		if (EOK != oal_mutex_destroy(&l2br->reg_lock))
+		{
+			NXP_LOG_DEBUG("Could not destroy mutex\n");
+		}
 		oal_mm_free(l2br);
 	}
 }
@@ -1514,6 +1518,17 @@ errno_t pfe_l2br_table_entry_set_vlan(pfe_l2br_table_entry_t *entry, uint16_t vl
 	return EOK;
 }
 
+
+/**
+ * @brief		Get vlan from L2 table entry
+ * @param[in]	pfe_l2br_table_entry_t table entry
+ * @return		Vlan of table entry
+ */
+__attribute__((pure)) uint16_t pfe_l2br_table_entry_get_vlan(pfe_l2br_table_entry_t *entry)
+{
+    return entry->u.mac2f_entry.vlan;
+}
+
 /**
  * @brief		Associate action data with table entry
  * @details		Action data vector is available as output of entry match event.
@@ -1559,6 +1574,18 @@ errno_t pfe_l2br_table_entry_set_action_data(pfe_l2br_table_entry_t *entry, uint
 	entry->action_data_set = TRUE;
 
 	return EOK;
+}
+
+/**
+ * @brief		Get action data from table entry
+ * @details		Action data vector is available as output of entry match event.
+ * @param[in]	entry The entry
+ * @return	    The action data
+ */
+ 
+__attribute__((pure)) uint64_t pfe_l2br_table_entry_get_action_data(pfe_l2br_table_entry_t *entry)
+{
+    return entry->u.mac2f_entry.action_data;
 }
 
 /**

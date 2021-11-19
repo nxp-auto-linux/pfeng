@@ -70,9 +70,21 @@
 #define CMD_02_CMDEXEC      cli_cmd_phyif_update
 #define CMD_02_HELP         txt_help_phyif_update
 
-/*      CMD_03_ENUM_NAME    reserved for future PHYIF cmds */
-/*      CMD_04_ENUM_NAME    reserved for future PHYIF cmds */
-/*      CMD_05_ENUM_NAME    reserved for future PHYIF cmds */
+#define CMD_03_ENUM_NAME    CMD_PHYIF_MAC_PRINT
+#define CMD_03_CLI_TXT      "phyif-mac-print"
+#define CMD_03_CMDEXEC      cli_cmd_phyif_mac_print
+#define CMD_03_HELP         txt_help_phyif_mac_print
+
+#define CMD_04_ENUM_NAME    CMD_PHYIF_MAC_ADD
+#define CMD_04_CLI_TXT      "phyif-mac-add"
+#define CMD_04_CMDEXEC      cli_cmd_phyif_mac_add
+#define CMD_04_HELP         txt_help_phyif_mac_add
+
+#define CMD_05_ENUM_NAME    CMD_PHYIF_MAC_DEL
+#define CMD_05_CLI_TXT      "phyif-mac-del"
+#define CMD_05_CMDEXEC      cli_cmd_phyif_mac_del
+#define CMD_05_HELP         txt_help_phyif_mac_del
+
 /*      CMD_06_ENUM_NAME    reserved for future PHYIF cmds */
 /*      CMD_07_ENUM_NAME    reserved for future PHYIF cmds */
 /*      CMD_08_ENUM_NAME    reserved for future PHYIF cmds */
@@ -99,10 +111,27 @@
 #define CMD_13_HELP         txt_help_logif_del
 
 /*      CMD_14_ENUM_NAME    reserved for future LOGIF cmds */
-/*      CMD_15_ENUM_NAME    reserved for future LOGIF cmds */
-/*      CMD_16_ENUM_NAME    reserved for future LOGIF cmds */
-/*      CMD_17_ENUM_NAME    reserved for future LOGIF cmds */
-/*      CMD_18_ENUM_NAME    reserved for future LOGIF cmds */
+
+#define CMD_15_ENUM_NAME    CMD_MIRROR_PRINT
+#define CMD_15_CLI_TXT      "mirror-print"
+#define CMD_15_CMDEXEC      cli_cmd_mirror_print
+#define CMD_15_HELP         txt_help_mirror_print
+
+#define CMD_16_ENUM_NAME    CMD_MIRROR_UPDATE
+#define CMD_16_CLI_TXT      "mirror-update"
+#define CMD_16_CMDEXEC      cli_cmd_mirror_update
+#define CMD_16_HELP         txt_help_mirror_update
+
+#define CMD_17_ENUM_NAME    CMD_MIRROR_ADD
+#define CMD_17_CLI_TXT      "mirror-add"
+#define CMD_17_CMDEXEC      cli_cmd_mirror_add
+#define CMD_17_HELP         txt_help_mirror_add
+
+#define CMD_18_ENUM_NAME    CMD_MIRROR_DEL
+#define CMD_18_CLI_TXT      "mirror-del"
+#define CMD_18_CMDEXEC      cli_cmd_mirror_del
+#define CMD_18_HELP         txt_help_mirror_del
+
 /*      CMD_19_ENUM_NAME    reserved for future LOGIF cmds */
 
 #define CMD_20_ENUM_NAME    CMD_BD_PRINT
@@ -327,6 +356,60 @@
 /*      CMD_78_ENUM_NAME    reserved for future QOS cmds */
 /*      CMD_79_ENUM_NAME    reserved for future QOS cmds */
 
+#define CMD_80_ENUM_NAME    CMD_QOS_POL_PRINT
+#define CMD_80_CLI_TXT      "qos-pol-print"
+#define CMD_80_CMDEXEC      cli_cmd_qos_pol_print
+#define CMD_80_HELP         txt_help_qos_pol_print
+
+#define CMD_81_ENUM_NAME    CMD_QOS_POL_SET
+#define CMD_81_CLI_TXT      "qos-pol-set"
+#define CMD_81_CMDEXEC      cli_cmd_qos_pol_set
+#define CMD_81_HELP         txt_help_qos_pol_set
+
+#define CMD_82_ENUM_NAME    CMD_QOS_POL_WRED_PRINT
+#define CMD_82_CLI_TXT      "qos-pol-wred-print"
+#define CMD_82_CMDEXEC      cli_cmd_qos_pol_wred_print
+#define CMD_82_HELP         txt_help_qos_pol_wred_print
+
+#define CMD_83_ENUM_NAME    CMD_QOS_POL_WRED_UPDATE
+#define CMD_83_CLI_TXT      "qos-pol-wred-update"
+#define CMD_83_CMDEXEC      cli_cmd_qos_pol_wred_update
+#define CMD_83_HELP         txt_help_qos_pol_wred_update
+
+#define CMD_84_ENUM_NAME    CMD_QOS_POL_SHP_PRINT
+#define CMD_84_CLI_TXT      "qos-pol-shp-print"
+#define CMD_84_CMDEXEC      cli_cmd_qos_pol_shp_print
+#define CMD_84_HELP         txt_help_qos_pol_shp_print
+
+#define CMD_85_ENUM_NAME    CMD_QOS_POL_SHP_UPDATE
+#define CMD_85_CLI_TXT      "qos-pol-shp-update"
+#define CMD_85_CMDEXEC      cli_cmd_qos_pol_shp_update
+#define CMD_85_HELP         txt_help_qos_pol_shp_update
+
+#define CMD_86_ENUM_NAME    CMD_QOS_POL_FLOW_PRINT
+#define CMD_86_CLI_TXT      "qos-pol-flow-print"
+#define CMD_86_CMDEXEC      cli_cmd_qos_pol_flow_print
+#define CMD_86_HELP         txt_help_qos_pol_flow_print
+
+#define CMD_87_ENUM_NAME    CMD_QOS_POL_FLOW_ADD
+#define CMD_87_CLI_TXT      "qos-pol-flow-add"
+#define CMD_87_CMDEXEC      cli_cmd_qos_pol_flow_add
+#define CMD_87_HELP         txt_help_qos_pol_flow_add
+
+#define CMD_88_ENUM_NAME    CMD_QOS_POL_FLOW_DEL
+#define CMD_88_CLI_TXT      "qos-pol-flow-del"
+#define CMD_88_CMDEXEC      cli_cmd_qos_pol_flow_del
+#define CMD_88_HELP         txt_help_qos_pol_flow_del
+
+#define CMD_90_ENUM_NAME    CMD_DEMO_FEATURE_PRINT
+#define CMD_90_CLI_TXT      "demo-feature-print"
+#define CMD_90_CMDEXEC      cli_cmd_demo_feature_print
+#define CMD_90_HELP         txt_help_demo_feature_print
+
+#define CMD_91_ENUM_NAME    CMD_DEMO_FEATURE_RUN
+#define CMD_91_CLI_TXT      "demo-feature-run"
+#define CMD_91_CMDEXEC      cli_cmd_demo_feature_run
+#define CMD_91_HELP         txt_help_demo_feature_run
 
 
 /* CMD_LAST (keep this at the bottom of the cli command definition list) */

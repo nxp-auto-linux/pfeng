@@ -12,6 +12,7 @@
 #include "fci_fp_db.h"
 #include "fci_flexible_filter.h"
 #include "fci_fw_features.h"
+#include "fci_mirror.h"
 #include "fci_spd.h"
 
 #ifdef PFE_CFG_FCI_ENABLE
@@ -111,6 +112,13 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				{
 					/*	Process 'interface' commands (add/del/update/query/...) */
 					ret = fci_interfaces_phy_cmd(msg, &fci_ret, (fpp_phy_if_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
+
+				case FPP_CMD_IF_MAC:
+				{
+					/*	Process 'MAC address of interface' commands (add/del/query) */
+					ret = fci_interfaces_mac_cmd(msg, &fci_ret, (fpp_if_mac_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
 					break;
 				}
 
@@ -256,6 +264,35 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					break;
 				}
 
+				case FPP_CMD_MIRROR:
+				{
+					ret = fci_mirror_cmd(msg, &fci_ret, (fpp_mirror_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
+				case FPP_CMD_QOS_POLICER:
+				{
+					ret = fci_qos_policer_cmd(msg, &fci_ret, (fpp_qos_policer_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
+
+				case FPP_CMD_QOS_POLICER_FLOW:
+				{
+					ret = fci_qos_policer_flow_cmd(msg, &fci_ret, (fpp_qos_policer_flow_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
+
+				case FPP_CMD_QOS_POLICER_WRED:
+				{
+					ret = fci_qos_policer_wred_cmd(msg, &fci_ret, (fpp_qos_policer_wred_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
+
+				case FPP_CMD_QOS_POLICER_SHP:
+				{
+					ret = fci_qos_policer_shp_cmd(msg, &fci_ret, (fpp_qos_policer_shp_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+					break;
+				}
+
 				case FPP_CMD_L2_FLUSH_ALL:
 				case FPP_CMD_L2_FLUSH_LEARNED:
 				case FPP_CMD_L2_FLUSH_STATIC:
@@ -332,6 +369,7 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 	context->phy_if_db_initialized = FALSE;
 	context->rt_db_initialized = FALSE;
 	context->rtable_initialized = FALSE;
+	context->tmu_initialized = FALSE;
 
 	/*	Sanity check */
 	if (6 != sizeof(pfe_mac_addr_t))
@@ -396,6 +434,14 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 			context->l2_bridge = info->l2_bridge;
 			context->l2_bridge_initialized = TRUE;
 		}
+	}
+
+	/*	Initialize the TMU  */
+	context->tmu = info->tmu;
+
+	if(NULL != context->tmu)
+	{
+		context->tmu_initialized = TRUE;
 	}
 
 	context->default_timeouts.timeout_tcp = 5U * 24U * 60U * 60U; 	/* 5 days */

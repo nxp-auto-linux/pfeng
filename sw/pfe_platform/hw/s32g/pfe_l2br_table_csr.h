@@ -14,12 +14,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
 #define MAC2F_TABLE_HASH_ENTRIES		256U /* Must be power-of-2 */
 #define MAC2F_TABLE_COLL_ENTRIES		256U
 #define MAC2F_TABLE_HASH_SPACE_START	0U

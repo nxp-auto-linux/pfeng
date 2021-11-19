@@ -18,6 +18,7 @@
  */
 
 #include "pfe_cfg.h"
+#include "pfe_platform_cfg.h"
 #include "libfci.h"
 #include "fpp.h"
 #include "fpp_ext.h"
@@ -173,9 +174,10 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			/*	Prepare MAC source address */
 			{
 				const pfe_mac_addr_t zero_mac = {0u};
+				memset(src_mac, 0, sizeof(pfe_mac_addr_t));
 				if (0 == memcmp(rt_cmd->src_mac, zero_mac, sizeof(pfe_mac_addr_t)))
 				{
-					pfe_phy_if_get_mac_addr(phy_if, src_mac);
+					pfe_phy_if_get_mac_addr_first(phy_if, src_mac, MAC_DB_CRIT_ALL, PFE_TYPE_ANY, PFE_CFG_LOCAL_IF);
 				}
 				else
 				{

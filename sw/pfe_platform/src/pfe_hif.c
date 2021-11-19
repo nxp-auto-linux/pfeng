@@ -225,6 +225,13 @@ pfe_hif_t *pfe_hif_create(addr_t cbus_base_va, pfe_hif_chnl_id_t channels)
 		}
 	}
 
+#ifdef PFE_CFG_PFE_MASTER
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	/* Clean Master detect flags for all HIF channels */
+	pfe_hif_clear_master_up(hif);
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+#endif /* PFE_CFG_PFE_MASTER */
+
 	return hif;
 }
 
@@ -275,6 +282,14 @@ void pfe_hif_destroy(pfe_hif_t *hif)
 	
 	if (NULL != hif)
 	{
+
+#ifdef PFE_CFG_PFE_MASTER
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+		/* Clean Master detect flags for all HIF channels */
+		pfe_hif_clear_master_up(hif);
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+#endif /* PFE_CFG_PFE_MASTER */
+
 		if (NULL != hif->channels)
 		{
 			for (ii=0U; ii<HIF_CFG_MAX_CHANNELS; ii++)
@@ -319,7 +334,90 @@ void pfe_hif_destroy(pfe_hif_t *hif)
 	}
 }
 
+#ifdef PFE_CFG_PFE_SLAVE
+/**
+ * @brief		Return TRUE if Master UP flag is set
+ * @param[in]	hif The HIF instance
+ */
+bool_t pfe_hif_get_master_up(const pfe_hif_t *hif)
+{
+	uint32_t ii;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if ((NULL == hif) || (NULL != hif->channels))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	for (ii = 0U; ii < HIF_CFG_MAX_CHANNELS; ii++)
+	{
+		if (NULL != hif->channels[ii])
+		{
+			return (0U != (pfe_hif_chnl_cfg_ltc_get(hif->cbus_base_va, ii) & MASTER_UP));
+		}
+	}
+
+	return FALSE;
+}
+#endif /* PFE_CFG_PFE_SLAVE */
+
 #ifdef PFE_CFG_PFE_MASTER
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+/**
+ * @brief		Reset master detect flags in all HIF channels
+ * @param[in]	hif The HIF instance
+ */
+void pfe_hif_clear_master_up(const pfe_hif_t *hif)
+{
+	uint32_t ii;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if ((NULL == hif) || (NULL != hif->channels))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	for (ii = 0U; ii < HIF_CFG_MAX_CHANNELS; ii++)
+	{
+		/* We can't use channel object because we need to set also
+		   not configured channels */
+		pfe_hif_chnl_cfg_ltc_set(hif->cbus_base_va, ii, 0U);
+	}
+}
+
+/**
+ * @brief		Set master detect flags in all HIF channels
+ * @details		Set flag to MASTER_UP and optionally to HIF_OCCUPIED
+ * @param[in]	hif The HIF instance
+ */
+void pfe_hif_set_master_up(const pfe_hif_t *hif)
+{
+	uint32_t ii;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if ((NULL == hif) || (NULL != hif->channels))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	for (ii = 0U; ii < HIF_CFG_MAX_CHANNELS; ii++)
+	{
+		/* We can't use channel object because we need to set also
+		   not configured channels */
+		if (NULL != hif->channels[ii])
+			pfe_hif_chnl_cfg_ltc_set(hif->cbus_base_va, ii, MASTER_UP | HIF_OCCUPIED);
+		else
+			pfe_hif_chnl_cfg_ltc_set(hif->cbus_base_va, ii, MASTER_UP);
+	}
+}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
 /**
  * @brief		Return HIF runtime statistics in text form
  * @details		Function writes formatted text into given buffer.

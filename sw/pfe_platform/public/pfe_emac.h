@@ -11,6 +11,7 @@
 #define PUBLIC_PFE_EMAC_H_
 
 #include "pfe_ct.h"
+#include "pfe_gpi.h"
 
 typedef enum
 {
@@ -97,6 +98,23 @@ typedef enum __attribute__ ((packed)) {
 } pfe_emac_crit_t;
 
 /**
+ * @brief		Check if given MAC address is zero
+ * @param[in]	addr The address to check
+ * @return		TRUE if the input address is zero
+ */
+static inline bool_t pfe_emac_is_zero(const pfe_mac_addr_t addr)
+{
+	if (0x0U == (addr[0] | addr[1] | addr[2] | addr[3] | addr[4] | addr[5]))
+	{
+		return TRUE;
+	}
+	else
+	{
+		return FALSE;
+	}
+}
+
+/**
  * @brief		Check if given MAC address is broadcast
  * @param[in]	addr The address to check
  * @return		TRUE if the input address is broadcast
@@ -151,6 +169,8 @@ static inline bool_t pfe_emac_check_crit_by_type(const pfe_mac_addr_t addr, pfe_
 }
 
 pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_mode_t mode, pfe_emac_speed_t speed, pfe_emac_duplex_t duplex);
+errno_t pfe_emac_bind_gpi(pfe_emac_t *emac, pfe_gpi_t *gpi);
+pfe_gpi_t *pfe_emac_get_gpi(const pfe_emac_t *emac);
 void pfe_emac_enable(const pfe_emac_t *emac);
 void pfe_emac_disable(const pfe_emac_t *emac);
 errno_t pfe_emac_enable_ts(pfe_emac_t *emac, uint32_t i_clk_hz, uint32_t o_clk_hz);
@@ -192,6 +212,6 @@ void pfe_emac_destroy(pfe_emac_t *emac);
 uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 uint32_t pfe_emac_get_rx_cnt(const pfe_emac_t *emac);
 uint32_t pfe_emac_get_tx_cnt(const pfe_emac_t *emac);
-
+uint32_t pfe_emac_get_stat_value(const pfe_emac_t *emac, uint32_t stat_id);
 
 #endif /* PUBLIC_PFE_EMAC_H_ */

@@ -339,21 +339,6 @@ int32_t oal_irq_get_id(const oal_irq_t *irq)
 	return irq->id;
 }
 
-errno_t oal_irq_get_flags(const oal_irq_t *irq, oal_irq_flags_t *flags)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == irq) || (NULL == flags)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	*flags = irq->flags;
-
-	return EOK;
-}
-
 bool_t oal_irq_in_atomic()
 {
 	return in_atomic();

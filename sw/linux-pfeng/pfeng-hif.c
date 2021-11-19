@@ -172,6 +172,7 @@ static int pfe_hif_drv_ihc_put_tx_conf(pfe_hif_drv_client_t *client, void *data,
  */
 static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 {
+	unsigned int rx_byte_cnt = 0;
 	pfe_ct_hif_rx_hdr_t *hif_hdr;
 	struct sk_buff *skb;
 	struct net_device *netdev;
@@ -225,7 +226,7 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 		netdev = netif->netdev;
 		skb->dev = netdev;
 
-		if (unlikely(hif_hdr->flags & HIF_RX_TS)) {
+		if (likely(hif_hdr->flags & HIF_RX_TS)) {
 
 			/* Get rx hw time stamp */
 			pfeng_hwts_skb_set_rx_ts(netif, skb);
@@ -255,15 +256,17 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 
 		skb->protocol = eth_type_trans(skb, netdev);
 
-		napi_gro_receive(&chnl->napi, skb);
+		rx_byte_cnt += skb_headlen(skb);
 
-		netdev->stats.rx_packets++;
-		netdev->stats.rx_bytes += skb_headlen(skb);
+		napi_gro_receive(&chnl->napi, skb);
 
 		done++;
 		if(unlikely(done == limit))
 			break;
 	}
+
+	netdev->stats.rx_packets += done;
+	netdev->stats.rx_bytes += rx_byte_cnt;
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	return done + ihcs;
@@ -275,11 +278,14 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 static bool pfeng_hif_chnl_tx_conf(struct pfeng_hif_chnl *chnl, int napi_budget)
 {
 	unsigned int done = 0;
+	int ret;
 
-	while (pfe_hif_chnl_has_tx_conf(chnl->priv) && done < PFE_DEFAULT_TX_WORK) {
+	while (done < PFE_DEFAULT_TX_WORK) {
 
-		if (unlikely(pfe_hif_chnl_get_tx_conf(chnl->priv) != EOK))
-			break;
+		/* remove a single frame from the tx ring */
+		ret = pfe_hif_chnl_get_tx_conf(chnl->priv);
+		if (unlikely(ret == EAGAIN))
+			break; /* back to napi polling to try later */
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 		/* Check for IHC packet first */
@@ -304,7 +310,7 @@ static bool pfeng_hif_chnl_tx_conf(struct pfeng_hif_chnl *chnl, int napi_budget)
 	}
 
 	if (unlikely(chnl->queues_stopped)) {
-		if (pfe_hif_chnl_can_accept_tx_num(chnl->priv, napi_budget)) {
+		if (pfeng_hif_chnl_txbd_unused(chnl) >= PFE_TXBDS_MAX_NEEDED) {
 			int i;
 
 			for (i = 0; i < HIF_CLIENTS_MAX; i++) {
@@ -399,7 +405,7 @@ static int pfeng_hif_chnl_drv_remove(struct pfeng_priv *priv, u32 idx)
 	/* Release IRQ line */
 	disable_irq(priv->pfe_cfg->irq_vector_hif_chnls[idx]);
 	irq_set_affinity_hint(priv->pfe_cfg->irq_vector_hif_chnls[idx], NULL);
-	devm_free_irq(dev, priv->pfe_cfg->irq_vector_hif_chnls[idx], chnl->priv);
+	free_irq(priv->pfe_cfg->irq_vector_hif_chnls[idx], chnl->priv);
 
 	/* Forget HIF channel data */
 	chnl->priv = NULL;
@@ -454,8 +460,8 @@ static int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 idx)
 	scnprintf(irq_name, sizeof(irq_name), "pfe-hif-%d:%s", idx, get_hif_chnl_mode_str(chnl));
 
 	/* HIF channel IRQ */
-	ret = devm_request_irq(dev, irq, pfeng_hif_chnl_direct_isr, 0,
-			       devm_kstrdup(dev, irq_name, GFP_KERNEL), chnl->priv);
+	ret = request_irq(irq, pfeng_hif_chnl_direct_isr, 0,
+			  devm_kstrdup(dev, irq_name, GFP_KERNEL), chnl->priv);
 	if (ret < 0) {
 		dev_err(dev, "Error allocating the IRQ %d for '%s', error %d\n",
 			irq, irq_name, ret);
@@ -763,8 +769,8 @@ void pfeng_ihc_tx_work_handler(struct work_struct *work)
 	struct pfeng_priv* priv = container_of(work, struct pfeng_priv, ihc_tx_work);
 	struct pfeng_hif_chnl *chnl = priv->ihc_chnl;
 	struct sk_buff *skb = NULL;
-	dma_addr_t des = 0;
-	int refid = -1, ret;
+	dma_addr_t dma;
+	int ret;
 
 	/* IHC transport requires protection */
 	spin_lock(&chnl->lock_tx);
@@ -775,20 +781,20 @@ void pfeng_ihc_tx_work_handler(struct work_struct *work)
 	}
 
 	/* Remap skb */
-	des = dma_map_single(chnl->dev, skb->data, skb_headlen(skb), DMA_TO_DEVICE);
-	if (unlikely(dma_mapping_error(chnl->dev, des))) {
+	dma = dma_map_single(chnl->dev, skb->data, skb_headlen(skb), DMA_TO_DEVICE);
+	if (unlikely(dma_mapping_error(chnl->dev, dma))) {
 		dev_err(chnl->dev, "No possible to map IHC frame, dropped.\n");
 		goto err;
 	}
-	refid = pfeng_hif_chnl_txconf_put_map_frag(chnl, skb->data, des, skb_headlen(skb), skb, PFENG_MAP_PKT_IHC);
-	/* Increment to be able to pass number 0 */
-	refid++;
+	pfeng_hif_chnl_txconf_put_map_frag(chnl, skb->data, dma, skb_headlen(skb), skb, PFENG_MAP_PKT_IHC, 0);
 
-	ret = pfe_hif_chnl_tx(chnl->priv, (void *)des, skb->data, skb_headlen(skb), true);
+	ret = pfe_hif_chnl_tx(chnl->priv, (void *)dma, skb->data, skb_headlen(skb), true);
 	if (unlikely(EOK != ret)) {
-		pfeng_hif_chnl_txconf_unroll_map_full(chnl, refid - 1, 0);
+		pfeng_hif_chnl_txconf_unroll_map_full(chnl, 0);
 		goto err;
 	}
+
+	pfeng_hif_chnl_txconf_update_wr_idx(chnl, 1);
 	spin_unlock(&chnl->lock_tx);
 
 	return;

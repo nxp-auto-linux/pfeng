@@ -35,6 +35,7 @@ struct pfe_emac_tag
 	uint32_t o_clk_hz;			/*	IEEE1588 desired output clock */
 	uint32_t adj_ppb;			/*	IEEE1588 frequency adjustment value */
 	bool_t adj_sign;			/*	IEEE1588 frequency adjustment sign (TRUE - positive, FALSE - negative) */
+	pfe_gpi_t *gpi;				/* gpi handle, to export gpi services for this emac instance */
 };
 
 typedef struct
@@ -151,7 +152,11 @@ static errno_t pfe_emac_addr_db_add(pfe_emac_t *emac, const pfe_mac_addr_t addr,
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Create new list entry */
+#ifdef PFE_CFG_TARGET_OS_LINUX
+	entry = kzalloc(sizeof(pfe_mac_addr_db_entry_t), GFP_ATOMIC); /* temporary fix for AAVB-3946 */
+#else
 	entry = oal_mm_malloc(sizeof(pfe_mac_addr_db_entry_t));
+#endif
 	if (NULL == entry)
 	{
 		NXP_LOG_ERROR("oal_mm_malloc() failed\n");
@@ -459,6 +464,26 @@ pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_
 	}
 
 	return emac;
+}
+
+errno_t pfe_emac_bind_gpi(pfe_emac_t *emac, pfe_gpi_t *gpi)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == emac) || (NULL == gpi)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	emac->gpi = gpi;
+
+	return EOK;
+}
+
+pfe_gpi_t *pfe_emac_get_gpi(const pfe_emac_t *emac)
+{
+	return emac->gpi;
 }
 
 /**
@@ -1819,4 +1844,25 @@ uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, char_t *buf, uint3
 	len += pfe_emac_cfg_get_text_stat(emac->emac_base_va, buf + len, buf_len - len, verb_level);
 
 	return len;
+}
+
+/**
+ * @brief		Get EMAC statistic in numeric form
+ * @details		This is a HW-specific function providing single statistic
+ * 				value from the EMAC block.
+ * @param[in]	emac		The EMAC instance
+ * @param[in]	stat_id		ID of required statistic (offset of register)
+ * @return		Value of requested statistic
+ */
+uint32_t pfe_emac_get_stat_value(const pfe_emac_t *emac, uint32_t stat_id)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0xFFFFFFFFU;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pfe_emac_cfg_get_stat_value(emac->emac_base_va, stat_id);
 }

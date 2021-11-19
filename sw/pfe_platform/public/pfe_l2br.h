@@ -73,16 +73,20 @@ errno_t pfe_l2br_static_entry_set_local_flag(const pfe_l2br_t *bridge, pfe_l2br_
 errno_t pfe_l2br_static_entry_set_src_discard_flag(const pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t src_discard);
 errno_t pfe_l2br_static_entry_set_dst_discard_flag(const pfe_l2br_t * bridge, pfe_l2br_static_entry_t* static_ent, bool_t dst_discard);
 
-pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, uint16_t def_aging_time, pfe_l2br_table_t *mac_table, pfe_l2br_table_t *vlan_table);
+pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, uint16_t def_aging_time, uint16_t vlan_stats_size, pfe_l2br_table_t *mac_table, pfe_l2br_table_t *vlan_table);
 errno_t pfe_l2br_destroy(pfe_l2br_t *bridge);
 pfe_l2br_domain_t *pfe_l2br_get_default_domain(const pfe_l2br_t *bridge) __attribute__((pure));
 pfe_l2br_domain_t *pfe_l2br_get_fallback_domain(const pfe_l2br_t *bridge) __attribute__((pure));
 pfe_l2br_domain_t *pfe_l2br_get_first_domain(pfe_l2br_t *bridge, pfe_l2br_domain_get_crit_t crit, void *arg);
 pfe_l2br_domain_t *pfe_l2br_get_next_domain(pfe_l2br_t *bridge);
 uint32_t pfe_l2br_get_text_statistics(const pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+uint32_t pfe_l2br_domain_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+errno_t pfe_l2br_clear_domain_stats(pfe_l2br_t *bridge, uint8_t vlan_index);
+errno_t pfe_l2br_get_domain_stats(pfe_l2br_t *bridge, pfe_ct_vlan_stats_t *stat, uint8_t vlan_index);
+uint8_t pfe_l2br_get_vlan_stats_index(pfe_l2br_domain_t *domain);
 
 errno_t pfe_l2br_flush_learned(pfe_l2br_t *bridge);
 errno_t pfe_l2br_flush_static(pfe_l2br_t *bridge);
 errno_t pfe_l2br_flush_all(pfe_l2br_t *bridge);
-
+pfe_l2br_table_entry_t *pfe_l2br_static_entry_get_entry(pfe_l2br_static_entry_t *static_ent);
 #endif /* PUBLIC_PFE_L2BR_H_ */

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2021 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -39,14 +39,16 @@
 #endif
 
 #include "oal_types.h"
+#include "oal_mm.h"
+#include "oal_util.h"
+#include "oal_sync.h"
+#if !defined(PFE_CFG_DETACHED_MINIHIF)
 #include "oal_mbox.h"
 #include "oal_irq.h"
-#include "oal_mm.h"
 #include "oal_thread.h"
-#include "oal_sync.h"
 #include "oal_time.h"
-#include "oal_util.h"
 #include "oal_job.h"
+#endif /* PFE_CFG_DETACHED_MINIHIF */
 
 #endif /* OAL_H_ */
 

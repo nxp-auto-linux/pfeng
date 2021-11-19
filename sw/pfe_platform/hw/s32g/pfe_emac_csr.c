@@ -13,13 +13,6 @@
 #include "pfe_cbus.h"
 #include "pfe_emac_csr.h"
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
-
 static inline uint32_t crc32_reversed(const uint8_t *const data, const uint32_t len)
 {
 	const uint32_t poly = 0xEDB88320U;
@@ -126,6 +119,7 @@ errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,  pfe_emac_sp
 	hal_write32(0x8000ffeeU, base_va + MAC_ADDRESS0_HIGH);
 	hal_write32(0xddccbbaaU, base_va + MAC_ADDRESS0_LOW);
 	hal_write32(0U
+			| RECEIVE_ALL(0U)
 			| DROP_NON_TCP_UDP(0U)
 			| L3_L4_FILTER_ENABLE(0U)
 			| VLAN_TAG_FILTER_ENABLE(0U)
@@ -1360,4 +1354,25 @@ uint32_t pfe_emac_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, 
 	}
 
 	return len;
+}
+
+/**
+ * @brief		Get EMAC statistic in numeric form
+ * @details		This is a HW-specific function providing single statistic
+ * 				value from the EMAC block.
+ * @param[in]	base_va 	Base address of EMAC register space (virtual)
+ * @param[in]	stat_id		ID of required statistic (offset of register)
+ * @return		Value of requested statistic
+ */
+uint32_t pfe_emac_cfg_get_stat_value(addr_t base_va, uint32_t stat_id)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL_ADDR == base_va))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0xFFFFFFFFU;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return hal_read32(base_va + stat_id);
 }

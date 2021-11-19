@@ -22,8 +22,7 @@
 #include "pfe_platform.h"
 #include "pfe_ct.h"
 #include "pfe_idex.h"
-#include "pfe_fw_feature.h"
-
+#include "pfe_feature_mgr.h"
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 #include "pfe_platform_rpc.h" /* RPC codes and arguments */
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
@@ -142,7 +141,6 @@ static void *pfe_poller_func(void *arg)
 					pfe_safety_irq_unmask(platform->safety);
 				}
 
-#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4)
 				/*	Watchdogs */
 				if (NULL != platform->wdt)
 				{
@@ -150,7 +148,6 @@ static void *pfe_poller_func(void *arg)
 					(void)pfe_wdt_isr(platform->wdt);
 					pfe_wdt_irq_unmask(platform->wdt);
 				}
-#endif /* PFE_CFG_IP_VERSION */
 
 				break;
 			}
@@ -176,176 +173,6 @@ static void *pfe_poller_func(void *arg)
 	return NULL;
 }
 #endif /* PFE_CFG_GLOB_ERR_POLL_WORKER */
-
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4)
-/**
- * @brief		Global interrupt service routine
- * @details		See the oal_irq_handler_t
- */
-static bool_t pfe_platform_global_isr(void *arg)
-{
-	const pfe_platform_t *platform = (pfe_platform_t *)arg;
-	bool_t handled = FALSE;
-	uint32_t ii;
-	static const pfe_hif_chnl_id_t ids[] = {HIF_CHNL_0, HIF_CHNL_1, HIF_CHNL_2, HIF_CHNL_3};
-	pfe_hif_chnl_t *chnls[sizeof(ids)/sizeof(pfe_hif_chnl_id_t)] = {NULL};
-
-	/*	Disable all participating IRQ sources */
-	if (NULL != platform->hif)
-	{
-		pfe_hif_irq_mask(platform->hif);
-	}
-
-	if (NULL != platform->bmu[0])
-	{
-		pfe_bmu_irq_mask(platform->bmu[0]);
-	}
-
-	if (NULL != platform->bmu[1])
-	{
-		pfe_bmu_irq_mask(platform->bmu[1]);
-	}
-
-	if (NULL != platform->hif)
-	{
-		for (ii=0U; ii<(sizeof(ids)/sizeof(pfe_hif_chnl_id_t)); ii++)
-		{
-			chnls[ii] = pfe_hif_get_channel(platform->hif, ids[ii]);
-			if (NULL != chnls[ii])
-			{
-				pfe_hif_chnl_irq_mask(chnls[ii]);
-			}
-		}
-	}
-
-	if (NULL != platform->safety)
-	{
-		pfe_safety_irq_mask(platform->safety);
-	}
-
-#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4)
-	if (NULL != platform->wdt)
-	{
-		pfe_wdt_irq_mask(platform->wdt);
-	}
-#endif /* PFE_CFG_IP_VERSION */
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (NULL != platform->hif_nocpy)
-	{
-		pfe_hif_chnl_irq_mask(pfe_hif_nocpy_get_channel(platform->hif_nocpy, PFE_HIF_CHNL_NOCPY_ID));
-	}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-
-	/*	Call modules ISRs */
-	if (NULL != platform->hif)
-	{
-		if (EOK == pfe_hif_isr(platform->hif))
-		{
-			handled = TRUE;
-		}
-	}
-
-	if (NULL != platform->bmu[0])
-	{
-		if (EOK == pfe_bmu_isr(platform->bmu[0]))
-		{
-			handled = TRUE;
-		}
-	}
-
-	if (NULL != platform->bmu[1])
-	{
-		if (EOK == pfe_bmu_isr(platform->bmu[1]))
-		{
-			handled = TRUE;
-		}
-	}
-
-	for (ii=0U; ii<(sizeof(ids)/sizeof(pfe_hif_chnl_id_t)); ii++)
-	{
-		if (NULL != chnls[ii])
-		{
-			if (EOK == pfe_hif_chnl_isr(chnls[ii]))
-			{
-				handled = TRUE;
-			}
-		}
-	}
-	if (NULL != platform->safety)
-	{
-		if (EOK == pfe_safety_isr(platform->safety))
-		{
-			handled = TRUE;
-		}
-	}
-
-#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4)
-	if (NULL != platform->wdt)
-	{
-		if (EOK == pfe_wdt_isr(platform->wdt))
-		{
-			handled = TRUE;
-		}
-	}
-#endif /* PFE_CFG_IP_VERSION */
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (NULL != platform->hif_nocpy)
-	{
-		if (EOK == pfe_hif_chnl_isr(pfe_hif_nocpy_get_channel(platform->hif_nocpy, PFE_HIF_CHNL_NOCPY_ID)))
-		{
-			handled = TRUE;
-		}
-	}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-
-	/*	Enable all participating IRQ sources */
-	if (NULL != platform->hif)
-	{
-		pfe_hif_irq_unmask(platform->hif);
-	}
-
-	if (NULL != platform->bmu[0])
-	{
-		pfe_bmu_irq_unmask(platform->bmu[0]);
-	}
-
-	if (NULL != platform->bmu[1])
-	{
-		pfe_bmu_irq_unmask(platform->bmu[1]);
-	}
-
-	for (ii=0U; ii<(sizeof(ids)/sizeof(pfe_hif_chnl_id_t)); ii++)
-	{
-		if (NULL != chnls[ii])
-		{
-			pfe_hif_chnl_irq_unmask(chnls[ii]);
-		}
-	}
-
-	if (NULL != platform->safety)
-	{
-		pfe_safety_irq_unmask(platform->safety);
-	}
-
-#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4)
-	if (NULL != platform->wdt)
-	{
-		pfe_wdt_irq_unmask(platform->wdt);
-	}
-#endif /* PFE_CFG_IP_VERSION */
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (NULL != platform->hif_nocpy)
-	{
-		pfe_hif_chnl_irq_unmask(pfe_hif_nocpy_get_channel(platform->hif_nocpy, PFE_HIF_CHNL_NOCPY_ID));
-	}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-
-	return handled;
-}
-#endif /* PFE_CFG_IP_VERSION */
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 /**
@@ -1015,6 +842,36 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 			break;
 		}
 
+		case PFE_PLATFORM_RPC_PFE_LOG_IF_DEL_EGRESS_IF:
+		{
+			pfe_platform_rpc_pfe_log_if_del_egress_if_arg_t *arg_p = (pfe_platform_rpc_pfe_log_if_del_egress_if_arg_t *)buf;
+
+			NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_DEL_EGRESS_IF\n");
+
+			if (EOK == ret)
+			{
+				ret = pfe_if_db_get_first(platform->phy_if_db, sender, IF_DB_CRIT_BY_ID, (void *)(addr_t)arg_p->phy_if_id, &entry);
+				phy_if_arg = pfe_if_db_entry_get_phy_if(entry);
+
+				if ((NULL == phy_if_arg) || (EOK != ret))
+				{
+					ret = ENOENT;
+				}
+				else
+				{
+					ret = pfe_log_if_del_egress_if(log_if_arg, phy_if_arg);
+				}
+			}
+
+			/*	Report execution status to caller */
+			if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
+			{
+				NXP_LOG_ERROR("Could not send RPC response\n");
+			}
+
+			break;
+		}
+
 		case PFE_PLATFORM_RPC_PFE_LOG_IF_IS_MATCH_OR:
 		{
 			pfe_platform_rpc_pfe_log_if_is_match_or_ret_t rpc_ret = {0};
@@ -1485,35 +1342,12 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
  */
 static errno_t pfe_platform_create_hif(pfe_platform_t *platform, const pfe_platform_config_t *config)
 {
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4)
-	uint32_t ii;
-	static const pfe_hif_chnl_id_t ids[HIF_CFG_MAX_CHANNELS] = {HIF_CHNL_0, HIF_CHNL_1, HIF_CHNL_2, HIF_CHNL_3};
-	pfe_hif_chnl_t *chnl;
-#endif /* PFE_CFG_IP_VERSION */
-
 	platform->hif = pfe_hif_create(platform->cbus_baseaddr + CBUS_HIF_BASE_ADDR, config->hif_chnls_mask);
 	if (NULL == platform->hif)
 	{
 		NXP_LOG_ERROR("Couldn't create HIF instance\n");
 		return ENODEV;
 	}
-
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4)
-	/*	IRQ mode: global isr (FPGA) */
-
-	/*	Now particular channel interrupt sources can be enabled */
-	for (ii = 0U; ii < HIF_CFG_MAX_CHANNELS; ii++)
-	{
-		chnl = pfe_hif_get_channel(platform->hif, ids[ii]);
-		if (NULL == chnl)
-		{
-			/* not requested HIF channel, skipping */
-			continue;
-		}
-
-		pfe_hif_chnl_irq_unmask(chnl);
-	}
-#endif /* PFE_CFG_IP_VERSION */
 
 	pfe_hif_irq_unmask(platform->hif);
 
@@ -1538,7 +1372,7 @@ static void pfe_platform_destroy_hif(pfe_platform_t *platform)
 /**
  * @brief		Assign HIF NOCPY to the platform
  */
-static errno_t pfe_platform_create_hif_nocpy(pfe_platform_t *platform, const pfe_platform_config_t *config)
+static errno_t pfe_platform_create_hif_nocpy(pfe_platform_t *platform)
 {
 	platform->hif_nocpy = pfe_hif_nocpy_create(pfe.cbus_baseaddr + CBUS_HIF_NOCPY_BASE_ADDR, platform->bmu[1]);
 
@@ -1644,11 +1478,6 @@ static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, const pfe_platf
 		return ENODEV;
 	}
 
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	  || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
-	/*	BMU interrupt handling. Both instances share single interrupt line. */
-	/*	IRQ mode: per block isr (S32G) */
-
 	platform->irq_bmu = oal_irq_create((int32_t)config->irq_vector_bmu, (oal_irq_flags_t)0, "PFE BMU IRQ");
 	if (NULL == platform->irq_bmu)
 	{
@@ -1663,7 +1492,6 @@ static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, const pfe_platf
 			return ENODEV;
 		}
 	}
-#endif /* PFE_CFG_IP_VERSION */
 
 	pfe_bmu_irq_unmask(platform->bmu[0]);
 	pfe_bmu_irq_unmask(platform->bmu[1]);
@@ -1712,9 +1540,7 @@ static void pfe_platform_destroy_bmu(pfe_platform_t *platform)
 static errno_t pfe_platform_create_gpi(pfe_platform_t *platform)
 {
 	pfe_gpi_cfg_t gpi_cfg_tmp;
-	pfe_fw_feature_t *feature = NULL;
 	uint32_t aseq_len = 0x40U;
-	uint8_t variant = 0U;
 
 	platform->gpi = oal_mm_malloc(platform->gpi_count * sizeof(pfe_gpi_t *));
 	if (NULL == platform->gpi)
@@ -1723,13 +1549,10 @@ static errno_t pfe_platform_create_gpi(pfe_platform_t *platform)
 		return ENOMEM;
 	}
 
-	if (EOK == pfe_class_get_feature(platform->classifier, &feature, "gpi_checksum_fix"))
+	if (TRUE == pfe_feature_mgr_is_available("gpi_checksum_fix"))
 	{
-		if ((EOK == pfe_fw_feature_get_variant(feature, &variant)) && (variant == 1U))
-		{
-			aseq_len = 0x50U;
-			NXP_LOG_INFO("Using GPI ASEQ LEN 0x50\n");
-		}
+        aseq_len = 0x50U;
+        NXP_LOG_INFO("Using GPI ASEQ LEN 0x50\n");
 	}
 
 	/*	GPI1 */
@@ -2024,6 +1847,7 @@ static void pfe_platform_destroy_class(pfe_platform_t *platform)
 static errno_t pfe_platform_create_l2_bridge(pfe_platform_t *platform, const pfe_platform_config_t *config)
 {
 	uint16_t vlan_id = config->vlan_id;
+	uint16_t vlan_stats_size = config->vlan_stats_size;
 
 	platform->mactab = pfe_l2br_table_create(platform->cbus_baseaddr, PFE_L2BR_TABLE_MAC2F);
 	if (NULL == platform->mactab)
@@ -2045,7 +1869,13 @@ static errno_t pfe_platform_create_l2_bridge(pfe_platform_t *platform, const pfe
 		vlan_id = 0x01;
 	}
 
-	platform->l2_bridge = pfe_l2br_create(platform->classifier, vlan_id, 300U, platform->mactab, platform->vlantab);
+	if ((vlan_stats_size < 2U) || (vlan_stats_size > 128U))
+	{
+		NXP_LOG_WARNING("VLAN stats size incorrect or not set. Using default VLAN stats size = 20.\n");
+		vlan_stats_size = 20;
+	}
+
+	platform->l2_bridge = pfe_l2br_create(platform->classifier, vlan_id, 300U, vlan_stats_size, platform->mactab, platform->vlantab);
 	if (NULL == platform->l2_bridge)
 	{
 		NXP_LOG_ERROR("Could not create L2 Bridge\n");
@@ -2116,7 +1946,7 @@ static errno_t pfe_platform_create_rtable(pfe_platform_t *platform, const pfe_pl
 		return ENODEV;
 	}
 
-	platform->rtable = pfe_rtable_create(platform->classifier, htable_mem, config->rtable_hash_size, pool_mem, config->rtable_collision_size);
+	platform->rtable = pfe_rtable_create(platform->classifier, htable_mem, config->rtable_hash_size, pool_mem, config->rtable_collision_size, platform->l2_bridge);
 
 	if (NULL == platform->rtable)
 	{
@@ -2161,7 +1991,6 @@ static errno_t pfe_platform_create_tmu(pfe_platform_t *platform)
 	};
 
 	platform->tmu = pfe_tmu_create(platform->cbus_baseaddr, platform->tmu_pe_count, &tmu_cfg);
-
 	if (NULL == platform->tmu)
 	{
 		NXP_LOG_ERROR("Couldn't create TMU instance\n");
@@ -2260,12 +2089,7 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 	}
 
 	/*	EMAC1 */
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC1_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
-#else /* FPGA */
-	platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC1_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_100_MBPS, EMAC_DUPLEX_FULL);
-#endif
 	if (NULL == platform->emac[0])
 	{
 		NXP_LOG_ERROR("Couldn't create EMAC1 instance\n");
@@ -2289,12 +2113,7 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 	}
 
 	/*	EMAC2 */
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	platform->emac[1] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC2_BASE_ADDR, EMAC_MODE_RGMII, EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
-#else /* FPGA */
-	platform->emac[1] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC2_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_100_MBPS, EMAC_DUPLEX_FULL);
-#endif
 	if (NULL == platform->emac[1])
 	{
 		NXP_LOG_ERROR("Couldn't create EMAC2 instance\n");
@@ -2318,12 +2137,7 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 	}
 
 	/*	EMAC3 */
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	platform->emac[2] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC3_BASE_ADDR, EMAC_MODE_RGMII, EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
-#else /* FPGA */
-	platform->emac[2] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC3_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_100_MBPS, EMAC_DUPLEX_FULL);
-#endif
 	if (NULL == platform->emac[2])
 	{
 		NXP_LOG_ERROR("Couldn't create EMAC3 instance\n");
@@ -2391,7 +2205,6 @@ static errno_t pfe_platform_create_safety(pfe_platform_t *platform, const pfe_pl
 		NXP_LOG_INFO("SAFETY instance created\n");
 	}
 
-#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4)
 	/*	Watchdogs */
 	platform->wdt = pfe_wdt_create(platform->cbus_baseaddr, CBUS_GLOBAL_CSR_BASE_ADDR);
 
@@ -2404,12 +2217,10 @@ static errno_t pfe_platform_create_safety(pfe_platform_t *platform, const pfe_pl
 	{
 		NXP_LOG_INFO("Watchdog instance created\n");
 	}
-#endif /* PFE_CFG_IP_VERSION */
 
 	pfe_safety_irq_unmask(platform->safety);
-#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4)
+
 	pfe_wdt_irq_unmask(platform->wdt);
-#endif /* PFE_CFG_IP_VERSION */
 
 	return EOK;
 }
@@ -2425,13 +2236,11 @@ static void pfe_platform_destroy_safety(pfe_platform_t *platform)
 		platform->safety = NULL;
 	}
 
-#if (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4)
 	if (NULL != platform->wdt)
 	{
 		pfe_wdt_destroy(platform->wdt);
 		platform->wdt = NULL;
 	}
-#endif /* PFE_CFG_IP_VERSION */
 }
 
 #ifdef PFE_CFG_FCI_ENABLE
@@ -2453,6 +2262,7 @@ static errno_t pfe_platform_create_fci(pfe_platform_t *platform)
 	fci_init_info.class = platform->classifier;
 	fci_init_info.phy_if_db = platform->phy_if_db;
 	fci_init_info.log_if_db = platform->log_if_db;
+	fci_init_info.tmu = platform->tmu;
 	ret = fci_init(&fci_init_info, "pfe_fci");
 	if (EOK != ret)
 	{
@@ -2722,25 +2532,26 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 		char_t *name;
 		pfe_ct_phy_if_id_t id;
 		pfe_mac_addr_t mac;
-		union
+		struct
 		{
 			pfe_emac_t *emac;
+			pfe_gpi_t *gpi;
 			pfe_hif_chnl_t *chnl;
 		} phy;
 	} phy_ifs[] =
 	{
-			{.name = "emac0", .id = PFE_PHY_IF_ID_EMAC0, .mac = GEMAC0_MAC, {.emac = platform->emac[0]}},
-			{.name = "emac1", .id = PFE_PHY_IF_ID_EMAC1, .mac = GEMAC1_MAC, {.emac = platform->emac[1]}},
-			{.name = "emac2", .id = PFE_PHY_IF_ID_EMAC2, .mac = GEMAC2_MAC, {.emac = platform->emac[2]}},
-			{.name = "util", .id = PFE_PHY_IF_ID_UTIL, .mac = {0}, {.chnl = NULL}},
-			{.name = "hif0", .id = PFE_PHY_IF_ID_HIF0, .mac = {0}, {.chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_0)}},
-			{.name = "hif1", .id = PFE_PHY_IF_ID_HIF1, .mac = {0}, {.chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_1)}},
-			{.name = "hif2", .id = PFE_PHY_IF_ID_HIF2, .mac = {0}, {.chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_2)}},
-			{.name = "hif3", .id = PFE_PHY_IF_ID_HIF3, .mac = {0}, {.chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_3)}},
+			{.name = "emac0", .id = PFE_PHY_IF_ID_EMAC0, .mac = GEMAC0_MAC, {.emac = platform->emac[0], .gpi = platform->gpi[0], .chnl = NULL}},
+			{.name = "emac1", .id = PFE_PHY_IF_ID_EMAC1, .mac = GEMAC1_MAC, {.emac = platform->emac[1], .gpi = platform->gpi[1], .chnl = NULL}},
+			{.name = "emac2", .id = PFE_PHY_IF_ID_EMAC2, .mac = GEMAC2_MAC, {.emac = platform->emac[2], .gpi = platform->gpi[2], .chnl = NULL}},
+			{.name = "util", .id = PFE_PHY_IF_ID_UTIL, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = NULL}},
+			{.name = "hif0", .id = PFE_PHY_IF_ID_HIF0, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_0)}},
+			{.name = "hif1", .id = PFE_PHY_IF_ID_HIF1, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_1)}},
+			{.name = "hif2", .id = PFE_PHY_IF_ID_HIF2, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_2)}},
+			{.name = "hif3", .id = PFE_PHY_IF_ID_HIF3, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_3)}},
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-			{.name = "hifncpy", .id = PFE_PHY_IF_ID_HIF_NOCPY, .mac = {0}, {.chnl = pfe_hif_nocpy_get_channel(platform->hif_nocpy, PFE_HIF_CHNL_NOCPY_ID)}},
+			{.name = "hifncpy", .id = PFE_PHY_IF_ID_HIF_NOCPY, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_nocpy_get_channel(platform->hif_nocpy, PFE_HIF_CHNL_NOCPY_ID)}},
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-			{.name = NULL, .id = PFE_PHY_IF_ID_INVALID, .mac = {0}, {NULL}}
+			{.name = NULL, .id = PFE_PHY_IF_ID_INVALID, .mac = {0}, {NULL, NULL, NULL}}
 	};
 
 	/*	Create interface databases */
@@ -2795,6 +2606,13 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 						if (EOK != pfe_phy_if_bind_emac(phy_if, phy_ifs[ii].phy.emac))
 						{
 							NXP_LOG_ERROR("Can't bind interface with EMAC (%s)\n", phy_ifs[ii].name);
+							return ENODEV;
+						}
+
+						/* provide gpi handle to emac: emac phy_ifs need access to gpi to configure Ingress QoS */
+						if (EOK != pfe_emac_bind_gpi(phy_ifs[ii].phy.emac, phy_ifs[ii].phy.gpi))
+						{
+							NXP_LOG_ERROR("Can't bind interface with GPI (%s)\n", phy_ifs[ii].name);
 							return ENODEV;
 						}
 
@@ -2969,28 +2787,6 @@ errno_t pfe_platform_soft_reset(const pfe_platform_t *platform)
 }
 
 /**
- * @brief 		Checks whether the firmware feature with given name is available in classifier
- * @param[in]	class Class instance to checks
- * @param[in]	name Name of the feature to check
- * @retval		TRUE Feature is available
- * @retval		FALSE Feature is not available
- */
-static bool_t pfe_platform_class_feature_avail(const pfe_class_t *class, const char *name)
-{
-    pfe_fw_feature_t *fw_feature;
-    errno_t ret;
-    bool_t res = FALSE;
-    /* Does the feature exist? */
-    ret = pfe_class_get_feature(class, &fw_feature, name);
-    if(EOK == ret)
-    {   /* Feature exists */
-        /* Is the feature enabled */
-        res = pfe_fw_feature_enabled(fw_feature);
-    }
-    return res;
-}
-
-/**
  * @brief	The platform init function
  * @details	Initializes the PFE HW platform and prepares it for usage according to configuration.
  */
@@ -3018,6 +2814,9 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 		NXP_LOG_INFO("PFE CBUS p0x%"PRINTADDR_T" mapped @ v0x%"PRINTADDR_T"\n", config->cbus_base, pfe.cbus_baseaddr);
 	}
 
+	/* Initialize the features */
+	pfe_feature_mgr_init((void *)pfe.cbus_baseaddr);
+
 	/*	Initialize LMEM TODO: Get LMEM size from global WSP_LMEM_SIZE register */
 	addr = (uint32_t*)(void*)((addr_t)pfe.cbus_baseaddr + CBUS_LMEM_BASE_ADDR);
 	for (ii = addr; ((addr_t)ii - (addr_t)addr) < CBUS_LMEM_SIZE; ++ii)
@@ -3031,51 +2830,9 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	pfe.etgpi_count = 3U;
 	pfe.hgpi_count = 1U;
 	pfe.bmu_count = 2U;
-#if ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	|| (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
 	pfe.class_pe_count = 8U;
 	pfe.util_pe_count = 1U;
-#else /* FPGA */
-	pfe.class_pe_count = 1U;
-	pfe.util_pe_count = 0U;
-#endif
 	pfe.tmu_pe_count = 0U;
-
-#if (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_FPGA_5_0_4)
-	/*	IRQ mode: global isr (FPGA) */
-
-	NXP_LOG_INFO("Detected Common IRQ mode (FPGA/PCI)\n");
-
-	pfe.irq_global = oal_irq_create((int32_t)config->irq_vector_global, OAL_IRQ_FLAG_SHARED, "PFE IRQ");
-	if (NULL == pfe.irq_global)
-	{
-		NXP_LOG_ERROR("Could not create global PFE IRQ\n");
-		goto exit;
-	}
-	else
-	{
-		if (EOK != oal_irq_add_handler(pfe.irq_global, &pfe_platform_global_isr, &pfe, NULL))
-		{
-			NXP_LOG_ERROR("Could not add global IRQ handler\n");
-			goto exit;
-		}
-	}
-#elif ((PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14) \
-	  || (PFE_CFG_IP_VERSION == PFE_CFG_IP_VERSION_NPU_7_14a))
-
-	/*	IRQ mode: per block isr (S32G) */
-
-	NXP_LOG_INFO("Detected per block IRQ mode (S32G)\n");
-
-	/* Note:
-	 *
-	 * The irq handlers are created inside corresponding constructors,
-	 * like pfe_platform_create_hif() or pfe_platform_create_bmu()
-	 *
-	 */
-#else
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
 
 	/*	BMU */
 	ret = pfe_platform_create_bmu(&pfe, config);
@@ -3110,17 +2867,6 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	{
 		goto exit;
 	}
-
-#ifdef PFE_CFG_FCI_ENABLE
-#if defined(PFE_CFG_RTABLE_ENABLE)
-	/*	Routing Table */
-	ret = pfe_platform_create_rtable(&pfe, config);
-	if (EOK != ret)
-	{
-		goto exit;
-	}
-#endif /* PFE_CFG_RTABLE_ENABLE */
-#endif /* PFE_CFG_FCI_ENABLE */
 	if(config->enable_util)
 	{
 		/*	UTIL */
@@ -3130,12 +2876,19 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 			goto exit;
 		}
 	}
+	else
+	{
+		pfe.util = NULL;
+	}
 
 	/*	SOFT RESET */
 	if (EOK != pfe_platform_soft_reset(&pfe))
 	{
 		NXP_LOG_ERROR("Platform reset failed\n");
 	}
+
+	/* Initialize the FW features */
+	pfe_feature_mgr_add_fw_modules(pfe.classifier, pfe.util);
 
 	/*	GPI */
 	ret = pfe_platform_create_gpi(&pfe);
@@ -3157,7 +2910,6 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	{
 		goto exit;
 	}
-
 #ifdef PFE_CFG_FCI_ENABLE
 #if defined(PFE_CFG_L2BRIDGE_ENABLE)
 	/*	L2 Bridge. Must be initialized after soft reset. */
@@ -3166,6 +2918,14 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	{
 		goto exit;
 	}
+#if defined(PFE_CFG_RTABLE_ENABLE)
+	/*	Routing Table */
+	ret = pfe_platform_create_rtable(&pfe, config);
+	if (EOK != ret)
+	{
+		goto exit;
+	}
+#endif /* PFE_CFG_RTABLE_ENABLE */
 #endif /* PFE_CFG_L2BRIDGE_ENABLE */
 #endif /* PFE_CFG_FCI_ENABLE */
 
@@ -3178,7 +2938,7 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	/*	HIF NOCPY */
-	ret = pfe_platform_create_hif_nocpy(&pfe, config);
+	ret = pfe_platform_create_hif_nocpy(&pfe);
 	if (EOK != ret)
 	{
 		goto exit;
@@ -3188,33 +2948,11 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	/*	Activate the classifier */
 	pfe_class_enable(pfe.classifier);
 
-	/* Get FW features */
-	if(FALSE != pfe_platform_class_feature_avail(pfe.classifier, "safety"))
+    ret = pfe_mirror_init(pfe.classifier);
+	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("\'safety\' available\n");
-	}
-	else
-	{
-		NXP_LOG_DEBUG("\'safety\' not available\n");
-	}
-
-	if(FALSE != pfe_platform_class_feature_avail(pfe.classifier, "ingress_vlan"))
-	{
-		NXP_LOG_DEBUG("\'ingress_vlan\' available\n");
-	}
-	else
-	{
-		NXP_LOG_DEBUG("\'ingress_vlan\' not available\n");
-	}
-
-	if(FALSE != pfe_platform_class_feature_avail(pfe.classifier, "egress_vlan"))
-	{
-		NXP_LOG_DEBUG("\'egress_vlan\' available\n");
-	}
-	else
-	{
-		NXP_LOG_DEBUG("\'egress_vlan\' not available\n");
-	}
+		goto exit;
+	}       
 
 	/*	Interfaces */
 	ret = pfe_platform_create_ifaces(&pfe);
@@ -3275,7 +3013,6 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	{
 		pfe_util_enable(pfe.util);
 	}
-
 	addr = (void *)(CBUS_GLOBAL_CSR_BASE_ADDR + 0x20U + (addr_t)(pfe.cbus_baseaddr));
 	val = hal_read32(addr);
 	hal_write32((val | 0x80000003U), addr);
@@ -3292,7 +3029,7 @@ exit:
 static void pfe_platform_destroy_group1(void)
 {
 #ifdef PFE_CFG_FCI_ENABLE
-    pfe_platform_destroy_fci(&pfe);
+	pfe_platform_destroy_fci(&pfe);
 #endif /* PFE_CFG_FCI_ENABLE */
 	pfe_platform_destroy_ifaces(&pfe);
 	pfe_platform_destroy_hif(&pfe);
@@ -3304,7 +3041,7 @@ static void pfe_platform_destroy_group1(void)
 	pfe_platform_destroy_hgpi(&pfe);
 	pfe_platform_destroy_bmu(&pfe);
 #if defined(PFE_CFG_RTABLE_ENABLE)
-    pfe_platform_destroy_rtable(&pfe);
+	pfe_platform_destroy_rtable(&pfe);
 #endif /* PFE_CFG_RTABLE_ENABLE */
 #if defined(PFE_CFG_L2BRIDGE_ENABLE)
 	pfe_platform_destroy_l2_bridge(&pfe);
@@ -3316,6 +3053,8 @@ static void pfe_platform_destroy_group2(void)
 #ifdef PFE_CFG_FCI_ENABLE
 	pfe_spd_acc_destroy(pfe.phy_if_db);
 #endif
+	pfe_platform_destroy_ifaces(&pfe);
+    pfe_mirror_deinit();
 	pfe_platform_destroy_class(&pfe);
 	pfe_platform_destroy_util(&pfe);
 	pfe_platform_destroy_tmu(&pfe);
@@ -3353,6 +3092,7 @@ errno_t pfe_platform_remove(void)
 
 	pfe_platform_destroy_group1();
 	pfe_platform_destroy_group2();
+	(void)pfe_feature_mgr_fini();
 
 	if (NULL_ADDR != pfe.cbus_baseaddr)
 	{

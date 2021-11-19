@@ -44,32 +44,37 @@ OUTPUT_DIR = build/$(CONFIG_NAME)
 
 TARGET_OS ?= QNX
 
+#This is for cleaner YOCTO recipe (cross-compiling from yocto needs explicit path to the target sysroot).
+SYSROOT_DIR ?= ""
+ifneq ($(SYSROOT_DIR), "")
+	CC += --sysroot=$(SYSROOT_DIR)
+endif
+
 #Specific configuration per TARGET_OS.
 ifeq ($(TARGET_OS),LINUX)
-	LD = $(PLATFORM)-gcc
+	LD = $(CC)
 	LIBS += -L../xfci/libfci/build/$(PLATFORM)-$(BUILD_PROFILE) -l:libfci.a
 	
 	#Expand GLOBAL_CCFLAGS to get rid of single quotes around string parameters of GLOBAL_CCFLAGS.
 	#Those single quotes are utilized in build process of the Linux PFE driver, but they cause warnings in this makefile.
 	GLOBAL_CCFLAGS := $(shell echo $(GLOBAL_CCFLAGS))
 	
-	LIBFCI_CLI_TARGET_OS = "LNX"
-	LIBFCI_CLI_VERSION = "BETA 0.9.5"
+	CLI_TARGET_OS = "LNX"
+	CLI_DRV_VERSION = "BETA 0.9.6"
 else
 #This branch by defaut means QNX.
 	LIBS += -L../xfci/libfci/build/$(PLATFORM)-$(BUILD_PROFILE) -l:libfci.a
 	LIBS_all += -lsocket
 	
-	LIBFCI_CLI_TARGET_OS = "QNX"
-	LIBFCI_CLI_VERSION = "$(RELEASE_VERSION)"
+	CLI_TARGET_OS = "QNX"
+	CLI_DRV_VERSION = "$(RELEASE_VERSION)"
 endif
 
 #User defined include/preprocessor flags and libraries
-INCLUDES += -Isrc/libfci_interface \
-			-I../xfci/libfci/public \
+INCLUDES += -I../xfci/libfci/public \
 			-I../fci/public \
 			-I../common/public \
-			-I./src/libfci_interface
+			-I./src/libfci_demo
 
 #Dependencies
 DEPENDENCIES = $(subst -L,,$(subst $(EMPTY) $(EMPTY)-l:,/,$(LIBS)))
@@ -92,13 +97,12 @@ LDFLAGS_all += $(LDFLAGS_$(BUILD_PROFILE))
 LIBS_all += $(LIBS_$(BUILD_PROFILE))
 DEPS = -Wp,-MMD,$(@:%.o=%.d),-MT,$@
 
-#Versioning info - MD5 hash of pfe_ct.h + most recent commit in this project's git.
+#Driver versioning info - MD5 hash of pfe_ct.h, drv version, target OS.
 PFE_CT_H_START_OFFSET=$(word 1, $(shell cat -n ../pfe_platform/public/pfe_ct.h | sed -n '/=== \*/,$$p'))
 PFE_CT_H_MD5 = $(word 1, $(shell cat ../pfe_platform/public/pfe_ct.h | sed -n '$(PFE_CT_H_START_OFFSET),$$p' | tr -d '\040\011\012\015' | md5sum))
-CCFLAGS += -DGLOBAL_VERSION_CONTROL_ID=\"$(shell git log -1 --pretty=format:"%h")\"
 CCFLAGS += -DPFE_CT_H_MD5=\"$(PFE_CT_H_MD5)\"
-CCFLAGS += -DLIBFCI_CLI_VERSION=\"$(LIBFCI_CLI_VERSION)\"
-CCFLAGS += -DLIBFCI_CLI_TARGET_OS=\"$(LIBFCI_CLI_TARGET_OS)\"
+CCFLAGS += -DCLI_DRV_VERSION=\"$(CLI_DRV_VERSION)\"
+CCFLAGS += -DCLI_TARGET_OS=\"$(CLI_TARGET_OS)\"
 
 #Macro to expand files recursively: parameters $1 -  directory, $2 - extension, i.e. cpp
 rwildcard = $(wildcard $(addprefix $1/*.,$2)) $(foreach d,$(wildcard $1/*),$(call rwildcard,$d,$2))

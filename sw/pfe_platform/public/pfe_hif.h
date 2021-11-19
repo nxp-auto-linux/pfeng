@@ -10,8 +10,13 @@
 #ifndef PUBLIC_PFE_HIF_H_
 #define PUBLIC_PFE_HIF_H_
 
+#if defined(PFE_CFG_TARGET_OS_LINUX)
+#include "pfe_hif_ring_linux.h"
+#include "pfe_hif_chnl_linux.h"
+#else
 #include "pfe_hif_ring.h"
 #include "pfe_hif_chnl.h"
+#endif
 
 typedef enum
 {
@@ -21,6 +26,9 @@ typedef enum
 	HIF_CHNL_2 = (1 << 2),
 	HIF_CHNL_3 = (1 << 3)
 } pfe_hif_chnl_id_t;
+
+#define MASTER_UP	(1 << 0)
+#define HIF_OCCUPIED	(1 << 1)
 
 /*	Way to translate physical interface ID to HIF channel ID... */
 #include "pfe_ct.h"
@@ -59,6 +67,14 @@ errno_t pfe_hif_isr(const pfe_hif_t *hif);
 void pfe_hif_irq_mask(const pfe_hif_t *hif);
 void pfe_hif_irq_unmask(const pfe_hif_t *hif);
 uint32_t pfe_hif_get_text_statistics(const pfe_hif_t *hif, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+void pfe_hif_clear_master_up(const pfe_hif_t *hif);
+void pfe_hif_set_master_up(const pfe_hif_t *hif);
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 #endif /* PFE_CFG_PFE_MASTER */
+
+#ifdef PFE_CFG_PFE_SLAVE
+bool_t pfe_hif_get_master_up(const pfe_hif_t *hif);
+#endif /* PFE_CFG_PFE_SLAVE */
 
 #endif /* PUBLIC_PFE_HIF_H_ */

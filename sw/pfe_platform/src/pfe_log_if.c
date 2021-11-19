@@ -542,7 +542,7 @@ errno_t pfe_log_if_set_match_and(pfe_log_if_t *iface)
 	}
 
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags &= (pfe_ct_if_flags_t)(oal_htonl(~IF_FL_MATCH_OR));
+	iface->log_if_class.flags &= oal_htonl(~(uint32_t)IF_FL_MATCH_OR);
 
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
@@ -1018,6 +1018,13 @@ errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("Unable to del MAC address: %d\n", ret);
+
+			/* Removal of MAC address from phy failed, put it back to DB */
+			ret = pfe_mac_db_add_addr(iface->mac_db, addr, owner);
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Unable to put back the MAC address into log_if MAC database: %d\n", ret);
+			}
 		}
 	}
 
@@ -1354,7 +1361,7 @@ errno_t pfe_log_if_enable(pfe_log_if_t *iface)
 	NXP_LOG_DEBUG("Enabling %s\n", iface->name);
 
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags |= oal_htonl(IF_FL_ENABLED);
+	iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp | oal_htonl(IF_FL_ENABLED));
 
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
@@ -1426,7 +1433,7 @@ errno_t pfe_log_if_disable(pfe_log_if_t *iface)
 	NXP_LOG_DEBUG("Disabling %s\n", iface->name);
 
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags &= (pfe_ct_if_flags_t)(oal_htonl(~IF_FL_ENABLED));
+	iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & (oal_htonl(~(uint32_t)IF_FL_ENABLED)));
 
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
@@ -1529,7 +1536,7 @@ errno_t pfe_log_if_loopback_enable(pfe_log_if_t *iface)
 	}
 
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags |= IF_FL_LOOPBACK;
+	iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp | IF_FL_LOOPBACK);
 
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
@@ -1600,7 +1607,7 @@ errno_t pfe_log_if_loopback_disable(pfe_log_if_t *iface)
 	}
 
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags &= ~IF_FL_LOOPBACK;
+	iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & ~(uint32_t)IF_FL_LOOPBACK);
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
 	{
@@ -1743,7 +1750,7 @@ errno_t pfe_log_if_promisc_disable(pfe_log_if_t *iface)
 	}
 
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags &= (pfe_ct_if_flags_t)(oal_htonl(~IF_FL_PROMISC));
+	iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & (oal_htonl(~(uint32_t)IF_FL_PROMISC)));
 
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
@@ -1878,7 +1885,7 @@ errno_t pfe_log_if_discard_enable(pfe_log_if_t *iface)
 	}
 
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags |= oal_htonl(IF_FL_DISCARD);
+	iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp | oal_htonl(IF_FL_DISCARD));
 
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
@@ -1922,7 +1929,7 @@ errno_t pfe_log_if_discard_disable(pfe_log_if_t *iface)
 	}
 
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags &= (pfe_ct_if_flags_t)(oal_htonl(~IF_FL_DISCARD));
+	iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & oal_htonl(~(uint32_t)IF_FL_DISCARD));
 
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)
@@ -1974,11 +1981,11 @@ __attribute__((pure)) bool_t pfe_log_if_is_discard(pfe_log_if_t *iface)
 /**
  * @brief		Get interface name
  * @param[in]	iface The interface instance
- * @return		Pointer to name string or NULL if failed/not found.
+ * @return		Pointer to name string or NULL if failed/not found
  */
 __attribute__((pure)) const char_t *pfe_log_if_get_name(const pfe_log_if_t *iface)
 {
-	static const char_t *unknown = "(unknown)";
+    static const char_t *unknown = "(unknown)";
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -1988,14 +1995,7 @@ __attribute__((pure)) const char_t *pfe_log_if_get_name(const pfe_log_if_t *ifac
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (NULL == iface)
-	{
-		return unknown;
-	}
-	else
-	{
-		return iface->name;
-	}
+	return ((NULL != iface)? iface->name : unknown);
 }
 
 /**

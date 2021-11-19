@@ -18,12 +18,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
 /**
  * @brief		Initialize and configure the CLASS block
  * @param[in]	base_va Base address of CLASS register space (virtual)
@@ -109,11 +103,11 @@ void pfe_class_cfg_disable(addr_t base_va)
 errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtable_len, uint32_t entry_size)
 {
 	uint8_t ii;
-	uint32_t reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
+	uint32_t reg;
 
 	if (NULL_ADDR == rtable_pa)
 	{
-		hal_write32(reg & (~PARSE_ROUTE_EN(TRUE)), base_va + CLASS_ROUTE_MULTI);
+		pfe_class_cfg_rtable_lookup_disable(base_va);
 		return EOK;
 	}
 
@@ -124,6 +118,7 @@ errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtab
 		return EINVAL;
 	}
 
+	/* Validate rtable entry size if route parsing is already enabled. */
 	reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
 	if (0U != (reg & PARSE_ROUTE_EN(TRUE)))
 	{
@@ -134,6 +129,7 @@ errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtab
 		}
 	}
 
+	/* Validate that rtable_len is a power of 2 and it's within boundaries. */
 	for (ii=0U; ii<(sizeof(rtable_len) * 8U); ii++)
 	{
 		if (0U != (rtable_len & (1UL << ii)))
@@ -160,8 +156,7 @@ errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtab
 				| ROUTE_ENTRY_SIZE(entry_size)
 				, base_va + CLASS_ROUTE_HASH_ENTRY_SIZE);
 
-	reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
-	hal_write32(reg | PARSE_ROUTE_EN(TRUE), base_va + CLASS_ROUTE_MULTI);
+	/* Don't enable PARSE_ROUTE_EN here as it will be enabled only when needed later. */
 
 	return EOK;
 }
@@ -396,4 +391,28 @@ uint32_t pfe_class_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size,
 				hal_read32(base_va + CLASS_PHY4_TTL_ERR_PKTS));
 
 	return len;
+}
+
+/**
+ * @brief		Enable HW lookup of routing table
+ * @param[in]	base_va Base address of CLASS register space (virtual)
+ */
+void pfe_class_cfg_rtable_lookup_enable(const addr_t base_va)
+{
+	uint32_t reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
+	hal_write32(reg | PARSE_ROUTE_EN(TRUE), base_va + CLASS_ROUTE_MULTI);
+
+	NXP_LOG_INFO("Enabling RTable lookup PARSE_ROUTE_EN\n");
+}
+
+/**
+ * @brief		Enable HW lookup of routing table
+ * @param[in]	base_va Base address of CLASS register space (virtual)
+ */
+void pfe_class_cfg_rtable_lookup_disable(const addr_t base_va)
+{
+	uint32_t reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
+	hal_write32(reg & (~PARSE_ROUTE_EN(TRUE)), base_va + CLASS_ROUTE_MULTI);
+
+	NXP_LOG_INFO("Disabling RTable lookup PARSE_ROUTE_EN\n");
 }

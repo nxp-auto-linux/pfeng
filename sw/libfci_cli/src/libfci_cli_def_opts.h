@@ -231,8 +231,9 @@ typedef enum cli_opt_incompat_grp_tt {
 #define OPT_09_HAS_ARG           y
 #define OPT_09_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_09_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_09_CLI_LONG_TXT_A    "mirror"
-#define OPT_09_TXT_HELP          "--mirror"
+#define OPT_09_CLI_LONG_TXT_A    "mirr"
+#define OPT_09_CLI_LONG_TXT_B    "mirror"
+#define OPT_09_TXT_HELP          "--mirr|--mirror"
 #define                          TXT_HELP__MIRROR \
         OPT_09_TXT_HELP
 
@@ -293,16 +294,7 @@ typedef enum cli_opt_incompat_grp_tt {
         OPT_14_TXT_HELP
 
 
-#define OPT_15_ENUM_NAME         OPT_LOADBALANCE
-#define OPT_15_OPT_PARSE         opt_parse_loadbalance
-#define OPT_15_HAS_ARG           y
-#define OPT_15_INCOMPAT_GRPS     OPT_GRP_NONE
-#define OPT_15_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_15_CLI_LONG_TXT_A    "lb"
-#define OPT_15_CLI_LONG_TXT_B    "loadbalance"
-#define OPT_15_TXT_HELP          "--lb|--loadbalance"
-#define                          TXT_HELP__LOADBALANCE \
-        OPT_15_TXT_HELP
+/*      OPT_15_ENUM_NAME         reserved for future use */
 
 
 #define OPT_16_ENUM_NAME         OPT_MATCH_MODE
@@ -718,51 +710,51 @@ typedef enum cli_opt_incompat_grp_tt {
         OPT_50_TXT_HELP
 
 
-#define OPT_51_ENUM_NAME         OPT_INGRESS_MR0
-#define OPT_51_OPT_PARSE         opt_parse_ingress_mr0
+#define OPT_51_ENUM_NAME         OPT_RX_MIRROR0
+#define OPT_51_OPT_PARSE         opt_parse_rx_mirror0
 #define OPT_51_HAS_ARG           y
 #define OPT_51_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_51_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_51_CLI_LONG_TXT_A    "inmr0"
-#define OPT_51_CLI_LONG_TXT_B    "ingress-mr0"
-#define OPT_51_TXT_HELP          "--inmr0|--ingress-mr0"
-#define                          TXT_HELP__INGRESS_MR0 \
+#define OPT_51_CLI_LONG_TXT_A    "rxmirr0"
+#define OPT_51_CLI_LONG_TXT_B    "rx-mirror0"
+#define OPT_51_TXT_HELP          "--rxmirr0|--rx-mirror0"
+#define                          TXT_HELP__RX_MIRROR0 \
         OPT_51_TXT_HELP
 
 
-#define OPT_52_ENUM_NAME         OPT_INGRESS_MR1
-#define OPT_52_OPT_PARSE         opt_parse_ingress_mr1
+#define OPT_52_ENUM_NAME         OPT_RX_MIRROR1
+#define OPT_52_OPT_PARSE         opt_parse_rx_mirror1
 #define OPT_52_HAS_ARG           y
 #define OPT_52_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_52_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_52_CLI_LONG_TXT_A    "inmr1"
-#define OPT_52_CLI_LONG_TXT_B    "ingress-mr1"
-#define OPT_52_TXT_HELP          "--inmr1|--ingress-mr1"
-#define                          TXT_HELP__INGRESS_MR1 \
+#define OPT_52_CLI_LONG_TXT_A    "rxmirr1"
+#define OPT_52_CLI_LONG_TXT_B    "rx-mirror1"
+#define OPT_52_TXT_HELP          "--rxmirr1|--rx-mirror1"
+#define                          TXT_HELP__RX_MIRROR1 \
         OPT_52_TXT_HELP
 
 
-#define OPT_53_ENUM_NAME         OPT_EGRESS_MR0
-#define OPT_53_OPT_PARSE         opt_parse_egress_mr0
+#define OPT_53_ENUM_NAME         OPT_TX_MIRROR0
+#define OPT_53_OPT_PARSE         opt_parse_tx_mirror0
 #define OPT_53_HAS_ARG           y
 #define OPT_53_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_53_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_53_CLI_LONG_TXT_A    "egmr0"
-#define OPT_53_CLI_LONG_TXT_B    "egress-mr0"
-#define OPT_53_TXT_HELP          "--egmr0|--egress-mr0"
-#define                          TXT_HELP__EGRESS_MR0 \
+#define OPT_53_CLI_LONG_TXT_A    "txmirr0"
+#define OPT_53_CLI_LONG_TXT_B    "tx-mirror0"
+#define OPT_53_TXT_HELP          "--txmirr0|--tx-mirror0"
+#define                          TXT_HELP__TX_MIRROR0 \
         OPT_53_TXT_HELP
 
 
-#define OPT_54_ENUM_NAME         OPT_EGRESS_MR1
-#define OPT_54_OPT_PARSE         opt_parse_egress_mr1
+#define OPT_54_ENUM_NAME         OPT_TX_MIRROR1
+#define OPT_54_OPT_PARSE         opt_parse_tx_mirror1
 #define OPT_54_HAS_ARG           y
 #define OPT_54_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_54_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_54_CLI_LONG_TXT_A    "egmr1"
-#define OPT_54_CLI_LONG_TXT_B    "egress-mr1"
-#define OPT_54_TXT_HELP          "--emr1|--egress-mr1"
-#define                          TXT_HELP__EGRESS_MR1 \
+#define OPT_54_CLI_LONG_TXT_A    "txmirr1"
+#define OPT_54_CLI_LONG_TXT_B    "tx-mirror1"
+#define OPT_54_TXT_HELP          "--txmirr1|--tx-mirror1"
+#define                          TXT_HELP__TX_MIRROR1 \
         OPT_54_TXT_HELP
 
 
@@ -1190,119 +1182,309 @@ typedef enum cli_opt_incompat_grp_tt {
         OPT_91_TXT_HELP
 
 
-#define OPT_92_ENUM_NAME         OPT_ZPROB
-#define OPT_92_OPT_PARSE         opt_parse_zprob
+#define OPT_92_ENUM_NAME         OPT_THFULL
+#define OPT_92_OPT_PARSE         opt_parse_thfull
 #define OPT_92_HAS_ARG           y
 #define OPT_92_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_92_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_92_CLI_LONG_TXT_A    "zprob"
-#define OPT_92_TXT_HELP          "--zprob"
-#define                          TXT_HELP__ZPROB \
+#define OPT_92_CLI_LONG_TXT_A    "thfull"
+#define OPT_92_CLI_LONG_TXT_B    "thld-full"
+#define OPT_92_TXT_HELP          "--thfull|--thld-full"
+#define                          TXT_HELP__THFULL \
         OPT_92_TXT_HELP
 
 
-#define OPT_93_ENUM_NAME         OPT_SCH_ALGO
-#define OPT_93_OPT_PARSE         opt_parse_sch_algo
+#define OPT_93_ENUM_NAME         OPT_ZPROB
+#define OPT_93_OPT_PARSE         opt_parse_zprob
 #define OPT_93_HAS_ARG           y
 #define OPT_93_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_93_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_93_CLI_LONG_TXT_A    "sch-algo"
-#define OPT_93_TXT_HELP          "--sch-algo"
-#define                          TXT_HELP__SCH_ALGO \
+#define OPT_93_CLI_LONG_TXT_A    "zprob"
+#define OPT_93_TXT_HELP          "--zprob"
+#define                          TXT_HELP__ZPROB \
         OPT_93_TXT_HELP
 
 
-#define OPT_94_ENUM_NAME         OPT_SCH_IN
-#define OPT_94_OPT_PARSE         opt_parse_sch_in
+#define OPT_94_ENUM_NAME         OPT_SCH_ALGO
+#define OPT_94_OPT_PARSE         opt_parse_sch_algo
 #define OPT_94_HAS_ARG           y
 #define OPT_94_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_94_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_94_CLI_LONG_TXT_A    "sch-in"
-#define OPT_94_TXT_HELP          "--sch-in"
-#define                          TXT_HELP__SCH_IN \
+#define OPT_94_CLI_LONG_TXT_A    "sch-algo"
+#define OPT_94_TXT_HELP          "--sch-algo"
+#define                          TXT_HELP__SCH_ALGO \
         OPT_94_TXT_HELP
 
 
-#define OPT_95_ENUM_NAME         OPT_SHP_POS
-#define OPT_95_OPT_PARSE         opt_parse_shp_pos
+#define OPT_95_ENUM_NAME         OPT_SCH_IN
+#define OPT_95_OPT_PARSE         opt_parse_sch_in
 #define OPT_95_HAS_ARG           y
 #define OPT_95_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_95_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_95_CLI_LONG_TXT_A    "shp-pos"
-#define OPT_95_TXT_HELP          "--shp-pos"
-#define                          TXT_HELP__SHP_POS \
+#define OPT_95_CLI_LONG_TXT_A    "sch-in"
+#define OPT_95_TXT_HELP          "--sch-in"
+#define                          TXT_HELP__SCH_IN \
         OPT_95_TXT_HELP
 
 
-#define OPT_96_ENUM_NAME         OPT_ISL
-#define OPT_96_OPT_PARSE         opt_parse_isl
+#define OPT_96_ENUM_NAME         OPT_SHP_POS
+#define OPT_96_OPT_PARSE         opt_parse_shp_pos
 #define OPT_96_HAS_ARG           y
 #define OPT_96_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_96_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_96_CLI_LONG_TXT_A    "isl"
-#define OPT_96_TXT_HELP          "--isl"
-#define                          TXT_HELP__ISL \
+#define OPT_96_CLI_LONG_TXT_A    "shp-pos"
+#define OPT_96_TXT_HELP          "--shp-pos"
+#define                          TXT_HELP__SHP_POS \
         OPT_96_TXT_HELP
 
 
-#define OPT_97_ENUM_NAME         OPT_CRMIN
-#define OPT_97_OPT_PARSE         opt_parse_crmin
+#define OPT_97_ENUM_NAME         OPT_ISL
+#define OPT_97_OPT_PARSE         opt_parse_isl
 #define OPT_97_HAS_ARG           y
 #define OPT_97_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_97_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_97_CLI_LONG_TXT_A    "crmin"
-#define OPT_97_CLI_LONG_TXT_B    "credit-min"
-#define OPT_97_TXT_HELP          "--crmin|--credit-min"
-#define                          TXT_HELP__CRMIN \
+#define OPT_97_CLI_LONG_TXT_A    "isl"
+#define OPT_97_TXT_HELP          "--isl"
+#define                          TXT_HELP__ISL \
         OPT_97_TXT_HELP
 
 
-#define OPT_98_ENUM_NAME         OPT_CRMAX
-#define OPT_98_OPT_PARSE         opt_parse_crmax
+#define OPT_98_ENUM_NAME         OPT_CRMIN
+#define OPT_98_OPT_PARSE         opt_parse_crmin
 #define OPT_98_HAS_ARG           y
 #define OPT_98_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_98_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_98_CLI_LONG_TXT_A    "crmax"
-#define OPT_98_CLI_LONG_TXT_B    "credit-max"
-#define OPT_98_TXT_HELP          "--crmax|--credit-max"
-#define                          TXT_HELP__CRMAX \
+#define OPT_98_CLI_LONG_TXT_A    "crmin"
+#define OPT_98_CLI_LONG_TXT_B    "credit-min"
+#define OPT_98_TXT_HELP          "--crmin|--credit-min"
+#define                          TXT_HELP__CRMIN \
         OPT_98_TXT_HELP
 
 
-#define OPT_99_ENUM_NAME         OPT_R_VLAN
-#define OPT_99_OPT_PARSE         opt_parse_r_vlan
+#define OPT_99_ENUM_NAME         OPT_CRMAX
+#define OPT_99_OPT_PARSE         opt_parse_crmax
 #define OPT_99_HAS_ARG           y
 #define OPT_99_INCOMPAT_GRPS     OPT_GRP_NONE
 #define OPT_99_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_99_CLI_LONG_TXT_A    "r-vlan"
-#define OPT_99_TXT_HELP          "--r-vlan"
-#define                          TXT_HELP__R_VLAN \
+#define OPT_99_CLI_LONG_TXT_A    "crmax"
+#define OPT_99_CLI_LONG_TXT_B    "credit-max"
+#define OPT_99_TXT_HELP          "--crmax|--credit-max"
+#define                          TXT_HELP__CRMAX \
         OPT_99_TXT_HELP
 
 
-#define OPT_100_ENUM_NAME        OPT_TTL_DECR
-#define OPT_100_OPT_PARSE        opt_parse_ttl_decr
+#define OPT_100_ENUM_NAME        OPT_R_VLAN
+#define OPT_100_OPT_PARSE        opt_parse_r_vlan
 #define OPT_100_HAS_ARG          y
 #define OPT_100_INCOMPAT_GRPS    OPT_GRP_NONE
 #define OPT_100_CLI_SHORT_CODE   OPT_AUTO_CODE
-#define OPT_100_CLI_LONG_TXT_A   "ttl-decr"
-#define OPT_100_CLI_LONG_TXT_B   "decr-ttl"
-#define OPT_100_TXT_HELP         "--ttl-decr | --decr-ttl"
-#define                          TXT_HELP__TTL_DECR \
+#define OPT_100_CLI_LONG_TXT_A   "r-vlan"
+#define OPT_100_TXT_HELP         "--r-vlan"
+#define                          TXT_HELP__R_VLAN \
         OPT_100_TXT_HELP
 
 
-#define OPT_101_ENUM_NAME        OPT_DISCARD_IF_TTL_BELOW_2
-#define OPT_101_OPT_PARSE        opt_parse_discard_if_ttl_below_2
+#define OPT_101_ENUM_NAME        OPT_TTL_DECR
+#define OPT_101_OPT_PARSE        opt_parse_ttl_decr
 #define OPT_101_HAS_ARG          y
 #define OPT_101_INCOMPAT_GRPS    OPT_GRP_NONE
 #define OPT_101_CLI_SHORT_CODE   OPT_AUTO_CODE
-#define OPT_101_CLI_LONG_TXT_A   "X-ttl"
-#define OPT_101_CLI_LONG_TXT_B   "discard-if-ttl-below-2"
-#define OPT_101_TXT_HELP         "--X-ttl | --discard-if-ttl-below-2"
-#define                          TXT_HELP__DISCARD_IF_TTL_BELOW_2 \
+#define OPT_101_CLI_LONG_TXT_A   "ttl-decr"
+#define OPT_101_CLI_LONG_TXT_B   "decr-ttl"
+#define OPT_101_TXT_HELP         "--ttl-decr | --decr-ttl"
+#define                          TXT_HELP__TTL_DECR \
         OPT_101_TXT_HELP
 
+
+#define OPT_102_ENUM_NAME        OPT_DISCARD_IF_TTL_BELOW_2
+#define OPT_102_OPT_PARSE        opt_parse_discard_if_ttl_below_2
+#define OPT_102_HAS_ARG          y
+#define OPT_102_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_102_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_102_CLI_LONG_TXT_A   "X-ttl"
+#define OPT_102_CLI_LONG_TXT_B   "discard-if-ttl-below-2"
+#define OPT_102_TXT_HELP         "--X-ttl | --discard-if-ttl-below-2"
+#define                          TXT_HELP__DISCARD_IF_TTL_BELOW_2 \
+        OPT_102_TXT_HELP
+
+
+#define OPT_103_ENUM_NAME        OPT_MODIFY_ACTIONS
+#define OPT_103_OPT_PARSE        opt_parse_modify_actions
+#define OPT_103_HAS_ARG          y
+#define OPT_103_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_103_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_103_CLI_LONG_TXT_A   "modify-actions"
+#define OPT_103_TXT_HELP         "--modify-actions"
+#define                          TXT_HELP__MODIFY_ACTIONS \
+        OPT_103_TXT_HELP
+
+
+#define OPT_104_ENUM_NAME        OPT_WRED_QUE
+#define OPT_104_OPT_PARSE        opt_parse_wred_que
+#define OPT_104_HAS_ARG          y
+#define OPT_104_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_104_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_104_CLI_LONG_TXT_A   "wred-que"
+#define OPT_104_TXT_HELP         "--wred-que"
+#define                          TXT_HELP__WRED_QUE \
+        OPT_104_TXT_HELP
+
+
+#define OPT_105_ENUM_NAME        OPT_SHP_TYPE
+#define OPT_105_OPT_PARSE        opt_parse_shp_type
+#define OPT_105_HAS_ARG          y
+#define OPT_105_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_105_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_105_CLI_LONG_TXT_A   "shp-type"
+#define OPT_105_TXT_HELP         "--shp-type"
+#define                          TXT_HELP__SHP_TYPE \
+        OPT_105_TXT_HELP
+
+
+#define OPT_106_ENUM_NAME        OPT_FLOW_ACTION
+#define OPT_106_OPT_PARSE        opt_parse_flow_action
+#define OPT_106_HAS_ARG          y
+#define OPT_106_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_106_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_106_CLI_LONG_TXT_A   "flowact"
+#define OPT_106_CLI_LONG_TXT_B   "flow-action"
+#define OPT_106_TXT_HELP         "--flowact|--flow-action"
+#define                          TXT_HELP__FLOW_ACTION \
+        OPT_106_TXT_HELP
+
+
+#define OPT_107_ENUM_NAME        OPT_FLOW_TYPES
+#define OPT_107_OPT_PARSE        opt_parse_flow_types
+#define OPT_107_HAS_ARG          y
+#define OPT_107_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_107_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_107_CLI_LONG_TXT_A   "ft"
+#define OPT_107_CLI_LONG_TXT_B   "flow-types"
+#define OPT_107_TXT_HELP         "--ft|--flow-types"
+#define                          TXT_HELP__FLOW_TYPES \
+        OPT_107_TXT_HELP
+
+
+#define OPT_108_ENUM_NAME        OPT_TOS
+#define OPT_108_OPT_PARSE        opt_parse_tos
+#define OPT_108_HAS_ARG          y
+#define OPT_108_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_108_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_108_CLI_LONG_TXT_A   "tos"
+#define OPT_108_CLI_LONG_TXT_B   "tclass"
+#define OPT_108_TXT_HELP         "--tos|--tclass"
+#define                          TXT_HELP__TOS \
+        OPT_108_TXT_HELP
+
+
+#define OPT_109_ENUM_NAME        OPT_SPORT_MIN
+#define OPT_109_OPT_PARSE        opt_parse_sport_min
+#define OPT_109_HAS_ARG          y
+#define OPT_109_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_109_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_109_CLI_LONG_TXT_A   "sport-min"
+#define OPT_109_CLI_LONG_TXT_B   "src-port-min"
+#define OPT_109_TXT_HELP         "--sport-min|--src-port-min"
+#define                          TXT_HELP__SPORT_MIN \
+        OPT_109_TXT_HELP
+
+
+#define OPT_110_ENUM_NAME        OPT_SPORT_MAX
+#define OPT_110_OPT_PARSE        opt_parse_sport_max
+#define OPT_110_HAS_ARG          y
+#define OPT_110_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_110_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_110_CLI_LONG_TXT_A   "sport-max"
+#define OPT_110_CLI_LONG_TXT_B   "src-port-max"
+#define OPT_110_TXT_HELP         "--sport-max|--src-port-max"
+#define                          TXT_HELP__SPORT_MAX \
+        OPT_110_TXT_HELP
+
+
+#define OPT_111_ENUM_NAME        OPT_DPORT_MIN
+#define OPT_111_OPT_PARSE        opt_parse_dport_min
+#define OPT_111_HAS_ARG          y
+#define OPT_111_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_111_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_111_CLI_LONG_TXT_A   "dport-min"
+#define OPT_111_CLI_LONG_TXT_B   "dst-port-min"
+#define OPT_111_TXT_HELP         "--dport-min|--dst-port-min"
+#define                          TXT_HELP__DPORT_MIN \
+        OPT_111_TXT_HELP
+
+
+#define OPT_112_ENUM_NAME        OPT_DPORT_MAX
+#define OPT_112_OPT_PARSE        opt_parse_dport_max
+#define OPT_112_HAS_ARG          y
+#define OPT_112_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_112_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_112_CLI_LONG_TXT_A   "dport-max"
+#define OPT_112_CLI_LONG_TXT_B   "dst-port-max"
+#define OPT_112_TXT_HELP         "--dport-max|--dst-port-max"
+#define                          TXT_HELP__DPORT_MAX \
+        OPT_112_TXT_HELP
+
+
+#define OPT_113_ENUM_NAME        OPT_VLAN_MASK
+#define OPT_113_OPT_PARSE        opt_parse_vlan_mask
+#define OPT_113_HAS_ARG          y
+#define OPT_113_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_113_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_113_CLI_LONG_TXT_A   "vlan-mask"
+#define OPT_113_TXT_HELP         "--vlan-mask"
+#define                          TXT_HELP__VLAN_MASK \
+        OPT_113_TXT_HELP
+
+
+#define OPT_114_ENUM_NAME        OPT_TOS_MASK
+#define OPT_114_OPT_PARSE        opt_parse_tos_mask
+#define OPT_114_HAS_ARG          y
+#define OPT_114_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_114_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_114_CLI_LONG_TXT_A   "tos-mask"
+#define OPT_114_CLI_LONG_TXT_B   "tclass-mask"
+#define OPT_114_TXT_HELP         "--tos-mask|--tclass-mask"
+#define                          TXT_HELP__TOS_MASK \
+        OPT_114_TXT_HELP
+
+
+#define OPT_115_ENUM_NAME        OPT_PROTOCOL_MASK
+#define OPT_115_OPT_PARSE        opt_parse_protocol_mask
+#define OPT_115_HAS_ARG          y
+#define OPT_115_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_115_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_115_CLI_LONG_TXT_A   "p-mask"
+#define OPT_115_CLI_LONG_TXT_B   "proto-mask"
+#define OPT_115_CLI_LONG_TXT_C   "protocol-mask"
+#define OPT_115_TXT_HELP         "--p-mask|--proto-mask|--protocol-mask"
+#define                          TXT_HELP__PROTOCOL_MASK \
+        OPT_115_TXT_HELP
+
+
+#define OPT_116_ENUM_NAME        OPT_SIP_PFX
+#define OPT_116_OPT_PARSE        opt_parse_sip_pfx
+#define OPT_116_HAS_ARG          y
+#define OPT_116_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_116_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_116_CLI_LONG_TXT_A   "s-pfx"
+#define OPT_116_CLI_LONG_TXT_B   "sip-pfx"
+#define OPT_116_CLI_LONG_TXT_C   "src-pfx"
+#define OPT_116_TXT_HELP         "--s-pfx|--sip-pfx|--src-pfx"
+#define                          TXT_HELP__SIP_PFX \
+        OPT_116_TXT_HELP
+
+
+#define OPT_117_ENUM_NAME        OPT_DIP_PFX
+#define OPT_117_OPT_PARSE        opt_parse_dip_pfx
+#define OPT_117_HAS_ARG          y
+#define OPT_117_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_117_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_117_CLI_LONG_TXT_A   "d-pfx"
+#define OPT_117_CLI_LONG_TXT_B   "dip-pfx"
+#define OPT_117_CLI_LONG_TXT_C   "dst-pfx"
+#define OPT_117_TXT_HELP         "--d-pfx|--dip-pfx|--dst-pfx"
+#define                          TXT_HELP__DIP_PFX \
+        OPT_117_TXT_HELP
 
 
 

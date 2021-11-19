@@ -14,8 +14,13 @@
 #include "pfe_ct.h"
 #include "pfe_emac.h"
 #include "pfe_mac_db.h"
+#if defined(PFE_CFG_TARGET_OS_LINUX)
+#include "pfe_hif_chnl_linux.h"
+#else
 #include "pfe_hif_chnl.h"
+#endif
 #include "pfe_class.h"
+#include "pfe_mirror.h"
 
 /**
  * @brief	Interface callback reasons
@@ -41,6 +46,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if);
 errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if);
 errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac);
 pfe_emac_t *pfe_phy_if_get_emac(const pfe_phy_if_t *iface);
+pfe_gpi_t *pfe_phy_if_get_gpi(const pfe_phy_if_t *iface);
 errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif);
 pfe_hif_chnl_t *pfe_phy_if_get_hif(const pfe_phy_if_t *iface);
 errno_t pfe_phy_if_bind_util(pfe_phy_if_t *iface);
@@ -67,12 +73,15 @@ errno_t pfe_phy_if_allmulti_disable(pfe_phy_if_t *iface);
 errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 pfe_mac_db_t *pfe_phy_if_get_mac_db(const pfe_phy_if_t *iface);
-errno_t pfe_phy_if_get_mac_addr(pfe_phy_if_t *iface, pfe_mac_addr_t addr);
+errno_t pfe_phy_if_get_mac_addr_first(pfe_phy_if_t *iface, pfe_mac_addr_t addr, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
+errno_t pfe_phy_if_get_mac_addr_next(pfe_phy_if_t *iface, pfe_mac_addr_t addr);
 errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
 errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat);
+errno_t pfe_phy_if_set_rx_mirror(pfe_phy_if_t *iface, uint32_t sel, pfe_mirror_t *mirror);
+errno_t pfe_phy_if_set_tx_mirror(pfe_phy_if_t *iface, uint32_t sel, pfe_mirror_t *mirror);
+pfe_mirror_t *pfe_phy_if_get_tx_mirror(pfe_phy_if_t *iface, uint32_t sel);
+pfe_mirror_t *pfe_phy_if_get_rx_mirror(pfe_phy_if_t *iface, uint32_t sel);
 uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-errno_t pfe_phy_if_set_mirroring(pfe_phy_if_t *iface, pfe_ct_phy_if_id_t mirror);
-pfe_ct_phy_if_id_t pfe_phy_if_get_mirroring(const pfe_phy_if_t *iface);
 uint32_t pfe_phy_if_get_spd(const pfe_phy_if_t *iface);
 errno_t pfe_phy_if_set_spd(pfe_phy_if_t *iface, uint32_t spd_addr);
 errno_t pfe_phy_if_set_ftable(pfe_phy_if_t *iface, uint32_t table);

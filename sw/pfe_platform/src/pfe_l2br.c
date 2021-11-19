@@ -43,6 +43,7 @@
 
 #include "pfe_cbus.h"
 #include "pfe_l2br_table.h"
+#include "pfe_feature_mgr.h"
 #include "pfe_l2br.h"
 
 /**
@@ -56,6 +57,8 @@ struct __pfe_l2br_tag
 	pfe_l2br_domain_t *default_domain;
 	pfe_l2br_domain_t *fallback_domain;
 	LLIST_t domains;							/*!< List of standard domains */
+	uint32_t domain_stats_table_addr;
+	uint16_t domain_stats_table_size;
 	LLIST_t static_entries;						/*!< List of static entries */
 	uint16_t def_vlan;							/*!< Default VLAN */
 	uint32_t dmem_fb_bd_base;					/*!< Address within classifier memory where the fall-back bridge domain structure is located */
@@ -83,6 +86,7 @@ struct __pfe_l2br_tag
 struct __pfe_l2br_domain_tag
 {
 	uint16_t vlan;
+	uint8_t  stats_index;
 	union
 	{
 		pfe_ct_vlan_table_result_t action_data;
@@ -122,7 +126,7 @@ struct __pfe_l2br_static_entry_tag
 /**
  * @brief	Internal linked-list element
  */
-typedef struct 
+typedef struct
 {
 	void *ptr;
 	LLIST_t list_entry;
@@ -137,6 +141,10 @@ typedef enum
 	PFE_L2BR_FLUSH_STATIC_MAC,
 	PFE_L2BR_FLUSH_LEARNED_MAC
 } pfe_l2br_flush_types;
+
+#define VLAN_STATS_VEC_SIZE 128
+
+static uint8_t stats_index[VLAN_STATS_VEC_SIZE];
 
 static errno_t pfe_bd_write_to_class(const pfe_l2br_t *bridge, uint32_t base, pfe_ct_bd_entry_t *class_entry);
 static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain);
@@ -269,6 +277,133 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 }
 
 /**
+ * @brief		Get the next free index in the vlan stats table
+ * @return		The index
+ */
+static uint8_t pfe_l2br_domain_get_free_stats_index(pfe_l2br_t *bridge)
+{
+	/*Index 0 is reseved for fallback domain and domains outside stats range.
+	 * The fallback domain does not call pfe_l2br_domain_create*/
+	uint8_t index = 1;
+
+	while (index < bridge->domain_stats_table_size)
+	{
+		if (stats_index[index] == 0)
+		{
+			stats_index[index] = 1;
+			break;
+		}
+		index ++;
+	}
+
+	/* domain outside stats range. */
+	if (index == bridge->domain_stats_table_size)
+	{
+		index = 0;
+	}
+
+	return index;
+}
+
+/**
+ * @brief		Free the index in the stats table
+ * @param[in]	Index of the table
+ */
+static void pfe_l2br_domain_free_stats_index(uint8_t index)
+{
+	stats_index[index] = 0;
+}
+
+/**
+ * @brief		Create the vlan stats table
+ * @details		Create and allocate in dmem the space for stats table that
+ * 				include all configured vlans
+ * @param[in]   Class instance
+ * @param[in]	Number of configured vlan
+ * @return		DMEM address of the table
+ */
+static uint32_t pfe_l2br_create_vlan_stats_table(pfe_class_t *class, uint16_t vlan_count)
+{
+    addr_t addr;
+    uint32_t size;
+    pfe_ct_vlan_statistics_t temp;
+    errno_t res;
+    pfe_ct_class_mmap_t mmap;
+
+    /* Calculate needed size */
+    size = (uint32_t)((uint32_t)vlan_count * sizeof(pfe_ct_vlan_stats_t));
+    /* Allocate DMEM */
+    addr = pfe_class_dmem_heap_alloc(class, size);
+    if(0U == addr)
+    {
+        NXP_LOG_ERROR("Not enough DMEM memory\n");
+        return 0U;
+    }
+
+    res = pfe_class_get_mmap(class, 0U, &mmap);
+
+	if (EOK != res)
+	{
+		NXP_LOG_ERROR("Cannot get class memory map\n");
+		return res;
+	}
+
+    /* Write the table header */
+    temp.vlan_count = oal_htonl(vlan_count);
+    temp.vlan = oal_htonl(addr);
+    /*It is safe to write the table pointer because PEs are gracefully stopped
+     * and configuration read*/
+    res = pfe_class_write_dmem(class, -1, oal_ntohl(mmap.vlan_statistics), (void *)&temp, sizeof(pfe_ct_vlan_statistics_t));
+    if(EOK != res)
+    {
+        NXP_LOG_ERROR("Cannot write to DMEM\n");
+        pfe_class_dmem_heap_free(class, addr);
+        addr = 0U;
+    }
+    /* Return the DMEM address */
+    return addr;
+}
+
+/**
+ * @brief		Destroy the vlan stats table
+ * @details		Free from dmem the space filled by the table
+ * @param[in]	Table address
+ * @param[in]   Class instance
+ */
+static errno_t pfe_l2br_destroy_vlan_stats_table(pfe_class_t *class, uint32_t table_address)
+{
+	pfe_ct_vlan_statistics_t temp = {0};
+	pfe_ct_class_mmap_t mmap;
+	errno_t res = EOK;
+
+	if (0U == table_address)
+	{
+		return EOK;
+	}
+
+	res = pfe_class_get_mmap(class, 0U, &mmap);
+
+	if (EOK != res)
+	{
+		NXP_LOG_ERROR("Cannot get class memory map\n");
+		return res;
+	}
+
+	/*It is safe to write the table pointer because PEs are gracefully stopped
+	 * and configuration read*/
+	res = pfe_class_write_dmem(class, -1, oal_ntohl(mmap.vlan_statistics), (void *)&temp, sizeof(pfe_ct_vlan_statistics_t));
+	if(EOK != res)
+	{
+		NXP_LOG_ERROR("Cannot write to DMEM\n");
+		return res;
+	}
+
+	pfe_class_dmem_heap_free(class, table_address);
+
+	return EOK;
+}
+
+/**
  * @brief		Create L2 bridge domain instance
  * @details		By default, new domain is configured to drop all matching packets. Use the
  *				pfe_l2br_domain_set_[ucast/mcast]_action() to finish the configuration. The
@@ -354,13 +489,21 @@ errno_t pfe_l2br_domain_create(pfe_l2br_t *bridge, uint16_t vlan)
 				NXP_LOG_DEBUG("Can't set vlan: %d\n", ret);
 				goto free_and_fail;
 			}
-            
+
 			domain->u.action_data.item.forward_list = 0U;
 			domain->u.action_data.item.untag_list = 0U;
 			domain->u.action_data.item.ucast_hit_action = (uint64_t)L2BR_ACT_DISCARD;
 			domain->u.action_data.item.ucast_miss_action = (uint64_t)L2BR_ACT_DISCARD;
 			domain->u.action_data.item.mcast_hit_action = (uint64_t)L2BR_ACT_DISCARD;
 			domain->u.action_data.item.mcast_miss_action = (uint64_t)L2BR_ACT_DISCARD;
+			domain->u.action_data.item.stats_index = pfe_l2br_domain_get_free_stats_index(bridge);
+
+			if (domain->u.action_data.item.stats_index == 0)
+			{
+				NXP_LOG_ERROR("No more space for vlan statistics.The stats will be added to vlan 0 fallback\n");
+			}
+
+			domain->stats_index = domain->u.action_data.item.stats_index;
 
 			/*	Set action data */
 			ret = pfe_l2br_table_entry_set_action_data(domain->vlan_entry, domain->u.action_data_u64val);
@@ -438,7 +581,7 @@ errno_t pfe_l2br_domain_destroy(pfe_l2br_domain_t *domain)
                 entry = NULL;
             }
         }
-        
+
         if (NULL != domain->vlan_entry)
         {
             /*	Remove entry from the table */
@@ -484,6 +627,8 @@ errno_t pfe_l2br_domain_destroy(pfe_l2br_domain_t *domain)
             LLIST_Remove(&domain->list_entry);
         }
 
+        pfe_l2br_domain_free_stats_index(domain->stats_index);
+
         if (EOK != oal_mutex_unlock(domain->bridge->mutex))
         {
             NXP_LOG_DEBUG("Mutex unlock failed\n");
@@ -516,6 +661,7 @@ static pfe_l2br_domain_t *pfe_l2br_create_default_domain(pfe_l2br_t *bridge, uin
 {
 	errno_t ret;
 	pfe_l2br_domain_t *domain = NULL;
+	pfe_ct_class_mmap_t class_mmap;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
@@ -525,23 +671,40 @@ static pfe_l2br_domain_t *pfe_l2br_create_default_domain(pfe_l2br_t *bridge, uin
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	ret = pfe_l2br_domain_create(bridge, vlan);
-
-	if (EOK != ret)
+	if (EOK != pfe_class_get_mmap(bridge->class, 0, &class_mmap))
 	{
-		NXP_LOG_DEBUG("Argument is NULL\n");
-		return NULL;
+		NXP_LOG_ERROR("Could not get memory map\n");
+		domain = NULL;
 	}
 	else
 	{
-		domain = pfe_l2br_get_first_domain(bridge, L2BD_CRIT_BY_VLAN, (void *)(addr_t)vlan);
-		if (NULL == domain)
+
+		bridge->dmem_def_bd_base = oal_ntohl(class_mmap.dmem_def_bd_base);
+
+		ret = pfe_l2br_domain_create(bridge, vlan);
+
+		if (EOK != ret)
 		{
-			NXP_LOG_ERROR("Default domain not found\n");
+			NXP_LOG_DEBUG("Can't create default domain\n");
+			return NULL;
 		}
 		else
 		{
-			domain->is_default = TRUE;
+			domain = pfe_l2br_get_first_domain(bridge, L2BD_CRIT_BY_VLAN, (void *)(addr_t)vlan);
+			if (NULL == domain)
+			{
+				NXP_LOG_ERROR("Default domain not found\n");
+			}
+			else
+			{
+				domain->is_default = TRUE;
+			}
+
+			if (EOK != pfe_l2br_update_hw_entry(domain))
+			{
+				oal_mm_free(domain);
+				domain = NULL;
+			}
 		}
 	}
 
@@ -606,7 +769,6 @@ static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
 	else
 	{
 		bridge->dmem_fb_bd_base = oal_ntohl(class_mmap.dmem_fb_bd_base);
-		bridge->dmem_def_bd_base = oal_ntohl(class_mmap.dmem_def_bd_base);
 
 		NXP_LOG_INFO("Fall-back bridge domain @ 0x%x (class)\n", (uint_t)bridge->dmem_fb_bd_base);
 		NXP_LOG_INFO("Default bridge domain @ 0x%x (class)\n", (uint_t)bridge->dmem_def_bd_base);
@@ -1421,7 +1583,7 @@ errno_t pfe_l2br_static_entry_replace_fw_list(const pfe_l2br_t *bridge, pfe_l2br
 errno_t pfe_l2br_static_entry_set_local_flag(const pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t local)
 {
 	uint32_t tmp;
-    
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == bridge) || (NULL == static_ent)))
 	{
@@ -1461,7 +1623,7 @@ errno_t pfe_l2br_static_entry_set_local_flag(const pfe_l2br_t *bridge, pfe_l2br_
 errno_t pfe_l2br_static_entry_set_src_discard_flag(const pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, bool_t src_discard)
 {
 	uint32_t tmp;
-    
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == bridge) || (NULL == static_ent)))
 	{
@@ -1502,7 +1664,7 @@ errno_t pfe_l2br_static_entry_set_dst_discard_flag(const pfe_l2br_t *bridge, pfe
 {
 	uint32_t tmp;
     errno_t ret = EINVAL;
-    
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == bridge) || (NULL == static_ent)))
 	{
@@ -1677,20 +1839,20 @@ pfe_l2br_static_entry_t *pfe_l2br_static_entry_get_first(pfe_l2br_t *bridge, pfe
 	{
 		case L2SENT_CRIT_ALL:
 			break;
-            
+
 		case L2SENT_CRIT_BY_MAC:
 			(void)memcpy((void *)bridge->cur_static_ent_crit_arg.mac, arg2, sizeof(pfe_mac_addr_t));
 			break;
-            
+
 		case L2SENT_CRIT_BY_VLAN:
 			bridge->cur_static_ent_crit_arg.vlan = (uint16_t)((addr_t)arg1);
 			break;
-            
+
 		case L2SENT_CRIT_BY_MAC_VLAN:
 			bridge->cur_static_ent_crit_arg.vlan = (uint16_t)((addr_t)arg1);
 			(void)memcpy((void *)bridge->cur_static_ent_crit_arg.mac, arg2, sizeof(pfe_mac_addr_t));
 			break;
-            
+
         default:
             NXP_LOG_DEBUG("Invalid static entry type");
             break;
@@ -1824,7 +1986,7 @@ static bool_t pfe_l2br_static_entry_match_criterion(const pfe_l2br_t *bridge, pf
 		case L2SENT_CRIT_BY_VLAN:
 			match = (static_ent->vlan == bridge->cur_static_ent_crit_arg.vlan);
 			break;
-            
+
 		case L2SENT_CRIT_BY_MAC_VLAN:
 			match = (static_ent->vlan == bridge->cur_static_ent_crit_arg.vlan);
 			if (TRUE == match) {
@@ -2046,92 +2208,6 @@ errno_t pfe_l2br_flush_all(pfe_l2br_t *bridge)
 }
 
 /**
- * @brief		Checks whether the firmware feature with given name is enabled
- * @param[in]	class Class instance to checks
- * @param[in]	name Name of the feature to check
- * @retval		TRUE Feature is enable
- * @retval		FALSE Feature is not enable
- */
-
-static bool_t pfe_platform_class_feature_enabled(const pfe_class_t *class, const char *name)
-{
-	pfe_fw_feature_t *fw_feature;
-	uint8_t variant = 0;
-    bool_t retval = FALSE;
-     
-    /* Does the feature exist? */
-	if(EOK == pfe_class_get_feature(class, &fw_feature, name))
-	{   /* Feature exists */
-		/* Get variant */
-		if (EOK == pfe_fw_feature_get_variant(fw_feature, &variant))
-        {
-            if (variant == 1U)
-            {
-                retval = TRUE;
-            }   
-        }
-	}
-
-	return retval;
-}
-
-/**
- * @brief		Enable the firmware feature with given name
- * @param[in]	class Class instance
- * @param[in]	name Name of the feature to enable
- * @retval		EOK if success, error code otherwise
- */
-
-static errno_t pfe_platform_class_feature_enable(const pfe_class_t *class, const char *name)
-{
-	pfe_fw_feature_t *fw_feature;
-	errno_t ret = EINVAL;
-	uint8_t variant = 0;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class) || (NULL == name)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-	}
-    else
-    {
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-        /* Does the feature exist? */
-        ret = pfe_class_get_feature(class, &fw_feature, name);
-        if(EOK != ret)
-        {
-            NXP_LOG_ERROR("%s FW feature doesn't exist!\n", name);
-        }
-        else
-        {
-            /* Get feature variant */
-            if (EOK == pfe_fw_feature_get_variant(fw_feature, &variant))
-            {
-                if (variant != 1U)
-                {
-                    NXP_LOG_ERROR("%s FW feature has invalid variant!\n", name);
-                    ret = EINVAL;
-                }
-                else
-                {
-                    /* Enable feature */
-                    ret = pfe_fw_feature_set_val(fw_feature, 1U);
-                    if(EOK != ret)
-                    {
-                        NXP_LOG_ERROR("%s FW feature can't be enabled!\n", name);
-                    }
-                }
-            }
-        }
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-    }
-#endif
-
-	return ret;
-}
-
-/**
  * @brief		Create L2 bridge instance
  * @param[in]	class The classifier instance
  * @param[in]	def_vlan Default VLAN
@@ -2140,7 +2216,7 @@ static errno_t pfe_platform_class_feature_enable(const pfe_class_t *class, const
  * @param[in]	vlan_table The VLAN table instance
  * @return		The instance or NULL if failed
  */
-pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, uint16_t def_aging_time, pfe_l2br_table_t *mac_table, pfe_l2br_table_t *vlan_table)
+pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, uint16_t def_aging_time, uint16_t vlan_stats_size, pfe_l2br_table_t *mac_table, pfe_l2br_table_t *vlan_table)
 {
 	pfe_l2br_t *bridge;
 
@@ -2183,6 +2259,12 @@ pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, uint16_t def_
 			goto free_and_fail;
 		}
 
+		bridge->domain_stats_table_size = vlan_stats_size;
+
+		memset (&stats_index, 0, sizeof(stats_index));
+
+		bridge->domain_stats_table_addr = pfe_l2br_create_vlan_stats_table(class ,vlan_stats_size);
+
 		/*	Create default domain */
 		bridge->default_domain = pfe_l2br_create_default_domain(bridge, def_vlan);
 		if (NULL == bridge->default_domain)
@@ -2209,11 +2291,11 @@ pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, uint16_t def_
 		}
 
 		/*	If the FW aging is off, turn it on */
-		if (pfe_platform_class_feature_enabled(bridge->class, "l2_bridge_aging")==FALSE)
+		if (FALSE == pfe_feature_mgr_is_available("l2_bridge_aging"))
 		{
-			if (EOK != pfe_platform_class_feature_enable(bridge->class, "l2_bridge_aging"))
+			if (EOK != pfe_feature_mgr_enable("l2_bridge_aging"))
 			{
-				NXP_LOG_ERROR("Could not enable L2 bridge aging FW feature\n");
+				NXP_LOG_ERROR("Could not enable L2 bridge aging in FW\n");
 				goto free_and_fail;
 			}
 		}
@@ -2264,6 +2346,11 @@ errno_t pfe_l2br_destroy(pfe_l2br_t *bridge)
 		if (FALSE == LLIST_IsEmpty(&bridge->domains))
 		{
 			NXP_LOG_WARNING("Bridge is being destroyed but still contains some active domains\n");
+		}
+
+		if (EOK != pfe_l2br_destroy_vlan_stats_table(bridge->class, bridge->domain_stats_table_addr))
+		{
+			NXP_LOG_DEBUG("Could not destroy vlan stats\n");
 		}
 
 		if (NULL != bridge->mutex)
@@ -2534,7 +2621,7 @@ static errno_t pfe_l2br_set_mac_aging_timeout(pfe_class_t *class, const uint16_t
 	/* All PEs share the same memory map therefore we can read
 	   arbitrary one (in this case 0U)
 	   Also mac aging algorithm will work only on core 0*/
-	ret = pfe_class_get_mmap(class, 0U, &mmap);
+	ret = pfe_class_get_mmap(class, 0, &mmap);
 	if(EOK == ret)
 	{
         /* Get the misc address */
@@ -2564,7 +2651,7 @@ uint32_t pfe_l2br_get_text_statistics(const pfe_l2br_t *bridge, char_t *buf, uin
 
 	/* We keep unused parameter verb_level for consistency with rest of the *_get_text_statistics() functions */
 	(void)verb_level;
-    
+
     /* Get memory */
     entry = pfe_l2br_table_entry_create(bridge->mac_table);
     /* Get the first entry */
@@ -2579,9 +2666,169 @@ uint32_t pfe_l2br_get_text_statistics(const pfe_l2br_t *bridge, char_t *buf, uin
         /* Get the next entry */
         ret = pfe_l2br_table_get_next(bridge->mac_table, l2t_iter, entry);
     }
-    len += oal_util_snprintf(buf + len, buf_len - len, "\nEntries count: %u\n", count);
+    len += oal_util_snprintf(buf + len, buf_len - len, "\n MAC entries count: %u\n", count);
     /* Free memory */
     (void)pfe_l2br_table_entry_destroy(entry);
     (void)pfe_l2br_iterator_destroy(l2t_iter);
     return len;
 }
+
+/**
+ * @brief       Get Entry from L2 static entry
+ * @param[in]   static_ent Static entry
+ * @return      entry
+ */
+pfe_l2br_table_entry_t *pfe_l2br_static_entry_get_entry(pfe_l2br_static_entry_t *static_ent)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+    if (unlikely(NULL == static_ent))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return NULL;
+    }
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+    return static_ent->entry;
+}
+
+/**
+ * @brief		Get L2 bridge domain(vlan) statistics
+ * @param[in]	class		The classifier instance
+ * @param[in]	vlan_index 	Index in vlan statistics table
+ * @param[out]	stat        Statistic structure
+ * @retval		EOK         Success
+ * @retval		NOMEM       Not possible to allocate memory for read
+ */
+errno_t pfe_l2br_get_domain_stats(pfe_l2br_t *bridge, pfe_ct_vlan_stats_t *stat, uint8_t vlan_index)
+{
+	uint32_t i = 0;
+	errno_t ret = EOK;
+	pfe_ct_vlan_stats_t * stats = NULL;
+	uint16_t offset = 0;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == bridge) || (NULL == stat)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	(void)memset(stat,0,sizeof(pfe_ct_vlan_stats_t));
+
+	stats = oal_mm_malloc(sizeof(pfe_ct_vlan_stats_t) * pfe_class_get_num_of_pes(bridge->class));
+
+	if (NULL == stats)
+	{
+		NXP_LOG_ERROR("Memory allocation failed\n");
+		return ret;
+	}
+
+	(void)memset(stats, 0, sizeof(pfe_ct_vlan_stats_t) * pfe_class_get_num_of_pes(bridge->class));
+
+	offset = sizeof(pfe_ct_vlan_stats_t) * vlan_index;
+
+	for(i = 0U; i < pfe_class_get_num_of_pes(bridge->class); i++)
+	{
+		/* Gather memory from all PEs*/
+		ret = pfe_class_read_dmem((void *)bridge->class, (uint32_t)i, &stats[i], bridge->domain_stats_table_addr + offset, sizeof(pfe_ct_vlan_stats_t));
+
+		/* Calculate total statistics */
+		stat->ingress += oal_ntohl(stats[i].ingress);
+		stat->egress += oal_ntohl(stats[i].egress);
+		stat->ingress_bytes += oal_ntohl(stats[i].ingress_bytes);
+		stat->egress_bytes += oal_ntohl(stats[i].egress_bytes);
+	}
+
+	oal_mm_free(stats);
+
+	return ret;
+}
+
+/**
+ * @brief		Clear vlan statistics
+ * @param[in]	class		The classifier instance
+ * @param[in]	vlan_index	Index in vlan statistics table
+ * @retval		EOK Success
+ * @retval		NOMEM Not possible to allocate memory for read
+ */
+errno_t pfe_l2br_clear_domain_stats(pfe_l2br_t *bridge, uint8_t vlan_index)
+{
+	errno_t ret = EOK;
+	pfe_ct_vlan_stats_t stat = {0};
+	uint16_t offset = 0;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == bridge))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	offset = sizeof(pfe_ct_vlan_statistics_t) + sizeof(pfe_ct_vlan_stats_t) * vlan_index;
+
+	if (EOK != oal_mutex_lock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	ret = pfe_class_write_dmem((void *)bridge->class, -1, bridge->domain_stats_table_addr + offset, &stat, sizeof(pfe_ct_vlan_stats_t));
+
+	if (EOK != oal_mutex_unlock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Return L2 Bridge domain(vlan) statistics in text form
+ * @details		Function writes formatted text into given buffer.
+ * @param[in]	bridge		The L2 Bridge instance
+ * @param[in]	buf 		Pointer to the buffer to write to
+ * @param[in]	buf_len 	Buffer length
+ * @param[in]	verb_level 	Verbosity level
+ * @return		Number of bytes written to the buffer
+ */
+uint32_t pfe_l2br_domain_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+{
+    uint32_t len = 0U;
+	pfe_ct_vlan_stats_t stats = {0};
+	pfe_l2br_domain_t *domain = NULL;
+
+	/* We keep unused parameter verb_level for consistency with rest of the *_get_text_statistics() functions */
+	(void)verb_level;
+
+	domain = pfe_l2br_get_first_domain(bridge, L2BD_CRIT_ALL, NULL);
+
+	while (domain != NULL)
+	{
+		pfe_l2br_get_domain_stats (bridge, &stats, domain->stats_index);
+		len += oal_util_snprintf(buf + len, buf_len - len, "Vlan [%4d] ingress: %12d       egress: %12d\n", domain->vlan, stats.ingress, stats.egress);
+		len += oal_util_snprintf(buf + len, buf_len - len, "      ingress_bytes: %12d egress_bytes: %12d\n", stats.ingress_bytes, stats.egress_bytes);
+		domain = pfe_l2br_get_next_domain(bridge);
+	}
+
+    return len;
+}
+
+/**
+ * @brief		Get L2 bridge domain(vlan) statistics
+ * @param[in]	domain		The classifier instance
+ * @return		Index in vlan statistics table
+ */
+
+uint8_t pfe_l2br_get_vlan_stats_index(pfe_l2br_domain_t *domain)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == domain))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return domain->stats_index;
+}
+

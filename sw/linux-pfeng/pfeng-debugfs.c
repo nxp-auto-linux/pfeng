@@ -18,10 +18,10 @@ static u32 *msg_verbosity_ptr;
 
 #define DEBUGFS_BUF_SIZE 4096
 
-#define CREATE_DEBUGFS_ENTRY_TYPE(ename)					\
+#define CREATE_DEBUGFS_ENTRY_TYPE(ename,var_type)				\
 static int fn_##ename##_debug_show(struct seq_file *seq, void *v)		\
 {										\
-	pfe_##ename##_t *var_##ename = seq->private;				\
+	pfe_##var_type##_t *var_##ename = seq->private;				\
 	char *buf;								\
 	int ret;								\
 										\
@@ -55,16 +55,17 @@ static const struct file_operations pfeng_##ename##_fops = {			\
 };
 
 #ifdef PFE_CFG_PFE_MASTER
-CREATE_DEBUGFS_ENTRY_TYPE(emac);
-CREATE_DEBUGFS_ENTRY_TYPE(l2br);
-CREATE_DEBUGFS_ENTRY_TYPE(class);
-CREATE_DEBUGFS_ENTRY_TYPE(bmu);
-CREATE_DEBUGFS_ENTRY_TYPE(gpi);
-CREATE_DEBUGFS_ENTRY_TYPE(tmu);
-CREATE_DEBUGFS_ENTRY_TYPE(util);
-CREATE_DEBUGFS_ENTRY_TYPE(fp);
+CREATE_DEBUGFS_ENTRY_TYPE(emac,emac);
+CREATE_DEBUGFS_ENTRY_TYPE(l2br,l2br);
+CREATE_DEBUGFS_ENTRY_TYPE(l2br_domain,l2br);
+CREATE_DEBUGFS_ENTRY_TYPE(class,class);
+CREATE_DEBUGFS_ENTRY_TYPE(bmu,bmu);
+CREATE_DEBUGFS_ENTRY_TYPE(gpi,gpi);
+CREATE_DEBUGFS_ENTRY_TYPE(tmu,tmu);
+CREATE_DEBUGFS_ENTRY_TYPE(util,util);
+CREATE_DEBUGFS_ENTRY_TYPE(fp,fp);
 #endif
-CREATE_DEBUGFS_ENTRY_TYPE(hif_chnl);
+CREATE_DEBUGFS_ENTRY_TYPE(hif_chnl,hif_chnl);
 
 #define ADD_DEBUGFS_ENTRY(ename, etype, parent, epriv, esav)			\
 	{									\
@@ -104,6 +105,7 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 #ifdef PFE_CFG_PFE_MASTER
 	ADD_DEBUGFS_ENTRY("class", class, priv->dbgfs, priv->pfe_platform->classifier, &dsav);
 	ADD_DEBUGFS_ENTRY("l2br", l2br, priv->dbgfs, priv->pfe_platform->l2_bridge, &dsav);
+	ADD_DEBUGFS_ENTRY("l2br_domain", l2br_domain, priv->dbgfs, priv->pfe_platform->l2_bridge, &dsav);
 	ADD_DEBUGFS_ENTRY("bmu1", bmu, priv->dbgfs, priv->pfe_platform->bmu[0], &dsav);
 	ADD_DEBUGFS_ENTRY("bmu2", bmu, priv->dbgfs, priv->pfe_platform->bmu[1], &dsav);
 	ADD_DEBUGFS_ENTRY("egpi1", gpi, priv->dbgfs, priv->pfe_platform->gpi[0], &dsav);

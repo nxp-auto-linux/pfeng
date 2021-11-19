@@ -8,6 +8,7 @@
 #include "oal.h"
 #include "pfe_ct.h"
 #include "pfe_spd_acc.h"
+#include "pfe_feature_mgr.h"
 
 #include "pfe_cfg.h"
 #include "libfci.h"
@@ -56,6 +57,15 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
 	}
     memset(&spd_entry, 0, sizeof(pfe_ct_spd_entry_t));
 
+	/*	Check that the FW feature is available (enabled) in FW */
+	if (FALSE == pfe_feature_mgr_is_available("IPsec"))
+	{
+		/* Unavailable feature. Respond with FCI error code. */
+		NXP_LOG_ERROR("Feature 'IPsec' is not available (not enabled in FW).\n");
+		*fci_ret = FPP_ERR_FW_FEATURE_NOT_AVAILABLE;
+		return EOK;
+	}
+
 	/*	Initialize the reply buffer */
 	memset(reply_buf, 0, sizeof(fpp_spd_cmd_t));
 
@@ -99,13 +109,13 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
             if(0 != (spd_cmd->flags & FPP_SPD_FLAG_IPv6))
             {
                 spd_entry.flags |= SPD_FLAG_IPv6;
-                memcpy(&spd_entry.u.v6.sip, &spd_cmd->saddr[0], 16U);
-                memcpy(&spd_entry.u.v6.dip, &spd_cmd->daddr[0], 16U);
+                memcpy(&spd_entry.ipv.v6.sip, &spd_cmd->saddr[0], 16U);
+                memcpy(&spd_entry.ipv.v6.dip, &spd_cmd->daddr[0], 16U);
             }
             else
             {
-                spd_entry.u.v4.sip = spd_cmd->saddr[0];
-                spd_entry.u.v4.dip = spd_cmd->daddr[0];
+                spd_entry.ipv.v4.sip = spd_cmd->saddr[0];
+                spd_entry.ipv.v4.dip = spd_cmd->daddr[0];
             }
             if(0 != (spd_cmd->flags & FPP_SPD_FLAG_SPORT_OPAQUE))
             {
@@ -160,13 +170,13 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
                 if(0 != (spd_entry.flags & SPD_FLAG_IPv6))
                 {
                     reply_buf->flags |= FPP_SPD_FLAG_IPv6;
-                    memcpy(&reply_buf->saddr[0], &spd_entry.u.v6.sip[0], 16U);
-                    memcpy(&reply_buf->daddr[0], &spd_entry.u.v6.dip[0], 16U);
+                    memcpy(&reply_buf->saddr[0], &spd_entry.ipv.v6.sip[0], 16U);
+                    memcpy(&reply_buf->daddr[0], &spd_entry.ipv.v6.dip[0], 16U);
                 }
                 else
                 {
-                    reply_buf->saddr[0] = spd_entry.u.v4.sip;
-                    reply_buf->daddr[0] = spd_entry.u.v4.dip;
+                    reply_buf->saddr[0] = spd_entry.ipv.v4.sip;
+                    reply_buf->daddr[0] = spd_entry.ipv.v4.dip;
                 }
                 if(0 != (spd_entry.flags & SPD_FLAG_SPORT_OPAQUE))
                 {

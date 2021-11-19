@@ -18,14 +18,18 @@
  */
 
 #include "pfe_cfg.h"
+#include "pfe_platform_cfg.h"
 #include "libfci.h"
 #include "fpp.h"
 #include "fpp_ext.h"
 #include "fci_internal.h"
 #include "fci_fp_db.h"
 #include "fci.h"
+#include "pfe_mirror.h"
+#include "pfe_feature_mgr.h"
 
 #ifdef PFE_CFG_FCI_ENABLE
+
 
 static errno_t fci_interfaces_get_arg_info(fpp_if_m_args_t *m_arg, pfe_ct_if_m_rules_t rule, void **offset, size_t *size, uint32_t *fp_table_addr);
 
@@ -857,7 +861,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 		default:
 		{
 			/*Do Nothing*/
-            break;
+			break;
 		}		
 	}
 
@@ -880,14 +884,16 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 	fpp_phy_if_cmd_t *if_cmd;
 	errno_t ret = EOK;
 	pfe_if_db_entry_t *entry = NULL;
-	pfe_if_db_entry_t *entry2 = NULL;
 	pfe_phy_if_t *phy_if = NULL;
 	pfe_ct_block_state_t block_state;
-	pfe_phy_if_t *mirror_if = NULL;
-	pfe_ct_phy_if_id_t mirror_if_id = PFE_PHY_IF_ID_INVALID;
 	pfe_ct_phy_if_stats_t stats = {0};
-	uint32_t addr;
+	pfe_mirror_t *mirror = NULL;
+	uint32_t addr = 0U;
+	uint32_t i;
+	const char *str;
 	char_t *name;
+	bool flag_in_cmd;
+	bool flag_in_drv;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -933,7 +939,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				break;
 			}
 
-			/* Check if entry is not NULL and get logical interface */
+			/* Check if entry is not NULL and get physical interface */
 			if(NULL != entry)
 			{
 				phy_if = pfe_if_db_entry_get_phy_if(entry);
@@ -964,44 +970,49 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				break;
 			}
 
-			if(FPP_IF_MIRROR == (oal_ntohl(if_cmd->flags) & FPP_IF_MIRROR))
+			for(i = 0U; i < FPP_MIRRORS_CNT; i++)
 			{
-				/* Get the requested interface */
-				ret = pfe_if_db_get_first(context->phy_if_db, context->if_session_id, IF_DB_CRIT_BY_NAME, if_cmd->mirror, &entry2);
-
-				if(EOK != ret)
-				{
-					NXP_LOG_ERROR("Failed to obtain interface \"%s\"in the database\n", if_cmd->mirror);
-					*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
-					break;
+				/* RX */
+				if('\0' == if_cmd->rx_mirrors[i][0])
+				{	/* Mirror is disabled */
+					pfe_phy_if_set_rx_mirror(phy_if, i, NULL);
 				}
+				else
+				{	/* Mirror is enabled and to be configured */
+					/* Get requested mirror handle */
+					mirror = pfe_mirror_get_first(MIRROR_BY_NAME, if_cmd->rx_mirrors[i]);
+					if(NULL == mirror)
+					{
+						/* FCI command requested nonexistent entity. Respond with FCI error code. */
+						NXP_LOG_ERROR("Mirror %s cannot be found\n", if_cmd->rx_mirrors[i]);
+						*fci_ret = FPP_ERR_MIRROR_NOT_FOUND;
+						ret = EOK;
+						break;
+					}
+					/* Set the mirror */
+					pfe_phy_if_set_rx_mirror(phy_if, i, mirror);
 
-				/* Check if entry is not NULL and get logical interface */
-				if(NULL != entry2)
-				{
-					mirror_if = pfe_if_db_entry_get_phy_if(entry2);
 				}
+				/* TX */
+				if('\0' == if_cmd->tx_mirrors[i][0])
+				{	/* Mirror is disabled */
+					pfe_phy_if_set_tx_mirror(phy_if, i, NULL);
+				}
+				else
+				{	/* Mirror is enabled and to be configured */
+					/* Get requested mirror handle */
+					mirror = pfe_mirror_get_first(MIRROR_BY_NAME, if_cmd->tx_mirrors[i]);
+					if(NULL == mirror)
+					{
+						/* FCI command requested nonexistent entity. Respond with FCI error code. */
+						NXP_LOG_ERROR("Mirror %s cannot be found\n", if_cmd->rx_mirrors[i]);
+						*fci_ret = FPP_ERR_MIRROR_NOT_FOUND;
+						ret = EOK;
+						break;
+					}
+					/* Set the mirror */
+					pfe_phy_if_set_tx_mirror(phy_if, i, mirror);
 
-				/* Check if the entry exits*/
-				if((NULL == mirror_if) || (NULL == phy_if))
-				{
-					NXP_LOG_DEBUG("Interface doesn't exist or couldn't be extracted from the entry\n");
-					*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
-					break;
-				}
-
-				if (EOK != pfe_phy_if_set_mirroring(phy_if, pfe_phy_if_get_id(mirror_if)))
-				{
-					NXP_LOG_DEBUG("Unable to enable mirroring on %s\n", pfe_phy_if_get_name(phy_if));
-					*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
-				}
-			}
-			else
-			{
-				if (EOK != pfe_phy_if_set_mirroring(phy_if, PFE_PHY_IF_ID_INVALID))
-				{
-					NXP_LOG_DEBUG("Unable to disable mirroring on %s\n", pfe_phy_if_get_name(phy_if));
-					*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
 				}
 			}
 
@@ -1040,33 +1051,75 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			/*	VLAN conformance check */
 			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_VLAN_CONF_CHECK))
 			{
+				flag_in_cmd = true;
 				ret = pfe_phy_if_set_flag(phy_if, IF_FL_VLAN_CONF_CHECK);
 			}
 			else
 			{
+				flag_in_cmd = false;
 				ret = pfe_phy_if_clear_flag(phy_if, IF_FL_VLAN_CONF_CHECK);
 			}
 
 			if(EOK != ret)
 			{
-				NXP_LOG_ERROR("VLAN_CONF_CHECK flag wasn't updated correctly on %s\n",  pfe_phy_if_get_name(phy_if));
-				*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
+				flag_in_drv = (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_VLAN_CONF_CHECK));
+
+				if ((EPERM == ret) && (flag_in_cmd == flag_in_drv))
+				{
+					/* Unavailable feature and FCI command didn't modify it. Continue through. */
+					ret = EOK;
+				}
+				else if ((EPERM == ret) && (flag_in_cmd != flag_in_drv))
+				{
+					/* Unavailable feature and FCI command tried to modify it. Respond with FCI error code. */
+					*fci_ret = FPP_ERR_FW_FEATURE_NOT_AVAILABLE;
+					ret = EOK;
+					break;
+				}
+				else
+				{
+					/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
+					NXP_LOG_ERROR("VLAN_CONF_CHECK flag wasn't updated correctly on %s\n",  pfe_phy_if_get_name(phy_if));
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+					break;
+				}
 			}
 
 			/*	PTP conformance check */
 			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_PTP_CONF_CHECK))
 			{
+				flag_in_cmd = true;
 				ret = pfe_phy_if_set_flag(phy_if, IF_FL_PTP_CONF_CHECK);
 			}
 			else
 			{
+				flag_in_cmd = false;
 				ret = pfe_phy_if_clear_flag(phy_if, IF_FL_PTP_CONF_CHECK);
 			}
 
 			if(EOK != ret)
 			{
-				NXP_LOG_ERROR("PTP_CONF_CHECK flag wasn't updated correctly on %s\n",  pfe_phy_if_get_name(phy_if));
-				*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
+				flag_in_drv = (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_PTP_CONF_CHECK));
+
+				if ((EPERM == ret) && (flag_in_cmd == flag_in_drv))
+				{
+					/* Unavailable feature and FCI command didn't modify it. Continue through. */
+					ret = EOK;
+				}
+				else if ((EPERM == ret) && (flag_in_cmd != flag_in_drv))
+				{
+					/* Unavailable feature and FCI command tried to modify it. Respond with FCI error code. */
+					*fci_ret = FPP_ERR_FW_FEATURE_NOT_AVAILABLE;
+					ret = EOK;
+					break;
+				}
+				else
+				{
+					/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
+					NXP_LOG_ERROR("PTP_CONF_CHECK flag wasn't updated correctly on %s\n",  pfe_phy_if_get_name(phy_if));
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+					break;
+				}
 			}
 
 			/*	PTP promiscuous mode */
@@ -1081,8 +1134,10 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 
 			if(EOK != ret)
 			{
+				/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 				NXP_LOG_ERROR("PTP_PROMISC flag wasn't updated correctly on %s\n",  pfe_phy_if_get_name(phy_if));
-				*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
+				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+				break;
 			}
 
 			/*	QinQ support control */
@@ -1187,8 +1242,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 				break;
 			}
-		}
-		/* FALLTHRU */
+		} /* FALLTHRU */
 
 		case FPP_ACTION_QUERY_CONT:
 		{
@@ -1226,12 +1280,8 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			/* Copy the phy if statistics to reply */
 			memcpy(&reply_buf->stats, &stats, sizeof(reply_buf->stats));
 
-			/* Store phy_if name and MAC */
+			/* Store phy_if name */
 			strncpy(reply_buf->name, pfe_phy_if_get_name(phy_if), IFNAMSIZ-1);
-			if (EOK != pfe_phy_if_get_mac_addr(phy_if, reply_buf->mac_addr))
-			{
-				NXP_LOG_DEBUG("Could not get interface MAC address\n");
-			}
 
 			/* Store phy_if id */
 			reply_buf->id = oal_htonl(pfe_phy_if_get_id(phy_if));
@@ -1246,39 +1296,45 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 
 			/* Get the mode - use the fact enums have same values */
 			reply_buf->mode = (fpp_phy_if_op_mode_t) pfe_phy_if_get_op_mode(phy_if);
-			pfe_phy_if_get_mac_addr(phy_if, reply_buf->mac_addr);
 
 			/* Get the block state */
 			(void)pfe_phy_if_get_block_state(phy_if, &block_state);
 			/* Use the fact that the enums have same values */
 			reply_buf->block_state = (fpp_phy_if_block_state_t)block_state;
-			mirror_if_id = pfe_phy_if_get_mirroring(phy_if);
-			if(PFE_PHY_IF_ID_INVALID != mirror_if_id)
-			{
-				ret = pfe_if_db_get_single(context->phy_if_db, context->if_session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)mirror_if_id, &entry);
-				if(EOK != ret)
-				{
-					NXP_LOG_ERROR("Failed to get interface with ID %u from database\n", mirror_if_id);
-				}
-				if (NULL != entry)
-				{
-					mirror_if = pfe_if_db_entry_get_phy_if(entry);
-					reply_buf->flags |= oal_htonl(FPP_IF_MIRROR);
-					strncpy(reply_buf->mirror, pfe_phy_if_get_name(mirror_if), IFNAMSIZ-1);
-				}
-				else
-				{
-					NXP_LOG_ERROR("Failed to obtain interface for ID %u\n", mirror_if_id);
 
-					reply_buf->flags |= oal_htonl(FPP_IF_MIRROR);
-					/* Fallback solution - we cannot query for the mirror interface because it
-					   would cancel the outgoing query for physical interfaces */
-					snprintf(reply_buf->mirror, IFNAMSIZ-1, "IF ID: %u", mirror_if_id);
-				}
-			}
-			else
+			for(i = 0U; i < FPP_MIRRORS_CNT; i++)
 			{
-				reply_buf->flags &= oal_htonl(~FPP_IF_MIRROR);
+				/* RX */
+				mirror = pfe_phy_if_get_rx_mirror(phy_if, i);
+				if(NULL != mirror)
+				{
+					str = pfe_mirror_get_name(mirror);
+					if(NULL != str)
+					{
+						strncpy(&reply_buf->rx_mirrors[i][0], str, 16);
+						reply_buf->rx_mirrors[i][15] = '\0'; /* Ensure correct string end */
+					}
+					else
+					{
+						NXP_LOG_WARNING("Could not obtain mirror name for %u\n", (uint_t)addr);
+					}
+				}
+
+				/* TX */
+				mirror = pfe_phy_if_get_tx_mirror(phy_if, i);
+				if(NULL != mirror)
+				{
+					str = pfe_mirror_get_name(mirror);
+					if(NULL != str)
+					{
+						strncpy(&reply_buf->tx_mirrors[i][0], str, 16);
+						reply_buf->tx_mirrors[i][15] = '\0'; /* Ensure correct string end */
+					}
+					else
+					{
+						NXP_LOG_WARNING("Could not obtain mirror name for %u\n", (uint_t)addr);
+					}
+				}
 			}
 
 			/*	Get filter info */
@@ -1292,8 +1348,10 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				}
 				else
 				{
+					/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 					NXP_LOG_ERROR("Can't get table name from DB: %d\n", ret);
-					*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+					break;
 				}
 			}
 			else
@@ -1312,6 +1370,217 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 		{
 			NXP_LOG_ERROR("Interface Command: Unknown action received: 0x%x\n", if_cmd->action);
 			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
+			break;
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief			Process FPP_CMD_IF_MAC commands
+ * @param[in]		msg FCI message containing the FPP_CMD_IF_MAC command
+ * @param[out]		fci_ret FCI command return value
+ * @param[out]		reply_buf Pointer to a buffer where function will construct command reply (fpp_if_mac_cmd_t)
+ * @param[in,out]	reply_len Maximum reply buffer size on input, real reply size on output (in bytes)
+ * @return			EOK if success, error code otherwise
+ * @note			Function is only called within the FCI worker thread context.
+ * @note			Must run with interface DB session lock.
+ */
+errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd_t *reply_buf, uint32_t *reply_len)
+{
+	fci_t *context = (fci_t *)&__context;
+	fpp_if_mac_cmd_t *if_mac_cmd;
+	errno_t ret = EOK;
+	pfe_if_db_entry_t *entry = NULL;
+	pfe_phy_if_t *phy_if = NULL;
+
+	bool is_query_cont = true;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+
+	if (unlikely(FALSE == context->fci_initialized))
+	{
+		NXP_LOG_ERROR("Context not initialized\n");
+		return EPERM;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	*fci_ret = FPP_ERR_OK;
+
+	if (*reply_len < sizeof(fpp_if_mac_cmd_t))
+	{
+		/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
+		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_if_mac_cmd_t)\n");
+		*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+		return EINVAL;
+	}
+	else
+	{
+		/* No data written to reply buffer (yet) */
+		*reply_len = 0U;
+	}
+
+	/* Initialize the reply buffer */
+	memset(reply_buf, 0, sizeof(fpp_if_mac_cmd_t));
+
+	/* Initialize pointer to the command data */
+	if_mac_cmd = (fpp_if_mac_cmd_t *)msg->msg_cmd.payload;
+
+	/*	Preparation: get the requested interface */
+	{
+		ret = pfe_if_db_get_single(context->phy_if_db, context->if_session_id, IF_DB_CRIT_BY_NAME, if_mac_cmd->name, &entry);
+
+		if(EOK != ret)
+		{
+			/* DB not locked or locked by some other FCI user.*/
+			/* FCI command requested unfulfillable action. Respond with FCI error code. */
+			NXP_LOG_ERROR("Incorrect session ID detected\n");
+			*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
+			ret = EOK;
+			return ret;
+		}
+
+		/* Check if entry is not NULL and get physical interface */
+		if(NULL != entry)
+		{
+			phy_if = pfe_if_db_entry_get_phy_if(entry);
+		}
+
+		/* Check if the entry exists*/
+		if((NULL == entry) || (NULL == phy_if))
+		{
+			/* Parent physical interface doesn't exist or cannot be extracted from the entry. */
+			/* FCI command requested nonexistent entity. Respond with FCI error code. */
+			*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
+			ret = EOK;
+			return ret;
+		}
+	}
+
+	/* Process the command */
+	switch (if_mac_cmd->action)
+	{
+		case FPP_ACTION_REGISTER:
+		{
+			ret = pfe_phy_if_add_mac_addr(phy_if, if_mac_cmd->mac, PFE_CFG_LOCAL_IF);
+			if (EOK != ret)
+			{
+				if (EEXIST == ret)
+				{
+					/* FCI command attempted to register already registered entity. Respond with FCI error code. */
+					*fci_ret = FPP_ERR_IF_MAC_ALREADY_REGISTERED;
+					ret = EOK;
+					break;
+				}
+				if (EINVAL == ret)
+				{
+					/* FCI command requested unfulfillable action. Respond with FCI error code. */
+					*fci_ret = FPP_ERR_IF_NOT_SUPPORTED;
+					ret = EOK;
+					break;
+				}
+			}
+
+			/* No further actions. */
+			break;
+		}
+
+		case FPP_ACTION_DEREGISTER:
+		{
+			ret = pfe_phy_if_del_mac_addr(phy_if, if_mac_cmd->mac, PFE_CFG_LOCAL_IF);
+			if (EOK != ret)
+			{
+				if (ENOENT == ret)
+				{
+					/* FCI command requested nonexistent entity. Respond with FCI error code. */
+					*fci_ret = FPP_ERR_IF_MAC_NOT_FOUND;
+					ret = EOK;
+					break;
+				}
+				if (EINVAL == ret)
+				{
+					/* FCI command requested unfulfillable action. Respond with FCI error code. */
+					*fci_ret = FPP_ERR_IF_NOT_SUPPORTED;
+					ret = EOK;
+					break;
+				}
+			}
+
+			/*	No further actions. */
+			break;
+		}
+
+		case FPP_ACTION_QUERY:
+		{
+			ret = pfe_phy_if_get_mac_addr_first(phy_if, reply_buf->mac, MAC_DB_CRIT_ALL, PFE_TYPE_ANY, PFE_CFG_LOCAL_IF);
+			if (EOK != ret)
+			{
+				if (ENOENT == ret)
+				{
+					/* End of the query process (no more entities to report). Respond with FCI error code. */
+					*fci_ret = FPP_ERR_IF_MAC_NOT_FOUND;
+					ret = EOK;
+					break;
+				}
+				if (EINVAL == ret)
+				{
+					/* FCI command requested unfulfillable action. Respond with FCI error code. */
+					*fci_ret = FPP_ERR_IF_NOT_SUPPORTED;
+					ret = EOK;
+					break;
+				}
+			}
+			
+			is_query_cont = false;
+		}
+		/* FALLTHRU */
+
+		case FPP_ACTION_QUERY_CONT:
+		{
+			if (is_query_cont)
+			{
+				ret = pfe_phy_if_get_mac_addr_next(phy_if, reply_buf->mac);
+				if (EOK != ret)
+				{
+					if (ENOENT == ret)
+					{
+						/* End of the query process (no more entities to report). Respond with FCI error code. */
+						*fci_ret = FPP_ERR_IF_MAC_NOT_FOUND;
+						ret = EOK;
+						break;
+					}
+					if (EINVAL == ret)
+					{
+						/* FCI command requested unfulfillable action. Respond with FCI error code. */
+						*fci_ret = FPP_ERR_IF_NOT_SUPPORTED;
+						ret = EOK;
+						break;
+					}
+				}
+			}
+
+			/* Store phy_if name into reply message */
+			strncpy(reply_buf->name, pfe_phy_if_get_name(phy_if), IFNAMSIZ-1);
+
+			/* Set reply length and return OK */
+			*reply_len = sizeof(fpp_if_mac_cmd_t);
+			*fci_ret = FPP_ERR_OK;
+			ret = EOK;
+			break;
+		}
+
+		default:
+		{
+			/* Unknown action. Respond with FCI error code. */
+			NXP_LOG_ERROR("FPP_CMD_IF_MAC: Unknown action received: 0x%x\n", if_mac_cmd->action);
+			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
+			ret = EOK;
 			break;
 		}
 	}

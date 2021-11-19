@@ -76,6 +76,7 @@ static int cli_txt2bool_on_off(bool* p_rtn_value, const char* p_txt);
 static int cli_txt2bdaction(uint8_t* p_rtn_value, const char* p_txt);
 
 static int cli_txtcpy_if_name(char* p_rtn_buf, const char* p_txt);
+static int cli_txtcpy_mirror_name(char* p_rtn_buf, const char* p_txt);
 static int cli_txtcpy_table_name(char* p_rtn_buf, const char* p_txt);
 static int cli_txtcpy_rule_name(char* p_rtn_buf, const char* p_txt);
 static int cli_txtcpy_feature_name(char* p_rtn_buf, const char* p_txt);
@@ -204,10 +205,10 @@ static int opt_parse_mirror(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_opta
     
     
     int rtn = CLI_ERR;
-    bool* p_is_valid = &(p_rtn_cmdargs->if_name_mirror.is_valid);
-    char* p_txt      =  (p_rtn_cmdargs->if_name_mirror.txt);
+    bool* p_is_valid = &(p_rtn_cmdargs->mirror_name.is_valid);
+    char* p_txt      =  (p_rtn_cmdargs->mirror_name.txt);
     
-    rtn = cli_txtcpy_if_name(p_txt, p_txt_optarg);
+    rtn = cli_txtcpy_mirror_name(p_txt, p_txt_optarg);
     
     set_if_rtn_ok(rtn, p_is_valid);
     return (rtn);
@@ -321,22 +322,6 @@ static int opt_parse_promisc(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_opt
     return (rtn);
 }
 
-static int opt_parse_loadbalance(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
-{
-    assert(NULL != p_rtn_cmdargs);
-    assert(NULL != p_txt_optarg);
-    
-    
-    int rtn = CLI_ERR;
-    bool* p_is_valid = &(p_rtn_cmdargs->loadbalance__ttl_decr.is_valid);
-    bool* p_is_on    = &(p_rtn_cmdargs->loadbalance__ttl_decr.is_on);
-    
-    rtn = cli_txt2bool_on_off(p_is_on, p_txt_optarg);
-    
-    set_if_rtn_ok(rtn, p_is_valid);
-    return (rtn);
-}
-
 static int opt_parse_ttl_decr(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
 {
     assert(NULL != p_rtn_cmdargs);
@@ -344,8 +329,8 @@ static int opt_parse_ttl_decr(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_op
     
     
     int rtn = CLI_ERR;
-    bool* p_is_valid = &(p_rtn_cmdargs->loadbalance__ttl_decr.is_valid);
-    bool* p_is_on    = &(p_rtn_cmdargs->loadbalance__ttl_decr.is_on);
+    bool* p_is_valid = &(p_rtn_cmdargs->ttl_decr.is_valid);
+    bool* p_is_on    = &(p_rtn_cmdargs->ttl_decr.is_on);
     
     rtn = cli_txt2bool_on_off(p_is_on, p_txt_optarg);
     
@@ -997,7 +982,7 @@ static int opt_parse_r_route(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_opt
     return (rtn);
 }
 
-static int opt_parse_ingress_mr0(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+static int opt_parse_rx_mirror0(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
 {
     assert(NULL != p_rtn_cmdargs);
     assert(NULL != p_txt_optarg);
@@ -1013,7 +998,7 @@ static int opt_parse_ingress_mr0(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt
     return (rtn);
 }
 
-static int opt_parse_ingress_mr1(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+static int opt_parse_rx_mirror1(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
 {
     assert(NULL != p_rtn_cmdargs);
     assert(NULL != p_txt_optarg);
@@ -1029,7 +1014,7 @@ static int opt_parse_ingress_mr1(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt
     return (rtn);
 }
 
-static int opt_parse_egress_mr0(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+static int opt_parse_tx_mirror0(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
 {
     assert(NULL != p_rtn_cmdargs);
     assert(NULL != p_txt_optarg);
@@ -1045,7 +1030,7 @@ static int opt_parse_egress_mr0(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_
     return (rtn);
 }
 
-static int opt_parse_egress_mr1(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+static int opt_parse_tx_mirror1(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
 {
     assert(NULL != p_rtn_cmdargs);
     assert(NULL != p_txt_optarg);
@@ -1553,7 +1538,7 @@ static int opt_parse_thmin(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optar
     bool* p_is_valid  = &(p_rtn_cmdargs->thmin.is_valid);
     uint32_t* p_value = &(p_rtn_cmdargs->thmin.value);
     
-    rtn = cli_txt2num_u32(p_value, p_txt_optarg, BASE_DEC, 0u, 255u);  /* according to FCI Reference, max queue depth is 255 */
+    rtn = cli_txt2num_u32(p_value, p_txt_optarg, BASE_DEC, 0u, UINT16_MAX);  /* let the driver sort out whether the value is valid or not */
     
     set_if_rtn_ok(rtn, p_is_valid);
     return (rtn);
@@ -1569,7 +1554,23 @@ static int opt_parse_thmax(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optar
     bool* p_is_valid  = &(p_rtn_cmdargs->thmax.is_valid);
     uint32_t* p_value = &(p_rtn_cmdargs->thmax.value);
     
-    rtn = cli_txt2num_u32(p_value, p_txt_optarg, BASE_DEC, 0u, 255u);  /* according to FCI Reference, max queue depth is 255 */
+    rtn = cli_txt2num_u32(p_value, p_txt_optarg, BASE_DEC, 0u, UINT16_MAX);  /* let the driver sort out whether the value is valid or not */
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_thfull(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid  = &(p_rtn_cmdargs->thfull.is_valid);
+    uint32_t* p_value = &(p_rtn_cmdargs->thfull.value);
+    
+    rtn = cli_txt2num_u32(p_value, p_txt_optarg, BASE_DEC, 0u, UINT16_MAX);  /* let the driver sort out whether the value is valid or not */
     
     set_if_rtn_ok(rtn, p_is_valid);
     return (rtn);
@@ -1703,10 +1704,299 @@ static int opt_parse_discard_if_ttl_below_2(cli_cmdargs_t* p_rtn_cmdargs, const 
     return (rtn);
 }
 
+static int opt_parse_modify_actions(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    assert(sizeof(fpp_modify_actions_t) == sizeof(uint32_t));
+    
+    
+    int rtn = CLI_ERR;
+    bool*               p_is_valid = &(p_rtn_cmdargs->modify_actions.is_valid);
+    fpp_modify_actions_t* p_bitset = &(p_rtn_cmdargs->modify_actions.bitset);
+    
+    {
+        /* parse input */
+        uint32_t tmp_bitset = 0u;
+        rtn = cli_txt2bitset32(&tmp_bitset, p_txt_optarg, cli_txt2value_modify_action);
+        
+        /* assign data */
+        if(CLI_OK == rtn)
+        {
+            *p_bitset = tmp_bitset;  /* WARNING: cast to enum */
+        }
+    }
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
 
+static int opt_parse_wred_que(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool*          p_is_valid = &(p_rtn_cmdargs->wred_que.is_valid);
+    fpp_iqos_queue_t* p_value = &(p_rtn_cmdargs->wred_que.value);
+    
+    {
+        /* parse input */
+        uint8_t tmp_value = 0u;
+        rtn = cli_txt2value_pol_wred_que(&tmp_value, p_txt_optarg);
+        
+        /* assign data */
+        if (CLI_OK == rtn)
+        {
+            *p_value = tmp_value;  /* WARNING: cast to enum */
+        }
+    }
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
 
+static int opt_parse_shp_type(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool*             p_is_valid = &(p_rtn_cmdargs->shp_type.is_valid);
+    fpp_iqos_shp_type_t* p_value = &(p_rtn_cmdargs->shp_type.value);
+    
+    {
+        /* parse input */
+        uint8_t tmp_value = 0u;
+        rtn = cli_txt2value_pol_shp_type(&tmp_value, p_txt_optarg);
+        
+        /* assign data */
+        if (CLI_OK == rtn)
+        {
+            *p_value = tmp_value;  /* WARNING: cast to enum */
+        }
+    }
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
 
+static int opt_parse_flow_action(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool*                p_is_valid = &(p_rtn_cmdargs->flow_action.is_valid);
+    fpp_iqos_flow_action_t* p_value = &(p_rtn_cmdargs->flow_action.value);
+    
+    {
+        /* parse input */
+        uint8_t tmp_value = 0u;
+        rtn = cli_txt2value_pol_flow_action(&tmp_value, p_txt_optarg);
+        
+        /* assign data */
+        if (CLI_OK == rtn)
+        {
+            *p_value = tmp_value;  /* WARNING: cast to enum */
+        }
+    }
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
 
+static int opt_parse_flow_types(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    assert(sizeof(fpp_if_m_rules_t) == sizeof(uint32_t));
+    
+    
+    int rtn = CLI_ERR;
+    bool*                   p_is_valid  = &(p_rtn_cmdargs->flow_types.is_valid);
+    fpp_iqos_flow_type_t*     p_bitset1 = &(p_rtn_cmdargs->flow_types.bitset1);
+    fpp_iqos_flow_arg_type_t* p_bitset2 = &(p_rtn_cmdargs->flow_types.bitset2);
+    
+    {
+        /* parse input */
+        uint32_t tmp_bitset = 0u;
+        rtn = cli_txt2bitset32(&tmp_bitset, p_txt_optarg, cli_txt2value_pol_flow_type32);  /* NOTE: txt2value is a 32bit merged representation of both target bitsets */
+        
+        /* assign data */
+        if(CLI_OK == rtn)
+        {
+            *p_bitset1 = ((tmp_bitset >>  0uL) & 0x0000FFFFuL); /* WARNING: cast to enum ; only lower 16bits are used for this bitset */
+            *p_bitset2 = ((tmp_bitset >> 16uL) & 0x0000FFFFuL); /* WARNING: cast to enum ; only upper 16bits are used for this bitset */
+        }
+    }
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_tos(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->tos.is_valid);
+    uint8_t* p_value = &(p_rtn_cmdargs->tos.value);
+    
+    rtn = cli_txt2num_u8(p_value, p_txt_optarg, BASE_HEX, 0u, UINT8_MAX);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_sport_min(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid  = &(p_rtn_cmdargs->sport.is_valid);
+    uint16_t* p_value = &(p_rtn_cmdargs->sport.value);
+    
+    rtn = cli_txt2num_u16(p_value, p_txt_optarg, BASE_DEC, 0u, UINT16_MAX);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_sport_max(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid  = &(p_rtn_cmdargs->sport2.is_valid);
+    uint16_t* p_value = &(p_rtn_cmdargs->sport2.value);
+    
+    rtn = cli_txt2num_u16(p_value, p_txt_optarg, BASE_DEC, 0u, UINT16_MAX);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_dport_min(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid  = &(p_rtn_cmdargs->dport.is_valid);
+    uint16_t* p_value = &(p_rtn_cmdargs->dport.value);
+    
+    rtn = cli_txt2num_u16(p_value, p_txt_optarg, BASE_DEC, 0u, UINT16_MAX);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_dport_max(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid  = &(p_rtn_cmdargs->dport2.is_valid);
+    uint16_t* p_value = &(p_rtn_cmdargs->dport2.value);
+    
+    rtn = cli_txt2num_u16(p_value, p_txt_optarg, BASE_DEC, 0u, UINT16_MAX);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_vlan_mask(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid  = &(p_rtn_cmdargs->vlan_mask.is_valid);
+    uint16_t* p_value = &(p_rtn_cmdargs->vlan_mask.value);
+    
+    rtn = cli_txt2num_u16(p_value, p_txt_optarg, BASE_HEX, 0u, UINT16_MAX);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_tos_mask(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->tos_mask.is_valid);
+    uint8_t* p_value = &(p_rtn_cmdargs->tos_mask.value);
+    
+    rtn = cli_txt2num_u8(p_value, p_txt_optarg, BASE_HEX, 0u, UINT8_MAX);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_protocol_mask(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->protocol_mask.is_valid);
+    uint8_t* p_value = &(p_rtn_cmdargs->protocol_mask.value);
+    
+    rtn = cli_txt2num_u8(p_value, p_txt_optarg, BASE_HEX, 0u, UINT8_MAX);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_sip_pfx(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->sip_pfx.is_valid);
+    uint8_t* p_value = &(p_rtn_cmdargs->sip_pfx.value);
+    
+    rtn = cli_txt2num_u8(p_value, p_txt_optarg, BASE_DEC, 0u, 32u);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_dip_pfx(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->dip_pfx.is_valid);
+    uint8_t* p_value = &(p_rtn_cmdargs->dip_pfx.value);
+    
+    rtn = cli_txt2num_u8(p_value, p_txt_optarg, BASE_DEC, 0u, 32u);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
 
 
 
@@ -1802,6 +2092,11 @@ static int txtcpy(char* p_rtn_buf, const char* p_txt, const uint16_t buf_ln)
 inline static int cli_txtcpy_if_name(char* p_rtn_buf, const char* p_txt)
 {
     return txtcpy(p_rtn_buf, p_txt, IF_NAME_TXT_LN);
+}
+
+inline static int cli_txtcpy_mirror_name(char* p_rtn_buf, const char* p_txt)
+{
+    return txtcpy(p_rtn_buf, p_txt, MIRROR_NAME_SIZE);
 }
 
 inline static int cli_txtcpy_table_name(char* p_rtn_buf, const char* p_txt)
@@ -3654,6 +3949,11 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
                 do_mandopt_print = true;
             break;
             
+            case CLI_ERR_INCOMPATIBLE_IPS:
+                p_txt_err = "Incompatible IP addresses.\n"
+                            "All IP addresses must be of a same type - either all IPv4, or all IPv6.";
+            break;
+            
             case CLI_ERR_WRONG_IP_TYPE:
                 if (CMD_LOGIF_UPDATE == cmd)
                 {
@@ -3667,9 +3967,10 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
                 }
             break;
             
-            case CLI_ERR_INCOMPATIBLE_IPS:
-                p_txt_err = "Incompatible IP addresses.\n"
-                            "All IP addresses must be of a same type - either all IPv4, or all IPv6.";
+            case CLI_ERR_INV_DEMO_FEATURE:
+                p_txt_err = "Requested demo feature not found.\n"
+                            "Is the feature name correct?\n"
+                            "Does the feature exist?";
             break;
             
             /* errors of the libFCI library */
@@ -3682,6 +3983,29 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
                 p_txt_err = "Requested target/parent/mirror interface not found.\n"
                             "Is the target/parent/mirror name correct?\n"
                             "Does the target/parent/mirror interface exist?";
+            break;
+            
+            case FPP_ERR_IF_NOT_SUPPORTED:
+                p_txt_err = "Requested interface cannot be used as a parameter for the given command.";
+            break;
+            
+            case FPP_ERR_IF_MAC_ALREADY_REGISTERED:
+                p_txt_err = "Requested MAC address is already registered for the given interface.";
+            break;
+            
+            case FPP_ERR_IF_MAC_NOT_FOUND:
+                p_txt_err = "Requested MAC address not found.\n"
+                            "Is the MAC address correct?\n"
+                            "Is the interface name correct?";
+            break;
+            
+            case FPP_ERR_MIRROR_ALREADY_REGISTERED:
+                p_txt_err = "Requested mirroring rule is already registered.";
+            break;
+            
+            case FPP_ERR_MIRROR_NOT_FOUND:
+                p_txt_err = "Requested mirroring rule not found.\n"
+                            "Is the rule name correct?";
             break;
             
             case FPP_ERR_L2_BD_ALREADY_REGISTERED:
@@ -3719,6 +4043,27 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
             case FPP_ERR_CT_ENTRY_NOT_FOUND:
                 p_txt_err = "Requested conntrack not found.\n"
                             "Are all options filled correctly?";
+            break;
+            
+            case FPP_ERR_FW_FEATURE_NOT_FOUND:
+                p_txt_err = "Requested FW feature not found.\n"
+                            "Is the FW feature name correct?";
+            break;
+            
+            case FPP_ERR_FW_FEATURE_NOT_AVAILABLE:
+                p_txt_err = "Requested FW feature is not available (not enabled) for the currently loaded FW.\n"
+                            "This can apply either to the whole FCI command or just to some property of the command.\n"
+                            "Use fwfeat-print to see a list of all FW features.";
+            break;
+            
+            case FPP_ERR_QOS_POLICER_FLOW_TABLE_FULL:
+                p_txt_err = "Ingress QoS flow table of the requested interface is full.\n";
+            break;
+            
+            case FPP_ERR_QOS_POLICER_FLOW_NOT_FOUND:
+                p_txt_err = "Requested Ingress QoS flow not found.\n"
+                            "Is the interface correct?\n"
+                            "Is the flow ID correct?";
             break;
             
             case (-2):
@@ -3765,9 +4110,10 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
 
 void cli_print_app_version(void)
 {
-    printf("app version: "  LIBFCI_CLI_VERSION
-           " ("  PFE_CT_H_MD5  " ; "  GLOBAL_VERSION_CONTROL_ID  " ; "  __DATE__ " "  __TIME__  ")"
-           " ["  LIBFCI_CLI_TARGET_OS  "]\n");
+    /* the following printf() is a one long string, spanning over multiple lines */
+    printf("app version: "  CLI_VERSION_MAJOR  "."  CLI_VERSION_MINOR  "."  CLI_VERSION_PATCH
+           " ("  __DATE__  " "  __TIME__  ") "
+           " ("  CLI_TARGET_OS  " ; "  CLI_DRV_VERSION  " ; "  PFE_CT_H_MD5  ")\n");
 }
 
 /* NOTE: argument 'p_txt_vec' is expected to follow the argv convention (element [0] exists, but fnc ignores it) */

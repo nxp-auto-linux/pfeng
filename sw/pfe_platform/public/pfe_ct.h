@@ -201,9 +201,8 @@ typedef struct __attribute__((packed, aligned(4)))
 typedef struct __attribute__((packed, aligned(4)))
 {
 	/* Number of rules in the table */
-	uint8_t count;
+	uint16_t count;
 	/* Reserved variables to keep "rules" aligned */
-	uint8_t reserved8;
 	uint16_t reserved16;
 	/* Pointer to the array of "count" rules */
 	PFE_PTR (pfe_ct_fp_rule_t) rules;
@@ -211,6 +210,24 @@ typedef struct __attribute__((packed, aligned(4)))
 } pfe_ct_fp_table_t;
 
 ct_assert(sizeof(pfe_ct_fp_table_t) == 16U);
+
+typedef union __attribute__((packed, aligned(4)))
+{
+	/*	IPv4 (for IF_MATCH_SIP, IF_MATCH_DIP) */
+	struct
+	{
+		uint32_t sip;
+		uint32_t dip;
+		uint32_t pad[6U];
+	} v4;
+
+	/*	IPv6 (for IF_MATCH_SIP6, IF_MATCH_DIP6) */
+	struct
+	{
+		uint32_t sip[4U];
+		uint32_t dip[4U];
+	} v6;
+} pfe_ct_ip_addresses_t;
 
 /**
  * @brief	Interface matching rules arguments
@@ -227,22 +244,7 @@ typedef struct __attribute__((packed, aligned(4)))
 	/* L4 destination port number (IF_MATCH_DPORT) */
 	uint16_t dport;
 	/* Source and destination addresses */
-	struct
-	{
-		/*	IPv4 (for IF_MATCH_SIP, IF_MATCH_DIP) */
-		struct
-		{
-			uint32_t sip;
-			uint32_t dip;
-		} v4;
-
-		/*	IPv6 (for IF_MATCH_SIP6, IF_MATCH_DIP6) */
-		struct
-		{
-			uint32_t sip[4U];
-			uint32_t dip[4U];
-		} v6;
-	}ipv;
+	pfe_ct_ip_addresses_t ipv;
 	/* Flexible Parser 0 table (IF_MATCH_FP0) */
 	PFE_PTR(pfe_ct_fp_table_t) fp0_table;
 	/* Flexible Parser 1 table (IF_MATCH_FP1) */
@@ -288,6 +290,34 @@ typedef struct __attribute__((packed, aligned(4)))
 	/* Number of ingress frames which were discarded */
 	uint32_t discarded;
 } pfe_ct_phy_if_stats_t;
+
+/*
+* @brief Statistic entry for vlan
+*/
+typedef struct __attribute__((packed, aligned(4)))
+{
+	/* Number of ingress frames for the given vlan */
+	uint32_t ingress;
+	/* Number of egress frames for the given vlan */
+	uint32_t egress;
+	/* Number of ingress bytes for the given vlan */
+	uint32_t ingress_bytes;
+	/* Number of egress bytes for the given vlan */
+	uint32_t egress_bytes;
+} pfe_ct_vlan_stats_t;
+
+/*
+* @brief Statistics gathered for each vlan
+*/
+typedef struct __attribute__((packed, aligned(4)))
+{
+	/* Number of configured vlan */
+	uint16_t vlan_count;
+	/* Reserved variables to keep "stats" aligned */
+	uint16_t reserved16;
+	/* Pointer to vlan stats table */
+	PFE_PTR (pfe_ct_vlan_stats_t) vlan;	
+} pfe_ct_vlan_statistics_t;
 
 /*
 * @brief Statistics gathered for the whole processing engine (PE)
@@ -434,20 +464,7 @@ typedef struct __attribute__((packed, aligned(4)))
 	/*	L4 destination port number */
 	uint16_t dport;
 	/*	Source and destination IP addresses */
-	union
-	{
-		struct
-		{
-			uint32_t sip;
-			uint32_t dip;
-		} v4;
-
-		struct
-		{
-			uint32_t sip[4U];
-			uint32_t dip[4U];
-		} v6;
-	} u;
+	pfe_ct_ip_addresses_t ipv;
 	uint32_t id5t;	/* 5-tuple ID to speed search, 0 = invalid ID */
 	uint32_t spi;	/* SPI value to match - only for action SPD_ACT_PROCESS_DECODE */
 	/* --- Action --- */
@@ -464,6 +481,16 @@ typedef struct __attribute__((packed, aligned(4)))
 	PFE_PTR(pfe_ct_spd_entry_t) entries;	/* Database entries */
 } pfe_ct_ipsec_spd_t;
 
+/**
+* @brief Configures mirroring 
+*/
+typedef struct __attribute__((packed, aligned(4))) pfe_ct_mirror_tag pfe_ct_mirror_t;
+
+/*
+* @def PFE_CT_MIRRORS_COUNT
+* @brief Number of RX and TX mirrors supported by physical interface.
+*/
+#define PFE_CT_MIRRORS_COUNT 2U
 /**
  * @brief	The physical interface structure as seen by classifier/firmware
  * @details	This structure is shared between firmware and the driver. It represents
@@ -485,7 +512,8 @@ typedef struct __attribute__((packed, aligned(4)))
 	/*	Block state */
 	pfe_ct_block_state_t block_state;
 	/*	Mirroring to given port */
-	pfe_ct_phy_if_id_t mirror;
+	PFE_PTR(pfe_ct_mirror_t) rx_mirrors[PFE_CT_MIRRORS_COUNT];
+	PFE_PTR(pfe_ct_mirror_t) tx_mirrors[PFE_CT_MIRRORS_COUNT];
 	/*	SPD for IPsec */
 	PFE_PTR(pfe_ct_ipsec_spd_t) ipsec_spd;
 	/*	Flexible Filter */
@@ -541,20 +569,20 @@ typedef union __attribute__((packed))
 {
 	struct
 	{
-		/*	[19:0]  Forward list (1U << pfe_ct_phy_if_id_t) */
-		uint64_t forward_list : 20;
-		/*	[39:20] Untag list (1U << pfe_ct_phy_if_id_t) */
-		uint64_t untag_list : 20;
-		/*	[42:40] Unicast hit action (pfe_ct_l2br_action_t) */
+		/*	[17:0]  Forward list (1U << pfe_ct_phy_if_id_t) */
+		uint64_t forward_list : 18;
+		/*	[35:18] Untag list (1U << pfe_ct_phy_if_id_t) */
+		uint64_t untag_list : 18;
+		/*	[38:36] Unicast hit action (pfe_ct_l2br_action_t) */
 		uint64_t ucast_hit_action : 3;
-		/*	[45:43] Multicast hit action (pfe_ct_l2br_action_t) */
+		/*	[41:39] Multicast hit action (pfe_ct_l2br_action_t) */
 		uint64_t mcast_hit_action : 3;
-		/*	[48:46] Unicast miss action (pfe_ct_l2br_action_t) */
+		/*	[44:42] Unicast miss action (pfe_ct_l2br_action_t) */
 		uint64_t ucast_miss_action : 3;
-		/*	[51:49] Multicast miss action (pfe_ct_l2br_action_t) */
+		/*	[47:45] Multicast miss action (pfe_ct_l2br_action_t) */
 		uint64_t mcast_miss_action : 3;
-		/*	[54:52] Reserved */
-		uint64_t reserved : 3;
+		/*	[54:48] Stats index */
+		uint64_t stats_index : 7;
 		/*	[55 : 63] */ /* Reserved */
 		uint64_t  hw_reserved : 9;
 	} item;
@@ -598,21 +626,21 @@ typedef union __attribute__((packed))
 	struct
 	{
 		/*	[55 : 63] */ /* Reserved */
-		uint64_t  hw_reserved : 9;
-		/*	[54:52] Reserved */
-		uint64_t reserved : 3;
-		/*	[51:49] Multicast miss action (pfe_ct_l2br_action_t) */
+		uint64_t hw_reserved : 9;
+		/*	[54:48]  Index in vlan stats table (pfe_ct_vlan_statistics_t) */
+		uint64_t stats_index : 7;
+		/*	[47:45] Multicast miss action (pfe_ct_l2br_action_t) */
 		uint64_t mcast_miss_action : 3;
-		/*	[48:46] Unicast miss action (pfe_ct_l2br_action_t) */
+		/*	[44:42] Unicast miss action (pfe_ct_l2br_action_t) */
 		uint64_t ucast_miss_action : 3;
-		/*	[45:43] Multicast hit action (pfe_ct_l2br_action_t) */
+		/*	[41:39] Multicast hit action (pfe_ct_l2br_action_t) */
 		uint64_t mcast_hit_action : 3;
-		/*	[42:40] Unicast hit action (pfe_ct_l2br_action_t) */
+		/*	[38:36] Unicast hit action (pfe_ct_l2br_action_t) */
 		uint64_t ucast_hit_action : 3;
-		/*	[39:20] Untag list (1U << pfe_ct_phy_if_id_t) */
-		uint64_t untag_list : 20;  /* List of ports to remove VLAN tag */
-		/*	[19:0]  Forward list (1U << pfe_ct_phy_if_id_t) */
-		uint64_t forward_list : 20;
+		/*	[35:18] Untag list (1U << pfe_ct_phy_if_id_t) */
+		uint64_t untag_list : 18;  /* List of ports to remove VLAN tag */
+		/*	[17:0]  Forward list (1U << pfe_ct_phy_if_id_t) */
+		uint64_t forward_list : 18;
 	} item;
 
 	uint64_t val;
@@ -667,6 +695,23 @@ typedef enum __attribute__((packed))
 ct_assert(sizeof(pfe_ct_pe_type_t) == 1U);
 
 /**
+* @brief Feature flags
+* Flags combinations:
+* F_PRESENT is missing - the feature is not available
+* F_PRESENT is set and F_RUNTIME is missing - the feature is always enabled (cannot be disabled)
+* F_PRESENT is set and F_RUNTIME is set - the feature can be enabled/disable at runtime, enabled state must be read out of DMEM 
+*/
+typedef enum __attribute__((packed))
+{
+    F_NONE = 0U,
+    F_PRESENT = (1U << 0U),     /* Feature not available if not set */
+    F_RUNTIME = (1U << 1U),     /* Feature can be enabled/disabled at runtime */
+    F_CLASS = (1U << 5U),       /* Feature implemented in Class firmware */
+    F_UTIL = (1U << 6U)         /* Feature implemented in Util firmware */
+} pfe_ct_feature_flags_t;
+ct_assert(sizeof(pfe_ct_feature_flags_t) == 1U);
+
+/**
 * @brief Storage for firmware features description
 */
 typedef struct __attribute__((packed,aligned(4)))
@@ -674,12 +719,25 @@ typedef struct __attribute__((packed,aligned(4)))
 	PFE_PTR(const char)name;          /* Feature name */
 	PFE_PTR(const char)description;   /* Feature description */
 	PFE_PTR(uint8_t) position;        /* Position of the run-time enable byte */
-	const uint8_t variant;            /* Configuration variant: 0 = disabled, 1 = enabled, 2 = runtime configured */
+	const pfe_ct_feature_flags_t flags;    /* Configuration variant: 0 = disabled, 1 = enabled, 2 = runtime configured */
 	const uint8_t def_val;            /* Enable/disable default value used for runtime configuration */
 	const uint8_t reserved[2];        /* Pad */
 } pfe_ct_feature_desc_t;
 
 ct_assert(sizeof(pfe_ct_feature_desc_t) == 16);
+
+/**
+* @brief Version of the HW detected by the FW
+*/
+typedef enum __attribute__((packed))
+{
+	HW_VERSION_UNKNOWN = 0U,          /* FW has not recognized the HW version */
+	HW_VERSION_S32G2 = 2U,            /* S32G2 */
+	HW_VERSION_S32G3 = 3U,            /* S32G3 */
+	HW_VERSION_MAX = (int)(1U << 31)  /* Ensure proper size */
+} pfe_ct_hw_version_t;
+
+ct_assert(sizeof(pfe_ct_hw_version_t) == sizeof(uint32_t));
 
 /**
  * @brief Firmware version information
@@ -707,6 +765,8 @@ typedef struct __attribute__((packed))
 	PFE_PTR(pfe_ct_feature_desc_t) features;
 	/*	Features count - number of items in features */
 	uint32_t features_count;
+	/*	Hardware Versions */
+	PFE_PTR(pfe_ct_hw_version_t) hw_version;
 } pfe_ct_version_t;
 
 /**
@@ -910,6 +970,8 @@ typedef struct __attribute__((packed, aligned(4)))
 	PFE_PTR(pfe_ct_pe_stats_t) pe_stats;
 	/*	Statistics provided for each classification algorithm */
 	PFE_PTR(pfe_ct_classify_stats_t) classification_stats;
+	/*	Statistics provided for each vlan */
+	PFE_PTR(pfe_ct_vlan_statistics_t) vlan_statistics;
 	/*	Flexible Filter */
 	PFE_PTR(pfe_ct_flexible_filter_t) flexible_filter;
 	/*	Put buffer: FW-to-SW data transfers */
@@ -1129,8 +1191,9 @@ typedef enum __attribute__((packed))
 	RT_ACT_CHANGE_DIP_ADDR = (1U << 19U),	/*!< Change Destination IP Address */
 	RT_ACT_CHANGE_DPORT = (1U << 20U),		/*!< Change Destination Port */
 	RT_ACT_DEL_VLAN_HDR = (1U << 21U),		/*!< Delete outer VLAN Header */
+	RT_ACT_MOD_VLAN_HDR = (1U << 22U),		/*!< Modify outer VLAN Header */
 	RT_ACT_INVALID = (int)(1U << 31U)		/*!< Invalid value */
-} pfe_ct_route_actions_t;
+}pfe_ct_route_actions_t;
 
 /*	We expect given pfe_ct_route_actions_t size due to byte order compatibility. */
 ct_assert(sizeof(pfe_ct_route_actions_t) == sizeof(uint32_t));
@@ -1138,7 +1201,7 @@ ct_assert(sizeof(pfe_ct_route_actions_t) == sizeof(uint32_t));
 /**
  * @brief	Arguments for routing actions
  */
-typedef struct __attribute__((packed))
+typedef struct __attribute__((packed, aligned(4)))
 {
 	/*	Source MAC address (RT_ACT_ADD_ETH_HDR) */
 	uint8_t smac[6U];
@@ -1154,27 +1217,24 @@ typedef struct __attribute__((packed))
 	uint16_t dport;
 	/*	Source and destination IPv4 and IPv6 addresses
 		(RT_ACT_CHANGE_SIP_ADDR, RT_ACT_CHANGE_DIP_ADDR) */
-	union
-	{
-		struct
-		{
-			uint32_t	sip;
-			uint32_t	dip;
-		} v4;
-
-		struct
-		{
-			uint32_t	sip[4U];
-			uint32_t	dip[4U];
-		} v6;
-	} ipv;
-
+	pfe_ct_ip_addresses_t ipv;
 	/*	Inner VLAN ID (RT_ACT_ADD_VLAN1_HDR) */
 	uint16_t vlan1;
-	/*	Reserved */
-	uint16_t res;
+	/*	Egress vlan index in stats table (RT_ACT_ADD_VLAN_HDR) */
+	uint16_t vlan_stats_index;
 	uint32_t sa;
 } pfe_ct_route_actions_args_t;
+
+/**
+* @brief Configures mirroring 
+*/
+struct __attribute__((packed, aligned(4))) pfe_ct_mirror_tag
+{
+	PFE_PTR(pfe_ct_fp_table_t) flexible_filter;	/* Only accepted frames are mirrored if pointer is set */
+	pfe_ct_route_actions_t actions;				/* Action to be done on mirrored frames */
+	pfe_ct_route_actions_args_t args;			/* Arguments for modification actions */
+	pfe_ct_phy_if_id_t e_phy_if;				/* Destination for mirrored frames (outbound interface) */
+};
 
 /**
  * @brief	Routing table entry flags
@@ -1232,20 +1292,7 @@ typedef struct __attribute__((packed, aligned(4))) pfe_ct_rtable_entry_tag
 	/*	Hash storage */
 	uint16_t hash;
 	/*	Source and destination IP addresses */
-	union
-	{
-		struct
-		{
-			uint32_t	sip;
-			uint32_t	dip;
-		} v4;
-
-		struct
-		{
-			uint32_t	sip[4U];
-			uint32_t	dip[4U];
-		} v6;
-	} u;
+	pfe_ct_ip_addresses_t ipv;
 
 	/*	---------- 6x8 byte boundary ---------- */
 

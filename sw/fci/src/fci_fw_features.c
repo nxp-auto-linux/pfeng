@@ -15,8 +15,8 @@
 #include "fci_internal.h"
 #include "pfe_pe.h"
 #include "pfe_class.h"
-#include "pfe_fw_feature.h"
 #include "oal.h"
+#include "pfe_feature_mgr.h"
 #include "fci_fw_features.h"
 
 #ifdef PFE_CFG_FCI_ENABLE
@@ -33,29 +33,33 @@
  */
 errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_cmd_t *reply_buf, uint32_t *reply_len)
 {
-	pfe_fw_feature_t *fw_feature = NULL;
-	fci_t *context = (fci_t *)&__context;
 	fpp_fw_features_cmd_t *fp_cmd;
 	const char *str;
+	const char *feature_name;
 	errno_t ret = EOK;
 
-#if defined(PFE_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)	
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 
-	if (unlikely(FALSE == context->fci_initialized))
+	if (unlikely(FALSE == __context.fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	
+	*fci_ret = FPP_ERR_OK;
+	
 	/* Important to initialize to avoid buffer overflows */
 	if (*reply_len < sizeof(fpp_fw_features_cmd_t))
 	{
+		/*	Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fw_features_cmd_t)\n");
+		*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 		return EINVAL;
 	}
 	else
@@ -70,77 +74,111 @@ errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_c
 	{
 		case FPP_ACTION_UPDATE:
 		{
-			ret = pfe_class_get_feature(context->class, &fw_feature, fp_cmd->name);
-
+			ret = pfe_feature_mgr_set_val(fp_cmd->name, fp_cmd->val);
 			if(EOK != ret)
 			{
-				*fci_ret = FPP_ERR_ENTRY_NOT_FOUND;
+				/*	FCI command requested nonexistent entity. Respond with FCI error code. */
+				*fci_ret = FPP_ERR_FW_FEATURE_NOT_FOUND;
+				ret = EOK;
 			}
-			else
-			{
-				ret = pfe_fw_feature_set_val(fw_feature, fp_cmd->val);
-				if(EOK != ret)
-				{
-					*fci_ret = FPP_ERR_ENTRY_NOT_FOUND;
-				}
-				*fci_ret = FPP_ERR_OK;
-			}
+
 			break;
 		}
 
 		case FPP_ACTION_QUERY:
 		{
-            ret = pfe_class_get_feature_first(context->class, &fw_feature);
-            if(ret != EOK)
-            {
-                *fci_ret = FPP_ERR_ENTRY_NOT_FOUND;
-            }
-            else
-            {
-				pfe_fw_feature_get_val(fw_feature, &reply_buf->val);
-				pfe_fw_feature_get_def_val(fw_feature, &reply_buf->def_val);
-				pfe_fw_feature_get_variant(fw_feature, &reply_buf->variant);
-                pfe_fw_feature_get_name(fw_feature, &str);
-				strncpy(reply_buf->name, str, FPP_FEATURE_NAME_SIZE);
-                pfe_fw_feature_get_desc(fw_feature, &str);
-				strncpy(reply_buf->desc, str, FPP_FEATURE_DESC_SIZE);
-				*reply_len = sizeof(fpp_fw_features_cmd_t);
-				*fci_ret = FPP_ERR_OK;
+			ret = pfe_feature_mgr_get_first(&feature_name);
+			if(ret != EOK)
+			{
+				/*	End of the query process (no more entities to report). Respond with FCI error code. */
+				*fci_ret = FPP_ERR_FW_FEATURE_NOT_FOUND;
 				ret = EOK;
-            }
-            break;
+			}
+			else
+			{
+				ret = pfe_feature_mgr_get_val(feature_name, &reply_buf->val);
+				if(EOK == ret)
+				{
+					ret = pfe_feature_mgr_get_def_val(feature_name, &reply_buf->def_val);
+				}
+				if(EOK == ret)
+				{
+					ret = pfe_feature_mgr_get_variant(feature_name, &reply_buf->flags);
+				}
+				if(EOK == ret)
+				{
+					strncpy(reply_buf->name, feature_name, FPP_FEATURE_NAME_SIZE);
+					ret = pfe_feature_mgr_get_desc(feature_name, &str);
+				}
+
+				if(EOK == ret)
+				{
+					strncpy(reply_buf->desc, str, FPP_FEATURE_DESC_SIZE);
+					*reply_len = sizeof(fpp_fw_features_cmd_t);
+					*fci_ret = FPP_ERR_OK;
+				}
+				else
+				{
+					/*	Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
+					*reply_len = sizeof(fpp_fw_features_cmd_t);
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+				}
+			}
+			break;
 
 		}
 		case FPP_ACTION_QUERY_CONT:
 		{
-            ret = pfe_class_get_feature_next(context->class, &fw_feature);
-            if(ret != EOK)
-            {
-                *fci_ret = FPP_ERR_ENTRY_NOT_FOUND;
-            }
-            else
-            {
-				pfe_fw_feature_get_val(fw_feature, &reply_buf->val);
-				pfe_fw_feature_get_def_val(fw_feature, &reply_buf->def_val);
-				pfe_fw_feature_get_variant(fw_feature, &reply_buf->variant);
-                pfe_fw_feature_get_name(fw_feature, &str);
-				strncpy(reply_buf->name, str, FPP_FEATURE_NAME_SIZE);
-                pfe_fw_feature_get_desc(fw_feature, &str);
-				strncpy(reply_buf->desc, str, FPP_FEATURE_DESC_SIZE);
-				*reply_len = sizeof(fpp_fw_features_cmd_t);
-				*fci_ret = FPP_ERR_OK;
+			ret = pfe_feature_mgr_get_next(&feature_name);
+			if(ret != EOK)
+			{
+				/*	End of the query process (no more entities to report). Respond with FCI error code. */
+				*fci_ret = FPP_ERR_FW_FEATURE_NOT_FOUND;
 				ret = EOK;
-            }
+			}
+			else
+			{
+				ret = pfe_feature_mgr_get_val(feature_name, &reply_buf->val);
+				if(EOK == ret)
+				{
+					ret = pfe_feature_mgr_get_def_val(feature_name, &reply_buf->def_val);
+				}
+				if(EOK == ret)
+				{
+					ret = pfe_feature_mgr_get_variant(feature_name, &reply_buf->flags);
+				}
+				if(EOK == ret)
+				{
+					strncpy(reply_buf->name, feature_name, FPP_FEATURE_NAME_SIZE);
+					ret = pfe_feature_mgr_get_desc(feature_name, &str);
+				}
+
+				if(EOK == ret)
+				{
+					strncpy(reply_buf->desc, str, FPP_FEATURE_DESC_SIZE);
+					*reply_len = sizeof(fpp_fw_features_cmd_t);
+					*fci_ret = FPP_ERR_OK;
+				}
+				else
+				{
+					/*	Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
+					*reply_len = sizeof(fpp_fw_features_cmd_t);
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+				}
+			}
 			break;
 		}
 
 		default:
 		{
-			NXP_LOG_ERROR("FW Feature Command: Unknown action received: 0x%x\n", fp_cmd->action);
+			/*	Unknown action. Respond with FCI error code. */
+			NXP_LOG_ERROR("FPP_CMD_FW_FEATURE: Unknown action received: 0x%x\n", fp_cmd->action);
 			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
+			ret = EOK;
 			break;
 		}
 	}
+
 	return ret;
 }
 

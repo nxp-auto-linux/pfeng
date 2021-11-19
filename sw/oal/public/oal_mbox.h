@@ -41,6 +41,10 @@
  * 				@note	A single thread can be both, sender and receiver in the same time and is
  * 						allowed to send message or signal to itself.
  *
+ * 				@note	oal_mbox_send_message() was removed under the AAVB-3805 (dead code removal)
+ * 						together with oal_mbox_attach_irq(), oal_mbox_detach_irq() and
+ * 						oal_irq_get_flags().
+ *
  * 				The mbox provides API to attach an IRQ. This feature enables to configure an IRQ
  * 				to be a "signal sender" and in case the IRQ is triggered, signal is automatically
  * 				sent to the box. This is intended to support implementation of detached ISRs where
@@ -143,27 +147,6 @@ oal_mbox_t * oal_mbox_create(void);
 void oal_mbox_destroy(oal_mbox_t *mbox);
 
 /**
- * @brief		Attach interrupt to message box
- * @details		Function enables automatic send of signal in case an interrupt
- * 				has occurred.
- * @param		mbox The mbox instance
- * @param		irq IRQ identifier as seen by OS
- * @param		code Integer value to be presented to the receiver (payload)
- * @retval		EOK Success, signal sending is enabled
- */
-errno_t oal_mbox_attach_irq(oal_mbox_t *mbox, oal_irq_t *irq, int32_t code);
-
-/**
- * @brief		Detach interrupt from message box
- * @details		If irq has been attached by oal_mbox_attach_irq() this function
- * 				will detach it. If the irq has not been attached the call fails.
- * @param[in]	mbox The mbox instance
- * @param[in]	irq IRQ to be detached
- * @return		EOK if success
- */
-errno_t oal_mbox_detach_irq(oal_mbox_t *mbox, oal_irq_t *irq);
-
-/**
  * @brief		Attach timer to message box
  * @details		Timer will ensure sending periodic pulses to the mbox with
  * 				period and code given by input parameters.
@@ -200,18 +183,6 @@ errno_t oal_mbox_receive(oal_mbox_t *mbox, oal_mbox_msg_t *msg);
  * @retval		EOK Success
  */
 errno_t oal_mbox_send_signal(oal_mbox_t *mbox, int32_t code);
-
-/**
- * @brief		Send message (blocking call)
- * @details		Call is blocking until message is not acknowledged by receiver
- * 				via the oal_mbox_ack_msg().
- * @param[in]	mbox The mbox instance
- * @param[in]	code Integer value to be presented to the receiver (payload)
- * @param[in]	data Pointer to be presented to the receiver (payload)
- * @param[in]	len Integer value to be presented to the receiver (payload)
- * @retval		EOK Success
- */
-errno_t oal_mbox_send_message(oal_mbox_t *mbox, int32_t code, void *data, uint32_t len);
 
 /**
  * @brief		Acknowledge a received message

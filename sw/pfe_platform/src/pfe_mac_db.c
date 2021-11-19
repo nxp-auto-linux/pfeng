@@ -209,7 +209,11 @@ errno_t pfe_mac_db_add_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv
 	if (NULL == entry)
 	{
 		/*	Add address to local list */
+#ifdef PFE_CFG_TARGET_OS_LINUX
+		entry = kzalloc(sizeof(pfe_mac_db_list_entry_t), GFP_ATOMIC); /* temporary fix for AAVB-3946 */
+#else
 		entry = oal_mm_malloc(sizeof(pfe_mac_db_list_entry_t));
+#endif
 		if (NULL == entry)
 		{
 			NXP_LOG_WARNING("Memory allocation failed\n");
@@ -236,7 +240,7 @@ errno_t pfe_mac_db_add_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv
 	}
 	else
 	{
-		ret = ENOEXEC;
+		ret = EEXIST;
 	}
 
 	if (EOK != oal_mutex_unlock(&db->lock))
@@ -378,7 +382,8 @@ errno_t pfe_mac_db_get_first_addr(pfe_mac_db_t *db, pfe_mac_db_crit_t crit, pfe_
 		}
 	}
 
-	if (NULL != entry) {
+	if (NULL != entry)
+	{
 		(void) memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
 		db->iterator = item->prNext;
 		db->crit.crit = crit;
@@ -432,7 +437,8 @@ errno_t pfe_mac_db_get_next_addr(pfe_mac_db_t *db, pfe_mac_addr_t addr)
 		db->iterator = db->iterator->prNext;
 	}
 
-	if (NULL != entry) {
+	if (NULL != entry)
+	{
 		(void) memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
 		db->iterator = item->prNext;
 	}

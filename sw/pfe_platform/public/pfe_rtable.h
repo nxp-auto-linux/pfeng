@@ -12,6 +12,7 @@
 
 #include "pfe_emac.h" /* pfe_mac_addr_t */
 #include "pfe_class.h"
+#include "pfe_l2br.h"
 #include "pfe_phy_if.h" /* pfe_interface_t */
 
 /**
@@ -86,7 +87,7 @@ typedef enum
  */
 typedef void (* pfe_rtable_callback_t)(void *arg, pfe_rtable_cbk_event_t event);
 
-pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint32_t htable_size, addr_t pool_base_va, uint32_t pool_size);
+pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint32_t htable_size, addr_t pool_base_va, uint32_t pool_size, pfe_l2br_t *bridge);
 errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
 errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
 void pfe_rtable_destroy(pfe_rtable_t *rtable);
@@ -118,7 +119,7 @@ void pfe_rtable_entry_set_proto(pfe_rtable_entry_t *entry, uint8_t proto);
 uint8_t pfe_rtable_entry_get_proto(const pfe_rtable_entry_t *entry);
 errno_t pfe_rtable_entry_set_dstif(pfe_rtable_entry_t *entry, const pfe_phy_if_t *iface);
 void pfe_rtable_entry_set_out_mac_addrs(pfe_rtable_entry_t *entry,const pfe_mac_addr_t smac,const pfe_mac_addr_t dmac);
-void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan);
+void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan, bool_t replace);
 uint16_t pfe_rtable_entry_get_out_vlan(const pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_set_out_inner_vlan(pfe_rtable_entry_t *entry, uint16_t vlan);
 void pfe_rtable_entry_set_out_pppoe_sid(pfe_rtable_entry_t *entry, uint16_t sid);

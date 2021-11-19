@@ -14,6 +14,7 @@
 #include "pfe_l2br.h" /* pfe_l2br_t */
 #include "pfe_class.h" /* pfe_class_t */
 #include "pfe_if_db.h"
+#include "pfe_tmu.h"	/* pfe_tmu_t */
 #include "fci_msg.h"
 
 
@@ -28,6 +29,7 @@ typedef struct
 	pfe_class_t *class;		/* The classifier instance */
 	pfe_if_db_t *phy_if_db;	/* Pointer to platform driver phy_if DB */
 	pfe_if_db_t *log_if_db;	/* Pointer to platform driver log_if DB */
+	pfe_tmu_t *tmu;			/* Pointer to platform driver tmu */
 } fci_init_info_t;
 
 /**

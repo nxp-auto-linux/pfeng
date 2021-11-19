@@ -42,7 +42,6 @@ errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_class_mmap
 errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, addr_t dst_addr, void *src_ptr, uint32_t len);
 errno_t pfe_class_read_dmem(void *class_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len);
 errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst_ptr, addr_t src_addr, uint32_t buffer_len, uint32_t read_len);
-errno_t pfe_class_read_pmem(pfe_class_t *class, uint32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len);
 errno_t pfe_class_set_rtable(pfe_class_t *class, addr_t rtable_pa, uint32_t rtable_len, uint32_t entry_size);
 errno_t pfe_class_set_default_vlan(const pfe_class_t *class, uint16_t vlan);
 uint32_t pfe_class_get_num_of_pes(const pfe_class_t *class);
@@ -60,5 +59,8 @@ errno_t pfe_class_get_feature(const pfe_class_t *class, pfe_fw_feature_t **featu
 void pfe_class_flexi_parser_stats_endian(pfe_ct_class_flexi_parser_stats_t *stats);
 void pfe_class_sum_flexi_parser_stats(pfe_ct_class_flexi_parser_stats_t *sum, const pfe_ct_class_flexi_parser_stats_t *val);
 uint32_t pfe_class_fp_stat_to_str(const pfe_ct_class_flexi_parser_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
+errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat);
+void pfe_class_rtable_lookup_enable(const pfe_class_t *class);
+void pfe_class_rtable_lookup_disable(const pfe_class_t *class);
 
 #endif /* PFE_CLASS_H_ */

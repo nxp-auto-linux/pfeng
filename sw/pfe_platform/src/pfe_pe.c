@@ -24,6 +24,20 @@
  */
 static oal_mutex_t mem_access_lock;
 
+typedef enum
+{
+	PFE_PE_DMEM,
+	PFE_PE_IMEM
+} pfe_pe_mem_t;
+
+typedef struct
+{
+	uint8_t pe_loaded_cnt;
+	bool_t can_load_util;
+	void (*pe_memset)(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_t addr, uint32_t size);
+	void (*pe_memcpy)(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t dst_addr, const void *src_ptr, uint32_t len);
+} fw_load_ops_t;
+
 /*	Processing Engine representation */
 struct pfe_pe_tag
 {
@@ -53,6 +67,9 @@ struct pfe_pe_tag
 	addr_t mem_access_addr;				/* PE's _MEM_ACCESS_ADDR register address (virtual) */
 	addr_t mem_access_rdata;			/* PE's _MEM_ACCESS_RDATA register address (virtual) */
 
+	/* Operations to load FW */
+	const fw_load_ops_t *fw_load_ops;
+
 	/* FW Errors*/
 	uint32_t error_record_addr;			/* Error record storage address in DMEM */
 	uint32_t last_error_write_index;	/* Last seen value of write index in the record */
@@ -72,26 +89,41 @@ struct pfe_pe_tag
 	bool_t miflock;						/* When TRUE then PFE memory interface is locked */
 };
 
-typedef enum
-{
-	PFE_PE_DMEM,
-	PFE_PE_IMEM
-} pfe_pe_mem_t;
-
-static void pfe_pe_memcpy_from_host_to_imem_32_nolock(
-		pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len);
 static bool_t pfe_pe_is_active_nolock(pfe_pe_t *pe);
+#if defined(FW_WRITE_CHECK_EN)
 static void pfe_pe_memcpy_from_imem_to_host_32_nolock(
 		pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len);
-static void pfe_pe_mem_memset_nolock(
-		pfe_pe_t *pe, pfe_pe_mem_t mem, uint8_t val, addr_t addr, uint32_t len);
+#endif /* FW_WRITE_CHECK_EN */
 static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(
 		pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len);
+/* FW loading functions */
+static void pfe_pe_fw_memcpy_bulk(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t dst_addr, const void *src_ptr, uint32_t len);
+static void pfe_pe_fw_memset_bulk(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_t addr, uint32_t size);
+static void pfe_pe_fw_memcpy_single(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t dst_addr, const void *src_ptr, uint32_t len);
+static void pfe_pe_fw_memset_single(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_t addr, uint32_t size);
 
 /*	This one is not static because a firmware test code is using it but it is
 	neither declared in public header because it should not be public. */
 void pfe_pe_memcpy_from_dmem_to_host_32_nolock(
 		pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len);
+
+static const fw_load_ops_t fw_load_ops[] =
+{
+	/* These OPs can load 8 CLASS cores only */
+	{
+		.pe_loaded_cnt = 8U,
+		.can_load_util = (bool_t)FALSE,
+		.pe_memset = pfe_pe_fw_memset_bulk,
+		.pe_memcpy = pfe_pe_fw_memcpy_bulk,
+	},
+	/* These OPs can load  1 CLASS/UTIL core only */
+	{
+		.pe_loaded_cnt = 1U,
+		.can_load_util = (bool_t)TRUE,
+		.pe_memset = pfe_pe_fw_memset_single,
+		.pe_memcpy = pfe_pe_fw_memcpy_single,
+	},
+};
 
 /**
  * @brief		Query if PE is active
@@ -309,6 +341,330 @@ errno_t pfe_pe_mem_unlock(pfe_pe_t *pe)
 }
 
 /**
+ * @brief		Get number of cycles to load PEs with configured load ops
+ * @param[in]	pe The PE instance
+ * @param[in]	pe_num Number of PEs that are being loaded
+ * @return		Number of cycles to load all PEs
+ */
+static uint8_t pfe_pe_fw_load_cycles(const pfe_pe_t *pe, uint8_t pe_num)
+{
+	uint8_t ret = 1U;
+
+	if (NULL != pe->fw_load_ops)
+	{
+		if(pe_num >= pe->fw_load_ops->pe_loaded_cnt)
+		{
+			ret = pe_num/pe->fw_load_ops->pe_loaded_cnt;
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Compare two PEs with regards of FW loading
+ * @param[in]	pe1 The PE instance
+ * @param[in]	pe2 The PE instance
+ * @return		EOK on success
+ */
+static errno_t pfe_pe_fw_ops_valid(pfe_pe_t *pe1, const pfe_pe_t *pe2)
+{
+	errno_t ret = EINVAL;
+
+	if ((pe1->type == pe2->type) &&
+		(pe1->mem_access_addr == pe2->mem_access_addr) &&
+		(pe1->mem_access_rdata == pe2->mem_access_rdata) &&
+		(pe1->mem_access_wdata == pe2->mem_access_wdata))
+	{
+		ret = EOK;
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Get fastest possible FW load operations
+ * @param[in]	pe The PE instance
+ * @param[in]	pe_num Number of PEs that are being loaded
+ * @return		EOK on success
+ */
+static errno_t pfe_pe_fw_install_ops(pfe_pe_t **pe, uint8_t pe_num)
+{
+	errno_t ret;
+	uint32_t idx = 0U, pe_idx = 0U;
+	uint8_t best_pe_loader_cnt = 0U;
+	const fw_load_ops_t* pe_loader = NULL;
+
+	for (idx = 0U; idx < (sizeof(fw_load_ops)/sizeof(fw_load_ops[0U])); ++idx)
+	{
+		ret = EINVAL;
+		if (((pe_num == fw_load_ops[idx].pe_loaded_cnt) ||
+			 (1U == fw_load_ops[idx].pe_loaded_cnt)) &&
+			(fw_load_ops[idx].pe_loaded_cnt > best_pe_loader_cnt) &&
+			(((pe[0]->type == PE_TYPE_UTIL) && (fw_load_ops[idx].can_load_util == TRUE)) ||
+			(pe[0]->type != PE_TYPE_UTIL)))
+		{
+			if (1U < fw_load_ops[idx].pe_loaded_cnt)
+			{
+				for (pe_idx = 1U; pe_idx < pe_num; ++pe_idx)
+				{
+					/* To be sure that PEs are equivalent compare them here */
+					ret = pfe_pe_fw_ops_valid(pe[0], pe[pe_idx]);
+
+					if (EOK != ret)
+					{
+						NXP_LOG_ERROR("PEs are not identical\n");
+						break;
+					}
+				}
+
+				if (EOK == ret)
+				{
+					best_pe_loader_cnt = fw_load_ops[idx].pe_loaded_cnt;
+					pe_loader = &fw_load_ops[idx];
+				}
+			}
+			else
+			{
+				best_pe_loader_cnt = fw_load_ops[idx].pe_loaded_cnt;
+				pe_loader = &fw_load_ops[idx];
+			}
+		}
+	}
+
+	ret = ENODEV;
+	for (pe_idx = 0U; pe_idx < pe_num; ++pe_idx)
+	{
+		pe[pe_idx]->fw_load_ops = pe_loader;
+	}
+
+	if(NULL != pe_loader)
+	{
+		ret = EOK;
+		NXP_LOG_INFO("Selected FW loading OPs to load %d PEs in parallel\n", pe_loader->pe_loaded_cnt);
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Memcpy FW data to PEs
+ * @warning		This is supposed to be called only during initial FW loading.
+ * 				Expectation is that everything is 4B aligned and size is divisible by 4.
+ * 				This function loads 8 PEs at the same time.
+ * @param[in]	pe The PE instance
+ * @param[in]	mem Memory type
+ * @param[in]	dst_addr Destination PE address
+ * @param[in]	src_ptr Source host address
+ * @param[in]	len Copied length
+ */
+static void pfe_pe_fw_memcpy_bulk(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t dst_addr, const void *src_ptr, uint32_t len)
+{
+	uint32_t mem_addr, addr_temp;
+	uint32_t *data = (uint32_t*)src_ptr;
+	uint32_t memsel;
+
+	if (PFE_PE_DMEM == mem)
+	{
+		memsel = PE_IBUS_ACCESS_DMEM;
+	}
+	else
+	{
+		memsel = PE_IBUS_ACCESS_IMEM;
+	}
+
+	/*	Sanity check if we can safely access the memory interface */
+	if (unlikely(!pe->miflock))
+	{
+		NXP_LOG_ERROR("Accessing unlocked PE memory interface (write).\n");
+	}
+
+	addr_temp = PE_IBUS_WRITE | memsel | PE_IBUS_WREN(0xf);
+
+	/*
+	 * IF we use gray code order in the unroll we will save very large number of instructions
+	 *	So optimal order is
+	 *	0 -> 1 -> 3 -> 2 -> 6 -> 7 -> 5 -> 4
+	 */
+
+	for (mem_addr = dst_addr; mem_addr < (dst_addr + len); mem_addr += 4U)
+	{
+		hal_write32(oal_htonl(*data), pe->mem_access_wdata);
+		data++;
+		/* Just do un-rool manually to save time */
+		addr_temp &= (0xff060000U);
+		addr_temp |= mem_addr;
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp |= ((uint32_t)1U << 20U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp |= ((uint32_t)1U << 21U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp &= ~((uint32_t)1U << 20U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp |= ((uint32_t)1U << 22U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp |= ((uint32_t)1U << 20U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp &= ~((uint32_t)1U << 21U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp &= ~((uint32_t)1U << 20U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+	}
+}
+
+/**
+ * @brief		Memset PEs memory
+ * @warning		This is supposed to be called only during initial FW loading.
+ *				Expectation is that everything is 4B aligned and size is divisible by 4.
+ *				This function loads 8 PEs at the same time.
+ * @param[in]	pe The PE instance
+ * @param[in]	mem Memory type
+ * @param[in]	val Value to set the memory
+ * @param[in]	addr Destination PE address
+ * @param[in]	size Copied length
+ */
+static void pfe_pe_fw_memset_bulk(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_t addr, uint32_t size)
+{
+	uint32_t mem_addr, addr_temp;
+	uint32_t memsel;
+
+	if (PFE_PE_DMEM == mem)
+	{
+		memsel = PE_IBUS_ACCESS_DMEM;
+	}
+	else
+	{
+		memsel = PE_IBUS_ACCESS_IMEM;
+	}
+
+	/*	Sanity check if we can safely access the memory interface */
+	if (unlikely(!pe->miflock))
+	{
+		NXP_LOG_ERROR("Accessing unlocked PE memory interface (write).\n");
+	}
+
+	hal_write32(oal_htonl(val), pe->mem_access_wdata);
+
+	addr_temp = PE_IBUS_WRITE | memsel | PE_IBUS_WREN(0xf);
+
+	/*
+	 * IF we use gray code order in the unroll we will save very large number of instructions
+	 *	So optimal order is
+	 *	0 -> 1 -> 3 -> 2 -> 6 -> 7 -> 5 -> 4
+	 */
+
+	for (mem_addr = addr; mem_addr < (addr + size); mem_addr += 4U)
+	{
+		/* Just do un-rool to save time manually to save time */
+		addr_temp &= (0xff060000U);
+		addr_temp |= mem_addr;
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp |= ((uint32_t)1U << 20U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp |= ((uint32_t)1U << 21U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp &= ~((uint32_t)1U << 20U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp |= ((uint32_t)1U << 22U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp |= ((uint32_t)1U << 20U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp &= ~((uint32_t)1U << 21U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+		addr_temp &= ~((uint32_t)1U << 20U);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+	}
+}
+
+/**
+ * @brief		Memset PEs memory
+ * @warning		This is supposed to be called only during initial FW loading.
+ *				Expectation is that everything is 4B aligned and size is divisible by 4.
+ *				This function can load single PE only.
+ * @param[in]	pe The PE instance
+ * @param[in]	mem Memory type
+ * @param[in]	dst_addr Destination PE address
+ * @param[in]	src_ptr Source host address
+ * @param[in]	len Copied length
+ */
+static void pfe_pe_fw_memcpy_single(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t dst_addr, const void *src_ptr, uint32_t len)
+{
+	uint32_t mem_addr, addr_temp;
+	uint32_t *data = (uint32_t*)src_ptr;
+	uint32_t memsel;
+
+	if (PFE_PE_DMEM == mem)
+	{
+		memsel = PE_IBUS_ACCESS_DMEM;
+	}
+	else
+	{
+		memsel = PE_IBUS_ACCESS_IMEM;
+	}
+
+	/*	Sanity check if we can safely access the memory interface */
+	if (unlikely(!pe->miflock))
+	{
+		NXP_LOG_ERROR("Accessing unlocked PE memory interface (write).\n");
+	}
+
+	addr_temp = PE_IBUS_WRITE | memsel | PE_IBUS_WREN(0xf) | PE_IBUS_PE_ID(pe->id);
+
+	for (mem_addr = dst_addr; mem_addr < (dst_addr + len); mem_addr += 4U)
+	{
+		hal_write32(oal_htonl(*data), pe->mem_access_wdata);
+		data++;
+		addr_temp &= (0xffff60000U);
+		addr_temp |= mem_addr;
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+	}
+}
+
+/**
+ * @brief		Memset PEs memory
+ * @warning		This is supposed to be called only during initial FW loading.
+ * 				Expectation is that everything is 4B aligned and size is divisible by 4.
+ * 				This function can load single PE only.
+ * @param[in]	pe The PE instance
+ * @param[in]	mem Memory type
+ * @param[in]	val Value to set the memory
+ * @param[in]	addr Destination PE address
+ * @param[in]	size Copied length
+ */
+static void pfe_pe_fw_memset_single(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_t addr, uint32_t size)
+{
+	uint32_t mem_addr, addr_temp;
+	uint32_t memsel;
+
+	if (PFE_PE_DMEM == mem)
+	{
+		memsel = PE_IBUS_ACCESS_DMEM;
+	}
+	else
+	{
+		memsel = PE_IBUS_ACCESS_IMEM;
+	}
+
+	/*	Sanity check if we can safely access the memory interface */
+	if (unlikely(!pe->miflock))
+	{
+		NXP_LOG_ERROR("Accessing unlocked PE memory interface (write).\n");
+	}
+
+	hal_write32(oal_htonl(val), pe->mem_access_wdata);
+
+	addr_temp = PE_IBUS_WRITE | memsel | PE_IBUS_WREN(0xf) | PE_IBUS_PE_ID(pe->id);
+
+	/* We could potentially do some manual unroll here */
+	for (mem_addr = addr; mem_addr < (addr + size); mem_addr += 4U)
+	{
+		addr_temp &= (0xffff60000U);
+		addr_temp |= mem_addr;
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+	}
+}
+
+/**
  * @brief		Read data from PE memory
  * @param[in]	pe The PE instance
  * @param[in]	mem Memory to access
@@ -475,92 +831,6 @@ static void pfe_pe_mem_write(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_
 
 	hal_write32(oal_htonl(val_temp), pe->mem_access_wdata);
 	hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
-}
-
-/**
- * @brief		Memset for PE memories
- * @param[in]	pe The PE instance
- * @param[in]	mem Memory to access
- * @param[in]	val Byte value to be used to fill the memory block
- * @param[in]	addr Address of the memory block within DMEM
- * @param[in]	len Number of bytes to fill
- */
-static void pfe_pe_mem_memset_nolock(pfe_pe_t *pe, pfe_pe_mem_t mem, uint8_t val, addr_t addr, uint32_t len)
-{
-	uint32_t val32 = (uint32_t)val | ((uint32_t)val << 8) | ((uint32_t)val << 16) | ((uint32_t)val << 24);
-	uint32_t offset;
-	uint32_t temp = len;
-	uint32_t adrr_temp = addr;
-
-	if ((addr & 0x3U) != 0U)
-	{
-		/*	Write unaligned bytes to align the address */
-		offset = BYTES_TO_4B_ALIGNMENT(addr);
-		offset = (len < offset) ? len : offset;
-		pfe_pe_mem_write(pe, mem, val32, addr, (uint8_t)offset);
-		temp = (len >= offset) ? (len - offset) : 0U;
-		adrr_temp = addr + offset;
-	}
-
-	while (temp>=4U)
-	{
-		/*	Write aligned words */
-		pfe_pe_mem_write(pe, mem, val32, adrr_temp, 4U);
-		temp-=4U;
-		adrr_temp+=4U;
-	}
-
-	if (temp > 0U)
-	{
-		/*	Write the rest */
-		pfe_pe_mem_write(pe, mem, val32, adrr_temp, (uint8_t)temp);
-	}
-}
-
-/**
- * @brief		Memset for DMEM
- * @param[in]	pe The PE instance
- * @param[in]	val Byte value to be used to fill the memory block
- * @param[in]	addr Address of the memory block within DMEM
- * @param[in]	len Number of bytes to fill
- */
-void pfe_pe_dmem_memset(pfe_pe_t *pe, uint8_t val, addr_t addr, uint32_t len)
-{
-	if (EOK != pfe_pe_mem_lock(pe))
-	{
-		NXP_LOG_DEBUG("Memory lock failed\n");
-		return;
-	}
-
-	pfe_pe_mem_memset_nolock(pe, PFE_PE_DMEM, val, addr, len);
-
-	if (EOK != pfe_pe_mem_unlock(pe))
-	{
-		NXP_LOG_DEBUG("Memory unlock failed\n");
-	}
-}
-
-/**
- * @brief		Memset for IMEM
- * @param[in]	pe The PE instance
- * @param[in]	val Byte value to be used to fill the memory block
- * @param[in]	addr Address of the memory block within IMEM
- * @param[in]	len Number of bytes to fill
- */
-void pfe_pe_imem_memset(pfe_pe_t *pe, uint8_t val, addr_t addr, uint32_t len)
-{
-	if (EOK != pfe_pe_mem_lock(pe))
-	{
-		NXP_LOG_DEBUG("Memory lock failed\n");
-		return;
-	}
-
-	pfe_pe_mem_memset_nolock(pe, PFE_PE_IMEM, val, addr, len);
-
-	if (EOK != pfe_pe_mem_unlock(pe))
-	{
-		NXP_LOG_DEBUG("Memory unlock failed\n");
-	}
 }
 
 /**
@@ -797,85 +1067,6 @@ errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_coun
 }
 
 /**
- * @brief		Write 'len'bytes to IMEM
- * @note		Function expects the source data to be in host endian format.
- * @param[in]	pe The PE instance
- * @param[in]	src_ptr Buffer source address (host, virtual)
- * @param[in]	dst_addr IMEM destination address (must be 32-bit aligned)
- * @param[in]	len Number of bytes to copy
- */
-static void pfe_pe_memcpy_from_host_to_imem_32_nolock(pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len)
-{
-	uint32_t val;
-	uint32_t offset;
-	addr_t dst_temp = dst_addr;
-	/* Avoid void pointer arithmetics */
-	const uint8_t *src_byteptr = src_ptr;
-	uint32_t len_temp = len;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == pe))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if ((dst_temp & 0x3U) != 0U)
-	{
-		/*	Write unaligned bytes to align the destination address */
-		offset = BYTES_TO_4B_ALIGNMENT(dst_temp);
-		offset = (len < offset) ? len : offset;
-		val = *(uint32_t *)src_byteptr;
-		pfe_pe_mem_write(pe, PFE_PE_IMEM, val, dst_temp, (uint8_t)offset);
-		src_byteptr += offset;
-		dst_temp = dst_addr + offset;
-		len_temp = (len >= offset) ? (len - offset) : 0U;
-	}
-
-	while(len_temp>=4U)
-	{
-		/*	4-byte writes */
-		val = *(uint32_t *)src_byteptr;
-		pfe_pe_mem_write(pe, PFE_PE_IMEM, val, (uint32_t)dst_temp, 4U);
-		len_temp-=4U;
-		src_byteptr+=4U;
-		dst_temp+=4U;
-	}
-
-	if (0U != len_temp)
-	{
-		/*	The rest */
-		val = *(uint32_t *)src_byteptr;
-		pfe_pe_mem_write(pe, PFE_PE_IMEM, val, (uint32_t)dst_temp, (uint8_t)len_temp);
-	}
-}
-
-/**
- * @brief		Write 'len'bytes to IMEM
- * @note		Function expects the source data to be in host endian format.
- * @param[in]	pe The PE instance
- * @param[in]	src_ptr Buffer source address (host, virtual)
- * @param[in]	dst_addr IMEM destination address (must be 32-bit aligned)
- * @param[in]	len Number of bytes to copy
- */
-void pfe_pe_memcpy_from_host_to_imem_32(pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len)
-{
-	if (EOK != pfe_pe_mem_lock(pe))
-	{
-		NXP_LOG_DEBUG("Memory lock failed\n");
-		return;
-	}
-
-	pfe_pe_memcpy_from_host_to_imem_32_nolock(pe, dst_addr, src_ptr, len);
-
-	if (EOK != pfe_pe_mem_unlock(pe))
-	{
-		NXP_LOG_DEBUG("Memory unlock failed\n");
-	}
-}
-
-/**
  * @brief		Read 'len' bytes from IMEM
  * @param[in]	pe The PE instance
  * @param[in]	src_addr IMEM source address (physical within PE, must be 32-bit aligned)
@@ -883,6 +1074,7 @@ void pfe_pe_memcpy_from_host_to_imem_32(pfe_pe_t *pe, addr_t dst_addr, const voi
  * @param[in]	len Number of bytes to read
  *
  */
+#if defined(FW_WRITE_CHECK_EN)
 static void pfe_pe_memcpy_from_imem_to_host_32_nolock(pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len)
 {
 	uint32_t val;
@@ -929,30 +1121,7 @@ static void pfe_pe_memcpy_from_imem_to_host_32_nolock(pfe_pe_t *pe, void *dst_pt
 		(void)memcpy((void*)dst_byteptr, (const void*)&val, len_temp);
 	}
 }
-
-/**
- * @brief		Read 'len' bytes from IMEM
- * @param[in]	pe The PE instance
- * @param[in]	src_addr IMEM source address (physical within PE, must be 32-bit aligned)
- * @param[in]	dst_ptr Destination address (host, virtual)
- * @param[in]	len Number of bytes to read
- *
- */
-void pfe_pe_memcpy_from_imem_to_host_32(pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len)
-{
-	if (EOK != pfe_pe_mem_lock(pe))
-	{
-		NXP_LOG_DEBUG("Memory lock failed\n");
-		return;
-	}
-
-	pfe_pe_memcpy_from_imem_to_host_32_nolock(pe, dst_ptr, src_addr, len);
-
-	if (EOK != pfe_pe_mem_unlock(pe))
-	{
-		NXP_LOG_DEBUG("Memory unlock failed\n");
-	}
-}
+#endif /* FW_WRITE_CHECK_EN */
 
 /**
  * @brief		Load an elf section into DMEM
@@ -979,65 +1148,65 @@ static errno_t pfe_pe_load_dmem_section_nolock(pfe_pe_t *pe, const void *sdata, 
     {
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-        if (((addr_t)(sdata) & 0x3U) != (addr & 0x3U))
-        {
-            NXP_LOG_ERROR("Load address 0x%p and elf file address 0x%p don't have the same alignment\n", (void *)addr, sdata);
-            ret = EINVAL;
-        }
-        else
-        {
-            if ((addr & 0x3U) != 0U)
-            {
-                NXP_LOG_ERROR("Load address 0x%p is not 32bit aligned\n", (void *)addr);
-                ret = EINVAL;
-            }
-            else
-            {
-                switch (type)
-                {
-                    case 0x7000002aU: /* MIPS.abiflags */
-                    {
-                        /* Skip the section */
-                        break;
-                    }
-                    case (uint32_t)SHT_PROGBITS:
-                    {
-            #if defined(FW_WRITE_CHECK_EN)
-                        void *buf = oal_mm_malloc(size);
-            #endif /* FW_WRITE_CHECK_EN */
+	if (((addr_t)(sdata) & 0x3U) != (addr & 0x3U))
+	{
+		NXP_LOG_ERROR("Load address 0x%p and elf file address 0x%p don't have the same alignment\n", (void *)addr, sdata);
+		ret = EINVAL;
+	}
+	else
+	{
+		if ((addr & 0x3U) != 0U)
+		{
+			NXP_LOG_ERROR("Load address 0x%p is not 32bit aligned\n", (void *)addr);
+			ret = EINVAL;
+		}
+		else
+		{
+			switch (type)
+			{
+				case 0x7000002aU: /* MIPS.abiflags */
+				{
+					/* Skip the section */
+					break;
+				}
+				case (uint32_t)SHT_PROGBITS:
+				{
+		#if defined(FW_WRITE_CHECK_EN)
+					void *buf = oal_mm_malloc(size);
+		#endif /* FW_WRITE_CHECK_EN */
 
-                        /*	Write section data */
-                        pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, addr - pe->dmem_elf_base_va, sdata, size);
+					/*	Write section data */
+					pe->fw_load_ops->pe_memcpy(pe, PFE_PE_DMEM, addr - pe->dmem_elf_base_va, sdata, size);
 
-            #if defined(FW_WRITE_CHECK_EN)
-                        pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, buf, addr, size);
+		#if defined(FW_WRITE_CHECK_EN)
+					pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, buf, addr, size);
 
-                        if (0 != memcmp(buf, sdata, size))
-                        {
-                            NXP_LOG_ERROR("DMEM data inconsistent\n");
-                        }
+					if (0 != memcmp(buf, sdata, size))
+					{
+						NXP_LOG_ERROR("DMEM data inconsistent\n");
+					}
 
-                        oal_mm_free(buf);
-            #endif /* FW_WRITE_CHECK_EN */
+					oal_mm_free(buf);
+		#endif /* FW_WRITE_CHECK_EN */
 
-                        break;
-                    }
+					break;
+				}
 
-                    case (uint32_t)SHT_NOBITS:
-                    {
-                        pfe_pe_mem_memset_nolock(pe, PFE_PE_DMEM, 0U, addr, size);
-                        break;
-                    }
+				case (uint32_t)SHT_NOBITS:
+				{
+					pe->fw_load_ops->pe_memset(pe, PFE_PE_DMEM, 0U, addr, size);
+					break;
+				}
 
-                    default:
-                    {
-                        NXP_LOG_ERROR("Unsupported section type: 0x%x\n", (uint_t)type);
-                        ret = EINVAL;
-                        break;
-                    }
-                }
-            }
-        }
+				default:
+				{
+					NXP_LOG_ERROR("Unsupported section type: 0x%x\n", (uint_t)type);
+					ret = EINVAL;
+					break;
+				}
+			}
+		}
+	}
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     }
 #endif
@@ -1103,7 +1272,7 @@ static errno_t pfe_pe_load_imem_section_nolock(pfe_pe_t *pe, const void *data, a
 #endif /* FW_WRITE_CHECK_EN */
 
 			/*	Write section data */
-			pfe_pe_memcpy_from_host_to_imem_32_nolock(pe, addr - pe->imem_elf_base_va, data, size);
+			pe->fw_load_ops->pe_memcpy(pe, PFE_PE_IMEM, addr - pe->imem_elf_base_va, data, size);
 
 #if defined(FW_WRITE_CHECK_EN)
 			pfe_pe_memcpy_from_imem_to_host_32_nolock(pe, buf, addr, size);
@@ -1194,37 +1363,6 @@ static bool_t pfe_pe_is_imem(const pfe_pe_t *pe, addr_t addr, uint32_t size)
 }
 
 /**
- * @brief		Check if memory region belongs to LMEM
- * @param[in]	pe The PE instance
- * @param[in]	addr Address to be checked
- * @param[in]	size Length of the region to be checked
- * @return		TRUE if given range belongs to LMEM
- */
-static bool_t pfe_pe_is_lmem(const pfe_pe_t *pe, addr_t addr, uint32_t size)
-{
-	addr_t reg_end;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == pe))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	reg_end = pe->lmem_base_addr_pa + pe->lmem_size;
-
-	if ((addr >= pe->lmem_base_addr_pa) && ((addr + size) < reg_end))
-	{
-		return TRUE;
-	}
-	else
-	{
-		return FALSE;
-	}
-}
-
-/**
  * @brief		Write elf section to PE memory
  * @details		Function expects the section data is in host endian format
  * @param[in]	pe The PE instance
@@ -1254,12 +1392,6 @@ static errno_t pfe_pe_load_elf_section(pfe_pe_t *pe, const void *sdata, addr_t l
 	{
 		/*	Section belongs to IMEM */
 		ret_val = pfe_pe_load_imem_section_nolock(pe, sdata, load_addr, size, type);
-	}
-	else if (pfe_pe_is_lmem(pe, load_addr, size))
-	{
-		/*	Section belongs to LMEM */
-		NXP_LOG_ERROR("LMEM not supported (yet)\n");
-		ret_val = EINVAL;
 	}
 	else
 	{
@@ -1489,22 +1621,25 @@ static void print_fw_issue(const pfe_ct_pe_mmap_t *fw_mmap)
 
 /**
  * @brief		Upload firmware into PEs memory
- * @param[in]	pe The PE instance
+ * @param[in]	pe The PE instances
+ * @param[in]	pe_num Number of PE instances
  * @param[in]	elf The elf file object to be uploaded
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
+errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 {
-	uint32_t ii;
+	uint32_t ii, pe_idx;
 	addr_t load_addr;
-	void *buf;
+	const void *buf;
 	errno_t ret;
 	uint32_t section_idx = 0U;
 	uint32_t mask_sectIdx;
 	const ELF_File_t *elf_file = (ELF_File_t *)elf;
 	const Elf32_Shdr *shdr = NULL;
 	static pfe_ct_pe_mmap_t *tmp_mmap = NULL;
-    uint32_t mmap_size;
+	uint32_t mmap_size;
+	uint32_t features_size = 0, errors_size = 0;
+	void *features_mem = NULL, *errors_mem = NULL;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == pe) || (NULL == elf)))
@@ -1514,14 +1649,34 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (EOK != pfe_pe_lock(pe))
+	for (pe_idx = 0; pe_idx < pe_num; ++pe_idx)
 	{
-		NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+		if (EOK != pfe_pe_lock(pe[pe_idx]))
+		{
+			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+		}
+		/* TODO unlock if it fails (maybe it doesn't matter  as we fail init anyway ?)*/
 	}
 
-	/*	Initialize DMEM and IMEM */
-	pfe_pe_mem_memset_nolock(pe, PFE_PE_DMEM, 0U, 0U, pe->dmem_size);
-	pfe_pe_mem_memset_nolock(pe, PFE_PE_IMEM, 0U, 0U, pe->imem_size);
+	ret =  pfe_pe_fw_install_ops(pe, (uint8_t)pe_num);
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Couldn't find PE load operations: %d\n", ret);
+	}
+
+	for(pe_idx = 0; pe_idx < pfe_pe_fw_load_cycles(pe[0], (uint8_t)pe_num); ++pe_idx)
+	{
+		/* Check that we have the ops */
+		if(NULL == pe[pe_idx]->fw_load_ops)
+		{
+			return ENODEV;
+		}
+
+		pe[pe_idx]->fw_load_ops->pe_memset(pe[pe_idx], PFE_PE_DMEM, 0, 0, pe[pe_idx]->dmem_size);
+		pe[pe_idx]->fw_load_ops->pe_memset(pe[pe_idx], PFE_PE_IMEM, 0, 0, pe[pe_idx]->imem_size);
+	}
+
+
 
 	/*	Attempt to get section containing firmware memory map data */
 	if (TRUE == ELF_SectFindName(elf_file, ".pfe_pe_mmap", &section_idx, NULL, NULL))
@@ -1566,9 +1721,6 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 			}
 
 			NXP_LOG_INFO("pfe_ct.h file version\"%s\"\n", mmap_version_str);
-
-			/*	Indicate that mmap_data is available */
-			pe->mmap_data = tmp_mmap;
 		}
 	}
 	else
@@ -1584,18 +1736,16 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 
 		/*	Load section to RAM */
 		shdr = &elf_file->arSectHead32[mask_sectIdx];
-		buf = oal_mm_malloc(shdr->sh_size);
-		if (NULL == buf)
+		errors_mem = oal_mm_malloc(shdr->sh_size);
+		if (NULL == errors_mem)
 		{
 			ret = ENOMEM;
 			goto free_and_fail;
 		}
 		else
 		{
-			(void)memcpy(buf, (const void *)((uint8_t *)elf_file->pvData + shdr->sh_offset), shdr->sh_size);
-			pe->fw_err_section_size = shdr->sh_size;
-			/*	Indicate that fw_err_section is available */
-			pe->fw_err_section = buf;
+			(void)memcpy(errors_mem, (const void *)((uint8_t *)elf_file->pvData + shdr->sh_offset), shdr->sh_size);
+			errors_size = shdr->sh_size;
 		}
 	}
 	else
@@ -1612,19 +1762,16 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 
 		/*	Load section to RAM */
 		shdr = &elf_file->arSectHead32[mask_sectIdx];
-		buf = oal_mm_malloc(shdr->sh_size);
-		if (NULL == buf)
+		features_mem = oal_mm_malloc(shdr->sh_size);
+		if (NULL == features_mem)
 		{
 			ret = ENOMEM;
 			goto free_and_fail;
 		}
 		else
 		{
-			(void)memcpy(buf, (const void *)((addr_t)elf_file->pvData + shdr->sh_offset), shdr->sh_size);
-			pe->fw_feature_section_size = shdr->sh_size;
-			/*	Indicate that fw_feature_section is available */
-			pe->fw_feature_section = buf;
-			pe->fw_features_base = INVALID_FEATURES_BASE; /* Invalid value */
+			(void)memcpy(features_mem, (const void *)((addr_t)elf_file->pvData + shdr->sh_offset), shdr->sh_size);
+			features_size = shdr->sh_size;
 		}
 	}
 	else
@@ -1658,57 +1805,84 @@ errno_t pfe_pe_load_firmware(pfe_pe_t *pe, const void *elf)
 			goto free_and_fail;
 		}
 
-		/*	Upload the section */
-		ret = pfe_pe_load_elf_section(pe, buf, load_addr, elf_file->arSectHead32[ii].sh_size, elf_file->arSectHead32[ii].sh_type);
-		if (EOK != ret)
+		for(pe_idx = 0; pe_idx < pfe_pe_fw_load_cycles(pe[0], (uint8_t)pe_num); ++pe_idx)
 		{
-			NXP_LOG_ERROR("Couldn't upload firmware section %s, %u bytes @ 0x%08x. Reason: %d\n",
-							elf_file->acSectNames+elf_file->arSectHead32[ii].sh_name,
-							(uint_t)elf_file->arSectHead32[ii].sh_size,
-							(uint_t)elf_file->arSectHead32[ii].sh_addr, ret);
-			goto free_and_fail;
+		/*	Upload the section */
+			ret = pfe_pe_load_elf_section(pe[pe_idx], buf, load_addr, elf_file->arSectHead32[ii].sh_size, elf_file->arSectHead32[ii].sh_type);
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Couldn't upload firmware section %s, %u bytes @ 0x%08x. Reason: %d\n",
+								elf_file->acSectNames+elf_file->arSectHead32[ii].sh_name,
+								(uint_t)elf_file->arSectHead32[ii].sh_size,
+								(uint_t)elf_file->arSectHead32[ii].sh_addr, ret);
+				goto free_and_fail;
+			}
 		}
 	}
 
-	if (EOK != pfe_pe_unlock(pe))
+	for (ii = 0; ii < pe_num; ++ii)
 	{
-		NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
-	}
+		if (EOK != pfe_pe_unlock(pe[ii]))
+		{
+			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+		}
 
-	/* Clear the internal copy of the index on each FW load because
-	   FW will also start from 0 */
-	pe->last_error_write_index = 0U;
-	pe->error_record_addr = 0U;
+		/*	Indicate that mmap_data is available */
+		pe[ii]->mmap_data = tmp_mmap;
+
+		pe[ii]->fw_err_section_size = errors_size;
+		/*	Indicate that fw_err_section is available */
+		pe[ii]->fw_err_section = errors_mem;
+
+		pe[ii]->fw_feature_section_size = features_size;
+
+		/*	Indicate that fw_feature_section is available */
+		pe[ii]->fw_feature_section = features_mem;
+		pe[ii]->fw_features_base = INVALID_FEATURES_BASE; /* Invalid value */
+
+		/* Clear the internal copy of the index on each FW load because
+		   FW will also start from 0 */
+		pe[ii]->last_error_write_index = 0U;
+		pe[ii]->error_record_addr = 0U;
+	}
 	return EOK;
 
 free_and_fail:
-	if (NULL != pe->mmap_data)
+	if (NULL != pe[0]->mmap_data)
 	{
-		oal_mm_free(pe->mmap_data);
-		pe->mmap_data = NULL;
+		oal_mm_free(pe[0]->mmap_data);
+
 	}
 
-	if (NULL != pe->fw_err_section)
+	if (NULL != pe[0]->fw_err_section)
 	{
-		oal_mm_free(pe->fw_err_section);
-		pe->fw_err_section = NULL;
-		pe->fw_err_section_size = 0U;
+		oal_mm_free(pe[0]->fw_err_section);
 	}
 
-	if (NULL != pe->fw_feature_section)
+	if (NULL != pe[0]->fw_feature_section)
 	{
-		oal_mm_free(pe->fw_feature_section);
-		pe->fw_feature_section = NULL;
-		pe->fw_feature_section_size = 0U;
+		oal_mm_free(pe[0]->fw_feature_section);
 	}
 
-	if (EOK != pfe_pe_unlock(pe))
+	for (ii = 0; ii < pe_num; ++ii)
 	{
-		NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
+		if (EOK != pfe_pe_unlock(pe[ii]))
+		{
+			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+		}
+		pe[ii]->mmap_data = NULL;
+
+		pe[ii]->fw_err_section = NULL;
+		pe[ii]->fw_err_section_size = 0U;
+
+		pe[ii]->fw_feature_section = NULL;
+		pe[ii]->fw_feature_section_size = 0U;
+
 	}
 
 	return ret;
 }
+
 
 /**
  * @brief		Get pointer to PE's memory where memory map data is stored
@@ -1740,35 +1914,46 @@ errno_t pfe_pe_get_mmap(const pfe_pe_t *pe, pfe_ct_pe_mmap_t *mmap)
 }
 
 /**
- * @brief		Destroy PE instance
- * @param[in]	pe The PE instance
+ * @brief		Destroy PE instances
+ * @param[in]	pe The list of PE instances
+ * @param[in]	pe_num The number of PE instances
  */
-void pfe_pe_destroy(pfe_pe_t *pe)
+void pfe_pe_destroy(pfe_pe_t **pe, uint8_t pe_num)
 {
-	if (NULL != pe)
+	uint32_t pe_idx;
+
+	if ((NULL != pe) && (0U < pe_num))
 	{
-		if (NULL != pe->mmap_data)
+		if (NULL != pe[0]->mmap_data)
 		{
-			oal_mm_free(pe->mmap_data);
-			pe->mmap_data = NULL;
+			oal_mm_free(pe[0]->mmap_data);
 		}
 
-		if (NULL != pe->fw_err_section)
+		if (NULL != pe[0]->fw_err_section)
 		{
-			oal_mm_free(pe->fw_err_section);
-			pe->fw_err_section = NULL;
-			pe->fw_err_section_size = 0U;
+			oal_mm_free(pe[0]->fw_err_section);
 		}
 
-		if (NULL != pe->fw_feature_section)
+		if (NULL != pe[0]->fw_feature_section)
 		{
-			oal_mm_free(pe->fw_feature_section);
-			pe->fw_feature_section = NULL;
-			pe->fw_feature_section_size = 0U;
+			oal_mm_free(pe[0]->fw_feature_section);
 		}
 
-		(void)oal_mutex_destroy(&pe->lock_mutex);
-		oal_mm_free(pe);
+		for (pe_idx = 0 ; pe_idx < pe_num; ++pe_idx)
+		{
+			pe[pe_idx]->mmap_data = NULL;
+
+			pe[pe_idx]->fw_err_section = NULL;
+			pe[pe_idx]->fw_err_section_size = 0U;
+
+			pe[pe_idx]->fw_feature_section = NULL;
+			pe[pe_idx]->fw_feature_section_size = 0U;
+
+			(void)oal_mutex_destroy(&pe[pe_idx]->lock_mutex);
+			oal_mm_free(pe[pe_idx]);
+
+			pe[pe_idx] = NULL;
+		}
 	}
 }
 

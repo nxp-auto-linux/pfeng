@@ -196,29 +196,12 @@ int pfeng_hwts_ioctl_set(struct pfeng_netif *netif, struct ifreq *rq)
 	/* Following messages are currently time stamped
 	 * SYNC, Follow_Up, Delay_Req, Delay_Resp*/
 	switch (cfg.rx_filter) {
-	case HWTSTAMP_FILTER_PTP_V1_L4_EVENT:
-	case HWTSTAMP_FILTER_PTP_V1_L4_SYNC:
-	case HWTSTAMP_FILTER_PTP_V1_L4_DELAY_REQ:
-	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
-	case HWTSTAMP_FILTER_PTP_V2_L4_SYNC:
-	case HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ:
-	case HWTSTAMP_FILTER_PTP_V2_L2_EVENT:
-	case HWTSTAMP_FILTER_PTP_V2_L2_SYNC:
-	case HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ:
-	case HWTSTAMP_FILTER_PTP_V2_EVENT:
-	case HWTSTAMP_FILTER_PTP_V2_SYNC:
-	case HWTSTAMP_FILTER_PTP_V2_DELAY_REQ:
-		/* We currently do not support specific filtering */
-		netif->tshw_cfg.rx_filter = cfg.rx_filter;
-		break;
 	case HWTSTAMP_FILTER_NONE:
-		/* We always time stamp some messages on RX */
-	case HWTSTAMP_FILTER_NTP_ALL:
-		/* No NTP time stamp */
-	case HWTSTAMP_FILTER_ALL:
-		/* We do not time stamp all incoming packets */
+		netif->tshw_cfg.rx_filter = HWTSTAMP_FILTER_NONE;
+		break;
 	default:
-		return -ERANGE;
+		netif->tshw_cfg.rx_filter = HWTSTAMP_FILTER_ALL;
+		break;
 	}
 
 	return copy_to_user(rq->ifr_data, &netif->tshw_cfg, sizeof(cfg)) ? -EFAULT : 0;
@@ -255,20 +238,8 @@ int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct ethtool_ts_info *info)
 
 	info->tx_types = BIT(HWTSTAMP_TX_ON) | BIT(HWTSTAMP_TX_OFF);
 
-	info->rx_filters = BIT(HWTSTAMP_FILTER_SOME) |
-			   BIT(HWTSTAMP_FILTER_NONE) |
-			   BIT(HWTSTAMP_FILTER_PTP_V1_L4_EVENT) |
-			   BIT(HWTSTAMP_FILTER_PTP_V1_L4_SYNC) |
-			   BIT(HWTSTAMP_FILTER_PTP_V1_L4_DELAY_REQ) |
-			   BIT(HWTSTAMP_FILTER_PTP_V2_L4_EVENT) |
-			   BIT(HWTSTAMP_FILTER_PTP_V2_L4_SYNC) |
-			   BIT(HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ) |
-			   BIT(HWTSTAMP_FILTER_PTP_V2_L2_EVENT) |
-			   BIT(HWTSTAMP_FILTER_PTP_V2_L2_SYNC) |
-			   BIT(HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ) |
-			   BIT(HWTSTAMP_FILTER_PTP_V2_EVENT) |
-			   BIT(HWTSTAMP_FILTER_PTP_V2_SYNC) |
-			   BIT(HWTSTAMP_FILTER_PTP_V2_DELAY_REQ);
+	info->rx_filters = BIT(HWTSTAMP_FILTER_ALL) |
+			   BIT(HWTSTAMP_FILTER_NONE);
 	}
 #endif
 	return 0;

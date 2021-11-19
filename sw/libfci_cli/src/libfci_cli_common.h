@@ -40,19 +40,24 @@
 
 #define NDEBUG
 
-/* app version (default values for non-makefile compilation) */
-#ifndef LIBFCI_CLI_TARGET_OS
-#define LIBFCI_CLI_TARGET_OS  "UNKNOWN_OS"
+
+/* app version */
+#define CLI_VERSION_MAJOR  "2"
+#define CLI_VERSION_MINOR  "2"
+#define CLI_VERSION_PATCH  "1"
+
+
+/* drv version (default values for non-makefile compilation) */
+#ifndef CLI_TARGET_OS
+#define CLI_TARGET_OS  "UNK"
 #endif
-#ifndef LIBFCI_CLI_VERSION
-#define LIBFCI_CLI_VERSION  "?.?.?"
+#ifndef CLI_DRV_VERSION
+#define CLI_DRV_VERSION  "?.?.?"
 #endif
 #ifndef PFE_CT_H_MD5
 #define PFE_CT_H_MD5  "????????????????????????????????"
 #endif
-#ifndef GLOBAL_VERSION_CONTROL_ID
-#define GLOBAL_VERSION_CONTROL_ID  "???????"
-#endif
+
 
 /* return codes */
 #define CLI_OK                     (FPP_ERR_OK)  /* Bound to LibFCI OK code for compatibility reasons */
@@ -66,6 +71,7 @@
 #define CLI_ERR_MISSING_MANDOPT    (-118)
 #define CLI_ERR_INCOMPATIBLE_IPS   (-119)
 #define CLI_ERR_WRONG_IP_TYPE      (-120)
+#define CLI_ERR_INV_DEMO_FEATURE   (-121)
 
 
 /* misc macros */
@@ -90,6 +96,9 @@
 #endif
 #if (FEATURE_NAME_TXT_LN < 2u)
   #error "FEATURE_NAME_TXT_LN must be '2' or greater!"
+#endif
+#if ((TABLE_NAME_TXT_LN != IFNAMSIZ) || (IFNAMSIZ != MIRROR_NAME_SIZE))
+  #error "TABLE_NAME_TXT_LN, IFNAMSIZ and MIRROR_NAME_SIZE have different values (normally they are all expected to have a same value)!"
 #endif
 
 
@@ -138,8 +147,8 @@ typedef struct cli_cmdargs_tt
     struct
     {
         bool is_valid;
-        char txt[IF_NAME_TXT_LN];  /* empty string ("") indicates rq to disable mirroring */
-    } if_name_mirror;
+        char txt[MIRROR_NAME_SIZE];
+    } mirror_name;
     struct
     {
         bool is_valid;
@@ -169,7 +178,7 @@ typedef struct cli_cmdargs_tt
     {
         bool is_valid;
         bool is_on;
-    } loadbalance__ttl_decr; /* NOTE: 'OPT_LOADBALANCE' and 'OPT_TTL_DESCR' share the same storage */
+    } ttl_decr;
     struct
     {
         bool is_valid;       /* NOTE: 'OPT_VLAN_CONF' and 'OPT_DISCARD_ON_MATCH_SRC' share the same storage */
@@ -289,22 +298,22 @@ typedef struct cli_cmdargs_tt
     {
         bool is_valid;
         uint16_t value;
-    } sport;
+    } sport;                  /* NOTE: 'OPT_SPORT' and 'OPT_SPORT_MIN' share the same storage */
     struct
     {
         bool is_valid;
         uint16_t value;
-    } dport;
+    } dport;                  /* NOTE: 'OPT_DPORT' and 'OPT_DPORT_MIN' share the same storage */
     struct
     {
         bool is_valid;
         uint16_t value;
-    } sport2;
+    } sport2;                  /* NOTE: 'OPT_R_SPORT' and 'OPT_SPORT_MAX' share the same storage */
     struct
     {
         bool is_valid;
         uint16_t value;
-    } dport2;
+    } dport2;                  /* NOTE: 'OPT_R_DPORT' and 'OPT_DPORT_MAX' share the same storage */
     
     
     struct
@@ -358,7 +367,7 @@ typedef struct cli_cmdargs_tt
     {
         bool is_valid;
         char txt[TABLE_NAME_TXT_LN];
-    } ruleA0_name;           /* NOTE: 'OPT_INGRESS_MR0' and 'OPT_RULE' share the same storage */
+    } ruleA0_name;           /* NOTE: 'OPT_RX_MIRROR0' and 'OPT_RULE' share the same storage */
     struct
     {
         bool is_valid;
@@ -368,7 +377,7 @@ typedef struct cli_cmdargs_tt
     {
         bool is_valid;
         char txt[TABLE_NAME_TXT_LN];
-    } ruleB0_name;           /* NOTE: 'OPT_EGRESS_MR0' and 'OPT_NEXT_RULE' share the same storage */
+    } ruleB0_name;           /* NOTE: 'OPT_TX_MIRROR0' and 'OPT_NEXT_RULE' share the same storage */
     struct
     {
         bool is_valid;
@@ -478,6 +487,11 @@ typedef struct cli_cmdargs_tt
     struct
     {
         bool is_valid;
+        uint32_t value;
+    } thfull;
+    struct
+    {
+        bool is_valid;
         uint8_t arr[ZPROBS_LN];
     } zprob;
     
@@ -513,6 +527,66 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         int32_t value;
     } crmax;
+    
+    
+    struct
+    {
+        bool is_valid;
+        fpp_modify_actions_t bitset;
+    } modify_actions;
+    
+    struct
+    {
+        bool is_valid;
+        fpp_iqos_queue_t value;
+    } wred_que;
+    struct
+    {
+        bool is_valid;
+        fpp_iqos_shp_type_t value;
+    } shp_type;
+    struct
+    {
+        bool is_valid;
+        fpp_iqos_flow_action_t value;
+    } flow_action;
+    struct
+    {
+        bool is_valid;
+        fpp_iqos_flow_type_t bitset1;
+        fpp_iqos_flow_arg_type_t bitset2;
+    } flow_types;
+    struct
+    {
+        bool is_valid;
+        uint8_t value;
+    } tos;
+    
+    struct
+    {
+        bool is_valid;
+        uint16_t value;
+    } vlan_mask;
+    struct
+    {
+        bool is_valid;
+        uint8_t value;
+    } tos_mask;
+    struct
+    {
+        bool is_valid;
+        uint8_t value;
+    } protocol_mask;
+    struct
+    {
+        bool is_valid;
+        uint8_t value;
+    } sip_pfx;  /* sip subnet prefix */
+    struct
+    {
+        bool is_valid;
+        uint8_t value;
+    } dip_pfx;  /* dip subnet prefix */
     
 } cli_cmdargs_t;
 

@@ -13,16 +13,11 @@
 #include "pfe_platform_cfg.h"
 #include "pfe_cbus.h"
 #include "pfe_tmu_csr.h"
+#include "pfe_feature_mgr.h"
 
 #ifndef PFE_CBUS_H_
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
-
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
 
 #define CLK_DIV_LOG2 (8U - 1U) /* Value of CLK_DIV_LOG2 log2(clk_div/2) */
 #define CLK_DIV ((uint64_t)1U << (CLK_DIV_LOG2 + 1U)) /* 256 */
@@ -31,6 +26,13 @@ static errno_t pfe_tmu_cntx_mem_write(addr_t cbus_base_va, pfe_ct_phy_if_id_t ph
 static errno_t pfe_tmu_cntx_mem_read(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t loc, uint32_t *data);
 static errno_t pfe_tmu_context_memory(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue_temp, uint16_t min, uint16_t max);
 static uint8_t pfe_tmu_hif_q_to_tmu_q(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue);
+
+/* PHY lookup table */
+static const pfe_ct_phy_if_id_t phy_if_id_temp[TLITE_PHYS_CNT] =
+{
+	PFE_PHY_IF_ID_EMAC0, PFE_PHY_IF_ID_EMAC1, PFE_PHY_IF_ID_EMAC2,
+	PFE_PHY_IF_ID_HIF, PFE_PHY_IF_ID_HIF_NOCPY, PFE_PHY_IF_ID_UTIL
+};
 
 /**
  * @brief		Return QoS configuration of given physical interface
@@ -67,6 +69,76 @@ const pfe_tmu_phy_cfg_t *pfe_tmu_cfg_get_phy_config(pfe_ct_phy_if_id_t phy)
 }
 
 /**
+ * @brief		Initialize TMU reclaim memory
+ * @details		This implements reclaim memory initialization workaround.
+ * 				It is necessary to call this function to initialize the ECC for
+ * 				TMU reclaim memory.
+ * @warning		Function should be called before @ref pfe_tmu_cfg_init.
+ * @param[in]	cbus_base_va The cbus base address
+ */
+void pfe_tmu_reclaim_init(addr_t cbus_base_va)
+{
+	uint8_t queue;
+	uint32_t ii;
+	uint32_t dropped_packets = 0U;
+	uint32_t retries = 0U;
+
+	hal_write32(0x1U, cbus_base_va + TMU_CNTX_ACCESS_CTRL);
+
+	/*	Initialize queues */
+	for (ii=0U; ii < TLITE_PHYS_CNT; ii++)
+	{
+		for (queue=0U; queue<TLITE_PHY_QUEUES_CNT; queue++)
+		{
+			hal_write32(((ii & 0x1fUL) << 8U) | ((uint32_t)queue & 0x7UL), cbus_base_va + TMU_PHY_QUEUE_SEL);
+			hal_nop();
+
+			/*	Clear direct access registers */
+			hal_write32(0U, cbus_base_va + TMU_CURQ_PTR);
+			hal_write32(0U, cbus_base_va + TMU_CURQ_PKT_CNT);
+			hal_write32(0U, cbus_base_va + TMU_CURQ_DROP_CNT);
+			hal_write32(0U, cbus_base_va + TMU_CURQ_TRANS_CNT);
+			hal_write32(0U, cbus_base_va + TMU_CURQ_QSTAT);
+			hal_write32(0U, cbus_base_va + TMU_HW_PROB_CFG_TBL0);
+			hal_write32(0U, cbus_base_va + TMU_HW_PROB_CFG_TBL1);
+			hal_write32(0U, cbus_base_va + TMU_CURQ_DEBUG);
+		}
+	}
+
+	if (FALSE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+	{
+		/* Queue 0 PHY 0*/
+		/* WRED min 0 max 0*/
+		if (EOK != pfe_tmu_context_memory(cbus_base_va, PFE_PHY_IF_ID_EMAC0, 0U, 0U, 0U))
+		{
+			return;
+		}
+
+		/* Initialize internal TMU FIFO (length is hard coded in verilog)*/
+		for(ii = 0U; ii < TLITE_INQ_FIFODEPTH; ii++)
+		{
+			hal_write32(0UL, cbus_base_va + TMU_PHY_INQ_PKTINFO);
+		}
+
+		do
+		{
+			oal_time_usleep(10U);
+			(void)pfe_tmu_q_cfg_get_drop_count(cbus_base_va, PFE_PHY_IF_ID_EMAC0, 0U, &dropped_packets);
+			retries++;
+		}
+		while ((TLITE_INQ_FIFODEPTH != dropped_packets) && (10U > retries));
+
+		if (dropped_packets != TLITE_INQ_FIFODEPTH)
+		{
+			NXP_LOG_ERROR("Failed to initialize TMU reclaim memory %u\n", (uint_t)dropped_packets);
+		}
+
+		/* Set queue to default mode */
+		(void)pfe_tmu_q_mode_set_default(cbus_base_va, PFE_PHY_IF_ID_EMAC0, 0U);
+	}
+}
+
+/**
  * @brief		Initialize and configure the TMU
  * @param[in]	cbus_base_va The cbus base address
  * @param[in]	cfg Pointer to the configuration structure
@@ -74,14 +146,9 @@ const pfe_tmu_phy_cfg_t *pfe_tmu_cfg_get_phy_config(pfe_ct_phy_if_id_t phy)
  */
 errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 {
-    uint8_t queue;
+	uint8_t queue;
 	uint32_t ii;
 	errno_t ret;
-	const pfe_ct_phy_if_id_t phy_if_id_temp[TLITE_PHYS_CNT] =
-	{
-		PFE_PHY_IF_ID_EMAC0, PFE_PHY_IF_ID_EMAC1, PFE_PHY_IF_ID_EMAC2,
-		PFE_PHY_IF_ID_HIF, PFE_PHY_IF_ID_HIF_NOCPY, PFE_PHY_IF_ID_UTIL
-	};
 
 	(void)cfg;
 
@@ -112,23 +179,7 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 	/*	Context memory initialization */
 	for (ii=0U; ii < TLITE_PHYS_CNT; ii++)
 	{
-		/*	Initialize queues */
-		for (queue=0U; queue<TLITE_PHY_QUEUES_CNT; queue++)
-		{
-			hal_write32(0x1U, cbus_base_va + TMU_CNTX_ACCESS_CTRL);
-			hal_write32(((ii & 0x1fUL) << 8U) | ((uint32_t)queue & 0x7UL), cbus_base_va + TMU_PHY_QUEUE_SEL);
-			hal_nop();
-
-			/*	Clear direct access registers */
-			hal_write32(0U, cbus_base_va + TMU_CURQ_PTR);
-			hal_write32(0U, cbus_base_va + TMU_CURQ_PKT_CNT);
-			hal_write32(0U, cbus_base_va + TMU_CURQ_DROP_CNT);
-			hal_write32(0U, cbus_base_va + TMU_CURQ_TRANS_CNT);
-			hal_write32(0U, cbus_base_va + TMU_CURQ_QSTAT);
-			hal_write32(0U, cbus_base_va + TMU_HW_PROB_CFG_TBL0);
-			hal_write32(0U, cbus_base_va + TMU_HW_PROB_CFG_TBL1);
-			hal_write32(0U, cbus_base_va + TMU_CURQ_DEBUG);
-		}
+		/* NOTE: Do not access the direct registers here it may result in bus fault.*/
 
 		/*	Initialize HW schedulers. Invalidate all inputs. */
 		pfe_tmu_sch_cfg_init(cbus_base_va, phy_if_id_temp[ii], 0U);
@@ -205,14 +256,14 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
  */
 void pfe_tmu_cfg_reset(addr_t cbus_base_va)
 {
-	uint32_t timeout = 20U;
+	uint32_t timeout = 200U;
 	uint32_t reg;
 
 	hal_write32(0x1U, cbus_base_va + TMU_CTRL);
 
 	do
 	{
-		oal_time_usleep(100U);
+		oal_time_usleep(10U);
 		timeout--;
 		reg = hal_read32(cbus_base_va + TMU_CTRL);
 	} while ((0U != (reg & 0x1U)) && (timeout > 0U));
@@ -268,7 +319,7 @@ void pfe_tmu_cfg_send_pkt(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t q
 static errno_t pfe_tmu_cntx_mem_write(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t loc, uint32_t data)
 {
 	uint32_t reg;
-	uint32_t timeout = 20U;
+	uint32_t timeout = 200U;
 	pfe_ct_phy_if_id_t phy_temp = phy;
 	errno_t ret = EOK;
 
@@ -302,7 +353,7 @@ static errno_t pfe_tmu_cntx_mem_write(addr_t cbus_base_va, pfe_ct_phy_if_id_t ph
 		hal_write32(0x3U, cbus_base_va + TMU_CNTX_CMD);
 		do
 		{
-			oal_time_usleep(10U);
+			oal_time_usleep(1U);
 			timeout--;
 			reg = hal_read32(cbus_base_va + TMU_CNTX_CMD);
 		} while ((0U == (reg & 0x4U)) && (timeout > 0U));
@@ -1526,7 +1577,7 @@ errno_t pfe_tmu_sch_cfg_bind_sched_output(addr_t cbus_base_va, pfe_ct_phy_if_id_
  */
 uint8_t pfe_tmu_sch_cfg_get_bound_sched_output(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
 {
-	addr_t sch_base_va = cbus_base_va + TLITE_PHYn_SCHEDm_BASE_ADDR((uint32_t)phy, sch);
+	addr_t sch_base_va = cbus_base_va + TLITE_PHYn_SCHEDm_BASE_ADDR((uint32_t)phy, 0U);
 	uint32_t reg;
 
 	/*	Scheduler0 -> Scheduler1 is the only possible option */
@@ -1564,7 +1615,6 @@ uint32_t pfe_tmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 	uint32_t reg, ii;
 	uint8_t prob, queue, zone;
 	uint32_t level, drops, tx;
-	const pfe_ct_phy_if_id_t phy_if_id_temp[TLITE_PHYS_CNT] = {PFE_PHY_IF_ID_EMAC0, PFE_PHY_IF_ID_EMAC1, PFE_PHY_IF_ID_EMAC2, PFE_PHY_IF_ID_HIF, PFE_PHY_IF_ID_HIF_NOCPY, PFE_PHY_IF_ID_UTIL};
 
 	/* Debug registers */
 	if(verb_level >= 10U)

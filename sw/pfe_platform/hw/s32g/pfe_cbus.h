@@ -10,16 +10,6 @@
 #ifndef PFE_CBUS_H_
 #define PFE_CBUS_H_
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
-#if (PFE_CFG_IP_VERSION == 0)
-#error PFE_CFG_IP_VERSION shall not be empty
-#endif /* PFE_CFG_IP_VERSION */
-
 #define CBUS_EMAC1_BASE_ADDR		(0xA0000U)
 #define CBUS_EGPI1_BASE_ADDR		(0xAC000U)
 #define CBUS_ETGPI1_BASE_ADDR		(0xB8000U)
@@ -52,7 +42,9 @@
 #include "pfe_util_csr.h"
 #include "pfe_gpi_csr.h"
 #include "pfe_hif_csr.h"
+#if !defined(PFE_CFG_TARGET_OS_LINUX)
 #include "pfe_hif_nocpy_csr.h"
+#endif
 #include "pfe_bmu_csr.h"
 #include "pfe_emac_csr.h"
 

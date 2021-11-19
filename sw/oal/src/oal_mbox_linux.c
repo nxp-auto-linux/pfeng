@@ -165,16 +165,6 @@ static errno_t mbox_send_generic(oal_mbox_t *mbox, oal_mbox_msg_type mtype, int3
 	return EOK;
 }
 
-
-/*
-	Send message (blocking)
-	The 'code' value is used to identify the message by receiver
-*/
-errno_t oal_mbox_send_message(oal_mbox_t *mbox, int32_t code, void *data, uint32_t len)
-{
-	return mbox_send_generic(mbox, OAL_MBOX_MSG_MESSAGE, code, data, len);
-}
-
 static inline uint32_t mbox_fifo_transcode_read(uint32_t code)
 {
 	return code - MBOX_FIFO_TRANSITION;

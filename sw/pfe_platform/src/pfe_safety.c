@@ -92,22 +92,19 @@ void pfe_safety_destroy(pfe_safety_t *safety)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (NULL != safety)
+	if (NULL != safety->lock)
 	{
-		if (NULL != safety->lock)
-		{
-			/* Mask safety interrupts */
-			(void)oal_mutex_lock(safety->lock);
-			pfe_safety_cfg_irq_mask(safety->safety_base_va);
-			(void)oal_mutex_unlock(safety->lock);
-			(void)oal_mutex_destroy(safety->lock);
-			(void)oal_mm_free(safety->lock);
-			safety->lock = NULL;
-		}
-
-		/* Free memory used for structure */
-		(void)oal_mm_free(safety);
+		/* Mask safety interrupts */
+		(void)oal_mutex_lock(safety->lock);
+		pfe_safety_cfg_irq_mask(safety->safety_base_va);
+		(void)oal_mutex_unlock(safety->lock);
+		(void)oal_mutex_destroy(safety->lock);
+		(void)oal_mm_free(safety->lock);
+		safety->lock = NULL;
 	}
+
+	/* Free memory used for structure */
+	(void)oal_mm_free(safety);
 }
 
 /**

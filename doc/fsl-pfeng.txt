@@ -23,8 +23,9 @@ Optional properties:
 - dma-coherent : Declare driver DMA cohereenty (S32G2xx cut 2.0+ only)
 - fsl,fw-class-name : PFE CLASS firmware filename
 - fsl,fw-util-name : PFE UTIL firmware filename
-- fsl,pfeng-master-hif-channel : [slave only] The number of master's HIF channel (0-3)
+- fsl,pfeng-master-hif-channel : [slave only] The number of master's HIF channel (0-3 or 4 for NOCPY)
 - phys : Serdes phys for sgmii interfaces
+- fsl,l2br-default-vlan : [master only] Default L2Bridge VLAN ID
 
 Required subnode:
 - hif : specifies the PFE HIF channel
@@ -33,7 +34,7 @@ Required subnode:
 
 Required properties for 'hif' subnode:
 - compatible : Should be "fsl,pfeng-hif"
-- reg : Small number, indexing the HIF channel
+- reg : Small number, indexing the HIF channel (0-3)
 - interrupts : Should contain HIF channel interrupt
 - fsl,pfeng-hif-mode : channel mode PFENG_HIF_MODE_EXCLUSIVE/PFENG_HIF_MODE_SHARED
 - fsl,pfeng-ihc : [master/slave only] Annotate for IHC traffic

@@ -33,13 +33,19 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+
 #include "libfci_cli_common.h"
 #include "libfci_cli_def_opts.h"
 #include "libfci_cli_print_helpers.h"
 #include "libfci_cli_def_optarg_keywords.h"
 #include "libfci_cli_cmds_fwfeat.h"
 
-#include "libfci_interface/fci_fwfeat.h"
+/*
+    NOTE:
+    The "demo_" functions are libFCI abstractions.
+    The "demo_" prefix was chosen because these functions are used as demos in FCI API Reference. 
+*/
+#include "libfci_demo/demo_fwfeat.h"
 
 /* ==== TESTMODE vars ====================================================== */
 
@@ -60,44 +66,46 @@ static int fwfeat_print(const fpp_fw_features_cmd_t* p_fwfeat)
     /* NOTE: native data type to comply with 'printf()' conventions (asterisk specifier) */ 
     int indent = 0;
     
-    printf("%-*s%s\n", indent, "", (p_fwfeat->name));
+    printf("%-*s%s\n", indent, "", demo_fwfeat_ld_get_name(p_fwfeat));
     
     indent += 4;
     
     {
-        const char* p_txt_ignored = (2u != (p_fwfeat->variant)) ? (" (ignored)") : ("");
+        const char* p_txt_ignored = ((FEAT_RUNTIME | FEAT_PRESENT) != demo_fwfeat_ld_get_flags(p_fwfeat)) ? (" (ignored)") : ("");
         printf("%-*sstate%s: %s\n", indent, "", 
                p_txt_ignored,
-               cli_value2txt_en_dis(p_fwfeat->val));
+               cli_value2txt_en_dis(demo_fwfeat_ld_is_enabled(p_fwfeat)));
     }
     
     {
-        const char* p_txt_variant_descr = "__INVALID_ITEM__";
-        switch (p_fwfeat->variant)
+        const fpp_fw_feature_flags_t flags = demo_fwfeat_ld_get_flags(p_fwfeat);
+        const char* p_txt_flags_desc = "__INVALID_ITEM__";
+        switch (flags & (FEAT_PRESENT | FEAT_RUNTIME))
         {
-            case 0:
-                p_txt_variant_descr = "ignore state and always act as DISABLED";
+            case FEAT_RUNTIME:
+            case FEAT_NONE:
+                p_txt_flags_desc = "ignore state and always act as DISABLED";
+            break;
+
+            case FEAT_PRESENT:
+                p_txt_flags_desc = "ignore state and always act as ENABLED";
+            break;
+
+            case FEAT_RUNTIME | FEAT_PRESENT:
+                p_txt_flags_desc = "feature is runtime-configurable";
             break;
             
-            case 1:
-                p_txt_variant_descr = "ignore state and always act as ENABLED";
-            break;
-            
-            case 2:
-                p_txt_variant_descr = "feature is runtime-configurable";
-            break;
-            
-            default:
-                p_txt_variant_descr = "__INVALID_ITEM__";
+            default: /* cannot happen */
+                p_txt_flags_desc = "__INVALID_ITEM__";
             break;
         }
-        printf("%-*svariant: %"PRIu8" (%s)\n", indent, "", 
-               (p_fwfeat->variant),
-               (p_txt_variant_descr));
+        printf("%-*sflags: 0x%02"PRIx8" (%s)\n", indent, "", 
+               (flags),
+               (p_txt_flags_desc));
     }
     
     {
-        printf("%-*s%s\n", indent, "", (p_fwfeat->desc));
+        printf("%-*s%s\n", indent, "", demo_fwfeat_ld_get_desc(p_fwfeat));
     }
     
     return (FPP_ERR_OK); 
@@ -121,7 +129,7 @@ int cli_cmd_fwfeat_print(const cli_cmdargs_t *p_cmdargs)
     if (p_cmdargs->feature_name.is_valid)
     {
         /* print a single feature */
-        rtn = fci_fwfeat_get_by_name(cli_p_cl, &fwfeat, (p_cmdargs->feature_name.txt));
+        rtn = demo_fwfeat_get_by_name(cli_p_cl, &fwfeat, (p_cmdargs->feature_name.txt));
         if (FPP_ERR_OK == rtn)
         {
             rtn = fwfeat_print(&fwfeat);
@@ -130,7 +138,7 @@ int cli_cmd_fwfeat_print(const cli_cmdargs_t *p_cmdargs)
     else
     {
         /* print all FW features */
-        rtn = fci_fwfeat_print_all(cli_p_cl, fwfeat_print);
+        rtn = demo_fwfeat_print_all(cli_p_cl, fwfeat_print);
     }
     
     return (rtn);
@@ -157,7 +165,7 @@ int cli_cmd_fwfeat_set(const cli_cmdargs_t *p_cmdargs)
     if (FPP_ERR_OK == rtn)
     {
         /* NOTE: enable and disable opts are mutually exclusive */
-        rtn = fci_fwfeat_set(cli_p_cl, (p_cmdargs->feature_name.txt), (p_cmdargs->enable_noreply.is_valid));
+        rtn = demo_fwfeat_set(cli_p_cl, (p_cmdargs->feature_name.txt), (p_cmdargs->enable_noreply.is_valid));
     }
     
     return (rtn);

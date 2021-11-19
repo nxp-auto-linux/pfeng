@@ -12,12 +12,6 @@
 
 #include "pfe_emac.h"
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
 #define MAC_CONFIGURATION						0x0000U
 #define MAC_EXT_CONFIGURATION					0x0004U
 #define MAC_PACKET_FILTER						0x0008U
@@ -156,6 +150,7 @@
 #define MTL_TXQ0_OPERATION_MODE					0x0d00U
 #define MTL_RXQ0_OPERATION_MODE					0x0d30U
 
+#define RECEIVE_ALL(x)                  ((!!(x)) ? (1UL << 31U) : 0U)	/* RA */
 #define DROP_NON_TCP_UDP(x)				((!!(x)) ? (1UL << 21U) : 0U)	/* DNTU */
 #define L3_L4_FILTER_ENABLE(x)			((!!(x)) ? (1UL << 20U) : 0U)	/* IPFE */
 #define VLAN_TAG_FILTER_ENABLE(x)		((!!(x)) ? (1UL << 16U) : 0U)	/* VTFE */
@@ -314,5 +309,6 @@ errno_t pfe_emac_cfg_mdio_write45(addr_t base_va, uint8_t pa, uint8_t dev, uint1
 uint32_t pfe_emac_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 uint32_t pfe_emac_cfg_get_tx_cnt(addr_t base_va);
 uint32_t pfe_emac_cfg_get_rx_cnt(addr_t base_va);
+uint32_t pfe_emac_cfg_get_stat_value(addr_t base_va, uint32_t stat_id);
 
 #endif /* SRC_PFE_EMAC_CSR_H_ */

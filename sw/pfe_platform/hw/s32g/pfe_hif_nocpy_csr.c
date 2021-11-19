@@ -21,12 +21,6 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
 /**
  * @brief	Control the buffer descriptor fetch
  * @details	When TRUE then HIF is fetching the same BD until it is valid BD. If FALSE
@@ -35,17 +29,6 @@
  */
 #define	PFE_HIF_NOCPY_CFG_USE_BD_POLLING	TRUE
 
-typedef struct
-{
-	pfe_hif_chnl_cbk_t cbk;
-	void *arg;
-} pfe_hif_nocpy_cfg_cbk_t;
-
-/*	Storage for RX callbacks per channel */
-static pfe_hif_nocpy_cfg_cbk_t nocpy_rx_cbk = {NULL, NULL};
-/*	Storage for TX callbacks per channel */
-static pfe_hif_nocpy_cfg_cbk_t nocpy_tx_cbk = {NULL, NULL};
-
 /**
  * @brief		HIF NOCPY ISR
  * @details		Handles all HIF NOCPY interrupts
@@ -53,10 +36,12 @@ static pfe_hif_nocpy_cfg_cbk_t nocpy_tx_cbk = {NULL, NULL};
  * @return		EOK if interrupt has been handled, error code otherwise
  * @note		Make sure the call is protected by some per-HIF mutex
  */
-errno_t pfe_hif_nocpy_cfg_isr(addr_t base_va)
+errno_t pfe_hif_nocpy_cfg_isr(addr_t base_va, pfe_hif_chnl_event_t *events)
 {
 	uint32_t reg_src, reg_en;
 	errno_t ret = ENOENT;
+
+	*events = (pfe_hif_chnl_event_t)0;
 
 	/*	Get enabled interrupts */
 	reg_en = hal_read32(base_va + HIF_NOCPY_INT_EN);
@@ -72,32 +57,14 @@ errno_t pfe_hif_nocpy_cfg_isr(addr_t base_va)
 	/*	Process interrupts which are triggered AND enabled */
 	if ((reg_src & reg_en & (BDP_CSR_RX_PKT_INT|BDP_CSR_RX_CBD_INT)) != 0U)
 	{
-		if (likely(NULL != nocpy_rx_cbk.cbk))
-		{
-			/*	Call user's callback */
-			nocpy_rx_cbk.cbk(nocpy_rx_cbk.arg);
-		}
-		else
-		{
-			NXP_LOG_INFO("BDP_CSR_RX_PKT_INT or BDP_CSR_RX_PKT_INT\n");
-		}
-
+		*events |= HIF_CHNL_EVT_RX_IRQ;
 		ret = EOK;
 	}
 
 	/*	Process interrupts which are triggered AND enabled */
 	if ((reg_src & reg_en & (BDP_CSR_TX_PKT_INT|BDP_CSR_TX_CBD_INT)) != 0U)
 	{
-		if (likely(NULL != nocpy_tx_cbk.cbk))
-		{
-			/*	Call user's callback */
-			nocpy_tx_cbk.cbk(nocpy_tx_cbk.arg);
-		}
-		else
-		{
-			NXP_LOG_INFO("BDP_CSR_TX_PKT_INT or BDP_CSR_TX_CBD_INT\n");
-		}
-
+		*events |= HIF_CHNL_EVT_TX_IRQ;
 		ret = EOK;
 	}
 
@@ -130,46 +97,6 @@ void pfe_hif_nocpy_cfg_irq_unmask(addr_t base_va)
 	/*	Enable group */
 	reg = hal_read32(base_va + HIF_NOCPY_INT_EN) | HIF_NOCPY_INT;
 	hal_write32(reg, base_va + HIF_NOCPY_INT_EN);
-}
-
-/**
- * @brief		Register custom event callback
- * @param[in]	event Event to trigger the callback
- * @param[in]	cbk The callback
- * @param[in]	arg Argument of the callback
- * @return		EOK if success, error code otherwise
- * @note		Make sure the call is protected by some per-HIF mutex
- */
-errno_t pfe_hif_nocpy_cfg_set_cbk(pfe_hif_chnl_event_t event, pfe_hif_chnl_cbk_t cbk, void *arg)
-{
-	errno_t ret = EOK;
-	switch (event)
-	{
-		case HIF_CHNL_EVT_RX_IRQ:
-		{
-			nocpy_rx_cbk.arg = arg;
-			hal_wmb();
-			nocpy_rx_cbk.cbk = cbk;
-			break;
-		}
-
-		case HIF_CHNL_EVT_TX_IRQ:
-		{
-			nocpy_tx_cbk.arg = arg;
-			hal_wmb();
-			nocpy_tx_cbk.cbk = cbk;
-			break;
-		}
-
-		default:
-		{
-			NXP_LOG_ERROR("Given event not supported: 0x%x\n", event);
-			ret = EINVAL;
-			break;
-		}
-	}
-
-	return ret;
 }
 
 /**
@@ -236,8 +163,6 @@ void pfe_hif_nocpy_cfg_tx_enable(addr_t base_va)
 #endif
 	hal_write32(regval, base_va + HIF_NOCPY_TX_CTRL);
 
-	pfe_hif_nocpy_cfg_tx_irq_unmask(base_va);
-
 #if (FALSE == PFE_HIF_NOCPY_CFG_USE_BD_POLLING)
 	pfe_hif_nocpy_cfg_tx_dma_start(base_va);
 #endif /* PFE_HIF_CFG_USE_BD_POLLING */
@@ -269,8 +194,6 @@ void pfe_hif_nocpy_cfg_rx_enable(addr_t base_va)
 	regval |= HIF_CTRL_BDP_POLL_CTRL_EN;
 #endif
 	hal_write32(regval, base_va + HIF_NOCPY_RX_CTRL);
-
-	pfe_hif_nocpy_cfg_rx_irq_unmask(base_va);
 
 #if (FALSE == PFE_HIF_NOCPY_CFG_USE_BD_POLLING)
 	pfe_hif_nocpy_cfg_rx_dma_start(base_va);

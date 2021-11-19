@@ -31,10 +31,17 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
+
 #include "libfci_cli_common.h"
 #include "libfci_cli_def_help.h"
 #include "libfci_cli_parser.h"
-#include "fci_ep.h"
+
+/*
+    NOTE:
+    The "demo_" functions are libFCI abstractions.
+    The "demo_" prefix was chosen because these functions are used as demos in FCI API Reference. 
+*/
+#include "libfci_demo/demo_common.h"
 
 /* ==== TYPEDEFS & DATA ==================================================== */
 
@@ -74,7 +81,7 @@ int main(int argc, char* argv[])
         cli_print_help(0);
     }
     
-    rtn = fci_ep_open_in_cmd_mode(&cli_p_cl);
+    rtn = demo_client_open_in_cmd_mode(&cli_p_cl);
     if (CLI_OK != rtn)
     {
         cli_print_error(rtn, "FCI endpoint failed to open.");
@@ -87,7 +94,7 @@ int main(int argc, char* argv[])
     /* close FCI (do not hide behind rtn check) */
     if (NULL != cli_p_cl)
     {
-        const int rtn_close = fci_ep_close(cli_p_cl);
+        const int rtn_close = demo_client_close(cli_p_cl);
         rtn = ((CLI_OK == rtn) ? (rtn_close) : (rtn));
         if (CLI_OK != rtn_close)
         {

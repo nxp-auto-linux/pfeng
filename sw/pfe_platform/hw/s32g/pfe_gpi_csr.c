@@ -20,80 +20,79 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
-#if ((PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_FPGA_5_0_4) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14) \
-	&& (PFE_CFG_IP_VERSION != PFE_CFG_IP_VERSION_NPU_7_14a))
-#error Unsupported IP version
-#endif /* PFE_CFG_IP_VERSION */
-
-static void pfe_gpi_cfg_init_inqos(addr_t base_va);
-
-/**
- * @brief		Initialize ingress QoS module
- * @param[in]	base_va Base address of GPI register space (virtual)
- */
-static void pfe_gpi_cfg_init_inqos(addr_t base_va)
+static void igqos_class_read_entry_data(addr_t base_va, uint32_t entry[])
 {
 	uint32_t ii;
+
+	for (ii = 0; ii < ENTRY_DATA_REG_CNT; ii++)
+	{
+		entry[ii] = hal_read32(base_va + CSR_IGQOS_ENTRY_DATA_REG(ii));
+	}
+}
+
+static void igqos_class_prepare_entry_data(addr_t base_va, const uint32_t entry[])
+{
+	uint32_t ii;
+
+	for (ii = 0; ii < ENTRY_DATA_REG_CNT; ii++)
+	{
+		hal_write32(entry[ii], base_va + CSR_IGQOS_ENTRY_DATA_REG(ii));
+	}
+}
+
+static void igqos_class_clear_entry_data(addr_t base_va)
+{
+	uint32_t ii;
+
+	for (ii = 0; ii < ENTRY_DATA_REG_CNT; ii++)
+	{
+		hal_write32(0, base_va + CSR_IGQOS_ENTRY_DATA_REG(ii));
+	}
+}
+
+static void igqos_class_request_entry_cmd(addr_t base_va, bool_t write, bool_t is_lru, uint32_t addr)
+{
 	uint32_t val;
 
-	for (ii=0U; ii<IGQOS_ENTRY_TABLE_LEN; ii++)
+	val = CMDCNTRL_CMD_TAB_ADDR(addr);
+	if (TRUE == write)
 	{
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG0);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG1);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG2);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG3);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG4);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG5);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG6);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG7);
-
-		val = CMDCNTRL_CMD_WRITE
-				| CMDCNTRL_CMD_TAB_ADDR(ii)
-				| CMDCNTRL_CMD_TAB_SELECT_ENTRY;
-		hal_write32(val, base_va + CSR_IGQOS_ENTRY_CMDCNTRL);
+		val |= CMDCNTRL_CMD_WRITE;
+	}
+	else
+	{
+		val |= CMDCNTRL_CMD_READ;
 	}
 
-	for (ii=0U; ii<IGQOS_LRU_TABLE_LEN; ii++)
+	if (TRUE == is_lru)
 	{
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG0);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG1);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG2);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG3);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG4);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG5);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG6);
-		hal_write32(0U, base_va + CSR_IGQOS_ENTRY_DATA_REG7);
-
-		val = CMDCNTRL_CMD_WRITE
-				| CMDCNTRL_CMD_TAB_ADDR(ii)
-				| CMDCNTRL_CMD_TAB_SELECT_LRU;
-		hal_write32(val, base_va + CSR_IGQOS_ENTRY_CMDCNTRL);
+		val |= CMDCNTRL_CMD_TAB_SELECT_LRU;
 	}
+
+	hal_write32(val, base_va + CSR_IGQOS_ENTRY_CMDCNTRL);
+}
+
+static void igqos_class_write_flow_cmd(addr_t base_va, uint32_t addr)
+{
+	igqos_class_request_entry_cmd(base_va, TRUE, FALSE, addr);
+}
+
+static void igqos_class_read_flow_cmd(addr_t base_va, uint32_t addr)
+{
+	igqos_class_request_entry_cmd(base_va, FALSE, FALSE, addr);
+}
+
+static void igqos_class_write_lru_cmd(addr_t base_va, uint32_t addr)
+{
+	igqos_class_request_entry_cmd(base_va, TRUE, TRUE, addr);
 }
 
 /**
  * @brief		HW-specific initialization function
- * @param[in]	cbus_va CBUS base address (virtual)
  * @param[in]	base_va Base address of GPI register space (virtual)
- * @return		EOK if success, error code if invalid configuration is detected
  */
-errno_t pfe_gpi_cfg_init(addr_t cbus_va, addr_t base_va, const pfe_gpi_cfg_t *cfg)
+void pfe_gpi_cfg_init(addr_t base_va, const pfe_gpi_cfg_t *cfg)
 {
-	addr_t gpi_cbus_offset = base_va - cbus_va;
-
-	switch (gpi_cbus_offset)
-	{
-		case CBUS_EGPI1_BASE_ADDR:
-		case CBUS_EGPI2_BASE_ADDR:
-		case CBUS_EGPI3_BASE_ADDR:
-			pfe_gpi_cfg_init_inqos(base_va);
-			break;
-		default:
-			/*Do Nothing*/
-			break;
-	}
-
 	hal_write32(0x0U, base_va + GPI_EMAC_1588_TIMESTAMP_EN);
 	if (cfg->emac_1588_ts_en)
 	{
@@ -114,8 +113,6 @@ errno_t pfe_gpi_cfg_init(addr_t cbus_va, addr_t base_va, const pfe_gpi_cfg_t *cf
 	hal_write32(cfg->gpi_tmlf_txthres, base_va + GPI_TMLF_TX);
 	hal_write32(cfg->gpi_dtx_aseq_len, base_va + GPI_DTX_ASEQ);
 	hal_write32(1, base_va + GPI_CSR_TOE_CHKSUM_EN);
-
-	return EOK;
 }
 
 /**
@@ -170,6 +167,443 @@ void pfe_gpi_cfg_disable(addr_t base_va)
 	hal_write32(reg & ~(0x1U), base_va + GPI_CTRL);
 }
 
+/* Ingress QoS */
+
+void pfe_gpi_cfg_qos_default_init(addr_t base_va)
+{
+	/* reset CONTROL */
+	hal_write32(0, base_va + CSR_IGQOS_CONTROL);
+
+	/* reset sub-blocks: wred, shapers */
+	pfe_gpi_cfg_wred_default_init(base_va);
+	pfe_gpi_cfg_shp_default_init(base_va, 0);
+	pfe_gpi_cfg_shp_default_init(base_va, 1);
+
+	/* reset TPID */
+	hal_write32((IGQOS_TPID_DOT1Q << 16) | IGQOS_TPID_DOT1Q, base_va + CSR_IGQOS_TPID);
+	/* reset IGQOS CLASS */
+	hal_write32(IGQOS_CLASS_TPID0_EN | IGQOS_CLASS_TPID1_EN, base_va + CSR_IGQOS_CLASS);
+}
+
+void pfe_gpi_cfg_qos_enable(addr_t base_va)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_CONTROL);
+
+	reg |= IGQOS_CONTROL_QOS_EN;
+	hal_write32(reg, base_va + CSR_IGQOS_CONTROL);
+}
+
+void pfe_gpi_cfg_qos_disable(addr_t base_va)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_CONTROL);
+
+	reg &= ~IGQOS_CONTROL_QOS_EN;
+	hal_write32(reg, base_va + CSR_IGQOS_CONTROL);
+}
+
+bool_t pfe_gpi_cfg_qos_is_enabled(addr_t base_va)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_CONTROL);
+
+	if ((reg & IGQOS_CONTROL_QOS_EN) == IGQOS_CONTROL_QOS_EN)
+	{
+		return TRUE;
+	}
+	else
+	{
+		return FALSE;
+	}
+}
+
+/**
+ * @brief		Write classification table entry at given address
+ * @param[in]	base_va	Base address of GPI register space (virtual)
+ * @param[in]	addr	Classification table entry address, from 0 to @CSR_IGQOS_ENTRY_TABLE_LEN - 1
+ * @param[in]	entry[]	Table entry data as array of 8 x 32b values
+ * @param[in]	base_va Base address of GPI register space (virtual)
+ */
+void pfe_gpi_cfg_qos_write_flow_entry_req(addr_t base_va, uint32_t addr, const uint32_t entry[])
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	igqos_class_prepare_entry_data(base_va, entry);
+	igqos_class_write_flow_cmd(base_va, addr);
+}
+
+void pfe_gpi_cfg_qos_clear_flow_entry_req(addr_t base_va, uint32_t addr)
+{
+	igqos_class_clear_entry_data(base_va);
+	igqos_class_write_flow_cmd(base_va, addr);
+}
+
+void pfe_gpi_cfg_qos_clear_lru_entry_req(addr_t base_va, uint32_t addr)
+{
+	igqos_class_clear_entry_data(base_va);
+	igqos_class_write_lru_cmd(base_va, addr);
+}
+
+void pfe_gpi_cfg_qos_read_flow_entry_req(addr_t base_va, uint32_t addr)
+{
+	igqos_class_read_flow_cmd(base_va, addr);
+}
+
+void pfe_gpi_cfg_qos_read_flow_entry_resp(addr_t base_va, uint32_t entry[])
+{
+	igqos_class_read_entry_data(base_va, entry);
+}
+
+bool_t pfe_gpi_cfg_qos_entry_ready(addr_t base_va)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_ENTRY_CMDSTATUS);
+
+	if (reg & 0x1)
+	{
+		return TRUE;
+	}
+	else
+	{
+		return FALSE;
+	}
+}
+
+/* WRED configuration */
+void pfe_gpi_cfg_wred_default_init(addr_t base_va)
+{
+	uint32_t val;
+
+	/* reset the IGQOS_QOS register */
+	hal_write32(0, base_va + CSR_IGQOS_QOS);
+
+	val = PFE_IQOS_WRED_WEIGHT_DEFAULT << 16;
+	val |= PFE_IQOS_WRED_ZONE4_PROB_DEFAULT << 12;
+	val |= PFE_IQOS_WRED_ZONE3_PROB_DEFAULT << 8;
+	val |= PFE_IQOS_WRED_ZONE2_PROB_DEFAULT << 4;
+	val |= PFE_IQOS_WRED_ZONE1_PROB_DEFAULT;
+
+	hal_write32(val, base_va + CSR_IQGOS_DMEMQ_ZONE_PROB);
+	hal_write32(val, base_va + CSR_IGQOS_LMEMQ_ZONE_PROB);
+	hal_write32(val, base_va + CSR_IGQOS_RXFQ_ZONE_PROB);
+
+	val = PFE_IQOS_WRED_DMEM_FULL_THR_DEFAULT;
+	hal_write32(val, base_va + CSR_IGQOS_DMEMQ_FULL_THRESH);
+
+	val = (PFE_IQOS_WRED_DMEM_MIN_THR_DEFAULT << 16) |
+	      PFE_IQOS_WRED_DMEM_MAX_THR_DEFAULT;
+	hal_write32(val, base_va + CSR_IGQOS_DMEMQ_DROP_THRESH);
+
+	val = PFE_IQOS_WRED_FULL_THR_DEFAULT;
+	hal_write32(val, base_va + CSR_IGQOS_LMEMQ_FULL_THRESH);
+	hal_write32(val, base_va + CSR_IGQOS_RXFQ_FULL_THRESH);
+
+	val = (PFE_IQOS_WRED_MIN_THR_DEFAULT << 16) |
+	      PFE_IQOS_WRED_MAX_THR_DEFAULT;
+	hal_write32(val, base_va + CSR_IGQOS_LMEMQ_DROP_THRESH);
+	hal_write32(val, base_va + CSR_IGQOS_RXFQ_DROP_THRESH);
+}
+
+static uint32_t igqos_wred_queue_enable_bit(pfe_iqos_queue_t queue)
+{
+	if (queue == PFE_IQOS_Q_DMEM)
+	{
+		return IGQOS_QOS_WRED_DMEMQ_EN;
+	}
+
+	if (queue == PFE_IQOS_Q_LMEM)
+	{
+		return IGQOS_QOS_WRED_LMEMQ_EN;
+	}
+
+	if (queue == PFE_IQOS_Q_RXF)
+	{
+		return IGQOS_QOS_WRED_RXFQ_EN;
+	}
+
+	return IGQOS_QOS_WRED_DMEMQ_EN;
+}
+
+void pfe_gpi_cfg_wred_enable(addr_t base_va, pfe_iqos_queue_t queue)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_QOS);
+
+	reg |= igqos_wred_queue_enable_bit(queue);
+	hal_write32(reg, base_va + CSR_IGQOS_QOS);
+}
+
+void pfe_gpi_cfg_wred_disable(addr_t base_va, pfe_iqos_queue_t queue)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_QOS);
+
+	reg &= ~igqos_wred_queue_enable_bit(queue);
+	hal_write32(reg, base_va + CSR_IGQOS_QOS);
+}
+
+bool_t pfe_gpi_cfg_wred_is_enabled(addr_t base_va, pfe_iqos_queue_t queue)
+{
+	uint32_t wred_q_en = igqos_wred_queue_enable_bit(queue);
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_QOS);
+
+	if ((reg & wred_q_en) == wred_q_en)
+	{
+		return TRUE;
+	}
+	else
+	{
+		return FALSE;
+	}
+}
+
+void pfe_gpi_cfg_wred_set_prob(addr_t base_va, pfe_iqos_queue_t queue, pfe_iqos_wred_zone_t zone, uint8_t val)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IQGOS_ZONE_PROB(queue));
+
+	reg &= ~(0xfU << (zone * 4));
+	reg |= ((0xfU & val) << (zone * 4));
+	hal_write32(reg, base_va + CSR_IQGOS_ZONE_PROB(queue));
+}
+
+void pfe_gpi_cfg_wred_get_prob(addr_t base_va, pfe_iqos_queue_t queue, pfe_iqos_wred_zone_t zone, uint8_t *val)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IQGOS_ZONE_PROB(queue));
+
+	reg >>= (zone * 4);
+	reg &= 0xfU;
+	*val = reg;
+}
+
+void pfe_gpi_cfg_wred_set_thr(addr_t base_va, pfe_iqos_queue_t queue, pfe_iqos_wred_thr_t thr, uint16_t val)
+{
+	uint32_t reg;
+	int off = 0;
+
+	switch (thr)
+	{
+		case PFE_IQOS_WRED_FULL_THR:
+		{
+			hal_write32(val, base_va + CSR_IQGOS_FULL_THRESH(queue));
+			break;
+		}
+		case PFE_IQOS_WRED_MIN_THR:
+		{
+			off = 16;
+			reg = hal_read32(base_va + CSR_IQGOS_DROP_THRESH(queue));
+			reg &= ~(0xffff << off);
+			reg |= (val << off);
+			hal_write32(reg, base_va + CSR_IQGOS_DROP_THRESH(queue));
+			break;
+		}
+		case PFE_IQOS_WRED_MAX_THR:
+		{
+			reg = hal_read32(base_va + CSR_IQGOS_DROP_THRESH(queue));
+			reg &= ~(0xffff << off);
+			reg |= (val << off);
+			hal_write32(reg, base_va + CSR_IQGOS_DROP_THRESH(queue));
+			break;
+		}
+		default:
+		{
+			break;
+		}
+	}
+}
+
+void pfe_gpi_cfg_wred_get_thr(addr_t base_va, pfe_iqos_queue_t queue, pfe_iqos_wred_thr_t thr, uint16_t *val)
+{
+	uint32_t reg;
+	int off = 0;
+
+	switch (thr)
+	{
+		case PFE_IQOS_WRED_FULL_THR:
+		{
+			*val = hal_read32(base_va + CSR_IQGOS_FULL_THRESH(queue));
+			break;
+		}
+		case PFE_IQOS_WRED_MIN_THR:
+		{
+			off = 16;
+			reg = hal_read32(base_va + CSR_IQGOS_DROP_THRESH(queue));
+			reg >>= off;
+			reg &= 0xffff;
+			*val = reg;
+			break;
+		}
+		case PFE_IQOS_WRED_MAX_THR:
+		{
+			reg = hal_read32(base_va + CSR_IQGOS_DROP_THRESH(queue));
+			reg >>= off;
+			reg &= 0xffff;
+			*val = reg;
+			break;
+		}
+		default:
+		{
+			break;
+		}
+	}
+}
+
+/* Shaper configuration */
+
+uint32_t pfe_gpi_cfg_get_sys_clk_mhz(addr_t cbus_base_va)
+{
+	uint32_t reg;
+
+	/* replace this with global csr driver function, when available */
+	reg = hal_read32(cbus_base_va + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_CLK_FRQ);
+
+	return reg & 0xffffU;
+}
+
+void pfe_gpi_cfg_shp_default_init(addr_t base_va, uint8_t id)
+{
+	/* reset the weight reg */
+	hal_write32(0, base_va + CSR_IGQOS_PORT_SHP_WGHT(id));
+	/* reset the min credit reg */
+	hal_write32(0, base_va + GPI_PORT_SHP_MIN_CREDIT(id));
+
+	/* reset CONFIG settings for shaper #id */
+	pfe_gpi_cfg_shp_set_type(base_va, id, PFE_IQOS_SHP_PORT_LEVEL);
+	pfe_gpi_cfg_shp_set_mode(base_va, id, PFE_IQOS_SHP_BPS);
+
+	/* reset CTRL */
+	hal_write32(0, base_va + CSR_IGQOS_PORT_SHP_CTRL(id));
+}
+
+void pfe_gpi_cfg_shp_enable(addr_t base_va, uint8_t id)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_PORT_SHP_CTRL(id));
+
+	reg |= 0x1;
+	hal_write32(reg, base_va + CSR_IGQOS_PORT_SHP_CTRL(id));
+}
+
+void pfe_gpi_cfg_shp_disable(addr_t base_va, uint8_t id)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_PORT_SHP_CTRL(id));
+
+	reg &= ~0x1;
+	hal_write32(reg, base_va + CSR_IGQOS_PORT_SHP_CTRL(id));
+}
+
+bool_t pfe_gpi_cfg_shp_is_enabled(addr_t base_va, uint8_t id)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_PORT_SHP_CTRL(id));
+
+	if (reg & 0x1)
+	{
+		return TRUE;
+	}
+	else
+	{
+		return FALSE;
+	}
+}
+
+void pfe_gpi_cfg_shp_set_type(addr_t base_va, uint8_t id, pfe_iqos_shp_type_t type)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_PORT_SHP_CONFIG);
+
+	reg &= ~(IGQOS_PORT_SHP_TYPE_MASK << IGQOS_PORT_SHP_TYPE_POS(id));
+	reg |= ((type & IGQOS_PORT_SHP_TYPE_MASK) << IGQOS_PORT_SHP_TYPE_POS(id));
+
+	hal_write32(reg, base_va + CSR_IGQOS_PORT_SHP_CONFIG);
+}
+
+void pfe_gpi_cfg_shp_get_type(addr_t base_va, uint8_t id, pfe_iqos_shp_type_t *type)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_PORT_SHP_CONFIG);
+
+	reg >>= IGQOS_PORT_SHP_TYPE_POS(id);
+	*type = (pfe_iqos_shp_type_t)(reg & IGQOS_PORT_SHP_TYPE_MASK);
+}
+
+void pfe_gpi_cfg_shp_set_mode(addr_t base_va, uint8_t id, pfe_iqos_shp_rate_mode_t mode)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_PORT_SHP_CONFIG);
+
+	reg &= ~(IGQOS_PORT_SHP_MODE_PPS(id));
+	if (PFE_IQOS_SHP_PPS == mode)
+	{
+		reg |= IGQOS_PORT_SHP_MODE_PPS(id);
+	}
+
+	hal_write32(reg, base_va + CSR_IGQOS_PORT_SHP_CONFIG);
+}
+
+void pfe_gpi_cfg_shp_get_mode(addr_t base_va, uint8_t id, pfe_iqos_shp_rate_mode_t *mode)
+{
+	uint32_t reg = hal_read32(base_va + CSR_IGQOS_PORT_SHP_CONFIG);
+
+	if (reg & IGQOS_PORT_SHP_MODE_PPS(id))
+	{
+		*mode = PFE_IQOS_SHP_PPS;
+	}
+	else
+	{
+		*mode = PFE_IQOS_SHP_BPS;
+	}
+}
+
+void pfe_gpi_cfg_shp_set_isl_weight(addr_t base_va, uint8_t id, uint32_t clk_div_log2, uint32_t weight)
+{
+	uint32_t reg;
+
+	reg = hal_read32(base_va + CSR_IGQOS_PORT_SHP_CTRL(id));
+	reg &= ~(IGQOS_PORT_SHP_CLKDIV_MASK << IGQOS_PORT_SHP_CLKDIV_POS);
+	reg |= (clk_div_log2 & IGQOS_PORT_SHP_CLKDIV_MASK) << IGQOS_PORT_SHP_CLKDIV_POS;
+	hal_write32(reg, base_va + CSR_IGQOS_PORT_SHP_CTRL(id));
+
+	hal_write32(weight & IGQOS_PORT_SHP_WEIGHT_MASK, base_va + CSR_IGQOS_PORT_SHP_WGHT(id));
+}
+
+void pfe_gpi_cfg_shp_get_isl_weight(addr_t base_va, uint8_t id, uint32_t *weight)
+{
+	uint32_t reg;
+
+	reg = hal_read32(base_va + CSR_IGQOS_PORT_SHP_WGHT(id));
+	*weight = reg & IGQOS_PORT_SHP_WEIGHT_MASK;
+}
+
+void pfe_gpi_cfg_shp_set_limits(addr_t base_va, uint8_t id, uint32_t max_credit, uint32_t min_credit)
+{
+	uint32_t reg;
+
+	/* reset MIN_CREDIT reg */
+	hal_write32(min_credit & IGQOS_PORT_SHP_CREDIT_MASK,
+		    base_va + CSR_IGQOS_PORT_SHP_MIN_CREDIT(id));
+
+	reg = hal_read32(base_va + CSR_IGQOS_PORT_SHP_CTRL(id));
+	reg &= ~(IGQOS_PORT_SHP_CREDIT_MASK << IGQOS_PORT_SHP_MAX_CREDIT_POS);
+	reg |= ((max_credit & IGQOS_PORT_SHP_CREDIT_MASK) << IGQOS_PORT_SHP_MAX_CREDIT_POS);
+	hal_write32(reg, base_va + CSR_IGQOS_PORT_SHP_CTRL(id));
+}
+
+void pfe_gpi_cfg_shp_get_limits(addr_t base_va, uint8_t id, uint32_t *max_credit, uint32_t *min_credit)
+{
+	uint32_t reg;
+
+	reg = hal_read32(base_va + CSR_IGQOS_PORT_SHP_MIN_CREDIT(id));
+	reg &= IGQOS_PORT_SHP_CREDIT_MASK;
+	*min_credit = reg;
+
+	reg = hal_read32(base_va + CSR_IGQOS_PORT_SHP_CTRL(id));
+	reg >>= IGQOS_PORT_SHP_MAX_CREDIT_POS;
+	reg &= IGQOS_PORT_SHP_CREDIT_MASK;
+	*max_credit = reg;
+}
+
+/* read the shaper drop packets counter register, which is clear on read */
+uint32_t pfe_gpi_cfg_shp_get_drop_cnt(addr_t base_va, uint8_t id)
+{
+	return hal_read32(base_va + CSR_IGQOS_STAT_SHAPER_DROP_CNT(id));
+}
+
 /**
  * @brief		Get GPI statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
@@ -203,10 +637,6 @@ uint32_t pfe_gpi_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_TX_DBUG_REG4 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG4));
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_TX_DBUG_REG5 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG5));
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_TX_DBUG_REG6 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG6));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_RX_DBUG_REG1 : 0x%x\n", hal_read32(base_va + GPI_RX_DBUG_REG1));
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_RX_DBUG_REG2 : 0x%x\n", hal_read32(base_va + GPI_RX_DBUG_REG2));
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "GPI_FIFO_STATUS  : 0x%x\n", hal_read32(base_va + GPI_FIFO_STATUS));
@@ -220,6 +650,28 @@ uint32_t pfe_gpi_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 		len += oal_util_snprintf(buf + len, size - len, "Version              : 0x%x\n", (reg >> 16) & 0xffU);
 		len += oal_util_snprintf(buf + len, size - len, "ID                   : 0x%x\n", reg & 0xffffU);
 	}
+
+	/*	Ingress QoS counters */
+	reg = hal_read32(base_va + CSR_IGQOS_QUEUE_STATUS);
+	len += oal_util_snprintf(buf + len, size - len, "IGQOS queue status   : 0x%x\n", reg);
+	reg = hal_read32(base_va + CSR_IGQOS_STAT_CLASS_DROP_CNT);
+	len += oal_util_snprintf(buf + len, size - len, "IGQOS CLASS drop cnt : 0x%x\n", reg);
+	reg = hal_read32(base_va + CSR_IGQOS_STAT_LMEM_QUEUE_DROP_CNT);
+	len += oal_util_snprintf(buf + len, size - len, "IGQOS LMEM drop cnt  : 0x%x\n", reg);
+	reg = hal_read32(base_va + CSR_IGQOS_STAT_DMEM_QUEUE_DROP_CNT);
+	len += oal_util_snprintf(buf + len, size - len, "IGQOS DMEM drop cnt  : 0x%x\n", reg);
+	reg = hal_read32(base_va + CSR_IGQOS_STAT_RXF_QUEUE_DROP_CNT);
+	len += oal_util_snprintf(buf + len, size - len, "IGQOS RXF drop cnt   : 0x%x\n", reg);
+	reg = pfe_gpi_cfg_shp_get_drop_cnt(base_va, 0);
+	len += oal_util_snprintf(buf + len, size - len, "IGQOS SHP0 drop cnt  : 0x%x\n", reg);
+	reg = pfe_gpi_cfg_shp_get_drop_cnt(base_va, 1);
+	len += oal_util_snprintf(buf + len, size - len, "IGQOS SHP1 drop cnt  : 0x%x\n", reg);
+	reg = hal_read32(base_va + CSR_IGQOS_STAT_MANAGED_PACKET_CNT);
+	len += oal_util_snprintf(buf + len, size - len, "IGQOS managed pkts   : 0x%x\n", reg);
+	reg = hal_read32(base_va + CSR_IGQOS_STAT_UNMANAGED_PACKET_CNT);
+	len += oal_util_snprintf(buf + len, size - len, "IGQOS unmanaged pkts : 0x%x\n", reg);
+	reg = hal_read32(base_va + CSR_IGQOS_STAT_RESERVED_PACKET_CNT);
+	len += oal_util_snprintf(buf + len, size - len, "IGQOS reserved pkts  : 0x%x\n", reg);
 
 	reg = hal_read32(base_va + GPI_FIFO_STATUS);
 	len += oal_util_snprintf(buf + len, size - len, "TX Underrun          : 0x%x\n", reg);

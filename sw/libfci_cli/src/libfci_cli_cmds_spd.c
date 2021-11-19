@@ -33,13 +33,19 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+
 #include "libfci_cli_common.h"
 #include "libfci_cli_def_opts.h"
 #include "libfci_cli_print_helpers.h"
 #include "libfci_cli_def_optarg_keywords.h"
-#include "libfci_cli_cmds_spd.h"
+#include "libfci_cli_cmds_route_and_cntk.h"
 
-#include "libfci_interface/fci_spd.h"
+/*
+    NOTE:
+    The "demo_" functions are libFCI abstractions.
+    The "demo_" prefix was chosen because these functions are used as demos in FCI API Reference. 
+*/
+#include "libfci_demo/demo_spd.h"
 
 /* ==== TESTMODE vars ====================================================== */
 
@@ -58,92 +64,98 @@ static int spd_print(const fpp_spd_cmd_t* p_spd)
     assert(NULL != p_spd);
     
     
+    /* NOTE: native data type to comply with 'printf()' conventions (asterisk specifier) */ 
+    int indent = 0;
+    
     {
-        printf("[%5"PRIu16"]", (p_spd->position));
+        printf("%-*sentry %"PRIu16":\n", indent, "", demo_spd_ld_get_position(p_spd));
     }
+    
+    indent += 4;
+    
     {
-        unsigned int padding = 0u;
+        const uint8_t protocol = demo_spd_ld_get_protocol(p_spd);
+        printf("%-*sproto:  %"PRIu8" (%s)\n", indent, "",
+               protocol, cli_value2txt_protocol(protocol));
+    }
+    
+    {
+        const char* p_txt = cli_value2txt_spd_action(demo_spd_ld_get_action(p_spd));
+        printf("%-*saction: %s ", indent, "", p_txt);
         
-        const char* p_txt = cli_value2txt_spd_action(p_spd->spd_action);
-        padding += strlen(p_txt);
-        printf("  ;  [ %s", p_txt);
-        
-        switch (p_spd->spd_action)
+        /* extra info for some actions */
+        switch (demo_spd_ld_get_action(p_spd))
         {
             case FPP_SPD_ACTION_PROCESS_ENCODE:
-                p_txt = " sad=";
-                padding += strlen(p_txt) + 10u;  /* counting in fixed 10 characters of the associated numeric value */
-                printf("%s%-10"PRIu32, p_txt, (p_spd->sa_id));
+                printf("(sad=%"PRIu32")", demo_spd_ld_get_sa_id(p_spd));
             break;
             
             case FPP_SPD_ACTION_PROCESS_DECODE:
-                p_txt = " spi=0x";
-                padding += strlen(p_txt) + 8u;  /* counting in fixed 8 characters of the associated numeric value */
-                printf("%s%08"PRIx32, p_txt, (p_spd->spi));
+                printf("(spi=0x%08"PRIx32")", demo_spd_ld_get_spi(p_spd));
             break;
             
             default:
-                p_txt = NULL;
-                padding += 0uL;
+                /* empty */
             break;
         }
         
-        padding = ((21u >= padding) ? (21u - padding) : (0u));  /* 21 chars is maximal expected length of this section */
-        printf("%-*s ]", padding, "");
-    }
-    {
-        /* protocol */
-        const char* p_txt = cli_value2txt_protocol(p_spd->protocol);
-        printf("  ;  %-10s %3"PRIu16, p_txt, (p_spd->protocol));
-    }
-    {
-        /* IP */
-        uint32_t tmpbuf_ipaddr[4] = {0u};  /* use tmp buf to enforce correct alignment */
-        
-        printf("  ;  src=");
-        memcpy(tmpbuf_ipaddr, (p_spd->saddr), sizeof(uint32_t)*4);
-        if (fci_spd_ld_is_ip6(p_spd))
-        {
-            cli_print_ip6(tmpbuf_ipaddr);
-        }
-        else
-        {
-            cli_print_ip4(tmpbuf_ipaddr[0], true);
-        }
-        
-        printf("  dst=");
-        memcpy(tmpbuf_ipaddr, (p_spd->daddr), sizeof(uint32_t)*4);
-        if (fci_spd_ld_is_ip6(p_spd))
-        {
-            cli_print_ip6(tmpbuf_ipaddr);
-        }
-        else
-        {
-            cli_print_ip4(tmpbuf_ipaddr[0], true);
-        }
-    }
-    {
-        /* port */
-        if (fci_spd_ld_is_used_sport(p_spd))
-        {
-            printf("  sport=%-5"PRIu16, (p_spd->sport));
-        }
-        else
-        {
-            printf("  sport= --- ");
-        }
-        
-        if (fci_spd_ld_is_used_dport(p_spd))
-        {
-            printf("  dport=%-5"PRIu16, (p_spd->dport));
-        }
-        else
-        {
-            printf("  dport= --- ");
-        }
+        printf("\n");
     }
     
-    printf("\n");
+    {
+        printf("%-*smatch:", indent, "");
+        
+        {
+            const uint32_t* p_saddr = demo_spd_ld_get_saddr(p_spd);
+            printf("  src=");
+            if (demo_spd_ld_is_ip6(p_spd))
+            {
+                cli_print_ip6(p_saddr);
+            }
+            else
+            {
+                cli_print_ip4(p_saddr[0], true);
+            }
+        }
+        
+        {
+            const uint32_t* p_daddr = demo_spd_ld_get_daddr(p_spd);
+            printf("  dst=");
+            if (demo_spd_ld_is_ip6(p_spd))
+            {
+                cli_print_ip6(p_daddr);
+            }
+            else
+            {
+                cli_print_ip4(p_daddr[0], true);
+            }
+        }
+        
+        {
+            if (demo_spd_ld_is_used_sport(p_spd))
+            {
+                printf("  sport=%-5"PRIu16, demo_spd_ld_get_sport(p_spd));
+            }
+            else
+            {
+                printf("  sport=---  ");
+            }
+        }
+        
+        {
+            if (demo_spd_ld_is_used_dport(p_spd))
+            {
+                printf("  dport=%-5"PRIu16, demo_spd_ld_get_dport(p_spd));
+            }
+            else
+            {
+                printf("  dport=---   ");
+            }
+        }
+        
+        printf("\n");
+    }
+    
     return (FPP_ERR_OK); 
 }
 
@@ -166,7 +178,7 @@ int cli_cmd_spd_print(const cli_cmdargs_t *p_cmdargs)
     {
         const uint16_t pos = (p_cmdargs->offset.is_valid) ? (p_cmdargs->offset.value) : (0u);
         const uint16_t cnt = (p_cmdargs->count_ethtype.is_valid) ? (p_cmdargs->count_ethtype.value) : (0u);
-        rtn = fci_spd_print_by_phyif(cli_p_cl, spd_print, (p_cmdargs->if_name.txt), pos, cnt);
+        rtn = demo_spd_print_by_phyif(cli_p_cl, spd_print, (p_cmdargs->if_name.txt), pos, cnt);
     }
     
     return (rtn);
@@ -206,31 +218,21 @@ int cli_cmd_spd_add(const cli_cmdargs_t *p_cmdargs)
     /* modify local data */
     if (FPP_ERR_OK == rtn)
     {
-        if (FPP_ERR_OK == rtn)
-        {
-            rtn = fci_spd_ld_set_protocol(&spd, (p_cmdargs->protocol.value));
-        }
-        if (FPP_ERR_OK == rtn)
-        {
-            rtn = fci_spd_ld_set_ip(&spd, (p_cmdargs->sip.arr), (p_cmdargs->dip.arr), (p_cmdargs->sip.is6));
-        }
-        if (FPP_ERR_OK == rtn)
-        {
-            rtn = fci_spd_ld_set_port(&spd, (p_cmdargs->sport.is_valid), (p_cmdargs->sport.value), 
-                                            (p_cmdargs->dport.is_valid), (p_cmdargs->dport.value));
-        }
-        if (FPP_ERR_OK == rtn)
-        {
-            rtn = fci_spd_ld_set_action(&spd, (p_cmdargs->spd_action.value), 
-                                              (p_cmdargs->data_hifc_sad.value), (p_cmdargs->mask_spi.value));
-        }
+        demo_spd_ld_set_protocol(&spd, (p_cmdargs->protocol.value));
+        demo_spd_ld_set_ip(&spd, (p_cmdargs->sip.arr), (p_cmdargs->dip.arr), (p_cmdargs->sip.is6));
+        
+        demo_spd_ld_set_port(&spd, (p_cmdargs->sport.is_valid), (p_cmdargs->sport.value), 
+                                   (p_cmdargs->dport.is_valid), (p_cmdargs->dport.value));
+        
+        demo_spd_ld_set_action(&spd, (p_cmdargs->spd_action.value), 
+                                     (p_cmdargs->data_hifc_sad.value), (p_cmdargs->mask_spi.value));
     }
     
     /* exec */
     if (FPP_ERR_OK == rtn)
     {
         const uint16_t pos = ((p_cmdargs->offset.is_valid) ? (p_cmdargs->offset.value) : (UINT16_MAX));
-        rtn = fci_spd_add(cli_p_cl, (p_cmdargs->if_name.txt), pos, &spd);
+        rtn = demo_spd_add(cli_p_cl, (p_cmdargs->if_name.txt), pos, &spd);
     }
     
     return (rtn);
@@ -255,7 +257,7 @@ int cli_cmd_spd_del(const cli_cmdargs_t *p_cmdargs)
     /* exec */
     if (FPP_ERR_OK == rtn)
     {
-        rtn = fci_spd_del(cli_p_cl, (p_cmdargs->if_name.txt), (p_cmdargs->offset.value));
+        rtn = demo_spd_del(cli_p_cl, (p_cmdargs->if_name.txt), (p_cmdargs->offset.value));
     }
     
     return (rtn);

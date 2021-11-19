@@ -518,7 +518,7 @@ errno_t pfe_log_if_get_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t *rul
 	errno_t ret = EOK;
 	pfe_platform_rpc_pfe_log_if_get_match_rules_arg_t req = {0};
 	pfe_platform_rpc_pfe_log_if_get_match_rules_ret_t rpc_ret = {0};
-	
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == rules)))
 	{
@@ -662,6 +662,13 @@ errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 		if (EOK != ret)
 		{
 			NXP_LOG_DEBUG("Can't del MAC address: %d\n", ret);
+
+			/* Removal of MAC address by master failed, put it back to DB */
+			ret = pfe_mac_db_add_addr(iface->mac_db, addr, owner);
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Unable to put back the MAC address into log_if MAC database: %d\n", ret);
+			}
 		}
 	}
 
@@ -786,7 +793,7 @@ errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_mac_db_crit_t crit, 
 		if(EOK != ret)
 		{
 			NXP_LOG_DEBUG("Unable to flush MAC address from phy_if MAC database: %d\n", ret);
-		}	
+		}
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -1408,11 +1415,11 @@ errno_t pfe_log_if_allmulti_disable(const pfe_log_if_t *iface)
 /**
  * @brief		Get interface name
  * @param[in]	iface The interface instance
- * @return		Pointer to name string or NULL if failed/not found.
+ * @return		Pointer to name string or NULL if failed/not found
  */
 __attribute__((pure)) const char_t *pfe_log_if_get_name(const pfe_log_if_t *iface)
 {
-	static const char_t *unknown = "(unknown)";
+    static const char_t *unknown = "(unknown)";
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -1422,14 +1429,7 @@ __attribute__((pure)) const char_t *pfe_log_if_get_name(const pfe_log_if_t *ifac
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (NULL == iface)
-	{
-		return unknown;
-	}
-	else
-	{
-		return iface->name;
-	}
+    return ((NULL != iface)? iface->name : unknown);
 }
 
 /**
@@ -1455,6 +1455,7 @@ errno_t pfe_log_if_get_stats(const pfe_log_if_t *iface, pfe_ct_class_algo_stats_
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	arg.log_if_id = iface->id;
+	(void)pfe_log_if_db_lock();
 
 	/*	Query the master driver */
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_STATS, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
@@ -1466,6 +1467,7 @@ errno_t pfe_log_if_get_stats(const pfe_log_if_t *iface, pfe_ct_class_algo_stats_
 	{
 		memcpy(stat, &rpc_ret.stats, sizeof(rpc_ret.stats));
 	}
+	(void)pfe_log_if_db_unlock();
 
 	return ret;
 }
