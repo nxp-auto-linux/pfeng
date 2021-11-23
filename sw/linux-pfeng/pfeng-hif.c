@@ -172,7 +172,6 @@ static int pfe_hif_drv_ihc_put_tx_conf(pfe_hif_drv_client_t *client, void *data,
  */
 static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 {
-	unsigned int rx_byte_cnt = 0;
 	pfe_ct_hif_rx_hdr_t *hif_hdr;
 	struct sk_buff *skb;
 	struct net_device *netdev;
@@ -256,17 +255,14 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 
 		skb->protocol = eth_type_trans(skb, netdev);
 
-		rx_byte_cnt += skb_headlen(skb);
-
+		netdev->stats.rx_packets++;
+		netdev->stats.rx_bytes += skb_headlen(skb);
 		napi_gro_receive(&chnl->napi, skb);
 
 		done++;
 		if(unlikely(done == limit))
 			break;
 	}
-
-	netdev->stats.rx_packets += done;
-	netdev->stats.rx_bytes += rx_byte_cnt;
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	return done + ihcs;
