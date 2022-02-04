@@ -425,12 +425,10 @@ typedef enum CAL_PACKED
 typedef enum CAL_PACKED
 {
     FPP_IF_OP_DEFAULT = 0,          /**< Default operation mode */
-    FPP_IF_OP_BRIDGE = 1,           /**< @ref l2_bridge, simple (non-VLAN aware) version */
+    FPP_IF_OP_VLAN_BRIDGE = 1,      /**< @ref l2_bridge, VLAN aware version */
     FPP_IF_OP_ROUTER = 2,           /**< @ref l3_router */
-    FPP_IF_OP_VLAN_BRIDGE = 3,      /**< @ref l2_bridge, VLAN-aware version */
-    FPP_IF_OP_FLEXIBLE_ROUTER = 4,  /**< @ref flex_router */
-    FPP_IF_OP_L2L3_BRIDGE = 5,      /**< @ref l2l3_bridge, simple (non-VLAN aware) version */
-    FPP_IF_OP_L2L3_VLAN_BRIDGE = 6, /**< @ref l2l3_bridge, VLAN-aware version */
+    FPP_IF_OP_FLEXIBLE_ROUTER = 3,  /**< @ref flex_router */
+    FPP_IF_OP_L2L3_VLAN_BRIDGE = 4, /**< @ref l2l3_bridge, VLAN-aware version */
 } fpp_phy_if_op_mode_t;
 
 /**
@@ -564,7 +562,9 @@ typedef enum CAL_PACKED
     BS_NORMAL = 0,       /**< Learning and forwarding enabled. */
     BS_BLOCKED = 1,      /**< Learning and forwarding disabled. */
     BS_LEARN_ONLY = 2,   /**< Learning enabled, forwarding disabled. */
-    BS_FORWARD_ONLY = 3  /**< Learning disabled, forwarding enabled. */
+    BS_FORWARD_ONLY = 3  /**< Learning disabled, forwarding enabled. <br>
+                              Traffic is forwarded only if its both source and destination MAC addresses 
+                              are known to the bridge. */
 } fpp_phy_if_block_state_t;
 
 /* Number of mirrors which can be configured per rx/tx on a physical interface.
@@ -2476,60 +2476,63 @@ typedef struct CAL_PACKED_ALIGNED(4)
 
 /**
  * @def         FPP_CMD_QOS_POLICER
- * @brief       Global Ingress QoS (policer) hardware module enable / disable command.
- * @details     Related topics: @ref ingress_qos
+ * @brief       FCI command for Ingress QoS policer enable/disable.
+ * @details     Related topics: @ref ingress_qos, @ref FPP_CMD_QOS_POLICER_FLOW, @ref FPP_CMD_QOS_POLICER_WRED, @ref FPP_CMD_QOS_POLICER_SHP
  * @details     Related data types: @ref fpp_qos_policer_cmd_t
  * @details     Supported `.action` values:
  *              - @c FPP_ACTION_UPDATE <br>
- *                   Toggle enable / disable status of the Ingress QoS block.
- *                   If the block is already enabled, the enable action does nothing.
- *                   If the block was previously disabled, the enable action will reset
- *                   the block configuration to a default initial state. This includes
- *                   clearing the flow classification table, and resetting of WRED and
- *                   rate shaping configurations.
+ *                   Enable/disable Ingress QoS policer of a physical interface.
  *              - @c FPP_ACTION_QUERY <br>
- *                   Retrieve enable / disable status of the policer.
+ *                   Get status of a target Ingress QoS policer.
+ *
+ * @note
+ * Management of Ingress QoS policer is available only for @b emac physical interfaces.
+ *
+ * @note
+ * Effects of enable/disable:
+ * - If an Ingress QoS policer gets disabled, its associated flow table, WRED module and shaper module are disabled as well.
+ * - If an Ingress QoS policer gets enabled, it starts with default configuration
+ *   (clear flow table, default WRED configuration, default shaper configuration).
  *
  * FPP_ACTION_UPDATE
  * -----------------
- * Toggle enable / disable status of the Ingress QoS hardware block for the given 'emac' interface.
- *
+ * Enable/disable Ingress QoS policer of an @b emac physical interface.
  * @code{.c}
- *  .............................................
+ *  .............................................  
  *  fpp_qos_policer_cmd_t cmd_to_fci =
  *  {
- *    .action  = FPP_ACTION_UPDATE,
- *    .if_name = "...",              // Physical interface name for 'emac' (emac<0-2>).[ro]
- *    .enable = ...                  // 1 to enable, 0 to disable Ingress QoS.
+ *    .action  = FPP_ACTION_UPDATE,  
+ *    .if_name = "...",    // Physical interface name ('emac' interfaces only).
+ *    .enable  =  ...      // 0 == disabled ; 1 == enabled
  *  };
- *
+ *    
  *  int rtn = 0;
  *  rtn = fci_write(client, FPP_CMD_QOS_POLICER, sizeof(fpp_qos_policer_cmd_t),
- *                  (unsigned short*)(&cmd_to_fci));
- *  .............................................
+ *                                              (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
  * FPP_ACTION_QUERY
  * ----------------
- * Get the enable / disable status of the Ingress QoS hardware block for the given 'emac' interface.
+ * Get status (enabled/disabled) of an Ingress QoS policer.
  * @code{.c}
- *  .............................................
+ *  .............................................  
  *  fpp_qos_policer_cmd_t cmd_to_fci =
  *  {
  *    .action  = FPP_ACTION_QUERY,
- *    .if_name = "...",            // Physical interface name for 'emac' (emac<0-2>).[ro]
+ *    .if_name = "...",    // Physical interface name ('emac' interfaces only).
  *  };
- *
+ *    
  *  fpp_qos_policer_cmd_t reply_from_fci = {0};
  *  unsigned short reply_length = 0u;
- *
+ *    
  *  int rtn = 0;
  *  rtn = fci_query(client, FPP_CMD_QOS_POLICER,
  *                  sizeof(fpp_qos_policer_cmd_t), (unsigned short*)(&cmd_to_fci),
  *                  &reply_length, (unsigned short*)(&reply_from_fci));
- *
+ *    
  *  // 'reply_from_fci' now holds the '.enable' field set accordingly.
- *  .............................................
+ *  .............................................  
  * @endcode
  *
  * Command return values (for all applicable ACTIONs)
@@ -2537,148 +2540,161 @@ typedef struct CAL_PACKED_ALIGNED(4)
  * - @c FPP_ERR_OK <br>
  *        Success
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
- *        Wrong physical interface provided (i.e. non-'emac'), or other
- *        unexpected value.
+ *        Wrong physical interface provided (i.e. non-'emac'), or unexpected value of some property.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
- *        Internal FCI failure during update.
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
-
 #define FPP_CMD_QOS_POLICER 0xf430
 
+/**
+ * @brief       Data structure for Ingress QoS policer enable/disable.
+ * @details     Related FCI commands: @ref FPP_CMD_QOS_POLICER
+ * @details     Related topics: @ref ingress_qos
+ * @note        Some values cannot be modified by FPP_ACTION_UPDATE [ro].
+ *
+ * @snippet     fpp_ext.h  fpp_qos_policer_cmd_t
+ */
 /* [fpp_qos_policer_cmd_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
     uint16_t action;
-    char if_name[IFNAMSIZ]; /*< Supports only 'emac' interfaces. Returns FPP_ERR_WRONG_COMMAND_PARAM
-                                if other physical interfaces provided. [ro] */
-    uint8_t enable;         /*< Ingress QoS hardware block (policer) enable / disable toggle.
-                                The hardware block configuration will be reset to its initial
-                                state after disabling it. This includes clearing the flow
-                                classification table, and resetting of WRED and rate shaping
-                                configurations.
-                                On query, it returns the state of the hardware block:
-                                0 == disabled, 1 == enabled.
-                             */
+    char if_name[IFNAMSIZ]; /*< Physical interface name ('emac' interfaces only). [ro] */
+    uint8_t enable;         /*< Enable/disable switch of the Ingress QoS Policer HW module.
+                                0 == disabled, 1 == enabled. */
 } fpp_qos_policer_cmd_t;
 /* [fpp_qos_policer_cmd_t] */
 
 /**
  * @def         FPP_CMD_QOS_POLICER_FLOW
- * @brief       Manages the classification of ingress packet flows.
+ * @brief       FCI command for management of Ingress QoS packet flows.
  * @details     Related topics: @ref ingress_qos
  * @details     Related data types: @ref fpp_qos_policer_flow_cmd_t, @ref fpp_iqos_flow_spec_t
  * @details     Supported `.action` values:
  *              - @c FPP_ACTION_REGISTER <br>
- *                   Add a flow to the Ingress QoS flow classification table.
+ *                   Add a flow to an Ingress QoS flow classification table.
  *              - @c FPP_ACTION_DEREGISTER <br>
- *                   Remove the entry specified by `.id` from the Ingress QoS
- *                   flow classification table.
+ *                   Remove a flow from an Ingress QoS flow classification table.
  *              - @c FPP_ACTION_QUERY <br>
- *                   Initiate a flow entry table query session. Returns the
- *                   properties of the first available flow entry from the table.
+ *                   Initiate (or reinitiate) a flow query session and get properties 
+ *                   of the first flow from an Ingress QoS flow clasification table.
  *              - @c FPP_ACTION_QUERY_CONT <br>
- *                   Continue the query session and get the properties of the next
- *                   available flow entry from the table. To be called from a loop
- *                   to iterate through all the flows of the table.
+ *                   Continue the query session and get properties of the next
+ *                   flow from the table. Intended to be called in a loop 
+ *                   (to iterate through the table).
+ *
+ * @note
+ * - Management of Ingress QoS packet flows is available only for @b emac physical interfaces.
+ * - Management of Ingress QoS packet flows is possible only if the associated @ref FPP_CMD_QOS_POLICER is enabled.
  *
  * FPP_ACTION_REGISTER
  * -------------------
- * Add a packet flow specification to the Ingress QoS flow classification table and specify
- * the action the policer should take for the packets from the given flow: mark as Managed,
- * mark as Reserved, or Drop.
- *
+ * Add a packet flow to an Ingress QoS flow classification table. Specify flow parameters and
+ * the action to be done for packets which conform to the given flow.
  * @code{.c}
- *  .............................................
+ *  .............................................  
  *  fpp_qos_policer_flow_cmd_t cmd_to_fci =
  *  {
  *    .action  = FPP_ACTION_REGISTER,
- *    .if_name = "...",              // Physical interface name for 'emac' (emac<0-2>). [ro]
- *    .id      =  ...,               // Entry position in the classification table. [ro]
- *                                   // A new entry can overwrite an existing one.
- *                                   // Valid values range from 0 to table size - 1.
- *                                   // ID can also have the value of 0xFF to request the next
- *                                   // free entry starting from 0 if available, and if not available
- *                                   // the command returns FPP_ERR_QOS_POLICER_FLOW_TABLE_FULL.
- *    .flow    = {...}               // Flow specification structure, see @ref fpp_iqos_flow_spec_t.
+ *    .if_name = "...",  // Physical interface name ('emac' interfaces only).
+ *    .id      =  ...,   // Position in the classification table. 0xFF == automatic placement.
+ *      
+ *    .flow    = {...}   // Flow specification structure.
  *  };
- *
+ *    
  *  int rtn = 0;
  *  rtn = fci_write(client, FPP_CMD_QOS_POLICER_FLOW, sizeof(fpp_qos_policer_flow_cmd_t),
- *                  (unsigned short*)(&cmd_to_fci));
- *  .............................................
+ *                                                   (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
- * FPP_ACTION_QUERY
- * ----------------
- * Get the properties of the Ingress QoS flow classification table entry specified by `.id`.
+ * FPP_ACTION_DEREGISTER
+ * ---------------------
+ * Remove a flow from an Ingress QoS flow classification table.
  * @code{.c}
- *  .............................................
+ *  .............................................  
+ *  fpp_qos_policer_flow_cmd_t cmd_to_fci =
+ *  {
+ *    .action  = FPP_ACTION_DEREGISTER,
+ *    .if_name = "...",  // Physical interface name ('emac' interfaces only).
+ *    .id      =  ...,   // Position in the classification table.
+ *  };
+ *    
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_QOS_POLICER_FLOW, sizeof(fpp_qos_policer_flow_cmd_t),
+ *                                                   (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
+ * @endcode
+ * 
+ * FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT
+ * ------------------------------------------
+ * Get properties of the Ingress QoS flow.
+ * @code{.c}
+ *  .............................................  
  *  fpp_qos_policer_flow_cmd_t cmd_to_fci =
  *  {
  *    .action  = FPP_ACTION_QUERY,
- *    .if_name = "...",            // Physical interface name.
- *    .id = ...,                   // Entry position in the table, from 0 to table size - 1.
+ *    .if_name = "...",  // Physical interface name ('emac' interfaces only).
+ *    .id      =  ...,   // Entry position in the table, from 0 to "table size - 1".
  *  };
- *
+ *    
  *  fpp_qos_policer_flow_cmd_t reply_from_fci = {0};
  *  unsigned short reply_length = 0u;
- *
+ *    
  *  int rtn = 0;
  *  rtn = fci_query(client, FPP_CMD_QOS_POLICER_FLOW,
  *                  sizeof(fpp_qos_policer_flow_cmd_t), (unsigned short*)(&cmd_to_fci),
  *                  &reply_length, (unsigned short*)(&reply_from_fci));
- *
- *  // 'reply_from_fci' now holds the content of the first available (i.e. active)
- *  //  table entry.
- *
+ *    
+ *  // 'reply_from_fci' now holds the content of the first available (i.e. active) flow
+ *  //  from the Ingress QoS flow classification table of the target physical interface.
+ *    
  *  cmd_to_fci.action = FPP_ACTION_QUERY_CONT;
  *  rtn = fci_query(client, FPP_CMD_QOS_POLICER_FLOW,
  *                  sizeof(fpp_qos_policer_flow_cmd_t), (unsigned short*)(&cmd_to_fci),
  *                  &reply_length, (unsigned short*)(&reply_from_fci));
- *
- *  // 'reply_from_fci' now holds properties of the next available table entry from
- *  //  the Ingress QoS classification flow table of the target physical interface.
- *  .............................................
+ *    
+ *  // 'reply_from_fci' now holds properties of the next available flow from the table.
+ *  .............................................  
  * @endcode
  *
  * Command return values (for all applicable ACTIONs)
  * --------------------------------------------------
  * - @c FPP_ERR_OK <br>
  *        Success
- * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
- *        Wrong physical interface provided (i.e. non-'emac'), or other unexpected value.
- * - @c FPP_ERR_QOS_POLICER_FLOW_NOT_FOUND <br>
- *        Returned when FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT reaches end of table.
+ * - @c FPP_ERR_QOS_POLICER_FLOW_NOT_FOUND
+ *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the Ingress QoS flow query session (no more flows).
+ *        - For other ACTIONs: Unknown (nonexistent) Ingress QoS flow was requested.
  * - @c FPP_ERR_QOS_POLICER_FLOW_TABLE_FULL <br>
- *        Returned when table full if registering with id == FPP_IQOS_FLOW_TABLE_SIZE.
- * - @c FPP_ERR_QOS_POL_ENTRY_RANGE <br>
- *        Provided entry id out of range.
+ *        Attempting to register flow with `.id >= FPP_IQOS_FLOW_TABLE_SIZE` or flow table full.
+ * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
+ *        Wrong physical interface provided (i.e. non-'emac'), or unexpected value of some property.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
-
 #define FPP_CMD_QOS_POLICER_FLOW            0xf440
 
 #define FPP_ERR_QOS_POLICER_FLOW_TABLE_FULL 0xf441
 #define FPP_ERR_QOS_POLICER_FLOW_NOT_FOUND  0xf442
 
 /**
- * @brief       Flags for flow types to match.
- * @details     Related data types: @ref fpp_qos_policer_flow_cmd_t
+ * @brief       Argumentless flow types (match flags).
+ * @details     Related data types: @ref fpp_iqos_flow_spec_t
  */
 typedef enum CAL_PACKED
 {
-    FPP_IQOS_FLOW_TYPE_ETH = (1 << 0),     /**< match ETH packets */
-    FPP_IQOS_FLOW_TYPE_PPPOE = (1 << 1),   /**< match PPPoE packets */
-    FPP_IQOS_FLOW_TYPE_ARP = (1 << 2),     /**< match ARP packets */
-    FPP_IQOS_FLOW_TYPE_IPV4 = (1 << 3),    /**< match IPv4 packets */
-    FPP_IQOS_FLOW_TYPE_IPV6 = (1 << 4),    /**< match IPv6 packets */
-    FPP_IQOS_FLOW_TYPE_IPX = (1 << 5),     /**< match IPX packets */
-    FPP_IQOS_FLOW_TYPE_MCAST = (1 << 6),   /**< match multicast (L2) packets */
-    FPP_IQOS_FLOW_TYPE_BCAST = (1 << 7),   /**< match L2 broadcast packets */
-    FPP_IQOS_FLOW_TYPE_VLAN = (1 << 8),    /**< match VLAN tagged packets */
+    FPP_IQOS_FLOW_TYPE_ETH = (1 << 0),     /**< Match ETH packets. */
+    FPP_IQOS_FLOW_TYPE_PPPOE = (1 << 1),   /**< Match PPPoE packets. */
+    FPP_IQOS_FLOW_TYPE_ARP = (1 << 2),     /**< Match ARP packets. */
+    FPP_IQOS_FLOW_TYPE_IPV4 = (1 << 3),    /**< Match IPv4 packets. */
+    FPP_IQOS_FLOW_TYPE_IPV6 = (1 << 4),    /**< Match IPv6 packets. */
+    FPP_IQOS_FLOW_TYPE_IPX = (1 << 5),     /**< Match IPX packets. */
+    FPP_IQOS_FLOW_TYPE_MCAST = (1 << 6),   /**< Match L2 multicast packets. */
+    FPP_IQOS_FLOW_TYPE_BCAST = (1 << 7),   /**< Match L2 broadcast pakcets. */
+    FPP_IQOS_FLOW_TYPE_VLAN = (1 << 8),    /**< Match VLAN tagged packets. */
 
     FPP_IQOS_FLOW_TYPE_MAX = FPP_IQOS_FLOW_TYPE_VLAN,
     /* Ensure proper size */
@@ -2686,88 +2702,153 @@ typedef enum CAL_PACKED
 } fpp_iqos_flow_type_t;
 
 /**
- * @brief       Flags for packet header field arguments to match.
- * @details     Related data types: @ref fpp_qos_policer_flow_cmd_t
+ * @brief       Argumentful flow types (match flags).
+ * @details     Related data types: @ref fpp_iqos_flow_spec_t, @ref fpp_iqos_flow_args_t
  */
 typedef enum CAL_PACKED
 {
-    FPP_IQOS_ARG_VLAN = (1 << 0),     /**< match on VLAN ID range arguments */
-    FPP_IQOS_ARG_TOS = (1 << 1),      /**< match on TOS range arguments */
-    FPP_IQOS_ARG_L4PROTO = (1 << 2),  /**< match on L4 PROTO range arguments */
-    FPP_IQOS_ARG_SIP = (1 << 3),      /**< match on source IPv4/IPv6 address range arguments */
-    FPP_IQOS_ARG_DIP = (1 << 4),      /**< match on destination IPv4/IPv6 address range arguments */
-    FPP_IQOS_ARG_SPORT = (1 << 5),    /**< match on L4 source port range arguments */
-    FPP_IQOS_ARG_DPORT = (1 << 6),    /**< match on L4 destination port range arguments */
+    FPP_IQOS_ARG_VLAN = (1 << 0),     /**< Match bitmasked VLAN value. */
+    FPP_IQOS_ARG_TOS = (1 << 1),      /**< Match bitmasked TOS value. */
+    FPP_IQOS_ARG_L4PROTO = (1 << 2),  /**< Match bitmasked L4 protocol value. */
+    FPP_IQOS_ARG_SIP = (1 << 3),      /**< Match prefixed source IPv4/IPv6 address. */
+    FPP_IQOS_ARG_DIP = (1 << 4),      /**< Match prefixed destination IPv4/IPv6 address. */
+    FPP_IQOS_ARG_SPORT = (1 << 5),    /**< Match L4 source port range. */
+    FPP_IQOS_ARG_DPORT = (1 << 6),    /**< Match L4 destination port range. */
 
     FPP_IQOS_ARG_MAX = FPP_IQOS_ARG_DPORT,
     /* Ensure proper size */
     FPP_IQOS_ARG_MAX_ = (uint16_t)(1U << 15U)
 } fpp_iqos_flow_arg_type_t;
 
+/**
+ * @brief       @ref FPP_CMD_QOS_POLICER_FLOW, @ref fpp_iqos_flow_args_t : <br>
+ *              Bitmask for comparison of the whole VLAN ID (all bits compared).
+*/
 #define FPP_IQOS_VLAN_ID_MASK 0xFFF
+
+/**
+ * @brief       @ref FPP_CMD_QOS_POLICER_FLOW, @ref fpp_iqos_flow_args_t : <br>
+ *              Bitmask for comparison of the whole TOS/TCLASS field (all bits compared).
+*/
 #define FPP_IQOS_TOS_MASK     0xFF
+
+/**
+ * @brief       @ref FPP_CMD_QOS_POLICER_FLOW, @ref fpp_iqos_flow_args_t : <br>
+ *              Bitmask for comparison of the whole L4 protocol field (all bits compared).
+*/
 #define FPP_IQOS_L4PROTO_MASK 0xFF
+
+/**
+ * @brief       @ref FPP_CMD_QOS_POLICER_FLOW, @ref fpp_iqos_flow_args_t : <br>
+ *              Network prefix for comparison of the whole IP address (all bits compared).
+*/
 #define FPP_IQOS_SDIP_MASK    0x3F
 
 /**
- * @brief       Header field arguments to match.
- * @details     Related data types: @ref fpp_qos_policer_flow_cmd_t, @ref fpp_iqos_flow_spec_t
- * @details     Each value is an argument for some match rule.
- * @note        Some values are in a network byte order [NBO].
+ * @brief       Arguments for argumentful flow types.
+ * @details     Related data types: @ref fpp_iqos_flow_spec_t, @ref fpp_iqos_flow_arg_type_t
+ *
+ * @details
+ * Bitmasking
+ * ----------
+ * Explanation: <br>
+ *   In the comparison process for argumentful flow types, bitmasking works as follows: <br>
+ *   `if ((PacketData & Mask) == (ArgData & Mask)), then packet matches the flow.`
+ *   - `PacketData` is the inspected value from an ingress packet.
+ *   - `ArgData` is the argument value of an argumentful flow type.
+ *   - `Mask` is the bitmask of an argumentful flow type. <br>
+ *      For IP addresses, the network prefix (e.g. /24) is internally converted into 
+ *      a valid subnet mask (/24 == 0xFFFFFFF0).
+ *
+ * Example: <br>
+ *   If `.l4proto_m = 0x07` , then only the lowest 3 bits of the TOS field would be compared.
+ *   That means any protocol value with matching lowest 3 bits would be accepted.
+ *
+ * Hint: <br>
+ * Use the provided bitmask symbols (see descriptions of struct fields) to compare whole values (all bits).
+ * Do not use custom bitmasks, unless some specific scenario requires such refinement.
+ *
+ * Description
+ * -----------
+ * @note
+ * Some values are in a network byte order [NBO].
+ *
+ * @snippet     fpp_ext.h  fpp_iqos_flow_args_t
  */
 /* [fpp_iqos_flow_args_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
-    uint16_t vlan;      /*< VLAN ID (12b). [NBO] */
-    uint16_t vlan_m;    /*< VLAN ID mask (12b). [NBO] */
-    uint8_t tos;        /*< TOS field for IPv4, TCLASS for IPv6 (8b). */
-    uint8_t tos_m;      /*< TOS mask (8b). */
-    uint8_t l4proto;    /*< L4 protocol field for IPv4 and IPv6 (8b). */
-    uint8_t l4proto_m;  /*< L4 protocol mask (8b). */
-    uint32_t sip;       /*< Source IP address for IPv4 and IPv6 (32b). [NBO] */
-    uint32_t dip;       /*< Destination IP address for IPv4 and IPv6 (32b). [NBO] */
-    uint8_t sip_m;      /*< Source IP address mask, "6 bit encoded". */
-    uint8_t dip_m;      /*< Destination IP address mask, "6 bit encoded". */
-    uint16_t sport_max; /*< Max L4 source port (16b). [NBO] */
-    uint16_t sport_min; /*< Min L4 source port (16b). [NBO] */
-    uint16_t dport_max; /*< Max L4 destination port (16b). [NBO] */
-    uint16_t dport_min; /*< Min L4 destination port (16b). [NBO] */
+    uint16_t vlan;       /*< FPP_IQOS_ARG_VLAN: VLAN ID (max 4095). [NBO] */
+    
+    uint16_t vlan_m;     /*< FPP_IQOS_ARG_VLAN: VLAN ID comparison bitmask (12b). [NBO] 
+                             Use FPP_IQOS_VLAN_ID_MASK to compare whole value (all bits). */
+    
+    uint8_t tos;         /*< FPP_IQOS_ARG_TOS: TOS field for IPv4, TCLASS for IPv6. */
+    
+    uint8_t tos_m;       /*< FPP_IQOS_ARG_TOS: TOS comparison bitmask. 
+                             Use FPP_IQOS_TOS_MASK to compare whole value (all bits). */
+    
+    uint8_t l4proto;     /*< FPP_IQOS_ARG_L4PROTO: L4 protocol field for IPv4 and IPv6. */
+    
+    uint8_t l4proto_m;   /*< FPP_IQOS_ARG_L4PROTO: L4 protocol comparison bitmask.
+                             Use FPP_IQOS_L4PROTO_MASK to compare whole value (all bits). */
+    
+    uint32_t sip;        /*< FPP_IQOS_ARG_SIP: Source IP address for IPv4/IPv6. [NBO] */
+    uint32_t dip;        /*< FPP_IQOS_ARG_DIP: Destination IP address for IPv4/IPv6. [NBO] */
+    
+    uint8_t sip_m;       /*< FPP_IQOS_ARG_SIP: Source IP address - network prefix. 
+                             Use FPP_IQOS_SDIP_MASK to compare whole address (all bits). */
+    
+    uint8_t dip_m;       /*< FPP_IQOS_ARG_DIP: Destination IP address - network prefix.
+                             Use FPP_IQOS_SDIP_MASK to compare whole address (all bits). */
+    
+    uint16_t sport_max;  /*< FPP_IQOS_ARG_SPORT: Max L4 source port. [NBO] */
+    uint16_t sport_min;  /*< FPP_IQOS_ARG_SPORT: Min L4 source port. [NBO] */
+    uint16_t dport_max;  /*< FPP_IQOS_ARG_DPORT: Max L4 destination port. [NBO] */
+    uint16_t dport_min;  /*< FPP_IQOS_ARG_DPORT: Min L4 destination port. [NBO] */
 } fpp_iqos_flow_args_t;
 /* [fpp_iqos_flow_args_t] */
 
 /**
- * @brief       Action to be done for matched flows.
- * @details     Related data types: @ref fpp_qos_policer_flow_cmd_t
+ * @brief       Action to be done for matching packets.
+ * @details     Related data types: @ref fpp_iqos_flow_spec_t
+ * @note        See @ref ingress_qos for explanation of Ingress QoS traffic classification.
  */
 typedef enum CAL_PACKED
 {
-    FPP_IQOS_FLOW_MANAGED = 0,  /**< Mark flow as Managed. Default action on flow match. */
-    FPP_IQOS_FLOW_DROP,         /**< Drop flow. */
-    FPP_IQOS_FLOW_RESERVED,     /**< Mark flow as Reserved. */
+    FPP_IQOS_FLOW_MANAGED = 0,  /**< Classify the matching packet as Managed traffic. Default action. */
+    FPP_IQOS_FLOW_DROP,         /**< Drop the packet. */
+    FPP_IQOS_FLOW_RESERVED,     /**< Classify the matching packet as Reserved traffic. */
 
     FPP_IQOS_FLOW_COUNT         /* must be last */
 } fpp_iqos_flow_action_t;
 
 /**
- * @brief       Flow classification specification stucture.
+ * @brief       Specification of Ingress QoS packet flow.
+ * @details     Related FCI commands: @ref FPP_CMD_QOS_POLICER_FLOW
  * @details     Related data types: @ref fpp_qos_policer_flow_cmd_t
- * @details     Each value is an argument for some match rule.
  * @note        Some values are in a network byte order [NBO].
+ * 
+ * @snippet     fpp_ext.h  fpp_iqos_flow_spec_t
  */
 /* [fpp_iqos_flow_spec_t] */
 typedef struct CAL_PACKED_ALIGNED(4)
 {
-    fpp_iqos_flow_type_t type_mask;         /*< Mask of flow types to match. [NBO] */
-    fpp_iqos_flow_arg_type_t arg_type_mask; /*< Mask on header field arguments to match [NBO] */
-    fpp_iqos_flow_args_t CAL_PACKED_ALIGNED(4) args; /*< Stuct of header field arguments to match,
-                                                         as indicated by @arg_type_mask.
-                                                      */
-    fpp_iqos_flow_action_t action;          /*< Actions to be performed on matched flows. */
+    fpp_iqos_flow_type_t type_mask;          /*< Argumentless flow types to match. [NBO]
+                                                 A bitset mask. */
+    
+    fpp_iqos_flow_arg_type_t arg_type_mask;  /*< Argumentful flow types to match. [NBO]
+                                                 A bitset mask. */
+    
+    fpp_iqos_flow_args_t CAL_PACKED_ALIGNED(4) args; /*< Arguments for argumentful flow types.
+                                                         Related to 'arg_type_mask'. */
+    
+    fpp_iqos_flow_action_t action;           /*< Action to be done for matching packets. */
 } fpp_iqos_flow_spec_t;
 /* [fpp_iqos_flow_spec_t] */
 
 /**
- * @brief       Data structure for a Ingress QoS flow classification entry.
+ * @brief       Data structure for Ingress QoS packet flow.
  * @details     Related FCI commands: @ref FPP_CMD_QOS_POLICER_FLOW
  * @details     Related topics: @ref ingress_qos
  *
@@ -2777,83 +2858,81 @@ typedef struct CAL_PACKED_ALIGNED(4)
 typedef struct CAL_PACKED_ALIGNED(4)
 {
     uint16_t action;
-    char if_name[IFNAMSIZ]; /*< Physical interface name for 'emac' (emac<0-2>). [ro] */
-    uint8_t id;             /*< Classification entry position in table. [ro]
+    char if_name[IFNAMSIZ]; /*< Physical interface name ('emac' interfaces only). */
+    
+    uint8_t id;             /*< Position in the classification table.
                                 minimal ID == 0
                                 maximal ID is implementation defined. See Ingress QoS.
-                                For FPP_ACTION_REGISTER, the value of 0xFF means "don't care",
-                                and the driver will choose the next available position starting
-                                from 0, or will return FPP_ERR_QOS_POLICER_FLOW_TABLE_FULL if
-                                not available.
-                            */
-    fpp_iqos_flow_spec_t CAL_PACKED_ALIGNED(4) flow; /*< Flow specification. */
+                                For FPP_ACTION_REGISTER, value 0xFF means "don't care".
+                                If 0xFF is set as registration id, driver will automatically
+                                choose the first available free position. */
+    
+    fpp_iqos_flow_spec_t CAL_PACKED_ALIGNED(4) flow;  /*< Flow specification. */
 } fpp_qos_policer_flow_cmd_t;
 /* [fpp_qos_policer_flow_cmd_t] */
 
 /**
  * @def         FPP_CMD_QOS_POLICER_WRED
- * @brief       Configure WRED (Weighted Early Random Detection) policing for a given ingress queue.
+ * @brief       FCI command for management of Ingress QoS WRED queues.
  * @details     Related topics: @ref ingress_qos
  * @details     Related data types: @ref fpp_qos_policer_wred_cmd_t
  * @details     Supported `.action` values:
  *              - @c FPP_ACTION_UPDATE <br>
- *                   Update WRED hardware configuration.
+ *                   Modify properties of Ingress QoS WRED queue.
  *              - @c FPP_ACTION_QUERY <br>
- *                   Retrieve the WRED configuration from hardware.
+ *                   Get properties of a target Ingress QoS WRED queue.
+ *
+ * @note
+ * - Management of Ingress QoS WRED queues is available only for @b emac physical interfaces.
+ * - Management of Ingress QoS WRED queues is possible only if the associated @ref FPP_CMD_QOS_POLICER is enabled.
  *
  * FPP_ACTION_UPDATE
  * -----------------
- * Configure queue thresholds and probability zones for dropping packets based on the priority
- * assigned to each packet flow by the ingress classifier.  The 'unmanaged' flows have the lowest
- * priority, and packets from these flows are the first to be dropped by the WRED algorithm.
- * The higher priority flows are registered in the classifier entry table and marked as either
- * 'Managed' or 'Reserved', the latter having the highest priority.
- *
+ * Update Ingress QoS WRED queue of a target physical interface.
  * @code{.c}
- *  .............................................
+ *  .............................................  
  *  fpp_qos_policer_wred_cmd_t cmd_to_fci =
  *  {
  *    .action  = FPP_ACTION_UPDATE,
- *    .if_name = "...",              // Physical interface name for 'emac' (emac<0-2>).[ro]
- *    .queue = ...,                  // Select the hardware queue for WRED policing (DMEM, LMEM, RXF).[ro]
- *    .enable = ...,                 // Enable / disable the WRED queue (1 to enable, 0 to disable).
- *    .thr[] = {...},                // Provide min, max, and full WRED threaholds for given queue, or use
- *                                      defaults.
- *    .zprob[] = {...},              // Provide probabilities in increments of 1/16 for each drop zone, or
- *                                      use defaults.
+ *    .if_name = "...",      // Physical interface name ('emac' interfaces only).
+ *    .queue   =  ...,       // Target Ingress QoS WRED queue (DMEM, LMEM, RXF).
+ *    .enable  =  ...,       // Enable/disable switch (0 == disabled, 1 == enabled).
+ *      
+ *    .thr[]   = {...},      // Min/max/full WRED thresholds.
+ *                           // 0xFFFF == let HW keep its currently configured thld value.
+ *      
+ *    .zprob[] = {...}       // WRED drop probabilities for all zones in 1/16 increments.
+ *                           // 0xFF == let HW keep its currently configured zone value.
  *  };
- *
+ *    
  *  int rtn = 0;
  *  rtn = fci_write(client, FPP_CMD_QOS_POLICER_WRED, sizeof(fpp_qos_policer_wred_cmd_t),
- *                  (unsigned short*)(&cmd_to_fci));
- *  .............................................
+ *                                                   (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
  * FPP_ACTION_QUERY
  * ----------------
- * Retrieve the WRED configuration from hardware for the given ingress queue of a physical interface.
+ * Get properties of a target Ingress QoS WRED queue.
  * @code{.c}
- *  .............................................
+ *  .............................................  
  *  fpp_qos_policer_wred_cmd_t cmd_to_fci =
  *  {
  *    .action  = FPP_ACTION_QUERY,
- *    .if_name = "...",            // Physical interface name for 'emac' (emac<0-2>).[ro]
- *    .queue = ...,                // Target WRED queue. [ro]
- *    .enable = ...,               // Returns the enabled / disabled status of the queue.
- *    .thr[] = ...,                // Returns the hardware programmed WRED thresholds.
- *    .zprob[] = ...,              // Returns the hardware programmed WRED probability values for each zone.
+ *    .if_name = "...",      // Physical interface name ('emac' interfaces only).
+ *    .queue   =  ...,       // Target Ingress QoS WRED queue (DMEM, LMEM, RXF).
  *  };
- *
+ *    
  *  fpp_qos_policer_wred_cmd_t reply_from_fci = {0};
  *  unsigned short reply_length = 0u;
- *
+ *    
  *  int rtn = 0;
  *  rtn = fci_query(client, FPP_CMD_QOS_POLICER_WRED,
  *                  sizeof(fpp_qos_policer_wred_cmd_t), (unsigned short*)(&cmd_to_fci),
  *                  &reply_length, (unsigned short*)(&reply_from_fci));
- *
- *  // 'reply_from_fci' now holds the '.enable' field set accordingly.
- *  .............................................
+ *    
+ *  // 'reply_from_fci' now holds properties of the target Ingress QoS WRED queue.
+ *  .............................................  
  * @endcode
  *
  * Command return values (for all applicable ACTIONs)
@@ -2861,60 +2940,74 @@ typedef struct CAL_PACKED_ALIGNED(4)
  * - @c FPP_ERR_OK <br>
  *        Success
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
- *        Wrong physical interface provided (i.e. non-'emac'), or other
- *        unexpected value.
+ *        Wrong physical interface provided (i.e. non-'emac'), or unexpected value of some property.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
- *        Internal FCI failure during update.
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
-
 #define FPP_CMD_QOS_POLICER_WRED            0xf450
 
 /**
- * @brief       Ingress queues subject to WRED policing.
+ * @brief       Supported target queues of Ingress QoS WRED.
  * @details     Related data types: @ref fpp_qos_policer_wred_cmd_t
  */
 typedef enum CAL_PACKED
 {
-    FPP_IQOS_Q_DMEM = 0,/**< select DMEM for WRED configuration */
-    FPP_IQOS_Q_LMEM,    /**< select LMEM for WRED configuration */
-    FPP_IQOS_Q_RXF,     /**< select RXF for WRED configuration */
+    FPP_IQOS_Q_DMEM = 0,/**< Queue which is in DMEM (Data Memory). Standard storage. */
+    FPP_IQOS_Q_LMEM,    /**< Queue which is in LMEM (Local Memory). Faster execution but smaller capacity. */
+    FPP_IQOS_Q_RXF,     /**< Queue which is in FIFO of the associated physical interface. */
 
     FPP_IQOS_Q_COUNT    /* must be last */
 } fpp_iqos_queue_t;
 
 /**
- * @brief       Supported probability zones.
- * @details     Related data types: @ref fpp_qos_policer_wred_cmd_t
+ * @brief       Supported probability zones of Ingress QoS WRED queue.
+ * @details     Related data types: @link fpp_qos_policer_wred_cmd_t @endlink`.zprob[]`
+ * @note        This enum represents valid array indexes.
  */
 typedef enum CAL_PACKED
 {
-    FPP_IQOS_WRED_ZONE1 = 0,   /**< WRED probability zone1 */
-    FPP_IQOS_WRED_ZONE2,       /**< WRED probability zone2 */
-    FPP_IQOS_WRED_ZONE3,       /**< WRED probability zone3 */
-    FPP_IQOS_WRED_ZONE4,       /**< WRED probability zone4 */
+    FPP_IQOS_WRED_ZONE1 = 0,   /**< WRED probability zone 1 (lowest). */
+    FPP_IQOS_WRED_ZONE2,       /**< WRED probability zone 2. */
+    FPP_IQOS_WRED_ZONE3,       /**< WRED probability zone 3. */
+    FPP_IQOS_WRED_ZONE4,       /**< WRED probability zone 4 (highest). */
 
     FPP_IQOS_WRED_ZONES_COUNT  /* must be last */
 } fpp_iqos_wred_zone_t;
 
 /**
- * @brief       Supported thershold types.
- * @details     Related data types: @ref fpp_qos_policer_wred_cmd_t
+ * @brief       Thresholds of Ingress QoS WRED queue.
+ * @details     Related data types: @link fpp_qos_policer_wred_cmd_t @endlink`.thr[]`
+ * @note        - This enum represents valid array indexes.
+ * @note        - See @ref ingress_qos for explanation of Ingress QoS traffic classification. <br>
+ *                (Unmanaged/Managed/Reserved)
  */
 typedef enum CAL_PACKED
 {
-    FPP_IQOS_WRED_MIN_THR = 0, /**< WRED queue min threshold, drop 'unmanaged' by prob zone */
-    FPP_IQOS_WRED_MAX_THR,     /**< WRED queue max threshold, drop 'managed' */
-    FPP_IQOS_WRED_FULL_THR,    /**< WRED queue full threshold, drop all */
-
-    FPP_IQOS_WRED_THR_COUNT    /* must be last */
+    FPP_IQOS_WRED_MIN_THR = 0,  /**< WRED queue min threshold. <br>
+                                     If queue fill below `.thr[FPP_IQOS_WRED_MIN_THR]`, the following applies:
+                                     - Drop Unmanaged traffic by probability zones.
+                                     - Keep Managed and Reserved traffic. */
+    
+    FPP_IQOS_WRED_MAX_THR,      /**< WRED queue max threshold. <br>
+                                     If queue fill over `.thr[FPP_IQOS_WRED_MIN_THR]` but below `.thr[FPP_IQOS_WRED_MAX_THR]`, the following applies:
+                                     - Drop all Unmanaged and Managed traffic.
+                                     - Keep Reserved traffic. */
+    
+    FPP_IQOS_WRED_FULL_THR,     /**< WRED queue full threshold. <br>
+                                     If queue fill over `.thr[FPP_IQOS_WRED_FULL_THR]`, then drop all traffic. */
+    
+    FPP_IQOS_WRED_THR_COUNT     /* must be last */
 } fpp_iqos_wred_thr_t;
 
 /**
- * @brief       Data structure for Ingress QoS WRED policing configuration.
+ * @brief       Data structure for Ingress QoS WRED queue.
  * @details     Related FCI commands: @ref FPP_CMD_QOS_POLICER_WRED
  * @details     Related topics: @ref ingress_qos
+ * @details     Related data types: @ref fpp_iqos_wred_thr_t, @ref fpp_iqos_wred_zone_t
+ * @note        - Some values are in a network byte order [NBO].
+ * @note        - Some values cannot be modified by FPP_ACTION_UPDATE [ro].
  *
  * @snippet     fpp_ext.h  fpp_qos_policer_wred_cmd_t
  */
@@ -2922,94 +3015,88 @@ typedef enum CAL_PACKED
 typedef struct CAL_PACKED_ALIGNED(4)
 {
     uint16_t action;
-    char if_name[IFNAMSIZ];  /*< Physical interface name for 'emac' (emac<0-2>). [ro] */
-    fpp_iqos_queue_t queue;  /*< Target ingress queue for WRED configuration. [ro] */
-    uint8_t enable;          /*< WRED queue enable / disable toggle.
-                                 The hardware block configuration will be reset to its
-                                 initial state after disabling it.
-                                 On query, it returns the state of the hardware block:
-                                 0 == disabled, 1 == enabled.
-                             */
-    uint16_t thr[FPP_IQOS_WRED_THR_COUNT];    /*< WRED thresholds (in number of buffers).
-                                                  The lowest threshold starts at 0. Max values
-                                                  are implementation defined, see Ingress QOS.
-                                                  Value 0xFFFF means preserve the hardware
-                                                  configured value. [NBO]
-                                               */
+    char if_name[IFNAMSIZ];  /*< Physical interface name ('emac' interfaces only). [ro] */
+    fpp_iqos_queue_t queue;  /*< Target Ingress QoS WRED queue. [ro] */
+    uint8_t enable;          /*< Enable/disable switch of the target WRED queue HW module.
+                                 0 == disabled, 1 == enabled. */
+    
+    uint16_t thr[FPP_IQOS_WRED_THR_COUNT]; /*< WRED queue thresholds. [NBO]
+                                               See 'fpp_iqos_wred_thr_t'.
+                                               Unit is "number of packets".
+                                               Min value == 0
+                                               Max value is implementation defined. See
+                                               Ingress QoS chapter for implementation details.
+                                               Value 0xFFFF == HW keeps its currently
+                                                               configured value. */
+    
     uint8_t zprob[FPP_IQOS_WRED_ZONES_COUNT]; /*< WRED drop probabilities for all probability
-                                                  zones, in increments of 1/16.
-                                                  The lowest probability zone starts at 0.
-                                                  Value 255 means preserve the H/W configured value.
-                                               */
+                                                  zones. See 'fpp_iqos_wred_zone_t'.
+                                                  One unit (1) represents probability of 1/16.
+                                                  Min value == 0   ( 0/16 = 0%)
+                                                  Max value == 15  (15/16 = 93,75%)
+                                                  Value 255 == HW keeps its currently 
+                                                               configured value. */
 } fpp_qos_policer_wred_cmd_t;
 /* [fpp_qos_policer_wred_cmd_t] */
 
 /**
  * @def         FPP_CMD_QOS_POLICER_SHP
- * @brief       Enable and configure an ingress traffic shaper.
+ * @brief       FCI command for management of Ingress QoS shapers.
  * @details     Related topics: @ref ingress_qos
  * @details     Related data types: @ref fpp_qos_policer_shp_cmd_t
  * @details     Supported `.action` values:
  *              - @c FPP_ACTION_UPDATE <br>
- *                   Update rate shaping hardware configuration.
+ *                   Modify properties of Ingress QoS shaper.
  *              - @c FPP_ACTION_QUERY <br>
- *                   Retrieve rate shaping configuration from hardware.
+ *                   Get properties of a target Ingress QoS shaper.
+ *
+ * @note
+ * - Management of Ingress QoS shapers is available only for @b emac physical interfaces.
+ * - Management of Ingress QoS shapers is possible only if the associated @ref FPP_CMD_QOS_POLICER is enabled.
  *
  * FPP_ACTION_UPDATE
  * -----------------
- * Configure the ingress IEEE 802.1Q Credit Base Shaper specified by ID
- * for a given physical interface.
- *
+ * Configure Ingress QoS credit based shaper (IEEE 802.1Q) of a target physical interface.
  * @code{.c}
- *  .............................................
+ *  .............................................  
  *  fpp_qos_policer_shp_cmd_t cmd_to_fci =
  *  {
  *    .action  = FPP_ACTION_UPDATE,
- *    .if_name = "...",              // Physical interface name for 'emac' (emac<0-2>).[ro]
- *    .id = ...,                     // ID of the ingress rate shaper to be configured.[ro]
- *    .enable = ...,                 // Enable / disable the shaper (1 to enable, 0 to disable).
- *    .type = ...,                   // Type of traffic to be shaped: all (port level), bcast, or mcast.
- *    .mode = ...,                   // Data rate measurement units: bps, or pps.
- *    .isl = ...,                    // Desired data rate in units as specified by `.mode`.
- *    .max_credit = ...,             // IEEE 802.1Q CBS hiCredit and loCredit values (max and min)
- *    .min_credit = ...,             // based on chosen shaper mode.
+ *    .if_name = "...",  // Physical interface name ('emac' interfaces only).
+ *    .id      =  ...,   // ID of the target Ingress QoS shaper.
+ *      
+ *    ... = ...  // Properties (data fields) to be updated, and their new (modified) values.
+ *               // Some properties cannot be modified (see fpp_qos_policer_shp_cmd_t).
  *  };
- *
+ *    
  *  int rtn = 0;
  *  rtn = fci_write(client, FPP_CMD_QOS_POLICER_SHP, sizeof(fpp_qos_policer_shp_cmd_t),
- *                  (unsigned short*)(&cmd_to_fci));
- *  .............................................
+ *                                                  (unsigned short*)(&cmd_to_fci));
+ *  .............................................  
  * @endcode
  *
  * FPP_ACTION_QUERY
  * ----------------
- * Retrieve the hardware configuration for the ingress shaper specified by ID, for a physical interface.
- *
+ * Get properties of a target Ingress QoS shaper.
  * @code{.c}
- *  .............................................
+ *  .............................................  
  *  fpp_qos_policer_shp_cmd_t cmd_to_fci =
  *  {
  *    .action  = FPP_ACTION_QUERY,
- *    .if_name = "...",            // Physical interface name for 'emac' (emac<0-2>).[ro]
- *    .id = ...,                   // Shaper ID.[ro]
- *    .enable = ...,               // Returns the enabled / disabled status of the shaper.
- *    .type = ...,                 // Returns the shaper type.
- *    .mode = ...,                 // Returns the shaper mode.
- *    .isl = ...,                  // Returns the CBS parameters as programmed in the hardware
- *    .max_credit = ...,           // idleSlope (in `.isl`), hiCredit (in `.max_credit`),
- *    .min_credit = ...,           // loCredit (in `.min_credit`).
+ *    .if_name = "...",  // Physical interface name ('emac' interfaces only).
+ *    .id      =  ...    // ID of the target Ingress QoS shaper.
  *  };
- *
+ *    
  *  fpp_qos_policer_shp_cmd_t reply_from_fci = {0};
  *  unsigned short reply_length = 0u;
- *
+ *    
  *  int rtn = 0;
- *  rtn = fci_query(client, FPP_CMD_QOS_POLICER_WRED,
+ *  rtn = fci_query(client, FPP_CMD_QOS_POLICER_SHP,
  *                  sizeof(fpp_qos_policer_shp_cmd_t), (unsigned short*)(&cmd_to_fci),
  *                  &reply_length, (unsigned short*)(&reply_from_fci));
- *
- *  // 'reply_from_fci' now holds the '.enable' field set accordingly.
- *  .............................................
+ *    
+ *  // 'reply_from_fci' now holds properties of the target Ingress QoS shaper.
+ *  .............................................  
  * @endcode
  *
  * Command return values (for all applicable ACTIONs)
@@ -3017,45 +3104,48 @@ typedef struct CAL_PACKED_ALIGNED(4)
  * - @c FPP_ERR_OK <br>
  *        Success
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
- *        Wrong physical interface provided (i.e. non-'emac'), or other
- *        unexpected value.
+ *        Wrong physical interface provided (i.e. non-'emac'), or unexpected value of some property.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
- *        Internal FCI failure during update.
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
-
 #define FPP_CMD_QOS_POLICER_SHP             0xf460
 
 /**
- * @brief       Supported rate policing shaper types.
+ * @brief       Types of Ingress QoS shaper.
  * @details     Related data types: @ref fpp_qos_policer_shp_cmd_t
  */
 typedef enum CAL_PACKED
 {
-    FPP_IQOS_SHP_PORT_LEVEL = 0,    /**< port level data rate shaper */
-    FPP_IQOS_SHP_BCAST,             /**< shaper for broadcast packets */
-    FPP_IQOS_SHP_MCAST,             /**< shaper for multicast packets */
+    FPP_IQOS_SHP_PORT_LEVEL = 0,    /**< Port level data rate shaper. */
+    FPP_IQOS_SHP_BCAST,             /**< Shaper for broadcast packets. */
+    FPP_IQOS_SHP_MCAST,             /**< Shaper for multicast packets. */
 
     FPP_IQOS_SHP_TYPE_COUNT         /* must be last */
 } fpp_iqos_shp_type_t;
 
 /**
- * @brief       Supported rate policing modes.
+ * @brief       Modes of Ingress QoS shaper.
  * @details     Related data types: @ref fpp_qos_policer_shp_cmd_t
  */
 typedef enum CAL_PACKED
 {
-    FPP_IQOS_SHP_BPS = 0,          /**< specify data rate in bits per second */
-    FPP_IQOS_SHP_PPS,              /**< specify data rate in packets per second */
-
+    FPP_IQOS_SHP_BPS = 0,          /**< `.isl` is in bits-per-second. <br>
+                                        `.max_credit` and `.min_credit` are in number of bytes. */
+    
+    FPP_IQOS_SHP_PPS,              /**< `.isl` is in packets-per-second. <br>
+                                        `.max_credit` and `.min_credit` are in number of packets. */
+    
     FPP_IQOS_SHP_RATE_MODE_COUNT   /* must be last */
 } fpp_iqos_shp_rate_mode_t;
 
 /**
- * @brief       Data structure for Ingress QoS rate shaping configuration.
+ * @brief       Data structure for Ingress QoS shaper.
  * @details     Related FCI commands: @ref FPP_CMD_QOS_POLICER_SHP
  * @details     Related topics: @ref ingress_qos
+ * @note        - Some values are in a network byte order [NBO].
+ * @note        - Some values cannot be modified by FPP_ACTION_UPDATE [ro].
  *
  * @snippet     fpp_ext.h  fpp_qos_policer_shp_cmd_t
  */
@@ -3063,27 +3153,22 @@ typedef enum CAL_PACKED
 typedef struct CAL_PACKED_ALIGNED(4)
 {
     uint16_t action;
-    char if_name[IFNAMSIZ]; /*< Physical interface name for 'emac' (emac<0-2>). [ro] */
-    uint8_t id;             /*< ID of the ingress rate shaper. [ro]
-                                Ranging from 0 to implementation defined. See Ingress QOS.
-                             */
-    uint8_t enable;         /*< Shaper hardware block enable / disable toggle.
-                                The hardware block configuration will be reset to its initial
-                                state after disabling it.
-                                On query, it returns the state of the hardware block:
-                                0 == disabled, 1 == enabled.
-                             */
-    fpp_iqos_shp_type_t type; /*< Rate policing shaper type (see @ref fpp_iqos_shp_type_t):
-                                  port level, broadcast traffic, or multicast traffic.
-                               */
-    fpp_iqos_shp_rate_mode_t mode; /*< Data rate measurement units (@ref fpp_iqos_shp_rate_mode_t):
-                                       bps, or pps.
-                                    */
-    uint32_t isl;           /*< Idle slope in units per second (see `.mode`). [NBO] */
-    int32_t max_credit;     /*< Max credit value that can be accumulated, depends on `mode`. [NBO] */
-    int32_t min_credit;     /*< Min credit value that can be accumulated, depends on `mode`.
-                                Must be negative. [NBO]
-                             */
+    char if_name[IFNAMSIZ];    /*< Physical interface name ('emac' interfaces only). [ro] */
+    
+    uint8_t id;                /*< ID of the target Ingress QoS shaper. [ro]
+                                   Min ID == 0
+                                   Max ID is implementation defined. See Ingress QoS. */
+    
+    uint8_t enable;            /*< Enable/disable switch of the target Ingress QoS shaper 
+                                   HW module. 0 == disabled, 1 == enabled. */
+    
+    fpp_iqos_shp_type_t type;  /*< Shaper type. Port level, bcast or mcast. */
+    
+    fpp_iqos_shp_rate_mode_t mode;  /*< Shaper mode. Bits or packets. */
+    uint32_t isl;                   /*< Idle slope. Units are '.mode' dependent. [NBO] */
+    int32_t max_credit;             /*< Max credit. Units are '.mode' dependent. [NBO] */
+    int32_t min_credit;             /*< Min credit. Units are '.mode' dependent. [NBO] 
+                                        Must be negative. */
 } fpp_qos_policer_shp_cmd_t;
 /* [fpp_qos_policer_shp_cmd_t] */
 
@@ -3169,18 +3254,21 @@ typedef struct CAL_PACKED_ALIGNED(4)
 #define FPP_FEATURE_DESC_SIZE 128
 
 /**
-* @brief Feature flags
-* @details
-* Flags combinations:
-* F_PRESENT is missing - the feature is not available
-* F_PRESENT is set and F_RUNTIME is missing - the feature is always enabled (cannot be disabled)
-* F_PRESENT is set and F_RUNTIME is set - the feature can be enabled/disable at runtime, enabled state must be read out of DMEM 
-*/
-typedef enum __attribute__((packed))
+ * @brief       Feature flags
+ * @details     Flags combinations:
+ *              - @c FEAT_PRESENT is missing: <br>
+ *                     The feature is not available.
+ *              - @c FEAT_PRESENT is set, but @c FEAT_RUNTIME is missing: <br>
+ *                     The feature is always enabled (cannot be disabled).
+ *              - @c FEAT_PRESENT is set and @c FEAT_RUNTIME is set: <br>
+ *                     The feature can be enabled/disable at runtime.
+ *                     Enable state must be read out of DMEM.
+ */
+typedef enum CAL_PACKED
 {
     FEAT_NONE = 0U,
-    FEAT_PRESENT = (1U << 0U),     /* Feature not available if not set */
-    FEAT_RUNTIME = (1U << 1U),     /* Feature can be enabled/disabled at runtime */
+    FEAT_PRESENT = (1U << 0U),      /**< Feature not available if this not set. */
+    FEAT_RUNTIME = (1U << 1U)       /**< Feature can be enabled/disabled at runtime. */
 } fpp_fw_feature_flags_t;
 
 /**

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -43,8 +43,8 @@
 
 /* app version */
 #define CLI_VERSION_MAJOR  "2"
-#define CLI_VERSION_MINOR  "2"
-#define CLI_VERSION_PATCH  "1"
+#define CLI_VERSION_MINOR  "4"
+#define CLI_VERSION_PATCH  "0"
 
 
 /* drv version (default values for non-makefile compilation) */
@@ -590,9 +590,13 @@ typedef struct cli_cmdargs_tt
     
 } cli_cmdargs_t;
 
+#define TXT_ERR_INDENT     ""
+#define TXT_ERR_NONAME     ""
+#define TXT_ERR_NAME(ERR)  ": " #ERR
+
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
-extern void cli_print_error(int rtncode, const char* p_txt_err, ...);
+extern void cli_print_error(int errcode, const char* p_txt_errname, const char* p_txt_errmsg, ...);
 
 /* ========================================================================= */
 

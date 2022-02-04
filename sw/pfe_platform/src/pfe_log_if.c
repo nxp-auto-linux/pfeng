@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -40,8 +40,279 @@ struct pfe_log_if_tag
 static blalloc_t *pfe_log_if_id_pool = NULL;
 
 static errno_t pfe_log_if_read_from_class(const pfe_log_if_t *iface, pfe_ct_log_if_t *class_if, uint32_t pe_idx);
-static errno_t pfe_log_if_write_to_class_nostats(const pfe_log_if_t *iface, pfe_ct_log_if_t *class_if);
-static errno_t pfe_log_if_write_to_class(const pfe_log_if_t *iface, pfe_ct_log_if_t *class_if);
+static errno_t pfe_log_if_write_to_class_nostats(const pfe_log_if_t *iface, const pfe_ct_log_if_t *class_if);
+static errno_t pfe_log_if_write_to_class(const pfe_log_if_t *iface, const pfe_ct_log_if_t *class_if);
+static errno_t pfe_log_if_match_rule1(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len);
+static errno_t pfe_log_if_match_rule2(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len);
+static errno_t pfe_log_if_match_rule3(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len);
+static errno_t pfe_log_if_match_rule4(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len);
+
+/**
+ * @brief			Add match rule
+ * @param[in, out]	iface The interface instance
+ * @param[in]		rule Rule to be added. See pfe_ct_if_m_rules_t. Function accepts
+ * 						 only single rule per call.
+ * @param[in]		arg Pointer to buffer containing rule argument data. The argument
+ * 						data shall be in network byte order. Type of the argument can
+ * 						be retrieved from the pfe_ct_if_m_args_t.
+ * @param[in]		arg_len Length of the rule argument. Due to sanity check.
+ * @retval			EOK Success
+ * @retval			EINVAL Invalid or missing argument
+ */
+static errno_t pfe_log_if_match_rule1(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len)
+{
+	errno_t ret = EINVAL;
+	pfe_ct_if_m_args_t m_args;
+
+	switch (rule)
+	{
+		case IF_MATCH_VLAN:
+		{
+			if (arg_len == sizeof(m_args.vlan))
+			{
+				iface->log_if_class.m_args.vlan = *((uint16_t *)arg);
+				ret = EOK;
+			}
+
+			break;
+		}
+
+		case IF_MATCH_PROTO:
+		{
+			if (arg_len == sizeof(m_args.proto))
+			{
+				iface->log_if_class.m_args.proto = *((uint8_t *)arg);
+				ret = EOK;
+			}
+
+			break;
+		}
+
+		case IF_MATCH_SPORT:
+		{
+			if (arg_len == sizeof(m_args.sport))
+			{
+				iface->log_if_class.m_args.sport = *((uint16_t *)arg);
+				ret = EOK;
+			}
+
+			break;
+		}
+
+		case IF_MATCH_DPORT:
+		{
+			if (arg_len == sizeof(m_args.dport))
+			{
+				iface->log_if_class.m_args.dport = *((uint16_t *)arg);
+				ret = EOK;
+			}
+
+			break;
+		}
+		default:
+		{
+			/* Required by Misra */
+			break;
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief			Add match rule
+ * @param[in, out]	iface The interface instance
+ * @param[in]		rule Rule to be added. See pfe_ct_if_m_rules_t. Function accepts
+ * 						 only single rule per call.
+ * @param[in]		arg Pointer to buffer containing rule argument data. The argument
+ * 						data shall be in network byte order. Type of the argument can
+ * 						be retrieved from the pfe_ct_if_m_args_t.
+ * @param[in]		arg_len Length of the rule argument. Due to sanity check.
+ * @retval			EOK Success
+ * @retval			EINVAL Invalid or missing argument
+ */
+static errno_t pfe_log_if_match_rule3(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len)
+{
+	errno_t ret = EINVAL;
+	pfe_ct_if_m_args_t m_args;
+
+	switch (rule)
+	{
+		case IF_MATCH_ETHTYPE:
+		{
+			if (arg_len == sizeof(m_args.ethtype))
+			{
+				iface->log_if_class.m_args.ethtype = *((uint16_t *)arg);
+				ret = EOK;
+			}
+
+			break;
+		}
+		case IF_MATCH_FP0:
+		{
+			if (arg_len == sizeof(m_args.fp0_table))
+			{
+				iface->log_if_class.m_args.fp0_table = *((PFE_PTR(pfe_ct_fp_table_t) *)arg);
+				ret = EOK;
+			}
+
+			break;
+		}
+
+		case IF_MATCH_FP1:
+		{
+			if (arg_len == sizeof(m_args.fp1_table))
+			{
+				iface->log_if_class.m_args.fp1_table = *((PFE_PTR(pfe_ct_fp_table_t) *)arg);
+				ret = EOK;
+			}
+
+			break;
+		}
+		default:
+		{
+			/* Required by Misra */
+			break;
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief			Add match rule
+ * @param[in, out]	iface The interface instance
+ * @param[in]		rule Rule to be added. See pfe_ct_if_m_rules_t. Function accepts
+ * 						 only single rule per call.
+ * @param[in]		arg Pointer to buffer containing rule argument data. The argument
+ * 						data shall be in network byte order. Type of the argument can
+ * 						be retrieved from the pfe_ct_if_m_args_t.
+ * @param[in]		arg_len Length of the rule argument. Due to sanity check.
+ * @retval			EOK Success
+ * @retval			EINVAL Invalid or missing argument
+ */
+static errno_t pfe_log_if_match_rule4(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len)
+{
+	errno_t ret = EINVAL;
+	pfe_ct_if_m_args_t m_args;
+
+	switch (rule)
+	{
+		case IF_MATCH_SMAC:
+		{
+			if (arg_len == sizeof(m_args.smac))
+			{
+				(void)memcpy((void*)(iface->log_if_class.m_args.smac), (const void*)arg, sizeof(m_args.smac));
+				ret = EOK;
+			}
+
+			break;
+		}
+
+		case IF_MATCH_DMAC:
+		{
+			if (arg_len == sizeof(m_args.dmac))
+			{
+				(void)memcpy((void*)(iface->log_if_class.m_args.dmac), (const void*)arg, sizeof(m_args.dmac));
+				ret = EOK;
+			}
+
+			break;
+		}
+
+		case IF_MATCH_HIF_COOKIE:
+		{
+			if (arg_len == sizeof(m_args.hif_cookie))
+			{
+				iface->log_if_class.m_args.hif_cookie = *((uint32_t *)arg);
+				ret = EOK;
+			}
+
+			break;
+		}
+
+		default:
+		{
+			/* Required by Misra */
+			break;
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Add match rule
+ * @param[in]	iface The interface instance
+ * @param[in]	rule Rule to be added. See pfe_ct_if_m_rules_t. Function accepts
+ * 					 only single rule per call.
+ * @param[in]	arg Pointer to buffer containing rule argument data. The argument
+ * 					data shall be in network byte order. Type of the argument can
+ * 					be retrieved from the pfe_ct_if_m_args_t.
+ * @param[in]	arg_len Length of the rule argument. Due to sanity check.
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+static errno_t pfe_log_if_match_rule2(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len)
+{
+	errno_t ret = EINVAL;
+	pfe_ct_if_m_args_t m_args;
+
+	switch (rule)
+	{
+		case IF_MATCH_SIP6:
+		{
+			if (arg_len == sizeof(m_args.ipv.v6.sip))
+			{
+				(void)memcpy((void*)(iface->log_if_class.m_args.ipv.v6.sip), (const void*)arg, sizeof(m_args.ipv.v6.sip));
+				ret = EOK;
+			}
+
+			break;
+		}
+
+		case IF_MATCH_DIP6:
+		{
+			if (arg_len == sizeof(m_args.ipv.v6.dip))
+			{
+				(void)memcpy((void*)(iface->log_if_class.m_args.ipv.v6.dip), (const void*)arg, sizeof(m_args.ipv.v6.dip));
+				ret = EOK;
+			}
+
+			break;
+		}
+
+		case IF_MATCH_SIP:
+		{
+			if (arg_len == sizeof(m_args.ipv.v4.sip))
+			{
+				(void)memcpy((void*)(&iface->log_if_class.m_args.ipv.v4.sip), (const void*)arg, sizeof(m_args.ipv.v4.sip));
+				ret = EOK;
+			}
+
+			break;
+		}
+
+		case IF_MATCH_DIP:
+		{
+			if (arg_len == sizeof(m_args.ipv.v4.dip))
+			{
+				(void)memcpy((void*)(&iface->log_if_class.m_args.ipv.v4.dip), (const void*)arg, sizeof(m_args.ipv.v4.dip));
+				ret = EOK;
+			}
+
+			break;
+		}
+
+		default:
+		{
+			/* Required by Misra */
+			break;
+		}
+	}
+
+	return ret;
+}
 
 /**
  * @brief		Read interface structure from classifier memory
@@ -75,7 +346,7 @@ static errno_t pfe_log_if_read_from_class(const pfe_log_if_t *iface, pfe_ct_log_
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  */
-static errno_t pfe_log_if_write_to_class_nostats(const pfe_log_if_t *iface, pfe_ct_log_if_t *class_if)
+static errno_t pfe_log_if_write_to_class_nostats(const pfe_log_if_t *iface, const pfe_ct_log_if_t *class_if)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class_if) || (NULL == iface) || (0U == iface->dmem_base)))
@@ -88,7 +359,7 @@ static errno_t pfe_log_if_write_to_class_nostats(const pfe_log_if_t *iface, pfe_
 	/* Be sure that class_stats are at correct place */
 	ct_assert_offsetof((sizeof(pfe_ct_log_if_t) - sizeof(pfe_ct_class_algo_stats_t)) == offsetof(pfe_ct_log_if_t, class_stats));
 
-	return pfe_class_write_dmem(iface->class, -1, iface->dmem_base, (void *)class_if,
+	return pfe_class_write_dmem(iface->class, -1, iface->dmem_base, (const  void *)class_if,
 							    sizeof(pfe_ct_log_if_t) - sizeof(pfe_ct_class_algo_stats_t));
 }
 
@@ -99,7 +370,7 @@ static errno_t pfe_log_if_write_to_class_nostats(const pfe_log_if_t *iface, pfe_
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  */
-static errno_t pfe_log_if_write_to_class(const pfe_log_if_t *iface, pfe_ct_log_if_t *class_if)
+static errno_t pfe_log_if_write_to_class(const pfe_log_if_t *iface, const pfe_ct_log_if_t *class_if)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class_if) || (NULL == iface) || (0U == iface->dmem_base)))
@@ -109,7 +380,7 @@ static errno_t pfe_log_if_write_to_class(const pfe_log_if_t *iface, pfe_ct_log_i
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_class_write_dmem(iface->class, -1, iface->dmem_base, (void *)class_if, sizeof(pfe_ct_log_if_t));
+	return pfe_class_write_dmem(iface->class, -1, iface->dmem_base, (const  void *)class_if, sizeof(pfe_ct_log_if_t));
 }
 
 /**
@@ -630,7 +901,6 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 {
 	errno_t ret = EINVAL;
 	pfe_ct_if_m_rules_t tmp;
-	pfe_ct_if_m_args_t m_args;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -657,172 +927,28 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 	}
 
 	/*	Validate and copy argument */
-	switch (rule)
+	ret = pfe_log_if_match_rule1(iface, rule, arg, arg_len);
+	if (EINVAL == ret)
 	{
-		case IF_MATCH_VLAN:
+		ret = pfe_log_if_match_rule2(iface, rule, arg, arg_len);
+		if (EINVAL == ret)
 		{
-			if (arg_len == sizeof(m_args.vlan))
+			ret = pfe_log_if_match_rule3(iface, rule, arg, arg_len);
+			if (EINVAL == ret)
 			{
-				iface->log_if_class.m_args.vlan = *((uint16_t *)arg);
-				ret = EOK;
+				ret = pfe_log_if_match_rule4(iface, rule, arg, arg_len);
+				if (EINVAL == ret)
+				{
+					if (arg_len != 0U)
+					{
+						NXP_LOG_DEBUG("Unexpected argument\n");
+					}
+					else
+					{
+						ret = EOK;
+					}
+				}
 			}
-
-			break;
-		}
-
-		case IF_MATCH_PROTO:
-		{
-			if (arg_len == sizeof(m_args.proto))
-			{
-				iface->log_if_class.m_args.proto = *((uint8_t *)arg);
-				ret = EOK;
-			}
-
-			break;
-		}
-
-		case IF_MATCH_SPORT:
-		{
-			if (arg_len == sizeof(m_args.sport))
-			{
-				iface->log_if_class.m_args.sport = *((uint16_t *)arg);
-				ret = EOK;
-			}
-
-			break;
-		}
-
-		case IF_MATCH_DPORT:
-		{
-			if (arg_len == sizeof(m_args.dport))
-			{
-				iface->log_if_class.m_args.dport = *((uint16_t *)arg);
-				ret = EOK;
-			}
-
-			break;
-		}
-
-		case IF_MATCH_SIP6:
-		{
-			if (arg_len == sizeof(m_args.ipv.v6.sip))
-			{
-				(void)memcpy((void*)(iface->log_if_class.m_args.ipv.v6.sip), (const void*)arg, sizeof(m_args.ipv.v6.sip));
-				ret = EOK;
-			}
-
-			break;
-		}
-
-		case IF_MATCH_DIP6:
-		{
-			if (arg_len == sizeof(m_args.ipv.v6.dip))
-			{
-				(void)memcpy((void*)(iface->log_if_class.m_args.ipv.v6.dip), (const void*)arg, sizeof(m_args.ipv.v6.dip));
-				ret = EOK;
-			}
-
-			break;
-		}
-
-		case IF_MATCH_SIP:
-		{
-			if (arg_len == sizeof(m_args.ipv.v4.sip))
-			{
-				(void)memcpy((void*)(&iface->log_if_class.m_args.ipv.v4.sip), (const void*)arg, sizeof(m_args.ipv.v4.sip));
-				ret = EOK;
-			}
-
-			break;
-		}
-
-		case IF_MATCH_DIP:
-		{
-			if (arg_len == sizeof(m_args.ipv.v4.dip))
-			{
-				(void)memcpy((void*)(&iface->log_if_class.m_args.ipv.v4.dip), (const void*)arg, sizeof(m_args.ipv.v4.dip));
-				ret = EOK;
-			}
-
-			break;
-		}
-
-		case IF_MATCH_ETHTYPE:
-		{
-			if (arg_len == sizeof(m_args.ethtype))
-			{
-				iface->log_if_class.m_args.ethtype = *((uint16_t *)arg);
-				ret = EOK;
-			}
-
-			break;
-		}
-		case IF_MATCH_FP0:
-		{
-			if (arg_len == sizeof(m_args.fp0_table))
-			{
-				iface->log_if_class.m_args.fp0_table = *((PFE_PTR(pfe_ct_fp_table_t) *)arg);
-				ret = EOK;
-			}
-
-			break;
-		}
-
-		case IF_MATCH_FP1:
-		{
-			if (arg_len == sizeof(m_args.fp1_table))
-			{
-				iface->log_if_class.m_args.fp1_table = *((PFE_PTR(pfe_ct_fp_table_t) *)arg);
-				ret = EOK;
-			}
-
-			break;
-		}
-
-		case IF_MATCH_SMAC:
-		{
-			if (arg_len == sizeof(m_args.smac))
-			{
-				(void)memcpy((void*)(iface->log_if_class.m_args.smac), (const void*)arg, sizeof(m_args.smac));
-				ret = EOK;
-			}
-
-			break;
-		}
-
-		case IF_MATCH_DMAC:
-		{
-			if (arg_len == sizeof(m_args.dmac))
-			{
-				(void)memcpy((void*)(iface->log_if_class.m_args.dmac), (const void*)arg, sizeof(m_args.dmac));
-				ret = EOK;
-			}
-
-			break;
-		}
-
-		case IF_MATCH_HIF_COOKIE:
-		{
-			if (arg_len == sizeof(m_args.hif_cookie))
-			{
-				iface->log_if_class.m_args.hif_cookie = *((uint32_t *)arg);
-				ret = EOK;
-			}
-
-			break;
-		}
-
-		default:
-		{
-			if (arg_len != 0U)
-			{
-				NXP_LOG_DEBUG("Unexpected argument\n");
-			}
-			else
-			{
-				ret = EOK;
-			}
-			break;
 		}
 	}
 
@@ -1258,6 +1384,10 @@ errno_t pfe_log_if_add_egress_if(pfe_log_if_t *iface, const pfe_phy_if_t *phy_if
 	if (PFE_PHY_IF_ID_INVALID <= phy_if_id)
 	{
 		NXP_LOG_ERROR("Invalid PHY IF ID\n");
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 		return EINVAL;
 	}
 
@@ -1311,6 +1441,10 @@ errno_t pfe_log_if_del_egress_if(pfe_log_if_t *iface, const pfe_phy_if_t *phy_if
 	if (PFE_PHY_IF_ID_INVALID <= phy_if_id)
 	{
 		NXP_LOG_ERROR("Invalid PHY IF ID\n");
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 		return EINVAL;
 	}
 
@@ -1387,7 +1521,8 @@ errno_t pfe_log_if_enable(pfe_log_if_t *iface)
 				NXP_LOG_DEBUG("mutex lock failed\n");
 			}
 
-			iface->log_if_class.flags = tmp;
+			tmp = iface->log_if_class.flags;
+			iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & (oal_htonl(~(uint32_t)IF_FL_ENABLED)));
 			ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 			if (EOK != ret)
 			{
@@ -1459,7 +1594,8 @@ errno_t pfe_log_if_disable(pfe_log_if_t *iface)
 				NXP_LOG_DEBUG("mutex lock failed\n");
 			}
 
-			iface->log_if_class.flags = tmp;
+			tmp = iface->log_if_class.flags;
+			iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp | oal_htonl(IF_FL_ENABLED));
 			ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 			if (EOK != ret)
 			{
@@ -2007,7 +2143,7 @@ __attribute__((pure)) const char_t *pfe_log_if_get_name(const pfe_log_if_t *ifac
  */
 errno_t pfe_log_if_get_stats(const pfe_log_if_t *iface, pfe_ct_class_algo_stats_t *stat)
 {
-	uint32_t i = 0;
+	uint32_t i = 0U;
 	errno_t ret = EOK;
 	addr_t offset = 0;
 	uint32_t buff_len = 0;
@@ -2037,13 +2173,14 @@ errno_t pfe_log_if_get_stats(const pfe_log_if_t *iface, pfe_ct_class_algo_stats_
 	ret = pfe_class_gather_read_dmem(iface->class, stats, (iface->dmem_base + offset), buff_len, sizeof(pfe_ct_class_algo_stats_t));
 
 	/* Calculate total statistics */
-	for(i = 0U; i < pfe_class_get_num_of_pes(iface->class); i++)
+	while(i < pfe_class_get_num_of_pes(iface->class))
 	{
 		/* Store statistics */
 		stat->accepted	+= oal_ntohl(stats[i].accepted);
 		stat->discarded	+= oal_ntohl(stats[i].discarded);
 		stat->processed	+= oal_ntohl(stats[i].processed);
 		stat->rejected	+= oal_ntohl(stats[i].rejected);
+		++i;
 	}
 	oal_mm_free(stats);
 
@@ -2070,7 +2207,7 @@ uint32_t pfe_log_if_get_text_statistics(const pfe_log_if_t *iface, char_t *buf, 
 	uint32_t len = 0U;
 	pfe_ct_log_if_t log_if_class = {0U};
 	bool_t printed_rules = FALSE;
-	uint32_t i;
+	uint32_t i = 0;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -2080,7 +2217,7 @@ uint32_t pfe_log_if_get_text_statistics(const pfe_log_if_t *iface, char_t *buf, 
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	/* Repeat read for all PEs (just because of statistics) */
-	for(i = 0U; i < pfe_class_get_num_of_pes(iface->class); i++)
+	while(i < pfe_class_get_num_of_pes(iface->class))
 	{
 
 		if (EOK != pfe_log_if_read_from_class(iface, &log_if_class, i))
@@ -2100,6 +2237,7 @@ uint32_t pfe_log_if_get_text_statistics(const pfe_log_if_t *iface, char_t *buf, 
 			len += oal_util_snprintf(buf + len, buf_len - len, "- Statistics from PE %u -\n", i);
 			len += pfe_pe_stat_to_str(&log_if_class.class_stats, buf + len, buf_len - len, verb_level);
 		}
+		++i;
 	}
 
 	return len;

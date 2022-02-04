@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -22,7 +22,7 @@ ct_assert((sizeof(pfe_mac_addr_t) * 8) == 48);
 /**
  * @brief HASH registers associated with a table
  */
-typedef struct 
+typedef struct
 {
 	addr_t cmd_reg;				/* REQ1_CMD_REG */
 	addr_t mac1_addr_reg;		/* REQ1_MAC1_ADDR_REG */
@@ -62,7 +62,7 @@ struct __pfe_l2br_table_iterator_tag
 /**
  * @brief	2-field MAC table entry
  */
-typedef struct __attribute__((packed, aligned(4))) 
+typedef struct __attribute__((packed, aligned(4)))
 {
 	pfe_mac_addr_t mac;										/*!< [47:0]												*/
 	uint32_t vlan 								: 13;		/*!< [60:48]											*/
@@ -233,14 +233,14 @@ static void pfe_l2br_get_data(const pfe_l2br_table_t *l2br, pfe_l2br_table_entry
 {
     uint64_t vlan_action_data;
     uint32_t mac_action_data;
-    
+
     /*	Get action data */
     if (PFE_L2BR_TABLE_MAC2F == l2br->type)
     {
         mac_action_data = hal_read32(l2br->regs.entry_reg) & 0x7fffffffU;
         entry->u.mac2f_entry.action_data = mac_action_data;
     }
-    else 
+    else
     {
         vlan_action_data = (uint64_t)hal_read32(l2br->regs.entry_reg);
         vlan_action_data |= ((uint64_t)hal_read32(l2br->regs.direct_reg) << 32U);
@@ -639,7 +639,7 @@ static errno_t pfe_l2br_table_do_search_entry_nolock(pfe_l2br_table_t *l2br, pfe
             NXP_LOG_DEBUG("L2BR table entry mismatch\n");
             return ENOENT;
         }
-        
+
         pfe_l2br_get_data(l2br, entry);
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     }
@@ -797,7 +797,7 @@ errno_t pfe_l2br_iterator_destroy(const pfe_l2br_table_iterator_t *inst)
 }
 
 /**
- * @brief	Halt table iterator to the current position 
+ * @brief	Halt table iterator to the current position
  *		in hash and collison table.
  *		This is needed if we delete an entry that has
  *		links in collision domain. The next entry will be
@@ -809,13 +809,13 @@ errno_t pfe_l2br_iterator_destroy(const pfe_l2br_table_iterator_t *inst)
 errno_t pfe_l2br_iterator_halt(pfe_l2br_table_iterator_t *inst)
 {
     errno_t ret = ENOENT;
-    
+
 	if ((inst->cur_hash_addr > 0U) && (inst->next_coll_addr != 0U))
     {
         inst->cur_hash_addr--;
 
         inst->next_coll_addr = inst->cur_coll_addr;
-        
+
         ret = EOK;
     }
 
@@ -1096,9 +1096,6 @@ static errno_t pfe_l2br_table_read_cmd(pfe_l2br_table_t *l2br, uint32_t addr, pf
 		uint32_t data32 = oal_htonl(rdata[0]);
 		uint16_t data16 = oal_htons(rdata[1] & 0xffffU);
 
-		rdata[4] = hal_read32(l2br->regs.mac5_addr_reg);
-		rdata[5] = hal_read32(l2br->regs.entry_reg);
-
 		(void)memcpy(&entry->u.mac2f_entry.mac[0], &data32, sizeof(uint32_t));
 		(void)memcpy(&entry->u.mac2f_entry.mac[4], &data16, sizeof(uint16_t));
 
@@ -1200,12 +1197,12 @@ static errno_t pfe_l2br_table_flush_cmd(pfe_l2br_table_t *l2br)
 {
 	uint32_t cmd;
     errno_t ret;
-    
+
 	/*	Prepare command arguments */
 	if ((PFE_L2BR_TABLE_MAC2F == l2br->type) || (PFE_L2BR_TABLE_VLAN == l2br->type))
 	{
 		cmd = (uint32_t)L2BR_CMD_FLUSH | ((uint32_t)1U << 14);
-        
+
         hal_write32(0U, l2br->regs.mac1_addr_reg);
         hal_write32(0U, l2br->regs.mac2_addr_reg);
         hal_write32(0U, l2br->regs.mac3_addr_reg);
@@ -1214,7 +1211,7 @@ static errno_t pfe_l2br_table_flush_cmd(pfe_l2br_table_t *l2br)
 
         /*	Issue the FLUSH command */
         hal_write32(cmd, l2br->regs.cmd_reg);
-        
+
         ret = pfe_l2br_wait_for_cmd_done(l2br, NULL);
 	}
 	else
@@ -1314,7 +1311,7 @@ pfe_l2br_table_t *pfe_l2br_table_create(addr_t cbus_base_va, pfe_l2br_table_type
             break;
 		}
 	}
-    
+
     if (NULL != l2br)
     {
         /*	Initialize the table */
@@ -1326,7 +1323,7 @@ pfe_l2br_table_t *pfe_l2br_table_create(addr_t cbus_base_va, pfe_l2br_table_type
             l2br = NULL;
         }
     }
-	
+
 	return l2br;
 }
 
@@ -1524,7 +1521,7 @@ errno_t pfe_l2br_table_entry_set_vlan(pfe_l2br_table_entry_t *entry, uint16_t vl
  * @param[in]	pfe_l2br_table_entry_t table entry
  * @return		Vlan of table entry
  */
-__attribute__((pure)) uint16_t pfe_l2br_table_entry_get_vlan(pfe_l2br_table_entry_t *entry)
+__attribute__((pure)) uint32_t pfe_l2br_table_entry_get_vlan(const pfe_l2br_table_entry_t *entry)
 {
     return entry->u.mac2f_entry.vlan;
 }
@@ -1582,8 +1579,8 @@ errno_t pfe_l2br_table_entry_set_action_data(pfe_l2br_table_entry_t *entry, uint
  * @param[in]	entry The entry
  * @return	    The action data
  */
- 
-__attribute__((pure)) uint64_t pfe_l2br_table_entry_get_action_data(pfe_l2br_table_entry_t *entry)
+
+__attribute__((pure)) uint64_t pfe_l2br_table_entry_get_action_data(const pfe_l2br_table_entry_t *entry)
 {
     return entry->u.mac2f_entry.action_data;
 }
@@ -1770,11 +1767,8 @@ uint32_t pfe_l2br_table_entry_to_str(const pfe_l2br_table_entry_t *entry, char_t
 	{
 		len += (uint32_t)snprintf(buf + len, buf_len - len, "[VLAN Table Entry]\n");
 		len += (uint32_t)snprintf(buf + len, buf_len - len, "VLAN       : 0x%x\n", entry->u.vlan_entry.vlan);
-#ifndef __ghs__
-		/* Workaround for ghs linker error with long long printf AAVB-3569 */
 		/*	Native type used to fix compiler warning */
 		len += (uint32_t)snprintf(buf + len, buf_len - len, "Action Data: 0x%"PRINT64"x\n", (uint64_t)entry->u.vlan_entry.action_data);
-#endif
 #if 0
 		/* Currently not used - action data stores the port information, FW does not have access to port field */
 		len += (uint32_t)snprintf(buf + len, buf_len - len, "Port       : 0x%x\n", entry->u.vlan_entry.port);

@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2021 NXP
+#  Copyright 2018-2022 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -25,6 +25,7 @@ INCLUDES += -I$(INC_PREFIX)src \
 			-I$(INC_PREFIX)../hal/public \
 			-I$(INC_PREFIX)../bpool/public \
 			-I$(INC_PREFIX)../pfe_platform/public \
+			-I$(INC_PREFIX)../pfe_hif_drv/public \
 			-I$(INC_PREFIX)../xfci/libfci/public
 
 #Dependencies
@@ -55,6 +56,7 @@ rwildcard = $(wildcard $(addprefix $1/*.,$2)) $(foreach d,$(wildcard $1/*),$(cal
 
 #Source list
 SRCS += src/fci.c
+ifneq ($(PFE_CFG_PFE_MASTER),0)
 SRCS += src/fci_l2br_domains.c
 SRCS += src/fci_l2br.c
 SRCS += src/fci_connections.c
@@ -68,6 +70,7 @@ SRCS += src/fci_flexible_filter.c
 SRCS += src/fci_spd.c
 SRCS += src/fci_qos.c
 SRCS += src/fci_mirror.c
+endif
 ifeq ($(TARGET_OS),QNX)
 SRCS += src/fci_core_qnx.c
 endif

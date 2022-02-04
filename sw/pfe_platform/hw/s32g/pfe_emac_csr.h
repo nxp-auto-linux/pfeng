@@ -145,6 +145,7 @@
 #define MAC_STSU								0x0b10U
 #define MAC_STNSU								0x0b14U
 #define MAC_TIMESTAMP_ADDEND					0x0b18U
+#define MAC_STS_HIGHER_WORD                     0x0b1cU
 #define MTL_OPERATION_MODE						0x0c00U
 #define MTL_DPP_CONTROL							0x0ce0U
 #define MTL_TXQ0_OPERATION_MODE					0x0d00U
@@ -280,8 +281,8 @@ errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode, pfe_emac_spe
 errno_t pfe_emac_cfg_enable_ts(addr_t base_va, bool_t eclk, uint32_t i_clk_hz, uint32_t o_clk_hz);
 void pfe_emac_cfg_disable_ts(addr_t base_va);
 errno_t pfe_emac_cfg_adjust_ts_freq(addr_t base_va, uint32_t i_clk_hz, uint32_t o_clk_hz, uint32_t ppb, bool_t sgn);
-void pfe_emac_cfg_get_ts_time(addr_t base_va, uint32_t *sec, uint32_t *nsec);
-errno_t pfe_emac_cfg_set_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec);
+void pfe_emac_cfg_get_ts_time(addr_t base_va, uint32_t *sec, uint32_t *nsec, uint16_t *sec_hi);
+errno_t pfe_emac_cfg_set_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec, uint16_t sec_hi);
 errno_t pfe_emac_cfg_adjust_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec, bool_t sgn);
 void pfe_emac_cfg_tx_disable(addr_t base_va);
 errno_t pfe_emac_cfg_set_duplex(addr_t base_va, pfe_emac_duplex_t duplex);

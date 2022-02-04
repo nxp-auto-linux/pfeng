@@ -627,7 +627,7 @@ typedef union __attribute__((packed))
 	{
 		/*	[55 : 63] */ /* Reserved */
 		uint64_t hw_reserved : 9;
-		/*	[54:48]  Index in vlan stats table (pfe_ct_vlan_statistics_t) */
+		/*	[54:48] Index in vlan stats table (pfe_ct_vlan_statistics_t) */
 		uint64_t stats_index : 7;
 		/*	[47:45] Multicast miss action (pfe_ct_l2br_action_t) */
 		uint64_t mcast_miss_action : 3;
@@ -716,12 +716,12 @@ ct_assert(sizeof(pfe_ct_feature_flags_t) == 1U);
 */
 typedef struct __attribute__((packed,aligned(4)))
 {
-	PFE_PTR(const char)name;          /* Feature name */
-	PFE_PTR(const char)description;   /* Feature description */
-	PFE_PTR(uint8_t) position;        /* Position of the run-time enable byte */
+	PFE_PTR(const char)name;               /* Feature name */
+	PFE_PTR(const char)description;        /* Feature description */
+	PFE_PTR(uint8_t) position;             /* Position of the run-time enable byte */
 	const pfe_ct_feature_flags_t flags;    /* Configuration variant: 0 = disabled, 1 = enabled, 2 = runtime configured */
-	const uint8_t def_val;            /* Enable/disable default value used for runtime configuration */
-	const uint8_t reserved[2];        /* Pad */
+	const uint8_t def_val;                 /* Enable/disable default value used for runtime configuration */
+	const uint8_t reserved[2];             /* Pad */
 } pfe_ct_feature_desc_t;
 
 ct_assert(sizeof(pfe_ct_feature_desc_t) == 16);
@@ -971,7 +971,7 @@ typedef struct __attribute__((packed, aligned(4)))
 	/*	Statistics provided for each classification algorithm */
 	PFE_PTR(pfe_ct_classify_stats_t) classification_stats;
 	/*	Statistics provided for each vlan */
-	PFE_PTR(pfe_ct_vlan_statistics_t) vlan_statistics;
+	PFE_PTR(pfe_ct_vlan_statistics_t) vlan_statistics;	
 	/*	Flexible Filter */
 	PFE_PTR(pfe_ct_flexible_filter_t) flexible_filter;
 	/*	Put buffer: FW-to-SW data transfers */

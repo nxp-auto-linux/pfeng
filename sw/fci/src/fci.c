@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2021 NXP
+ *  Copyright 2017-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -14,6 +14,11 @@
 #include "fci_fw_features.h"
 #include "fci_mirror.h"
 #include "fci_spd.h"
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+#include "pfe_idex.h" /* The RPC provider */
+#include "pfe_platform_rpc.h" /* The RPC codes and data structures */
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 #ifdef PFE_CFG_FCI_ENABLE
 
@@ -30,10 +35,31 @@ fci_t __context = {0};
  */
 errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 {
-	fci_t *context = (fci_t *)&__context;
-	errno_t ret = EOK; /* Return value */
-	uint16_t fci_ret = FPP_ERR_OK; /* FCI command return value */
+#if !defined(PFE_CFG_PFE_MASTER)
+	/* Slave FCI proxy support */
 
+	errno_t ret = EOK; /* Return value */
+	pfe_platform_rpc_pfe_fci_proxy_arg_t proxy_cmd = {msg->type, msg->msg_cmd};
+	pfe_platform_rpc_pfe_fci_proxy_ret_t proxy_rep = {0};
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == msg) || (NULL == rep_msg)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	NXP_LOG_DEBUG("Send FCI proxy message (type=0x%02x, code=0x%02x)\n", (uint_t)msg->type, (uint_t)msg->msg_cmd.code);
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_FCI_PROXY, &proxy_cmd, sizeof(proxy_cmd), &proxy_rep, sizeof(proxy_rep));
+	rep_msg->msg_cmd = proxy_rep.msg_cmd;
+
+#else
+	/* Normal FCI processing */
+
+	errno_t ret = EOK; /* Return value */
+	fci_t *context = (fci_t *)&__context;
+	uint16_t fci_ret = FPP_ERR_OK; /* FCI command return value */
 	uint32_t *reply_buf_ptr = NULL;
 	uint32_t *reply_buf_len_ptr = NULL;
 	uint16_t *reply_retval_ptr = NULL;
@@ -60,6 +86,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 	*reply_buf_len_ptr = FCI_CFG_MAX_CMD_PAYLOAD_LEN;
 #endif /* FCI_CFG_FORCE_LEGACY_API */
 
+	NXP_LOG_DEBUG("Process FCI message (type=0x%02x, code=0x%02x)\n", (uint_t)msg->type, (uint_t)msg->msg_cmd.code);
 	switch (msg->type)
 	{
 		case FCI_MSG_CMD:
@@ -81,7 +108,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					{
 						buf.flags = 1;
 						buf.len = fci_buf->len;
-						memcpy(&buf.payload, fci_buf->payload, fci_buf->len);
+						(void)memcpy(&buf.payload, fci_buf->payload, fci_buf->len);
 
 						ret = pfe_class_put_data(context->class, &buf);
 						if (EOK != ret)
@@ -129,7 +156,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					if (EOK == ret)
 					{
 						ret = fci_routes_cmd(msg, &fci_ret, (fpp_rt_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-						oal_mutex_unlock(&context->db_mutex);
+						(void)oal_mutex_unlock(&context->db_mutex);
 					}
 
 					break;
@@ -143,7 +170,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					if (EOK == ret)
 					{
 						ret = fci_connections_ipv4_timeout_cmd(msg, &fci_ret, (fpp_timeout_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-						oal_mutex_unlock(&context->db_mutex);
+						(void)oal_mutex_unlock(&context->db_mutex);
 					}
 
 					break;
@@ -156,7 +183,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					if (EOK == ret)
 					{
 						ret = fci_connections_ipv4_ct_cmd(msg, &fci_ret, (fpp_ct_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-						oal_mutex_unlock(&context->db_mutex);
+						(void)oal_mutex_unlock(&context->db_mutex);
 					}
 
 					break;
@@ -169,7 +196,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					if (EOK == ret)
 					{
 						ret = fci_connections_ipv6_ct_cmd(msg, &fci_ret, (fpp_ct6_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-						oal_mutex_unlock(&context->db_mutex);
+						(void)oal_mutex_unlock(&context->db_mutex);
 					}
 
 					break;
@@ -182,7 +209,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					if (EOK == ret)
 					{
 						fci_routes_drop_all_ipv4();
-						oal_mutex_unlock(&context->db_mutex);
+						(void)oal_mutex_unlock(&context->db_mutex);
 					}
 
 					break;
@@ -195,7 +222,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					if (EOK == ret)
 					{
 						fci_routes_drop_all_ipv6();
-						oal_mutex_unlock(&context->db_mutex);
+						(void)oal_mutex_unlock(&context->db_mutex);
 					}
 
 					break;
@@ -327,9 +354,11 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 		default:
 		{
 			NXP_LOG_WARNING("Unknown message type\n");
-			return EINVAL;
+			ret = EINVAL;
+			break;
 		}
 	}
+#endif /* PFE_CFG_PFE_MASTER */
 
 	return ret;
 }
@@ -349,7 +378,7 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 	errno_t err = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == info) || (NULL == identifier)))
+	if (unlikely(NULL == identifier))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -362,7 +391,7 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 		return EINVAL;
 	}
 
-	memset(context, 0, sizeof(fci_t));
+	(void)memset(context, 0, sizeof(fci_t));
 
 	context->db_mutex_initialized = FALSE;
 	context->log_if_db_initialized = FALSE;
@@ -370,9 +399,9 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 	context->rt_db_initialized = FALSE;
 	context->rtable_initialized = FALSE;
 	context->tmu_initialized = FALSE;
-
+	
 	/*	Sanity check */
-	if (6 != sizeof(pfe_mac_addr_t))
+	if (6U != sizeof(pfe_mac_addr_t))
 	{
 		err = EINVAL;
 		goto free_and_fail;
@@ -386,6 +415,7 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 		goto free_and_fail;
 	}
 
+#ifdef PFE_CFG_PFE_MASTER
 	err = oal_mutex_init(&context->db_mutex);
 	if (EOK != err)
 	{
@@ -398,10 +428,16 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 
 	/*	Initialize the Flexible Parser databases */
 	fci_fp_db_init();
-	context->class = info->class;
+	if (NULL != info)
+	{
+		context->class = info->class;
+	}
 
 	/*	Initialize the physical interface database */
-	context->phy_if_db = info->phy_if_db;
+	if (NULL != info)
+	{
+		context->phy_if_db = info->phy_if_db;
+	}
 
 	if(NULL != context->log_if_db)
 	{
@@ -409,7 +445,10 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 	}
 
 	/*	Initialize the logical interface database */
-	context->log_if_db = info->log_if_db;
+	if (NULL != info)
+	{
+		context->log_if_db = info->log_if_db;
+	}
 
 	if(NULL != context->log_if_db)
 	{
@@ -436,13 +475,19 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 		}
 	}
 
-	/*	Initialize the TMU  */
-	context->tmu = info->tmu;
+	if (NULL != info)
+	{
+		/*	Initialize the TMU  */
+		context->tmu = info->tmu;
+	}
 
 	if(NULL != context->tmu)
 	{
 		context->tmu_initialized = TRUE;
 	}
+#else
+	(void)info;
+#endif /* PFE_CFG_PFE_MASTER */
 
 	context->default_timeouts.timeout_tcp = 5U * 24U * 60U * 60U; 	/* 5 days */
 	context->default_timeouts.timeout_udp = 300U; 					/* 5 min */
@@ -461,7 +506,9 @@ free_and_fail:
 void fci_fini(void)
 {
 	fci_t *context = (fci_t *)&__context;
-	uint32_t session_id;
+#ifdef PFE_CFG_PFE_MASTER
+	uint32_t session_id = 0U;
+#endif /* PFE_CFG_PFE_MASTER */
 
 	if (FALSE == context->fci_initialized)
 	{
@@ -475,7 +522,8 @@ void fci_fini(void)
 		context->core = NULL;
 	}
 
-	pfe_if_db_lock(&session_id);
+#ifdef PFE_CFG_PFE_MASTER
+	(void)pfe_if_db_lock(&session_id);
 	/*	Shutdown the logical IF DB */
 	if (TRUE == context->log_if_db_initialized)
 	{
@@ -491,16 +539,16 @@ void fci_fini(void)
 		context->phy_if_db = NULL;
 		context->phy_if_db_initialized = FALSE;
 	}
-	pfe_if_db_unlock(session_id);
+	(void)pfe_if_db_unlock(session_id);
 
 	/*	Shutdown the RT DB */
 	if (TRUE == context->rt_db_initialized)
 	{
 		if (TRUE == context->db_mutex_initialized)
 		{
-			oal_mutex_lock(&context->db_mutex);
+			(void)oal_mutex_lock(&context->db_mutex);
 			fci_routes_drop_all();
-			oal_mutex_unlock(&context->db_mutex);
+			(void)oal_mutex_unlock(&context->db_mutex);
 		}
 
 		context->rt_db_initialized = FALSE;
@@ -514,8 +562,9 @@ void fci_fini(void)
 	{
 		(void)oal_mutex_destroy(&context->db_mutex);
 	}
+#endif /* PFE_CFG_PFE_MASTER */
 
-	memset(context, 0, sizeof(fci_t));
+	(void)memset(context, 0, sizeof(fci_t));
 	context->fci_initialized = FALSE;
 }
 
@@ -539,6 +588,7 @@ errno_t fci_enable_if(pfe_phy_if_t *phy_if)
 	return pfe_phy_if_enable(phy_if);
 }
 
+#ifdef PFE_CFG_PFE_MASTER
 /**
  * @brief		Disable transmission/reception on interface
  * @param[in]	phy_if The interface instance
@@ -604,5 +654,6 @@ errno_t fci_disable_if(pfe_phy_if_t *phy_if)
 
 	return ret;
 }
+#endif /* PFE_CFG_PFE_MASTER */
 
 #endif /* PFE_CFG_FCI_ENABLE */

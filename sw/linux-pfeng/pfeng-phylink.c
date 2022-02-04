@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 NXP
+ * Copyright 2020-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -73,7 +73,7 @@ static void pfeng_cfg_to_plat(struct pfeng_netif *netif, const struct phylink_li
 
 	if (emac_duplex) {
 		pfe_emac_set_link_duplex(pfe_emac, emac_duplex);
-		emac->speed = state->duplex;
+		emac->duplex = state->duplex;
 	}
 }
 

@@ -13,6 +13,20 @@
 #include "pfe_cbus.h"
 #include "pfe_emac_csr.h"
 
+static inline uint32_t reverse_bits_32(uint32_t u32Data)
+{
+    uint8_t u8Index;
+	uint32_t u32RevData = 0U;
+
+	for(u8Index = 0U; u8Index < 32U; u8Index++)
+	{
+		u32RevData = (u32RevData << 1U) | (u32Data & 0x1U);
+		u32Data >>= 1U;
+	}
+
+	return u32RevData;
+}
+
 static inline uint32_t crc32_reversed(const uint8_t *const data, const uint32_t len)
 {
 	const uint32_t poly = 0xEDB88320U;
@@ -37,7 +51,7 @@ static inline uint32_t crc32_reversed(const uint8_t *const data, const uint32_t 
 		}
 	}
 
-	return res;
+	return reverse_bits_32(~res);
 }
 
 /**
@@ -389,15 +403,17 @@ errno_t pfe_emac_cfg_adjust_ts_freq(addr_t base_va, uint32_t i_clk_hz, uint32_t 
 }
 
 /**
- * @brief			Get syste time
+ * @brief			Get system time
  * @param[in]		base_va Base address
  * @param[in,out]	sec Seconds
  * @param[in,out]	nsec NanoSeconds
+ * @param[in,out]	sec_hi Higher Word Seconds
  */
-void pfe_emac_cfg_get_ts_time(addr_t base_va, uint32_t *sec, uint32_t *nsec)
+void pfe_emac_cfg_get_ts_time(addr_t base_va, uint32_t *sec, uint32_t *nsec, uint16_t *sec_hi)
 {
 	*sec = hal_read32(base_va + MAC_SYSTEM_TIME_SECONDS);
 	*nsec = hal_read32(base_va + MAC_SYSTEM_TIME_NANOSECONDS);
+	*sec_hi = (uint16_t)hal_read32(base_va + MAC_STS_HIGHER_WORD);
 }
 
 /**
@@ -406,8 +422,9 @@ void pfe_emac_cfg_get_ts_time(addr_t base_va, uint32_t *sec, uint32_t *nsec)
  * @param[in]	base_va Base address
  * @param[in]	sec Seconds
  * @param[in]	nsec NanoSeconds
+ * @param[in]	sec_hi Higher Word Seconds
  */
-errno_t pfe_emac_cfg_set_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec)
+errno_t pfe_emac_cfg_set_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec, uint16_t sec_hi)
 {
 	uint32_t regval, ii;
 
@@ -418,6 +435,7 @@ errno_t pfe_emac_cfg_set_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec)
 
 	hal_write32(sec, base_va + MAC_STSU);
 	hal_write32(nsec, base_va + MAC_STNSU);
+	hal_write32(sec_hi, base_va + MAC_STS_HIGHER_WORD);
 
 	/*	Initialize time */
 	regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
@@ -821,9 +839,26 @@ uint32_t pfe_emac_cfg_get_hash(addr_t base_va, const pfe_mac_addr_t addr)
 void pfe_emac_cfg_set_hash_group(addr_t base_va, uint32_t hash, bool_t en)
 {
 	uint32_t reg, old_reg;
-	uint32_t val = (hash & 0xfc000000U) >> 26U;
-	uint8_t hash_table_idx = ((uint8_t)val & 0x40U) >> 6U;
-	uint8_t pos = ((uint8_t)val & 0x1fU);
+	uint32_t val;
+	uint8_t hash_table_idx, pos;
+
+	/*
+	 * NOTE:
+	 * The algorithm calculates value to write into Hash table
+	 * (Refer to the register description of MAC_HASH_TABLE_REG in RM for more details)
+	 *    - Step 1:  Compute the CRC value of the destination MAC address (see crc32_reversed())
+	 *    - Step 2:  Reverse 32 bits of CRC result (see crc32_reversed())
+	 *    - Step 3:  Select the appropriate register bit to set.
+	 *
+	 * In this function, it executes Step 3 in above algorithm.
+	 * Currently, 64-bit Hash is used, so the upper 6 bits after passing through the CRC calculator are used to index the bit to set in the Hash table
+	 * The MSB in these group represents the index of the register to be used
+	 * The remaining 5 bits reveals information on the position to set in the corresponding register
+	 */
+
+	val = (hash & 0xfc000000U) >> 26U;                /* Upper 6 bits of CRC result */
+	hash_table_idx = ((uint8_t)val & 0x20U) >> 5U;    /* MSB represents Hash table register index (0/1) */
+	pos = ((uint8_t)val & 0x1fU);                     /* Remaining 5 bits illustrates the bit to set in corresponding register  */
 
 	reg = hal_read32(base_va + MAC_HASH_TABLE_REG(hash_table_idx));
 	old_reg = reg;

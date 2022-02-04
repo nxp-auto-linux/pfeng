@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2021 NXP
+#  Copyright 2018-2022 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -108,7 +108,10 @@ export PFE_CFG_BMU2_BUF_COUNT?=1024
 export PFE_CFG_BMU2_BUF_SIZE?=2048
 #Number of entries of a HIF ring, must be power of 2
 export PFE_CFG_HIF_RING_LENGTH?=256
-
+#Number of milisecs in Master-UP wait inside Platform. Used by Slave only
+export PFE_CFG_SLAVE_HIF_MASTER_UP_TMOUT?=1000
+#Number of milisecs to wait by Slave until IP ready flag set by Master
+export PFE_CFG_IP_READY_MS_TMOUT?=5000
 
 ifeq ($(PFE_CFG_HIF_DRV_MODE),0)
   #Use multi-client HIF driver. Required when multiple logical interfaces need to
@@ -164,7 +167,10 @@ ifeq ($(PFE_CFG_PFE_MASTER),0)
     $(warning HIF nocpy is not supported in SLAVE mode)
     PFE_CFG_HIF_NOCPY_SUPPORT=0
   endif
+  # Linux supports FCI netlink on Slave
+  ifneq ($(TARGET_OS),LINUX)
   export PFE_CFG_FCI_ENABLE=0
+  endif
 endif
 
 #Set default verbosity level for sysfs. Valid values are from 1 to 10.
@@ -194,6 +200,8 @@ endif
 
 ifneq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_MULTI_INSTANCE_SUPPORT
+    GLOBAL_CCFLAGS+=-DPFE_CFG_SLAVE_HIF_MASTER_UP_TMOUT=$(PFE_CFG_SLAVE_HIF_MASTER_UP_TMOUT)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_IP_READY_MS_TMOUT=$(PFE_CFG_IP_READY_MS_TMOUT)
 endif
 
 ifneq ($(PFE_CFG_PFE_MASTER),0)

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -71,6 +71,7 @@ errno_t pfe_tmu_queue_set_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy
 errno_t pfe_tmu_queue_get_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t *prob);
 uint8_t pfe_tmu_queue_get_wred_zones(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue);
 uint8_t pfe_tmu_queue_get_cnt(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy);
+errno_t pfe_tmu_queue_reset_tail_drop_policy(const pfe_tmu_t *tmu);
 
 errno_t pfe_tmu_shp_enable(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
 errno_t pfe_tmu_shp_disable(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);

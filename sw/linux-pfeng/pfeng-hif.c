@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 NXP
+ * Copyright 2020-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -118,11 +118,9 @@ static int pfe_hif_drv_ihc_put_pkt(pfe_hif_drv_client_t *client, void *data, uin
 	pfe_hif_pkt_t *rx_metadata;
 
 	/*	Create the RX metadata */
-	rx_metadata = oal_mm_malloc(sizeof(*rx_metadata));
+	rx_metadata = kzalloc(sizeof(*rx_metadata), GFP_ATOMIC);
 	if (unlikely(!rx_metadata))
 		return -ENOMEM;
-
-	memset(rx_metadata, 0, sizeof(*rx_metadata));
 
 	rx_metadata->client = client;
 	rx_metadata->data = (addr_t)data;
@@ -134,11 +132,19 @@ static int pfe_hif_drv_ihc_put_pkt(pfe_hif_drv_client_t *client, void *data, uin
 
 	if (unlikely(EOK != fifo_put(client->ihc_rx_fifo, rx_metadata))) {
 		dev_err(chnl->dev, "IHC RX fifo full\n");
-		oal_mm_free(rx_metadata);
+		kfree(rx_metadata);
 		return -EINVAL;
 	}
 
 	return 0;
+}
+
+/* required by IDEX IHC Rx handler */
+void pfe_hif_pkt_free(const pfe_hif_pkt_t *pkt)
+{
+	if (pkt->ref_ptr)
+		dev_kfree_skb(pkt->ref_ptr);
+	kfree(pkt);
 }
 
 static int pfe_hif_drv_ihc_put_tx_conf(pfe_hif_drv_client_t *client, void *data, uint32_t len)
@@ -146,7 +152,7 @@ static int pfe_hif_drv_ihc_put_tx_conf(pfe_hif_drv_client_t *client, void *data,
 	struct pfeng_hif_chnl *chnl = container_of(client, struct pfeng_hif_chnl, ihc_client);
 	void *idex_frame;
 
-	idex_frame = oal_mm_malloc_contig_aligned_nocache(len, 0U);
+	idex_frame = kmalloc(len, GFP_ATOMIC);
 	if (unlikely(!idex_frame))
 		return -ENOMEM;
 
@@ -154,11 +160,37 @@ static int pfe_hif_drv_ihc_put_tx_conf(pfe_hif_drv_client_t *client, void *data,
 
 	if (unlikely(EOK != fifo_put(client->ihc_txconf_fifo, idex_frame))) {
 		dev_err(chnl->dev, "IHC TX fifo full\n");
-		oal_mm_free_contig(idex_frame);
+		kfree(idex_frame);
 		return -EINVAL;
 	}
 
 	return 0;
+}
+
+static void pfeng_tx_conf_free(void *idex_frame)
+{
+	kfree(idex_frame);
+}
+
+void pfeng_ihc_rx_work_handler(struct work_struct *work)
+{
+	struct pfeng_priv* priv = container_of(work, struct pfeng_priv, ihc_rx_work);
+	pfe_hif_drv_client_t *client = &priv->ihc_chnl->ihc_client;
+	uint32_t fill_level;
+
+	fifo_get_fill_level(client->ihc_txconf_fifo, &fill_level);
+
+	if (fill_level) {
+		/* Call IHC TX callback */
+		client->event_handler(client, client->priv, EVENT_TXDONE_IND, 0);
+	}
+
+	fifo_get_fill_level(client->ihc_rx_fifo, &fill_level);
+
+	if (fill_level) {
+		/* Call IHC RX callback */
+		client->event_handler(client, client->priv, EVENT_RX_PKT_IND, 0);
+	}
 }
 
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
@@ -199,9 +231,10 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 			ihcs++;
 			/* IHC client callback */
 			if (!pfe_hif_drv_ihc_put_pkt(client, skb->data, skb->len, skb)) {
+				struct pfeng_priv *priv = dev_get_drvdata(chnl->dev);
 
-				/* Call IHC RX callback */
-				client->event_handler(client, client->priv, EVENT_RX_PKT_IND, 0);
+				queue_work(priv->ihc_wq, &priv->ihc_rx_work);
+
 			} else {
 				dev_err(chnl->dev, "RX IHC queuing failed. Origin PhyIf %d\n", hif_hdr->i_phy_if);
 				kfree_skb(skb);
@@ -292,8 +325,11 @@ static bool pfeng_hif_chnl_tx_conf(struct pfeng_hif_chnl *chnl, int napi_budget)
 			/* IDEX confirmation must return IDEX API compatible data */
 			skb_pull(skb, PFENG_TX_PKT_HEADER_SIZE);
 			if (!pfe_hif_drv_ihc_put_tx_conf(client, skb->data, skb_headlen(skb))) {
-				/* Call IHC TX callback */
-				client->event_handler(client, client->priv, EVENT_TXDONE_IND, 0);
+				struct pfeng_priv *priv = dev_get_drvdata(chnl->dev);
+
+				/* process Tx confirmations together Rx buffers */
+				queue_work(priv->ihc_wq, &priv->ihc_rx_work);
+
 			} else {
 				dev_err(chnl->dev, "TXconf IHC queuing failed.\n");
 			}
@@ -519,7 +555,6 @@ static void pfeng_hif_idex_release(struct pfeng_priv *priv)
 	if (chnl->ihc) {
 		chnl->ihc = false;
 		priv->ihc_chnl = NULL;
-		pfe_idex_set_rpc_cbk(NULL, priv->pfe_platform);
 		pfe_idex_fini();
 		dev_info(&priv->pdev->dev, "IDEX RPC released. HIF IHC support disabled\n");
 	}
@@ -530,26 +565,26 @@ static int pfeng_hif_idex_create(struct pfeng_priv *priv, int idx)
 {
 	struct pfeng_hif_chnl *ihc_chnl = &priv->hif_chnl[idx];
 	struct device *dev = &priv->pdev->dev;
+	int ret = 0;
 
 	/* Install IDEX support */
-	if (pfe_idex_init(&ihc_chnl->hif_drv, pfeng_hif_ids[priv->ihc_master_chnl])) {
-		dev_err(dev, "Can't initialize IDEX, HIF IHC support disabled.\n");
-		ihc_chnl->ihc = false;
-		priv->ihc_enabled = false;
-	} else {
-		if (EOK != pfe_idex_set_rpc_cbk(&pfe_platform_idex_rpc_cbk, priv->pfe_platform)) {
-			dev_err(dev, "Unable to set IDEX RPC callback. HIF IHC support disabled\n");
-			ihc_chnl->ihc = false;
-			priv->ihc_enabled = false;
-			pfe_idex_fini();
-		} else {
-			priv->ihc_enabled = true;
-			priv->ihc_chnl = ihc_chnl;
-			dev_info(dev, "IDEX RPC installed\n");
-		}
+	ret = pfe_idex_init(&ihc_chnl->hif_drv,
+			  pfeng_hif_ids[priv->ihc_master_chnl],
+			  priv->pfe_platform->hif,
+			  pfe_platform_idex_rpc_cbk, priv->pfe_platform,
+			  pfeng_tx_conf_free);
+
+	if (!ret) {
+		priv->ihc_enabled = true;
+		priv->ihc_chnl = ihc_chnl;
+		dev_info(dev, "IDEX RPC installed\n");
+		return 0;
 	}
 
-	return 0;
+	dev_err(dev, "Can't initialize IDEX, HIF IHC support disabled.\n");
+	ihc_chnl->ihc = false;
+	priv->ihc_enabled = false;
+	return -ENODEV;
 }
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
@@ -702,17 +737,6 @@ pfe_hif_drv_client_t * pfe_hif_drv_ihc_client_register(pfe_hif_drv_t *hif_drv, p
 }
 
 /**
- * @brief		Release packet
- * @param[in]	pkt The packet instance
- */
-void pfe_hif_pkt_free(const pfe_hif_pkt_t *pkt)
-{
-	if (pkt->ref_ptr)
-		kfree_skb(pkt->ref_ptr);
-	oal_mm_free(pkt);
-}
-
-/**
  * @brief		Get packet from RX queue for IHC data
  * @param[in]	client IHC Client instance
  * @param[in]	queue RX queue number
@@ -768,9 +792,6 @@ void pfeng_ihc_tx_work_handler(struct work_struct *work)
 	dma_addr_t dma;
 	int ret;
 
-	/* IHC transport requires protection */
-	spin_lock(&chnl->lock_tx);
-
 	if (!kfifo_get(&priv->ihc_tx_fifo, &skb)) {
 		dev_err(chnl->dev, "No IHC TX data!\n");
 		goto err;
@@ -782,6 +803,9 @@ void pfeng_ihc_tx_work_handler(struct work_struct *work)
 		dev_err(chnl->dev, "No possible to map IHC frame, dropped.\n");
 		goto err;
 	}
+
+	/* IHC transport requires protection */
+	spin_lock_bh(&chnl->lock_tx);
 	pfeng_hif_chnl_txconf_put_map_frag(chnl, skb->data, dma, skb_headlen(skb), skb, PFENG_MAP_PKT_IHC, 0);
 
 	ret = pfe_hif_chnl_tx(chnl->priv, (void *)dma, skb->data, skb_headlen(skb), true);
@@ -791,12 +815,12 @@ void pfeng_ihc_tx_work_handler(struct work_struct *work)
 	}
 
 	pfeng_hif_chnl_txconf_update_wr_idx(chnl, 1);
-	spin_unlock(&chnl->lock_tx);
+	spin_unlock_bh(&chnl->lock_tx);
 
 	return;
 
 err:
-	spin_unlock(&chnl->lock_tx);
+	spin_unlock_bh(&chnl->lock_tx);
 	if(skb)
 		kfree_skb(skb);
 
@@ -855,7 +879,7 @@ errno_t pfe_hif_drv_client_xmit_sg_pkt(pfe_hif_drv_client_t *client, uint32_t qu
 		return -ENOMEM;
 	}
 
-	queue_work(priv->ihc_tx_wq, &priv->ihc_tx_work);
+	queue_work(priv->ihc_wq, &priv->ihc_tx_work);
 
 	return 0;
 }

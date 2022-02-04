@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 NXP
+ * Copyright 2021-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -57,6 +57,10 @@ static int disable_master_detection = 0;
 module_param(disable_master_detection, int, 0644);
 MODULE_PARM_DESC(disable_master_detection, "\t 1 - disable Master detection, default is 0");
 
+static int ipready_tmout = PFE_CFG_IP_READY_MS_TMOUT;
+module_param(ipready_tmout, int, 0644);
+MODULE_PARM_DESC(ipready_tmout, "\t 0 - nn, timeout for IP-ready, 0 means 'no timeout'");
+
 static struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -84,14 +88,15 @@ static struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev)
 	priv->msg_enable = default_msg_level;
 	priv->msg_verbosity = msg_verbosity;
 
-	priv->ihc_tx_wq = create_singlethread_workqueue("pfeng-ihc-tx");
-	if (!priv->ihc_tx_wq) {
+	priv->ihc_wq = create_singlethread_workqueue("pfeng-ihc-slave");
+	if (!priv->ihc_wq) {
 		dev_err(dev, "Initialize of IHC TX WQ failed\n");
 		goto err_cfg_alloc;
 	}
 	if (kfifo_alloc(&priv->ihc_tx_fifo, 32, GFP_KERNEL))
 		goto err_cfg_alloc;
 	INIT_WORK(&priv->ihc_tx_work, pfeng_ihc_tx_work_handler);
+	INIT_WORK(&priv->ihc_rx_work, pfeng_ihc_rx_work_handler);
 
 	return priv;
 
@@ -147,8 +152,8 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 		}
 	}
 
-	if (priv->ihc_tx_wq)
-		destroy_workqueue(priv->ihc_tx_wq);
+	if (priv->ihc_wq)
+		destroy_workqueue(priv->ihc_wq);
 	if (kfifo_initialized(&priv->ihc_tx_fifo))
 		kfifo_free(&priv->ihc_tx_fifo);
 
@@ -187,6 +192,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 {
 	struct pfeng_priv *priv = (struct pfeng_priv *)arg;
 	struct device *dev = &priv->pdev->dev;
+	int loops = ipready_tmout * 10; /* sleep is 100 usec */
 	int ret;
 
 	/* Detect controller state */
@@ -200,6 +206,13 @@ static int pfeng_drv_deferred_probe(void *arg)
 
 			if (hal_ip_ready_get())
 				break;
+
+			if (ipready_tmout && !loops--) {
+				/* Timed out */
+				dev_err(dev, "PFE controller UP timed out\n");
+				priv->deferred_probe_task = NULL;
+				do_exit(0);
+			}
 
 			usleep_range(100, 500);
 		}
@@ -255,25 +268,6 @@ static int pfeng_drv_deferred_probe(void *arg)
 	if (ret)
 		goto err_drv;
 
-	/* Detect Master state */
-	if (priv->deferred_probe_task) {
-		dev_info(dev, "Wait for Master UP ...\n");
-
-		while(1) {
-
-			if(kthread_should_stop())
-				do_exit(0);
-
-			if (pfe_hif_get_master_up(priv->pfe_platform->hif))
-				break;
-
-			usleep_range(100, 500);
-		}
-
-		dev_info(dev, "Master UP detected\n");
-	} else
-		dev_info(dev, "Master UP detection skipped\n");
-
 	/* Create net interfaces */
 	ret = pfeng_netif_create(priv);
 	if (ret)
@@ -296,6 +290,9 @@ static int pfeng_drv_deferred_probe(void *arg)
 
 err_drv:
 	pfeng_drv_remove(priv->pdev);
+
+	if (priv->deferred_probe_task && ret == -ETIMEDOUT)
+		do_exit(0);
 
 	return ret;
 }

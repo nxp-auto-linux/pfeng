@@ -67,7 +67,7 @@ errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_c
 		/*	No data written to reply buffer (yet) */
 		*reply_len = 0U;
 	}
-	memset(reply_buf, 0, sizeof(fpp_fw_features_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_fw_features_cmd_t));
 	fp_cmd = (fpp_fw_features_cmd_t *)(msg->msg_cmd.payload);
 
 	switch (fp_cmd->action)
@@ -107,13 +107,13 @@ errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_c
 				}
 				if(EOK == ret)
 				{
-					strncpy(reply_buf->name, feature_name, FPP_FEATURE_NAME_SIZE);
+					(void)strncpy(reply_buf->name, feature_name, FPP_FEATURE_NAME_SIZE);
 					ret = pfe_feature_mgr_get_desc(feature_name, &str);
 				}
 
 				if(EOK == ret)
 				{
-					strncpy(reply_buf->desc, str, FPP_FEATURE_DESC_SIZE);
+					(void)strncpy(reply_buf->desc, str, FPP_FEATURE_DESC_SIZE);
 					*reply_len = sizeof(fpp_fw_features_cmd_t);
 					*fci_ret = FPP_ERR_OK;
 				}
@@ -149,13 +149,13 @@ errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_c
 				}
 				if(EOK == ret)
 				{
-					strncpy(reply_buf->name, feature_name, FPP_FEATURE_NAME_SIZE);
+					(void)strncpy(reply_buf->name, feature_name, FPP_FEATURE_NAME_SIZE);
 					ret = pfe_feature_mgr_get_desc(feature_name, &str);
 				}
 
 				if(EOK == ret)
 				{
-					strncpy(reply_buf->desc, str, FPP_FEATURE_DESC_SIZE);
+					(void)strncpy(reply_buf->desc, str, FPP_FEATURE_DESC_SIZE);
 					*reply_len = sizeof(fpp_fw_features_cmd_t);
 					*fci_ret = FPP_ERR_OK;
 				}

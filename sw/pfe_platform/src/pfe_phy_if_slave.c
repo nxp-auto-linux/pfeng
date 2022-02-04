@@ -77,9 +77,12 @@ static errno_t pfe_phy_if_db_unlock(void)
  */
 pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const char_t *name)
 {
-	pfe_platform_rpc_pfe_phy_if_create_arg_t req = {0U};
+	pfe_platform_rpc_pfe_phy_if_create_arg_t req;
 	pfe_phy_if_t *iface;
 	errno_t ret;
+
+	(void)class;
+	memset(&req, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_create_arg_t));
 
 	/*	Get remote phy_if instance */
 	req.phy_if_id = id;
@@ -143,8 +146,10 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
  */
 void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 {
-	pfe_platform_rpc_pfe_phy_if_flush_mac_addrs_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_flush_mac_addrs_arg_t arg;
 	errno_t ret = EOK;
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_flush_mac_addrs_arg_t));
 
 	if (NULL != iface)
 	{
@@ -209,6 +214,8 @@ __attribute__((pure)) pfe_class_t *pfe_phy_if_get_class(const pfe_phy_if_t *ifac
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
+#else
+	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return NULL;
@@ -235,6 +242,9 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
+#else
+	(void)iface;
+	(void)log_if;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	NXP_LOG_DEBUG("%s: Not supported in slave variant\n", __func__);
@@ -245,11 +255,13 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 
 static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 {
-	pfe_platform_rpc_pfe_phy_if_has_log_if_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_has_log_if_arg_t arg;
 	errno_t ret;
 	bool_t val = TRUE;
 
 	ct_assert(sizeof(arg.log_if_id) == sizeof(uint8_t));
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_has_log_if_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
@@ -282,6 +294,7 @@ static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_
 	}
 
 	(void)pfe_phy_if_db_unlock();
+	(void)log_if;
 
 	return val;
 }
@@ -343,6 +356,9 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
+#else
+	(void)iface;
+	(void)log_if;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	NXP_LOG_DEBUG("%s: Not supported in slave variant\n", __func__);
@@ -361,15 +377,17 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 	errno_t ret;
 	pfe_ct_if_op_mode_t mode = IF_OP_DEFAULT;
 	pfe_platform_rpc_pfe_phy_if_get_op_mode_arg_t arg = {0};
-	pfe_platform_rpc_pfe_phy_if_get_op_mode_ret_t rpc_ret = {0};
+	pfe_platform_rpc_pfe_phy_if_get_op_mode_ret_t rpc_ret;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+	memset(&rpc_ret, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_get_op_mode_ret_t));
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return IF_OP_DEFAULT;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
@@ -414,7 +432,9 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 {
 	errno_t ret;
-	pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t arg;
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -472,6 +492,9 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
+#else
+	(void)iface;
+	(void)emac;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	We're not going to allow slave driver to do this */
@@ -499,6 +522,9 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
+#else
+	(void)iface;
+	(void)hif;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	We're not going to allow slave driver to do this */
@@ -525,6 +551,8 @@ errno_t pfe_phy_if_bind_util(pfe_phy_if_t *iface)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
+#else
+	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	We're not going to allow slave driver to do this */
@@ -547,13 +575,13 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 	pfe_platform_rpc_pfe_phy_if_is_enabled_arg_t arg = {0};
 	pfe_platform_rpc_pfe_phy_if_is_enabled_ret_t rpc_ret = {0};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
@@ -597,7 +625,9 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_enable_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_enable_arg_t arg;
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_enable_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -639,7 +669,9 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_disable_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_disable_arg_t arg;
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_disable_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -717,11 +749,15 @@ errno_t pfe_phy_if_set_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
+#else
+	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	We're not going to allow slave driver to do this */
 	NXP_LOG_ERROR("%s: Not supported\n", __func__);
 	ret = ENOTSUP;
+
+	(void)flag;
 
 	return ret;
 }
@@ -742,11 +778,15 @@ errno_t pfe_phy_if_clear_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
+#else
+	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	We're not going to allow slave driver to do this */
 	NXP_LOG_ERROR("%s: Not supported\n", __func__);
 	ret = ENOTSUP;
+
+	(void)flag;
 
 	return ret;
 }
@@ -765,10 +805,14 @@ pfe_ct_if_flags_t pfe_phy_if_get_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t fla
 		NXP_LOG_ERROR("NULL argument received\n");
 		return IF_FL_NONE;
 	}
+#else
+	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	We're not going to allow slave driver to do this */
 	NXP_LOG_ERROR("%s: Not supported\n", __func__);
+
+	(void)flag;
 
 	return IF_FL_NONE;
 }
@@ -786,13 +830,13 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 	pfe_platform_rpc_pfe_phy_if_is_promisc_arg_t arg = {0};
 	pfe_platform_rpc_pfe_phy_if_is_promisc_ret_t rpc_ret = {0};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
@@ -836,7 +880,9 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_promisc_enable_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_promisc_enable_arg_t arg;
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_promisc_enable_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -884,7 +930,9 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_promisc_enable_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_promisc_disable_arg_t arg;
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_promisc_disable_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -932,7 +980,9 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_loopback_enable_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_loopback_enable_arg_t arg;
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_loopback_enable_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -980,7 +1030,9 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_loopback_disable_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_loopback_disable_arg_t arg;
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_loopback_disable_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -1028,7 +1080,9 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_allmulti_enable(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_allmulti_enable_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_allmulti_enable_arg_t arg;
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_allmulti_enable_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -1062,7 +1116,9 @@ errno_t pfe_phy_if_allmulti_enable(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_allmulti_disable(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_allmulti_disable_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_allmulti_disable_arg_t arg;
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_allmulti_disable_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -1102,7 +1158,12 @@ errno_t pfe_phy_if_get_flow_control(pfe_phy_if_t *iface, bool_t* tx_ena, bool_t*
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
         }
+#else
+	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	(void)tx_ena;
+	(void)rx_ena;
 
 	return ENOTSUP;
 }
@@ -1121,7 +1182,11 @@ errno_t pfe_phy_if_set_tx_flow_control(pfe_phy_if_t *iface, bool_t tx_ena)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
+#else
+	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	(void)tx_ena;
 
 	return ENOTSUP;
 }
@@ -1140,7 +1205,11 @@ errno_t pfe_phy_if_set_rx_flow_control(pfe_phy_if_t *iface, bool_t rx_ena)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
+#else
+	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	(void)rx_ena;
 
 	return ENOTSUP;
 }
@@ -1157,9 +1226,11 @@ errno_t pfe_phy_if_set_rx_flow_control(pfe_phy_if_t *iface, bool_t rx_ena)
 errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, pfe_ct_phy_if_id_t owner)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_add_mac_addr_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_add_mac_addr_arg_t arg;
 
 	ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg.mac_addr));
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_add_mac_addr_arg_t));
 
 	(void)owner; /* Owner will be added directly to the RPC */
 
@@ -1223,9 +1294,11 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, pfe_ct_phy_if_id_t owner)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_del_mac_addr_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_del_mac_addr_arg_t arg;
 
 	ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg.mac_addr));
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_del_mac_addr_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -1357,8 +1430,10 @@ errno_t pfe_phy_if_get_mac_addr_first(pfe_phy_if_t *iface, pfe_mac_addr_t addr, 
 errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_ct_phy_if_id_t owner)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_flush_mac_addrs_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_flush_mac_addrs_arg_t arg;
 	(void)owner; /* Owner will be added directly to the RPC */
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_flush_mac_addrs_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -1451,8 +1526,6 @@ __attribute__((pure)) char_t *pfe_phy_if_get_name(const pfe_phy_if_t *iface)
 	{
 		return iface->name;
 	}
-
-	return iface->name;
 }
 
 /**
@@ -1520,6 +1593,8 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
+
+	(void)verb_level;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))

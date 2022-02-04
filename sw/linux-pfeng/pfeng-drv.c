@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2021 NXP
+ * Copyright 2019-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -99,6 +99,13 @@ MODULE_PARM_DESC(l2br_vlan_id, "\t Default L2Bridge VLAN ID (default read from D
 static int l2br_vlan_stats_size = 20;
 module_param(l2br_vlan_stats_size, int, 0644);
 MODULE_PARM_DESC(l2br_vlan_stats_size, "\t Default vlan stats size vector (default read from DT or 20");
+
+/* The following parameter is currently defined in [fci_core_linux.c]: */
+/*
+	static bool disable_netlink = false;
+	module_param(disable_netlink, bool, 0644);
+	MODULE_PARM_DESC(disable_netlink, "\t Do not create netlink socket for FCI communication (default: false)");
+*/
 
 static int pfeng_s32g_set_port_coherency(struct pfeng_priv *priv)
 {
@@ -213,14 +220,15 @@ static struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev)
 #endif /* PFE_CFG_RTABLE_ENABLE */
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	priv->ihc_tx_wq = create_singlethread_workqueue("pfeng-ihc-tx");
-	if (!priv->ihc_tx_wq) {
-		dev_err(dev, "Initialize of IHC TX WQ failed\n");
+	priv->ihc_wq = create_singlethread_workqueue("pfeng-ihc");
+	if (!priv->ihc_wq) {
+		dev_err(dev, "Initialize of IHC TX failed\n");
 		goto err_cfg_alloc;
 	}
 	if (kfifo_alloc(&priv->ihc_tx_fifo, 32, GFP_KERNEL))
 		goto err_cfg_alloc;
 	INIT_WORK(&priv->ihc_tx_work, pfeng_ihc_tx_work_handler);
+	INIT_WORK(&priv->ihc_rx_work, pfeng_ihc_rx_work_handler);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	return priv;
@@ -281,7 +289,6 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	}
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	pfe_hif_clear_master_up(priv->pfe_platform->hif);
 	hal_ip_ready_set(false);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
@@ -306,8 +313,8 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	}
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	if (priv->ihc_tx_wq)
-		destroy_workqueue(priv->ihc_tx_wq);
+	if (priv->ihc_wq)
+		destroy_workqueue(priv->ihc_wq);
 	if (kfifo_initialized(&priv->ihc_tx_fifo))
 		kfifo_free(&priv->ihc_tx_fifo);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
@@ -518,6 +525,10 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 			goto err_drv;
 	}
 
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	hal_ip_ready_set(true);
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
 	/* Prepare EMAC RX/TX clocks */
 	for (id = 0; id < PFENG_PFE_EMACS; id++) {
 		struct pfeng_emac *emac = &priv->emac[id];
@@ -609,10 +620,6 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		goto err_drv;
 	}
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	hal_ip_ready_set(true);
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
 	/* Create debugfs */
 	pfeng_debugfs_create(priv);
 
@@ -650,10 +657,6 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_drv;
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	pfe_hif_set_master_up(priv->pfe_platform->hif);
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,8,0)
 	dev_pm_set_driver_flags(dev, DPM_FLAG_NO_DIRECT_COMPLETE);
 #else
@@ -688,7 +691,6 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	priv->in_suspend = true;
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	pfe_hif_clear_master_up(priv->pfe_platform->hif);
 	hal_ip_ready_set(false);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
@@ -839,10 +841,6 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	ret = pfeng_netif_resume(priv);
 	if (ret)
 		goto err_drv;
-
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	pfe_hif_set_master_up(priv->pfe_platform->hif);
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	priv->in_suspend = false;
 

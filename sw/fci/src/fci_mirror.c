@@ -1,5 +1,5 @@
  /* =========================================================================
- *  Copyright 2021 NXP
+ *  Copyright 2021-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -73,7 +73,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 		*reply_len = 0U;
 	}
 
-	memset(reply_buf, 0, sizeof(fpp_mirror_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_mirror_cmd_t));
 	mirror_cmd = (fpp_mirror_cmd_t *)(msg->msg_cmd.payload);
 
 	switch (mirror_cmd->action)
@@ -229,7 +229,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 
 				/* Set the filter */
 				addr = fci_fp_db_get_table_dmem_addr((char_t *)mirror_cmd->filter_table_name);
-				if(0 == addr)
+				if(0U == addr)
 				{	/* Requested filter table (from FCI command) is not used anywhere yet. Good. Use it as filter. */
 
                     /* Add filter table to HW */
@@ -268,11 +268,11 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 			{	/* Some actions to be set - add one by one */
 
 				/* Initialize */
-				memset(&m_args, 0, sizeof(pfe_ct_route_actions_args_t));
+				(void)memset(&m_args, 0, sizeof(pfe_ct_route_actions_args_t));
 				m_actions = RT_ACT_NONE;
 
 				/* Start adding */
-				if(0U != (mirror_cmd->m_actions & MODIFY_ACT_ADD_VLAN_HDR))
+				if(0U != ((uint32_t)mirror_cmd->m_actions & (uint32_t)MODIFY_ACT_ADD_VLAN_HDR))
 				{	/* VLAN header add/replace */
 					m_args.vlan = mirror_cmd->m_args.vlan;
 					m_actions |= RT_ACT_ADD_VLAN_HDR;
@@ -356,7 +356,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 
 			/* Get mirror name */
 			str = pfe_mirror_get_name(mirror);
-			strncpy(reply_buf->name, str, sizeof(reply_buf->name) - 1U);
+			(void)strncpy(reply_buf->name, str, sizeof(reply_buf->name) - 1U);
 
 			/* Get egress port name, step #1 - find the egress interface in the interface db */
 			egress_id = pfe_mirror_get_egress_port(mirror);
@@ -378,7 +378,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
             if((NULL == entry) || (NULL == phy_if))
 			{
 				/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
-				pfe_if_db_unlock(context->if_session_id);
+				(void)pfe_if_db_unlock(context->if_session_id);
 				NXP_LOG_DEBUG("Cannot get egress interface of the mirror '%s'.\n", pfe_mirror_get_name(mirror));
 				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				ret = ENOENT;
@@ -387,28 +387,32 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 
             /* Get egress port name, step #2 - get name of the egress interface */
 			str = pfe_phy_if_get_name(phy_if);
-			strncpy(reply_buf->egress_phy_if, str, IFNAMSIZ - 1U);
-			reply_buf->egress_phy_if[IFNAMSIZ - 1U] = '\0';  /* Ensure termination */
+			(void)strncpy(reply_buf->egress_phy_if, str, (uint32_t)IFNAMSIZ - 1U);
+			reply_buf->egress_phy_if[(uint32_t)IFNAMSIZ - 1U] = '\0';  /* Ensure termination */
 			pfe_if_db_unlock(context->if_session_id);
 
 			/* Get filter name */
-			memset(reply_buf->filter_table_name, 0, IFNAMSIZ);
+			(void)memset(reply_buf->filter_table_name, 0, IFNAMSIZ);
 			addr = pfe_mirror_get_filter(mirror);
-			if(0 != addr)
+			if(0U != addr)
 			{
 				ret = fci_fp_db_get_table_from_addr(addr, (char **)&str);
 				if(EOK == ret)
 				{
-					strncpy(reply_buf->filter_table_name, str, 15);
+					(void)strncpy(reply_buf->filter_table_name, str, 15);
 					reply_buf->filter_table_name[15] = '\0';  /* Ensure termination */
 				}
 			}
 
+			/* Initialize */
+			(void)memset(&m_args, 0, sizeof(pfe_ct_route_actions_args_t));
+			m_actions = RT_ACT_NONE;
+
 			/* Get modification actions */
 			reply_buf->m_actions = MODIFY_ACT_NONE;
-			pfe_mirror_get_actions(mirror, &m_actions, &m_args);
+			(void)pfe_mirror_get_actions(mirror, &m_actions, &m_args);
 			m_actions = (pfe_ct_route_actions_t) oal_ntohl(m_actions);  /* PFE has modification actions in big endian. */
-			if(0U != (m_actions & RT_ACT_ADD_VLAN_HDR))
+			if(0U != ((uint32_t)m_actions & (uint32_t)RT_ACT_ADD_VLAN_HDR))
 			{
 				reply_buf->m_actions |= MODIFY_ACT_ADD_VLAN_HDR;
 				reply_buf->m_args.vlan = m_args.vlan;

@@ -135,14 +135,14 @@
 /**
  * @brief Control register
  * @note The register which is used for Master-detect signalization
- * @warning We hijacked GPR:GENCTRL4 register, using 16 higher bits,
+ * @warning We hijacked GPR:GENCTRL3 register, using 16 higher bits,
  *          low 16 bits remains untouched for security reason
  */
 #define PFE_IP_READY_CTRL_REG	(0x4007CAECU)
 #define CTRL_REG_LEN			4U
 
 #define BIT_IP_READY			16U
-#define IP_READY				(1U << BIT_IP_READY)
+#define IP_READY				((uint32_t)1U << BIT_IP_READY)
 
 /**
  * @brief Set IP-ready flag
@@ -165,7 +165,7 @@ __attribute__((unused)) static void hal_ip_ready_set(bool_t on)
 		}
 		hal_write32(val, ctrlreg);
 
-		oal_mm_dev_unmap(ctrlreg, CTRL_REG_LEN);
+		(void)oal_mm_dev_unmap(ctrlreg, CTRL_REG_LEN);
 	}
 }
 
@@ -183,7 +183,7 @@ __attribute__((unused)) static bool_t hal_ip_ready_get(void)
 		val = hal_read32(ctrlreg);
 		val &= IP_READY;
 
-		oal_mm_dev_unmap(ctrlreg, CTRL_REG_LEN);
+		(void)oal_mm_dev_unmap(ctrlreg, CTRL_REG_LEN);
 	}
 
 	return (0U != val);

@@ -73,10 +73,12 @@ static errno_t pfe_log_if_db_unlock(void)
  */
 pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, const char_t *name)
 {
-	pfe_platform_rpc_pfe_log_if_create_arg_t arg = {0U};
+	pfe_platform_rpc_pfe_log_if_create_arg_t arg;
 	pfe_platform_rpc_pfe_log_if_create_ret_t rpc_ret = {0U};
 	pfe_log_if_t *iface;
 	errno_t ret;
+
+	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_log_if_create_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == parent) || (NULL == name)))
@@ -254,13 +256,13 @@ errno_t pfe_log_if_set_match_or(pfe_log_if_t *iface)
 	errno_t ret = EOK;
 	pfe_platform_rpc_pfe_log_if_set_match_and_arg_t req = {0};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	req.log_if_id = iface->id;
 
@@ -289,13 +291,13 @@ errno_t pfe_log_if_set_match_and(pfe_log_if_t *iface)
 	errno_t ret = EOK;
 	pfe_platform_rpc_pfe_log_if_set_match_and_arg_t req = {0};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	req.log_if_id = iface->id;
 
@@ -326,13 +328,13 @@ bool_t pfe_log_if_is_match_or(pfe_log_if_t *iface)
 	pfe_platform_rpc_pfe_log_if_is_match_or_ret_t rpc_ret = {0};
 	errno_t ret = EOK;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	req.log_if_id = iface->id;
 
@@ -386,7 +388,7 @@ errno_t pfe_log_if_set_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule
 	}
 
 	req.log_if_id = iface->id;
-	req.rules = oal_htonl(rules);
+	req.rules = (pfe_ct_if_m_rules_t)oal_htonl(rules);
 	memcpy(&req.args, args, sizeof(req.args));
 
 	(void)pfe_log_if_db_lock();
@@ -450,7 +452,7 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 	}
 
 	req.log_if_id = iface->id;
-	req.rule = oal_htonl(rule);
+	req.rule = (pfe_ct_if_m_rules_t)oal_htonl(rule);
 	req.arg_len = oal_htonl(arg_len);
 	memcpy(&req.arg, arg, sizeof(req.arg));
 
@@ -489,7 +491,7 @@ errno_t pfe_log_if_del_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	req.log_if_id = iface->id;
-	req.rule = oal_htonl(rule);
+	req.rule = (pfe_ct_if_m_rules_t)oal_htonl(rule);
 
 	(void)pfe_log_if_db_lock();
 
@@ -539,7 +541,7 @@ errno_t pfe_log_if_get_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t *rul
 	}
 	else
 	{
-		*rules = oal_ntohl(rpc_ret.rules);
+		*rules = (pfe_ct_if_m_rules_t)oal_ntohl(rpc_ret.rules);
 		if (NULL != args)
 		{
 			memcpy(args, &rpc_ret.args, sizeof(pfe_ct_if_m_args_t));
@@ -819,13 +821,13 @@ errno_t pfe_log_if_get_egress_ifs(pfe_log_if_t *iface, uint32_t *egress)
 	pfe_platform_rpc_pfe_log_if_get_egress_arg_t req = {0};
 	pfe_platform_rpc_pfe_log_if_get_egress_ret_t rpc_ret = {0};
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == egress)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	req.log_if_id = iface->id;
 
@@ -1495,6 +1497,9 @@ uint32_t pfe_log_if_get_text_statistics(const pfe_log_if_t *iface, char_t *buf, 
 	/*	Ask the master driver if interface is in promiscuous mode */
 	NXP_LOG_ERROR("%s: Not supported yet\n", __func__);
 	len += oal_util_snprintf(buf + len, buf_len - len, "%s: Unable to get statistics (not implemented)\n", __func__);
+
+	(void)iface;
+	(void)verb_level;
 
 	return len;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 NXP
+ * Copyright 2020-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -499,6 +499,23 @@ static int pfeng_mc_list_sync(struct net_device *netdev)
 	return -ret;
 }
 
+static int pfeng_phyif_is_bridge(pfe_phy_if_t *phyif)
+{
+	bool on_bridge;
+
+	switch (pfe_phy_if_get_op_mode(phyif)) {
+	case IF_OP_VLAN_BRIDGE:
+	case IF_OP_L2L3_VLAN_BRIDGE:
+		on_bridge = true;
+		break;
+	default:
+		on_bridge = false;
+		break;
+	}
+
+	return on_bridge;
+}
+
 static void pfeng_netif_set_rx_mode(struct net_device *netdev)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
@@ -541,9 +558,11 @@ static void pfeng_netif_set_rx_mode(struct net_device *netdev)
 	}
 
 	if (!uprom) {
-		if (pfe_phy_if_is_promisc(phyif_emac)) {
-			if (pfe_phy_if_promisc_disable(phyif_emac) != EOK)
-				netdev_warn(netdev, "failed to disable promisc mode\n");
+		if (pfeng_phyif_is_bridge(phyif_emac)) {
+			netdev_dbg(netdev, "bridge op: ignore to disable promisc mode\n");
+		} else if (pfe_phy_if_is_promisc(phyif_emac)) {
+				if (pfe_phy_if_promisc_disable(phyif_emac) != EOK)
+					netdev_warn(netdev, "failed to disable promisc mode\n");
 		}
 	}
 
@@ -555,6 +574,8 @@ static void pfeng_netif_set_rx_mode(struct net_device *netdev)
 
 static int pfeng_netif_set_mac_address(struct net_device *netdev, void *p)
 {
+	struct pfeng_netif *netif = netdev_priv(netdev);
+	struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
 	struct sockaddr *addr = (struct sockaddr *)p;
 
 	if (is_valid_ether_addr(addr->sa_data)) {
@@ -564,7 +585,20 @@ static int pfeng_netif_set_mac_address(struct net_device *netdev, void *p)
 		eth_hw_addr_random(netdev);
 	}
 
+	if (!emac)
+		return 0;
+
 	netdev_info(netdev, "setting MAC addr: %pM\n", netdev->dev_addr);
+
+#ifdef PFE_CFG_PFE_SLAVE
+	{
+		errno_t ret = pfe_log_if_add_match_rule(emac->logif_emac, IF_MATCH_DMAC, (void *)netdev->dev_addr, 6U);
+		if (EOK != ret) {
+			netdev_err(netdev, "Can't add DMAC match rule\n");
+			return -ret;
+		}
+	}
+#endif
 
 	return pfeng_uc_list_sync(netdev);
 }

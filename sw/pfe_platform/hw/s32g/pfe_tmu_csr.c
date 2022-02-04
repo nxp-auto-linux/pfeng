@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -138,6 +138,50 @@ void pfe_tmu_reclaim_init(addr_t cbus_base_va)
 	}
 }
 
+errno_t pfe_tmu_q_reset_tail_drop_policy(addr_t cbus_base_va)
+{
+	uint8_t queue;
+	uint32_t ii;
+	errno_t ret;
+
+	for (ii = 0U; ii < TLITE_PHYS_CNT; ii++)
+	{
+		if (PFE_PHY_IF_ID_EMAC2 >= ii)
+		{
+			ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], 0, TLITE_OPT_Q0_SIZE);
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Can't set the default queue size for PHY#%u queue 0: %d\n", (uint_t)ii, (int_t)ret);
+				return ret;
+			}
+
+			for (queue = 1U; queue < TLITE_PHY_QUEUES_CNT; queue++)
+			{
+				ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, TLITE_OPT_Q1_7_SIZE);
+				if (EOK != ret)
+				{
+					NXP_LOG_ERROR("Can't set the default queue size for PHY#%u queue %hhu: %d\n", (uint_t)ii, queue, (int_t)ret);
+					return ret;
+				}
+			}
+		}
+		else
+		{
+			for (queue = 0U; queue < TLITE_PHY_QUEUES_CNT; queue++)
+			{
+				ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, TLITE_MAX_Q_SIZE);
+				if (EOK != ret)
+				{
+					NXP_LOG_ERROR("Can't set the default queue size for PHY#%u queue %hhu: %d\n", (uint_t)ii, queue, (int_t)ret);
+					return ret;
+				}
+			}
+		}
+	}
+
+	return EOK;
+}
+
 /**
  * @brief		Initialize and configure the TMU
  * @param[in]	cbus_base_va The cbus base address
@@ -173,8 +217,8 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_HIF_NOCPY_BASE_ADDR + HIF_NOCPY_RX_INQ0_PKTPTR, cbus_base_va + TMU_PHY4_INQ_ADDR);
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-    /* The macro UTIL_INQ_PKTPTR already contains the CBUS_UTIL_CSR_BASE_ADDR (difference to above lines) */
-    hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + UTIL_INQ_PKTPTR, cbus_base_va + TMU_PHY5_INQ_ADDR); /* UTIL */
+	/* The macro UTIL_INQ_PKTPTR already contains the CBUS_UTIL_CSR_BASE_ADDR (difference to above lines) */
+	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + UTIL_INQ_PKTPTR, cbus_base_va + TMU_PHY5_INQ_ADDR); /* UTIL */
 
 	/*	Context memory initialization */
 	for (ii=0U; ii < TLITE_PHYS_CNT; ii++)
@@ -224,7 +268,7 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 		/*	Set default queue mode */
 		for (queue=0U; queue<TLITE_PHY_QUEUES_CNT; queue++)
 		{
-			ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, 255U);
+			ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, TLITE_MAX_Q_SIZE);
 			if (EOK != ret)
 			{
 				NXP_LOG_DEBUG("Can't set default queue mode: %d\n", ret);
@@ -245,7 +289,7 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	hal_write32(0xfU, cbus_base_va + TMU_PHY4_TDQ_CTRL);
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-    hal_write32(0xfU, cbus_base_va + TMU_PHY5_TDQ_CTRL);	/* UTIL */
+	hal_write32(0xfU, cbus_base_va + TMU_PHY5_TDQ_CTRL);	/* UTIL */
 
 	return EOK;
 }
@@ -331,8 +375,8 @@ static errno_t pfe_tmu_cntx_mem_write(addr_t cbus_base_va, pfe_ct_phy_if_id_t ph
 		case PFE_PHY_IF_ID_EMAC1:
 		case PFE_PHY_IF_ID_EMAC2:
 		case PFE_PHY_IF_ID_HIF_NOCPY:
-        case PFE_PHY_IF_ID_UTIL:
-        	/*Do Nothing*/
+		case PFE_PHY_IF_ID_UTIL:
+			/*Do Nothing*/
 			break;
 		case PFE_PHY_IF_ID_HIF:
 		case PFE_PHY_IF_ID_HIF0:
@@ -390,7 +434,7 @@ static errno_t pfe_tmu_cntx_mem_read(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy
 		case PFE_PHY_IF_ID_EMAC1:
 		case PFE_PHY_IF_ID_EMAC2:
 		case PFE_PHY_IF_ID_HIF_NOCPY:
-        case PFE_PHY_IF_ID_UTIL:
+		case PFE_PHY_IF_ID_UTIL:
 		{
 			break;
 		}
@@ -693,7 +737,7 @@ errno_t pfe_tmu_q_mode_set_tail_drop(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy
 	uint32_t reg;
 	uint8_t queue_temp = queue;
 
-	if (max > 0xffU)
+	if (TLITE_MAX_ENTRIES < max)
 	{
 		return EINVAL;
 	}
@@ -1104,10 +1148,7 @@ errno_t pfe_tmu_shp_cfg_set_idle_slope(addr_t cbus_base_va,
 
 	reg = hal_read32(cbus_base_va + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_CLK_FRQ);
 	sys_clk_hz = (reg & 0xffffULL) * 1000000ULL;
-#ifndef __ghs__
-	/* Workaround for ghs linker error with long long printf AAVB-3569 */
 	NXP_LOG_INFO("Using PFE sys_clk value %"PRINT64"uHz\n", sys_clk_hz);
-#endif
 
 	/*	Set weight (added to credit counter with each sys_clk_hz/clk_div tick) */
 	switch (pfe_tmu_shp_cfg_get_rate_mode(cbus_base_va, phy, shp))
@@ -1148,10 +1189,7 @@ errno_t pfe_tmu_shp_cfg_set_idle_slope(addr_t cbus_base_va,
 		reg = hal_read32(shp_base_va + TMU_SHP_CTRL);
 		reg &= 0x1U;
 		hal_write32(reg | (CLK_DIV_LOG2 << 1), shp_base_va + TMU_SHP_CTRL);
-#ifndef __ghs__
-		/* Workaround for ghs linker error with long long printf AAVB-3569 */
 		NXP_LOG_INFO("Shaper tick is %"PRINT64"uHz\n", sys_clk_hz / CLK_DIV);
-#endif
 	}
 
 	return ret;
@@ -1175,7 +1213,7 @@ uint32_t pfe_tmu_shp_cfg_get_idle_slope(addr_t cbus_base_va,
 	reg = hal_read32(cbus_base_va + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_CLK_FRQ);
 	sys_clk_hz = (reg & 0xffffULL) * 1000000ULL;
 	wgt = hal_read32(shp_base_va + TMU_SHP_WGHT) & 0xfffffU;
-	
+
 	switch (pfe_tmu_shp_cfg_get_rate_mode(cbus_base_va, phy, shp))
 	{
 		case RATE_MODE_DATA_RATE:
@@ -1183,13 +1221,13 @@ uint32_t pfe_tmu_shp_cfg_get_idle_slope(addr_t cbus_base_va,
 			isl = ((uint64_t)wgt * 8ULL * sys_clk_hz) / (CLK_DIV * (1ULL << 12));
 		}
 		break;
-		
+
 		case RATE_MODE_PACKET_RATE:
 		{
 			isl = ((uint64_t)wgt * sys_clk_hz) / (CLK_DIV * (1ULL << 12));
 		}
 		break;
-		
+
 		default:
 		{
 			isl = 0ULL;

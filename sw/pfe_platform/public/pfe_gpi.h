@@ -12,8 +12,8 @@
 
 /* Ingress QoS flow specification */
 
-#define PFE_IQOS_FLOW_TABLE_SIZE	64
-#define PFE_IQOS_FLOW_TABLE_ENTRY_SKIP	0xFF
+#define PFE_IQOS_FLOW_TABLE_SIZE	64U
+#define PFE_IQOS_FLOW_TABLE_ENTRY_SKIP	0xFFU
 
 /* flow type to match */
 typedef enum __attribute__((packed))
@@ -70,10 +70,10 @@ typedef struct __attribute__((packed, aligned(4)))
     uint16_t dport_min; /*< min L4 destination port (16b) */
 } pfe_iqos_flow_args_t;
 
-#define PFE_IQOS_VLAN_ID_MASK	0xFFF
+#define PFE_IQOS_VLAN_ID_MASK	0xFFFU
 #define PFE_IQOS_TOS_MASK	0xFF
 #define PFE_IQOS_L4PROTO_MASK	0xFF
-#define PFE_IQOS_SDIP_MASK	0x3F
+#define PFE_IQOS_SDIP_MASK	0x3FU
 
 typedef enum __attribute__((packed))
 {
@@ -144,7 +144,7 @@ typedef enum __attribute__((packed))
 #define PFE_IQOS_WRED_WEIGHT_DEFAULT         0x1U
 
 /* Ingress QoS rate shaping specification */
-#define PFE_IQOS_SHP_COUNT  2   /* number of available shapers */
+#define PFE_IQOS_SHP_COUNT  2U   /* number of available shapers */
 
 typedef enum __attribute__((packed))
 {

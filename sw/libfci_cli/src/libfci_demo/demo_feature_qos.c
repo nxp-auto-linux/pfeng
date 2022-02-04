@@ -41,7 +41,7 @@
 #include "demo_qos.h"
  
  
-extern int demo_feature_L2_bridge_simple(FCI_CLIENT* p_cl);
+extern int demo_feature_L2_bridge_vlan(FCI_CLIENT* p_cl);
  
  
 /*
@@ -93,7 +93,7 @@ int demo_feature_qos(FCI_CLIENT* p_cl)
     
     /* setup PFE to classify traffic (not needed by Egress QoS, done for demo purposes)*/
     /* =============================================================================== */
-    rtn = demo_feature_L2_bridge_simple(p_cl);
+    rtn = demo_feature_L2_bridge_vlan(p_cl);
     
     
     /* configure Egress QoS queues for emac0 */

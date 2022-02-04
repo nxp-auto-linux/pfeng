@@ -17,7 +17,7 @@
 * @def PFE_FP_RULE_POSITION_FIRST
 * @brief Macro to define position in function pfe_fp_add_rule_to_table() as the first one
 */
-#define FCI_FP_RULE_POSITION_FIRST 0x0
+#define FCI_FP_RULE_POSITION_FIRST 0x0U
 
 typedef struct fci_fp_table_tag fci_fp_table_t;
 

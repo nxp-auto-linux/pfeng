@@ -73,12 +73,12 @@ int pfeng_ptp_gettime64(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	struct pfeng_priv *priv = netif->priv;
         pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac];
 	uint32_t sec = 0, nsec = 0;
-	uint64_t nsts = 0;
+	uint16_t sec_hi = 0;
 	errno_t ret;
 
-	ret = pfe_emac_get_ts_time(emac, &sec, &nsec);
-	nsts = nsec + sec * NS_IN_S;
-	*ts = ns_to_timespec64(nsts);
+	ret = pfe_emac_get_ts_time(emac, &sec, &nsec, &sec_hi);
+	ts->tv_nsec = nsec;
+	ts->tv_sec = ((uint64_t)sec_hi << 32U) + sec;
 
 	PTP_DEBUG(netif->netdev, "%s, returned s %lld ns %ld \n",__func__, ts->tv_sec, ts->tv_nsec);
 
@@ -94,12 +94,14 @@ int pfeng_ptp_settime64(struct ptp_clock_info *ptp, const struct timespec64 *ts)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
-        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac];
+	pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac];
 	errno_t ret;
+	uint32_t sec = (uint64_t)ts->tv_sec & 0x00000000FFFFFFFFU;
+	uint16_t sec_hi = (uint16_t)(ts->tv_sec >> 32);
 
 	PTP_DEBUG(netif->netdev, "%s, s %lld ns %ld \n",__func__, ts->tv_sec, ts->tv_nsec);
 
-	ret = pfe_emac_set_ts_time(emac, ts->tv_sec, ts->tv_nsec);
+	ret = pfe_emac_set_ts_time(emac, sec, ts->tv_nsec, sec_hi);
 
 	if (ret != 0) {
 		netdev_err(netif->netdev, "Set time failed (err %d)\n", ret);

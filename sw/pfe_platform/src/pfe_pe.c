@@ -101,6 +101,12 @@ static void pfe_pe_fw_memcpy_bulk(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t dst_add
 static void pfe_pe_fw_memset_bulk(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_t addr, uint32_t size);
 static void pfe_pe_fw_memcpy_single(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t dst_addr, const void *src_ptr, uint32_t len);
 static void pfe_pe_fw_memset_single(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_t addr, uint32_t size);
+static void pfe_pe_free_mem(pfe_pe_t **pe, uint32_t pe_num);
+static errno_t pfe_pe_upload_sections(pfe_pe_t **pe, uint32_t pe_num, const ELF_File_t *elf_file);
+static void print_fw_issue(const pfe_ct_pe_mmap_t *fw_mmap);
+static uint8_t pfe_pe_fw_load_cycles(const pfe_pe_t *pe, uint8_t pe_num);
+static errno_t pfe_pe_load_elf_section(pfe_pe_t *pe, const void *sdata, addr_t load_addr, addr_t size, uint32_t type);
+static addr_t pfe_pe_get_elf_sect_load_addr(const ELF_File_t *elf_file, const Elf32_Shdr *shdr);
 
 /*	This one is not static because a firmware test code is using it but it is
 	neither declared in public header because it should not be public. */
@@ -124,6 +130,99 @@ static const fw_load_ops_t fw_load_ops[] =
 		.pe_memcpy = pfe_pe_fw_memcpy_single,
 	},
 };
+
+/**
+ * @brief		Try to upload all sections of the .elf
+ * @param[in]	pe The PE instances
+ * @param[in]	pe_num Number of PE instances
+ * @param[in]	elf_file The elf file object to be uploaded
+ * @return		EOK if success, error code otherwise
+ */
+static errno_t pfe_pe_upload_sections(pfe_pe_t **pe, uint32_t pe_num, const ELF_File_t *elf_file)
+{
+	uint32_t ii, pe_idx;
+	addr_t load_addr;
+	const void *buf;
+	errno_t ret = EOK;
+
+	for (ii = 0U; ii < elf_file->Header.r32.e_shnum; ii++)
+	{
+		if (0U == (elf_file->arSectHead32[ii].sh_flags & (uint32_t)(((uint32_t)SHF_WRITE) | ((uint32_t)SHF_ALLOC) | ((uint32_t)SHF_EXECINSTR))))
+		{
+			/*	Skip the section */
+			continue;
+		}
+
+		buf = (void*)((addr_t)elf_file->pvData + elf_file->arSectHead32[ii].sh_offset);
+		/* Translate elf virtual address to load address */
+		load_addr = pfe_pe_get_elf_sect_load_addr(elf_file, &elf_file->arSectHead32[ii]);
+		if(0U == load_addr)
+		{	/* Failed */
+			ret = EINVAL;
+			pfe_pe_free_mem(pe, pe_num);
+			return ret;
+		}
+
+		for(pe_idx = 0; pe_idx < pfe_pe_fw_load_cycles(pe[0], (uint8_t)pe_num); ++pe_idx)
+		{
+		/*	Upload the section */
+			ret = pfe_pe_load_elf_section(pe[pe_idx], buf, load_addr, elf_file->arSectHead32[ii].sh_size, elf_file->arSectHead32[ii].sh_type);
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Couldn't upload firmware section %s, %u bytes @ 0x%08x. Reason: %d\n",
+								elf_file->acSectNames+elf_file->arSectHead32[ii].sh_name,
+								(uint_t)elf_file->arSectHead32[ii].sh_size,
+								(uint_t)elf_file->arSectHead32[ii].sh_addr, ret);
+				pfe_pe_free_mem(pe, pe_num);
+				return ret;
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Free memory when see failed condition.
+ * @param[in]	pe_num number of the PE instance
+  * @param[in]	pe	   the PE instance
+ */
+static void pfe_pe_free_mem(pfe_pe_t **pe, uint32_t pe_num)
+{
+	uint32_t ii;
+
+	if (NULL != pe[0]->mmap_data)
+	{
+		oal_mm_free(pe[0]->mmap_data);
+
+	}
+
+	if (NULL != pe[0]->fw_err_section)
+	{
+		oal_mm_free(pe[0]->fw_err_section);
+	}
+
+	if (NULL != pe[0]->fw_feature_section)
+	{
+		oal_mm_free(pe[0]->fw_feature_section);
+	}
+
+	for (ii = 0; ii < pe_num; ++ii)
+	{
+		if (EOK != pfe_pe_unlock(pe[ii]))
+		{
+			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+		}
+		pe[ii]->mmap_data = NULL;
+
+		pe[ii]->fw_err_section = NULL;
+		pe[ii]->fw_err_section_size = 0U;
+
+		pe[ii]->fw_feature_section = NULL;
+		pe[ii]->fw_feature_section_size = 0U;
+
+	}
+}
 
 /**
  * @brief		Query if PE is active
@@ -614,7 +713,7 @@ static void pfe_pe_fw_memcpy_single(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t dst_a
 	{
 		hal_write32(oal_htonl(*data), pe->mem_access_wdata);
 		data++;
-		addr_temp &= (0xffff60000U);
+		addr_temp &= (0xfff60000U);
 		addr_temp |= mem_addr;
 		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
 	}
@@ -658,7 +757,7 @@ static void pfe_pe_fw_memset_single(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val
 	/* We could potentially do some manual unroll here */
 	for (mem_addr = addr; mem_addr < (addr + size); mem_addr += 4U)
 	{
-		addr_temp &= (0xffff60000U);
+		addr_temp &= (0xfff60000U);
 		addr_temp |= mem_addr;
 		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
 	}
@@ -899,14 +998,17 @@ static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(
  */
 void pfe_pe_memcpy_from_host_to_dmem_32(pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len)
 {
-	if (EOK != pfe_pe_mem_lock(pe))
+	errno_t ret;
+
+	ret = pfe_pe_mem_lock(pe);
+	if (EOK != ret)
 	{
 		NXP_LOG_DEBUG("Memory lock failed\n");
 		return;
 	}
 
 	pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, dst_addr, src_ptr, len);
-
+	
 	if (EOK != pfe_pe_mem_unlock(pe))
 	{
 		NXP_LOG_DEBUG("Memory unlock failed\n");
@@ -978,7 +1080,10 @@ void pfe_pe_memcpy_from_dmem_to_host_32_nolock(pfe_pe_t *pe, void *dst_ptr, addr
  */
 void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len)
 {
-	if (EOK != pfe_pe_mem_lock(pe))
+	errno_t ret;
+
+	ret = pfe_pe_mem_lock(pe);
+	if (EOK != ret)
 	{
 		NXP_LOG_DEBUG("Memory lock failed\n");
 		return;
@@ -1007,45 +1112,44 @@ void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst_ptr, addr_t src_
 errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_count, void *dst_ptr, addr_t src_addr, uint32_t buffer_len, uint32_t read_len)
 {
 	int32_t ii = 0U;
+	uint8_t mem_lock_error = 0U;
 	errno_t ret = EOK;
 	errno_t ret_store = EOK;
 
-	while (ii < pe_count)
+	/* Lock all PEs - they will stop processing frames and wait. This will
+	   ensure data coherence. */
+	for (ii = 0; ii < pe_count; ii++)
 	{
 		ret = pfe_pe_mem_lock(pe[ii]);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("Memory unlock failed\n");
-
-			/* Free all already locked PEs */
-			for (; ii >= 0; ii--)
-			{
-				(void)pfe_pe_mem_unlock(pe[ii]);
-			}
-
-			return ret;
+			mem_lock_error++;
+			NXP_LOG_DEBUG("Memory lock failed for PE instance %d\n", (int_t)ii);
 		}
-
-		ii++;
 	}
 
-	/* Perform the read from required PEs */
-	for (ii = 0; ii < pe_count; ii++)
+	/* Only read from PEs if all PEs are locked */
+	if (0U == mem_lock_error)
 	{
-		/* Check if there is still memory  */
-		if (buffer_len >= ((read_len * (uint32_t)ii) + read_len))
+		/* Perform the read from required PEs */
+		for (ii = 0; ii < pe_count; ii++)
 		{
-			pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe[ii],
-					(void *)((uint8_t*)dst_ptr + (read_len * (uint32_t)ii)),
-						src_addr, read_len);
-		}
-		else
-		{
-			ret = ENOMEM;
-			break;
+			/* Check if there is still memory  */
+			if (buffer_len >= ((read_len * (uint32_t)ii) + read_len))
+			{
+				pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe[ii],
+						(void *)((uint8_t*)dst_ptr + (read_len * (uint32_t)ii)),
+							src_addr, read_len);
+			}
+			else
+			{
+				ret = ENOMEM;
+				break;
+			}
 		}
 	}
 
+	/* Unlock all PEs */
 	for (ii = 0; ii < pe_count; ii++)
 	{
 		/* Backup return from memcpy */
@@ -1629,9 +1733,7 @@ static void print_fw_issue(const pfe_ct_pe_mmap_t *fw_mmap)
 errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 {
 	uint32_t ii, pe_idx;
-	addr_t load_addr;
-	const void *buf;
-	errno_t ret;
+	errno_t ret = EOK;
 	uint32_t section_idx = 0U;
 	uint32_t mask_sectIdx;
 	const ELF_File_t *elf_file = (ELF_File_t *)elf;
@@ -1676,8 +1778,6 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		pe[pe_idx]->fw_load_ops->pe_memset(pe[pe_idx], PFE_PE_IMEM, 0, 0, pe[pe_idx]->imem_size);
 	}
 
-
-
 	/*	Attempt to get section containing firmware memory map data */
 	if (TRUE == ELF_SectFindName(elf_file, ".pfe_pe_mmap", &section_idx, NULL, NULL))
 	{
@@ -1701,7 +1801,8 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		if (NULL == tmp_mmap)
 		{
 			ret = ENOMEM;
-			goto free_and_fail;
+			pfe_pe_free_mem(pe, pe_num);
+			return ret;
 		}
 		else
 		{
@@ -1717,7 +1818,8 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 			{
 				ret = EINVAL;
 				print_fw_issue(tmp_mmap);
-				goto free_and_fail;
+				pfe_pe_free_mem(pe, pe_num);
+				return ret;
 			}
 
 			NXP_LOG_INFO("pfe_ct.h file version\"%s\"\n", mmap_version_str);
@@ -1740,7 +1842,8 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		if (NULL == errors_mem)
 		{
 			ret = ENOMEM;
-			goto free_and_fail;
+			pfe_pe_free_mem(pe, pe_num);
+			return ret;
 		}
 		else
 		{
@@ -1752,7 +1855,6 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 	{
 		NXP_LOG_WARNING("Section not found (.errors). FW error reporting will not be available.\n");
 	}
-
 
 	/*	Attempt to get section containing firmware supported features */
 	if (TRUE == ELF_SectFindName(elf_file, ".features", &section_idx, NULL, NULL))
@@ -1766,7 +1868,8 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		if (NULL == features_mem)
 		{
 			ret = ENOMEM;
-			goto free_and_fail;
+			pfe_pe_free_mem(pe, pe_num);
+			return ret;
 		}
 		else
 		{
@@ -1784,40 +1887,15 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 	{
 		NXP_LOG_DEBUG("Unexpected .elf format (little endian)\n");
 		ret = EINVAL;
-		goto free_and_fail;
+		pfe_pe_free_mem(pe, pe_num);
+		return ret;
 	}
 
 	/*	Try to upload all sections of the .elf */
-	for (ii=0U; ii<elf_file->Header.r32.e_shnum; ii++)
+	ret = pfe_pe_upload_sections(pe, pe_num, elf_file);
+	if (EOK != ret)
 	{
-		if (!(elf_file->arSectHead32[ii].sh_flags & (uint32_t)(((uint32_t)SHF_WRITE) | ((uint32_t)SHF_ALLOC) | ((uint32_t)SHF_EXECINSTR))))
-		{
-			/*	Skip the section */
-			continue;
-		}
-
-		buf = (void*)((addr_t)elf_file->pvData + elf_file->arSectHead32[ii].sh_offset);
-		/* Translate elf virtual address to load address */
-		load_addr = pfe_pe_get_elf_sect_load_addr(elf_file, &elf_file->arSectHead32[ii]);
-		if(0U == load_addr)
-		{	/* Failed */
-			ret = EINVAL;
-			goto free_and_fail;
-		}
-
-		for(pe_idx = 0; pe_idx < pfe_pe_fw_load_cycles(pe[0], (uint8_t)pe_num); ++pe_idx)
-		{
-		/*	Upload the section */
-			ret = pfe_pe_load_elf_section(pe[pe_idx], buf, load_addr, elf_file->arSectHead32[ii].sh_size, elf_file->arSectHead32[ii].sh_type);
-			if (EOK != ret)
-			{
-				NXP_LOG_ERROR("Couldn't upload firmware section %s, %u bytes @ 0x%08x. Reason: %d\n",
-								elf_file->acSectNames+elf_file->arSectHead32[ii].sh_name,
-								(uint_t)elf_file->arSectHead32[ii].sh_size,
-								(uint_t)elf_file->arSectHead32[ii].sh_addr, ret);
-				goto free_and_fail;
-			}
-		}
+		return ret;
 	}
 
 	for (ii = 0; ii < pe_num; ++ii)
@@ -1844,40 +1922,6 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		   FW will also start from 0 */
 		pe[ii]->last_error_write_index = 0U;
 		pe[ii]->error_record_addr = 0U;
-	}
-	return EOK;
-
-free_and_fail:
-	if (NULL != pe[0]->mmap_data)
-	{
-		oal_mm_free(pe[0]->mmap_data);
-
-	}
-
-	if (NULL != pe[0]->fw_err_section)
-	{
-		oal_mm_free(pe[0]->fw_err_section);
-	}
-
-	if (NULL != pe[0]->fw_feature_section)
-	{
-		oal_mm_free(pe[0]->fw_feature_section);
-	}
-
-	for (ii = 0; ii < pe_num; ++ii)
-	{
-		if (EOK != pfe_pe_unlock(pe[ii]))
-		{
-			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
-		}
-		pe[ii]->mmap_data = NULL;
-
-		pe[ii]->fw_err_section = NULL;
-		pe[ii]->fw_err_section_size = 0U;
-
-		pe[ii]->fw_feature_section = NULL;
-		pe[ii]->fw_feature_section_size = 0U;
-
 	}
 
 	return ret;
@@ -1918,7 +1962,7 @@ errno_t pfe_pe_get_mmap(const pfe_pe_t *pe, pfe_ct_pe_mmap_t *mmap)
  * @param[in]	pe The list of PE instances
  * @param[in]	pe_num The number of PE instances
  */
-void pfe_pe_destroy(pfe_pe_t **pe, uint8_t pe_num)
+void pfe_pe_destroy(pfe_pe_t **pe, uint32_t pe_num)
 {
 	uint32_t pe_idx;
 
@@ -2546,6 +2590,7 @@ uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len,
 {
 	uint32_t len = 0U;
 	pfe_ct_pe_sw_state_monitor_t state_monitor;
+	errno_t ret;
 
 	if (NULL == pe->mmap_data)
 	{
@@ -2556,9 +2601,11 @@ uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len,
 	len += oal_util_snprintf(buf + len, buf_len - len, "- PE state monitor -\n");
 
 	/*	Make the PFE data coherent */
-	if (EOK != pfe_pe_mem_lock(pe))
+	ret = pfe_pe_mem_lock(pe);
+	if (EOK != ret)
 	{
 		NXP_LOG_DEBUG("Memory lock failed\n");
+		return 0;
 	}
 
 	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &state_monitor,
@@ -2581,6 +2628,7 @@ uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len,
 	if (EOK != pfe_pe_mem_unlock(pe))
 	{
 		NXP_LOG_DEBUG("Memory unlock failed\n");
+		len = 0U;
 	}
 
 	return len;

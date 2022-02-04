@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -55,8 +55,8 @@ typedef struct
 	LLIST_t iterator;
 } pfe_phy_if_list_entry_t;
 
-static errno_t pfe_phy_if_write_to_class_nostats(const pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if);
-static errno_t pfe_phy_if_write_to_class(const pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if);
+static errno_t pfe_phy_if_write_to_class_nostats(const pfe_phy_if_t *iface, const pfe_ct_phy_if_t *class_if);
+static errno_t pfe_phy_if_write_to_class(const pfe_phy_if_t *iface, const pfe_ct_phy_if_t *class_if);
 static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_log_if_t *log_if);
 static bool_t pfe_phy_if_has_enabled_log_if_nolock(const pfe_phy_if_t *iface);
 static bool_t pfe_phy_if_has_loopback_log_if_nolock(const pfe_phy_if_t *iface);
@@ -73,7 +73,7 @@ static uint32_t pfe_phy_if_stat_to_str(const pfe_ct_phy_if_stats_t *stat, char *
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  */
-static errno_t pfe_phy_if_write_to_class_nostats(const pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if)
+static errno_t pfe_phy_if_write_to_class_nostats(const pfe_phy_if_t *iface, const pfe_ct_phy_if_t *class_if)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class_if) || (NULL == iface) || (0U == iface->dmem_base)))
@@ -86,7 +86,7 @@ static errno_t pfe_phy_if_write_to_class_nostats(const pfe_phy_if_t *iface, pfe_
 	/* Be sure that phy_stats are at correct place */
 	ct_assert_offsetof((sizeof(pfe_ct_phy_if_t) - sizeof(pfe_ct_phy_if_stats_t)) == offsetof(pfe_ct_phy_if_t, phy_stats));
 
-	return pfe_class_write_dmem(iface->class, -1, iface->dmem_base, (void *)class_if,
+	return pfe_class_write_dmem(iface->class, -1, iface->dmem_base, (const  void *)class_if,
 								sizeof(pfe_ct_phy_if_t) - sizeof(pfe_ct_phy_if_stats_t));
 }
 
@@ -97,7 +97,7 @@ static errno_t pfe_phy_if_write_to_class_nostats(const pfe_phy_if_t *iface, pfe_
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  */
-static errno_t pfe_phy_if_write_to_class(const pfe_phy_if_t *iface, pfe_ct_phy_if_t *class_if)
+static errno_t pfe_phy_if_write_to_class(const pfe_phy_if_t *iface, const pfe_ct_phy_if_t *class_if)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class_if) || (NULL == iface) || (0U == iface->dmem_base)))
@@ -107,7 +107,7 @@ static errno_t pfe_phy_if_write_to_class(const pfe_phy_if_t *iface, pfe_ct_phy_i
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_class_write_dmem(iface->class, -1, iface->dmem_base, (void *)class_if, sizeof(pfe_ct_phy_if_t));
+	return pfe_class_write_dmem(iface->class, -1, iface->dmem_base, (const  void *)class_if, sizeof(pfe_ct_phy_if_t));
 }
 
 /**
@@ -170,6 +170,14 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 	else
 	{
 		(void)memset(iface, 0, sizeof(pfe_phy_if_t));
+		if (EOK != oal_mutex_init(&iface->lock))
+		{
+			NXP_LOG_ERROR("Could not initialize mutex\n");
+			oal_mm_free(iface);
+			iface = NULL;
+			return NULL;
+		}
+
 		iface->type = PFE_PHY_IF_INVALID;
 		iface->id = id;
 		iface->class = class;
@@ -197,14 +205,6 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 
 		/*	Get physical interface instance address within DMEM array */
 		iface->dmem_base = oal_ntohl(pfe_pe_mmap.dmem_phy_if_base) + ((uint16_t)id * sizeof(pfe_ct_phy_if_t));
-
-		if (EOK != oal_mutex_init(&iface->lock))
-		{
-			NXP_LOG_ERROR("Could not initialize mutex\n");
-			oal_mm_free(iface);
-			iface = NULL;
-			return NULL;
-		}
 
 		if (NULL == name)
 		{
@@ -409,6 +409,9 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 			{
 				NXP_LOG_DEBUG("mutex unlock failed\n");
 			}
+
+			oal_mm_free(entry);
+			entry = NULL;
 
 			return EEXIST;
 		}
@@ -1379,7 +1382,7 @@ static errno_t pfe_phy_if_set_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags_t
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	For selected flags: check that the underlying FW feature is available (enabled) in FW */
-	const char* feat_name = ((IF_FL_VLAN_CONF_CHECK == flag) ? ("vlan_conf_check") : 
+	const char* feat_name = ((IF_FL_VLAN_CONF_CHECK == flag) ? ("vlan_conf_check") :
 							((IF_FL_PTP_CONF_CHECK == flag) ? ("ptp_conf_check") : (NULL)));
 	if (NULL != feat_name)
 	{
@@ -1424,7 +1427,7 @@ static errno_t pfe_phy_if_clear_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	For selected flags: check that the underlying FW feature is available (enabled) in FW */
-	const char* feat_name = ((IF_FL_VLAN_CONF_CHECK == flag) ? ("vlan_conf_check") : 
+	const char* feat_name = ((IF_FL_VLAN_CONF_CHECK == flag) ? ("vlan_conf_check") :
 							((IF_FL_PTP_CONF_CHECK == flag) ? ("ptp_conf_check") : (NULL)));
 	if (NULL != feat_name)
 	{
@@ -2774,7 +2777,7 @@ uint32_t pfe_phy_if_get_ftable(pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 {
-	uint32_t i = 0;
+	uint32_t i = 0U;
 	errno_t ret = EOK;
 	addr_t offset = 0;
 	uint32_t buffer_len = 0;
@@ -2804,13 +2807,14 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 	ret = pfe_class_gather_read_dmem(iface->class, stats, (iface->dmem_base + offset), buffer_len, sizeof(pfe_ct_phy_if_stats_t));
 
 	/* Calculate total statistics */
-	for(i = 0U; i < pfe_class_get_num_of_pes(iface->class); i++)
+	while(i < pfe_class_get_num_of_pes(iface->class))
 	{
 		/* Store statistics */
 		stat->discarded	+= oal_ntohl(stats[i].discarded);
 		stat->egress	+= oal_ntohl(stats[i].egress);
 		stat->ingress	+= oal_ntohl(stats[i].ingress);
 		stat->malformed	+= oal_ntohl(stats[i].malformed);
+		++i;
 	}
 	oal_mm_free(stats);
 
@@ -2831,7 +2835,7 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
  *                   Value NULL disables the selected RX mirror
  *  @return EOK when success or error code otherwise
  */
-errno_t pfe_phy_if_set_rx_mirror(pfe_phy_if_t *iface, uint32_t sel, pfe_mirror_t *mirror)
+errno_t pfe_phy_if_set_rx_mirror(pfe_phy_if_t *iface, uint32_t sel, const pfe_mirror_t *mirror)
 {
     errno_t ret = EOK;
     uint32_t tmp;
@@ -2873,7 +2877,7 @@ errno_t pfe_phy_if_set_rx_mirror(pfe_phy_if_t *iface, uint32_t sel, pfe_mirror_t
  *                   Value NULL disables the selected RX mirror
  *  @return EOK when success or error code otherwise
  */
-errno_t pfe_phy_if_set_tx_mirror(pfe_phy_if_t *iface, uint32_t sel, pfe_mirror_t *mirror)
+errno_t pfe_phy_if_set_tx_mirror(pfe_phy_if_t *iface, uint32_t sel, const pfe_mirror_t *mirror)
 {
     errno_t ret = EOK;
     uint32_t tmp;
@@ -2915,7 +2919,7 @@ errno_t pfe_phy_if_set_tx_mirror(pfe_phy_if_t *iface, uint32_t sel, pfe_mirror_t
  * @param[in] sel Selector of the TX mirror (0 to PFE_CT_MIRRORS_COUNT - 1)
  * @return The mirror reference or NULL if no mirror is configured
  */
-pfe_mirror_t *pfe_phy_if_get_tx_mirror(pfe_phy_if_t *iface, uint32_t sel)
+pfe_mirror_t *pfe_phy_if_get_tx_mirror(const pfe_phy_if_t *iface, uint32_t sel)
 {
     uint32_t address;
 
@@ -2941,7 +2945,7 @@ pfe_mirror_t *pfe_phy_if_get_tx_mirror(pfe_phy_if_t *iface, uint32_t sel)
  * @param[in] sel Selector of the RX mirror (0 to PFE_CT_MIRRORS_COUNT - 1)
  * @return The mirror reference or NULL if no mirror is configured
  */
-pfe_mirror_t *pfe_phy_if_get_rx_mirror(pfe_phy_if_t *iface, uint32_t sel)
+pfe_mirror_t *pfe_phy_if_get_rx_mirror(const pfe_phy_if_t *iface, uint32_t sel)
 {
     uint32_t address;
 
@@ -3010,7 +3014,7 @@ uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, 
 {
 	uint32_t len = 0U;
 	pfe_ct_phy_if_t phy_if_class = {0U};
-	uint32_t i;
+	uint32_t i = 0U;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -3021,7 +3025,7 @@ uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, 
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/* Repeat read for all PEs (just because of statistics) */
-	for(i = 0U; i < pfe_class_get_num_of_pes(iface->class); i++)
+	while(i < pfe_class_get_num_of_pes(iface->class))
 	{
 		/*
 			Read current interface configuration from classifier. Since all class PEs are running the
@@ -3039,6 +3043,7 @@ uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, 
 			len += oal_util_snprintf(buf + len, buf_len - len, "DefLogIf  (DMEM) : 0x%x\n", oal_ntohl(phy_if_class.def_log_if));
 			(void)pfe_phy_if_stat_to_str(&phy_if_class.phy_stats, buf + len, buf_len - len, verb_level);
 		}
+		++i;
 	}
 	return len;
 }

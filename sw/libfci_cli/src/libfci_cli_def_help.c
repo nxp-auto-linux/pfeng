@@ -154,15 +154,13 @@
                                         "  Name of the mirroring rule.\n"
 
 #define TXT_OPT__MODE                   TXT_HELP__MODE  "=<if_mode>"
-#define TXT_OPTDESCR__MODE              TXT_HELP__MODE  "=<"  TXT_IF_MODE__BRIDGE  "|"  TXT_IF_MODE__ROUTER  "|...>"  "\n"  \
+#define TXT_OPTDESCR__MODE              TXT_HELP__MODE  "=<"  TXT_IF_MODE__VLAN_BRIDGE  "|"  TXT_IF_MODE__ROUTER  "|...>"  "\n"  \
                                         "  Operating mode of the physical interface.\n"          \
                                         "  Interface modes:\n"                      \
                                         "    "  TXT_IF_MODE__DEFAULT          "\n"  \
-                                        "    "  TXT_IF_MODE__BRIDGE           "\n"  \
-                                        "    "  TXT_IF_MODE__ROUTER           "\n"  \
                                         "    "  TXT_IF_MODE__VLAN_BRIDGE      "\n"  \
+                                        "    "  TXT_IF_MODE__ROUTER           "\n"  \
                                         "    "  TXT_IF_MODE__FLEXIBLE_ROUTER  "\n"  \
-                                        "    "  TXT_IF_MODE__L2L3_BRIDGE      "\n"  \
                                         "    "  TXT_IF_MODE__L2L3_VLAN_BRIDGE "\n"
 
 #define TXT_OPT__BLOCK_STATE            TXT_HELP__BLOCK_STATE  "=<block_state>"

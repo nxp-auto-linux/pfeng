@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -13,6 +13,7 @@
 #include "fci.h"
 #include "fci_internal.h"
 #include "pfe_class.h"
+#include "fci_flexible_filter.h"
 #include "pfe_flexible_filter.h"
 #include "pfe_feature_mgr.h"
 
@@ -51,7 +52,7 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
 	(void)reply_buf;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     fp_cmd = (fpp_flexible_filter_cmd_t *)(msg->msg_cmd.payload);
-    /* Important to initialize to avoid buffer overflows */    
+    /* Important to initialize to avoid buffer overflows */
 	if (*reply_len < sizeof(fpp_flexible_filter_cmd_t))
 	{
 		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_flexible_filter_cmd_t)\n");
@@ -61,7 +62,7 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
 	{
 		/*	No data written to reply buffer (yet) */
 		*reply_len = 0U;
-	}     
+	}
 
 	/*	Check that the FW feature is available (enabled) in FW */
 	if (FALSE == pfe_feature_mgr_is_available("g_flex_filter"))
@@ -83,7 +84,7 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
             {
                 /* Get the DMEM address */
                 addr = fci_fp_db_get_table_dmem_addr((char_t *)fp_cmd->table_name);
-                if(0 != addr)
+                if(0U != addr)
                 {
                     /* Let the classifier use the address of the table as flexible filter */
                     ret = pfe_flexible_filter_set(context->class, oal_htonl(addr));
@@ -111,7 +112,7 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
             if(EOK == ret)
             {
                 /* Delete the table from DMEM - no longer in use, copy is in database */
-                fci_fp_db_pop_table_from_hw((char_t *)fp_cmd->table_name);
+                (void)fci_fp_db_pop_table_from_hw((char_t *)fp_cmd->table_name);
                 *fci_ret = FPP_ERR_OK;
             }
             else

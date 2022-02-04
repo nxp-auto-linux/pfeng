@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -367,7 +367,7 @@ void pfe_class_enable(pfe_class_t *class)
 		state = pfe_pe_get_fw_state(class->pe[0U]);
 	}
 	while ((state < PFE_FW_STATE_INIT) && (timeout > 0U));
-	
+
 	if (timeout == 0U)
 	{
 		NXP_LOG_ERROR("Time-out waiting for classifier to init\n");
@@ -627,7 +627,7 @@ errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_class_mmap
  * @param[in]	len Number of bytes to be written
  * @return		EOK or error code in case of failure
  */
-errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, addr_t dst_addr, void *src_ptr, uint32_t len)
+errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, addr_t dst_addr, const void *src_ptr, uint32_t len)
 {
 	uint32_t ii;
     pfe_class_t *class = (pfe_class_t *)class_p;
@@ -759,7 +759,7 @@ void pfe_class_destroy(pfe_class_t *class)
 	{
 		pfe_class_disable(class);
 
-		pfe_pe_destroy(class->pe, (uint8_t)class->pe_num);
+		pfe_pe_destroy(class->pe, class->pe_num);
 
 		if (NULL != class->pe)
 		{
@@ -1115,7 +1115,7 @@ uint32_t pfe_class_fp_stat_to_str(const pfe_ct_class_flexi_parser_stats_t *stat,
  * @param[in]	buf Buffer to be sent
  * @return		EOK success, error code otherwise
  */
-uint32_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
+errno_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
 {
 	uint32_t ii, tries;
 	errno_t ret;
@@ -1165,7 +1165,7 @@ uint32_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
 errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
 {
 	pfe_ct_pe_mmap_t mmap;
-	uint32_t i = 0;
+	uint32_t i = 0U;
 	errno_t ret = EOK;
 	uint32_t buff_len = 0;
 	pfe_ct_classify_stats_t * stats = NULL;
@@ -1187,7 +1187,7 @@ errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
 	{
 		return ENOMEM;
 	}
-	
+
 	/* Get the memory map - all PEs share the same memory map
 	   therefore we can read arbitrary one (in this case 0U) */
 	ret = pfe_pe_get_mmap(class->pe[0U], &mmap);
@@ -1202,25 +1202,24 @@ errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
 	ret = pfe_class_gather_read_dmem(class, stats, oal_ntohl(mmap.class_pe.classification_stats), buff_len, sizeof(pfe_ct_classify_stats_t));
 
 	/* Calculate total statistics */
-	for(i = 0U; i < pfe_class_get_num_of_pes(class); i++)
+	while(i < pfe_class_get_num_of_pes(class))
 	{
 		pfe_class_alg_stats_endian(&stats[i].flexible_router);
 		pfe_class_alg_stats_endian(&stats[i].ip_router);
-		pfe_class_alg_stats_endian(&stats[i].l2_bridge);
 		pfe_class_alg_stats_endian(&stats[i].vlan_bridge);
 		pfe_class_alg_stats_endian(&stats[i].log_if);
 		pfe_class_alg_stats_endian(&stats[i].hif_to_hif);
 		pfe_class_flexi_parser_stats_endian(&stats[i].flexible_filter);
-	
+
 		pfe_class_sum_pe_algo_stats(&stat->flexible_router, &stats[i].flexible_router);
 		pfe_class_sum_pe_algo_stats(&stat->ip_router, &stats[i].ip_router);
-		pfe_class_sum_pe_algo_stats(&stat->l2_bridge, &stats[i].l2_bridge);
 		pfe_class_sum_pe_algo_stats(&stat->vlan_bridge, &stats[i].vlan_bridge);
 		pfe_class_sum_pe_algo_stats(&stat->log_if, &stats[i].log_if);
 		pfe_class_sum_pe_algo_stats(&stat->hif_to_hif, &stats[i].hif_to_hif);
 		pfe_class_sum_flexi_parser_stats(&stat->flexible_filter, &stats[i].flexible_filter);
+		++i;
 	}
-	
+
 	oal_mm_free(stats);
 
 	return ret;
@@ -1279,6 +1278,11 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	if (NULL == pe_stats)
 	{
 		NXP_LOG_ERROR("Memory allocation failed\n");
+		if (EOK != oal_mutex_unlock(&class->mutex))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
+
 		return len;
 	}
 
@@ -1291,6 +1295,11 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	{
 		NXP_LOG_ERROR("Cannot get PE memory map\n");
 		oal_mm_free(pe_stats);
+		if (EOK != oal_mutex_unlock(&class->mutex))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
+
 		return len;
 	}
 
@@ -1382,8 +1391,6 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	len += pfe_class_stat_to_str(&c_alg_stats.flexible_router, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- IP Router -\n");
 	len += pfe_class_stat_to_str(&c_alg_stats.ip_router, buf + len, buf_len - len, verb_level);
-	len += oal_util_snprintf(buf + len, buf_len - len, "- L2 Bridge -\n");
-	len += pfe_class_stat_to_str(&c_alg_stats.l2_bridge, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- VLAN Bridge -\n");
 	len += pfe_class_stat_to_str(&c_alg_stats.vlan_bridge, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- Logical Interfaces -\n");

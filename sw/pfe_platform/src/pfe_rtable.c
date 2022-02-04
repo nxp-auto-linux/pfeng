@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -226,12 +226,12 @@ static uint32_t pfe_get_crc32_be(uint32_t crc, uint8_t *data, uint16_t len)
 	{
 		tempcrc ^= ((uint32_t)(*tempdata) << 24U);
         tempdata++;
-        
+
 		for (i = 0U; i < 8U; i++)
 		{
 			tempcrc = (tempcrc << 1U) ^ ((0U != (tempcrc & 0x80000000U)) ? CRCPOLY_BE : 0U);
 		}
-        
+
         length--;
 	}
 
@@ -295,7 +295,7 @@ static uint32_t pfe_rtable_entry_get_hash(pfe_rtable_entry_t *entry, pfe_rtable_
 	uint32_t crc = 0xffffffffU;
 	uint32_t sport = 0U;
 	uint32_t ip_addr;
-    
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
@@ -643,7 +643,7 @@ void pfe_rtable_entry_free(pfe_rtable_entry_t *entry)
  * @retval		EOK Success
  * @retval		EINVAL Invalid argument
  */
-errno_t pfe_rtable_entry_set_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
+errno_t pfe_rtable_entry_set_5t(pfe_rtable_entry_t *entry, const pfe_5_tuple_t *tuple)
 {
 	errno_t ret;
 
@@ -933,7 +933,7 @@ errno_t pfe_rtable_entry_set_dstif_id(pfe_rtable_entry_t *entry, pfe_ct_phy_if_i
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */    
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	if (if_id > PFE_PHY_IF_ID_MAX)
 	{
 		NXP_LOG_WARNING("Physical interface ID is invalid: 0x%x\n", if_id);
@@ -1058,7 +1058,7 @@ errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, const pfe_ip_add
  * @retval		EOK Success
  * @retval		EINVAL Invalid argument
  */
-void pfe_rtable_entry_set_out_sport(pfe_rtable_entry_t *entry, uint16_t output_sport)
+void pfe_rtable_entry_set_out_sport(const pfe_rtable_entry_t *entry, uint16_t output_sport)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
@@ -1178,7 +1178,7 @@ void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan, boo
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->args.vlan = oal_htons(vlan);
-	
+
 	if (replace)
 	{
 		entry->phys_entry->actions |= oal_htonl(RT_ACT_MOD_VLAN_HDR);
@@ -1202,7 +1202,7 @@ void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan, boo
 uint16_t pfe_rtable_entry_get_out_vlan(const pfe_rtable_entry_t *entry)
 {
     uint16_t ret = 0U;
-    
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
@@ -1212,7 +1212,7 @@ uint16_t pfe_rtable_entry_get_out_vlan(const pfe_rtable_entry_t *entry)
     {
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-        if (0U != (oal_ntohl(entry->phys_entry->actions) & (uint32_t)(RT_ACT_ADD_VLAN_HDR | RT_ACT_MOD_VLAN_HDR)))
+        if (0U != (oal_ntohl(entry->phys_entry->actions) & ((uint32_t)RT_ACT_ADD_VLAN_HDR | (uint32_t)RT_ACT_MOD_VLAN_HDR)))
         {
             ret = oal_ntohs(entry->phys_entry->args.vlan);
         }
@@ -1291,7 +1291,7 @@ void pfe_rtable_entry_set_id5t(pfe_rtable_entry_t *entry, uint32_t id5t)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	entry->phys_entry->id5t = oal_htonl(id5t);   
+	entry->phys_entry->id5t = oal_htonl(id5t);
 }
 
 errno_t pfe_rtable_entry_get_id5t(const pfe_rtable_entry_t *entry, uint32_t *id5t)
@@ -1303,7 +1303,7 @@ errno_t pfe_rtable_entry_get_id5t(const pfe_rtable_entry_t *entry, uint32_t *id5
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
- 
+
     *id5t = oal_ntohl(entry->phys_entry->id5t);
     return EOK;
 }
@@ -1646,7 +1646,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 	if (TRUE == pfe_rtable_entry_is_duplicate(rtable, entry))
 	{
 		NXP_LOG_INFO("Entry already added\n");
-        
+
         if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
         {
             NXP_LOG_DEBUG("Mutex unlock failed\n");
@@ -1660,7 +1660,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 	entry->temp_phys_entry->status &= ~(uint8_t)RT_STATUS_ACTIVE;
 
 	/* Add vlan stats index into the phy_entry structure */
-	if (0U != (oal_ntohl(entry->temp_phys_entry->actions) & (uint32_t)(RT_ACT_ADD_VLAN_HDR | RT_ACT_MOD_VLAN_HDR)))
+	if (0U != (oal_ntohl(entry->temp_phys_entry->actions) & ((uint32_t)RT_ACT_ADD_VLAN_HDR | (uint32_t)RT_ACT_MOD_VLAN_HDR)))
 	{
 		if (NULL != rtable->bridge)
 		{
@@ -1696,7 +1696,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 
 			return ENOENT;
 		}
-		NXP_LOG_WARNING("Routing table hash [%d] collision detected. New entry will be added to linked list leading to performance penalty during lookup.\n", hash);
+		NXP_LOG_WARNING("Routing table hash [%u] collision detected. New entry will be added to linked list leading to performance penalty during lookup.\n", (uint_t)hash);
 	}
 
 	/*	Make sure the new entry is invalid */
@@ -1733,7 +1733,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 		last_phys_entry_va->flags = RT_FL_NONE;
 
 		/*	Wait some time due to sync with firmware */
-		oal_time_usleep(1000U);
+		oal_time_usleep(10U);
 #endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
 
 		/*	Update the next pointer */
@@ -1779,14 +1779,14 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 
 	entry->rtable = rtable;
 
-    if (0 == rtable->active_entries_count)
+    if (0U == rtable->active_entries_count)
     {
         NXP_LOG_INFO("RTable first entry added, enable hardware RTable lookup\n");
         pfe_class_rtable_lookup_enable(rtable->class);
     }
 
     rtable->active_entries_count++;
-    NXP_LOG_INFO("RTable active_entries_count: %d\n", rtable->active_entries_count);
+    NXP_LOG_INFO("RTable active_entries_count: %u\n", (uint_t)(rtable->active_entries_count));
 
     if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
     {
@@ -1841,12 +1841,12 @@ errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 
 	ret = pfe_rtable_del_entry_nolock(rtable, entry);
 
-	if (0 == rtable->active_entries_count)
+	if (0U == rtable->active_entries_count)
     {
         NXP_LOG_INFO("RTable last entry removed, disable hardware RTable lookup\n");
         pfe_class_rtable_lookup_disable(rtable->class);
 	}
-    
+
     if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
     {
         NXP_LOG_DEBUG("Mutex unlock failed\n");
@@ -1899,7 +1899,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 			hal_wmb();
 
 			/*	Wait some time due to sync with firmware */
-			oal_time_usleep(1000U);
+			oal_time_usleep(10U);
 #endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
 
 			/*	Replace hash table entry with next (pool) entry */
@@ -1955,7 +1955,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 			hal_wmb();
 
 			/*	Wait some time due to sync with firmware */
-			oal_time_usleep(1000);
+			oal_time_usleep(10U);
 
 			/*	Zero-out the entry */
 			(void)memset(entry->phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
@@ -1985,7 +1985,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 		entry->phys_entry->flags = RT_FL_NONE;
 
 		/*	Wait some time to sync with firmware */
-		oal_time_usleep(1000U);
+		oal_time_usleep(10U);
 #endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
 
 		/*	Bypass the found entry */
@@ -2034,10 +2034,10 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 
 	entry->rtable = NULL;
 
-	if (rtable->active_entries_count > 0)
+	if (rtable->active_entries_count > 0U)
 	{
-		rtable->active_entries_count -= 1;
-		NXP_LOG_INFO("RTable active_entries_count: %d\n", rtable->active_entries_count);
+		rtable->active_entries_count -= 1U;
+		NXP_LOG_INFO("RTable active_entries_count: %u\n", (uint_t)(rtable->active_entries_count));
 	}
 	else
 	{
@@ -2102,7 +2102,7 @@ void pfe_rtable_do_timeouts(pfe_rtable_t *rtable)
 			{
 				entry->curr_timeout = 0;
 			}
-			
+
 			/*	Entry is not active */
 			if (0U == entry->curr_timeout)
 			{
@@ -2344,9 +2344,9 @@ free_and_fail:
 }
 
 /**
-* @brief		Returns total count of entries within the table 
+* @brief		Returns total count of entries within the table
 * @param[in]	rtable The routing table instance
-* @return		Total count of entries within the table 
+* @return		Total count of entries within the table
 */
 uint32_t pfe_rtable_get_size(const pfe_rtable_t *rtable)
 {
@@ -2376,27 +2376,27 @@ void pfe_rtable_destroy(pfe_rtable_t *rtable)
 		if (NULL != rtable->mbox)
 		{
 			oal_mbox_detach_timer(rtable->mbox);
-		}
 
-		if (NULL != rtable->worker)
-		{
-			NXP_LOG_INFO("Stopping rtable worker...\n");
+			if (NULL != rtable->worker)
+			{
+				NXP_LOG_INFO("Stopping rtable worker...\n");
 
-			err = oal_mbox_send_signal(rtable->mbox, SIG_WORKER_STOP);
-			if (EOK != err)
-			{
-				NXP_LOG_ERROR("Signal failed: %d\n", err);
-			}
-			else
-			{
-				err = oal_thread_join(rtable->worker, NULL);
+				err = oal_mbox_send_signal(rtable->mbox, SIG_WORKER_STOP);
 				if (EOK != err)
 				{
-					NXP_LOG_ERROR("Can't join the worker thread: %d\n", err);
+					NXP_LOG_ERROR("Signal failed: %d\n", err);
 				}
 				else
 				{
-					NXP_LOG_INFO("rtable worker stopped\n");
+					err = oal_thread_join(rtable->worker, NULL);
+					if (EOK != err)
+					{
+						NXP_LOG_ERROR("Can't join the worker thread: %d\n", err);
+					}
+					else
+					{
+						NXP_LOG_INFO("rtable worker stopped\n");
+					}
 				}
 			}
 		}
@@ -2599,7 +2599,7 @@ static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, const 
 			{
 				match = (0 == memcmp(&five_tuple, &arg->five_tuple, sizeof(pfe_5_tuple_t)));
 			}
-			break;       
+			break;
 
 		default:
 			NXP_LOG_ERROR("Unknown criterion\n");
@@ -2694,7 +2694,7 @@ pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_cr
 				}
 			}
 		}
-        
+
         if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
         {
             NXP_LOG_DEBUG("Mutex unlock failed\n");
@@ -2762,7 +2762,7 @@ pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 				}
 			}
 		}
-        
+
         if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
         {
             NXP_LOG_DEBUG("Mutex unlock failed\n");

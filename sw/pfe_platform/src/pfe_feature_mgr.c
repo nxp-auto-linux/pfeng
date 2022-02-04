@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2021 NXP
+ *  Copyright 2021-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -35,14 +35,14 @@ typedef struct
 	pfe_hw_feature_t **hw_features;	/* List of all hw features*/
 	uint32_t hw_features_count;		/* Number of items in hw_features */
 
-	bool_t rewind;					/* Internal flag supporting transition walk from hw_feature set to fw_feature set */
+	bool_t rewind_flg;					/* Internal flag supporting transition walk from hw_feature set to fw_feature set */
 	pfe_class_t *class;
 	pfe_util_t *util;
 } pfe_feature_mgr_t;
 
-static errno_t pfe_hw_get_feature(const pfe_feature_mgr_t *feature_mgr, pfe_hw_feature_t **feature, const char *name);
-static errno_t pfe_hw_get_feature_first(pfe_feature_mgr_t *feature_mgr, pfe_hw_feature_t **feature);
-static errno_t pfe_hw_get_feature_next(pfe_feature_mgr_t *feature_mgr, pfe_hw_feature_t **feature);
+static errno_t pfe_hw_get_feature(const pfe_feature_mgr_t *fmgr, pfe_hw_feature_t **feature, const char *name);
+static errno_t pfe_hw_get_feature_first(pfe_feature_mgr_t *fmgr, pfe_hw_feature_t **feature);
+static errno_t pfe_hw_get_feature_next(pfe_feature_mgr_t *fmgr, pfe_hw_feature_t **feature);
 
 /**
  * @brief Feature manager instance
@@ -73,10 +73,10 @@ errno_t pfe_feature_mgr_init(uint32_t *cbus_base)
 		feature_mgr = oal_mm_malloc(sizeof(pfe_feature_mgr_t));
 		if(NULL != feature_mgr)
 		{
-			memset(feature_mgr, 0, sizeof(pfe_feature_mgr_t));
+			(void)memset(feature_mgr, 0, sizeof(pfe_feature_mgr_t));
 			feature_mgr->cbus_base = cbus_base;
-
-			ret = pfe_hw_feature_init_all(cbus_base, &feature_mgr->hw_features, &feature_mgr->hw_features_count);
+			feature_mgr->hw_features = oal_mm_malloc(1U * sizeof(pfe_hw_feature_t *));
+			ret = pfe_hw_feature_init_all(cbus_base, feature_mgr->hw_features, &feature_mgr->hw_features_count);
 		}
 		else
 		{
@@ -125,7 +125,7 @@ errno_t pfe_feature_mgr_add_fw_modules(pfe_class_t *class, pfe_util_t *util)
 
 /**
  * @brief Deinitializes the feature manager instance
- * @return EOK or error code in case of failure. 
+ * @return EOK or error code in case of failure.
  */
 errno_t pfe_feature_mgr_fini(void)
 {
@@ -261,16 +261,19 @@ bool_t pfe_feature_mgr_is_available(const char *feature_name)
 	else
 	{	/* Util not present */
 
-		/* Use class information to check whether the feature requires util to be present */
-		if(pfe_fw_feature_is_in_util(fw_feature_class))
+		if (EOK == ret_class)
 		{
-			/* No firmware = no feature */
-			util_avail = FALSE;
-		}
-		else
-		{
-			/* Feature does not need util to be present */
-			util_avail = TRUE;
+			/* Use class information to check whether the feature requires util to be present */
+			if(pfe_fw_feature_is_in_util(fw_feature_class))
+			{
+				/* No firmware = no feature */
+				util_avail = FALSE;
+			}
+			else
+			{
+				/* Feature does not need util to be present */
+				util_avail = TRUE;
+			}
 		}
 	}
 
@@ -357,7 +360,7 @@ errno_t pfe_feature_mgr_set_val(const char *feature_name, const uint8_t val)
 				if(EOK != ret)
 				{	/* Failure */
 					/* Revert the changes already made */
-					pfe_fw_feature_set_val(fw_feature_util, old_val);
+					(void)pfe_fw_feature_set_val(fw_feature_util, old_val);
 				}
 			}
 		}
@@ -400,12 +403,12 @@ errno_t pfe_feature_mgr_enable(const char *feature_name)
 		ret = pfe_hw_feature_get_flags(hw_feature, &tmp);
 		if(EOK == ret)
 		{
-			if(0 == (tmp & F_PRESENT))
+			if(0U == ((uint8_t)tmp & (uint8_t)F_PRESENT))
 			{	/* Feature cannot be enabled */
 				NXP_LOG_WARNING("Cannot enable feature %s - not present in Platform\n", feature_name);
 				return EINVAL;
 			}
-			else if(0 == (tmp & F_RUNTIME))
+			else if(0U == ((uint8_t)tmp & (uint8_t)F_RUNTIME))
 			{	/* Feature cannot be disabled */
 				NXP_LOG_INFO("Feature %s is always enabled in Platform\n", feature_name);
 				return EOK;
@@ -433,12 +436,12 @@ errno_t pfe_feature_mgr_enable(const char *feature_name)
 		ret = pfe_fw_feature_get_flags(fw_feature_class, &tmp);
 		if(EOK == ret)
 		{
-			if(0 == (tmp & F_PRESENT))
+			if(0U == ((uint8_t)tmp & (uint8_t)F_PRESENT))
 			{	/* Feature cannot be enabled */
 				NXP_LOG_WARNING("Cannot enable feature %s - not present in FW\n", feature_name);
 				return EINVAL;
 			}
-			else if(0 == (tmp & F_RUNTIME))
+			else if(0U == ((uint8_t)tmp & (uint8_t)F_RUNTIME))
 			{	/* Feature cannot be disabled */
 				NXP_LOG_INFO("Feature %s is always enabled in FW\n", feature_name);
 				return EOK;
@@ -487,12 +490,12 @@ errno_t pfe_feature_mgr_disable(const char *feature_name)
 		ret = pfe_hw_feature_get_flags(hw_feature, &tmp);
 		if(EOK == ret)
 		{
-			if(0 == (tmp & F_PRESENT))
+			if(0U == ((uint8_t)tmp & (uint8_t)F_PRESENT))
 			{	/* Feature cannot be enabled */
 				NXP_LOG_INFO("Feature %s is always disabled in Platform\n", feature_name);
 				return EOK;
 			}
-			else if(0 == (tmp & F_RUNTIME))
+			else if(0U == ((uint8_t)tmp & (uint8_t)F_RUNTIME))
 			{	/* Feature cannot be disabled */
 				NXP_LOG_ERROR("Cannot disabled feature %s - always enabled in Platform\n", feature_name);
 				return EINVAL;
@@ -520,12 +523,12 @@ errno_t pfe_feature_mgr_disable(const char *feature_name)
 		ret = pfe_fw_feature_get_flags(fw_feature_class, &tmp);
 		if(EOK == ret)
 		{
-			if(0 == (tmp & F_PRESENT))
+			if(0U == ((uint8_t)tmp & (uint8_t)F_PRESENT))
 			{	/* Feature cannot be enabled */
 				NXP_LOG_INFO("Feature %s is always disabled in FW\n", feature_name);
 				return EOK;
 			}
-			else if(0 == (tmp & F_RUNTIME))
+			else if(0U == ((uint8_t)tmp & (uint8_t)F_RUNTIME))
 			{	/* Feature cannot be disabled */
 				NXP_LOG_ERROR("Cannot disabled feature %s - always enabled in FW\n", feature_name);
 				return EINVAL;
@@ -651,8 +654,8 @@ errno_t pfe_feature_mgr_get_first(const char **feature_name)
 	if(EOK == ret)
 	{
 		ret = pfe_hw_feature_get_name(hw_feature, feature_name);
-		/* Signal rewind for class/util fw feature walk */
-		feature_mgr->rewind = TRUE;
+		/* Signal rewind_flg for class/util fw feature walk */
+		feature_mgr->rewind_flg = TRUE;
 	}
 	else
 	{
@@ -669,7 +672,7 @@ errno_t pfe_feature_mgr_get_first(const char **feature_name)
 		{
 			ret = pfe_fw_feature_get_name(fw_feature, feature_name);
 		}
-		feature_mgr->rewind = FALSE;
+		feature_mgr->rewind_flg = FALSE;
 	}
 
 	return ret;
@@ -716,11 +719,11 @@ errno_t pfe_feature_mgr_get_next(const char **feature_name)
 			return EINVAL;
 		}
 
-		if (TRUE == feature_mgr->rewind)
+		if (TRUE == feature_mgr->rewind_flg)
 		{
 			ret = pfe_class_get_feature_first(feature_mgr->class, &fw_feature);
-			/* Unset 'rewind' to use real pfe_class_get_feature_next next time */
-			feature_mgr->rewind = FALSE;
+			/* Unset 'rewind_flg' to use real pfe_class_get_feature_next next time */
+			feature_mgr->rewind_flg = FALSE;
 		}
 		else
 		{
@@ -731,6 +734,10 @@ errno_t pfe_feature_mgr_get_next(const char **feature_name)
 		{
 			ret = pfe_fw_feature_get_name(fw_feature, feature_name);
 		}
+	}
+	else
+	{
+		; /* No action required */
 	}
 
 	return ret;
@@ -865,7 +872,7 @@ errno_t pfe_feature_mgr_get_variant(const char *feature_name, uint8_t *val)
 		ret = pfe_hw_feature_get_flags(hw_feature, &tmp);
 		if(EOK == ret)
 		{
-			*val = tmp & (F_PRESENT | F_RUNTIME);
+			*val = (uint8_t)tmp & ((uint8_t)F_PRESENT | (uint8_t)F_RUNTIME);
 		}
 		return ret;
 	}
@@ -882,7 +889,7 @@ errno_t pfe_feature_mgr_get_variant(const char *feature_name, uint8_t *val)
 		ret = pfe_fw_feature_get_flags(fw_feature_class, &tmp);
 		if(EOK == ret)
 		{
-			*val = tmp & (F_PRESENT | F_RUNTIME);
+			*val = (uint8_t)tmp & ((uint8_t)F_PRESENT | (uint8_t)F_RUNTIME);
 		}
 	}
 

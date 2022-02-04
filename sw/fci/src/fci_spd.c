@@ -29,7 +29,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
     pfe_if_db_entry_t *pfe_if_db_entry = NULL;
     pfe_phy_if_t *phy_if = NULL;
     pfe_ct_spd_entry_t spd_entry;
-    static uint32_t search_position = 0U;
+    static uint16_t search_position = 0U;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -55,7 +55,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
 		/*	No data written to reply buffer (yet) */
 		*reply_len = 0U;
 	}
-    memset(&spd_entry, 0, sizeof(pfe_ct_spd_entry_t));
+    (void)memset(&spd_entry, 0, sizeof(pfe_ct_spd_entry_t));
 
 	/*	Check that the FW feature is available (enabled) in FW */
 	if (FALSE == pfe_feature_mgr_is_available("IPsec"))
@@ -67,7 +67,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
 	}
 
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(fpp_spd_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_spd_cmd_t));
 
 	spd_cmd = (fpp_spd_cmd_t *)(msg->msg_cmd.payload);
     /* Get the physical interface reference - needed for all commands */
@@ -106,22 +106,22 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
     {
         case FPP_ACTION_REGISTER:
 
-            if(0 != (spd_cmd->flags & FPP_SPD_FLAG_IPv6))
+            if(0U != ((uint8_t)spd_cmd->flags & (uint8_t)FPP_SPD_FLAG_IPv6))
             {
                 spd_entry.flags |= SPD_FLAG_IPv6;
-                memcpy(&spd_entry.ipv.v6.sip, &spd_cmd->saddr[0], 16U);
-                memcpy(&spd_entry.ipv.v6.dip, &spd_cmd->daddr[0], 16U);
+                (void)memcpy(&spd_entry.ipv.v6.sip, &spd_cmd->saddr[0], 16U);
+                (void)memcpy(&spd_entry.ipv.v6.dip, &spd_cmd->daddr[0], 16U);
             }
             else
             {
                 spd_entry.ipv.v4.sip = spd_cmd->saddr[0];
                 spd_entry.ipv.v4.dip = spd_cmd->daddr[0];
             }
-            if(0 != (spd_cmd->flags & FPP_SPD_FLAG_SPORT_OPAQUE))
+            if(0U != ((uint8_t)spd_cmd->flags & (uint8_t)FPP_SPD_FLAG_SPORT_OPAQUE))
             {
                 spd_entry.flags |= SPD_FLAG_SPORT_OPAQUE;
             }
-            if(0 != (spd_cmd->flags & FPP_SPD_FLAG_DPORT_OPAQUE))
+            if(0U != ((uint8_t)spd_cmd->flags & (uint8_t)FPP_SPD_FLAG_DPORT_OPAQUE))
             {
                 spd_entry.flags |= SPD_FLAG_DPORT_OPAQUE;
             }
@@ -165,13 +165,13 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
             if(EOK == ret)
             {
                 /* Construct reply */
-                memset(reply_buf, 0, sizeof(fpp_spd_cmd_t));
-                strcpy(reply_buf->name, spd_cmd->name);
+                (void)memset(reply_buf, 0, sizeof(fpp_spd_cmd_t));
+                (void)strcpy(reply_buf->name, spd_cmd->name);
                 if(0 != (spd_entry.flags & SPD_FLAG_IPv6))
                 {
                     reply_buf->flags |= FPP_SPD_FLAG_IPv6;
-                    memcpy(&reply_buf->saddr[0], &spd_entry.ipv.v6.sip[0], 16U);
-                    memcpy(&reply_buf->daddr[0], &spd_entry.ipv.v6.dip[0], 16U);
+                    (void)memcpy(&reply_buf->saddr[0], &spd_entry.ipv.v6.sip[0], 16U);
+                    (void)memcpy(&reply_buf->daddr[0], &spd_entry.ipv.v6.dip[0], 16U);
                 }
                 else
                 {

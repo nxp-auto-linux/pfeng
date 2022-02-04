@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -176,17 +176,17 @@ uint32_t pfe_wdt_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 {
 	uint32_t len = 0U;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL_ADDR == base_va) || (NULL == char_t))
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL_ADDR == base_va) || (NULL == buf))
 	{
 		NXP_LOG_ERROR("NULL argument received (pfe_wdt_cfg_get_text_stat)\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if(verb_level >= 9U)
 	{
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "base_va              : 0x%x\n", base_va);
+		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "base_va              : 0x%x\n", (uint_t)base_va);
 		/*	Get version of wsp (wdt is part of wsp)*/
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WSP Version          : 0x%x\n", hal_read32(base_va + WSP_VERSION));
 	}

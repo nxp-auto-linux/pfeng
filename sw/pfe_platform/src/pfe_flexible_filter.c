@@ -9,7 +9,7 @@
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "pfe_ct.h"
-#include "pfe_class.h"
+#include "pfe_flexible_filter.h"
 
 /**
 * @brief Initializes the module

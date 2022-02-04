@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2021 NXP
+ *  Copyright 2017-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -49,18 +49,16 @@ FCI_CLIENT* cli_p_cl = NULL;
 
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
-void cli_print_error(int rtncode, const char* p_txt_err, ...)
+void cli_print_error(int errcode, const char* p_txt_errname, const char* p_txt_errmsg, ...)
 {
-    assert(NULL != p_txt_err);
+    assert((NULL != p_txt_errname) && (NULL != p_txt_errmsg));
 
-    printf("ERROR (%d): ", rtncode);
+    printf("ERROR (%d)%s\n", errcode, p_txt_errname);
     
     va_list args;
-    va_start(args, p_txt_err);
-    vprintf(p_txt_err, args);
+    va_start(args, p_txt_errmsg);
+    vprintf(p_txt_errmsg, args);
     va_end(args);
-    
-    printf("\n");
 }
 
 int main(int argc, char* argv[])
@@ -84,7 +82,7 @@ int main(int argc, char* argv[])
     rtn = demo_client_open_in_cmd_mode(&cli_p_cl);
     if (CLI_OK != rtn)
     {
-        cli_print_error(rtn, "FCI endpoint failed to open.");
+        cli_print_error(rtn, TXT_ERR_NONAME, TXT_ERR_INDENT "FCI endpoint failed to open.\n");
     }
     else
     {
@@ -98,7 +96,7 @@ int main(int argc, char* argv[])
         rtn = ((CLI_OK == rtn) ? (rtn_close) : (rtn));
         if (CLI_OK != rtn_close)
         {
-            cli_print_error(rtn_close, "FCI endpoint failed to close.");
+            cli_print_error(rtn_close, TXT_ERR_NONAME, TXT_ERR_INDENT "FCI endpoint failed to close.\n");
         }
     }
     

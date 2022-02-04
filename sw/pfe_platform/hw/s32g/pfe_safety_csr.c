@@ -86,7 +86,7 @@ errno_t pfe_safety_cfg_isr(addr_t base_va)
 		trig_en_interrupts >>= 1U;
 		while (0U != trig_en_interrupts)
 		{
-			if (0U != (trig_en_interrupts && 1UL))
+			if (0U != (trig_en_interrupts & 1UL))
 			{
 				NXP_LOG_INFO("%s\n", wsp_safety_int_src_text[index]);
 			}

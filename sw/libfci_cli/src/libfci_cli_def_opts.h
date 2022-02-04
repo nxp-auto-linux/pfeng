@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -4858,7 +4858,7 @@ uint32_t cli_opt_get_incompat_grps(cli_opt_t opt);
 
 
 
-void cli_mandopt_print(const char* p_txt_delim);
+void cli_mandopt_print(const char* p_txt_indent, const char* p_txt_delim);
 void cli_mandopt_clear(void);
 int cli_mandopt_check(const mandopt_t* p_mandopts, const uint8_t mandopts_ln);
 

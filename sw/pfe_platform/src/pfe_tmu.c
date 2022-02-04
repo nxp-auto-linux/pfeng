@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -554,6 +554,19 @@ uint8_t pfe_tmu_queue_get_wred_zones(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t ph
 	{
 		return EINVAL;
 	}
+}
+
+errno_t pfe_tmu_queue_reset_tail_drop_policy(const pfe_tmu_t *tmu)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0U;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pfe_tmu_q_reset_tail_drop_policy(tmu->cbus_base_va);
 }
 
 /**

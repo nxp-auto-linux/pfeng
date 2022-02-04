@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -31,7 +31,5 @@ errno_t pfe_util_get_fw_version(const pfe_util_t *util, pfe_ct_version_t *ver);
 errno_t pfe_util_get_feature(const pfe_util_t *util, pfe_fw_feature_t **feature, const char *name);
 errno_t pfe_util_get_feature_first(pfe_util_t *util, pfe_fw_feature_t **feature);
 errno_t pfe_util_get_feature_next(pfe_util_t *util, pfe_fw_feature_t **feature);
-errno_t pfe_util_read_dmem(void *util_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len);
-errno_t pfe_util_write_dmem(void *util_p, int32_t pe_idx, addr_t dst_addr, void *src_ptr, uint32_t len);
 
 #endif /* SRC_PFE_UTIL_H_ */

@@ -38,25 +38,35 @@
  
 #include "demo_common.h"
 #include "demo_phy_if.h"
+#include "demo_if_mac.h"
 #include "demo_mirror.h"
  
- 
-extern int demo_feature_L2_bridge_simple(FCI_CLIENT* p_cl);
+extern int demo_feature_L2_bridge_vlan(FCI_CLIENT* p_cl);
  
  
 /*
- * @brief      Use libFCI to configure advanced properties of physical interface.
+ * @brief      Use libFCI to configure advanced properties of physical interfaces.
  * @details    Scenario description:
  *               [*] Let there be two computers (PCs), both in the same network subnet.
- *                   Both PCs are connected through PFE. PFE acts as a simple bridge.
- *               [*] Use libFCI to create and assign a mirroring rule to mirror
- *                   all communication between the two computers to emac2 physical interface.
+ *                   Both PCs are connected to PFE, each to one PFE emac physical interface.
+ *                   PFE acts as a simple bridge.
+ *               [*] MAC address filtering:
+ *                   Selected emac physical interfaces should not work in a promiscuous mode,
+ *                   but should accept only traffic from a selected range of destination MAC 
+ *                   addresses. Use libFCI to configure this MAC address filtering.
+ *               [*] Mirroring:
+ *                   Use libFCI to create and assign mirroring rules. Task is to mirror 
+ *                   a copy of all PC0<->PC1 communication to emac2 physical interface.
  *             PC description:
  *               PC0:
- *                 --> IP address: 10.3.0.2/24
+ *                 --> IP address:  10.3.0.2/24
+ *                 --> MAC address: 0A:01:23:45:67:89
+ *                     (this is just a demo MAC; real MAC of the real PC0 should be used)
  *                 --> Accessible via PFE's emac0 physical interface.
  *               PC1:
- *                 --> IP address: 10.3.0.5/24
+ *                 --> IP address:  10.3.0.5/24
+ *                 --> MAC address: 0A:FE:DC:BA:98:76
+ *                     (this is just a demo MAC; real MAC of the real PC1 should be used)
  *                 --> Accessible via PFE's emac1 physical interface.
  *               
  * @note       This code uses a suite of "demo_" functions. The "demo_" functions encapsulate
@@ -75,9 +85,9 @@ int demo_feature_physical_interface(FCI_CLIENT* p_cl)
     int rtn = FPP_ERR_OK;
     
     
-    /* setup PFE to classify traffic (not needed by Flexible Filter, done for demo purposes)*/
-    /* ==================================================================================== */
-    rtn = demo_feature_L2_bridge_simple(p_cl);
+    /* setup PFE to classify traffic (not needed, but done for demo purposes)*/
+    /* ===================================================================== */
+    rtn = demo_feature_L2_bridge_vlan(p_cl);
     
     
     /* create a mirroring rule */
@@ -102,13 +112,22 @@ int demo_feature_physical_interface(FCI_CLIENT* p_cl)
             /* ------------------------------------ */
             if (FPP_ERR_OK == rtn)
             {
+                /* add MAC address filter: accept traffic with dest. MAC == MAC of PC1 */
+                if (FPP_ERR_OK == rtn)
+                {
+                    rtn = demo_if_mac_add(p_cl, (uint8_t[6]){0x0A,0xFE,0xDC,0xBA,0x98,0x76}, 
+                                                "emac0");
+                }
+                
+                
                 /* get data from PFE and store them in the local variable "phyif" */
                 rtn = demo_phy_if_get_by_name(p_cl, &phyif, "emac0");
                 if (FPP_ERR_OK == rtn)
                 {
                     /* modify locally stored data */
-                    demo_phy_if_ld_set_rx_mirror(&phyif, 0, "MirroringRule0");
-                    demo_phy_if_ld_set_promisc(&phyif, true);
+                    demo_phy_if_ld_set_rx_mirror(&phyif, 0, "MirroringRule0");  /* mirror */
+                    demo_phy_if_ld_set_promisc(&phyif, false);  /* disable promiscuous mode
+                                                                   (MAC filters are used) */
                 
                     /* update data in PFE */
                     rtn = demo_phy_if_update(p_cl, &phyif);
@@ -119,13 +138,22 @@ int demo_feature_physical_interface(FCI_CLIENT* p_cl)
             /* ------------------------------------ */
             if (FPP_ERR_OK == rtn)
             {
+                /* add MAC address filter: accept traffic with dest. MAC == MAC of PC0 */
+                if (FPP_ERR_OK == rtn)
+                {
+                    rtn = demo_if_mac_add(p_cl, (uint8_t[6]){0x0A,0x01,0x23,0x45,0x67,0x89}, 
+                                                "emac1");
+                }
+                
+                
                 /* get data from PFE and store them in the local variable "phyif" */
                 rtn = demo_phy_if_get_by_name(p_cl, &phyif, "emac1");
                 if (FPP_ERR_OK == rtn)
                 {
                     /* modify locally stored data */
-                    demo_phy_if_ld_set_rx_mirror(&phyif, 0, "MirroringRule0");
-                    demo_phy_if_ld_set_promisc(&phyif, true);
+                    demo_phy_if_ld_set_rx_mirror(&phyif, 0, "MirroringRule0");  /* mirror */
+                    demo_phy_if_ld_set_promisc(&phyif, false);  /* disable promiscuous mode
+                                                                   (MAC filters are used) */
                     
                     /* update data in PFE */
                     rtn = demo_phy_if_update(p_cl, &phyif);

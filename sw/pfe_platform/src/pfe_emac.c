@@ -432,7 +432,7 @@ pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_
 			{
 				NXP_LOG_DEBUG("Mutex unlock failed\n");
 			}
-			
+
 			/*	Invalid configuration */
 			NXP_LOG_ERROR("Invalid configuration requested\n");
 			(void)oal_mutex_destroy(&emac->mutex);
@@ -628,13 +628,22 @@ errno_t pfe_emac_get_ts_freq_adjustment(pfe_emac_t *emac, uint32_t *ppb, bool_t 
  * @param[in]		emac THe EMAC instance
  * @param[in,out]	sec Pointer where seconds value shall be written
  * @param[in,out]	nsec Pointer where nano-seconds value shall be written
+ * @param[in,out]	sec_hi Pointer where higher-word-seconds value shall be written
  * @return			EOK if success, error code otherwise
  */
-errno_t pfe_emac_get_ts_time(pfe_emac_t *emac, uint32_t *sec, uint32_t *nsec)
+errno_t pfe_emac_get_ts_time(pfe_emac_t *emac, uint32_t *sec, uint32_t *nsec, uint16_t *sec_hi)
 {
 	errno_t ret;
 
-	if ((NULL == sec) || (NULL == nsec))
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if ((NULL == sec) || (NULL == nsec) || (NULL == sec_hi))
 	{
 		ret = EINVAL;
 	}
@@ -645,7 +654,7 @@ errno_t pfe_emac_get_ts_time(pfe_emac_t *emac, uint32_t *sec, uint32_t *nsec)
 			NXP_LOG_DEBUG("Mutex lock failed\n");
 		}
 
-		pfe_emac_cfg_get_ts_time(emac->emac_base_va, sec, nsec);
+		pfe_emac_cfg_get_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
 		ret = EOK;
 
 		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
@@ -673,6 +682,14 @@ errno_t pfe_emac_adjust_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, b
 {
 	errno_t ret;
 
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
 	if (EOK != oal_mutex_lock(&emac->ts_mutex))
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
@@ -695,18 +712,27 @@ errno_t pfe_emac_adjust_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, b
  * @param[in]	emac The EMAC instance
  * @param[in]	sec New seconds value
  * @param[in]	nsec New nano-seconds value
+ * @param[in]	sec_hi New higher-word-seconds value
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_emac_set_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec)
+errno_t pfe_emac_set_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, uint16_t sec_hi)
 {
 	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&emac->ts_mutex))
 	{
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-	ret = pfe_emac_cfg_set_ts_time(emac->emac_base_va, sec, nsec);
+	ret = pfe_emac_cfg_set_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
 
 	if (EOK != oal_mutex_unlock(&emac->ts_mutex))
 	{
@@ -1151,7 +1177,7 @@ errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_emac_crit_t crit, pfe_mac
 
 /**
  * @brief		Remove MAC address from EMAC
- * @details		Address resolution will be done using exact match with the added address 
+ * @details		Address resolution will be done using exact match with the added address
  * @param[in]	emac The EMAC instance
  * @param[in]	addr The MAC address to delete
  * @param[in]	owner The identification of driver instance
@@ -1162,7 +1188,7 @@ errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_emac_crit_t crit, pfe_mac
 errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
 {
 	errno_t ret;
-	
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
@@ -1187,7 +1213,7 @@ errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_i
 
 /**
  * @brief		Remove MAC address from EMAC without entering the critical section
- * @details		Address resolution will be done using exact match with the added address 
+ * @details		Address resolution will be done using exact match with the added address
  * @param[in]	emac The EMAC instance
  * @param[in]	addr The MAC address to delete
  * @param[in]	owner The identification of driver instance
@@ -1324,15 +1350,15 @@ errno_t pfe_emac_add_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_i
 			if (EOK != oal_mutex_unlock(&emac->mutex))
 			{
 				NXP_LOG_DEBUG("Mutex unlock failed\n");
-			}	
+			}
 
 			/*	Can't add broadcast address */
 			return EINVAL;
 		}
-		
-		/*	Get the hash */ 
+
+		/*	Get the hash */
 		hash = pfe_emac_cfg_get_hash(emac->emac_base_va, addr);
-		
+
 		/*	Store address into EMAC's internal DB together with 'in_hash_grp' flag and hash */
 		ret = pfe_emac_addr_db_add(emac, addr, TRUE, hash, owner);
 		if (EOK != ret)

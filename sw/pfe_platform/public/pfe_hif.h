@@ -27,8 +27,8 @@ typedef enum
 	HIF_CHNL_3 = (1 << 3)
 } pfe_hif_chnl_id_t;
 
-#define MASTER_UP	(1 << 0)
-#define HIF_OCCUPIED	(1 << 1)
+#define MASTER_UP	(1U << 0)
+#define HIF_OCCUPIED	(1U << 1)
 
 /*	Way to translate physical interface ID to HIF channel ID... */
 #include "pfe_ct.h"

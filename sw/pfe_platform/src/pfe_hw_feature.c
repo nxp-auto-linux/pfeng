@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2021 NXP
+ *  Copyright 2021-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -17,8 +17,8 @@
 struct pfe_hw_feature_tag
 {
 	/* Similar to pfe_ct_feature_desc_t */
-	char *name;	/* Feature name */
-	char *description;	/* Feature description */
+	const char *name;	/* Feature name */
+	const char *description;	/* Feature description */
 	pfe_ct_feature_flags_t flags;
 	uint8_t def_val;	/* Enable/disable default value used for runtime configuration */
 	uint8_t	val;
@@ -28,13 +28,13 @@ struct pfe_hw_feature_tag
  * @brief Creates a feature instance
  * @return The created feature instance or NULL in case of failure
  */
-static pfe_hw_feature_t *pfe_hw_feature_create(char *name, char *descr, pfe_ct_feature_flags_t flags, uint8_t def_val)
+static pfe_hw_feature_t *pfe_hw_feature_create(const char *name, const char *descr, pfe_ct_feature_flags_t flags, uint8_t def_val)
 {
 	pfe_hw_feature_t *feature;
 	feature = oal_mm_malloc(sizeof(pfe_hw_feature_t));
 	if(NULL != feature)
 	{
-		(void)memset(feature, 0U, sizeof(pfe_hw_feature_t));
+		(void)memset(feature, 0, sizeof(pfe_hw_feature_t));
 		feature->name = name;
 		feature->description = descr;
 		feature->flags = flags;
@@ -63,45 +63,40 @@ void pfe_hw_feature_destroy(const pfe_hw_feature_t *feature)
 	oal_mm_free(feature);
 }
 
-errno_t pfe_hw_feature_init_all(uint32_t *cbus_base, pfe_hw_feature_t ***hw_features, uint32_t *hw_features_count)
+errno_t pfe_hw_feature_init_all(const uint32_t *cbus_base, pfe_hw_feature_t **hw_features, uint32_t *hw_features_count)
 {
 	uint32_t val;
 	pfe_hw_feature_t *feature;
-	pfe_hw_feature_t **hw_features_arr;
-	bool_t on_g3 = FALSE;
-
-	hw_features_arr = oal_mm_malloc(1U * sizeof(pfe_hw_feature_t *));
+	uint8_t on_g3 = 0U;
 
 	feature = pfe_hw_feature_create(PFE_HW_FEATURE_RUN_ON_G3, "Active if running on S32G3", F_PRESENT, 0);
 	if (NULL != feature)
 	{
 		/*      Detect S32G silicon version */
 		val = hal_read32((void *)(CBUS_GLOBAL_CSR_BASE_ADDR + WSP_VERSION + (addr_t)cbus_base));
-		if(0x00050300 == val)
+		if(0x00050300U == val)
 		{       /* S32G2 */
 			NXP_LOG_INFO("Silicon S32G2\n");
 		}
-		else if(0x00000101 == val)
+		else if(0x00000101U == val)
 		{       /* S32G3 */
-			on_g3 = TRUE;
+			on_g3 = 1U;
 			NXP_LOG_INFO("Silicon S32G3\n");
 		}
 		else
 		{       /* Unknown */
-			NXP_LOG_ERROR("Silicon HW version is unknown: 0x%x\n", val);
+			NXP_LOG_ERROR("Silicon HW version is unknown: 0x%x\n", (uint_t)val);
 		}
 
-		pfe_hw_feature_set_val(feature, on_g3);
-		hw_features_arr[0] = feature;
+		(void)pfe_hw_feature_set_val(feature, on_g3);
 
+		hw_features[0] = feature;
+		*hw_features_count = 1U;
 	}
 	else
 	{
 		return ENOMEM;
 	}
-
-	*hw_features = hw_features_arr;
-	*hw_features_count = 1U;
 
 	return EOK;
 }

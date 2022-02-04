@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -14,7 +14,8 @@
 #include "fci.h"
 #include "fci_internal.h"
 #include "pfe_class.h"
-#include "pfe_flexible_filter.h"
+#include "fci_flexible_filter.h"
+#include "fci_fp.h"
 
 #ifdef PFE_CFG_FCI_ENABLE
 
@@ -31,20 +32,20 @@
 static void fci_fp_construct_rule_reply(fpp_fp_rule_props_t *r, char *rule_name, char *next_rule,
                                    uint32_t data, uint32_t mask, uint16_t offset, pfe_ct_fp_flags_t flags)
 {
-    strncpy((char_t *)r->rule_name, rule_name, 15);
+    (void)strncpy((char_t *)r->rule_name, rule_name, 15);
     r->data = data;
     r->mask = mask;
     r->offset = offset;
     if(NULL != next_rule)
     {
-        strncpy((char_t *)r->next_rule_name, next_rule, 15);
+        (void)strncpy((char_t *)r->next_rule_name, next_rule, 15);
     }
-    if(flags & FP_FL_ACCEPT)
+    if(((uint8_t)flags & (uint8_t)FP_FL_ACCEPT) != 0U)
     {
         /*  Ensure correct endianess */
         r->match_action = FP_ACCEPT;
     }
-    else if(flags & FP_FL_REJECT)
+    else if(((uint8_t)flags & (uint8_t)FP_FL_REJECT) != 0U)
     {
         r->match_action = FP_REJECT;
     }
@@ -52,7 +53,7 @@ static void fci_fp_construct_rule_reply(fpp_fp_rule_props_t *r, char *rule_name,
     {
         r->match_action = FP_NEXT_RULE;
     }
-    if(flags & FP_FL_INVERT)
+    if(((uint8_t)flags & (uint8_t)FP_FL_INVERT) != 0U)
     {
         r->invert = TRUE;
     }
@@ -61,11 +62,11 @@ static void fci_fp_construct_rule_reply(fpp_fp_rule_props_t *r, char *rule_name,
         r->invert = FALSE;
     }
 
-    if(flags & FP_FL_L3_OFFSET)
+    if(((uint8_t)flags & (uint8_t)FP_FL_L3_OFFSET) != 0U)
     {
         r->offset_from = FP_OFFSET_FROM_L3_HEADER;
     }
-    else if(flags & FP_FL_L4_OFFSET)
+    else if(((uint8_t)flags & (uint8_t)FP_FL_L4_OFFSET) != 0U)
     {
         r->offset_from = FP_OFFSET_FROM_L4_HEADER;
     }
@@ -88,7 +89,7 @@ static void fci_fp_construct_rule_reply(fpp_fp_rule_props_t *r, char *rule_name,
 errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *reply_buf, uint32_t *reply_len)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    fci_t *context = (fci_t *)&__context;
+    const fci_t *context = (fci_t *)&__context;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     fpp_fp_table_cmd_t *fp_cmd;
     errno_t ret = EOK;
@@ -237,7 +238,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
 errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *reply_buf, uint32_t *reply_len)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    fci_t *context = (fci_t *)&__context;
+    const fci_t *context = (fci_t *)&__context;
 #endif
     fpp_fp_rule_cmd_t *fp_cmd;
     errno_t ret = EOK;
@@ -303,7 +304,7 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
                     *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
                     return EINVAL;
             }
-            if(TRUE == fp_cmd->r.invert)
+            if((uint8_t)TRUE == fp_cmd->r.invert)
             {
                 flags |= FP_FL_INVERT;
             }

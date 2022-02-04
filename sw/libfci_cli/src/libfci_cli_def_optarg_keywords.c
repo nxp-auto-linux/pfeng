@@ -50,11 +50,9 @@
 static const char *const txt_if_modes[] = 
 {
     TXT_IF_MODE__DEFAULT,
-    TXT_IF_MODE__BRIDGE,
-    TXT_IF_MODE__ROUTER,
     TXT_IF_MODE__VLAN_BRIDGE,
+    TXT_IF_MODE__ROUTER,
     TXT_IF_MODE__FLEXIBLE_ROUTER,
-    TXT_IF_MODE__L2L3_BRIDGE,
     TXT_IF_MODE__L2L3_VLAN_BRIDGE
 };
 #define IF_MODES_LN  CALC_LN(txt_if_modes)

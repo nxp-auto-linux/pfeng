@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -43,16 +43,16 @@
 
 #define FCI_CONNECTIONS_CFG_MAX_STR_LEN		128U
 
-static void fci_connections_ipv4_cmd_to_5t(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *tuple);
-static void fci_connections_ipv4_cmd_to_5t_rep(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *tuple);
-static void fci_connections_ipv6_cmd_to_5t(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t *tuple);
-static void fci_connections_ipv6_cmd_to_5t_rep(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t *tuple);
-static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route,
-								pfe_5_tuple_t *tuple, pfe_5_tuple_t *tuple_rep);
-static errno_t fci_connections_ipv4_cmd_to_entry(fpp_ct_cmd_t *ct_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface);
+static void fci_connections_ipv4_cmd_to_5t(const fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *tuple);
+static void fci_connections_ipv4_cmd_to_5t_rep(const fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *tuple);
+static void fci_connections_ipv6_cmd_to_5t(const fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t *tuple);
+static void fci_connections_ipv6_cmd_to_5t_rep(const fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t *tuple);
+static pfe_rtable_entry_t *fci_connections_create_entry(const fci_rt_db_entry_t *route,
+								const pfe_5_tuple_t *tuple, const pfe_5_tuple_t *tuple_rep);
+static errno_t fci_connections_ipv4_cmd_to_entry(const fpp_ct_cmd_t *ct_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface);
 static errno_t fci_connections_ipv4_cmd_to_rep_entry(fpp_ct_cmd_t *ct_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface);
-static errno_t fci_connections_ipv6_cmd_to_entry(fpp_ct6_cmd_t *ct_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface);
-static errno_t fci_connections_ipv6_cmd_to_rep_entry(fpp_ct6_cmd_t *ct_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface);
+static errno_t fci_connections_ipv6_cmd_to_entry(const fpp_ct6_cmd_t *ct6_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface);
+static errno_t fci_connections_ipv6_cmd_to_rep_entry(fpp_ct6_cmd_t *ct6_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface);
 static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, fci_msg_t *msg, uint16_t *fci_ret, void *reply_buf, uint32_t *reply_len);
 #if (PFE_CFG_VERBOSITY_LEVEL >= 8)
 #ifdef NXP_LOG_ENABLED
@@ -61,9 +61,9 @@ static char_t * fci_connections_ipv6_cmd_to_str(fpp_ct6_cmd_t *ct6_cmd);
 static char_t * fci_connections_entry_to_str(pfe_rtable_entry_t *entry);
 static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *dip, uint16_t *sport, uint16_t *dport,
 									uint8_t *sip_out, uint8_t *dip_out, uint16_t *sport_out, uint16_t *dport_out, uint8_t *proto);
-#endif /* NXP_LOG_ENABLED */					
+#endif /* NXP_LOG_ENABLED */
 #endif /* PFE_CFG_VERBOSITY_LEVEL */
-static pfe_phy_if_t *fci_connections_rentry_to_if(pfe_rtable_entry_t *entry);
+static pfe_phy_if_t *fci_connections_rentry_to_if(const pfe_rtable_entry_t *entry);
 
 #if (PFE_CFG_VERBOSITY_LEVEL >= 8)
 #ifdef NXP_LOG_ENABLED
@@ -297,7 +297,7 @@ static char_t * fci_connections_entry_to_str(pfe_rtable_entry_t *entry)
  * @param[in]	ct_cmd The command
  * @param[out]	tuple Pointer to location where output shall be written
  */
-static void fci_connections_ipv4_cmd_to_5t(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *tuple)
+static void fci_connections_ipv4_cmd_to_5t(const fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *tuple)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ct_cmd) || (NULL == tuple)))
@@ -307,10 +307,10 @@ static void fci_connections_ipv4_cmd_to_5t(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	memset(tuple, 0, sizeof(pfe_5_tuple_t));
+	(void)memset(tuple, 0, sizeof(pfe_5_tuple_t));
 
-	memcpy(&tuple->src_ip.v4, &ct_cmd->saddr, 4);
-	memcpy(&tuple->dst_ip.v4, &ct_cmd->daddr, 4);
+	(void)memcpy(&tuple->src_ip.v4, &ct_cmd->saddr, 4);
+	(void)memcpy(&tuple->dst_ip.v4, &ct_cmd->daddr, 4);
 	tuple->src_ip.is_ipv4 = TRUE;
 	tuple->dst_ip.is_ipv4 = TRUE;
 	tuple->sport = oal_ntohs(ct_cmd->sport);
@@ -323,7 +323,7 @@ static void fci_connections_ipv4_cmd_to_5t(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *
  * @param[in]	ct_cmd The command
  * @param[out]	tuple Pointer to location where output shall be written
  */
-static void fci_connections_ipv4_cmd_to_5t_rep(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *tuple)
+static void fci_connections_ipv4_cmd_to_5t_rep(const fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *tuple)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ct_cmd) || (NULL == tuple)))
@@ -333,10 +333,10 @@ static void fci_connections_ipv4_cmd_to_5t_rep(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	memset(tuple, 0, sizeof(pfe_5_tuple_t));
+	(void)memset(tuple, 0, sizeof(pfe_5_tuple_t));
 
-	memcpy(&tuple->src_ip.v4, &ct_cmd->saddr_reply, 4);
-	memcpy(&tuple->dst_ip.v4, &ct_cmd->daddr_reply, 4);
+	(void)memcpy(&tuple->src_ip.v4, &ct_cmd->saddr_reply, 4);
+	(void)memcpy(&tuple->dst_ip.v4, &ct_cmd->daddr_reply, 4);
 	tuple->src_ip.is_ipv4 = TRUE;
 	tuple->dst_ip.is_ipv4 = TRUE;
 	tuple->sport = oal_ntohs(ct_cmd->sport_reply);
@@ -349,7 +349,7 @@ static void fci_connections_ipv4_cmd_to_5t_rep(fpp_ct_cmd_t *ct_cmd, pfe_5_tuple
  * @param[in]	ct6_cmd The command
  * @param[out]	tuple Pointer to location where output shall be written
  */
-static void fci_connections_ipv6_cmd_to_5t(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t *tuple)
+static void fci_connections_ipv6_cmd_to_5t(const fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t *tuple)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ct6_cmd) || (NULL == tuple)))
@@ -359,10 +359,10 @@ static void fci_connections_ipv6_cmd_to_5t(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	memset(tuple, 0, sizeof(pfe_5_tuple_t));
+	(void)memset(tuple, 0, sizeof(pfe_5_tuple_t));
 
-	memcpy(&tuple->src_ip.v6, &ct6_cmd->saddr[0], 16);
-	memcpy(&tuple->dst_ip.v6, &ct6_cmd->daddr[0], 16);
+	(void)memcpy(&tuple->src_ip.v6, &ct6_cmd->saddr[0], 16);
+	(void)memcpy(&tuple->dst_ip.v6, &ct6_cmd->daddr[0], 16);
 	tuple->src_ip.is_ipv4 = FALSE;
 	tuple->dst_ip.is_ipv4 = FALSE;
 	tuple->sport = oal_ntohs(ct6_cmd->sport);
@@ -375,7 +375,7 @@ static void fci_connections_ipv6_cmd_to_5t(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t
  * @param[in]	ct_cmd The command
  * @param[out]	tuple Pointer to location where output shall be written
  */
-static void fci_connections_ipv6_cmd_to_5t_rep(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t *tuple)
+static void fci_connections_ipv6_cmd_to_5t_rep(const fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t *tuple)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ct6_cmd) || (NULL == tuple)))
@@ -385,10 +385,10 @@ static void fci_connections_ipv6_cmd_to_5t_rep(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tup
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	memset(tuple, 0, sizeof(pfe_5_tuple_t));
+	(void)memset(tuple, 0, sizeof(pfe_5_tuple_t));
 
-	memcpy(&tuple->src_ip.v6, &ct6_cmd->saddr_reply[0], 16);
-	memcpy(&tuple->dst_ip.v6, &ct6_cmd->daddr_reply[0], 16);
+	(void)memcpy(&tuple->src_ip.v6, &ct6_cmd->saddr_reply[0], 16);
+	(void)memcpy(&tuple->dst_ip.v6, &ct6_cmd->daddr_reply[0], 16);
 	tuple->src_ip.is_ipv4 = FALSE;
 	tuple->dst_ip.is_ipv4 = FALSE;
 	tuple->sport = oal_ntohs(ct6_cmd->sport_reply);
@@ -408,8 +408,8 @@ static void fci_connections_ipv6_cmd_to_5t_rep(fpp_ct6_cmd_t *ct6_cmd, pfe_5_tup
  * @param[in]	tuple_rep Reply flow direction
  * @return		The routing table entry instance to be inserted into routing table or NULL if failed
  */
-static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route,
-															pfe_5_tuple_t *tuple, pfe_5_tuple_t *tuple_rep)
+static pfe_rtable_entry_t *fci_connections_create_entry(const fci_rt_db_entry_t *route,
+															const pfe_5_tuple_t *tuple, const pfe_5_tuple_t *tuple_rep)
 {
 	pfe_rtable_entry_t *new_entry;
 
@@ -438,7 +438,7 @@ static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route
 	}
 
 	/*	Set properties */
-	pfe_rtable_entry_set_dstif(new_entry, route->iface);
+	(void)pfe_rtable_entry_set_dstif(new_entry, route->iface);
 	pfe_rtable_entry_set_timeout(new_entry, fci_connections_get_default_timeout(tuple->proto));
 	/*	Set route ID (network endian) */
 	pfe_rtable_entry_set_route_id(new_entry, route->id);
@@ -504,7 +504,7 @@ static pfe_rtable_entry_t *fci_connections_create_entry(fci_rt_db_entry_t *route
  * @param[out]	iface Pointer where target interface instance shall be written
  * @return		EOK if success, error code otherwise
  */
-static errno_t fci_connections_ipv4_cmd_to_entry(fpp_ct_cmd_t *ct_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface)
+static errno_t fci_connections_ipv4_cmd_to_entry(const fpp_ct_cmd_t *ct_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface)
 {
 	fci_t *context = (fci_t *)&__context;
 	fci_rt_db_entry_t *route;
@@ -526,7 +526,7 @@ static errno_t fci_connections_ipv4_cmd_to_entry(fpp_ct_cmd_t *ct_cmd, pfe_rtabl
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Check if original direction is enabled */
-	if (0 != (oal_ntohs(ct_cmd->flags) & CTCMD_FLAGS_ORIG_DISABLED))
+	if (0U != (oal_ntohs(ct_cmd->flags) & CTCMD_FLAGS_ORIG_DISABLED))
 	{
 		/*	Original direction is disabled */
 		*entry = NULL;
@@ -535,7 +535,7 @@ static errno_t fci_connections_ipv4_cmd_to_entry(fpp_ct_cmd_t *ct_cmd, pfe_rtabl
 	}
 
 	/*	Get route */
-	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (void *)&ct_cmd->route_id);
+	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (const void *)&ct_cmd->route_id);
 	if (NULL == route)
 	{
 		NXP_LOG_ERROR("No such route (0x%x)\n", (uint_t)ct_cmd->route_id);
@@ -596,7 +596,7 @@ static errno_t fci_connections_ipv4_cmd_to_rep_entry(fpp_ct_cmd_t *ct_cmd, pfe_r
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Check if reply direction is enabled */
-	if (0 != (oal_ntohs(ct_cmd->flags) & CTCMD_FLAGS_REP_DISABLED))
+	if (0U != (oal_ntohs(ct_cmd->flags) & CTCMD_FLAGS_REP_DISABLED))
 	{
 		/*	Reply direction is disabled */
 		*entry = NULL;
@@ -605,7 +605,7 @@ static errno_t fci_connections_ipv4_cmd_to_rep_entry(fpp_ct_cmd_t *ct_cmd, pfe_r
 	}
 
 	/*	Get route */
-	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (void *)&ct_cmd->route_id_reply);
+	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (const void *)&ct_cmd->route_id_reply);
 	if (NULL == route)
 	{
 		NXP_LOG_ERROR("No such route (0x%x)\n", (uint_t)oal_ntohl(ct_cmd->route_id_reply));
@@ -642,7 +642,7 @@ static errno_t fci_connections_ipv4_cmd_to_rep_entry(fpp_ct_cmd_t *ct_cmd, pfe_r
  * @param[out]	iface Pointer where target interface instance shall be written
  * @return		EOK if success, error code otherwise
  */
-static errno_t fci_connections_ipv6_cmd_to_entry(fpp_ct6_cmd_t *ct6_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface)
+static errno_t fci_connections_ipv6_cmd_to_entry(const fpp_ct6_cmd_t *ct6_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface)
 {
 	fci_t *context = (fci_t *)&__context;
 	fci_rt_db_entry_t *route;
@@ -664,7 +664,7 @@ static errno_t fci_connections_ipv6_cmd_to_entry(fpp_ct6_cmd_t *ct6_cmd, pfe_rta
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Check if original direction is enabled */
-	if (0 != (oal_ntohs(ct6_cmd->flags) & CTCMD_FLAGS_ORIG_DISABLED))
+	if (0U != (oal_ntohs(ct6_cmd->flags) & CTCMD_FLAGS_ORIG_DISABLED))
 	{
 		/*	Original direction is disabled */
 		*entry = NULL;
@@ -672,7 +672,7 @@ static errno_t fci_connections_ipv6_cmd_to_entry(fpp_ct6_cmd_t *ct6_cmd, pfe_rta
 	}
 
 	/*	Get route */
-	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (void *)&ct6_cmd->route_id);
+	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (const void *)&ct6_cmd->route_id);
 	if (NULL == route)
 	{
 		NXP_LOG_ERROR("No such route (0x%x)\n", (uint_t)ct6_cmd->route_id);
@@ -733,7 +733,7 @@ static errno_t fci_connections_ipv6_cmd_to_rep_entry(fpp_ct6_cmd_t *ct6_cmd, pfe
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	Check if reply direction is enabled */
-	if (0 != (oal_ntohs(ct6_cmd->flags) & CTCMD_FLAGS_REP_DISABLED))
+	if (0U != (oal_ntohs(ct6_cmd->flags) & CTCMD_FLAGS_REP_DISABLED))
 	{
 		/*	Reply direction is disabled */
 		*entry = NULL;
@@ -742,7 +742,7 @@ static errno_t fci_connections_ipv6_cmd_to_rep_entry(fpp_ct6_cmd_t *ct6_cmd, pfe
 	}
 
 	/*	Get route */
-	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (void *)&ct6_cmd->route_id_reply);
+	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (const void *)&ct6_cmd->route_id_reply);
 	if (NULL == route)
 	{
 		NXP_LOG_ERROR("No such route (0x%x)\n", (uint_t)oal_ntohl(ct6_cmd->route_id_reply));
@@ -777,7 +777,7 @@ static errno_t fci_connections_ipv6_cmd_to_rep_entry(fpp_ct6_cmd_t *ct6_cmd, pfe
  * @param[in]	entry Routing table entry
  * @return		The interface instance or NULL if failed
  */
-static pfe_phy_if_t *fci_connections_rentry_to_if(pfe_rtable_entry_t *entry)
+static pfe_phy_if_t *fci_connections_rentry_to_if(const pfe_rtable_entry_t *entry)
 {
 	fci_t *context = (fci_t *)&__context;
 	uint32_t route_id;
@@ -807,7 +807,7 @@ static pfe_phy_if_t *fci_connections_rentry_to_if(pfe_rtable_entry_t *entry)
 	}
 
 	/*	Get 'reply' route */
-	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (void *)&route_id);
+	route = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (const void *)&route_id);
 	if (NULL == route)
 	{
 		NXP_LOG_ERROR("No such route: %d\n", (int_t)oal_ntohl(route_id));
@@ -835,7 +835,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, fci_msg_t *msg, uint16_t
 	fpp_ct6_cmd_t *ct6_cmd, *ct6_reply;
 	errno_t ret = EOK;
 	pfe_ip_addr_t sip, dip;
-	uint32_t route_id;
+	uint32_t route_id = 0U;
 	pfe_rtable_entry_t *entry = NULL, *rep_entry = NULL;
 	pfe_5_tuple_t tuple;
 	pfe_ct_route_actions_t actions;
@@ -869,11 +869,11 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, fci_msg_t *msg, uint16_t
 	/*	Initialize the reply buffer */
 	if (sizeof(fpp_ct_cmd_t) > sizeof(fpp_ct6_cmd_t))
 	{
-		memset(reply_buf, 0, sizeof(fpp_ct_cmd_t));
+		(void)memset(reply_buf, 0, sizeof(fpp_ct_cmd_t));
 	}
 	else
 	{
-		memset(reply_buf, 0, sizeof(fpp_ct6_cmd_t));
+		(void)memset(reply_buf, 0, sizeof(fpp_ct6_cmd_t));
 	}
 
 	ct_cmd = (fpp_ct_cmd_t *)(msg->msg_cmd.payload);
@@ -1044,7 +1044,7 @@ free_and_fail:
 				}
 
 				pfe_rtable_entry_free(rep_entry);
-				entry = NULL;
+				rep_entry = NULL;
 			}
 
 			if (NULL != phy_if_reply)
@@ -1177,7 +1177,7 @@ free_and_fail:
 		}
 
 		case FPP_ACTION_UPDATE:
-		{	
+		{
 #if (PFE_CFG_VERBOSITY_LEVEL >= 8)
 			if (TRUE == ipv6)
 			{
@@ -1208,7 +1208,7 @@ free_and_fail:
 
 				if (TRUE == ipv6)
 				{
-					if (oal_ntohs(ct6_cmd->flags) & CTCMD_FLAGS_TTL_DECREMENT)
+					if ((oal_ntohs(ct6_cmd->flags) & CTCMD_FLAGS_TTL_DECREMENT) != 0U)
 					{
 						pfe_rtable_entry_set_ttl_decrement(entry);
 					}
@@ -1219,7 +1219,7 @@ free_and_fail:
 				}
 				else
 				{
-					if (oal_ntohs(ct_cmd->flags) & CTCMD_FLAGS_TTL_DECREMENT)
+					if ((oal_ntohs(ct_cmd->flags) & CTCMD_FLAGS_TTL_DECREMENT) != 0U)
 					{
 						pfe_rtable_entry_set_ttl_decrement(entry);
 					}
@@ -1287,17 +1287,17 @@ free_and_fail:
 			/*	Build reply structure */
 			pfe_rtable_entry_get_sip(entry, &sip);
 			pfe_rtable_entry_get_dip(entry, &dip);
-			pfe_rtable_entry_get_route_id(entry, &route_id);
+			(void)pfe_rtable_entry_get_route_id(entry, &route_id);
 
 			if (TRUE == ipv6)
 			{
-				memcpy(ct6_reply->saddr, &sip.v6, 16);
-				memcpy(ct6_reply->daddr, &dip.v6, 16);
+				(void)memcpy(ct6_reply->saddr, &sip.v6, 16);
+				(void)memcpy(ct6_reply->daddr, &dip.v6, 16);
 				ct6_reply->sport = oal_htons(pfe_rtable_entry_get_sport(entry));
 				ct6_reply->dport = oal_htons(pfe_rtable_entry_get_dport(entry));
 				ct6_reply->vlan = oal_htons(pfe_rtable_entry_get_out_vlan(entry));
-				memcpy(ct6_reply->saddr_reply, ct6_reply->daddr, 16);
-				memcpy(ct6_reply->daddr_reply, ct6_reply->saddr, 16);
+				(void)memcpy(ct6_reply->saddr_reply, ct6_reply->daddr, 16);
+				(void)memcpy(ct6_reply->daddr_reply, ct6_reply->saddr, 16);
 				ct6_reply->sport_reply = ct6_reply->dport;
 				ct6_reply->dport_reply = ct6_reply->sport;
 				ct6_reply->protocol = oal_ntohs(pfe_rtable_entry_get_proto(entry));
@@ -1306,13 +1306,13 @@ free_and_fail:
 			}
 			else
 			{
-				memcpy(&ct_reply->saddr, &sip.v4, 4);
-				memcpy(&ct_reply->daddr, &dip.v4, 4);
+				(void)memcpy(&ct_reply->saddr, &sip.v4, 4);
+				(void)memcpy(&ct_reply->daddr, &dip.v4, 4);
 				ct_reply->sport = oal_htons(pfe_rtable_entry_get_sport(entry));
 				ct_reply->dport = oal_htons(pfe_rtable_entry_get_dport(entry));
 				ct_reply->vlan = oal_htons(pfe_rtable_entry_get_out_vlan(entry));
-				memcpy(&ct_reply->saddr_reply, &ct_reply->daddr, 4);
-				memcpy(&ct_reply->daddr_reply, &ct_reply->saddr, 4);
+				(void)memcpy(&ct_reply->saddr_reply, &ct_reply->daddr, 4);
+				(void)memcpy(&ct_reply->daddr_reply, &ct_reply->saddr, 4);
 				ct_reply->sport_reply = ct_reply->dport;
 				ct_reply->dport_reply = ct_reply->sport;
 				ct_reply->protocol = oal_ntohs(pfe_rtable_entry_get_proto(entry));
@@ -1360,7 +1360,7 @@ free_and_fail:
 				NXP_LOG_ERROR("Couldn't get output tuple\n");
 			}
 
-			if (0 != (actions & RT_ACT_DEC_TTL))
+			if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_DEC_TTL))
 			{
 				if (TRUE == ipv6)
 				{
@@ -1372,31 +1372,31 @@ free_and_fail:
 				}
 			}
 
-			if (0 != (actions & RT_ACT_CHANGE_SIP_ADDR))
+			if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_SIP_ADDR))
 			{
 				if (TRUE == ipv6)
 				{
-					memcpy(ct6_reply->daddr_reply, &tuple.src_ip.v6, 16);
+					(void)memcpy(ct6_reply->daddr_reply, &tuple.src_ip.v6, 16);
 				}
 				else
 				{
-					memcpy(&ct_reply->daddr_reply, &tuple.src_ip.v4, 4);
+					(void)memcpy(&ct_reply->daddr_reply, &tuple.src_ip.v4, 4);
 				}
 			}
 
-			if (0 != (actions & RT_ACT_CHANGE_DIP_ADDR))
+			if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_DIP_ADDR))
 			{
 				if (TRUE == ipv6)
 				{
-					memcpy(ct6_reply->saddr_reply, &tuple.dst_ip.v6, 16);
+					(void)memcpy(ct6_reply->saddr_reply, &tuple.dst_ip.v6, 16);
 				}
 				else
 				{
-					memcpy(&ct_reply->saddr_reply, &tuple.dst_ip.v4, 4);
+					(void)memcpy(&ct_reply->saddr_reply, &tuple.dst_ip.v4, 4);
 				}
 			}
 
-			if (0 != (actions & RT_ACT_CHANGE_SPORT))
+			if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_SPORT))
 			{
 				if (TRUE == ipv6)
 				{
@@ -1408,7 +1408,7 @@ free_and_fail:
 				}
 			}
 
-			if (0 != (actions & RT_ACT_CHANGE_DPORT))
+			if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_DPORT))
 			{
 				if (TRUE == ipv6)
 				{
@@ -1433,7 +1433,7 @@ free_and_fail:
 			break;
 		}
 	}
-	
+
 	return ret;
 }
 
@@ -1532,12 +1532,12 @@ errno_t fci_connections_ipv4_timeout_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_
 	}
 
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(fpp_timeout_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_timeout_cmd_t));
 
 	timeout_cmd = (fpp_timeout_cmd_t *)(msg->msg_cmd.payload);
 
 	/*	Update FCI-wide defaults applicable for new connections */
-	if (EOK != fci_connections_set_default_timeout(timeout_cmd->protocol, timeout_cmd->timeout_value1))
+	if (EOK != fci_connections_set_default_timeout((uint8_t)timeout_cmd->protocol, timeout_cmd->timeout_value1))
 	{
 		NXP_LOG_WARNING("Can't set default timeout\n");
 	}
@@ -1598,7 +1598,7 @@ errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry)
 		return ret;
 	}
 
-	memset(&msg, 0, sizeof(fci_msg_t));
+	(void)memset(&msg, 0, sizeof(fci_msg_t));
 	msg.type = FCI_MSG_CMD;
 
 	if (TRUE == tuple.src_ip.is_ipv4)
@@ -1607,7 +1607,7 @@ errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry)
 		/*	IPv4 */
 		NXP_LOG_DEBUG("Removing IPv4 connection:\n%s\n", fci_connections_entry_to_str(entry));
 #endif /* PFE_CFG_VERBOSITY_LEVEL */
-		
+
 		client = (fci_core_client_t *)pfe_rtable_entry_get_refptr(entry);
 		if (NULL != client)
 		{
@@ -1615,8 +1615,8 @@ errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry)
 			ct_cmd = (fpp_ct_cmd_t *)msg.msg_cmd.payload;
 			ct_cmd->action = FPP_ACTION_REMOVED;
 
-			memcpy(&ct_cmd->saddr, &tuple.src_ip.v4, 4);
-			memcpy(&ct_cmd->daddr, &tuple.dst_ip.v4, 4);
+			(void)memcpy(&ct_cmd->saddr, &tuple.src_ip.v4, 4);
+			(void)memcpy(&ct_cmd->daddr, &tuple.dst_ip.v4, 4);
 			ct_cmd->sport = oal_htons(tuple.sport);
 			ct_cmd->dport = oal_htons(tuple.dport);
 			ct_cmd->protocol = oal_htons(tuple.proto);
@@ -1645,8 +1645,8 @@ errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry)
 			ct6_cmd = (fpp_ct6_cmd_t *)msg.msg_cmd.payload;
 			ct6_cmd->action = FPP_ACTION_REMOVED;
 
-			memcpy(&ct6_cmd->saddr[0], &tuple.src_ip.v6, 16);
-			memcpy(&ct6_cmd->daddr[0], &tuple.dst_ip.v6, 16);
+			(void)memcpy(&ct6_cmd->saddr[0], &tuple.src_ip.v6, 16);
+			(void)memcpy(&ct6_cmd->daddr[0], &tuple.dst_ip.v6, 16);
 			ct6_cmd->sport = oal_htons(tuple.sport);
 			ct6_cmd->dport = oal_htons(tuple.dport);
 			ct6_cmd->protocol = oal_htons(tuple.proto);
@@ -1760,7 +1760,8 @@ errno_t fci_connections_set_default_timeout(uint8_t ip_proto, uint32_t timeout)
  */
 uint32_t fci_connections_get_default_timeout(uint8_t ip_proto)
 {
-	fci_t *context = (fci_t *)&__context;
+	const fci_t *context = (fci_t *)&__context;
+	uint32_t ret = 0U;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(FALSE == context->fci_initialized))
@@ -1774,19 +1775,24 @@ uint32_t fci_connections_get_default_timeout(uint8_t ip_proto)
 	{
 		case 6U:
 		{
-			return context->default_timeouts.timeout_tcp;
+			ret = context->default_timeouts.timeout_tcp;
+			break;
 		}
 
 		case 17U:
 		{
-			return context->default_timeouts.timeout_udp;
+			ret = context->default_timeouts.timeout_udp;
+			break;
 		}
 
 		default:
 		{
-			return context->default_timeouts.timeout_other;
+			ret = context->default_timeouts.timeout_other;
+			break;
 		}
 	}
+	
+	return ret;
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */

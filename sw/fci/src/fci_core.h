@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -81,14 +81,6 @@ errno_t fci_core_send(fci_msg_t *msg, fci_msg_t *rep);
  * @return		EOK if success, error code otherwise
  */
 errno_t fci_core_client_send(fci_core_client_t *client, fci_msg_t *msg, fci_msg_t *rep);
-
-/**
- * @brief		Send message to all FCI clients
- * @param[in]	msg Pointer to the buffer containing payload to be sent
- * @param[in]	rep Pointer to buffer where reply data shall be stored
- * @return		EOK if success, error code otherwise
- */
-errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep);
 
 #endif /* SRC_FCI_CORE_H_ */
 

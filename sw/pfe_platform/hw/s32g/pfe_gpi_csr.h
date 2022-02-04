@@ -75,7 +75,7 @@
 
 #define GPI_PORT_SHP0_MIN_CREDIT			0x140U
 #define GPI_PORT_SHP1_MIN_CREDIT			0x144U
-#define GPI_PORT_SHP_MIN_CREDIT(i)			(0x140U + (i) * 4U)
+#define GPI_PORT_SHP_MIN_CREDIT(i)			((addr_t)0x140U + ((i) * (addr_t)4U))
 
 #define GPI_LMEM2_FREE_ADDR				0x148U
 #define GPI_CSR_AXI_WRITE_DONE_ADDR			0x14cU
@@ -89,16 +89,16 @@
 #define CSR_IGQOS_RXFQ_ZONE_PROB			0x168U
 #define CSR_IGQOS_RXFQ_FULL_THRESH			0x16cU
 #define CSR_IGQOS_RXFQ_DROP_THRESH			0x170U
-#define CSR_IQGOS_ZONE_PROB(q)				(0x150U + (q) * 0xcU)
-#define CSR_IQGOS_FULL_THRESH(q)			(0x154U + (q) * 0xcU)
-#define CSR_IQGOS_DROP_THRESH(q)			(0x158U + (q) * 0xcU)
+#define CSR_IQGOS_ZONE_PROB(q)				((addr_t)0x150U + ((q) * (addr_t)0xcU))
+#define CSR_IQGOS_FULL_THRESH(q)			((addr_t)0x154U + ((q) * (addr_t)0xcU))
+#define CSR_IQGOS_DROP_THRESH(q)			((addr_t)0x158U + ((q) * (addr_t)0xcU))
 
 #define CSR_IGQOS_CONTROL				0x174U
 #define CSR_IGQOS_CLASS					0x178U
 #define CSR_IGQOS_QOS					0x17cU
 #define CSR_IGQOS_ENTRY_CMDSTATUS			0x180U
 #define CSR_IGQOS_ENTRY_CMDCNTRL			0x184U
-#define CSR_IGQOS_ENTRY_DATA_REG(i)			(0x188U + (i) * 4U)
+#define CSR_IGQOS_ENTRY_DATA_REG(i)			((addr_t)0x188U + ((i) * (addr_t)4U))
 #define CSR_IGQOS_QUEUE_STATUS				0x1a8U
 #define CSR_IGQOS_STAT_CLASS_DROP_CNT			0x1acU
 #define CSR_IGQOS_STAT_LMEM_QUEUE_DROP_CNT		0x1b0U
@@ -106,7 +106,7 @@
 #define CSR_IGQOS_STAT_RXF_QUEUE_DROP_CNT		0x1b8U
 #define CSR_IGQOS_STAT_SHAPER0_DROP_CNT			0x1bcU
 #define CSR_IGQOS_STAT_SHAPER1_DROP_CNT			0x1c0U
-#define CSR_IGQOS_STAT_SHAPER_DROP_CNT(i)		(CSR_IGQOS_STAT_SHAPER0_DROP_CNT + (i) * 4U)
+#define CSR_IGQOS_STAT_SHAPER_DROP_CNT(i)		((addr_t)CSR_IGQOS_STAT_SHAPER0_DROP_CNT + ((i) * (addr_t)4U))
 #define CSR_IGQOS_STAT_MANAGED_PACKET_CNT		0x1c4U
 #define CSR_IGQOS_STAT_UNMANAGED_PACKET_CNT		0x1c8U
 #define CSR_IGQOS_STAT_RESERVED_PACKET_CNT		0x1ccU
@@ -121,16 +121,16 @@
 #define CSR_IGQOS_PORT_SHP1_CTRL			0x1ecU
 #define CSR_IGQOS_PORT_SHP1_WGHT			0x1f0U
 #define CSR_IGQOS_PORT_SHP1_STATUS			0x1f4U
-#define CSR_IGQOS_PORT_SHP_CTRL(i)			(0x1e0U + (i) * 0xcU)
-#define CSR_IGQOS_PORT_SHP_WGHT(i)			(0x1e4U + (i) * 0xcU)
-#define CSR_IGQOS_PORT_SHP_STATUS(i)			(0x1e8U + (i) * 0xcU)
+#define CSR_IGQOS_PORT_SHP_CTRL(i)			((addr_t)0x1e0U + ((i) * (addr_t)0xcU))
+#define CSR_IGQOS_PORT_SHP_WGHT(i)			((addr_t)0x1e4U + ((i) * (addr_t)0xcU))
+#define CSR_IGQOS_PORT_SHP_STATUS(i)		(0x1e8U + ((i) * 0xcU))
 
 #define CSR_IGQOS_PORT_SHP_CONFIG			0x1f8U
 #define CSR_IGQOS_CSR_SHP_DROPCNT			0x1fcU
 
 #define CSR_IGQOS_PORT_SHP0_MIN_CREDIT			0x200U
 #define CSR_IGQOS_PORT_SHP1_MIN_CREDIT			0x204U
-#define CSR_IGQOS_PORT_SHP_MIN_CREDIT(i)		(0x200U + (i) * 0x4U)
+#define CSR_IGQOS_PORT_SHP_MIN_CREDIT(i)		((addr_t)0x200U + ((i) * (addr_t)0x4U))
 
 #define CSR_IGQOS_LRU_TIMER_VALUE			0x208U
 #define CSR_IGQOS_LRU_ENTRY				0x20cU
@@ -150,7 +150,7 @@
 #define CSR_IGQOS_LRU_TIMER_LOAD_VALUE			0x244U
 
 /* reg values */
-#define mask32(width)					((uint32_t)((1U << (width)) - 1))
+#define mask32(width)					((uint32_t)(((uint32_t)1U << (width)) - 1U))
 #define IGQOS_CONTROL_QOS_EN				BIT(0)
 #define IGQOS_TPID_DOT1Q				0x8100U
 
@@ -170,11 +170,11 @@
 #define IGQOS_PORT_SHP_INTW_WIDTH			3
 #define IGQOS_PORT_SHP_WEIGHT_MASK			mask32(IGQOS_PORT_SHP_FRACW_WIDTH + IGQOS_PORT_SHP_INTW_WIDTH)
 #define IGQOS_PORT_SHP_MODE_PPS(i)			BIT(i)
-#define IGQOS_PORT_SHP_TYPE_POS(i)			(((i) + 1) * 2)
+#define IGQOS_PORT_SHP_TYPE_POS(i)			(((i) + 1U) * 2U)
 #define IGQOS_PORT_SHP_TYPE_MASK			0x3U
 #define IGQOS_PORT_SHP_CLKDIV_POS			1
 #define IGQOS_PORT_SHP_CLKDIV_MASK			0xfU
-#define IGQOS_PORT_SHP_MAX_CREDIT_POS			8
+#define IGQOS_PORT_SHP_MAX_CREDIT_POS			8U
 #define IGQOS_PORT_SHP_CREDIT_MASK			0x3fffffU
 #define IGQOS_PORT_SHP_CREDIT_MAX			0x3fffff
 

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -107,6 +107,8 @@ static fci_fp_rule_t *fci_fp_rule_get_first(fci_fp_rule_db_t *db, fci_fp_rule_cr
 static fci_fp_rule_t *fci_fp_rule_get_next(fci_fp_rule_db_t *db, dbase_t dbase);
 static bool_t fci_fp_match_table_by_criterion(fci_fp_table_criterion_t crit, fci_fp_table_criterion_arg_t *arg, fci_fp_table_t *table);
 static fci_fp_table_t *fci_fp_table_get_first(fci_fp_table_db_t *db, fci_fp_table_criterion_t crit, void *arg);
+static uint32_t fci_fp_print_table(fci_fp_table_t *table, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+
 #if 0
 static fci_fp_table_t *fci_fp_table_get_next(fci_fp_table_db_t *db);
 #endif
@@ -151,6 +153,7 @@ static bool_t fci_fp_match_rule_by_criterion(fci_fp_rule_criterion_t crit, const
         {
             NXP_LOG_ERROR("Unknown criterion\n");
             match = FALSE;
+			break;
         }
     }
     return match;
@@ -563,8 +566,8 @@ static errno_t fci_fp_get_rule_pos_in_table(fci_fp_table_t *table, fci_fp_rule_t
 */
 void fci_fp_db_init(void)
 {
-    (void)memset(&fci_fp_rule_db, 0U, sizeof(fci_fp_rule_db_t));
-    (void)memset(&fci_fp_table_db, 0U, sizeof(fci_fp_table_db_t));
+    (void)memset(&fci_fp_rule_db, 0, sizeof(fci_fp_rule_db_t));
+    (void)memset(&fci_fp_table_db, 0, sizeof(fci_fp_table_db_t));
     LLIST_Init(&fci_fp_table_db.tables);
     LLIST_Init(&fci_fp_rule_db.rules);
 
@@ -593,17 +596,17 @@ errno_t fci_fp_db_create_rule(char_t *name, uint32_t data, uint32_t mask, uint16
         return EINVAL;
     }
 #endif
-    if((0U == (flags & (FP_FL_ACCEPT | FP_FL_REJECT))) && (NULL == next_rule))
+    if((0U == ((uint8_t)flags & ((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT))) && (NULL == next_rule))
     {   /* If flags are not FP_FL_REJECT and not FP_FL_ACCEPT we need the next rule name */
         NXP_LOG_ERROR("Flags FP_FL_ACCEPT and FP_FL_REJECT are not set but next rule is not defined (NULL)\n");
         return EINVAL;
     }
-    if((FP_FL_ACCEPT | FP_FL_REJECT) == (flags & (FP_FL_ACCEPT | FP_FL_REJECT)))
+    if(((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT) == ((uint8_t)flags & ((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT)))
     {   /* Cannot do both Accept and Reject action */
         NXP_LOG_ERROR("Both flags FP_FL_ACCEPT and FP_FL_REJECT are set\n");
         return EINVAL;
     }
-    if((0U != (flags & (FP_FL_ACCEPT | FP_FL_REJECT))) && (NULL != next_rule))
+    if((0U != ((uint8_t)flags & ((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT))) && (NULL != next_rule))
     {   /* Ignored argument */
         NXP_LOG_WARNING("Next rule is ignored with these flags: 0x%x\n", flags);
         next_rule = NULL; /* Avoid memory allocation and value storage to avoid future problems */
@@ -895,7 +898,7 @@ errno_t fci_fp_db_add_rule_to_table(char_t *table_name, char_t *rule_name, uint1
             NXP_LOG_ERROR("Invalid value of position %u\n", position);
             return EINVAL;
         }
-    }
+     }
     return EOK;
 }
 
@@ -984,7 +987,7 @@ errno_t fci_fp_db_push_table_to_hw(pfe_class_t *class, char_t *table_name)
     pfe_ct_fp_rule_t rule_buf;
     LLIST_t *item;
     fci_fp_rule_t *rule;
-    uint32_t i = 0U;
+    uint16_t i = 0U;
     uint8_t pos;
 
 
@@ -1043,7 +1046,7 @@ errno_t fci_fp_db_push_table_to_hw(pfe_class_t *class, char_t *table_name)
         {   /* Next rule is not used */
             rule_buf.next_idx = 0xFFU; /* If used it will cause FW internal check to detect it */
         }
-        pfe_fp_table_write_rule(class, table->dmem_addr, &rule_buf, i);
+        (void)pfe_fp_table_write_rule(class, table->dmem_addr, &rule_buf, i);
 
         i++;
     }
@@ -1105,7 +1108,7 @@ errno_t fci_fp_db_get_table_from_addr(uint32_t addr, char_t **table_name)
     {   /* 0 is not valid table address, used as no-address */
         return EINVAL;
     }
-    
+
     table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_ADDRESS, &addr);
     if(NULL == table)
     {
@@ -1316,16 +1319,16 @@ static uint32_t fci_fp_print_rule(fci_fp_rule_t *rule, char_t *buf, uint32_t buf
 
     len += oal_util_snprintf(buf + len, buf_len - len, "%s = {", rule->name);
     /* Conditions */
-    if(FP_FL_INVERT == (rule->flags & FP_FL_INVERT))
+    if((uint8_t)FP_FL_INVERT == ((uint8_t)rule->flags & (uint8_t)FP_FL_INVERT))
     {
         len += oal_util_snprintf(buf + len, buf_len - len, "!");
     }
     len += oal_util_snprintf(buf + len, buf_len - len, "(0x%x & 0x%x == ", rule->data, rule->mask);
-    if(FP_FL_L4_OFFSET == (rule->flags & FP_FL_L4_OFFSET))
+    if((uint8_t)FP_FL_L4_OFFSET == ((uint8_t)rule->flags & (uint8_t)FP_FL_L4_OFFSET))
     {
         len += oal_util_snprintf(buf + len, buf_len - len, "frame[L4 header + %u] & 0x%x)", rule->offset, rule->mask);
     }
-    if(FP_FL_L3_OFFSET == (rule->flags & FP_FL_L3_OFFSET))
+    if((uint8_t)FP_FL_L3_OFFSET == ((uint8_t)rule->flags & (uint8_t)FP_FL_L3_OFFSET))
     {
         len += oal_util_snprintf(buf + len, buf_len - len, "frame[L3 header + %u] & 0x%x)", rule->offset, rule->mask);
     }
@@ -1334,11 +1337,11 @@ static uint32_t fci_fp_print_rule(fci_fp_rule_t *rule, char_t *buf, uint32_t buf
         len += oal_util_snprintf(buf + len, buf_len - len, "frame[%u] & 0x%x)", rule->offset, rule->mask);
     }
     /* Consequences */
-    if(FP_FL_REJECT == (rule->flags & FP_FL_REJECT))
+    if((uint8_t)FP_FL_REJECT == ((uint8_t)rule->flags & (uint8_t)FP_FL_REJECT))
     {
         len += oal_util_snprintf(buf + len, buf_len - len, "? REJECT : use next rule");
     }
-    else if(FP_FL_ACCEPT == (rule->flags & FP_FL_ACCEPT))
+    else if((uint8_t)FP_FL_ACCEPT == ((uint8_t)rule->flags & (uint8_t)FP_FL_ACCEPT))
     {
         len += oal_util_snprintf(buf + len, buf_len - len, "? ACCEPT : use next rule");
     }
@@ -1358,7 +1361,7 @@ static uint32_t fci_fp_print_rule(fci_fp_rule_t *rule, char_t *buf, uint32_t buf
 * @param[in] verb_level Verbosity level
 * @return Number of characters written into the buffer
 */
-uint32_t fci_fp_print_table(fci_fp_table_t *table, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+static uint32_t fci_fp_print_table(fci_fp_table_t *table, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
     uint32_t len = 0U;
     LLIST_t *item;
@@ -1399,8 +1402,8 @@ uint32_t fci_fp_print_tables(char_t *buf, uint32_t buf_len, uint8_t verb_level)
 
 uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
-    fci_fp_table_t *table;
-    pfe_ct_class_flexi_parser_stats_t *c_stats; 
+    const fci_fp_table_t *table;
+    pfe_ct_class_flexi_parser_stats_t *c_stats;
     LLIST_t *item;
     uint32_t len = 0U;
     uint32_t pe_idx = 0U;
@@ -1410,7 +1413,7 @@ uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_le
     {
         table = LLIST_Data(item,  fci_fp_table_t, db_entry);
         len += oal_util_snprintf(buf + len, buf_len - len, "%s = {\n", table->name);
-        if (table->dmem_addr != 0)
+        if (table->dmem_addr != 0U)
         {
             c_stats = oal_mm_malloc(sizeof(pfe_ct_class_flexi_parser_stats_t) * (pfe_class_get_num_of_pes(table->class) + 1U));
             if(NULL == c_stats)
@@ -1424,9 +1427,9 @@ uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_le
 
             for(pe_idx = 0U; pe_idx < pfe_class_get_num_of_pes(table->class); pe_idx++)
             {
-                pfe_fp_table_get_statistics(table->class, pe_idx, table->dmem_addr, &c_stats[pe_idx +1]);
-                pfe_class_flexi_parser_stats_endian(&c_stats[pe_idx + 1]);
-                pfe_class_sum_flexi_parser_stats(&c_stats[0], &c_stats[pe_idx + 1]);
+                (void)pfe_fp_table_get_statistics(table->class, pe_idx, table->dmem_addr, &c_stats[pe_idx +1U]);
+                pfe_class_flexi_parser_stats_endian(&c_stats[pe_idx + 1U]);
+                pfe_class_sum_flexi_parser_stats(&c_stats[0], &c_stats[pe_idx + 1U]);
             }
 
             len += pfe_class_fp_stat_to_str(&c_stats[0U], buf + len, buf_len - len, verb_level);

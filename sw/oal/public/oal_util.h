@@ -41,12 +41,12 @@ typedef struct __attribute__((packed))
 	struct {
 		uint8_t messageType : 4;
 		uint8_t transportSpecific : 4;
-	};
+	} byte1;
 
 	struct {
 		uint8_t versionPTP : 4;
 		uint8_t reserved0 : 4;
-	};
+	} byte2;
 
 	uint16_t messageLength;
 	uint8_t domainNumber;

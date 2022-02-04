@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2021 NXP
+ *  Copyright 2017-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -78,8 +78,8 @@ do \
 * @param[in] NameOfList The name of the LLIST_t within the struct.
 */
 #define LLIST_Data(prListItem,TypeOfData,NameOfList) \
-            ( (TypeOfData*)((char_t *)(prListItem) \
-              - (char_t *)LLIST_OffsetOff(TypeOfData, NameOfList)) \
+            ( (TypeOfData*)(((char_t *)(prListItem)) \
+              - ((char_t *)LLIST_OffsetOff(TypeOfData, NameOfList))) \
             )
 
 /**

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2021 NXP
+ *  Copyright 2021-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -11,7 +11,7 @@
 #include "pfe_mirror.h"
 #include "linked_list.h"
 
-typedef struct pfe_mirror_db_tag
+typedef struct
 {
     pfe_class_t *class;
     LLIST_t mirrors;
@@ -50,7 +50,7 @@ static pfe_mirror_db_t *pfe_mirror_create_db(pfe_class_t *class)
     db = oal_mm_malloc(sizeof(pfe_mirror_db_t));
     if(NULL != db)
     {
-        memset(db, 0U, sizeof(pfe_mirror_db_t));
+        (void)memset(db, 0, sizeof(pfe_mirror_db_t));
         db->class = class;
         LLIST_Init(&db->mirrors);
     }
@@ -81,7 +81,7 @@ static void pfe_mirror_destroy_db(pfe_mirror_db_t *db)
  * @param[in] arg Criterion argument (data)
  * @return The matching mirror instance or NULL if there is no matching mirror in the database
  */
-static pfe_mirror_t *pfe_mirror_db_get_by_crit(pfe_mirror_db_t *db, pfe_mirror_db_crit_t crit, void *arg)
+static pfe_mirror_t *pfe_mirror_db_get_by_crit(pfe_mirror_db_t *db, pfe_mirror_db_crit_t crit, const void *arg)
 {
     LLIST_t *curr;
     pfe_mirror_t *mirror;
@@ -112,7 +112,7 @@ static pfe_mirror_t *pfe_mirror_db_get_by_crit(pfe_mirror_db_t *db, pfe_mirror_d
         switch(crit)
         {
             case MIRROR_BY_NAME:
-                if(0 == strcmp(mirror->name, (char *)arg))
+                if(0 == strcmp(mirror->name, (const char *)arg))
                 {   /* Match */
                     return mirror;
                 }
@@ -125,7 +125,7 @@ static pfe_mirror_t *pfe_mirror_db_get_by_crit(pfe_mirror_db_t *db, pfe_mirror_d
                 break;
             default :
                 NXP_LOG_ERROR("Wrong criterion %u\n", crit);
-                return NULL;
+				break;
         }
     }
     /* Not found */
@@ -220,7 +220,7 @@ void pfe_mirror_deinit(void)
  * @param[in] arg Criterion specific argument (value)
  * @return Either the 1st found mirror instance or NULL if there is no matching mirror
  */
-pfe_mirror_t *pfe_mirror_get_first(pfe_mirror_db_crit_t crit, void *arg)
+pfe_mirror_t *pfe_mirror_get_first(pfe_mirror_db_crit_t crit, const void *arg)
 {
     pfe_mirror_t *mirror = NULL;
     if(NULL != pfe_mirror_db)
@@ -275,11 +275,11 @@ pfe_mirror_t *pfe_mirror_create(const char *name)
             mirror = oal_mm_malloc(sizeof(pfe_mirror_t) + strlen(name));
             if(NULL != mirror)
             {   /* Memory available */
-                memset(mirror, 0U, sizeof(pfe_mirror_t));
+                (void)memset(mirror, 0, sizeof(pfe_mirror_t));
                 /* Remember input data */
                 mirror->db = pfe_mirror_db;
                 mirror->name = (char *)&mirror[1];
-                strcpy(mirror->name, name);
+                (void)strcpy(mirror->name, name);
                 /* Allocate DMEM */
                 mirror->phys_addr = pfe_class_dmem_heap_alloc(mirror->db->class, sizeof(pfe_ct_mirror_t));
                 if(0U == mirror->phys_addr)
@@ -319,7 +319,7 @@ void pfe_mirror_destroy(pfe_mirror_t *mirror)
  * @param[in] mirror Mirror instance
  * @return DMEM address used by the mirror
  */
-uint32_t pfe_mirror_get_address(pfe_mirror_t *mirror)
+uint32_t pfe_mirror_get_address(const pfe_mirror_t *mirror)
 {
     #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mirror))
@@ -337,7 +337,7 @@ uint32_t pfe_mirror_get_address(pfe_mirror_t *mirror)
  * @param[in] mirror Mirror instance
  * @return Mirror name - this string shall not be modified outside; NULL in case of failure
  */
-const char *pfe_mirror_get_name(pfe_mirror_t *mirror)
+const char *pfe_mirror_get_name(const pfe_mirror_t *mirror)
 {
     #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mirror))
@@ -376,7 +376,7 @@ errno_t pfe_mirror_set_egress_port(pfe_mirror_t *mirror, pfe_ct_phy_if_id_t egre
  * @param[in] mirror Mirror instance
  * @return The egress port
  */
-pfe_ct_phy_if_id_t pfe_mirror_get_egress_port(pfe_mirror_t *mirror)
+pfe_ct_phy_if_id_t pfe_mirror_get_egress_port(const pfe_mirror_t *mirror)
 {
     #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mirror))
@@ -416,7 +416,7 @@ errno_t pfe_mirror_set_filter(pfe_mirror_t *mirror, uint32_t filter_address)
  * @param[in] mirror Mirror instance
  * @return Address of flexible filter to select mirrored frames (0 = disabled the filter)
  */
-uint32_t pfe_mirror_get_filter(pfe_mirror_t *mirror)
+uint32_t pfe_mirror_get_filter(const pfe_mirror_t *mirror)
 {
     #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mirror))
@@ -437,7 +437,7 @@ uint32_t pfe_mirror_get_filter(pfe_mirror_t *mirror)
  * @param[in] args Arguments for actions (all fields in network endian)
  * @return EOK when success or error code otherwise
  */
-errno_t pfe_mirror_set_actions(pfe_mirror_t *mirror, pfe_ct_route_actions_t actions, pfe_ct_route_actions_args_t *args)
+errno_t pfe_mirror_set_actions(pfe_mirror_t *mirror, pfe_ct_route_actions_t actions, const pfe_ct_route_actions_args_t *args)
 {
     #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mirror))
@@ -450,7 +450,7 @@ errno_t pfe_mirror_set_actions(pfe_mirror_t *mirror, pfe_ct_route_actions_t acti
     mirror->phys.actions = actions;
     if(RT_ACT_NONE != actions)
     {
-        memcpy(&mirror->phys.args, args, sizeof(pfe_ct_route_actions_args_t));
+        (void)memcpy(&mirror->phys.args, args, sizeof(pfe_ct_route_actions_args_t));
     }
     return pfe_class_write_dmem(mirror->db->class, -1, mirror->phys_addr, &mirror->phys, sizeof(pfe_ct_mirror_t));
 }
@@ -462,7 +462,7 @@ errno_t pfe_mirror_set_actions(pfe_mirror_t *mirror, pfe_ct_route_actions_t acti
  * @param[out] args Arguments for actions (all fields in network endian)
  * @return EOK when success or error code otherwise
  */
-errno_t pfe_mirror_get_actions(pfe_mirror_t *mirror, pfe_ct_route_actions_t *actions, pfe_ct_route_actions_args_t *args)
+errno_t pfe_mirror_get_actions(const pfe_mirror_t *mirror, pfe_ct_route_actions_t *actions, pfe_ct_route_actions_args_t *args)
 {
     #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == mirror)||(NULL == args)))
@@ -475,7 +475,7 @@ errno_t pfe_mirror_get_actions(pfe_mirror_t *mirror, pfe_ct_route_actions_t *act
     *actions = mirror->phys.actions;
     if(RT_ACT_NONE != mirror->phys.actions)
     {   /* Arguments are needed */
-        memcpy(args, &mirror->phys.args, sizeof(pfe_ct_route_actions_args_t));
+        (void)memcpy(args, &mirror->phys.args, sizeof(pfe_ct_route_actions_args_t));
     }
     return EOK;
 }

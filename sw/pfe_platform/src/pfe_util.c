@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -33,13 +33,15 @@ struct pfe_util_tag
 	uint32_t fw_features_count;			/* Number of items in fw_features */
 };
 
+static errno_t pfe_util_read_dmem(void *util_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len);
+static errno_t pfe_util_write_dmem(void *util_p, int32_t pe_idx, addr_t dst_addr, const void *src_ptr, uint32_t len);
 
 static errno_t pfe_util_load_fw_features(pfe_util_t *util)
 {
 	pfe_ct_pe_mmap_t mmap;
 	errno_t ret = EOK;
 	pfe_ct_feature_desc_t *entry;
-	uint32_t i, j;
+	uint32_t i = 0U, j = 0U;
 	bool_t val_break = FALSE;
 
 	ret = pfe_pe_get_mmap(util->pe[0U], &mmap);
@@ -60,7 +62,7 @@ static errno_t pfe_util_load_fw_features(pfe_util_t *util)
 			{
 				/* Initialize current_feature */
 				util->current_feature = 0U;
-				for(i = 0U; i < util->fw_features_count; i++)
+				while(i < util->fw_features_count)
 				{
 					util->fw_features[i] = pfe_fw_feature_create();
 					if(NULL == util->fw_features[i])
@@ -129,6 +131,8 @@ static errno_t pfe_util_load_fw_features(pfe_util_t *util)
 					{
 						break;
 					}
+
+					++i;
 				}
 			}
 		} /* Else is OK too */
@@ -363,7 +367,7 @@ errno_t pfe_util_load_firmware(pfe_util_t *util, const void *elf)
 	{
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
-	
+
 	ret = pfe_pe_load_firmware(util->pe, util->pe_num, elf);
 	if (EOK != ret)
 	{
@@ -390,7 +394,7 @@ errno_t pfe_util_load_firmware(pfe_util_t *util, const void *elf)
 void pfe_util_destroy(pfe_util_t *util)
 {
     uint32_t ii;
-    
+
 	if (NULL != util)
 	{
 		pfe_pe_destroy(util->pe, util->pe_num);
@@ -519,7 +523,7 @@ errno_t pfe_util_get_feature_next(pfe_util_t *util, pfe_fw_feature_t **feature)
  * @param[in]	len Number of bytes to be written
  * @return		EOK or error code in case of failure
  */
-errno_t pfe_util_write_dmem(void *util_p, int32_t pe_idx, addr_t dst_addr, void *src_ptr, uint32_t len)
+static errno_t pfe_util_write_dmem(void *util_p, int32_t pe_idx, addr_t dst_addr, const void *src_ptr, uint32_t len)
 {
 	uint32_t ii;
     pfe_util_t *util = (pfe_util_t *)util_p;
@@ -573,7 +577,7 @@ errno_t pfe_util_write_dmem(void *util_p, int32_t pe_idx, addr_t dst_addr, void 
  * @param[in]	len Number of bytes to be read
  * @return		EOK or error code in case of failure
  */
-errno_t pfe_util_read_dmem(void *util_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len)
+static errno_t pfe_util_read_dmem(void *util_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len)
 {
     pfe_util_t *util = (pfe_util_t *)util_p;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -704,30 +708,40 @@ uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, char_t *buf, uint3
 	for (ii=0U; ii<util->pe_num; ii++)
 	{
 		ipsec_state_t state = { 0 };
-		len += pfe_pe_get_text_statistics(util->pe[ii], buf + len, buf_len - len, verb_level);
+		uint32_t text_stat_len = 0U;
 
 		if (EOK == pfe_pe_get_mmap(util->pe[ii], &mmap))
 		{
-			/* IPsec statistics */
-			pfe_pe_memcpy_from_dmem_to_host_32(util->pe[ii], &state, oal_ntohl(mmap.util_pe.ipsec_state), sizeof(state));
-			len += oal_util_snprintf(buf + len, buf_len - len, "\nIPsec\n", state.hse_mu);
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE MU			0x%x\n", oal_ntohl(state.hse_mu));
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE MU Channel    0x%x\n", oal_ntohl(state.hse_mu_chn));
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_OK						0x%x\n", oal_ntohl(state.response_ok));
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_VERIFY_FAILED			 0x%x\n", oal_ntohl(state.verify_failed));
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_INVALID_DATA		0x%x\n", oal_ntohl(state.ipsec_invalid_data));
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_REPLAY_DETECTED     0x%x\n", oal_ntohl(state.ipsec_replay_detected));
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_REPLAY_LATE		 0x%x\n", oal_ntohl(state.ipsec_replay_late));
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_SEQNUM_OVERFLOW     0x%x\n", oal_ntohl(state.ipsec_seqnum_overflow));
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_CE_DROP			 0x%x\n", oal_ntohl(state.ipsec_ce_drop));
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_TTL_EXCEEDED		0x%x\n", oal_ntohl(state.ipsec_ttl_exceeded));
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_VALID_DUMMY_PAYLOAD 0x%x\n", oal_ntohl(state.ipsec_valid_dummy_payload));
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_HEADER_LEN_OVERFLOW 0x%x\n", oal_ntohl(state.ipsec_header_overflow));
-			len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_PADDING_CHECK_FAIL  0x%x\n", oal_ntohl(state.ipsec_padding_check_fail));
-			len += oal_util_snprintf(buf + len, buf_len - len, "Code of handled error    0x%x\n", oal_ntohl(state.handled_error_code));
-			len += oal_util_snprintf(buf + len, buf_len - len, "SAId of handled error    0x%x\n", oal_ntohl(state.handled_error_said));
-			len += oal_util_snprintf(buf + len, buf_len - len, "Code of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_code));
-			len += oal_util_snprintf(buf + len, buf_len - len, "SAId of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_said));
+			text_stat_len = pfe_pe_get_text_statistics(util->pe[ii], buf + len, buf_len - len, verb_level);
+			if (0U == text_stat_len)
+			{
+				len = 0U;
+				break;
+			}
+			else
+			{
+				len += text_stat_len;
+				/* IPsec statistics */
+				pfe_pe_memcpy_from_dmem_to_host_32(util->pe[ii], &state, oal_ntohl(mmap.util_pe.ipsec_state), sizeof(state));
+				len += oal_util_snprintf(buf + len, buf_len - len, "\nIPsec\n");
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE MU			0x%x\n", oal_ntohl(state.hse_mu));
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE MU Channel    0x%x\n", oal_ntohl(state.hse_mu_chn));
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_OK						0x%x\n", oal_ntohl(state.response_ok));
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_VERIFY_FAILED			 0x%x\n", oal_ntohl(state.verify_failed));
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_INVALID_DATA		0x%x\n", oal_ntohl(state.ipsec_invalid_data));
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_REPLAY_DETECTED     0x%x\n", oal_ntohl(state.ipsec_replay_detected));
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_REPLAY_LATE		 0x%x\n", oal_ntohl(state.ipsec_replay_late));
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_SEQNUM_OVERFLOW     0x%x\n", oal_ntohl(state.ipsec_seqnum_overflow));
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_CE_DROP			 0x%x\n", oal_ntohl(state.ipsec_ce_drop));
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_TTL_EXCEEDED		0x%x\n", oal_ntohl(state.ipsec_ttl_exceeded));
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_VALID_DUMMY_PAYLOAD 0x%x\n", oal_ntohl(state.ipsec_valid_dummy_payload));
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_HEADER_LEN_OVERFLOW 0x%x\n", oal_ntohl(state.ipsec_header_overflow));
+				len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_PADDING_CHECK_FAIL  0x%x\n", oal_ntohl(state.ipsec_padding_check_fail));
+				len += oal_util_snprintf(buf + len, buf_len - len, "Code of handled error    0x%x\n", oal_ntohl(state.handled_error_code));
+				len += oal_util_snprintf(buf + len, buf_len - len, "SAId of handled error    0x%x\n", oal_ntohl(state.handled_error_said));
+				len += oal_util_snprintf(buf + len, buf_len - len, "Code of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_code));
+				len += oal_util_snprintf(buf + len, buf_len - len, "SAId of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_said));
+			}
 		}
 	}
 

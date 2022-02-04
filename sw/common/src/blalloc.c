@@ -531,15 +531,15 @@ uint32_t blalloc_get_text_statistics(const blalloc_t *ctx, char_t *buf, uint32_t
 	len += oal_util_snprintf(buf + len, buf_len - len, "\n"); /* End previous output */
 	len += oal_util_snprintf(buf + len, buf_len - len, "Free  memory %u bytes (%u chunks)\n", unused_chunks * ((uint_t)1U << ctx->chunk_size), unused_chunks);
 	len += oal_util_snprintf(buf + len, buf_len - len, "Used  memory %u bytes (%u chunks)\n", used_chunks * ((uint_t)1U << ctx->chunk_size), used_chunks);
-	len += oal_util_snprintf(buf + len, buf_len - len, "Total memory %u bytes (%u chunks)\n", ctx->size, byte_count * CHUNKS_IN_BYTE);
+	len += oal_util_snprintf(buf + len, buf_len - len, "Total memory %u bytes (%u chunks)\n", (uint_t)ctx->size, byte_count * CHUNKS_IN_BYTE);
 	len += oal_util_snprintf(buf + len, buf_len - len, "Chunk size   %u bytes\n", (1U << ctx->chunk_size));
 	len += oal_util_snprintf(buf + len, buf_len - len, "Fragments    %u\n", fragments);
-	len += oal_util_snprintf(buf + len, buf_len - len, "Dummy chunks %u\n", (byte_count * CHUNKS_IN_BYTE) - (ctx->size >> ctx->chunk_size));
+	len += oal_util_snprintf(buf + len, buf_len - len, "Dummy chunks %u\n", (uint_t)((byte_count * CHUNKS_IN_BYTE) - (ctx->size >> ctx->chunk_size)));
 	if(verb_level > 0U)
 	{   /* Detailed information requested */
-		len += oal_util_snprintf(buf + len, buf_len - len, "1st free chunk  %u\n", ctx->start_srch);
-		len += oal_util_snprintf(buf + len, buf_len - len, "Bytes requested %u (cumulative)\n", ctx->requested);
-		len += oal_util_snprintf(buf + len, buf_len - len, "Bytes allocated %u (cumulative)\n", ctx->allocated);
+		len += oal_util_snprintf(buf + len, buf_len - len, "1st free chunk  %u\n", (uint_t)ctx->start_srch);
+		len += oal_util_snprintf(buf + len, buf_len - len, "Bytes requested %u (cumulative)\n", (uint_t)ctx->requested);
+		len += oal_util_snprintf(buf + len, buf_len - len, "Bytes allocated %u (cumulative)\n", (uint_t)ctx->allocated);
 	}
 	return len;
 }

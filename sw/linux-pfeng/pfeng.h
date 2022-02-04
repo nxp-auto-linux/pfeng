@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2021 NXP
+ * Copyright 2018-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -39,7 +39,7 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"BETA 0.9.6"
+#define PFENG_DRIVER_VERSION		"BETA 0.9.7 CD1"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
@@ -280,8 +280,9 @@ struct pfeng_priv {
 	struct pfeng_hif_chnl		*ihc_chnl;
 	u32				ihc_master_chnl;
 	bool				ihc_enabled;
-	struct workqueue_struct		*ihc_tx_wq;
+	struct workqueue_struct		*ihc_wq;
 	struct work_struct		ihc_tx_work;
+	struct work_struct		ihc_rx_work;
 	DECLARE_KFIFO_PTR(ihc_tx_fifo, struct sk_buff *);
 #ifdef PFE_CFG_PFE_SLAVE
 	struct task_struct		*deferred_probe_task;
@@ -326,6 +327,7 @@ int pfeng_hif_chnl_start(struct pfeng_hif_chnl *chnl);
 int pfeng_hif_chnl_set_coalesce(struct pfeng_hif_chnl *chnl, struct clk *clk_sys, u32 usecs, u32 frames);
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 void pfeng_ihc_tx_work_handler(struct work_struct *work);
+void pfeng_ihc_rx_work_handler(struct work_struct *work);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 /* bman */
