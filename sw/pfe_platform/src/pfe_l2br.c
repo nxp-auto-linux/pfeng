@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -146,7 +146,7 @@ typedef enum
 
 static uint8_t stats_index[VLAN_STATS_VEC_SIZE];
 
-static errno_t pfe_bd_write_to_class(const pfe_l2br_t *bridge, uint32_t base, pfe_ct_bd_entry_t *class_entry);
+static errno_t pfe_bd_write_to_class(const pfe_l2br_t *bridge, uint32_t base, const pfe_ct_bd_entry_t *class_entry);
 static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain);
 static pfe_l2br_domain_t *pfe_l2br_create_default_domain(pfe_l2br_t *bridge, uint16_t vlan);
 static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge);
@@ -163,7 +163,7 @@ static errno_t pfe_l2br_set_mac_aging_timeout(pfe_class_t *class, const uint16_t
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
  */
-static errno_t pfe_bd_write_to_class(const pfe_l2br_t *bridge, uint32_t base, pfe_ct_bd_entry_t *class_entry)
+static errno_t pfe_bd_write_to_class(const pfe_l2br_t *bridge, uint32_t base, const pfe_ct_bd_entry_t *class_entry)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class_entry) || (NULL == bridge) || (0U == base)))
@@ -173,7 +173,7 @@ static errno_t pfe_bd_write_to_class(const pfe_l2br_t *bridge, uint32_t base, pf
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return pfe_class_write_dmem(bridge->class, -1, (addr_t)base, (void *)class_entry, sizeof(pfe_ct_bd_entry_t));
+	return pfe_class_write_dmem(bridge->class, -1, (addr_t)base, (const  void *)class_entry, sizeof(pfe_ct_bd_entry_t));
 }
 
 static void pfe_l2br_update_hw_ll_entry(pfe_l2br_domain_t *domain, uint32_t base)
@@ -280,7 +280,7 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
  * @brief		Get the next free index in the vlan stats table
  * @return		The index
  */
-static uint8_t pfe_l2br_domain_get_free_stats_index(pfe_l2br_t *bridge)
+static uint8_t pfe_l2br_domain_get_free_stats_index(const pfe_l2br_t *bridge)
 {
 	/*Index 0 is reseved for fallback domain and domains outside stats range.
 	 * The fallback domain does not call pfe_l2br_domain_create*/
@@ -288,9 +288,9 @@ static uint8_t pfe_l2br_domain_get_free_stats_index(pfe_l2br_t *bridge)
 
 	while (index < bridge->domain_stats_table_size)
 	{
-		if (stats_index[index] == 0)
+		if (stats_index[index] == 0U)
 		{
-			stats_index[index] = 1;
+			stats_index[index] = 1U;
 			break;
 		}
 		index ++;
@@ -311,7 +311,7 @@ static uint8_t pfe_l2br_domain_get_free_stats_index(pfe_l2br_t *bridge)
  */
 static void pfe_l2br_domain_free_stats_index(uint8_t index)
 {
-	stats_index[index] = 0;
+	stats_index[index] = 0U;
 }
 
 /**
@@ -340,16 +340,16 @@ static uint32_t pfe_l2br_create_vlan_stats_table(pfe_class_t *class, uint16_t vl
         return 0U;
     }
 
-    res = pfe_class_get_mmap(class, 0U, &mmap);
+    res = pfe_class_get_mmap(class, 0, &mmap);
 
 	if (EOK != res)
 	{
 		NXP_LOG_ERROR("Cannot get class memory map\n");
-		return res;
+		return (uint32_t)res;
 	}
 
     /* Write the table header */
-    temp.vlan_count = oal_htonl(vlan_count);
+    temp.vlan_count = oal_htons(vlan_count);
     temp.vlan = oal_htonl(addr);
     /*It is safe to write the table pointer because PEs are gracefully stopped
      * and configuration read*/
@@ -381,7 +381,7 @@ static errno_t pfe_l2br_destroy_vlan_stats_table(pfe_class_t *class, uint32_t ta
 		return EOK;
 	}
 
-	res = pfe_class_get_mmap(class, 0U, &mmap);
+	res = pfe_class_get_mmap(class, 0, &mmap);
 
 	if (EOK != res)
 	{
@@ -498,12 +498,12 @@ errno_t pfe_l2br_domain_create(pfe_l2br_t *bridge, uint16_t vlan)
 			domain->u.action_data.item.mcast_miss_action = (uint64_t)L2BR_ACT_DISCARD;
 			domain->u.action_data.item.stats_index = pfe_l2br_domain_get_free_stats_index(bridge);
 
-			if (domain->u.action_data.item.stats_index == 0)
+			if (domain->u.action_data.item.stats_index == 0U)
 			{
 				NXP_LOG_ERROR("No more space for vlan statistics.The stats will be added to vlan 0 fallback\n");
 			}
 
-			domain->stats_index = domain->u.action_data.item.stats_index;
+			domain->stats_index = (uint8_t)domain->u.action_data.item.stats_index;
 
 			/*	Set action data */
 			ret = pfe_l2br_table_entry_set_action_data(domain->vlan_entry, domain->u.action_data_u64val);
@@ -698,12 +698,11 @@ static pfe_l2br_domain_t *pfe_l2br_create_default_domain(pfe_l2br_t *bridge, uin
 			else
 			{
 				domain->is_default = TRUE;
-			}
-
-			if (EOK != pfe_l2br_update_hw_entry(domain))
-			{
-				oal_mm_free(domain);
-				domain = NULL;
+				if (EOK != pfe_l2br_update_hw_entry(domain))
+				{
+					oal_mm_free(domain);
+					domain = NULL;
+				}
 			}
 		}
 	}
@@ -748,6 +747,7 @@ static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
 	if (NULL == domain->mutex)
 	{
 		NXP_LOG_DEBUG("Memory allocation failed\n");
+		oal_mm_free(domain);
 		return NULL;
 	}
 
@@ -1025,6 +1025,10 @@ errno_t pfe_l2br_domain_del_if(pfe_l2br_domain_t *domain, const pfe_phy_if_t *if
 			if (EOK != ret)
 			{
 				NXP_LOG_ERROR("VLAN table entry update failed: %d\n", ret);
+				if (EOK != oal_mutex_unlock(domain->mutex))
+				{
+					NXP_LOG_DEBUG("Mutex unlock failed\n");
+				}
 				return ENOEXEC;
 			}
 
@@ -1418,6 +1422,8 @@ errno_t pfe_l2br_static_entry_create(pfe_l2br_t *bridge, uint16_t vlan, pfe_mac_
 		if (NULL == static_entry->entry)
 		{
 			NXP_LOG_ERROR("malloc() failed\n");
+			oal_mm_free(static_entry);
+			static_entry = NULL;
 			return ENOMEM;
 		}
 
@@ -2261,7 +2267,7 @@ pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, uint16_t def_
 
 		bridge->domain_stats_table_size = vlan_stats_size;
 
-		memset (&stats_index, 0, sizeof(stats_index));
+		(void)memset (&stats_index, 0, sizeof(stats_index));
 
 		bridge->domain_stats_table_addr = pfe_l2br_create_vlan_stats_table(class ,vlan_stats_size);
 
@@ -2678,7 +2684,7 @@ uint32_t pfe_l2br_get_text_statistics(const pfe_l2br_t *bridge, char_t *buf, uin
  * @param[in]   static_ent Static entry
  * @return      entry
  */
-pfe_l2br_table_entry_t *pfe_l2br_static_entry_get_entry(pfe_l2br_static_entry_t *static_ent)
+pfe_l2br_table_entry_t *pfe_l2br_static_entry_get_entry(const pfe_l2br_static_entry_t *static_ent)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(NULL == static_ent))
@@ -2696,11 +2702,11 @@ pfe_l2br_table_entry_t *pfe_l2br_static_entry_get_entry(pfe_l2br_static_entry_t 
  * @param[in]	vlan_index 	Index in vlan statistics table
  * @param[out]	stat        Statistic structure
  * @retval		EOK         Success
- * @retval		NOMEM       Not possible to allocate memory for read
+ * @retval		ENOMEM       Not possible to allocate memory for read
  */
-errno_t pfe_l2br_get_domain_stats(pfe_l2br_t *bridge, pfe_ct_vlan_stats_t *stat, uint8_t vlan_index)
+errno_t pfe_l2br_get_domain_stats(const pfe_l2br_t *bridge, pfe_ct_vlan_stats_t *stat, uint8_t vlan_index)
 {
-	uint32_t i = 0;
+	uint32_t i = 0U;
 	errno_t ret = EOK;
 	pfe_ct_vlan_stats_t * stats = NULL;
 	uint16_t offset = 0;
@@ -2720,23 +2726,24 @@ errno_t pfe_l2br_get_domain_stats(pfe_l2br_t *bridge, pfe_ct_vlan_stats_t *stat,
 	if (NULL == stats)
 	{
 		NXP_LOG_ERROR("Memory allocation failed\n");
-		return ret;
+		return ENOMEM;
 	}
 
 	(void)memset(stats, 0, sizeof(pfe_ct_vlan_stats_t) * pfe_class_get_num_of_pes(bridge->class));
 
-	offset = sizeof(pfe_ct_vlan_stats_t) * vlan_index;
+	offset = sizeof(pfe_ct_vlan_stats_t) * (uint16_t)vlan_index;
 
-	for(i = 0U; i < pfe_class_get_num_of_pes(bridge->class); i++)
+	while(i < pfe_class_get_num_of_pes(bridge->class))
 	{
 		/* Gather memory from all PEs*/
-		ret = pfe_class_read_dmem((void *)bridge->class, (uint32_t)i, &stats[i], bridge->domain_stats_table_addr + offset, sizeof(pfe_ct_vlan_stats_t));
+		ret = pfe_class_read_dmem((void *)bridge->class, (int32_t)i, &stats[i], bridge->domain_stats_table_addr + offset, sizeof(pfe_ct_vlan_stats_t));
 
 		/* Calculate total statistics */
 		stat->ingress += oal_ntohl(stats[i].ingress);
 		stat->egress += oal_ntohl(stats[i].egress);
 		stat->ingress_bytes += oal_ntohl(stats[i].ingress_bytes);
 		stat->egress_bytes += oal_ntohl(stats[i].egress_bytes);
+		++i;
 	}
 
 	oal_mm_free(stats);
@@ -2751,7 +2758,7 @@ errno_t pfe_l2br_get_domain_stats(pfe_l2br_t *bridge, pfe_ct_vlan_stats_t *stat,
  * @retval		EOK Success
  * @retval		NOMEM Not possible to allocate memory for read
  */
-errno_t pfe_l2br_clear_domain_stats(pfe_l2br_t *bridge, uint8_t vlan_index)
+errno_t pfe_l2br_clear_domain_stats(const pfe_l2br_t *bridge, uint8_t vlan_index)
 {
 	errno_t ret = EOK;
 	pfe_ct_vlan_stats_t stat = {0};
@@ -2765,7 +2772,7 @@ errno_t pfe_l2br_clear_domain_stats(pfe_l2br_t *bridge, uint8_t vlan_index)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	offset = sizeof(pfe_ct_vlan_statistics_t) + sizeof(pfe_ct_vlan_stats_t) * vlan_index;
+	offset = sizeof(pfe_ct_vlan_stats_t) * (uint16_t)vlan_index;
 
 	if (EOK != oal_mutex_lock(bridge->mutex))
 	{
@@ -2794,6 +2801,7 @@ errno_t pfe_l2br_clear_domain_stats(pfe_l2br_t *bridge, uint8_t vlan_index)
 uint32_t pfe_l2br_domain_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
     uint32_t len = 0U;
+    errno_t ret;
 	pfe_ct_vlan_stats_t stats = {0};
 	pfe_l2br_domain_t *domain = NULL;
 
@@ -2804,7 +2812,12 @@ uint32_t pfe_l2br_domain_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, ui
 
 	while (domain != NULL)
 	{
-		pfe_l2br_get_domain_stats (bridge, &stats, domain->stats_index);
+		ret = pfe_l2br_get_domain_stats (bridge, &stats, domain->stats_index);
+        if(EOK != ret)
+        {
+            NXP_LOG_ERROR("Get domain statistics failed\n");
+            break;
+        }
 		len += oal_util_snprintf(buf + len, buf_len - len, "Vlan [%4d] ingress: %12d       egress: %12d\n", domain->vlan, stats.ingress, stats.egress);
 		len += oal_util_snprintf(buf + len, buf_len - len, "      ingress_bytes: %12d egress_bytes: %12d\n", stats.ingress_bytes, stats.egress_bytes);
 		domain = pfe_l2br_get_next_domain(bridge);
@@ -2819,7 +2832,7 @@ uint32_t pfe_l2br_domain_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, ui
  * @return		Index in vlan statistics table
  */
 
-uint8_t pfe_l2br_get_vlan_stats_index(pfe_l2br_domain_t *domain)
+uint8_t pfe_l2br_get_vlan_stats_index(const pfe_l2br_domain_t *domain)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == domain))

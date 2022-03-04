@@ -1,7 +1,7 @@
 /* =========================================================================
  *  Copyright (C) 2007 Mindspeed Technologies, Inc.
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2021 NXP
+ *  Copyright 2017-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -26,8 +26,13 @@
  *              LibFCI user and the endpoint. For reference: in Linux a netlink socket is used;
  *              in QNX a message is used.
  *
+ * @section     limitations  Limitations
+ * @subsection  mst_slv  Master-Slave setup
+ *              If PFE is ran in Master-Slave setup, then only the Master can issue FCI commands and configure PFE.
+ *              For more information about Master-Slave setup, please see driver user manual.
+ *
  * @section     how_to_use  How to use the FCI API
- * @subsection  fciuse_cmd Sending FCI commands
+ * @subsection  fciuse_cmd  Sending FCI commands
  *              -# Call @ref fci_open() to get an @ref FCI_CLIENT instance, using @ref FCI_GROUP_NONE
  *                 as a multicast group mask. This opens a connection to an FCI endpoint.
  *              -# Call @ref fci_write() or @ref fci_query() to send a command to the endpoint. <br> See @ref fci_cs.
@@ -54,21 +59,21 @@
  *
  * @section     a_and_d  Acronyms and Definitions
  *              - <b>PFE:</b> <br>
- *                Packet Forwarding Engine. A dedicated HW component (networking accelerator) 
+ *                Packet Forwarding Engine. A dedicated HW component (networking accelerator)
  *                which is configured by this FCI API.
  *              - <b>NBO:</b> <br>
- *                Network Byte Order. When working with values or properties which are stored in [NBO], 
+ *                Network Byte Order. When working with values or properties which are stored in [NBO],
  *                consider using appropriate endianess conversion functions.
  *              - <b>L2/L3/L4:</b> <br>
  *                Layers of the OSI model.
  *              - <b>Physical Interface:</b> <br>
  *                See @ref mgmt_phyif.
- *              - <b>Logical Interface:</b> <br> 
+ *              - <b>Logical Interface:</b> <br>
  *                See @ref mgmt_logif.
  *              - <b>Classification Algorithm:</b> <br>
  *                Method how ingress traffic is processed by the PFE firmware.
  *              - <b>Route:</b> <br> @anchor ref__route
- *                In the context of PFE, a route represents a direction where the matching 
+ *                In the context of PFE, a route represents a direction where the matching
  *                traffic shall be forwarded to. Every route specifies an egress physical interface
  *                and a MAC address of the next network node.
  *              - <b>Conntrack:</b> <br> @anchor ref__conntrack
@@ -76,6 +81,10 @@
  *                In the context of PFE, it always refers to an IP connection (TCP, UDP, other).
  *                The term is equal to a 'routing table entry'. Each conntrack is linked with some @b route.
  *                The route is used to forward traffic that matches the conntrack's properties.
+ *              - <b>RSPAN:</b> <br>
+ *                Remote Switch port Analyzer. A way of monitoring traffic via traffic mirroring between ports.
+ *                In the context of PFE, this refers to traffic mirroring between physical interfaces.
+ *                See chapter @ref mgmt_phyif and its subchapter @link ref__mirroring_rules_mgmt Mirroring rules management @endlink.
  *
  * @section     lfs  Functions Summary
  *              - @ref fci_open() <br>
@@ -142,6 +151,14 @@
  *                <i>Management of @ref egress_qos schedulers.</i>
  *              - @ref FPP_CMD_QOS_SHAPER <br>
  *                <i>Management of @ref egress_qos shapers.</i>
+ *              - @ref FPP_CMD_QOS_POLICER <br>
+ *                <i>@ref ingress_qos policer enable/disable.</i>
+ *              - @ref FPP_CMD_QOS_POLICER_FLOW <br>
+ *                <i>Management of @ref ingress_qos packet flows.</i>
+ *              - @ref FPP_CMD_QOS_POLICER_WRED <br>
+ *                <i>Management of @ref ingress_qos WRED queues.</i>
+ *              - @ref FPP_CMD_QOS_POLICER_SHP <br>
+ *                <i>Management of @ref ingress_qos shapers.</i>
  *
  * @section     cbks  Events summary
  * @if FCI_EVENTS_IMPLEMENTED
@@ -156,11 +173,11 @@
  * @section     if_mgmt  Interface Management
  * @subsection  mgmt_phyif  Physical Interface
  *              Physical interfaces are static objects (defined at startup), which represent hardware
- *              interfaces of PFE. They are used by PFE for ingress/egress of network traffic. 
+ *              interfaces of PFE. They are used by PFE for ingress/egress of network traffic.
  *
- *              Physical interfaces have several configurable properties. See @ref FPP_CMD_PHY_IF 
+ *              Physical interfaces have several configurable properties. See @ref FPP_CMD_PHY_IF
  *              and @ref fpp_phy_if_cmd_t. Among all these properties, a `.mode` property
- *              is especially important. Mode of a physical interface specifies which classification 
+ *              is especially important. Mode of a physical interface specifies which classification
  *              algorithm shall be applied on ingress traffic of the interface.
  *
  *              Every physical interface can have a list of logical interfaces.
@@ -190,7 +207,7 @@
  *              -# Unlock the interface database.
  *                 <br> (@ref FPP_CMD_IF_UNLOCK_SESSION)
  *
- *              <br>
+ *              <br><br>
  *              Hardcoded physical interface names and physical interface IDs:
  *              | name     | ID | comment                                                |
  *              | -------- | -- | ------------------------------------------------------ |
@@ -234,7 +251,7 @@
  *              -# Unlock the interface database.
  *                 <br> (@ref FPP_CMD_IF_UNLOCK_SESSION)
  *
- *              Mirroring rules management
+ *              Mirroring rules management @anchor ref__mirroring_rules_mgmt
  *              --------------------------
  *              Physical interfaces can be configured to mirror their ingress or egress traffic.
  *              Configuration data for mirroring are managed as separate entities - mirroring rules.
@@ -243,7 +260,7 @@
  *              <br> (@ref FPP_CMD_MIRROR + FPP_ACTION_REGISTER)
  *
  *              To @b assign a mirroring rule to a physical interface:
- *              <br> Write name of the desired mirror rule in `.rx_mirrors[i]` or `.tx_mirrors[i]` property 
+ *              <br> Write name of the desired mirror rule in `.rx_mirrors[i]` or `.tx_mirrors[i]` property
  *                   of the physical interface. Use steps described in @ref mgmt_phyif, section @b modify.
  *
  *              To @b update a mirroring rule:
@@ -251,6 +268,10 @@
  *
  *              To @b list available mirroring rules:
  *              <br> (@ref FPP_CMD_MIRROR + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
+ *
+ *              Examples
+ *              --------
+ *              @ref demo_feature_physical_interface.c
  *
  * @subsection  mgmt_logif  Logical Interface
  *              Logical interfaces are dynamic objects (definable at runtime) which represent traffic endpoints.
@@ -260,15 +281,15 @@
  *              - To forward traffic or its replicas between physical interfaces (1:N distribution).
  *              - To serve as classification & forwarding rules for @ref flex_router.
  *
- *              Logical interfaces have several configurable properties. See @ref FPP_CMD_LOG_IF 
+ *              Logical interfaces have several configurable properties. See @ref FPP_CMD_LOG_IF
  *              and @ref fpp_log_if_cmd_t.
  *
  *              Logical interfaces can be created and destroyed at runtime. Every @e physical interface
  *              can have a list of associated @e logical interfaces. The very first logical interface
- *              in the list (tail position) is considered the @b default logical interface of the given 
+ *              in the list (tail position) is considered the @b default logical interface of the given
  *              physical interface. New logical interfaces are always added to the top of the list (head position),
  *              creating a sequence which is ordered from the head (the newest one) back to the tail (the default one).
- *              This forms a classification sequence, which is important if the parent physical interface 
+ *              This forms a classification sequence, which is important if the parent physical interface
  *              operates in the Flexible Router mode.
  *
  *              Similar to physical interfaces, the logical interfaces can be set to a @b promiscuous mode.
@@ -319,7 +340,7 @@
  *              ------------
  *              IPv4/IPv6 Router is a dedicated feature to offload a host from tasks
  *              related to forwarding of specific IP packets between physical interfaces.
- *              Without the offload, IP packets are passed to the host's TCP/IP stack and 
+ *              Without the offload, IP packets are passed to the host's TCP/IP stack and
  *              the host is responsible for routing of packets. That is "slow path" routing.
  *              PFE can be configured to provide "fast path" routing, identifying IP packets
  *              which can be forwarded directly by PFE (using its internal routing table)
@@ -336,13 +357,13 @@
  *              -# Create one or more IPv4/IPv6 conntracks.
  *                 <br> (@ref FPP_CMD_IPV4_CONNTRACK + FPP_ACTION_REGISTER)
  *                 <br> (@ref FPP_CMD_IPV6_CONNTRACK + FPP_ACTION_REGISTER)
- *              -# Configure the physical interfaces which shall classify their ingress traffic 
+ *              -# Configure the physical interfaces which shall classify their ingress traffic
  *                 by the Router classification algorithm. Use steps described in
  *                 @ref mgmt_phyif (section @b modify) and do the following for each desired physical interface:
  *                 - Set mode of the interface to @ref FPP_IF_OP_ROUTER.
  *                 - Enable the interface by setting the flag @ref FPP_IF_ENABLED.
  *
- *              Once the Router is operational, all ingress IP packets of the Router-configured physical 
+ *              Once the Router is operational, all ingress IP packets of the Router-configured physical
  *              interfaces are matched against existing conntracks using a 5-tuple match (protocol, source IP,
  *              destination IP, source port, destination port). If a packet matches some existing conntrack,
  *              it is processed and modified according to conntrack's properties (destination MAC, NAT, PAT, etc.)
@@ -352,7 +373,7 @@
  *              ---------------------
  *              Conntracks are subjected to aging. If no matching packets are detected on a conntrack
  *              for a specified time period, the conntrack is automatically removed from PFE.
- *              To @b set the @b timeout period, use the following command (shared for both 
+ *              To @b set the @b timeout period, use the following command (shared for both
  *              IPv4 and IPv6 conntracks):
  *              <br> (@ref FPP_CMD_IPV4_SET_TIMEOUT)
  *
@@ -364,7 +385,7 @@
  *
  *              <small>
  *              Note: <br>
- *              Removing a route which is used by some conntracks causes the associated connntracks 
+ *              Removing a route which is used by some conntracks causes the associated connntracks
  *              to be removed as well.
  *              </small> <br>
  *
@@ -387,12 +408,12 @@
  *              Introduction
  *              ------------
  *              L2 Bridge is a dedicated feature to offload a host from tasks related
- *              to MAC address-based forwarding of Ethernet frames. PFE can be configured 
+ *              to MAC address-based forwarding of Ethernet frames. PFE can be configured
  *              to act as a network switch, implementing the following functionality:
  *              - <b>MAC table:</b>
  *                L2 Bridge uses its own MAC table to keep track of encountered MAC addresses.
- *                Each MAC table entry consists of a MAC address and a physical interface 
- *                which should be used to reach the given MAC address. MAC table entries can 
+ *                Each MAC table entry consists of a MAC address and a physical interface
+ *                which should be used to reach the given MAC address. MAC table entries can
  *                be dynamic (learned) or static.
  *              - <b>MAC address learning:</b>
  *                L2 Bridge is capable of automatically adding (learning) new MAC table entries from
@@ -417,7 +438,7 @@
  *              - <b>VLAN Awareness:</b>
  *                The L2 Bridge uses its own VLAN table to support VLAN-based policies
  *                like Ingress or Egress port membership. It also supports configuration of bridge
- *                domain ports (represented by physical interfaces) to provide VLAN tagging and 
+ *                domain ports (represented by physical interfaces) to provide VLAN tagging and
  *                untagging services, effectively allowing creation of access / trunk ports.
  *
  *              The L2 Bridge utilizes PFE HW accelerators to perform highly optimized MAC and VLAN
@@ -432,30 +453,26 @@
  *              - Associated VLAN ID.
  *              - Set of physical interfaces which represent ports of the BD.
  *              - Information about which ports are tagged or untagged.
- *                - Tagged port adds a VLAN tag to egressed frames if they are not VLAN tagged, or keeps 
+ *                - Tagged port adds a VLAN tag to egressed frames if they are not VLAN tagged, or keeps
  *                  the tag of the frames intact if they are already VLAN tagged.
  *                - Untagged port removes the VLAN tag from egressed frames if the frames are VLAN tagged.
- *              - Instruction how to process matching uni-cast frames. 
- *              - Instruction how to process matching multi-cast frames. 
+ *              - Instruction how to process matching uni-cast frames.
+ *              - Instruction how to process matching multi-cast frames.
  *
  *              The L2 Bridge recognizes several BD types:
- *              - <b>Default BD:</b> @anchor ref__default_bd
+ *              - <b>Default BD:</b> @anchor ref__default_bd <br>
  *                Factory default VLAN ID of this bridge domain is @b 1.
- *                - For a VLAN-aware Bridge, this domain is used to process ingress frames which
- *                  either have a VLAN tag equal to the Default BD's VLAN ID, or don't have 
- *                  a VLAN tag at all (untagged Ethernet frames).
- *                - For a simple (non-VLAN aware) Bridge, this domain is used as a representation
- *                  of the simple bridge.
- *              - <b>Fall-back BD:</b>
- *                This domain is used by a VLAN-aware Bridge to process ingress frames which 
- *                have an unknown VLAN tag. Unknown VLAN tag means that the VLAN tag does not 
- *                match any existing standard BD nor the default BD.
- *              - <b>Standard BD:</b>
+ *                This domain is used to process ingress frames which either have a VLAN tag equal
+ *                to the Default BD's VLAN ID, or don't have a VLAN tag at all (untagged Ethernet frames).
+ *              - <b>Fall-back BD:</b> <br>
+ *                This domain is used to process ingress frames which have an unknown VLAN tag.
+ *                Unknown VLAN tag means that the VLAN tag does not match any existing standard BD nor the default BD.
+ *              - <b>Standard BD:</b> <br>
  *                Standard user-defined bridge domains. Used by a VLAN-aware Bridge. These BDs
  *                process ingress frames which have a VLAN tag that matches the BD's VLAN ID.
  *
- *              Configuration (VLAN-aware Bridge)
- *              ---------------------------------
+ *              Configuration
+ *              -------------
  *              -# Create a bridge domain (VLAN domain).
  *                 <br> (@ref FPP_CMD_L2_BD + FPP_ACTION_REGISTER)
  *              -# Configure hit/miss actions of the bridge domain.
@@ -472,24 +489,9 @@
  *                 - Enable the promiscuous mode by setting the flag @ref FPP_IF_PROMISC.
  *                 - Enable the interface by setting the flag @ref FPP_IF_ENABLED.
  *
- *              Configuration (simple non-VLAN aware Bridge)
- *              --------------------------------------------
- *              -# Configure hit/miss actions of the @link ref__default_bd Default BD @endlink.
- *                 <br> (@ref FPP_CMD_L2_BD + FPP_ACTION_UPDATE)
- *              -# Configure which physical interfaces are considered members (ports) of the Default BD.
- *                 <br> (@ref FPP_CMD_L2_BD + FPP_ACTION_UPDATE)
- *              -# Configure the physical interfaces which shall classify their ingress traffic
- *                 by the simple (non-VLAN aware) Bridge classification algorithm. Use steps described in
- *                 @ref mgmt_phyif (section @b modify) and do the following for each desired physical interface:
- *                 - Set mode of the interface to @ref FPP_IF_OP_BRIDGE.
- *                 - Enable the promiscuous mode by setting the flag @ref FPP_IF_PROMISC.
- *                 - Enable the interface by setting the flag @ref FPP_IF_ENABLED.
- *
  *              Once the L2 Bridge is operational, ingress Ethernet frames of the Bridge-configured
- *              physical interfaces are processed according to setup of bridge domains. In case of 
- *              a VLAN-aware Bridge, VLAN tag of every ingress frame is inspected and the frame is then 
- *              processed by an appropriate bridge domain. In case of a simple (non-VLAN aware) Bridge,
- *              all ingress frames are always processed by the default BD.
+ *              physical interfaces are processed according to setup of bridge domains. VLAN tag of
+ *              every ingress frame is inspected and the frame is then processed by an appropriate bridge domain.
  *
  *              Additional operations
  *              ---------------------
@@ -534,12 +536,12 @@
  *
  *              Examples
  *              --------
- *              @ref demo_feature_L2_bridge_simple.c, @ref demo_feature_L2_bridge_vlan.c
+ *              @ref demo_feature_L2_bridge_vlan.c
  *
  * @subsection  l2l3_bridge  L2L3 Bridge
  *              Introduction
  *              ------------
- *              L2L3 Bridge is an extension of the L2 Bridge and IP Router features. 
+ *              L2L3 Bridge is an extension of the L2 Bridge and IP Router features.
  *              It allows both features to be simultaneously available on a physical interface.
  *              Traffic with specific destination MAC addresses is passed to the IP Router.
  *              The rest is handled by the L2 Bridge.
@@ -550,45 +552,42 @@
  *              -# Configure @ref l2_bridge.
  *              -# Create at least one MAC table static entry with the 'local' flag. Note that
  *                 if a static entry is configured as local, then its egress list is ignored.
- *                   - In case of a simple (non-VLAN aware) L2L3 Bridge, all 'local' static entries
- *                     should belong to the @link ref__default_bd Default BD @endlink.
- *                   - In case of VLAN-aware L2L3 Bridge, 'local' static entries must have
- *                     a correct VLAN (and MAC address) in order to properly match the ingress traffic.
- *
+ *                 Also note that 'local' static entries must have a correct VLAN (and MAC address)
+ *                 in order to properly match the ingress traffic.
  *                 <br> (@ref FPP_CMD_L2_STATIC_ENT + FPP_ACTION_REGISTER)
  *                 <br> (@ref FPP_CMD_L2_STATIC_ENT + FPP_ACTION_UPDATE)
  *              -# Configure the physical interfaces which shall classify their ingress traffic
  *                 by the L2L3 Bridge classification algorithm. Use steps described in
  *                 @ref mgmt_phyif (section @b modify) and do the following for each desired physical interface:
- *                 - Set mode of the interface either to @ref FPP_IF_OP_L2L3_BRIDGE or to @ref FPP_IF_OP_L2L3_VLAN_BRIDGE.
+ *                 - Set mode of the interface to @ref FPP_IF_OP_L2L3_VLAN_BRIDGE.
  *                 - Enable the promiscuous mode by setting the flag @ref FPP_IF_PROMISC.
  *                 - Enable the interface by setting the flag @ref FPP_IF_ENABLED.
  *
- *              Once the L2L3 Bridge is operational, it checks the ingress traffic of 
- *              L2L3 Bridge-configured physical interfaces against 'local' static entries 
- *              in the L2 Bridge MAC table. If traffic's destination MAC matches a MAC address 
+ *              Once the L2L3 Bridge is operational, it checks the ingress traffic of
+ *              L2L3 Bridge-configured physical interfaces against 'local' static entries
+ *              in the L2 Bridge MAC table. If traffic's destination MAC matches a MAC address
  *              of some 'local' static entry, then the traffic is passed to the IP Router.
  *              Otherwise the traffic is passed to the L2 Bridge.
  *
  *              Examples
  *              --------
- *              @ref demo_feature_L2L3_bridge_simple.c, @ref demo_feature_L2L3_bridge_vlan.c
+ *              @ref demo_feature_L2L3_bridge_vlan.c
  *
  * @subsection  flex_parser  Flexible Parser
  *              Introduction
  *              ------------
  *              Flexible Parser is a PFE firmware-based feature which can classify ingress traffic
  *              according to a set of custom classification rules. The feature is intended to be used
- *              as an extension of other PFE features/classification algorithms. Flexible Parser consists 
+ *              as an extension of other PFE features/classification algorithms. Flexible Parser consists
  *              of the following elements:
  *              - <b>FP rule:</b>
  *                A classification rule. See @ref FPP_CMD_FP_RULE.
  *                FP rules inspect content of Ethernet frames. Based on the inspection result
- *                (whether the condition of a rule is satisfied or not), a next step of the Flexible Parser 
+ *                (whether the condition of a rule is satisfied or not), a next step of the Flexible Parser
  *                classification process is taken.
- *              - <b>FP table:</b> @anchor ref__fp_table 
- *                An ordered set of FP rules. See @ref FPP_CMD_FP_TABLE. These tables can be assigned 
- *                as extensions of other PFE features/classification algorithms. Namely, they can be used 
+ *              - <b>FP table:</b> @anchor ref__fp_table
+ *                An ordered set of FP rules. See @ref FPP_CMD_FP_TABLE. These tables can be assigned
+ *                as extensions of other PFE features/classification algorithms. Namely, they can be used
  *                as an argument for:
  *                - Flexible Filter of a physical interface. See @ref fpp_phy_if_cmd_t (`.ftable`).
  *                  Flexible Filter acts as a traffic filter, pre-emptively discarding ingress traffic
@@ -598,7 +597,7 @@
  *                  See @ref flex_router.
  *
  *              Flexible Parser classification introduces a performance penalty which is proportional to a count
- *              of rules and complexity of a used table. Always consider whether the use of this feature is 
+ *              of rules and complexity of a used table. Always consider whether the use of this feature is
  *              really necessary. If it is necessary, then try to use FP tables with as few rules as possible.
  *
  *              Configuration
@@ -624,14 +623,14 @@
  *              in whatever role it was assigned to (see @link ref__fp_table FP table @endlink).
  *              Classification always starts from the very first rule of the table (index 0). Normally,
  *              rules of the table are evaluated sequentially till the traffic is either accepted, rejected,
- *              or the end of the table is reached. If the end of the table is reached and the traffic is 
+ *              or the end of the table is reached. If the end of the table is reached and the traffic is
  *              still not accepted nor rejected, then Flexible Parser automatically rejects it.
  *
  *              Based on the action of an FP rule, it is possible to make a jump from the currently
  *              evaluated rule to any other rule in the same table. This can be used in some complex scenarios.
  *
  *              @b WARNING: <br>
- *              It is prohibited to use jumps to create loops. Failure to adhere to this warning 
+ *              It is prohibited to use jumps to create loops. Failure to adhere to this warning
  *              will result in an undefined behavior of Flexible Parser.
  *
  *              Additional operations
@@ -657,7 +656,7 @@
  *              - FrameData is an inspected value from an ingress Ethernet frame.
  *                Each rule can inspect a different value from the frame.
  *                See @ref FPP_CMD_FP_RULE and @ref fpp_fp_rule_props_t, fields `.offset` and `.offset_from`.
- *              - RuleData is a template value inside the FP rule. It is compared with the inspected value 
+ *              - RuleData is a template value inside the FP rule. It is compared with the inspected value
  *                from the ingress Ethernet frame.
  *              - Mask is a bitmask specifying which bits of the RuleData and FrameData shall be compared
  *                (the rest of the bits is ignored).
@@ -709,12 +708,12 @@
  *              -# Unlock the interface database with @ref FPP_CMD_IF_UNLOCK_SESSION.
  *
  *              Once the Flexible Router is operational, it classifies the ingress traffic of
- *              Flexible Router-configured physical interfaces. The process is based on the 
- *              classification sequence of logical interfaces (see @ref mgmt_logif). Classifier walks 
- *              through the sequence from the head position back to tail, matching the ingress 
+ *              Flexible Router-configured physical interfaces. The process is based on the
+ *              classification sequence of logical interfaces (see @ref mgmt_logif). Classifier walks
+ *              through the sequence from the head position back to tail, matching the ingress
  *              traffic against match rules of logical interfaces which are in the sequence.
  *              If a match is found (traffic conforms with match rules of the given logical interface),
- *              then the traffic is processed according to the interface's configuration (forwarded, 
+ *              then the traffic is processed according to the interface's configuration (forwarded,
  *              dropped, sent to a host, etc.).
  *
  *              Configuration example
@@ -728,11 +727,11 @@
  *              -# Traffic is ingressed (received) through emac1 port of PFE.
  *              -# Classifier walks through the list of logical interfaces associated with the emac1
  *                 physical interface.
- *              -# If some logical interface accepts the traffic, then information about the matching 
- *                 logical interface (and its parent physical interface) is passed to the Routing and 
+ *              -# If some logical interface accepts the traffic, then information about the matching
+ *                 logical interface (and its parent physical interface) is passed to the Routing and
  *                 Forwarding Algorithm. Algorithm reads the logical interface and retrieves forwarding properties.
  *              -# Traffic is forwarded by the Routing and Forwarding Algorithm based on the provided information.
- *                 In this example, the logical interface specified that a replica of the traffic shall be 
+ *                 In this example, the logical interface specified that a replica of the traffic shall be
  *                 forwarded to both emac2 and hif0 interfaces.
  *              -# Traffic is transmitted via physical interfaces.
  *
@@ -768,7 +767,7 @@
  *              <br> (@ref FPP_CMD_SPD + FPP_ACTION_DEREGISTER)
  *
  *              To @b list existing SPD entries from the SPD table of a physical interface:
- *              <br> (@ref FPP_CMD_SPD + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)    
+ *              <br> (@ref FPP_CMD_SPD + FPP_ACTION_QUERY and FPP_ACTION_QUERY_CONT)
  *
  *              The HSE also requires the configuration via interfaces of the HSE firmware which is out of the scope of this
  *              document. The SAs referenced within the SPD entries must exist prior creation of the respective SPD entry.
@@ -780,11 +779,11 @@
  * @subsection  egress_qos Egress QoS
  *              Introduction
  *              ------------
- *              The egress QoS allows user to prioritize, aggregate and shape traffic intended to
+ *              The Egress QoS allows user to prioritize, aggregate and shape traffic intended to
  *              leave the accelerator through some @link mgmt_phyif physical interface @endlink.
  *              Egress QoS is implemented as follows:
  *              - Each @b emac physical interface has its own QoS block.
- *              - All @b hif physical interfaces share one common QoS block.    
+ *              - All @b hif physical interfaces share one common QoS block.
  *
  *              Every QoS block has a platform-specific number of queues, schedulers and shapers.
  *
@@ -793,9 +792,9 @@
  *                - @b Queues:
  *                     - Number of queues: 8
  *                     - Maximum queue depth: 255
- *                     - Probability zones per queue: 8    
+ *                     - Probability zones per queue: 8
  *                       <small><br>
- *                       Queues of @b hif interfaces:    
+ *                       Queues of @b hif interfaces:
  *                       Every hif interface has only @b 2 queues, indexed as follows:
  *                         - [0] : low priority queue (L)
  *                         - [1] : high priority queue (H)
@@ -806,7 +805,7 @@
  *                - @b Schedulers:
  *                     - Number of schedulers: 2
  *                     - Number of scheduler inputs: 8
- *                     - Traffic sources which can be connected to scheduler inputs:    
+ *                     - Traffic sources which can be connected to scheduler inputs:
  *                       (see @link fpp_qos_scheduler_cmd_t @endlink.input_src)
  *                         Source|Description
  *                         ------|----------------------
@@ -816,7 +815,7 @@
  *
  *                - @b Shapers:
  *                     - Number of shapers: 4
- *                     - Shaper positions:    
+ *                     - Shaper positions:
  *                       (see @link fpp_qos_shaper_cmd_t @endlink.position)
  *                         Position  |Description
  *                         ----------|------------------------------------------
@@ -832,11 +831,11 @@
  *              --------------------------
  *              The following pseudocode explains traffic queueing algorithm of PFE:
  *              @code{.c}
- *              .............................................  
+ *              .............................................
  *              get_queue_for_packet(pkt)
  *              {
  *                queue = 0;
- *                  
+ *
  *                if (pkt.hasVlanTag)
  *                {
  *                  queue = pkt.VlanHdr.PCP;
@@ -852,15 +851,15 @@
  *                    queue = (pkt.IPv6Hdr.TrafficClass.DS) / 8;
  *                  }
  *                }
- *                  
+ *
  *                return queue;
  *              }
- *              .............................................  
+ *              .............................................
  *              @endcode
  *
  *              <small>
- *              @b Note:    
- *              Hif interfaces have only two queues. Their queueing algorithm is similar to the 
+ *              @b Note:
+ *              Hif interfaces have only two queues. Their queueing algorithm is similar to the
  *              aforementioned pseudocode, but is modified to produce only two results:
  *                - 0 : traffic belongs to the hif's low priority queue.
  *                - 1 : traffic belongs to the hif's high priority queue.
@@ -885,7 +884,7 @@
                 @endverbatim
  *
  *              All queues are connected to Scheduler 1 and the scheduler discipline
- *              is set to Round Robin. Rate mode is set to Data Rate (bps). Queues are 
+ *              is set to Round Robin. Rate mode is set to Data Rate (bps). Queues are
  *              in Tail Drop mode.
  *
  *              To <b> list QoS queue </b> properties:
@@ -925,21 +924,131 @@
  *              --------
  *              @ref demo_feature_qos.c
  *
+ * @subsection  ingress_qos Ingress QoS
+ *              Introduction
+ *              ------------
+ *              The Ingress QoS allows user to prioritize, aggregate and shape traffic as
+ *              it comes into the accelerator through an @b emac @link mgmt_phyif physical interface @endlink,
+ *              before it is further processed by the accelerator.
+ *
+ *              Each @b emac physical interface has its own Ingress QoS Policer block.
+ *              Every Policer block has its dedicated flow classification table, WRED queues and Ingress QoS shapers.
+ *              Exact size of flow classification table and exact numbers/limits of WRED queues and
+ *              Ingress QoS shapers are platform-specific.
+ *
+ *              @if S32G2
+ *                The following applies for each @b S32G2/PFE Ingress QoS block ("policer"):
+ *                - @b Flow classification table:
+ *                     - Maximum number of flows: 64
+ *
+ *                - @b WRED queues:
+ *                     - Number of queues: 3 (DMEM, LMEM, RXF)
+ *                     - Maximum queue depth: 8192 for DMEM ; 512 for LMEM and RXF
+ *                     - Probability zones per queue: 4
+ *
+ *                - @b Ingress @b QoS @b shapers:
+ *                     - Number of shapers: 2
+ *              @endif
+ *
+ *              Configuration
+ *              -------------
+ *              By default, the Ingress QoS block ("policer") is organized as follows:
+ *              @verbatim
+                              policer
+         +-------------------------------------------------+
+         |                                                 |
+         |  +------------+   +--------+   +-------------+  |
+Ingress  |  |            |   |  WRED  |   | Ingress QoS |  |   Further PFE
+traffic--+->| flow table +-->| queues +-->|   shapers   +--+-->processing
+         |  |            |   |        |   |             |  |
+         |  +-----+------+   +---+----+   +-------------+  |
+         |        |              |                         |
+         +--------+--------------+-------------------------+
+                  |              |
+                 possible packet drop
+                @endverbatim
+ *
+ *              - <tt>policer</tt>  (@ref FPP_CMD_QOS_POLICER)
+ *                    - The Ingress QoS block ("policer") itself.
+ *                    - The whole block can be enabled/disabled. If the block is disabled,
+ *                      it is bypassed and does not affect performance.
+ *              - <tt>flow table</tt> which contains flows  (@ref FPP_CMD_QOS_POLICER_FLOW)
+ *                    - Flow classification table. Contains user-defined flows.
+ *                    - Each flow represents a certain criteria, such as traffic type to match
+ *                      (VLAN, ARP, IPv4, etc.) or some data within the traffic to match
+ *                      (match VLAN ID, match IP address, etc).
+ *                    - Ingressing traffic is compared with flows and their criteria.
+ *                      If traffic matches some flow, then (based on flow action), the traffic gets
+ *                      either dropped or marked as Managed or Reserved.
+ *                      Traffic which does not match any flow from the table is marked as Unmanaged.
+ *              - <tt>WRED queues</tt>  (@ref FPP_CMD_QOS_POLICER_WRED)
+ *                    - Ingress QoS WRED queues. These queues (by HW design) always use WRED algorithm.
+ *                    - Individual queues can be disabled. If all queues are disabled,
+ *                      then the WRED queueing module is bypassed.
+ *                    - Traffic is queued (or possibly dropped) based on the momentary queue fill and
+ *                      also based on the marking of the traffic (Unmanaged/Managed/Reserved).
+ *                      See description of @ref fpp_iqos_wred_thr_t enum members.
+ *              - <tt>Ingress QoS shapers</tt>  (@ref FPP_CMD_QOS_POLICER_SHP)
+ *                    - Ingress QoS shapers. These shapers can be used to shape ingress traffic
+ *                      to ensure optimal data flow.
+ *                    - Individual shapers can be disabled. If all shapers are disabled,
+ *                      then the Ingress QoS shaper module is bypassed.
+ *                    - Shapers can be assigned to shape one of several predefined traffic types.
+ *                      See description of @ref fpp_iqos_shp_type_t enum members.
+ *
+ *              To @b get Ingress QoS @b policer status:
+ *              -# (@ref FPP_CMD_QOS_POLICER + FPP_ACTION_QUERY)
+ *
+ *              To @b list Ingress QoS @b flow properties:
+ *              -# (@ref FPP_CMD_QOS_POLICER_FLOW + FPP_ACTION_QUERY, FPP_ACTION_QUERY_CONT)
+ *
+ *              To @b list Ingress QoS @b WRED queue properties:
+ *              -# (@ref FPP_CMD_QOS_POLICER_WRED + FPP_ACTION_QUERY)
+ *
+ *              To @b list Ingress QoS @b shaper properties:
+ *              -# (@ref FPP_CMD_QOS_POLICER_SHP + FPP_ACTION_QUERY)
+ *
+ *              <br>
+ *              To @b enable/disable Ingress QoS @b policer:
+ *              -# (@ref FPP_CMD_QOS_POLICER + FPP_ACTION_UPDATE)
+ *
+ *              To @b add Ingress QoS @b flow to flow classification table:
+ *              -# (@ref FPP_CMD_QOS_POLICER_FLOW + FPP_ACTION_REGISTER)
+ *
+ *              To @b remove Ingress QoS @b flow from flow classification table:
+ *              -# (@ref FPP_CMD_QOS_POLICER_FLOW + FPP_ACTION_DEREGISTER)
+ *
+ *              To @b modify Ingress QoS @b WRED queue properties (read-modify-write):
+ *              -# Read Ingress QoS WRED queue properties.
+ *                 <br> (@ref FPP_CMD_QOS_POLICER_WRED + FPP_ACTION_QUERY)
+ *              -# Locally modify the properties. See fpp_qos_policer_wred_cmd_t.
+ *              -# Write the modified properties back to PFE.
+ *                 <br> (@ref FPP_CMD_QOS_POLICER_WRED + FPP_ACTION_UPDATE)
+ *
+ *              To @b modify Ingress QoS @b shaper properties (read-modify-write):
+ *              -# Read Ingress QoS shaper properties.
+ *                 <br> (@ref FPP_CMD_QOS_POLICER_SHP + FPP_ACTION_QUERY)
+ *              -# Locally modify the properties. See fpp_qos_policer_shp_cmd_t.
+ *              -# Write the modified properties back to PFE.
+ *                 <br> (@ref FPP_CMD_QOS_POLICER_SHP + FPP_ACTION_UPDATE)
+ *
+ *              Examples
+ *              --------
+ *              @ref demo_feature_qos_policer.c
  */
 
 /**
  * @example demo_feature_physical_interface.c
- * @example demo_feature_L2_bridge_simple.c
  * @example demo_feature_L2_bridge_vlan.c
  * @example demo_feature_router_simple.c
  * @example demo_feature_router_nat.c
- * @example demo_feature_L2L3_bridge_simple.c
  * @example demo_feature_L2L3_bridge_vlan.c
  * @example demo_feature_flexible_filter.c
  * @example demo_feature_flexible_router.c
  * @example demo_feature_spd.c
  * @example demo_feature_qos.c
- * 
+ * @example demo_feature_qos_policer.c
+ *
  * @example demo_common.c
  * @example demo_phy_if.c
  * @example demo_log_if.c
@@ -950,6 +1059,7 @@
  * @example demo_rt_ct.c
  * @example demo_spd.c
  * @example demo_qos.c
+ * @example demo_qos_pol.c
  * @example demo_fwfeat.c
  */
 
@@ -980,7 +1090,7 @@
  * @details      <!-- empty, but is needed by Doxygen generator -->
  * @hideinitializer
  */
-#define CTCMD_FLAGS_ORIG_DISABLED           (1U << 0)
+#define CTCMD_FLAGS_ORIG_DISABLED           ((uint16_t)1U << 0)
 
 /**
  * @def         CTCMD_FLAGS_REP_DISABLED
@@ -989,7 +1099,7 @@
  *              @ref FPP_CMD_IPV4_CONNTRACK)
  * @hideinitializer
  */
-#define CTCMD_FLAGS_REP_DISABLED            (1U << 1)
+#define CTCMD_FLAGS_REP_DISABLED            ((uint16_t)1U << 1)
 
 /**
  * @def         CTCMD_FLAGS_TTL_DECREMENT
@@ -997,7 +1107,7 @@
  * @details     Used to decrement TTL field when the pkt is routed
  * @hideinitializer
  */
-#define CTCMD_FLAGS_TTL_DECREMENT            (1U << 2)
+#define CTCMD_FLAGS_TTL_DECREMENT            ((uint16_t)1U << 2)
 
 
 /* TODO put to config file: */
@@ -1117,13 +1227,13 @@ typedef enum
  * @details     Binds the FCI client with FCI endpoint. This enables sending/receiving data
  *              to/from the endpoint. Refer to the remaining API for possible communication
  *              options.
- * @param[in]   type Client type. Default value is FCI_CLIENT_DEFAULT. See @ref fci_client_type_t.
+ * @param[in]   client_type Client type. Default value is FCI_CLIENT_DEFAULT. See @ref fci_client_type_t.
  * @param[in]   group A 32-bit multicast group mask. Each bit represents single multicast address.
  *                    FCI instance will listen to specified multicast addresses as well it will
  *                    send data to all specified multicast groups. See @ref fci_mcast_groups_t.
  * @return      The FCI client instance or NULL if failed
  */
-FCI_CLIENT * fci_open(fci_client_type_t type, fci_mcast_groups_t group);
+FCI_CLIENT * fci_open(fci_client_type_t client_type, fci_mcast_groups_t group);
 
 /**
  * @brief       Disconnects from FCI endpoint and destroys FCI client instance
@@ -1189,17 +1299,16 @@ int fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *cmd_buf, u
  *
  * @note        If either @c rsp_data or @c rsplen is NULL pointer, the response data is discarded.
  *
- * @param[in]   this_client The FCI client instance
+ * @param[in]   client The FCI client instance
  * @param[in]   fcode Command to be executed. Available commands are listed in @ref fci_cs.
  * @param[in]   cmd_len Length of the command arguments structure in bytes
- * @param[in]   pcmd Pointer to structure holding command arguments.
- * @param[out]  rsplen Pointer to memory where length of the data response will be provided
- * @param[out]  rsp_data Pointer to memory where the data response shall be written.
+ * @param[in]   cmd_buf Pointer to structure holding command arguments.
+ * @param[out]  rep_len Pointer to memory where length of the data response will be provided
+ * @param[out]  rep_buf Pointer to memory where the data response shall be written.
  * @retval      <0 Failed to execute the command.
  * @retval      >=0 Command was executed with given return value (@c FPP_ERR_OK for success).
  */
-int fci_query(FCI_CLIENT *this_client, unsigned short fcode, unsigned short cmd_len, unsigned short *pcmd, unsigned short *rsplen, unsigned short *rsp_data);
-
+int fci_query(FCI_CLIENT *client, unsigned short fcode, unsigned short cmd_len, unsigned short *cmd_buf, unsigned short *rep_len, unsigned short *rep_buf);
 /**
  * @brief       Run an FCI command
  * @details     Similar as the fci_query() but without data response. The endpoint receiving the
@@ -1236,6 +1345,6 @@ int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned sho
 /**
  * @brief       Obsolete function, shall not be used
  */
-int fci_fd(FCI_CLIENT *this_client);
+int fci_fd(FCI_CLIENT *client);
 
 #endif /* LIBFCI_H */

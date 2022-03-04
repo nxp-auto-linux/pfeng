@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -121,7 +121,7 @@ static errno_t fci_interfaces_get_arg_info(fpp_if_m_args_t *m_arg, pfe_ct_if_m_r
 		{
 			/* Get the table address in the HW */
 			*fp_table_addr = oal_htonl(fci_fp_db_get_table_dmem_addr(m_arg->fp_table0));
-			if(0 == *fp_table_addr)
+			if(0U == *fp_table_addr)
 			{
 				retval = ENOENT;
 			}
@@ -134,7 +134,7 @@ static errno_t fci_interfaces_get_arg_info(fpp_if_m_args_t *m_arg, pfe_ct_if_m_r
 		{
 			/* Get the table address in the HW */
 			*fp_table_addr = oal_htonl(fci_fp_db_get_table_dmem_addr(m_arg->fp_table1));
-			if(0 == *fp_table_addr)
+			if(0U == *fp_table_addr)
 			{
 				retval = ENOENT;
 			}
@@ -168,6 +168,7 @@ static errno_t fci_interfaces_get_arg_info(fpp_if_m_args_t *m_arg, pfe_ct_if_m_r
 		{
 			*size = 0U;
 			*offset = NULL;
+			break;
 		}
 	}
 	return retval;
@@ -190,21 +191,22 @@ static errno_t fci_interfaces_destroy_fptables(const fpp_if_m_rules_t match, con
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	char_t *table_name;
-	if(FPP_IF_MATCH_FP0 == (match & FPP_IF_MATCH_FP0))
+	char_t *table_name = NULL;
+
+	if((uint32_t)FPP_IF_MATCH_FP0 == ((uint32_t)match & (uint32_t)FPP_IF_MATCH_FP0))
 	{	/* A flexible parser table was dropped - it needs to be destroyed if it existed */
-		if(0 != args->fp0_table)
+		if(0U != args->fp0_table)
 		{	/* Table existed */
-			fci_fp_db_get_table_from_addr(args->fp0_table, &table_name);
-			fci_fp_db_pop_table_from_hw(table_name);
+			(void)fci_fp_db_get_table_from_addr(args->fp0_table, &table_name);
+			(void)fci_fp_db_pop_table_from_hw(table_name);
 		}
 	}
-	if(FPP_IF_MATCH_FP1 == (match & FPP_IF_MATCH_FP1))
+	if((uint32_t)FPP_IF_MATCH_FP1 == ((uint32_t)match & (uint32_t)FPP_IF_MATCH_FP1))
 	{	/* A flexible parser table was dropped - it needs to be destroyed if it existed */
-		if(0 != args->fp1_table)
+		if(0U != args->fp1_table)
 		{	/* Table existed */
-			fci_fp_db_get_table_from_addr(args->fp1_table, &table_name);
-			fci_fp_db_pop_table_from_hw(table_name);
+			(void)fci_fp_db_get_table_from_addr(args->fp1_table, &table_name);
+			(void)fci_fp_db_pop_table_from_hw(table_name);
 		}
 	}
 
@@ -316,7 +318,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 	}
 
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(fpp_log_if_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_log_if_cmd_t));
 
 	if_cmd = (fpp_log_if_cmd_t *)msg->msg_cmd.payload;
 
@@ -396,7 +398,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 
 			/* Remove interface from the database */
-			pfe_if_db_remove(context->log_if_db, context->if_session_id, entry);
+			(void)pfe_if_db_remove(context->log_if_db, context->if_session_id, entry);
 			/* Destroy the interface */
 			pfe_log_if_destroy(log_if);
 			break;
@@ -463,11 +465,11 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			fp_table_destroy[0] = 0U;
 			fp_table_destroy[1] = 0U;
 			/* We are going to configure Flexible parser - prepare table(s) */
-			if(FPP_IF_MATCH_FP0 == (oal_ntohl(if_cmd->match) & FPP_IF_MATCH_FP0))
+			if((uint32_t)FPP_IF_MATCH_FP0 == (oal_ntohl(if_cmd->match) & (uint32_t)FPP_IF_MATCH_FP0))
 			{
 				/* Get the newly configured table address */
 				fp_table_addr = fci_fp_db_get_table_dmem_addr(if_cmd->arguments.fp_table0);
-				if(0 == fp_table_addr)
+				if(0U == fp_table_addr)
 				{   /* Table has not been created yet */
 					ret = fci_fp_db_push_table_to_hw(context->class, if_cmd->arguments.fp_table0);
 					if(EOK != ret)
@@ -477,7 +479,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 					}
 					/* We have just created the table therefore the existing one must be different
 					   and it needs to be destroyed before we overwrite the reference */
-					if(0 != args.fp0_table)
+					if(0U != args.fp0_table)
 					{
 						/* Table is still in use therefore it cannot be destroyed,
 						   just remember it */
@@ -498,11 +500,11 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 
 				}
 			}
-			if(FPP_IF_MATCH_FP1 == (oal_ntohl(if_cmd->match) & FPP_IF_MATCH_FP1))
+			if((uint32_t)FPP_IF_MATCH_FP1 == (oal_ntohl(if_cmd->match) & (uint32_t)FPP_IF_MATCH_FP1))
 			{
 				/* Get the newly configured table address */
 				fp_table_addr = fci_fp_db_get_table_dmem_addr(if_cmd->arguments.fp_table1);
-				if(0 == fp_table_addr)
+				if(0U == fp_table_addr)
 				{   /* Table has not been created yet */
 					ret = fci_fp_db_push_table_to_hw(context->class, if_cmd->arguments.fp_table1);
 					if(EOK != ret)
@@ -512,7 +514,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 					}
 					/* We have just created the table therefore the existing one must be different
 					   and it needs to be destroyed before we overwrite the reference */
-					if(0 != args.fp1_table)
+					if(0U != args.fp1_table)
 					{
 						/* Table is still in use therefore it cannot be destroyed,
 						   just remember it */
@@ -536,7 +538,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 
 			/* Update each rule one by one */
-			for(index = 0U; 8U * sizeof(if_cmd->match) > index;  ++index)
+			for(index = 0U; (8U * sizeof(if_cmd->match)) > index;  ++index)
 			{
 				if(0U != (oal_ntohl(if_cmd->match) & (1U << index)))
 				{
@@ -560,32 +562,32 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 
 			/* Now is the time to destroy Flexible Parser tables no longer in use */
-			if(0 != fp_table_destroy[0])
+			if(0U != fp_table_destroy[0])
 			{
-				fci_fp_db_get_table_from_addr(fp_table_destroy[0], &table_name);
-				fci_fp_db_pop_table_from_hw(table_name);
+				(void)fci_fp_db_get_table_from_addr(fp_table_destroy[0], &table_name);
+				(void)fci_fp_db_pop_table_from_hw(table_name);
 			}
-			if(0 != fp_table_destroy[1])
+			if(0U != fp_table_destroy[1])
 			{
-				fci_fp_db_get_table_from_addr(fp_table_destroy[1], &table_name);
-				fci_fp_db_pop_table_from_hw(table_name);
+				(void)fci_fp_db_get_table_from_addr(fp_table_destroy[1], &table_name);
+				(void)fci_fp_db_pop_table_from_hw(table_name);
 			}
 
 			/* Update egress in case at least one is set (old egress is dropped) */
-			if(0 != if_cmd->egress)
+			if(0U != if_cmd->egress)
 			{
 				NXP_LOG_INFO("Updating egress interfaces on %s (0x%x)\n",  pfe_log_if_get_name(log_if), (uint_t)oal_ntohl(if_cmd->egress));
-				for(index = 0U; PFE_PHY_IF_ID_INVALID > index;  ++index)
+				for(index = 0U; (uint32_t)PFE_PHY_IF_ID_INVALID > index;  ++index)
 				{
 
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-					if(PFE_PHY_IF_ID_HIF == index)
+					if((uint32_t)PFE_PHY_IF_ID_HIF == index)
 					{
 						/* Skip currently not used interfaces */
 						continue;
 					}
 #else
-					if((PFE_PHY_IF_ID_HIF == index) || (PFE_PHY_IF_ID_HIF_NOCPY == index))
+					if(((uint32_t)PFE_PHY_IF_ID_HIF == index) || ((uint32_t)PFE_PHY_IF_ID_HIF_NOCPY == index))
 					{
 						/* Skip currently not used interfaces */
 						continue;
@@ -615,7 +617,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 							ret = pfe_log_if_get_egress_ifs(log_if, &egress);
 							if(EOK == ret)
 							{
-								if(0U != (egress & (1U << index)))
+								if(0U != (egress & ((uint32_t)1U << index)))
 								{   /* Interface is on the current list but not on the requested list - drop it */
 									ret = pfe_log_if_del_egress_if(log_if, phy_if);
 								}
@@ -639,7 +641,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 
 			/* AND/OR rules */
-			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_MATCH_OR))
+			if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_MATCH_OR))
 			{
 				ret = pfe_log_if_set_match_or(log_if);
 			}
@@ -655,7 +657,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 
 			/* enable/disable */
-			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_ENABLED))
+			if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_ENABLED))
 			{
 				ret = pfe_log_if_enable(log_if);
 			}
@@ -671,7 +673,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 
 			/* loopback */
-			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_LOOPBACK))
+			if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_LOOPBACK))
 			{
 				ret = pfe_log_if_loopback_enable(log_if);
 			}
@@ -687,7 +689,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 
 			/* promisc */
-			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_PROMISC))
+			if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_PROMISC))
 			{
 				ret = pfe_log_if_promisc_enable(log_if);
 			}
@@ -703,7 +705,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 
 			/* discard */
-			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_DISCARD))
+			if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_DISCARD))
 			{
 				ret = pfe_log_if_discard_enable(log_if);
 			}
@@ -763,8 +765,8 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			/* Store names */
 			if(NULL != phy_if)
 			{
-				strncpy(reply_buf->name, pfe_log_if_get_name(log_if), IFNAMSIZ-1);
-				strncpy(reply_buf->parent_name, pfe_phy_if_get_name(phy_if), IFNAMSIZ-1);
+				(void)strncpy(reply_buf->name, pfe_log_if_get_name(log_if), (uint32_t)IFNAMSIZ-1U);
+				(void)strncpy(reply_buf->parent_name, pfe_phy_if_get_name(phy_if), (uint32_t)IFNAMSIZ-1U);
 			}
 			else
 			{
@@ -780,10 +782,10 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 
 			/* Copy the log if statistics to reply */
-			memcpy(&reply_buf->stats, &stats, sizeof(reply_buf->stats));
+			(void)memcpy(&reply_buf->stats, &stats, sizeof(reply_buf->stats));
 
 			/* Get important flag values */
-			reply_buf->flags = (fpp_if_flags_t)0U;
+			(void)memset(&reply_buf->flags, 0, sizeof(reply_buf->flags));
 			if(pfe_log_if_is_enabled(log_if))
 			{
 				reply_buf->flags |= oal_htonl(FPP_IF_ENABLED);
@@ -816,6 +818,8 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			}
 			reply_buf->egress = oal_htonl(egress);
 
+            (void)memset(&rules, 0, sizeof(pfe_ct_if_m_rules_t));
+            (void)memset(&args, 0, sizeof(pfe_ct_if_m_args_t));
 			/* Store rules for FCI */
 			if(EOK != pfe_log_if_get_match_rules(log_if, &rules, &args))
 			{
@@ -834,20 +838,20 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			reply_buf->arguments.dport = args.dport;
 			reply_buf->arguments.proto = args.proto;
 			reply_buf->arguments.hif_cookie = args.hif_cookie;
-			memcpy(&reply_buf->arguments.ipv, &args.ipv, sizeof(reply_buf->arguments.ipv));
-			memcpy(reply_buf->arguments.smac, args.smac, 6U);
-			memcpy(reply_buf->arguments.dmac, args.dmac, 6U);
+			(void)memcpy(&reply_buf->arguments.ipv, &args.ipv, sizeof(reply_buf->arguments.ipv));
+			(void)memcpy(reply_buf->arguments.smac, args.smac, 6U);
+			(void)memcpy(reply_buf->arguments.dmac, args.dmac, 6U);
 
 			/* Translate names of flexible parser tables from addresses to strings. */
-			memset(reply_buf->arguments.fp_table0, 0, IFNAMSIZ);
-			memset(reply_buf->arguments.fp_table1, 0, IFNAMSIZ);
+			(void)memset(reply_buf->arguments.fp_table0, 0, IFNAMSIZ);
+			(void)memset(reply_buf->arguments.fp_table1, 0, IFNAMSIZ);
 			if(EOK == fci_fp_db_get_table_from_addr(args.fp0_table, &table_name))
 			{
-				strcpy(reply_buf->arguments.fp_table0, table_name);
+				(void)strcpy(reply_buf->arguments.fp_table0, table_name);
 			}
 			if(EOK == fci_fp_db_get_table_from_addr(args.fp1_table, &table_name))
 			{
-				strcpy(reply_buf->arguments.fp_table1, table_name);
+				(void)strcpy(reply_buf->arguments.fp_table1, table_name);
 			}
 
 			/* Set ids */
@@ -862,7 +866,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 		{
 			/*Do Nothing*/
 			break;
-		}		
+		}
 	}
 
 	return ret;
@@ -921,7 +925,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 	}
 
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(fpp_phy_if_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_phy_if_cmd_t));
 
 	if_cmd = (fpp_phy_if_cmd_t *)msg->msg_cmd.payload;
 
@@ -975,7 +979,12 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				/* RX */
 				if('\0' == if_cmd->rx_mirrors[i][0])
 				{	/* Mirror is disabled */
-					pfe_phy_if_set_rx_mirror(phy_if, i, NULL);
+					if (EOK != pfe_phy_if_set_rx_mirror(phy_if, i, NULL))
+					{
+						NXP_LOG_ERROR("Configures the selected RX mirror failed\n");
+						*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
+						break;
+					}
 				}
 				else
 				{	/* Mirror is enabled and to be configured */
@@ -990,13 +999,23 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 						break;
 					}
 					/* Set the mirror */
-					pfe_phy_if_set_rx_mirror(phy_if, i, mirror);
+					if (EOK != pfe_phy_if_set_rx_mirror(phy_if, i, mirror))
+					{
+						NXP_LOG_ERROR("Configures the selected RX mirror failed\n");
+						*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
+						break;
+					}
 
 				}
 				/* TX */
 				if('\0' == if_cmd->tx_mirrors[i][0])
 				{	/* Mirror is disabled */
-					pfe_phy_if_set_tx_mirror(phy_if, i, NULL);
+					if (EOK != pfe_phy_if_set_tx_mirror(phy_if, i, NULL))
+					{
+						NXP_LOG_ERROR("Configures the selected TX mirror failed\n");
+						*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
+						break;
+					}
 				}
 				else
 				{	/* Mirror is enabled and to be configured */
@@ -1011,13 +1030,18 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 						break;
 					}
 					/* Set the mirror */
-					pfe_phy_if_set_tx_mirror(phy_if, i, mirror);
+					if (EOK != pfe_phy_if_set_tx_mirror(phy_if, i, mirror))
+					{
+						NXP_LOG_ERROR("Configures the selected TX mirror failed\n");
+						*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
+						break;
+					}
 
 				}
 			}
 
 			/*	Enable/Disable */
-			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_ENABLED))
+			if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_ENABLED))
 			{
 				ret = pfe_phy_if_enable(phy_if);
 			}
@@ -1033,7 +1057,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			}
 
 			/* promisc */
-			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_PROMISC))
+			if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_PROMISC))
 			{
 				ret = pfe_phy_if_promisc_enable(phy_if);
 			}
@@ -1049,7 +1073,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			}
 
 			/*	VLAN conformance check */
-			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_VLAN_CONF_CHECK))
+			if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_VLAN_CONF_CHECK))
 			{
 				flag_in_cmd = true;
 				ret = pfe_phy_if_set_flag(phy_if, IF_FL_VLAN_CONF_CHECK);
@@ -1064,17 +1088,20 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			{
 				flag_in_drv = (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_VLAN_CONF_CHECK));
 
-				if ((EPERM == ret) && (flag_in_cmd == flag_in_drv))
+				if (EPERM == ret)
 				{
-					/* Unavailable feature and FCI command didn't modify it. Continue through. */
-					ret = EOK;
-				}
-				else if ((EPERM == ret) && (flag_in_cmd != flag_in_drv))
-				{
-					/* Unavailable feature and FCI command tried to modify it. Respond with FCI error code. */
-					*fci_ret = FPP_ERR_FW_FEATURE_NOT_AVAILABLE;
-					ret = EOK;
-					break;
+					if(flag_in_cmd == flag_in_drv)
+					{
+						/* Unavailable feature and FCI command didn't modify it. Continue through. */
+						ret = EOK;
+					}
+					else
+					{
+						/* Unavailable feature and FCI command tried to modify it. Respond with FCI error code. */
+						*fci_ret = FPP_ERR_FW_FEATURE_NOT_AVAILABLE;
+						ret = EOK;
+						break;
+					}
 				}
 				else
 				{
@@ -1086,7 +1113,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			}
 
 			/*	PTP conformance check */
-			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_PTP_CONF_CHECK))
+			if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_PTP_CONF_CHECK))
 			{
 				flag_in_cmd = true;
 				ret = pfe_phy_if_set_flag(phy_if, IF_FL_PTP_CONF_CHECK);
@@ -1101,17 +1128,20 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			{
 				flag_in_drv = (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_PTP_CONF_CHECK));
 
-				if ((EPERM == ret) && (flag_in_cmd == flag_in_drv))
+				if (EPERM == ret)
 				{
-					/* Unavailable feature and FCI command didn't modify it. Continue through. */
-					ret = EOK;
-				}
-				else if ((EPERM == ret) && (flag_in_cmd != flag_in_drv))
-				{
-					/* Unavailable feature and FCI command tried to modify it. Respond with FCI error code. */
-					*fci_ret = FPP_ERR_FW_FEATURE_NOT_AVAILABLE;
-					ret = EOK;
-					break;
+					if(flag_in_cmd == flag_in_drv)
+					{
+						/* Unavailable feature and FCI command didn't modify it. Continue through. */
+						ret = EOK;
+					}
+					else
+					{
+						/* Unavailable feature and FCI command tried to modify it. Respond with FCI error code. */
+						*fci_ret = FPP_ERR_FW_FEATURE_NOT_AVAILABLE;
+						ret = EOK;
+						break;
+					}
 				}
 				else
 				{
@@ -1123,7 +1153,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			}
 
 			/*	PTP promiscuous mode */
-			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_PTP_PROMISC))
+			if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_PTP_PROMISC))
 			{
 				ret = pfe_phy_if_set_flag(phy_if, IF_FL_PTP_PROMISC);
 			}
@@ -1141,7 +1171,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			}
 
 			/*	QinQ support control */
-			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_ALLOW_Q_IN_Q))
+			if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_ALLOW_Q_IN_Q))
 			{
 				ret = pfe_phy_if_set_flag(phy_if, IF_FL_ALLOW_Q_IN_Q);
 			}
@@ -1157,7 +1187,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			}
 
 			/*	TTL discard control */
-			if(0U != (oal_ntohl(if_cmd->flags) & FPP_IF_DISCARD_TTL))
+			if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_DISCARD_TTL))
 			{
 				ret = pfe_phy_if_set_flag(phy_if, IF_FL_DISCARD_TTL);
 			}
@@ -1188,7 +1218,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 					addr = fci_fp_db_get_table_dmem_addr((char_t *)if_cmd->ftable);
 					if (0U == addr)
 					{
-						ret = fci_fp_db_push_table_to_hw(context->class, (char_t *)if_cmd->ftable);
+						(void)fci_fp_db_push_table_to_hw(context->class, (char_t *)if_cmd->ftable);
 						addr = fci_fp_db_get_table_dmem_addr((char_t *)if_cmd->ftable);
 					}
 
@@ -1278,21 +1308,21 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				break;
 			}
 			/* Copy the phy if statistics to reply */
-			memcpy(&reply_buf->stats, &stats, sizeof(reply_buf->stats));
+			(void)memcpy(&reply_buf->stats, &stats, sizeof(reply_buf->stats));
 
 			/* Store phy_if name */
-			strncpy(reply_buf->name, pfe_phy_if_get_name(phy_if), IFNAMSIZ-1);
+			(void)strncpy(reply_buf->name, pfe_phy_if_get_name(phy_if), (uint32_t)IFNAMSIZ-1U);
 
 			/* Store phy_if id */
 			reply_buf->id = oal_htonl(pfe_phy_if_get_id(phy_if));
 
-			reply_buf->flags |= (TRUE == pfe_phy_if_is_promisc(phy_if)) ? oal_htonl(FPP_IF_PROMISC) : 0;
-			reply_buf->flags |= (TRUE == pfe_phy_if_is_enabled(phy_if)) ? oal_htonl(FPP_IF_ENABLED) : 0;
-			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_VLAN_CONF_CHECK)) ? oal_htonl(FPP_IF_VLAN_CONF_CHECK) : 0;
-			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_PTP_CONF_CHECK)) ? oal_htonl(FPP_IF_PTP_CONF_CHECK) : 0;
-			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_PTP_PROMISC)) ? oal_htonl(FPP_IF_PTP_PROMISC) : 0;
-			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_ALLOW_Q_IN_Q)) ? oal_htonl(FPP_IF_ALLOW_Q_IN_Q) : 0;
-			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_DISCARD_TTL)) ? oal_htonl(FPP_IF_DISCARD_TTL) : 0;
+			reply_buf->flags |= (TRUE == pfe_phy_if_is_promisc(phy_if)) ? oal_htonl(FPP_IF_PROMISC) : 0U;
+			reply_buf->flags |= (TRUE == pfe_phy_if_is_enabled(phy_if)) ? oal_htonl(FPP_IF_ENABLED) : 0U;
+			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_VLAN_CONF_CHECK)) ? oal_htonl(FPP_IF_VLAN_CONF_CHECK) : 0U;
+			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_PTP_CONF_CHECK)) ? oal_htonl(FPP_IF_PTP_CONF_CHECK) : 0U;
+			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_PTP_PROMISC)) ? oal_htonl(FPP_IF_PTP_PROMISC) : 0U;
+			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_ALLOW_Q_IN_Q)) ? oal_htonl(FPP_IF_ALLOW_Q_IN_Q) : 0U;
+			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_DISCARD_TTL)) ? oal_htonl(FPP_IF_DISCARD_TTL) : 0U;
 
 			/* Get the mode - use the fact enums have same values */
 			reply_buf->mode = (fpp_phy_if_op_mode_t) pfe_phy_if_get_op_mode(phy_if);
@@ -1311,7 +1341,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 					str = pfe_mirror_get_name(mirror);
 					if(NULL != str)
 					{
-						strncpy(&reply_buf->rx_mirrors[i][0], str, 16);
+						(void)strncpy(&reply_buf->rx_mirrors[i][0], str, 16);
 						reply_buf->rx_mirrors[i][15] = '\0'; /* Ensure correct string end */
 					}
 					else
@@ -1327,7 +1357,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 					str = pfe_mirror_get_name(mirror);
 					if(NULL != str)
 					{
-						strncpy(&reply_buf->tx_mirrors[i][0], str, 16);
+						(void)strncpy(&reply_buf->tx_mirrors[i][0], str, 16);
 						reply_buf->tx_mirrors[i][15] = '\0'; /* Ensure correct string end */
 					}
 					else
@@ -1344,7 +1374,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				ret = fci_fp_db_get_table_from_addr(addr, &name);
 				if (EOK == ret)
 				{
-					strncpy(reply_buf->ftable, name, sizeof(reply_buf->ftable));
+					(void)strncpy(reply_buf->ftable, name, sizeof(reply_buf->ftable) - 1U);
 				}
 				else
 				{
@@ -1356,7 +1386,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			}
 			else
 			{
-				memset(reply_buf->ftable, 0, sizeof(reply_buf->ftable));
+				(void)memset(reply_buf->ftable, 0, sizeof(reply_buf->ftable));
 			}
 
 			/* Set reply length end return OK */
@@ -1395,7 +1425,6 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 	pfe_if_db_entry_t *entry = NULL;
 	pfe_phy_if_t *phy_if = NULL;
 
-	bool is_query_cont = true;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -1427,7 +1456,7 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 	}
 
 	/* Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(fpp_if_mac_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_if_mac_cmd_t));
 
 	/* Initialize pointer to the command data */
 	if_mac_cmd = (fpp_if_mac_cmd_t *)msg->msg_cmd.payload;
@@ -1537,36 +1566,38 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 				}
 			}
 			
-			is_query_cont = false;
+			/* Store phy_if name into reply message */
+			(void)strncpy(reply_buf->name, pfe_phy_if_get_name(phy_if), (uint32_t)IFNAMSIZ-1U);
+
+			/* Set reply length and return OK */
+			*reply_len = sizeof(fpp_if_mac_cmd_t);
+			*fci_ret = FPP_ERR_OK;
+			ret = EOK;
+			break;
 		}
-		/* FALLTHRU */
 
 		case FPP_ACTION_QUERY_CONT:
 		{
-			if (is_query_cont)
+			ret = pfe_phy_if_get_mac_addr_next(phy_if, reply_buf->mac);
+			if (EOK != ret)
 			{
-				ret = pfe_phy_if_get_mac_addr_next(phy_if, reply_buf->mac);
-				if (EOK != ret)
+				if (ENOENT == ret)
 				{
-					if (ENOENT == ret)
-					{
-						/* End of the query process (no more entities to report). Respond with FCI error code. */
-						*fci_ret = FPP_ERR_IF_MAC_NOT_FOUND;
-						ret = EOK;
-						break;
-					}
-					if (EINVAL == ret)
-					{
-						/* FCI command requested unfulfillable action. Respond with FCI error code. */
-						*fci_ret = FPP_ERR_IF_NOT_SUPPORTED;
-						ret = EOK;
-						break;
-					}
+					/* End of the query process (no more entities to report). Respond with FCI error code. */
+					*fci_ret = FPP_ERR_IF_MAC_NOT_FOUND;
+					ret = EOK;
+					break;
+				}
+				if (EINVAL == ret)
+				{
+					/* FCI command requested unfulfillable action. Respond with FCI error code. */
+					*fci_ret = FPP_ERR_IF_NOT_SUPPORTED;
+					ret = EOK;
+					break;
 				}
 			}
-
 			/* Store phy_if name into reply message */
-			strncpy(reply_buf->name, pfe_phy_if_get_name(phy_if), IFNAMSIZ-1);
+			(void)strncpy(reply_buf->name, pfe_phy_if_get_name(phy_if), (uint32_t)IFNAMSIZ-1U);
 
 			/* Set reply length and return OK */
 			*reply_len = sizeof(fpp_if_mac_cmd_t);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2021 NXP
+ * Copyright 2018-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -39,7 +39,7 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"BETA 0.9.6"
+#define PFENG_DRIVER_VERSION		"BETA 0.9.7"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
@@ -122,7 +122,7 @@ struct pfeng_netif_cfg {
 	const char			*name;
 	struct device_node		*dn;
 	u8				*macaddr;
-	u8				emac;
+	u8				emac_id;
 	u8				hifs;
 	u32				hifmap;
 	bool				tx_inject;
@@ -132,6 +132,7 @@ struct pfeng_netif_cfg {
 #ifdef PFE_CFG_PFE_SLAVE
 	bool				emac_router;
 #endif /* PFE_CFG_PFE_SLAVE */
+	bool				only_mgmt;
 };
 
 /* net interface private data */
@@ -182,6 +183,10 @@ struct pfe_hif_drv_tag
 };
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
+/* Count for max 3 EMAC netifs and 1 AUX netif */
+#define PFENG_NETIFS_CNT	PFENG_PFE_EMACS + 1
+#define PFENG_NETIFS_AUX_IDX	PFENG_PFE_EMACS
+
 struct pfeng_rx_chnl_pool;
 struct pfeng_tx_chnl_pool;
 struct pfeng_hif_chnl {
@@ -190,7 +195,6 @@ struct pfeng_hif_chnl {
 	struct net_device		dummy_netdev;
 	struct device			*dev;
 	pfe_hif_chnl_t			*priv;
-	struct dentry			*dentry;
 	int				cl_mode;
 	bool				ihc;
 	bool				queues_stopped;
@@ -198,7 +202,7 @@ struct pfeng_hif_chnl {
 	u8				idx;
 	u32				features;
 
-	struct pfeng_netif		*netifs[HIF_CLIENTS_MAX];
+	struct pfeng_netif		*netifs[PFENG_NETIFS_CNT];
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	/* For IDEX support only */
@@ -217,6 +221,16 @@ struct pfeng_hif_chnl {
 	u32				cfg_rx_max_coalesced_frames;
 	u32				cfg_rx_coalesce_usecs;
 };
+
+static inline struct pfeng_netif *pfeng_phy_if_id_to_netif(struct pfeng_hif_chnl *chnl,
+							   pfe_ct_phy_if_id_t phy_if_id)
+{
+	if (likely(phy_if_id >= PFE_PHY_IF_ID_EMAC0 && phy_if_id <= PFE_PHY_IF_ID_EMAC2)) {
+		return chnl->netifs[phy_if_id - PFE_PHY_IF_ID_EMAC0];
+	}
+
+	return chnl->netifs[PFENG_NETIFS_AUX_IDX];
+}
 
 /* leave out one BD to ensure minimum gap */
 #define PFE_TXBDS_NEEDED(val)	((val) + 1)
@@ -262,32 +276,30 @@ struct pfeng_emac {
 
 /* driver private data */
 struct pfeng_priv {
+	struct pfeng_hif_chnl		hif_chnl[PFENG_PFE_HIF_CHANNELS]; /* datapath hot, keep first */
 	struct platform_device		*pdev;
 	struct reset_control		*rst;
-	struct dentry			*dbgfs;
 	struct list_head		netif_cfg_list;
 	struct list_head		netif_list;
 	struct clk			*clk_sys;
 	struct clk			*clk_pe;
 	struct clk                      *clk_ptp;
 	uint64_t                        clk_ptp_reference;
-	bool				msg_enable;
-	u32				msg_verbosity;
-	struct pfeng_emac		emac[PFENG_PFE_EMACS];
-	struct pfeng_hif_chnl		hif_chnl[PFENG_PFE_HIF_CHANNELS];
-	pfe_ct_phy_if_id_t		drv_id;
+	u32				msg_enable;
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	struct pfeng_hif_chnl		*ihc_chnl;
 	u32				ihc_master_chnl;
 	bool				ihc_enabled;
-	struct workqueue_struct		*ihc_tx_wq;
+	struct workqueue_struct		*ihc_wq;
 	struct work_struct		ihc_tx_work;
+	struct work_struct		ihc_rx_work;
 	DECLARE_KFIFO_PTR(ihc_tx_fifo, struct sk_buff *);
 #ifdef PFE_CFG_PFE_SLAVE
 	struct task_struct		*deferred_probe_task;
 	struct workqueue_struct		*ihc_slave_wq;
 #endif /* PFE_CFG_PFE_SLAVE */
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+	struct pfeng_emac		emac[PFENG_PFE_EMACS];
 	struct resource			syscon;
 	u8				local_drv_id;
 	bool				in_suspend;
@@ -296,6 +308,8 @@ struct pfeng_priv {
 	pfe_platform_config_t		*pfe_cfg;
 	const char			*fw_class_name;
 	const char			*fw_util_name;
+	struct dentry			*dbgfs;
+	u32				msg_verbosity;
 };
 
 /* fw */
@@ -320,12 +334,13 @@ int pfeng_mdio_resume(struct pfeng_priv *priv);
 /* hif */
 int pfeng_hif_create(struct pfeng_priv *priv);
 void pfeng_hif_remove(struct pfeng_priv *priv);
-struct sk_buff *pfeng_hif_chnl_receive_pkt(struct pfeng_hif_chnl *chnl, uint32_t queue);
+struct sk_buff *pfeng_hif_chnl_receive_pkt(struct pfeng_hif_chnl *chnl);
 int pfeng_hif_chnl_event_handler(pfe_hif_drv_client_t *client, void *data, uint32_t event, uint32_t qno);
 int pfeng_hif_chnl_start(struct pfeng_hif_chnl *chnl);
 int pfeng_hif_chnl_set_coalesce(struct pfeng_hif_chnl *chnl, struct clk *clk_sys, u32 usecs, u32 frames);
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 void pfeng_ihc_tx_work_handler(struct work_struct *work);
+void pfeng_ihc_rx_work_handler(struct work_struct *work);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 /* bman */

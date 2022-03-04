@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2021 NXP
+#  Copyright 2018-2022 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -48,6 +48,12 @@ export PFE_CFG_HIF_USE_BD_TRIGGER?=0
 export PFE_CFG_PFE0_IF?=6
 export PFE_CFG_PFE1_IF?=7
 export PFE_CFG_PFE2_IF?=8
+#Promiscuity of particular driver interfaces. 1 - interface will accept all traffic.
+#0 - interface will accept only management traffic, if AUX interface does exist. If
+#AUX is not present, this option has no meaning.
+export PFE_CFG_PFE0_PROMISC?=1
+export PFE_CFG_PFE1_PROMISC?=1
+export PFE_CFG_PFE2_PROMISC?=1
 #Multi-instance driver support (includes IHC API). 1 - enable, 0 - disable.
 export PFE_CFG_MULTI_INSTANCE_SUPPORT?=0
 #Master/Slave variant switch
@@ -98,6 +104,9 @@ export PFE_CFG_RT_MEM?="pfe_ddr"
 export PFE_CFG_RT_HASH_SIZE?=256
 #Routing table collision size (number of entries)
 export PFE_CFG_RT_COLLISION_SIZE?=256
+#Conntrack stats table size (number of entries)
+export PFE_CFG_CONN_STATS_SIZE?=20
+
 #Enable firmware-based priority control for HIF traffic
 export PFE_CFG_HIF_PRIO_CTRL=1
 #Enable safe interrupt handling
@@ -108,7 +117,10 @@ export PFE_CFG_BMU2_BUF_COUNT?=1024
 export PFE_CFG_BMU2_BUF_SIZE?=2048
 #Number of entries of a HIF ring, must be power of 2
 export PFE_CFG_HIF_RING_LENGTH?=256
-
+#Number of milisecs in Master-UP wait inside Platform. Used by Slave only
+export PFE_CFG_SLAVE_HIF_MASTER_UP_TMOUT?=1000
+#Number of milisecs to wait by Slave until IP ready flag set by Master
+export PFE_CFG_IP_READY_MS_TMOUT?=5000
 
 ifeq ($(PFE_CFG_HIF_DRV_MODE),0)
   #Use multi-client HIF driver. Required when multiple logical interfaces need to
@@ -138,9 +150,9 @@ endif
 #When enabled the driver instantiates auxiliary interface called 'pfex' which
 #can be used to transmit and receive traffic not belonging to any other 'pfeN'
 #interface (for instance HIF-to-HIF or bridge traffic). The interface accepts
-#all traffic not accepted by any other pfeN interface (regardless they exist
-#or not) and traffic transmitted via this interface is always routed according
-#to the current configuration of the PFE traffic distribution rules.
+#all traffic not accepted by any other pfeN interface and traffic transmitted
+#via this interface is always routed according to the current configuration
+#of the PFE traffic distribution rules.
 export PFE_CFG_AUX_INTERFACE?=0
 
 ifneq ($(PFE_CFG_MC_HIF),0)
@@ -164,7 +176,10 @@ ifeq ($(PFE_CFG_PFE_MASTER),0)
     $(warning HIF nocpy is not supported in SLAVE mode)
     PFE_CFG_HIF_NOCPY_SUPPORT=0
   endif
+  # Linux supports FCI netlink on Slave
+  ifneq ($(TARGET_OS),LINUX)
   export PFE_CFG_FCI_ENABLE=0
+  endif
 endif
 
 #Set default verbosity level for sysfs. Valid values are from 1 to 10.
@@ -194,6 +209,8 @@ endif
 
 ifneq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_MULTI_INSTANCE_SUPPORT
+    GLOBAL_CCFLAGS+=-DPFE_CFG_SLAVE_HIF_MASTER_UP_TMOUT=$(PFE_CFG_SLAVE_HIF_MASTER_UP_TMOUT)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_IP_READY_MS_TMOUT=$(PFE_CFG_IP_READY_MS_TMOUT)
 endif
 
 ifneq ($(PFE_CFG_PFE_MASTER),0)
@@ -207,6 +224,9 @@ GLOBAL_CCFLAGS+=-DPFE_CFG_LOCAL_IF=$(PFE_CFG_LOCAL_IF)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE0_IF=$(PFE_CFG_PFE0_IF)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE1_IF=$(PFE_CFG_PFE1_IF)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE2_IF=$(PFE_CFG_PFE2_IF)
+GLOBAL_CCFLAGS+=-DPFE_CFG_PFE0_PROMISC=$(PFE_CFG_PFE0_PROMISC)
+GLOBAL_CCFLAGS+=-DPFE_CFG_PFE1_PROMISC=$(PFE_CFG_PFE1_PROMISC)
+GLOBAL_CCFLAGS+=-DPFE_CFG_PFE2_PROMISC=$(PFE_CFG_PFE2_PROMISC)
 
 ifneq ($(PFE_CFG_HIF_NOCPY_SUPPORT),0)
   ifeq ($(TARGET_OS),QNX)
@@ -344,6 +364,10 @@ ifneq ($(PFE_CFG_RT_COLLISION_SIZE),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_RT_COLLISION_SIZE=$(PFE_CFG_RT_COLLISION_SIZE)
 endif
 
+ifneq ($(PFE_CFG_CONN_STATS_SIZE),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_CONN_STATS_SIZE=$(PFE_CFG_CONN_STATS_SIZE)
+endif
+
 ifneq ($(PFE_CFG_HIF_PRIO_CTRL),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_PRIO_CTRL
 endif
@@ -360,6 +384,9 @@ ifneq ($(PFE_CFG_BMU2_BUF_SIZE),0)
 endif
 ifneq ($(PFE_CFG_HIF_RING_LENGTH),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_RING_LENGTH=$(PFE_CFG_HIF_RING_LENGTH)
+
+    # The following symbol exists for compatibility with MCAL HIF RX RING length symbol in the shared platform code.
+    GLOBAL_CCFLAGS+=-DPFE_HIF_RX_RING_CFG_LENGTH=$(PFE_CFG_HIF_RING_LENGTH)
 endif
 # This variable will be propagated to every Makefile in the project
 export GLOBAL_CCFLAGS;

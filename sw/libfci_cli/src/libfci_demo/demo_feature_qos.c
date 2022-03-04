@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -41,7 +41,7 @@
 #include "demo_qos.h"
  
  
-extern int demo_feature_L2_bridge_simple(FCI_CLIENT* p_cl);
+extern int demo_feature_L2_bridge_vlan(FCI_CLIENT* p_cl);
  
  
 /*
@@ -51,6 +51,11 @@ extern int demo_feature_L2_bridge_simple(FCI_CLIENT* p_cl);
  *                   Both PCs are connected through PFE. PFE acts as a simple bridge.
  *               [*] Use libFCI to configure PFE egress QoS feature on PFE's emac0 physical
  *                   interface, to prioritize and shape egress communication on emac0.
+ *               [*] NOTE:
+ *                   Be aware that all Egress QoS queues of a physical interface share 
+ *                   a single pool of available slots. This means that sum of all Egress QoS
+ *                   queue lengths for every interface must fit within some limit.
+ *                   See FCI API Reference (chapter Egress QoS) for interface limits.
  *             PC description:
  *               PC0:
  *                 --> IP address: 10.3.0.2/24
@@ -93,7 +98,7 @@ int demo_feature_qos(FCI_CLIENT* p_cl)
     
     /* setup PFE to classify traffic (not needed by Egress QoS, done for demo purposes)*/
     /* =============================================================================== */
-    rtn = demo_feature_L2_bridge_simple(p_cl);
+    rtn = demo_feature_L2_bridge_vlan(p_cl);
     
     
     /* configure Egress QoS queues for emac0 */
@@ -102,93 +107,7 @@ int demo_feature_qos(FCI_CLIENT* p_cl)
     {
         fpp_qos_queue_cmd_t que = {0};
         
-        /* queue 0 */
-        /* ------- */
-        if (FPP_ERR_OK == rtn)
-        {
-            /* get data from PFE and store them in the local variable "que" */
-            rtn = demo_qos_que_get_by_id(p_cl, &que, "emac0", 0u);
-            if (FPP_ERR_OK == rtn)
-            {
-                /* modify locally stored data */
-                demo_qos_que_ld_set_mode(&que, 3u);  /* 3 == WRED */
-                demo_qos_que_ld_set_min(&que, 100u);
-                demo_qos_que_ld_set_max(&que, 200u);
-                demo_qos_que_ld_set_zprob(&que, 0u, 10u);
-                demo_qos_que_ld_set_zprob(&que, 1u, 20u);
-                demo_qos_que_ld_set_zprob(&que, 2u, 30u);
-                demo_qos_que_ld_set_zprob(&que, 3u, 40u);
-                demo_qos_que_ld_set_zprob(&que, 4u, 50u);
-                demo_qos_que_ld_set_zprob(&que, 5u, 60u);
-                demo_qos_que_ld_set_zprob(&que, 6u, 70u);
-                demo_qos_que_ld_set_zprob(&que, 7u, 80u);
-                
-                /* update data in PFE */
-                rtn = demo_qos_que_update(p_cl, &que);
-            }
-        }
-        
-        /* queue 1 */
-        /* ------- */
-        if (FPP_ERR_OK == rtn)
-        {
-            /* get data from PFE and store them in the local variable "que" */
-            rtn = demo_qos_que_get_by_id(p_cl, &que, "emac0", 1u);
-            if (FPP_ERR_OK == rtn)
-            {
-                /* modify locally stored data */
-                demo_qos_que_ld_set_mode(&que, 2u);  /* 2 == TAIL DROP */
-                demo_qos_que_ld_set_max(&que, 125u);
-                
-                /* update data in PFE */
-                rtn = demo_qos_que_update(p_cl, &que);
-            }
-        }
-        
-        /* queue 6 */
-        /* ------- */
-        if (FPP_ERR_OK == rtn)
-        {
-            /* get data from PFE and store them in the local variable "que" */
-            rtn = demo_qos_que_get_by_id(p_cl, &que, "emac0", 6u);
-            if (FPP_ERR_OK == rtn)
-            {
-                /* modify locally stored data */
-                demo_qos_que_ld_set_mode(&que, 3u);  /* 3 == WRED */
-                demo_qos_que_ld_set_min(&que, 100u);
-                demo_qos_que_ld_set_max(&que, 200u);
-                demo_qos_que_ld_set_zprob(&que, 0u, 20u);
-                demo_qos_que_ld_set_zprob(&que, 1u, 20u);
-                demo_qos_que_ld_set_zprob(&que, 2u, 40u);
-                demo_qos_que_ld_set_zprob(&que, 3u, 40u);
-                demo_qos_que_ld_set_zprob(&que, 4u, 60u);
-                demo_qos_que_ld_set_zprob(&que, 5u, 60u);
-                demo_qos_que_ld_set_zprob(&que, 6u, 80u);
-                demo_qos_que_ld_set_zprob(&que, 7u, 80u);
-                
-                /* update data in PFE */
-                rtn = demo_qos_que_update(p_cl, &que);
-            }
-        }
-        
-        /* queue 7 */
-        /* ------- */
-        if (FPP_ERR_OK == rtn)
-        {
-            /* get data from PFE and store them in the local variable "que" */
-            rtn = demo_qos_que_get_by_id(p_cl, &que, "emac0", 7u);
-            if (FPP_ERR_OK == rtn)
-            {
-                /* modify locally stored data */
-                demo_qos_que_ld_set_mode(&que, 2u);  /* 2 == TAIL DROP */
-                demo_qos_que_ld_set_max(&que, 150u);
-                
-                /* update data in PFE */
-                rtn = demo_qos_que_update(p_cl, &que);
-            }
-        }
-        
-        /* rest of the queues are unused (disabled) */
+        /* first shorten and disable unused queues to free some slots in the shared pool */
         
         /* queue 2 (disabled) */
         /* ------------------ */
@@ -252,6 +171,94 @@ int demo_feature_qos(FCI_CLIENT* p_cl)
                 /* modify locally stored data */
                 demo_qos_que_ld_set_mode(&que, 0u);  /* 0 == DISABLED */
                 demo_qos_que_ld_set_max(&que, 0u);
+                
+                /* update data in PFE */
+                rtn = demo_qos_que_update(p_cl, &que);
+            }
+        }
+        
+        /* now configure used queues ; keep in mind that sum of max lengths must be <255 */
+        
+        /* queue 0 */
+        /* ------- */
+        if (FPP_ERR_OK == rtn)
+        {
+            /* get data from PFE and store them in the local variable "que" */
+            rtn = demo_qos_que_get_by_id(p_cl, &que, "emac0", 0u);
+            if (FPP_ERR_OK == rtn)
+            {
+                /* modify locally stored data */
+                demo_qos_que_ld_set_mode(&que, 3u);  /* 3 == WRED */
+                demo_qos_que_ld_set_min(&que, 25u);
+                demo_qos_que_ld_set_max(&que, 100u);
+                demo_qos_que_ld_set_zprob(&que, 0u, 10u);
+                demo_qos_que_ld_set_zprob(&que, 1u, 20u);
+                demo_qos_que_ld_set_zprob(&que, 2u, 30u);
+                demo_qos_que_ld_set_zprob(&que, 3u, 40u);
+                demo_qos_que_ld_set_zprob(&que, 4u, 50u);
+                demo_qos_que_ld_set_zprob(&que, 5u, 60u);
+                demo_qos_que_ld_set_zprob(&que, 6u, 70u);
+                demo_qos_que_ld_set_zprob(&que, 7u, 80u);
+                
+                /* update data in PFE */
+                rtn = demo_qos_que_update(p_cl, &que);
+            }
+        }
+        
+        /* queue 1 */
+        /* ------- */
+        if (FPP_ERR_OK == rtn)
+        {
+            /* get data from PFE and store them in the local variable "que" */
+            rtn = demo_qos_que_get_by_id(p_cl, &que, "emac0", 1u);
+            if (FPP_ERR_OK == rtn)
+            {
+                /* modify locally stored data */
+                demo_qos_que_ld_set_mode(&que, 2u);  /* 2 == TAIL DROP */
+                demo_qos_que_ld_set_max(&que, 50u);
+                
+                /* update data in PFE */
+                rtn = demo_qos_que_update(p_cl, &que);
+            }
+        }
+        
+        /* queue 6 */
+        /* ------- */
+        if (FPP_ERR_OK == rtn)
+        {
+            /* get data from PFE and store them in the local variable "que" */
+            rtn = demo_qos_que_get_by_id(p_cl, &que, "emac0", 6u);
+            if (FPP_ERR_OK == rtn)
+            {
+                /* modify locally stored data */
+                demo_qos_que_ld_set_mode(&que, 3u);  /* 3 == WRED */
+                demo_qos_que_ld_set_min(&que, 10u);
+                demo_qos_que_ld_set_max(&que, 50u);
+                demo_qos_que_ld_set_zprob(&que, 0u, 20u);
+                demo_qos_que_ld_set_zprob(&que, 1u, 20u);
+                demo_qos_que_ld_set_zprob(&que, 2u, 40u);
+                demo_qos_que_ld_set_zprob(&que, 3u, 40u);
+                demo_qos_que_ld_set_zprob(&que, 4u, 60u);
+                demo_qos_que_ld_set_zprob(&que, 5u, 60u);
+                demo_qos_que_ld_set_zprob(&que, 6u, 80u);
+                demo_qos_que_ld_set_zprob(&que, 7u, 80u);
+                
+                /* update data in PFE */
+                rtn = demo_qos_que_update(p_cl, &que);
+            }
+        }
+        
+        /* queue 7 */
+        /* ------- */
+        if (FPP_ERR_OK == rtn)
+        {
+            /* get data from PFE and store them in the local variable "que" */
+            rtn = demo_qos_que_get_by_id(p_cl, &que, "emac0", 7u);
+            if (FPP_ERR_OK == rtn)
+            {
+                /* modify locally stored data */
+                demo_qos_que_ld_set_mode(&que, 2u);  /* 2 == TAIL DROP */
+                demo_qos_que_ld_set_max(&que, 50u);
                 
                 /* update data in PFE */
                 rtn = demo_qos_que_update(p_cl, &que);

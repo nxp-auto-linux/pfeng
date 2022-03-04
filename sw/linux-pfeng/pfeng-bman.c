@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 NXP
+ * Copyright 2020-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -113,34 +113,6 @@ int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl)
 err:
 	pfeng_bman_pool_destroy(chnl);
 	return -ENOMEM;
-}
-
-void pfeng_bman_pool_destroy(struct pfeng_hif_chnl *chnl)
-{
-	struct pfeng_rx_chnl_pool *rx_pool = (struct pfeng_rx_chnl_pool *)chnl->bman.rx_pool;
-	struct pfeng_tx_chnl_pool *tx_pool = (struct pfeng_tx_chnl_pool *)chnl->bman.tx_pool;
-
-	if (rx_pool) {
-		if(rx_pool->rx_tbl) {
-			kfree(rx_pool->rx_tbl);
-			rx_pool->rx_tbl = NULL;
-		}
-
-		kfree(rx_pool);
-		chnl->bman.rx_pool = NULL;
-	}
-
-	if (tx_pool) {
-		if(tx_pool->tx_tbl) {
-			kfree(tx_pool->tx_tbl);
-			tx_pool->tx_tbl = NULL;
-		}
-
-		kfree(tx_pool);
-		chnl->bman.tx_pool = NULL;
-	}
-
-	return;
 }
 
 int pfeng_hif_chnl_txbd_unused(struct pfeng_hif_chnl *chnl)
@@ -279,6 +251,31 @@ static bool pfeng_bman_buf_alloc_and_map(struct pfeng_rx_chnl_pool *pool, struct
 	return true;
 }
 
+static void pfeng_bman_free_rx_buffers(struct pfeng_rx_chnl_pool *pool)
+{
+	struct pfeng_rx_map *rx_map;
+	int i;
+
+	for (i = 0; i < pool->depth; i++) {
+		rx_map = pfeng_bman_get_rx_map(pool, i);
+
+		if (!rx_map->page)
+			continue;
+
+		dma_sync_single_range_for_cpu(pool->dev, rx_map->dma,
+					      rx_map->page_offset,
+					      PFE_RXB_DMA_SIZE, DMA_FROM_DEVICE);
+
+		dma_unmap_page(pool->dev, rx_map->dma, PAGE_SIZE, DMA_FROM_DEVICE);
+
+		__free_page(rx_map->page);
+
+		rx_map->dma = 0;
+		rx_map->page = NULL;
+		rx_map->page_offset = 0;
+	}
+}
+
 static int pfeng_hif_chnl_refill_rx_buffer(struct pfeng_hif_chnl *chnl, struct pfeng_rx_map *rx_map)
 {
 	struct pfeng_rx_chnl_pool *pool = chnl->bman.rx_pool;
@@ -384,7 +381,7 @@ static struct sk_buff *pfeng_rx_map_buff_to_skb(struct pfeng_rx_chnl_pool *pool,
 	return skb;
 }
 
-struct sk_buff *pfeng_hif_chnl_receive_pkt(struct pfeng_hif_chnl *chnl, u32 queue)
+struct sk_buff *pfeng_hif_chnl_receive_pkt(struct pfeng_hif_chnl *chnl)
 {
 	struct sk_buff *skb;
 	void *buf_pa;
@@ -427,4 +424,33 @@ int pfeng_hif_chnl_fill_rx_buffers(struct pfeng_hif_chnl *chnl)
 	}
 
 	return cnt;
+}
+
+void pfeng_bman_pool_destroy(struct pfeng_hif_chnl *chnl)
+{
+	struct pfeng_rx_chnl_pool *rx_pool = (struct pfeng_rx_chnl_pool *)chnl->bman.rx_pool;
+	struct pfeng_tx_chnl_pool *tx_pool = (struct pfeng_tx_chnl_pool *)chnl->bman.tx_pool;
+
+	if (rx_pool) {
+		if(rx_pool->rx_tbl) {
+			pfeng_bman_free_rx_buffers(rx_pool);
+			kfree(rx_pool->rx_tbl);
+			rx_pool->rx_tbl = NULL;
+		}
+
+		kfree(rx_pool);
+		chnl->bman.rx_pool = NULL;
+	}
+
+	if (tx_pool) {
+		if(tx_pool->tx_tbl) {
+			kfree(tx_pool->tx_tbl);
+			tx_pool->tx_tbl = NULL;
+		}
+
+		kfree(tx_pool);
+		chnl->bman.tx_pool = NULL;
+	}
+
+	return;
 }

@@ -24,7 +24,7 @@
  * @brief	Maximum size of FCI IPC message payload
  * @see		fci_msg_t
  */
-#define FCI_CFG_MAX_CMD_PAYLOAD_LEN		256
+#define FCI_CFG_MAX_CMD_PAYLOAD_LEN		256U
 
 /**
  * @brief	FCI message types

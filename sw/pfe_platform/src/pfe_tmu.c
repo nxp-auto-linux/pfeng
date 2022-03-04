@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -14,12 +14,208 @@
 #include "pfe_platform_cfg.h"
 #include "pfe_cbus.h"
 #include "pfe_pe.h"
+#include "pfe_feature_mgr.h"
+#include "pfe_phy_if.h"
 #include "pfe_tmu.h"
 
 struct pfe_tmu_tag
 {
 	addr_t cbus_base_va;
+	pfe_class_t *class;
 };
+
+/**
+ * @brief		Check whether the provided physical interface ID represents HIF-type interface or not.
+ * @details		Optionally, for HIF-type interfaces the function can also provide index of the given HIF
+ *				within  pfe_ct_hif_tmu_queue_sizes_t  (for FW feature err051211_workaround).
+ * @param[in]	id	Interface ID
+ * @param[out]	err051211_hif_id	[optional] Index of the HIF interface in  pfe_ct_hif_tmu_queue_sizes_t. Can be NULL.
+ * @return		TRUE if the provided ID represents HIF-type physical interface.
+ */
+static bool is_hif_by_id(pfe_ct_phy_if_id_t id, uint8_t *err051211_hif_idx)
+{
+	bool ret = FALSE;
+	uint8_t hif_idx = 0U;
+
+	/* Check that indexes 0 .. 3 can be assigned */
+	ct_assert((sizeof(pfe_ct_hif_tmu_queue_sizes_t) / sizeof(uint16_t)) == 4U);
+
+	switch (id)
+	{
+		case PFE_PHY_IF_ID_HIF0:
+			hif_idx = 0U;
+			ret = TRUE;
+			break;
+		case PFE_PHY_IF_ID_HIF1:
+			hif_idx = 1U;
+			ret = TRUE;
+			break;
+		case PFE_PHY_IF_ID_HIF2:
+			hif_idx = 2U;
+			ret = TRUE;
+			break;
+		case PFE_PHY_IF_ID_HIF3:
+			hif_idx = 3U;
+			ret = TRUE;
+			break;
+		default:
+			ret = FALSE;
+			break;
+	}
+
+	if (NULL != err051211_hif_idx)
+	{
+		*err051211_hif_idx = hif_idx;
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Compute new sum of queue lenghts for the given physical interface.
+ * 				Also check that the new sum does not exceed any applicable limitations.
+ * @param[in]	tmu		The TMU instance
+ * @parma[in]	phy		Physical interface ID
+ * @param[in]	queue	The queue ID
+ * @param[in]	max		New max threshold (number of packets) for the queue
+ * @param[out]	sum		Pointer to result of sum calculation (passback)
+ * @return		EOK if computation and all applicable checks are OK.
+ */
+static errno_t get_sum_of_queue_lengths(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, 
+		uint8_t queue, uint32_t max, uint16_t* sum)
+{
+	errno_t ret_val = ENOSPC;
+	uint32_t tmp_sum = 0U;
+	uint32_t tmp_min = 0U;
+	uint32_t tmp_max = 0U;
+	uint8_t i = 0U;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == tmu) || (NULL == sum)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/* Compute new sum of queue lengths */
+	const uint8_t cnt = pfe_tmu_queue_get_cnt(tmu, phy);
+	for (i = 0U; (i < cnt); i++)
+	{
+		if (i == queue)
+		{
+			tmp_sum += max;	/* For the queue-to-be-changed, apply its new max threshhold */
+		}
+		else
+		{
+			pfe_tmu_queue_get_mode(tmu, phy, i, &tmp_min, &tmp_max);
+			tmp_sum += tmp_max;
+		}
+	}
+
+	/* Check the new sum */
+	if (TRUE == is_hif_by_id(phy, NULL))
+	{	/* HIF */
+		if (TLITE_HIF_MAX_ENTRIES < tmp_sum)
+		{
+			NXP_LOG_ERROR("Sum of queue lengths (%u) exceeds max allowed sum (%u) for HIF interface.", tmp_sum, TLITE_HIF_MAX_ENTRIES);
+			ret_val = ENOSPC;
+		}
+		else if ((TRUE == pfe_feature_mgr_is_available("err051211_workaround")) && 
+				 (PFE_HIF_RX_RING_CFG_LENGTH < (tmp_sum + PFE_TMU_ERR051211_Q_OFFSET)))
+		{
+			NXP_LOG_ERROR("err051211_workaround is active and \"sum of queue lengths (%u) + Q_OFFSET (%u)\" exceeds HIF RX Ring length (%u).", tmp_sum, PFE_TMU_ERR051211_Q_OFFSET, PFE_HIF_RX_RING_CFG_LENGTH);
+			ret_val = ENOSPC;
+		}
+		else
+		{
+			ret_val = EOK;
+		}
+	}
+	else
+	{	/* EMAC and 'others' */
+		if (TLITE_MAX_ENTRIES < tmp_sum)
+		{
+			NXP_LOG_ERROR("Sum of queue lengths (%u) exceeds max allowed sum (%u) for EMAC/UTIL/HIF_NOCPY interface.", tmp_sum, TLITE_MAX_ENTRIES);
+			ret_val = ENOSPC;
+		}
+		else
+		{
+			ret_val = EOK;
+		}
+	}
+
+	/* Set passback value */
+	*sum = (uint16_t)tmp_sum;
+	return ret_val;
+}
+
+/**
+ * @brief		Set all TMU queues of the target physical interface to minimal possible lengths.
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @return		EOK if success, error code otherwise
+ */
+static errno_t set_all_queues_to_min_length(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy)
+{
+	errno_t ret_val = EINVAL;
+	uint8_t queue = 0U;
+	uint8_t queue_cnt = 0U;
+
+	pfe_tmu_queue_mode_t mode = TMU_Q_MODE_TAIL_DROP;
+	uint32_t min = 0UL;
+	uint32_t max = 0UL;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	queue_cnt = pfe_tmu_queue_get_cnt(tmu, phy);
+	for (queue = 0U; (queue_cnt > queue); queue++)
+	{
+		if (EOK != pfe_tmu_check_queue(tmu, phy, queue))
+		{
+			ret_val = EINVAL;
+		}
+		else
+		{
+			mode = pfe_tmu_queue_get_mode(tmu, phy, queue, &min, &max);
+			switch (mode)
+			{
+				case TMU_Q_MODE_TAIL_DROP:
+				{
+					ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, 1U);
+					break;
+				}
+
+				case TMU_Q_MODE_WRED:
+				{
+					ret_val = pfe_tmu_q_mode_set_wred(tmu->cbus_base_va, phy, queue, 0U, 1U);
+					break;
+				}
+
+				case TMU_Q_MODE_DEFAULT:
+				{
+					ret_val = pfe_tmu_q_mode_set_default(tmu->cbus_base_va, phy, queue);
+					break;
+				}
+
+				default:
+				{
+					NXP_LOG_ERROR("Unknown queue mode: %d\n", mode);
+					ret_val = EINVAL;
+					break;
+				}
+			}
+		}
+	}
+
+	return ret_val;
+}
 
 /**
  * @brief		Set the configuration of the TMU block.
@@ -52,15 +248,17 @@ static void pfe_tmu_init(const pfe_tmu_t *tmu, const pfe_tmu_cfg_t *cfg)
  * @param[in]	cbus_base_va CBUS base virtual address
  * @param[in]	pe_num Number of PEs to be included
  * @param[in]	cfg The TMU block configuration
+ * @param[in]	class Classifier instance
  * @return		The TMU instance or NULL if failed
  */
-pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cfg_t *cfg)
+pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cfg_t *cfg,
+						  pfe_class_t *class)
 {
 	pfe_tmu_t *tmu;
 	(void)pe_num;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL_ADDR == cbus_base_va) || (NULL == cfg)))
+	if (unlikely((NULL_ADDR == cbus_base_va) || (NULL == cfg) || (NULL == class)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
@@ -77,6 +275,7 @@ pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cf
 	{
 		(void)memset(tmu, 0, sizeof(pfe_tmu_t));
 		tmu->cbus_base_va = cbus_base_va;
+		tmu->class = class;
 	}
 
 	/*	Issue block reset */
@@ -188,7 +387,7 @@ void pfe_tmu_destroy(const pfe_tmu_t *tmu)
  * @param[in]	queue Queue ID
  * @return		EOK if the arguments are valid
  */
-static errno_t pfe_tmu_check_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue)
+errno_t pfe_tmu_check_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue)
 {
 	const pfe_tmu_phy_cfg_t *pcfg;
 
@@ -206,7 +405,7 @@ static errno_t pfe_tmu_check_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		{
 			NXP_LOG_ERROR("Invalid queue ID (%d). PHY %d implements %d queues\n",
 					queue, phy, pcfg->q_cnt);
-			return EINVAL;
+			return ENOENT;
 		}
 	}
 
@@ -220,7 +419,7 @@ static errno_t pfe_tmu_check_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
  * @param[in]	sch Scheduler ID
  * @return		EOK if the arguments are valid
  */
-static errno_t pfe_tmu_check_scheduler(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
+errno_t pfe_tmu_check_scheduler(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
 {
 	const pfe_tmu_phy_cfg_t *pcfg;
 
@@ -238,7 +437,7 @@ static errno_t pfe_tmu_check_scheduler(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t 
 		{
 			NXP_LOG_ERROR("Invalid scheduler ID (%d). PHY %d implements %d schedulers\n",
 					sch, phy, pcfg->sch_cnt);
-			return EINVAL;
+			return ENOENT;
 		}
 	}
 
@@ -252,7 +451,7 @@ static errno_t pfe_tmu_check_scheduler(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t 
  * @param[in]	shp Shaper ID
  * @return		EOK if the arguments are valid
  */
-static errno_t pfe_tmu_check_shaper(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
+errno_t pfe_tmu_check_shaper(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
 	const pfe_tmu_phy_cfg_t *pcfg;
 
@@ -270,7 +469,7 @@ static errno_t pfe_tmu_check_shaper(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy
 		{
 			NXP_LOG_ERROR("Invalid shaper ID (%d). PHY %d implements %d shapers\n",
 					shp, phy, pcfg->shp_cnt);
-			return EINVAL;
+			return ENOENT;
 		}
 	}
 
@@ -374,7 +573,9 @@ errno_t pfe_tmu_queue_get_tx_count(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue,
 		pfe_tmu_queue_mode_t mode, uint32_t min, uint32_t max)
 {
-    errno_t ret_val;
+	errno_t ret_val;
+	uint16_t sum = 0U;	/* Sum of queue lengths */
+	uint8_t err051211_hif_idx = 0xFF;	/* Index of HIF in  pfe_ct_hif_tmu_queue_sizes_t */
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -384,7 +585,21 @@ errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+	/* Check and set mode + lengths */
+	if (min > max)
+	{
+		NXP_LOG_ERROR("Wrong queue lengths: min queue length (%u) is larger than max queue length (%u)\n", min, max);
+		ret_val = EINVAL;
+	}
+	else if (EOK != pfe_tmu_check_queue(tmu, phy, queue))
+	{
+		ret_val = EINVAL;
+	}
+	else if (EOK != get_sum_of_queue_lengths(tmu, phy, queue, max, &sum))
+	{
+		ret_val = ENOSPC;
+	}
+	else
 	{
 		switch (mode)
 		{
@@ -414,9 +629,22 @@ errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
 			}
 		}
 	}
-	else
+
+	/* If err051211_workaround is active and queue of some HIF was modified, then update sum of queue lengths in firmware. */
+	if (EOK == ret_val)
 	{
-		ret_val = EINVAL;
+		if ((TRUE == is_hif_by_id(phy, &err051211_hif_idx)) &&
+			(TRUE == pfe_feature_mgr_is_available("err051211_workaround")))
+		{
+			pfe_ct_class_mmap_t mmap = {0};
+			ret_val = pfe_class_get_mmap(tmu->class, 0, &mmap);
+			if (EOK == ret_val)
+			{
+				const uint32_t addr = oal_ntohl(mmap.hif_tmu_queue_sizes) + (err051211_hif_idx * sizeof(uint16_t));
+				sum = oal_htons(sum);
+				ret_val = pfe_class_write_dmem(tmu->class, -1, addr, (void *)&sum, sizeof(uint16_t));
+			}
+		}
 	}
 
 	return ret_val;
@@ -554,6 +782,83 @@ uint8_t pfe_tmu_queue_get_wred_zones(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t ph
 	{
 		return EINVAL;
 	}
+}
+
+errno_t pfe_tmu_queue_reset_tail_drop_policy(const pfe_tmu_t *tmu)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0U;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return pfe_tmu_q_reset_tail_drop_policy(tmu->cbus_base_va);
+}
+
+/**
+ * @brief		Enforce compliance of queue length sums of all HIF interfaces with 
+ * 				err051211_workaround constraints. Also update data in FW.
+ * @param[in]	tmu The TMU instance
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_tmu_queue_err051211_sync(const pfe_tmu_t *tmu)
+{
+	pfe_ct_phy_if_id_t phy = PFE_PHY_IF_ID_HIF0;
+	pfe_tmu_queue_mode_t mode = TMU_Q_MODE_TAIL_DROP;
+	uint32_t min = 0UL;
+	uint32_t max = 0UL;
+	uint32_t default_max = 0UL;
+	uint16_t sum = 0U;	/* Sum of queue lengths */
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == tmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/*	Pre-compute safe default HIF queue length (in case it is needed). Consider the following two limits:
+			--> Size of HIF RX Ring
+			--> Max allowed queue size for HIF */
+	default_max = (PFE_HIF_RX_RING_CFG_LENGTH >= PFE_TMU_ERR051211_MINIMAL_REQUIRED_RX_RING_LENGTH) ? ((PFE_HIF_RX_RING_CFG_LENGTH - PFE_TMU_ERR051211_Q_OFFSET) / 2U) : (1UL);
+	default_max = (default_max >= TLITE_HIF_MAX_Q_SIZE) ? (TLITE_HIF_MAX_Q_SIZE) : (default_max);
+
+	/* Check all HIF interfaces and update data in FW. */
+	for (phy = PFE_PHY_IF_ID_HIF0; (PFE_PHY_IF_ID_HIF3 >= phy); phy = (pfe_ct_phy_if_id_t)(phy + 1U))
+	{
+		uint8_t queue = 0U;
+		const uint8_t queue_cnt = pfe_tmu_queue_get_cnt(tmu, phy);
+
+		/* Check sum of queue lengths for the given HIF ; 0xFF args ensure that real current sum is returned */
+		if (ENOSPC == get_sum_of_queue_lengths(tmu, phy, 0xFF, 0xFF, &sum))
+		{
+			/* Reset queue lengths and then set them all to default_max length. This will update data in FW as well. */
+			set_all_queues_to_min_length(tmu, phy);
+			for (queue = 0U; (queue_cnt > queue); queue++)
+			{
+				mode = pfe_tmu_queue_get_mode(tmu, phy, queue, &min, &max);
+				pfe_tmu_queue_set_mode(tmu, phy, queue, mode, min, default_max);
+			}
+
+			NXP_LOG_WARNING("Every TMU queue of physical interface id=%d was set to length %u, because err051211_workaround got activated "
+							"and \"original sum of queue lengths (%u) + Q_OFFSET (%u)\" for the given interface was exceeding HIF RX Ring length (%u).", 
+							phy, default_max, sum, (uint_t)PFE_TMU_ERR051211_Q_OFFSET, (uint_t)PFE_HIF_RX_RING_CFG_LENGTH);
+		}
+		else
+		{
+			/* Sum is OK. Simply reapply parameters. This will update data in FW as well. */
+			for (queue = 0U; (queue_cnt > queue); queue++)
+			{
+				mode = pfe_tmu_queue_get_mode(tmu, phy, queue, &min, &max);
+				pfe_tmu_queue_set_mode(tmu, phy, queue, mode, min, max);
+			}
+		}
+	}
+
+	return EOK;
 }
 
 /**

@@ -60,7 +60,7 @@ ifeq ($(TARGET_OS),LINUX)
 	GLOBAL_CCFLAGS := $(shell echo $(GLOBAL_CCFLAGS))
 	
 	CLI_TARGET_OS = "LNX"
-	CLI_DRV_VERSION = "BETA 0.9.6"
+	CLI_DRV_VERSION = "BETA 0.9.7"
 else
 #This branch by defaut means QNX.
 	LIBS += -L../xfci/libfci/build/$(PLATFORM)-$(BUILD_PROFILE) -l:libfci.a

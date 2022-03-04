@@ -1,5 +1,5 @@
 *
-* Copyright 2020-2021 NXP
+* Copyright 2020-2022 NXP
 *
 * NXP S32G274A PFE networking accelerator (pfeng)
 *
@@ -66,6 +66,7 @@ Requires properties for 'ethernet' subnode:
 Optional properties for 'ethernet' subnode:
 - fsl,pfeng-ihc : [master/slave only] Declares the interface for IHC traffic
 - fsl,pfeng-emac-router : [slave only] switch linked EMAC to IF_OP_FLEX_ROUTER mode
+- fsl,pfeng-logif-mode-mgmt-only : only "management" frames (PTP, egress TS, mirrored) receive mode
 - local-mac-address : MAC address
 - phy-handle : phandle to the PHY device connected to this device.
 - fixed-link : Assume a fixed link. See fixed-link.txt in the same directory.

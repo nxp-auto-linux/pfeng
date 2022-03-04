@@ -76,6 +76,7 @@ typedef struct
 	uint32_t irq_vector_upe_gpt; /* UPE + GPT IRQ number */
 	uint32_t irq_vector_safety; /* Safety IRQ number */
 	bool_t enable_util;			/* Shall be UTIL enabled? */
+	bool_t disable_master_detect;	/* Shall be Master-detect disabled? */
 	pfe_ct_phy_if_id_t local_hif; /* ID of the local interface */
 	uint32_t rtable_hash_size;	/* Size (number of entries) of hash area within routing table */
 	uint32_t rtable_collision_size;	/* Size (number of entries) of collision area within routing table */

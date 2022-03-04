@@ -41,11 +41,9 @@
 
 /* indexed by elements of 'fpp_phy_if_op_mode_t' */
 #define TXT_IF_MODE__DEFAULT           "DEFAULT"
-#define TXT_IF_MODE__BRIDGE            "BRIDGE"
 #define TXT_IF_MODE__ROUTER            "ROUTER"
 #define TXT_IF_MODE__VLAN_BRIDGE       "VLAN_BRIDGE"
 #define TXT_IF_MODE__FLEXIBLE_ROUTER   "FLEXIBLE_ROUTER"
-#define TXT_IF_MODE__L2L3_BRIDGE       "L2L3_BRIDGE"
 #define TXT_IF_MODE__L2L3_VLAN_BRIDGE  "L2L3_VLAN_BRIDGE"
 
 /* indexed by elements of 'fpp_phy_if_block_state_t' */

@@ -53,7 +53,7 @@
  * @brief Generic 'register' action for FPP_CMD_*.
  * @hideinitializer
  */
-#define FPP_ACTION_REGISTER     0
+#define FPP_ACTION_REGISTER     0U
 
 /**
  * @brief Generic 'deregister' action for FPP_CMD_*.

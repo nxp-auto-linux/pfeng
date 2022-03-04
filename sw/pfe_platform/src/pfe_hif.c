@@ -19,6 +19,9 @@ struct pfe_hif_tag
 {
 	addr_t cbus_base_va;			/*	CBUS base virtual address */
 	pfe_hif_chnl_t **channels;
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	bool_t disable_master_detect;	/* Shall be Master-detect disabled? */
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 #ifdef PFE_CFG_PARANOID_IRQ
 	oal_mutex_t lock;			/*	Mutex to lock access to HW resources */
 #endif /* PFE_CFG_PARANOID_IRQ */
@@ -110,6 +113,18 @@ void pfe_hif_irq_unmask(const pfe_hif_t *hif)
 #endif /* PFE_CFG_PARANOID_IRQ */
 }
 #endif /* PFE_CFG_PFE_MASTER */
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+void pfe_hif_set_master_detect_cfg(pfe_hif_t *hif, bool_t on)
+{
+	hif->disable_master_detect = (!on);
+}
+
+bool_t pfe_hif_get_master_detect_cfg(const pfe_hif_t *hif)
+{
+	return (!hif->disable_master_detect);
+}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 /**
  * @brief		Create new HIF instance
@@ -225,13 +240,6 @@ pfe_hif_t *pfe_hif_create(addr_t cbus_base_va, pfe_hif_chnl_id_t channels)
 		}
 	}
 
-#ifdef PFE_CFG_PFE_MASTER
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	/* Clean Master detect flags for all HIF channels */
-	pfe_hif_clear_master_up(hif);
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-#endif /* PFE_CFG_PFE_MASTER */
-
 	return hif;
 }
 
@@ -344,7 +352,7 @@ bool_t pfe_hif_get_master_up(const pfe_hif_t *hif)
 	uint32_t ii;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if ((NULL == hif) || (NULL != hif->channels))
+	if ((NULL == hif) || (NULL == hif->channels))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return FALSE;
@@ -374,7 +382,7 @@ void pfe_hif_clear_master_up(const pfe_hif_t *hif)
 	uint32_t ii;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if ((NULL == hif) || (NULL != hif->channels))
+	if ((NULL == hif) || (NULL == hif->channels))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;
@@ -399,7 +407,7 @@ void pfe_hif_set_master_up(const pfe_hif_t *hif)
 	uint32_t ii;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if ((NULL == hif) || (NULL != hif->channels))
+	if ((NULL == hif) || (NULL == hif->channels))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return;

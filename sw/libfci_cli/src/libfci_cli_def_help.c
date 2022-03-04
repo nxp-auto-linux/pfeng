@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -67,11 +67,14 @@
         "    "  TXT_PHYIF__EMAC1  "\n"  \
         "    "  TXT_PHYIF__EMAC2  "\n"  \
 
+#define TXT_EQOS_QUEUE_RANGES  \
+        "    "   TXT_PHYIF__HIF0 "," TXT_PHYIF__HIF1 "," TXT_PHYIF__HIF2 "," TXT_PHYIF__HIF3 ": 0-31  \n"  \
+        "    "  "emacX/" TXT_PHYIF__UTIL "/" TXT_PHYIF__HIF_NOCPY ":  0-255  \n"  \
+
 #define TXT_IQOS_WRED_RANGES  \
         "    "  TXT_POL_WRED_QUE__DMEM  ": 0-8192  \n"  \
         "    "  TXT_POL_WRED_QUE__LMEM  ": 0-512   \n"  \
         "    "  TXT_POL_WRED_QUE__RXF   ":  0-512  \n"  \
-
 
 #define TXT_OPTARGS__PHYIF         TXT_PHYIF__EMAC2
 #define TXT_OPTARGS__ON_OFF        TXT_ON_OFF__ON  "|"  TXT_ON_OFF__OFF
@@ -154,15 +157,13 @@
                                         "  Name of the mirroring rule.\n"
 
 #define TXT_OPT__MODE                   TXT_HELP__MODE  "=<if_mode>"
-#define TXT_OPTDESCR__MODE              TXT_HELP__MODE  "=<"  TXT_IF_MODE__BRIDGE  "|"  TXT_IF_MODE__ROUTER  "|...>"  "\n"  \
+#define TXT_OPTDESCR__MODE              TXT_HELP__MODE  "=<"  TXT_IF_MODE__VLAN_BRIDGE  "|"  TXT_IF_MODE__ROUTER  "|...>"  "\n"  \
                                         "  Operating mode of the physical interface.\n"          \
                                         "  Interface modes:\n"                      \
                                         "    "  TXT_IF_MODE__DEFAULT          "\n"  \
-                                        "    "  TXT_IF_MODE__BRIDGE           "\n"  \
-                                        "    "  TXT_IF_MODE__ROUTER           "\n"  \
                                         "    "  TXT_IF_MODE__VLAN_BRIDGE      "\n"  \
+                                        "    "  TXT_IF_MODE__ROUTER           "\n"  \
                                         "    "  TXT_IF_MODE__FLEXIBLE_ROUTER  "\n"  \
-                                        "    "  TXT_IF_MODE__L2L3_BRIDGE      "\n"  \
                                         "    "  TXT_IF_MODE__L2L3_VLAN_BRIDGE "\n"
 
 #define TXT_OPT__BLOCK_STATE            TXT_HELP__BLOCK_STATE  "=<block_state>"
@@ -653,9 +654,11 @@
                                         "  Shaper mode\n"
 
 #define TXT_OPT__THMIN_EQOS             TXT_HELP__THMIN  "=<value>"
-#define TXT_OPTDESCR__THMIN_EQOS        TXT_HELP__THMIN  "=<0-255>"  "\n"  \
+#define TXT_OPTDESCR__THMIN_EQOS        TXT_HELP__THMIN  "=<interface type dependent>"  "\n"  \
                                         "  Minimal threshold value. Meaningful only for the following que modes:\n"  \
-                                        "    "  TXT_QUE_MODE__WRED  ": Number of packets in the queue where the lowest drop probability zone starts.\n"
+                                        "    "  TXT_QUE_MODE__WRED  ": Number of packets in the queue where the lowest drop probability zone starts.\n"  \
+                                        "  Range depends on type of the target physical interface:\n"  \
+                                        TXT_EQOS_QUEUE_RANGES
 
 #define TXT_OPT__THMIN_IQOS_WRED        TXT_HELP__THMIN  "=<value>"
 #define TXT_OPTDESCR__THMIN_IQOS_WRED   TXT_HELP__THMIN  "=<queue type dependent>"  "\n"  \
@@ -664,10 +667,11 @@
                                         TXT_IQOS_WRED_RANGES
 
 #define TXT_OPT__THMAX_EQOS             TXT_HELP__THMAX  "=<value>"
-#define TXT_OPTDESCR__THMAX_EQOS        TXT_HELP__THMAX  "=<0-255>"  "\n"  \
+#define TXT_OPTDESCR__THMAX_EQOS        TXT_HELP__THMAX  "=<interface type dependent>"  "\n"  \
                                         "  Maximal threshold value. Meaningful only for the following que modes:\n"  \
                                         "    "  TXT_QUE_MODE__TAIL_DROP  ": Max allowed number of packets in the queue.\n"  \
-                                        "    "  TXT_QUE_MODE__WRED       ": Number of packets in the queue above which the drop probability is always 100%.\n"
+                                        "    "  TXT_QUE_MODE__WRED       ": Number of packets in the queue above which the drop probability is always 100%.\n"  \
+                                        "  Range depends on type of the target interface (see " TXT_HELP__THMIN ").\n"
 
 #define TXT_OPT__THMAX_IQOS_WRED        TXT_HELP__THMAX  "=<value>"
 #define TXT_OPTDESCR__THMAX_IQOS_WRED   TXT_HELP__THMAX  "=<queue type dependent>"  "\n"  \

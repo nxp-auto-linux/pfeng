@@ -373,8 +373,6 @@ errno_t pfe_hif_chnl_cfg_init(addr_t base_va, uint32_t channel_id)
 	/*	Disable RX coalescing */
 	(void)pfe_hif_chnl_cfg_set_rx_irq_coalesce(base_va, channel_id, 0U, 0U);
 
-	hal_write32(0x0U, base_va + HIF_LTC_MAX_PKT_CHn_ADDR(channel_id));
-
 	/*	Enable channel status interrupts except of the RX/TX and
 	 	the global enable bit. */
 	hal_write32(0xffffffffU
@@ -480,10 +478,12 @@ errno_t pfe_hif_cfg_init(addr_t base_va)
 	hal_write32(0x33221100U, base_va + HIF_RX_QUEUE_MAP_CH_NO_ADDR);
 	hal_write32(0x0U, base_va + HIF_DMA_BURST_SIZE_ADDR); /* 0 = 128B, 1 = 256B, 2 = 512B, 3 = 1024B */
 	hal_write32(0x0U, base_va + HIF_DMA_BASE_ADDR);
-	hal_write32(0x0U, base_va + HIF_LTC_PKT_CTRL_ADDR);
+	hal_write32(0x0U, base_va + HIF_LTC_PKT_CTRL_ADDR); /* Must stay disabled. LTC hijaked for Master-detect feature */
 	hal_write32(0xffffffffU & ~(HIF_ERR_INT), base_va + HIF_ERR_INT_EN);
 	hal_write32(0xffffffffU & ~(HIF_TX_FIFO_ERR_INT), base_va + HIF_TX_FIFO_ERR_INT_EN);
 	hal_write32(0xffffffffU  & ~(HIF_RX_FIFO_ERR_INT), base_va + HIF_RX_FIFO_ERR_INT_EN);
+#else
+    (void)base_va;
 #endif /* PFE_CFG_PFE_MASTER */
 
 	return EOK;

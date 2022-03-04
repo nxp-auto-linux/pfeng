@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -2648,25 +2648,24 @@ static int cmd_parse(cli_cmd_t* p_rtn_cmd, const char* p_txt_cmd)
     /*  print error message if something went wrong  */
     if (CLI_OK != rtn)
     {
-        const char* p_txt_err = "";
+        const char* p_txt_errmsg = "";
         switch (rtn)
         {
             case CLI_ERR_INVPTR:
-                p_txt_err = "Invalid pointer while parsing a command name.\n"
-                            "SERIOUS! NOTIFY A DEVELOPER!";
+                p_txt_errmsg = TXT_ERR_INDENT "Invalid pointer while parsing a command name.\n";
             break;
             
             case CLI_ERR_INVCMD:
-                p_txt_err = "Unknown command.\n"
-                            "Use option '--help' to get a list of all available commands.";
+                p_txt_errmsg = TXT_ERR_INDENT "Unknown command.\n"
+                               TXT_ERR_INDENT "Use option '--help' to get a list of all available commands.\n";
             break;
             
             default:
-                p_txt_err = "Something unexpected happened while parsing a command name.\n"
-                            "Check your input and try again. If the problem persists, notify a developer.";
+                p_txt_errmsg = TXT_ERR_INDENT "Something unexpected happened while parsing a command name.\n"
+                               TXT_ERR_INDENT "Check your input and try again.\n";
             break;
         }
-        cli_print_error(rtn, p_txt_err);
+        cli_print_error(rtn, TXT_ERR_NONAME, p_txt_errmsg);
     }
     
     /* assign return data */
@@ -3838,38 +3837,36 @@ static int opts_parse(cli_cmdargs_t* p_rtn_cmdargs, char* p_txt_vec[], int vec_l
     /*  print error message if something went wrong  */
     if (CLI_OK != rtn)
     {  
-        const char* p_txt_err = "";
+        const char* p_txt_errmsg = "";
         switch (rtn)
         {
             case CLI_ERR_INVPTR:
-                p_txt_err = "Invalid pointer while parsing the option '%s%s'.\n"
-                            "SERIOUS! NOTIFY A DEVELOPER!";
+                p_txt_errmsg = TXT_ERR_INDENT "Invalid pointer while parsing the option '%s%s'.\n";
             break;
             
             case CLI_ERR_INVOPT:
-                p_txt_err = "Unknown option '%s%s'. (maybe check leading '-' or '--'?)\n"
-                            "Use '<command> --help' to get a detailed info (and a list of valid options) for the given command.";
+                p_txt_errmsg = TXT_ERR_INDENT "Unknown option '%s%s'. (maybe check leading '-' or '--'?)\n"
+                               TXT_ERR_INDENT "Use '<command> --help' to get a detailed info (and a list of valid options) for the given command.\n";
             break;
             
             case CLI_ERR_INVARG:
-                p_txt_err = "Invalid or missing argument(s) for the option '%s%s'.\n"
-                            "If not missing, then maybe wrong upper/lower case? Or something too small/large/long?";
+                p_txt_errmsg = TXT_ERR_INDENT "Invalid or missing argument(s) for the option '%s%s'.\n"
+                               TXT_ERR_INDENT "If not missing, then maybe wrong upper/lower case? Or something too small/large/long?\n";
             break;
             
             case CLI_ERR_NONOPT:
-                p_txt_err = "Non-option argument '%s%s' detected. (maybe it's just missing the '-' or '--'?)";
+                p_txt_errmsg = TXT_ERR_INDENT "Non-option argument '%s%s' detected. (maybe it's just missing the '-' or '--'?)\n";
             break;
             
             case CLI_ERR_INCOMPATIBLE_OPTS:
-                p_txt_err = "Options '%s' and '%s' cannot be used at the same time.";
+                p_txt_errmsg = TXT_ERR_INDENT "Options '%s' and '%s' cannot be used at the same time.\n";
             break;
             
             default:
-                p_txt_err = "Something unexpected happened while parsing the option '%s%s'.\n"
-                            "Check your input and try again. If the problem persists, notify a developer.";
+                p_txt_errmsg = TXT_ERR_INDENT "Something unexpected happened while parsing the option '%s%s'.\n";
             break;
         }
-        cli_print_error(rtn, p_txt_err, p_txt_opt, p_txt_opt_addit);
+        cli_print_error(rtn, TXT_ERR_NONAME, p_txt_errmsg, p_txt_opt, p_txt_opt_addit);
     }
     
     /* just for debug/test purposes; this call passes 'cmdargs' data to unit tests */
@@ -3922,177 +3919,241 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
     /* print error message if something went wrong */
     if (CLI_OK != rtn)
     {
-        const char* p_txt_err = "";
+        const char* p_txt_errname = TXT_ERR_NONAME;
+        const char* p_txt_errmsg = "";
         bool do_mandopt_print = false;
         switch (rtn)
         {
             /* errors of the libFCI_cli app */
             
             case CLI_ERR_INVPTR:
-                p_txt_err = "Invalid pointer during execution of the command.\n"
-                            "SERIOUS! NOTIFY A DEVELOPER!";
+                p_txt_errmsg = TXT_ERR_INDENT "Invalid pointer during execution of the command.\n";
             break;
             
             case CLI_ERR_INVCMD:
-                p_txt_err = "Unknown command (execution stage)."
-                            "\nSERIOUS! NOTIFY A DEVELOPER!";
+                p_txt_errmsg = TXT_ERR_INDENT "Unknown command (execution stage).\n";
             break;
             
             case CLI_ERR_INVARG:
-                p_txt_err = "Invalid argument of some option.\n"
-                            "Use '<command> --help' to get a detailed info (and a list of valid options) for the given command.";
+                p_txt_errmsg = TXT_ERR_INDENT "Invalid argument of some option.\n"
+                               TXT_ERR_INDENT "Use '<command> --help' to get a detailed info (and a list of valid options) for the given command.\n";
             break;
             
             case CLI_ERR_MISSING_MANDOPT:
                 /* NOTE: This error code utilizes a mandopt feature to print extra info (missing opts) */
-                p_txt_err = "Command is missing the following mandatory options:";
+                p_txt_errmsg = TXT_ERR_INDENT "Command is missing the following mandatory options:";  /* terminating '\n' purposefully omitted */
                 do_mandopt_print = true;
             break;
             
             case CLI_ERR_INCOMPATIBLE_IPS:
-                p_txt_err = "Incompatible IP addresses.\n"
-                            "All IP addresses must be of a same type - either all IPv4, or all IPv6.";
+                p_txt_errmsg = TXT_ERR_INDENT "Incompatible IP addresses.\n"
+                               TXT_ERR_INDENT "All IP addresses must be of a same type - either all IPv4, or all IPv6.\n";
             break;
             
             case CLI_ERR_WRONG_IP_TYPE:
                 if (CMD_LOGIF_UPDATE == cmd)
                 {
-                    p_txt_err = "Wrong IP address type (IPv4/IPv6) as an argument of some option. Check the following:\n"
-                                "  --> ("  TXT_HELP__SIP  ") and ("  TXT_HELP__DIP  ") accept only IPv4 argument.\n"
-                                "  --> ("  TXT_HELP__SIP6  ") and ("  TXT_HELP__DIP6  ") accept only IPv6 argument.\n";
+                    p_txt_errmsg = TXT_ERR_INDENT "Wrong IP address type (IPv4/IPv6) as an argument of some option.\n"
+                                   TXT_ERR_INDENT "Check the following special rules:\n"
+                                   TXT_ERR_INDENT "  [*]  For logif-update:  ("  TXT_HELP__SIP  ")  and  ("  TXT_HELP__DIP  ")  accept only IPv4 argument.\n"
+                                   TXT_ERR_INDENT "  [*]  For logif-update:  ("  TXT_HELP__SIP6  ")  and  ("  TXT_HELP__DIP6  ")  accept only IPv6 argument.\n";
                 }
                 else
                 {
-                    p_txt_err = "Wrong IP address type (IPv4/IPv6) as an argument of some option.";
+                    p_txt_errmsg = TXT_ERR_INDENT "Wrong IP address type (IPv4/IPv6) as an argument of some option.\n";
                 }
             break;
             
             case CLI_ERR_INV_DEMO_FEATURE:
-                p_txt_err = "Requested demo feature not found.\n"
-                            "Is the feature name correct?\n"
-                            "Does the feature exist?";
+                p_txt_errmsg = TXT_ERR_INDENT "Requested demo feature not found.\n"
+                               TXT_ERR_INDENT "Is the feature name correct?\n"
+                               TXT_ERR_INDENT "Does the feature exist?\n";
             break;
             
             /* errors of the libFCI library */
             
             case FPP_ERR_IF_ENTRY_ALREADY_REGISTERED:
-                p_txt_err = "Requested interface name is already registered.";
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_IF_ENTRY_ALREADY_REGISTERED);
+                p_txt_errmsg  = "Requested interface name is already registered.\n";
             break;
             
             case FPP_ERR_IF_ENTRY_NOT_FOUND:
-                p_txt_err = "Requested target/parent/mirror interface not found.\n"
-                            "Is the target/parent/mirror name correct?\n"
-                            "Does the target/parent/mirror interface exist?";
-            break;
-            
-            case FPP_ERR_IF_NOT_SUPPORTED:
-                p_txt_err = "Requested interface cannot be used as a parameter for the given command.";
-            break;
-            
-            case FPP_ERR_IF_MAC_ALREADY_REGISTERED:
-                p_txt_err = "Requested MAC address is already registered for the given interface.";
-            break;
-            
-            case FPP_ERR_IF_MAC_NOT_FOUND:
-                p_txt_err = "Requested MAC address not found.\n"
-                            "Is the MAC address correct?\n"
-                            "Is the interface name correct?";
-            break;
-            
-            case FPP_ERR_MIRROR_ALREADY_REGISTERED:
-                p_txt_err = "Requested mirroring rule is already registered.";
-            break;
-            
-            case FPP_ERR_MIRROR_NOT_FOUND:
-                p_txt_err = "Requested mirroring rule not found.\n"
-                            "Is the rule name correct?";
-            break;
-            
-            case FPP_ERR_L2_BD_ALREADY_REGISTERED:
-                p_txt_err = "Requested bridge domain is already registered.";
-            break;
-            
-            case FPP_ERR_L2_BD_NOT_FOUND:
-                p_txt_err = "Requested bridge domain not found.\n"
-                            "Is the VLAN ID correct?";
-            break;
-            
-            case FPP_ERR_L2_STATIC_ENT_ALREADY_REGISTERED:
-                p_txt_err = "Requested static entry is already registered.";
-            break;
-            
-            case FPP_ERR_L2_STATIC_EN_NOT_FOUND:
-                p_txt_err = "Requested static entry not found.\n"
-                            "Is the VLAN ID correct?\n"
-                            "Is the MAC correct?";
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_IF_ENTRY_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested target/parent/mirror interface not found.\n"
+                                TXT_ERR_INDENT "Is the target/parent/mirror name correct?\n"
+                                TXT_ERR_INDENT "Does the target/parent/mirror interface exist?\n";
             break;
             
             case FPP_ERR_IF_MATCH_UPDATE_FAILED:
-                p_txt_err = "Failed to update logical interface match rules. Maybe incompatible versions of libFCI and driver?";
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_IF_MATCH_UPDATE_FAILED);
+                p_txt_errmsg  = TXT_ERR_INDENT "Failed to update logical interface match rules.\n"
+                                TXT_ERR_INDENT "Maybe incompatible versions of libFCI and driver?\n";
             break;
             
-            case FPP_ERR_RT_ENTRY_ALREADY_REGISTERED:
-                p_txt_err = "Requested route is already registered.";
+            case FPP_ERR_IF_NOT_SUPPORTED:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_IF_NOT_SUPPORTED);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested interface cannot be used as a parameter for the given command.\n";
             break;
             
-            case FPP_ERR_RT_ENTRY_NOT_FOUND:
-                p_txt_err = "Requested route not found.\n"
-                            "Is the route ID correct?";
+            case FPP_ERR_IF_MAC_ALREADY_REGISTERED:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_IF_MAC_ALREADY_REGISTERED);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested MAC address is already registered for the given interface.\n";
             break;
             
-            case FPP_ERR_CT_ENTRY_NOT_FOUND:
-                p_txt_err = "Requested conntrack not found.\n"
-                            "Are all options filled correctly?";
+            case FPP_ERR_IF_MAC_NOT_FOUND:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_IF_MAC_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested MAC address not found.\n"
+                                TXT_ERR_INDENT "Is the MAC address correct?\n"
+                                TXT_ERR_INDENT "Is the interface name correct?\n";
             break;
             
-            case FPP_ERR_FW_FEATURE_NOT_FOUND:
-                p_txt_err = "Requested FW feature not found.\n"
-                            "Is the FW feature name correct?";
+            case FPP_ERR_MIRROR_ALREADY_REGISTERED:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_MIRROR_ALREADY_REGISTERED);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested mirroring rule is already registered.\n";
             break;
             
-            case FPP_ERR_FW_FEATURE_NOT_AVAILABLE:
-                p_txt_err = "Requested FW feature is not available (not enabled) for the currently loaded FW.\n"
-                            "This can apply either to the whole FCI command or just to some property of the command.\n"
-                            "Use fwfeat-print to see a list of all FW features.";
+            case FPP_ERR_MIRROR_NOT_FOUND:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_MIRROR_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested mirroring rule not found.\n"
+                                TXT_ERR_INDENT "Is the rule name correct?\n";
+            break;
+            
+            case FPP_ERR_L2_BD_ALREADY_REGISTERED:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_L2_BD_ALREADY_REGISTERED);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested bridge domain is already registered.\n";
+            break;
+            
+            case FPP_ERR_L2_BD_NOT_FOUND:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_L2_BD_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested bridge domain not found.\n"
+                                TXT_ERR_INDENT "Is the VLAN ID correct?\n";
+            break;
+            
+            case FPP_ERR_L2_STATIC_ENT_ALREADY_REGISTERED:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_L2_STATIC_ENT_ALREADY_REGISTERED);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested static entry is already registered.\n";
+            break;
+            
+            case FPP_ERR_L2_STATIC_EN_NOT_FOUND:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_L2_STATIC_EN_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested static entry not found.\n"
+                                TXT_ERR_INDENT "Is the VLAN ID correct?\n"
+                                TXT_ERR_INDENT "Is the MAC correct?\n";
+            break;
+            
+            case FPP_ERR_QOS_QUEUE_NOT_FOUND:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_QOS_QUEUE_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested Egress QoS queue not found.\n"
+                                TXT_ERR_INDENT "Is the queue index correct?\n";
+            break;
+            
+            case FPP_ERR_QOS_QUEUE_SUM_OF_LENGTHS_EXCEEDED:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_QOS_QUEUE_SUM_OF_LENGTHS_EXCEEDED);
+                p_txt_errmsg  = TXT_ERR_INDENT "Sum of all Egress QoS queue lengths of the target physical interface\n"
+                                TXT_ERR_INDENT "would exceed storage limit of the given interface.\n"
+                                TXT_ERR_INDENT "Hint: First make space by shortening some other Egress QoS queues of\n"
+                                TXT_ERR_INDENT "      the target physical interface. Then lenghten this one.\n";
+            break;
+            
+            case FPP_ERR_QOS_SCHEDULER_NOT_FOUND:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_QOS_SCHEDULER_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested Egress QoS scheduler not found.\n"
+                                TXT_ERR_INDENT "Is the scheduler index correct?\n";
+            break;
+            
+            case FPP_ERR_QOS_SHAPER_NOT_FOUND:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_QOS_SHAPER_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested Egress QoS shaper not found.\n"
+                                TXT_ERR_INDENT "Is the shaper index correct?\n";
             break;
             
             case FPP_ERR_QOS_POLICER_FLOW_TABLE_FULL:
-                p_txt_err = "Ingress QoS flow table of the requested interface is full.\n";
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_QOS_POLICER_FLOW_TABLE_FULL);
+                p_txt_errmsg  = TXT_ERR_INDENT "Ingress QoS flow table of the requested interface is full.\n";
             break;
             
             case FPP_ERR_QOS_POLICER_FLOW_NOT_FOUND:
-                p_txt_err = "Requested Ingress QoS flow not found.\n"
-                            "Is the interface correct?\n"
-                            "Is the flow ID correct?";
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_QOS_POLICER_FLOW_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested Ingress QoS flow not found.\n"
+                                TXT_ERR_INDENT "Is the interface correct?\n"
+                                TXT_ERR_INDENT "Is the flow ID correct?\n";
+            break;
+            
+            case FPP_ERR_FW_FEATURE_NOT_FOUND:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_FW_FEATURE_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested FW feature not found.\n"
+                                TXT_ERR_INDENT "Is the FW feature name correct?\n";
+            break;
+            
+            case FPP_ERR_FW_FEATURE_NOT_AVAILABLE:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_FW_FEATURE_NOT_AVAILABLE);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested FW feature is not available (not enabled) for the currently loaded FW.\n"
+                                TXT_ERR_INDENT "This can apply either to the whole FCI command or just to some property of the command.\n"
+                                TXT_ERR_INDENT "Use fwfeat-print to see a list of all FW features.\n";
+            break;
+            
+            case FPP_ERR_RT_ENTRY_ALREADY_REGISTERED:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_RT_ENTRY_ALREADY_REGISTERED);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested route is already registered.\n";
+            break;
+            
+            case FPP_ERR_RT_ENTRY_NOT_FOUND:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_RT_ENTRY_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested route not found.\n"
+                                TXT_ERR_INDENT "Is the route ID correct?\n";
+            break;
+            
+            /*
+                case FPP_ERR_CT_ENTRY_ALREADY_REGISTERED
+                Up to the 1st March 2022 (and going), this error code is still not returned by PFE FCI API
+                when there is an attempt to register the same conntrack twice. Instead, PFE FCI API returns -17 (EEXIST).
+            */
+            
+            case FPP_ERR_CT_ENTRY_NOT_FOUND:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_CT_ENTRY_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested conntrack not found.\n"
+                                TXT_ERR_INDENT "Are all options filled correctly?\n";
+            break;
+            
+            case FPP_ERR_WRONG_COMMAND_PARAM:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_WRONG_COMMAND_PARAM);
+                p_txt_errmsg  = TXT_ERR_INDENT "Some parameter of the command is wrong or invalid.\n"
+                                TXT_ERR_INDENT "Check your input and try again.\n";
             break;
             
             case (-2):
+                p_txt_errname = TXT_ERR_NAME(ENOENT);
                 if (CMD_LOGIF_UPDATE == cmd)
                 {
-                    p_txt_err = "If there was an attempt to set FP_TABLE0 or FP_TABLE1, then no FP table of the given name was found.\n"
-                                "If no such attempt was made, then something unexpected happened during execution of the command.";
+                    p_txt_errmsg = TXT_ERR_INDENT "If there was an attempt to set FP_TABLE0 or FP_TABLE1,\n"
+                                   TXT_ERR_INDENT "then no FP table of the given name was found.\n"
+                                   TXT_ERR_INDENT "If no such attempt was made, then something unexpected happened during execution of the command.\n";
+                }
+                else if (CMD_LOGIF_ADD == cmd)
+                {
+                    p_txt_errmsg = TXT_ERR_INDENT "Target parent physical interface not found.\n";
                 }
                 else if (CMD_LOGIF_DEL == cmd)
                 {
-                    p_txt_err = "No interface of the given name was found.";
+                    p_txt_errmsg = TXT_ERR_INDENT "Target logical interface not found.\n";
                 }
                 else
                 {
-                    p_txt_err = "Something unexpected happened during execution of the command.\n"
-                                "Check your input and try again. If the problem persists, notify a developer.";
+                    p_txt_errmsg = TXT_ERR_INDENT "Something unexpected happened during execution of the command.\n"
+                                   TXT_ERR_INDENT "Check your input and try again.\n";
                 }
             break;
             
             default:
-                p_txt_err = "Something unexpected happened during execution of the command.\n"
-                            "Check your input and try again. If the problem persists, notify a developer.";
+                p_txt_errmsg = TXT_ERR_INDENT "Something unexpected happened during execution of the command.\n"
+                               TXT_ERR_INDENT "Check your input and try again.\n";
             break;
         }
-        cli_print_error(rtn, "%s", p_txt_err);
+        cli_print_error(rtn, p_txt_errname, p_txt_errmsg);
         
         if (do_mandopt_print)
         {
-            cli_mandopt_print("  or  ");
+            cli_mandopt_print("  ", "  or  ");
             cli_mandopt_clear();
         }
     }
@@ -4132,12 +4193,12 @@ int cli_parse_and_execute(char* p_txt_vec[], int vec_ln)
     if (0 > vec_ln)
     {
         rtn = CLI_ERR;
-        cli_print_error(rtn, "Negative length of the input text vector (vec_ln=%d).", vec_ln);
+        cli_print_error(rtn, TXT_ERR_NONAME, TXT_ERR_INDENT "Negative length of the input text vector (vec_ln=%d).\n", vec_ln);
     }
     else if (NULL == p_txt_vec)
     {
         rtn = CLI_ERR_INVPTR;
-        cli_print_error(rtn, "Invalid pointer to the input text vector.");
+        cli_print_error(rtn, TXT_ERR_NONAME, TXT_ERR_INDENT "Invalid pointer to the input text vector.\n");
     }
     else
     {
@@ -4147,7 +4208,7 @@ int cli_parse_and_execute(char* p_txt_vec[], int vec_ln)
         if (vec_ln > i)
         {
             rtn = CLI_ERR_INVPTR;
-            cli_print_error(rtn, "Invalid pointer within the input text vector (element [%d]).", i);
+            cli_print_error(rtn, TXT_ERR_NONAME, TXT_ERR_INDENT "Invalid pointer within the input text vector (element [%d]).\n", i);
         }
         else
         {

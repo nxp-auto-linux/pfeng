@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -47,8 +47,10 @@ struct pfe_classifier_tag
 static errno_t pfe_class_dmem_heap_init(pfe_class_t *class);
 static errno_t pfe_class_load_fw_features(pfe_class_t *class);
 static void pfe_class_alg_stats_endian(pfe_ct_class_algo_stats_t *stat);
+static void pfe_class_ihc_stats_endian(pfe_ct_class_ihc_stats_t *stat);
 static void pfe_class_pe_stats_endian(pfe_ct_pe_stats_t *stat);
 static void pfe_class_sum_pe_algo_stats(pfe_ct_class_algo_stats_t *sum, const pfe_ct_class_algo_stats_t *val);
+static void pfe_class_sum_pe_ihc_stats(pfe_ct_class_ihc_stats_t *sum, const pfe_ct_class_ihc_stats_t *val);
 static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
 
 /**
@@ -82,7 +84,7 @@ errno_t pfe_class_isr(const pfe_class_t *class)
 		}
 
 		/*	Read and print the error record from each PE */
-		(void)pfe_pe_get_fw_errors_nolock(class->pe[i]);
+		(void)pfe_pe_get_fw_messages_nolock(class->pe[i]);
 
 #ifdef PFE_CFG_FCI_ENABLE
 		/*	Check if there is new message */
@@ -367,7 +369,7 @@ void pfe_class_enable(pfe_class_t *class)
 		state = pfe_pe_get_fw_state(class->pe[0U]);
 	}
 	while ((state < PFE_FW_STATE_INIT) && (timeout > 0U));
-	
+
 	if (timeout == 0U)
 	{
 		NXP_LOG_ERROR("Time-out waiting for classifier to init\n");
@@ -476,11 +478,11 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
 
 static errno_t pfe_class_load_fw_features(pfe_class_t *class)
 {
-    pfe_ct_pe_mmap_t mmap;
+	pfe_ct_pe_mmap_t mmap;
 	errno_t ret = EOK;
-    pfe_ct_feature_desc_t *entry;
-    uint32_t i, j;
-    bool_t val_break = FALSE;
+	pfe_ct_feature_desc_t *entry;
+	uint32_t i, j;
+	bool_t val_break = FALSE;
 
 	ret = pfe_pe_get_mmap(class->pe[0U], &mmap);
 	if(EOK == ret)
@@ -627,10 +629,10 @@ errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_class_mmap
  * @param[in]	len Number of bytes to be written
  * @return		EOK or error code in case of failure
  */
-errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, addr_t dst_addr, void *src_ptr, uint32_t len)
+errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, addr_t dst_addr, const void *src_ptr, uint32_t len)
 {
 	uint32_t ii;
-    pfe_class_t *class = (pfe_class_t *)class_p;
+	pfe_class_t *class = (pfe_class_t *)class_p;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == class))
@@ -683,7 +685,7 @@ errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, addr_t dst_addr, voi
  */
 errno_t pfe_class_read_dmem(void *class_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len)
 {
-    pfe_class_t *class = (pfe_class_t *)class_p;
+	pfe_class_t *class = (pfe_class_t *)class_p;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class) || (NULL == dst_ptr)))
 	{
@@ -759,7 +761,7 @@ void pfe_class_destroy(pfe_class_t *class)
 	{
 		pfe_class_disable(class);
 
-		pfe_pe_destroy(class->pe, (uint8_t)class->pe_num);
+		pfe_pe_destroy(class->pe, class->pe_num);
 
 		if (NULL != class->pe)
 		{
@@ -899,19 +901,19 @@ errno_t pfe_class_get_feature(const pfe_class_t *class, pfe_fw_feature_t **featu
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-    for(i = 0U; i < class->fw_features_count; i++)
-    {
-        ret = pfe_fw_feature_get_name(class->fw_features[i], &fname);
-        if(ret == EOK)
-        {
-            if(0 == strcmp(fname, name))
-            {
-                *feature = class->fw_features[i];
-                return EOK;
-            }
-        }
-    }
-    return ENOENT;
+	for(i = 0U; i < class->fw_features_count; i++)
+	{
+		ret = pfe_fw_feature_get_name(class->fw_features[i], &fname);
+		if(ret == EOK)
+		{
+			if(0 == strcmp(fname, name))
+			{
+				*feature = class->fw_features[i];
+				return EOK;
+			}
+		}
+	}
+	return ENOENT;
 }
 
 /**
@@ -929,14 +931,14 @@ errno_t pfe_class_get_feature_first(pfe_class_t *class, pfe_fw_feature_t **featu
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-    if(class->fw_features_count > 0U)
-    {
-        class->current_feature = 0U;
-        *feature = class->fw_features[class->current_feature];
-        return EOK;
-    }
+	if(class->fw_features_count > 0U)
+	{
+		class->current_feature = 0U;
+		*feature = class->fw_features[class->current_feature];
+		return EOK;
+	}
 
-    return ENOENT;
+	return ENOENT;
 }
 
 /**
@@ -954,18 +956,18 @@ errno_t pfe_class_get_feature_next(pfe_class_t *class, pfe_fw_feature_t **featur
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-    if(class->fw_features_count > 0U)
-    {
-        /* Avoid going out of the array boundaries */
-        if((class->current_feature + 1U) < class->fw_features_count)
-        {
-            class->current_feature += 1U;
-            *feature = class->fw_features[class->current_feature];
-            return EOK;
-        }
-    }
+	if(class->fw_features_count > 0U)
+	{
+		/* Avoid going out of the array boundaries */
+		if((class->current_feature + 1U) < class->fw_features_count)
+		{
+			class->current_feature += 1U;
+			*feature = class->fw_features[class->current_feature];
+			return EOK;
+		}
+	}
 
-    return ENOENT;
+	return ENOENT;
 }
 
 
@@ -987,6 +989,25 @@ static void pfe_class_alg_stats_endian(pfe_ct_class_algo_stats_t *stat)
 	stat->rejected = oal_ntohl(stat->rejected);
 	stat->discarded = oal_ntohl(stat->discarded);
 }
+
+/**
+* @brief Converts endiannes of the whole structure containing statistics
+* @param[in,out] stat Statistics which endiannes shall be converted
+*/
+static void pfe_class_ihc_stats_endian(pfe_ct_class_ihc_stats_t *stat)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+        if (unlikely(NULL == stat))
+        {
+                NXP_LOG_ERROR("NULL argument received\n");
+                return;
+        }
+#endif
+        stat->rx = oal_ntohl(stat->rx);
+        stat->tx = oal_ntohl(stat->tx);
+        stat->discarded = oal_ntohl(stat->discarded);
+}
+
 
 void pfe_class_flexi_parser_stats_endian(pfe_ct_class_flexi_parser_stats_t *stats)
 {
@@ -1058,12 +1079,31 @@ static void pfe_class_sum_pe_algo_stats(pfe_ct_class_algo_stats_t *sum, const pf
 }
 
 /**
- * @brief		Converts statistics of a logical interface or classification algorithm into a text form
- * @param[in]	stat		Statistics to convert - expected in HOST endian
- * @param[out]	buf			Buffer where to write the text
- * @param[in]	buf_len		Buffer length
- * @param[in]	verb_level	Verbosity level
- * @return		Number of bytes written into the output buffer
+* @brief Function adds statistics value to sum
+* @param[in] sum Sum to add the value (results are in HOST endian)
+* @param[in] val Value to be added to the sum (it is in HOST endian)
+*/
+static void pfe_class_sum_pe_ihc_stats(pfe_ct_class_ihc_stats_t *sum, const pfe_ct_class_ihc_stats_t *val)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+        if (unlikely((NULL == sum) || (NULL == val)))
+        {
+                NXP_LOG_ERROR("NULL argument received\n");
+                return;
+        }
+#endif
+        sum->rx += val->rx;
+        sum->tx += val->tx;
+        sum->discarded += val->discarded;
+}
+
+/**
+ * @brief                  Converts statistics of a logical interface or classification algorithm into a text form
+ * @param[in]  stat        Statistics to convert - expected in HOST endian
+ * @param[out] buf         Buffer where to write the text
+ * @param[in]  buf_len     Buffer length
+ * @param[in]  verb_level  Verbosity level
+ * @return                 Number of bytes written into the output buffer
  */
 static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
 {
@@ -1085,28 +1125,54 @@ static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, cha
 }
 
 /**
- * @brief               Converts statistics of a logical interface or classification algorithm into a text form
- * @param[in]   stat            Statistics to convert - expected in HOST endian
- * @param[out]  buf                     Buffer where to write the text
- * @param[in]   buf_len         Buffer length
- * @param[in]   verb_level      Verbosity level
- * @return              Number of bytes written into the output buffer
+ * @brief                 Converts statistics of a logical interface or classification algorithm into a text form
+ * @param[in]  stat       Statistics to convert - expected in HOST endian
+ * @param[out] buf        Buffer where to write the text
+ * @param[in]  buf_len    Buffer length
+ * @param[in]  verb_level Verbosity level
+ * @return                Number of bytes written into the output buffer
+ */
+static uint32_t pfe_class_ihc_stat_to_str(const pfe_ct_class_ihc_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
+{
+	uint32_t len = 0U;
+
+	(void)verb_level;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == stat) || (NULL == buf)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0U;
+	}
+#endif
+	len += oal_util_snprintf(buf + len, buf_len - len, "  Frames received:    %u\n", stat->rx);
+	len += oal_util_snprintf(buf + len, buf_len - len, "  Frames transmitted: %u\n", stat->tx);
+	len += oal_util_snprintf(buf + len, buf_len - len, "  Frames discarded:   %u\n", stat->discarded);
+	return len;
+}
+
+/**
+ * @brief                  Converts statistics of a logical interface or classification algorithm into a text form
+ * @param[in]   stat       Statistics to convert - expected in HOST endian
+ * @param[out]  buf        Buffer where to write the text
+ * @param[in]   buf_len    Buffer length
+ * @param[in]   verb_level Verbosity level
+ * @return                 Number of bytes written into the output buffer
  */
 uint32_t pfe_class_fp_stat_to_str(const pfe_ct_class_flexi_parser_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
 {
-        uint32_t len = 0U;
+	uint32_t len = 0U;
 
-        (void)verb_level;
+	(void)verb_level;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-        if (unlikely((NULL == stat) || (NULL == buf)))
-        {
-                NXP_LOG_ERROR("NULL argument received\n");
-                return 0U;
-        }
+	if (unlikely((NULL == stat) || (NULL == buf)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0U;
+	}
 #endif
-        len += oal_util_snprintf(buf + len, buf_len - len, "Frames accepted:  %u\n", stat->accepted);
-        len += oal_util_snprintf(buf + len, buf_len - len, "Frames rejected:  %u\n", stat->rejected);
-        return len;
+	len += oal_util_snprintf(buf + len, buf_len - len, "Frames accepted:  %u\n", stat->accepted);
+	len += oal_util_snprintf(buf + len, buf_len - len, "Frames rejected:  %u\n", stat->rejected);
+	return len;
 }
 
 /**
@@ -1115,7 +1181,7 @@ uint32_t pfe_class_fp_stat_to_str(const pfe_ct_class_flexi_parser_stats_t *stat,
  * @param[in]	buf Buffer to be sent
  * @return		EOK success, error code otherwise
  */
-uint32_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
+errno_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
 {
 	uint32_t ii, tries;
 	errno_t ret;
@@ -1165,7 +1231,7 @@ uint32_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
 errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
 {
 	pfe_ct_pe_mmap_t mmap;
-	uint32_t i = 0;
+	uint32_t i = 0U, j = 0U;
 	errno_t ret = EOK;
 	uint32_t buff_len = 0;
 	pfe_ct_classify_stats_t * stats = NULL;
@@ -1187,7 +1253,7 @@ errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
 	{
 		return ENOMEM;
 	}
-	
+
 	/* Get the memory map - all PEs share the same memory map
 	   therefore we can read arbitrary one (in this case 0U) */
 	ret = pfe_pe_get_mmap(class->pe[0U], &mmap);
@@ -1202,30 +1268,54 @@ errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
 	ret = pfe_class_gather_read_dmem(class, stats, oal_ntohl(mmap.class_pe.classification_stats), buff_len, sizeof(pfe_ct_classify_stats_t));
 
 	/* Calculate total statistics */
-	for(i = 0U; i < pfe_class_get_num_of_pes(class); i++)
+	while(i < pfe_class_get_num_of_pes(class))
 	{
 		pfe_class_alg_stats_endian(&stats[i].flexible_router);
 		pfe_class_alg_stats_endian(&stats[i].ip_router);
-		pfe_class_alg_stats_endian(&stats[i].l2_bridge);
 		pfe_class_alg_stats_endian(&stats[i].vlan_bridge);
 		pfe_class_alg_stats_endian(&stats[i].log_if);
-		pfe_class_alg_stats_endian(&stats[i].hif_to_hif);
+		for (j = 0; j < PFE_PHY_IF_ID_MAX + 1; j++)
+		{
+			pfe_class_ihc_stats_endian(&stats[i].hif_to_hif[j]);
+		}
 		pfe_class_flexi_parser_stats_endian(&stats[i].flexible_filter);
-	
+
 		pfe_class_sum_pe_algo_stats(&stat->flexible_router, &stats[i].flexible_router);
 		pfe_class_sum_pe_algo_stats(&stat->ip_router, &stats[i].ip_router);
-		pfe_class_sum_pe_algo_stats(&stat->l2_bridge, &stats[i].l2_bridge);
 		pfe_class_sum_pe_algo_stats(&stat->vlan_bridge, &stats[i].vlan_bridge);
 		pfe_class_sum_pe_algo_stats(&stat->log_if, &stats[i].log_if);
-		pfe_class_sum_pe_algo_stats(&stat->hif_to_hif, &stats[i].hif_to_hif);
+		for (j = 0; j < PFE_PHY_IF_ID_MAX + 1; j++)
+		{
+			pfe_class_sum_pe_ihc_stats(&stat->hif_to_hif[j], &stats[i].hif_to_hif[j]);
+		}
 		pfe_class_sum_flexi_parser_stats(&stat->flexible_filter, &stats[i].flexible_filter);
+		++i;
 	}
-	
+
 	oal_mm_free(stats);
 
 	return ret;
 }
 
+#define HIF_CHANNELS_MASK (((uint32_t)1U << (uint32_t)PFE_PHY_IF_ID_HIF0)\
+                          |((uint32_t)1U << (uint32_t)PFE_PHY_IF_ID_HIF1)\
+                          |((uint32_t)1U << (uint32_t)PFE_PHY_IF_ID_HIF2)\
+                          |((uint32_t)1U << (uint32_t)PFE_PHY_IF_ID_HIF3)\
+                          |((uint32_t)1U << (uint32_t)PFE_PHY_IF_ID_HIF_NOCPY))
+
+char_t phyif_name[][20] =
+{
+        "EMAC0",
+        "EMAC1",
+        "EMAC2",
+        "HIF",
+        "HIF_NOCPY",
+        "UTIL",
+        "HIF0",
+        "HIF1",
+        "HIF2",
+        "HIF3"
+};
 
 /**
  * @brief		Return CLASS runtime statistics in text form
@@ -1279,6 +1369,11 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	if (NULL == pe_stats)
 	{
 		NXP_LOG_ERROR("Memory allocation failed\n");
+		if (EOK != oal_mutex_unlock(&class->mutex))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
+
 		return len;
 	}
 
@@ -1291,6 +1386,11 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	{
 		NXP_LOG_ERROR("Cannot get PE memory map\n");
 		oal_mm_free(pe_stats);
+		if (EOK != oal_mutex_unlock(&class->mutex))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
+
 		return len;
 	}
 
@@ -1382,16 +1482,21 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	len += pfe_class_stat_to_str(&c_alg_stats.flexible_router, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- IP Router -\n");
 	len += pfe_class_stat_to_str(&c_alg_stats.ip_router, buf + len, buf_len - len, verb_level);
-	len += oal_util_snprintf(buf + len, buf_len - len, "- L2 Bridge -\n");
-	len += pfe_class_stat_to_str(&c_alg_stats.l2_bridge, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- VLAN Bridge -\n");
 	len += pfe_class_stat_to_str(&c_alg_stats.vlan_bridge, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- Logical Interfaces -\n");
 	len += pfe_class_stat_to_str(&c_alg_stats.log_if, buf + len, buf_len - len, verb_level);
-	len += oal_util_snprintf(buf + len, buf_len - len, "- InterHIF -\n");
-	len += pfe_class_stat_to_str(&c_alg_stats.hif_to_hif, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- Global Flexible filter -\n");
 	len += pfe_class_fp_stat_to_str(&c_alg_stats.flexible_filter, buf + len, buf_len - len, verb_level);
+	len += oal_util_snprintf(buf + len, buf_len - len, "- InterHIF -\n");
+	for (j = 0; j < PFE_PHY_IF_ID_MAX + 1; j++)
+	{
+		if ( ((uint32_t)(1 << j)) & HIF_CHANNELS_MASK)
+		{
+			len += oal_util_snprintf(buf + len, buf_len - len, "Interface: %s\n", phyif_name[j]);
+			len += pfe_class_ihc_stat_to_str(&c_alg_stats.hif_to_hif[j], buf + len, buf_len - len, verb_level);
+		}
+	}
 
 	len += oal_util_snprintf(buf + len, buf_len - len, "\nDMEM heap\n---------\n");
 	len += blalloc_get_text_statistics(class->heap_context, buf + len, buf_len - len, verb_level);

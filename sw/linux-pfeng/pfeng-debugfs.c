@@ -1,5 +1,5 @@
 /*
- * Copyright 2018,2020-2021 NXP
+ * Copyright 2018,2020-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -64,6 +64,7 @@ CREATE_DEBUGFS_ENTRY_TYPE(gpi,gpi);
 CREATE_DEBUGFS_ENTRY_TYPE(tmu,tmu);
 CREATE_DEBUGFS_ENTRY_TYPE(util,util);
 CREATE_DEBUGFS_ENTRY_TYPE(fp,fp);
+CREATE_DEBUGFS_ENTRY_TYPE(rtable,rtable);
 #endif
 CREATE_DEBUGFS_ENTRY_TYPE(hif_chnl,hif_chnl);
 
@@ -104,8 +105,10 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 
 #ifdef PFE_CFG_PFE_MASTER
 	ADD_DEBUGFS_ENTRY("class", class, priv->dbgfs, priv->pfe_platform->classifier, &dsav);
+#ifdef PFE_CFG_L2BRIDGE_ENABLE
 	ADD_DEBUGFS_ENTRY("l2br", l2br, priv->dbgfs, priv->pfe_platform->l2_bridge, &dsav);
 	ADD_DEBUGFS_ENTRY("l2br_domain", l2br_domain, priv->dbgfs, priv->pfe_platform->l2_bridge, &dsav);
+#endif
 	ADD_DEBUGFS_ENTRY("bmu1", bmu, priv->dbgfs, priv->pfe_platform->bmu[0], &dsav);
 	ADD_DEBUGFS_ENTRY("bmu2", bmu, priv->dbgfs, priv->pfe_platform->bmu[1], &dsav);
 	ADD_DEBUGFS_ENTRY("egpi1", gpi, priv->dbgfs, priv->pfe_platform->gpi[0], &dsav);
@@ -114,6 +117,9 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 	ADD_DEBUGFS_ENTRY("tmu", tmu, priv->dbgfs, priv->pfe_platform->tmu, &dsav);
 	ADD_DEBUGFS_ENTRY("util", util, priv->dbgfs, priv->pfe_platform->util, &dsav);
 	ADD_DEBUGFS_ENTRY("fp", fp, priv->dbgfs, priv->pfe_platform->classifier, &dsav);
+#ifdef PFE_CFG_RTABLE_ENABLE 
+	ADD_DEBUGFS_ENTRY("rtable", rtable, priv->dbgfs, priv->pfe_platform->rtable, &dsav);
+#endif
 	if (priv->emac[0].enabled)
 		ADD_DEBUGFS_ENTRY("emac0", emac, priv->dbgfs, priv->pfe_platform->emac[0], &dsav);
 	if (priv->emac[1].enabled)

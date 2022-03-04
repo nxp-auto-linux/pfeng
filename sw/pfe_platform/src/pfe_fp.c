@@ -111,6 +111,7 @@ errno_t pfe_fp_table_get_statistics(pfe_class_t *class, uint32_t pe_idx, uint32_
     errno_t res;
     addr_t addr;
 
+    (void)memset(&temp.fp_stats, 0, sizeof(pfe_ct_class_flexi_parser_stats_t));
     addr = table_address;
     res = pfe_class_read_dmem(class, (int32_t)pe_idx, (void *)&temp, addr, sizeof(pfe_ct_fp_table_t));
     if(EOK != res)

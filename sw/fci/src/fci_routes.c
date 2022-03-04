@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -92,7 +92,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 	fci_rt_db_entry_t *rt_entry = NULL;
 	pfe_if_db_entry_t *if_entry = NULL;
 	pfe_phy_if_t *phy_if = NULL;
-	uint32_t session_id;
+	uint32_t session_id = 0U;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -120,25 +120,25 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 	}
 
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(fpp_rt_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_rt_cmd_t));
 
 	rt_cmd = (fpp_rt_cmd_t *)(msg->msg_cmd.payload);
 	is_ipv6 = (oal_ntohl(rt_cmd->flags) == 2U) ? TRUE : FALSE;
 
 	/*	Prepare MAC and IP destination address */
-	memcpy(dst_mac, rt_cmd->dst_mac, sizeof(pfe_mac_addr_t));
-	memset(&ip, 0, sizeof(pfe_ip_addr_t));
+	(void)memcpy(dst_mac, rt_cmd->dst_mac, sizeof(pfe_mac_addr_t));
+	(void)memset(&ip, 0, sizeof(pfe_ip_addr_t));
 
 	if (is_ipv6)
 	{
 		/*	Convert to 'known' IPv6 address format */
-		memcpy(&ip.v6, &rt_cmd->dst_addr[0], 16);
+		(void)memcpy(&ip.v6, &rt_cmd->dst_addr[0], 16);
 		ip.is_ipv4 = FALSE;
 	}
 	else
 	{
 		/*	Convert to 'known' IPv4 address format */
-		memcpy(&ip.v4, &rt_cmd->dst_addr[0], 4);
+		(void)memcpy(&ip.v4, &rt_cmd->dst_addr[0], 4);
 		ip.is_ipv4 = TRUE;
 	}
 
@@ -174,14 +174,17 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			/*	Prepare MAC source address */
 			{
 				const pfe_mac_addr_t zero_mac = {0u};
-				memset(src_mac, 0, sizeof(pfe_mac_addr_t));
+				(void)memset(src_mac, 0, sizeof(pfe_mac_addr_t));
 				if (0 == memcmp(rt_cmd->src_mac, zero_mac, sizeof(pfe_mac_addr_t)))
 				{
-					pfe_phy_if_get_mac_addr_first(phy_if, src_mac, MAC_DB_CRIT_ALL, PFE_TYPE_ANY, PFE_CFG_LOCAL_IF);
+					if(EOK != pfe_phy_if_get_mac_addr_first(phy_if, src_mac, MAC_DB_CRIT_ALL, PFE_TYPE_ANY, PFE_CFG_LOCAL_IF))
+                    {
+                        NXP_LOG_ERROR("FPP_CMD_IP_ROUTE: Get the first MAC address from mac addr db failed\n");
+                    }
 				}
 				else
 				{
-					memcpy(src_mac, rt_cmd->src_mac, sizeof(pfe_mac_addr_t));
+					(void)memcpy(src_mac, rt_cmd->src_mac, sizeof(pfe_mac_addr_t));
 				}
 			}
 
@@ -278,24 +281,24 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 
 			/*	Build reply structure */
 			reply_buf->mtu = rt_entry->mtu;
-			memcpy(reply_buf->src_mac, rt_entry->src_mac, sizeof(pfe_mac_addr_t));
-			memcpy(reply_buf->dst_mac, rt_entry->dst_mac, sizeof(pfe_mac_addr_t));
+			(void)memcpy(reply_buf->src_mac, rt_entry->src_mac, sizeof(pfe_mac_addr_t));
+			(void)memcpy(reply_buf->dst_mac, rt_entry->dst_mac, sizeof(pfe_mac_addr_t));
 
 			if (rt_entry->dst_ip.is_ipv4)
 			{
 				/*	IPv4 */
-				memcpy(&reply_buf->dst_addr[0], &rt_entry->dst_ip.v4, 4);
+				(void)memcpy(&reply_buf->dst_addr[0], &rt_entry->dst_ip.v4, 4);
 				reply_buf->flags = oal_htonl(1U); /* TODO: This is weird (see FCI doc). Some macro should be used instead. */
 			}
 			else
 			{
 				/*	IPv6 */
-				memcpy(&reply_buf->dst_addr[0], &rt_entry->dst_ip.v6, 16);
+				(void)memcpy(&reply_buf->dst_addr[0], &rt_entry->dst_ip.v6, 16);
 				reply_buf->flags = oal_htonl(2U); /* TODO: This is weird (see FCI doc). Some macro should be used instead. */
 			}
 
 			reply_buf->id = rt_entry->id;
-			strncpy(reply_buf->output_device, pfe_phy_if_get_name(rt_entry->iface), IFNAMSIZ-1);
+			(void)strncpy(reply_buf->output_device, pfe_phy_if_get_name(rt_entry->iface), (uint32_t)IFNAMSIZ-1U);
 
 			fci_ret = FPP_ERR_OK;
 			ret = EOK;
@@ -351,7 +354,7 @@ errno_t fci_routes_drop_one(fci_rt_db_entry_t *route)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	memset(&msg, 0, sizeof(fci_msg_t));
+	(void)memset(&msg, 0, sizeof(fci_msg_t));
 	msg.type = FCI_MSG_CMD;
 	msg.msg_cmd.code = FPP_CMD_IP_ROUTE;
 

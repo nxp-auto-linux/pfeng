@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 NXP
+ * Copyright 2021-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -31,6 +31,10 @@
 #define PFENG_DT_COMPATIBLE_EMAC		"fsl,pfeng-emac"
 /* MDIO represents DT mdio@ node */
 #define PFENG_DT_COMPATIBLE_MDIO		"fsl,pfeng-mdio"
+/* PFE controller cbus resource name*/
+#define PFE_RES_NAME_PFE_CBUS			"pfe-cbus"
+/* S32G_MAIN_GPR memory map resource name */
+#define PFE_RES_NAME_S32G_MAIN_GPR		"s32g-main-gpr"
 
 #include "pfeng.h"
 
@@ -124,9 +128,9 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 	u32 propval, emac_list = 0;
 
 	/* Get the base address of device */
-	res = platform_get_resource(priv->pdev, IORESOURCE_MEM, 0);
+	res = platform_get_resource_byname(priv->pdev, IORESOURCE_MEM, PFE_RES_NAME_PFE_CBUS);
 	if(unlikely(!res)) {
-		dev_err(dev, "Cannot find mem resource, aborting\n");
+		dev_err(dev, "Cannot find mem resource by '%s', aborting\n", PFE_RES_NAME_PFE_CBUS);
 		return -EIO;
 	}
 	pfe_cfg->cbus_base = res->start;
@@ -135,14 +139,14 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 
 #ifdef PFE_CFG_PFE_MASTER
 	/* S32G Main GPRs */
-	res = platform_get_resource(priv->pdev, IORESOURCE_MEM, 1);
+	res = platform_get_resource_byname(priv->pdev, IORESOURCE_MEM, PFE_RES_NAME_S32G_MAIN_GPR);
 	if(unlikely(!res)) {
-		dev_err(dev, "Cannot find syscon resource, aborting\n");
+		dev_err(dev, "Cannot find syscon resource by '%s', aborting\n", PFE_RES_NAME_S32G_MAIN_GPR);
 		return -EIO;
 	}
 	priv->syscon.start = res->start;
 	priv->syscon.end = res->end;
-	dev_dbg(dev, "Syscon addr 0x%llx size 0x%llx\n", priv->syscon.start, priv->syscon.end - priv->syscon.start);
+	dev_dbg(dev, "Syscon addr 0x%llx size 0x%llx\n", priv->syscon.start, priv->syscon.end - priv->syscon.start + 1);
 
 	/* Firmware CLASS name */
 	if (of_find_property(np, "fsl,fw-class-name", NULL))
@@ -278,8 +282,12 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 			netif_cfg->tx_inject = true;
 			netif_cfg->aux = false;
 		}
+
+		if (of_find_property(child, "fsl,pfeng-logif-mode-mgmt-only", NULL))
+				netif_cfg->only_mgmt = true;
+
 		dev_info(dev, "logif(%s) mode: %s,%s", netif_cfg->name,
-			netif_cfg->aux ? "aux" : "std",
+			netif_cfg->aux ? "aux" : netif_cfg->only_mgmt ? "mgmt" : "std",
 			netif_cfg->tx_inject ? "tx-inject " : "tx-class");
 
 		if (!netif_cfg->aux) {
@@ -314,9 +322,9 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 				netif_cfg->emac_router = true;
 #endif /* PFE_CFG_PFE_MASTER */
 
-			netif_cfg->emac = id;
+			netif_cfg->emac_id = id;
 			emac_list |= 1 << id;
-			dev_info(dev, "logif(%s) EMAC: %u", netif_cfg->name, netif_cfg->emac);
+			dev_info(dev, "logif(%s) EMAC: %u", netif_cfg->name, netif_cfg->emac_id);
 		}
 
 		/* HIF phandle(s) */
@@ -353,7 +361,7 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 		netif_cfg->dn = of_node_get(child);
 #ifdef PFE_CFG_PFE_MASTER
 		{
-			struct pfeng_emac *emac = &priv->emac[netif_cfg->emac];
+			struct pfeng_emac *emac = &priv->emac[netif_cfg->emac_id];
 			__maybe_unused struct device_node *phy_handle;
 
 			/* fixed-link check */
@@ -364,13 +372,13 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 #if !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
 			if (pfeng_manged_inband(child)) {
 				emac->link_an = MLO_AN_INBAND;
-				dev_info(dev, "SGMII AN enabled on EMAC%d\n", netif_cfg->emac);
+				dev_info(dev, "SGMII AN enabled on EMAC%d\n", netif_cfg->emac_id);
 			}
 
 			emac->phyless = false;
 			phy_handle = of_parse_phandle(child, "phy-handle", 0);
 			if (emac->link_an == MLO_AN_INBAND && !phy_handle) {
-				dev_info(dev, "EMAC%d PHY less SGMII\n", netif_cfg->emac);
+				dev_info(dev, "EMAC%d PHY less SGMII\n", netif_cfg->emac_id);
 				emac->phyless = true;
 			}
 #endif /* PFENG_CFG_LINUX_NO_SERDES_SUPPORT */

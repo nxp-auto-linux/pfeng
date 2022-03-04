@@ -82,7 +82,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 	bd_cmd = (fpp_l2_bd_cmd_t *)(msg->msg_cmd.payload);
 
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(fpp_l2_bd_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_l2_bd_cmd_t));
 
 	ret = pfe_if_db_lock(&session_id);
 
@@ -98,8 +98,8 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 		{
 			/*	Check input values. We need to translate integer to pfe_ct_l2br_action_t therefore
 			 	some validation needs to be performed first. */
-			if ((bd_cmd->ucast_hit > 3) || (bd_cmd->ucast_miss > 3)
-					|| (bd_cmd->mcast_hit > 3) || (bd_cmd->mcast_miss > 3))
+			if ((bd_cmd->ucast_hit > 3U) || (bd_cmd->ucast_miss > 3U)
+					|| (bd_cmd->mcast_hit > 3U) || (bd_cmd->mcast_miss > 3U))
 			{
 				NXP_LOG_ERROR("Unsupported action code received\n");
 				*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
@@ -142,8 +142,8 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 		{
 			/*	Check input values. We need to translate integer to pfe_ct_l2br_action_t therefore
 				some validation needs to be performed first. */
-			if ((bd_cmd->ucast_hit > 3) || (bd_cmd->ucast_miss > 3)
-					|| (bd_cmd->mcast_hit > 3) || (bd_cmd->mcast_miss > 3))
+			if ((bd_cmd->ucast_hit > 3U) || (bd_cmd->ucast_miss > 3U)
+					|| (bd_cmd->mcast_hit > 3U) || (bd_cmd->mcast_miss > 3U))
 			{
 				NXP_LOG_ERROR("Unsupported action code received\n");
 				*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
@@ -184,7 +184,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 			 	are interfaces, which are known to the internal FCI database. Note that FCI API is using
 			 	integer indexes to identify the physical interfaces but rest of SW works with pfe_phy_if_t
 			 	instances. */
-			for (ii=0U; ((ii < (8U * sizeof(bd_cmd->if_list))) && (ii <= PFE_PHY_IF_ID_MAX)); ii++)
+			for (ii=0U; ((ii < (8U * sizeof(bd_cmd->if_list))) && (ii <= (uint32_t)PFE_PHY_IF_ID_MAX)); ii++)
 			{
 				/*	Check if interface shall be added or removed */
 				if (0U != (oal_ntohl(bd_cmd->if_list) & (1U << ii)))
@@ -469,7 +469,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 	br_ent_cmd = (fpp_l2_static_ent_cmd_t *)(msg->msg_cmd.payload);
 
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(fpp_l2_static_ent_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_l2_static_ent_cmd_t));
 
 	switch (br_ent_cmd->action)
 	{
@@ -484,7 +484,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 				return EOK;
 			}
 
-			memcpy(mac, br_ent_cmd->mac, sizeof(pfe_mac_addr_t));
+			(void)memcpy(mac, br_ent_cmd->mac, sizeof(pfe_mac_addr_t));
 			ret = pfe_l2br_static_entry_create(context->l2_bridge, oal_ntohs(br_ent_cmd->vlan), mac, oal_ntohl(br_ent_cmd->forward_list));
 			if (EOK == ret) {
 				NXP_LOG_DEBUG("Static entry %02x:%02x:%02x:%02x:%02x:%02x added to vlan %d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], oal_ntohs(br_ent_cmd->vlan));
@@ -633,7 +633,7 @@ uint32_t fci_l2br_static_entry_get_valid_fw_list(void)
 		return 0;
 	}
 
-	for (ii=0U; ((ii < (8U * sizeof(uint32_t))) && (ii <= PFE_PHY_IF_ID_MAX)); ii++)
+	for (ii=0U; ((ii < (8U * sizeof(uint32_t))) && (ii <= (uint32_t)PFE_PHY_IF_ID_MAX)); ii++)
 	{
 			/*	Only add interfaces which are known to platform interface database */
 			if_db_entry = NULL;
@@ -645,7 +645,7 @@ uint32_t fci_l2br_static_entry_get_valid_fw_list(void)
 			}
 			if (NULL != if_db_entry)
 			{
-				valid_if_list |= 1U << ii;
+				valid_if_list |= ((uint32_t)1U << ii);
 			}
 	}
 

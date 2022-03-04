@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -102,7 +102,7 @@ void pfe_rtable_entry_set_ttl_decrement(pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_remove_ttl_decrement(pfe_rtable_entry_t *entry);
 pfe_rtable_entry_t *pfe_rtable_entry_create(void);
 void pfe_rtable_entry_free(pfe_rtable_entry_t *entry);
-errno_t pfe_rtable_entry_set_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple);
+errno_t pfe_rtable_entry_set_5t(pfe_rtable_entry_t *entry, const pfe_5_tuple_t *tuple);
 errno_t pfe_rtable_entry_set_sip(pfe_rtable_entry_t *entry, const pfe_ip_addr_t *ip_addr);
 void pfe_rtable_entry_get_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr);
 errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, const pfe_ip_addr_t *output_sip);
@@ -111,7 +111,7 @@ void pfe_rtable_entry_get_dip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr)
 errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, const pfe_ip_addr_t *output_dip);
 void pfe_rtable_entry_set_sport(pfe_rtable_entry_t *entry, uint16_t sport);
 uint16_t pfe_rtable_entry_get_sport(const pfe_rtable_entry_t *entry);
-void pfe_rtable_entry_set_out_sport(pfe_rtable_entry_t *entry, uint16_t output_sport);
+void pfe_rtable_entry_set_out_sport(const pfe_rtable_entry_t *entry, uint16_t output_sport);
 void pfe_rtable_entry_set_dport(pfe_rtable_entry_t *entry, uint16_t dport);
 uint16_t pfe_rtable_entry_get_dport(const pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_set_out_dport(pfe_rtable_entry_t *entry, uint16_t output_dport);
@@ -138,5 +138,6 @@ errno_t pfe_rtable_entry_get_id5t(const pfe_rtable_entry_t *entry, uint32_t *id5
 errno_t pfe_rtable_entry_set_dstif_id(pfe_rtable_entry_t *entry, pfe_ct_phy_if_id_t if_id);
 
 void pfe_rtable_do_timeouts(pfe_rtable_t *rtable);
+uint32_t pfe_rtable_get_text_statistics(pfe_rtable_t *rtable, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 
 #endif /* PUBLIC_PFE_RTABLE_H_ */

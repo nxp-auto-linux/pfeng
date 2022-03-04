@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -119,9 +119,9 @@ enum
  * 			If FALSE the TX confirmation will be executed with every pfe_hif_drv_client_xmit call.
  */
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
-    #define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		TRUE
+	#define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		TRUE
 #else
-    #define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		FALSE
+	#define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		FALSE
 #endif
 
 /**
@@ -131,9 +131,9 @@ enum
  * 			from within the pfe_hif_drv_client_xmit call.
  */
 #if defined(PFE_CFG_TARGET_OS_AUTOSAR)
-    #define	HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION	TRUE
+	#define	HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION	TRUE
 #else
-    #define	HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION	FALSE
+	#define	HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION	FALSE
 #endif
 
 /**
@@ -206,6 +206,7 @@ enum
 	EVENT_RX_PKT_IND,		/* Event to indicate that, packet recieved for client */
 	EVENT_TXDONE_IND,		/* Event to indicate that, packet tx done for client */
 	EVENT_RX_OOB,			/* Out of RX buffers */
+	EVENT_ETS,				/* Indicates that new Egress Time Stamp is available */
 	HIF_EVENT_MAX
 };
 
@@ -236,6 +237,15 @@ typedef struct pfe_hif_drv_tag pfe_hif_drv_t;
 typedef struct pfe_hif_pkt_tag pfe_hif_pkt_t;
 typedef errno_t (* pfe_hif_drv_client_event_handler)(pfe_hif_drv_client_t *client, void *arg, uint32_t event, uint32_t qno);
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+/*  Metadata prepended to every TX buffer. Its size shall be multiple of 4. */
+typedef struct __attribute__((packed, aligned(4)))
+{
+	boolean bDoTxIndication;
+	boolean bDoTS; /* Used in pfe_hif_drv to request timestamp on demand */
+} trTxMeta;
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 pfe_hif_drv_t *pfe_hif_drv_create(pfe_hif_chnl_t *channel);
 void pfe_hif_drv_destroy(pfe_hif_drv_t *hif_drv);
 errno_t pfe_hif_drv_init(pfe_hif_drv_t *hif_drv);
@@ -249,25 +259,32 @@ void pfe_hif_drv_show_ring_status(pfe_hif_drv_t *hif_drv, bool_t rx, bool_t tx);
 
 /*	IHC API */
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-pfe_hif_drv_client_t * pfe_hif_drv_ihc_client_register(pfe_hif_drv_t *hif_drv, pfe_hif_drv_client_event_handler handler, void *priv);
+pfe_hif_drv_client_t * pfe_hif_drv_ihc_client_register(
+		pfe_hif_drv_t *hif_drv, pfe_hif_drv_client_event_handler handler, void *priv);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 /*	AUX API */
 #ifdef PFE_CFG_MC_HIF
-pfe_hif_drv_client_t * pfe_hif_drv_aux_client_register(pfe_hif_drv_t *hif_drv, uint32_t txq_num, uint32_t rxq_num,
-		pfe_hif_drv_client_event_handler handler, void *priv);
+pfe_hif_drv_client_t * pfe_hif_drv_aux_client_register(
+		pfe_hif_drv_t *hif_drv, uint32_t txq_num, uint32_t rxq_num, uint32_t txq_depth,
+			uint32_t rxq_depth, pfe_hif_drv_client_event_handler handler, void *priv);
 #endif /*PFE_CFG_MC_HIF*/
 
 
 /*	HIF client */
-pfe_hif_drv_client_t * pfe_hif_drv_client_register(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t phy_if_id, uint32_t txq_num, uint32_t rxq_num,
-		uint32_t txq_depth, uint32_t rxq_depth, pfe_hif_drv_client_event_handler handler, void *priv);
+pfe_hif_drv_client_t * pfe_hif_drv_client_register(
+		pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t phy_if_id, uint32_t txq_num,
+			uint32_t rxq_num, uint32_t txq_depth, uint32_t rxq_depth, bool_t promisc,
+				pfe_hif_drv_client_event_handler handler, void *priv);
 errno_t pfe_hif_drv_client_set_inject_if(pfe_hif_drv_client_t *client, pfe_ct_phy_if_id_t phy_if_id);
 pfe_hif_drv_t *pfe_hif_drv_client_get_drv(const pfe_hif_drv_client_t *client);
 void *pfe_hif_drv_client_get_priv(const pfe_hif_drv_client_t *client);
 void pfe_hif_drv_client_unregister(pfe_hif_drv_client_t *client);
 void pfe_hif_drv_client_rx_done(const pfe_hif_drv_client_t *client);
 void pfe_hif_drv_client_tx_done(const pfe_hif_drv_client_t *client);
+#if defined(PFE_CFG_TARGET_OS_AUTOSAR) && defined(PFE_CFG_IEEE1588_SUPPORT)
+void pfe_hif_drv_client_ptp_ts_db_tick_iteration(pfe_hif_drv_client_t *client);
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR && PFE_CFG_IEEE1588_SUPPORT */
 
 /*	Packet transmission */
 errno_t pfe_hif_drv_client_xmit_pkt(pfe_hif_drv_client_t *client, uint32_t queue, void *data_pa, void *data_va, uint32_t len, void *ref_ptr);

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -83,6 +83,8 @@ struct pfe_rtable_tag
 	pfe_l2br_t *bridge; /* Bridge pointer */
 	pfe_class_t *class;						/*	Classifier */
 	uint32_t active_entries_count;			/*  Counter of active RTable entries, needed for enabling/disabling of RTable lookup */
+	uint32_t conntrack_stats_table_addr;
+	uint16_t conntrack_stats_table_size;
 };
 
 /**
@@ -157,6 +159,8 @@ enum pfe_rtable_worker_signals
 };
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
 
+static uint8_t stats_index[PFE_CFG_CONN_STATS_SIZE + 1];
+
 static uint32_t pfe_get_crc32_be(uint32_t crc, uint8_t *data, uint16_t len);
 static void pfe_rtable_invalidate(pfe_rtable_t *rtable);
 static uint32_t pfe_rtable_entry_get_hash(pfe_rtable_entry_t *entry, pfe_rtable_hash_type_t htype, uint32_t hash_mask);
@@ -168,12 +172,57 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, const pfe_rtable_criterion_arg_t *arg, pfe_rtable_entry_t *entry);
 static bool_t pfe_rtable_entry_is_in_table(const pfe_rtable_entry_t *entry);
 static pfe_rtable_entry_t *pfe_rtable_get_by_phys_entry_va(const pfe_rtable_t *rtable, const pfe_ct_rtable_entry_t *phys_entry_va);
-
+static uint32_t pfe_rtable_create_stats_table(pfe_class_t *class, uint16_t conntrack_count);
+static uint8_t pfe_rtable_get_free_stats_index(const pfe_rtable_t *rtable);
+static void pfe_rtable_free_stats_index(uint8_t index);
+static errno_t pfe_rtable_destroy_stats_table(pfe_class_t *class, uint32_t table_address);
+errno_t pfe_rtable_clear_stats(const pfe_rtable_t *rtable, uint8_t conntrack_index);
 #if !defined(PFE_CFG_TARGET_OS_AUTOSAR)
 	static void *rtable_worker_func(void *arg);
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
 
 #define CRCPOLY_BE 0x04C11DB7U
+
+/**
+ * @brief		Get the next free index in the conntrack stats table
+ * @return		The index
+ */
+static uint8_t pfe_rtable_get_free_stats_index(const pfe_rtable_t *rtable)
+{
+	/* Index 0 is the default one. All conntracks that have no space
+	   in the table will be counted on default index */
+	uint8_t index = 1;
+
+	while (index < rtable->conntrack_stats_table_size)
+	{
+		if (stats_index[index] == 0U)
+		{
+			stats_index[index] = 1U;
+			break;
+		}
+		index ++;
+	}
+
+	/* conntrack outside stats range. */
+	if (index == rtable->conntrack_stats_table_size)
+	{
+		index = 0;
+	}
+
+	return index;
+}
+
+/**
+ * @brief		Free the index in the stats table
+ * @param[in]		Index of the table
+ */
+static void pfe_rtable_free_stats_index(uint8_t index)
+{
+	if (index < PFE_CFG_CONN_STATS_SIZE + 1)
+	{
+		stats_index[index] = 0U;
+	}
+}
 
 static pfe_rtable_entry_t *pfe_rtable_get_by_phys_entry_va(const pfe_rtable_t *rtable, const pfe_ct_rtable_entry_t *phys_entry_va)
 {
@@ -226,12 +275,12 @@ static uint32_t pfe_get_crc32_be(uint32_t crc, uint8_t *data, uint16_t len)
 	{
 		tempcrc ^= ((uint32_t)(*tempdata) << 24U);
         tempdata++;
-        
+
 		for (i = 0U; i < 8U; i++)
 		{
 			tempcrc = (tempcrc << 1U) ^ ((0U != (tempcrc & 0x80000000U)) ? CRCPOLY_BE : 0U);
 		}
-        
+
         length--;
 	}
 
@@ -295,7 +344,7 @@ static uint32_t pfe_rtable_entry_get_hash(pfe_rtable_entry_t *entry, pfe_rtable_
 	uint32_t crc = 0xffffffffU;
 	uint32_t sport = 0U;
 	uint32_t ip_addr;
-    
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
@@ -643,7 +692,7 @@ void pfe_rtable_entry_free(pfe_rtable_entry_t *entry)
  * @retval		EOK Success
  * @retval		EINVAL Invalid argument
  */
-errno_t pfe_rtable_entry_set_5t(pfe_rtable_entry_t *entry, pfe_5_tuple_t *tuple)
+errno_t pfe_rtable_entry_set_5t(pfe_rtable_entry_t *entry, const pfe_5_tuple_t *tuple)
 {
 	errno_t ret;
 
@@ -933,7 +982,7 @@ errno_t pfe_rtable_entry_set_dstif_id(pfe_rtable_entry_t *entry, pfe_ct_phy_if_i
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */    
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	if (if_id > PFE_PHY_IF_ID_MAX)
 	{
 		NXP_LOG_WARNING("Physical interface ID is invalid: 0x%x\n", if_id);
@@ -941,7 +990,7 @@ errno_t pfe_rtable_entry_set_dstif_id(pfe_rtable_entry_t *entry, pfe_ct_phy_if_i
 	}
 
 	entry->phys_entry->e_phy_if = if_id;
-    return EOK;
+	return EOK;
 }
 /**
  * @brief		Set destination interface
@@ -1058,7 +1107,7 @@ errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, const pfe_ip_add
  * @retval		EOK Success
  * @retval		EINVAL Invalid argument
  */
-void pfe_rtable_entry_set_out_sport(pfe_rtable_entry_t *entry, uint16_t output_sport)
+void pfe_rtable_entry_set_out_sport(const pfe_rtable_entry_t *entry, uint16_t output_sport)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
@@ -1178,7 +1227,7 @@ void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan, boo
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	entry->phys_entry->args.vlan = oal_htons(vlan);
-	
+
 	if (replace)
 	{
 		entry->phys_entry->actions |= oal_htonl(RT_ACT_MOD_VLAN_HDR);
@@ -1202,7 +1251,7 @@ void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan, boo
 uint16_t pfe_rtable_entry_get_out_vlan(const pfe_rtable_entry_t *entry)
 {
     uint16_t ret = 0U;
-    
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
@@ -1212,7 +1261,7 @@ uint16_t pfe_rtable_entry_get_out_vlan(const pfe_rtable_entry_t *entry)
     {
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-        if (0U != (oal_ntohl(entry->phys_entry->actions) & (uint32_t)(RT_ACT_ADD_VLAN_HDR | RT_ACT_MOD_VLAN_HDR)))
+        if (0U != (oal_ntohl(entry->phys_entry->actions) & ((uint32_t)RT_ACT_ADD_VLAN_HDR | (uint32_t)RT_ACT_MOD_VLAN_HDR)))
         {
             ret = oal_ntohs(entry->phys_entry->args.vlan);
         }
@@ -1291,7 +1340,7 @@ void pfe_rtable_entry_set_id5t(pfe_rtable_entry_t *entry, uint32_t id5t)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	entry->phys_entry->id5t = oal_htonl(id5t);   
+	entry->phys_entry->id5t = oal_htonl(id5t);
 }
 
 errno_t pfe_rtable_entry_get_id5t(const pfe_rtable_entry_t *entry, uint32_t *id5t)
@@ -1303,7 +1352,7 @@ errno_t pfe_rtable_entry_get_id5t(const pfe_rtable_entry_t *entry, uint32_t *id5
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
- 
+
     *id5t = oal_ntohl(entry->phys_entry->id5t);
     return EOK;
 }
@@ -1638,19 +1687,19 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 
 	/*	Protect table accesses */
 	if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
-    {
-        NXP_LOG_DEBUG("Mutex lock failed\n");
-    }
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
 
 	/*	Check for duplicates */
 	if (TRUE == pfe_rtable_entry_is_duplicate(rtable, entry))
 	{
 		NXP_LOG_INFO("Entry already added\n");
-        
-        if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
-        {
-            NXP_LOG_DEBUG("Mutex unlock failed\n");
-        }
+
+		if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
 
 		return EEXIST;
 	}
@@ -1658,9 +1707,10 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 	hash = pfe_rtable_entry_get_hash(entry, hash_type, (rtable->htable_size - 1U));
 	entry->temp_phys_entry->flags = RT_FL_NONE;
 	entry->temp_phys_entry->status &= ~(uint8_t)RT_STATUS_ACTIVE;
+	entry->temp_phys_entry->conntrack_stats_index = oal_htons((uint16_t)pfe_rtable_get_free_stats_index(rtable));
 
 	/* Add vlan stats index into the phy_entry structure */
-	if (0U != (oal_ntohl(entry->temp_phys_entry->actions) & (uint32_t)(RT_ACT_ADD_VLAN_HDR | RT_ACT_MOD_VLAN_HDR)))
+	if (0U != (oal_ntohl(entry->temp_phys_entry->actions) & ((uint32_t)RT_ACT_ADD_VLAN_HDR | (uint32_t)RT_ACT_MOD_VLAN_HDR)))
 	{
 		if (NULL != rtable->bridge)
 		{
@@ -1696,7 +1746,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 
 			return ENOENT;
 		}
-		NXP_LOG_WARNING("Routing table hash [%d] collision detected. New entry will be added to linked list leading to performance penalty during lookup.\n", hash);
+		NXP_LOG_WARNING("Routing table hash [%u] collision detected. New entry will be added to linked list leading to performance penalty during lookup.\n", (uint_t)hash);
 	}
 
 	/*	Make sure the new entry is invalid */
@@ -1733,7 +1783,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 		last_phys_entry_va->flags = RT_FL_NONE;
 
 		/*	Wait some time due to sync with firmware */
-		oal_time_usleep(1000U);
+		oal_time_usleep(10U);
 #endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
 
 		/*	Update the next pointer */
@@ -1779,14 +1829,14 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 
 	entry->rtable = rtable;
 
-    if (0 == rtable->active_entries_count)
+    if (0U == rtable->active_entries_count)
     {
         NXP_LOG_INFO("RTable first entry added, enable hardware RTable lookup\n");
         pfe_class_rtable_lookup_enable(rtable->class);
     }
 
     rtable->active_entries_count++;
-    NXP_LOG_INFO("RTable active_entries_count: %d\n", rtable->active_entries_count);
+    NXP_LOG_INFO("RTable active_entries_count: %u\n", (uint_t)(rtable->active_entries_count));
 
     if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
     {
@@ -1841,12 +1891,12 @@ errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 
 	ret = pfe_rtable_del_entry_nolock(rtable, entry);
 
-	if (0 == rtable->active_entries_count)
+	if (0U == rtable->active_entries_count)
     {
         NXP_LOG_INFO("RTable last entry removed, disable hardware RTable lookup\n");
         pfe_class_rtable_lookup_disable(rtable->class);
 	}
-    
+
     if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
     {
         NXP_LOG_DEBUG("Mutex unlock failed\n");
@@ -1886,6 +1936,11 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 	{
 		/*	Invalidate the found entry. This will disable the whole chain. */
 		entry->phys_entry->flags = RT_FL_NONE;
+		if ( entry->temp_phys_entry->conntrack_stats_index != 0)
+		{
+			pfe_rtable_clear_stats(rtable, oal_ntohs(entry->temp_phys_entry->conntrack_stats_index));
+			pfe_rtable_free_stats_index(oal_ntohs(entry->temp_phys_entry->conntrack_stats_index));
+		}
 
 		if (NULL != entry->next)
 		{
@@ -1899,7 +1954,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 			hal_wmb();
 
 			/*	Wait some time due to sync with firmware */
-			oal_time_usleep(1000U);
+			oal_time_usleep(10U);
 #endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
 
 			/*	Replace hash table entry with next (pool) entry */
@@ -1909,7 +1964,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 			(void)memset(entry->next->phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
 			if (TRUE == pfe_rtable_phys_entry_is_pool(rtable, entry->next->phys_entry))
 			{
-                ret = fifo_put(rtable->pool_va, entry->next->phys_entry);
+				ret = fifo_put(rtable->pool_va, entry->next->phys_entry);
 				if (EOK != ret)
 				{
 					NXP_LOG_ERROR("Couldn't return routing table entry to the pool\n");
@@ -1922,7 +1977,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 
 			/*	Next entry now points to the copied physical one */
 			entry->next->phys_entry = entry->phys_entry;
-            next_phys_entry_pa = pfe_rtable_phys_entry_get_pa(rtable, entry->next->phys_entry);
+			next_phys_entry_pa = pfe_rtable_phys_entry_get_pa(rtable, entry->next->phys_entry);
 			entry->next->phys_entry->rt_orig = oal_htonl((uint32_t)((addr_t)next_phys_entry_pa & 0xffffffffU));
 
 			/*	Remove entry from the list of active entries and ensure consistency
@@ -1955,7 +2010,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 			hal_wmb();
 
 			/*	Wait some time due to sync with firmware */
-			oal_time_usleep(1000);
+			oal_time_usleep(10U);
 
 			/*	Zero-out the entry */
 			(void)memset(entry->phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
@@ -1985,7 +2040,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 		entry->phys_entry->flags = RT_FL_NONE;
 
 		/*	Wait some time to sync with firmware */
-		oal_time_usleep(1000U);
+		oal_time_usleep(10U);
 #endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
 
 		/*	Bypass the found entry */
@@ -2001,7 +2056,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 
 		/*	Clear the found entry and return it back to the pool */
 		(void)memset(entry->phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
-        ret = fifo_put(rtable->pool_va, entry->phys_entry);
+		ret = fifo_put(rtable->pool_va, entry->phys_entry);
 		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("Couldn't return routing table entry to the pool\n");
@@ -2034,10 +2089,10 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 
 	entry->rtable = NULL;
 
-	if (rtable->active_entries_count > 0)
+	if (rtable->active_entries_count > 0U)
 	{
-		rtable->active_entries_count -= 1;
-		NXP_LOG_INFO("RTable active_entries_count: %d\n", rtable->active_entries_count);
+		rtable->active_entries_count -= 1U;
+		NXP_LOG_INFO("RTable active_entries_count: %u\n", (uint_t)(rtable->active_entries_count));
 	}
 	else
 	{
@@ -2102,7 +2157,7 @@ void pfe_rtable_do_timeouts(pfe_rtable_t *rtable)
 			{
 				entry->curr_timeout = 0;
 			}
-			
+
 			/*	Entry is not active */
 			if (0U == entry->curr_timeout)
 			{
@@ -2196,6 +2251,95 @@ static void *rtable_worker_func(void *arg)
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
 
 /**
+ * @brief		Create the conntrack stats table
+ * @details		Create and allocate in dmem the space for stats table that
+ * 				include all configured conntracks
+ * @param[in]   Class instance
+ * @param[in]	conntrack_count Number of configured vlan
+ * @return		DMEM address of the table
+ */
+static uint32_t pfe_rtable_create_stats_table(pfe_class_t *class, uint16_t conntrack_count)
+{
+	addr_t addr;
+	uint32_t size;
+	pfe_ct_conntrack_statistics_t temp = {0};
+	errno_t res;
+	pfe_ct_class_mmap_t mmap;
+
+	/* Calculate needed size */
+	size = (uint32_t)((uint32_t)conntrack_count * sizeof(pfe_ct_conntrack_stats_t));
+	/* Allocate DMEM */
+	addr = pfe_class_dmem_heap_alloc(class, size);
+	if(0U == addr)
+	{
+		NXP_LOG_ERROR("Not enough DMEM memory\n");
+		return 0U;
+	}
+
+	res = pfe_class_get_mmap(class, 0, &mmap);
+
+	if (EOK != res)
+	{
+		NXP_LOG_ERROR("Cannot get class memory map\n");
+		return 0U;
+	}
+
+	/* Write the table header */
+	temp.conntrack_count = oal_htons(conntrack_count);
+	temp.stats_table = oal_htonl(addr);
+	/*It is safe to write the table pointer because PEs are gracefully stopped in the write function
+	* and the written config is read by the firmware */
+	res = pfe_class_write_dmem(class, -1, oal_ntohl(mmap.conntrack_statistics), (void *)&temp, sizeof(pfe_ct_conntrack_statistics_t));
+	if(EOK != res)
+	{
+		NXP_LOG_ERROR("Cannot write to DMEM\n");
+		pfe_class_dmem_heap_free(class, addr);
+		addr = 0U;
+	}
+	/* Return the DMEM address */
+	return addr;
+}
+
+/**
+ * @brief		Destroy the conntrack stats table
+ * @details		Free from dmem the space filled by the table
+ * @param[in]	table_address Conntrack stats table address
+ * @param[in]   class instance
+ */
+static errno_t pfe_rtable_destroy_stats_table(pfe_class_t *class, uint32_t table_address)
+{
+	pfe_ct_conntrack_statistics_t temp = {0};
+	pfe_ct_class_mmap_t mmap;
+	errno_t res = EOK;
+
+	if (0U == table_address)
+	{
+		return EOK;
+	}
+
+	res = pfe_class_get_mmap(class, 0, &mmap);
+
+	if (EOK != res)
+	{
+		NXP_LOG_ERROR("Cannot get class memory map\n");
+		return res;
+	}
+
+        /*It is safe to write the table pointer because PEs are gracefully stopped in the write function
+        * and the written config is read by the firmware */
+	res = pfe_class_write_dmem(class, -1, oal_ntohl(mmap.conntrack_statistics), (void *)&temp, sizeof(pfe_ct_conntrack_statistics_t));
+	if(EOK != res)
+	{
+		NXP_LOG_ERROR("Cannot write to DMEM\n");
+		return res;
+	}
+
+	pfe_class_dmem_heap_free(class, table_address);
+
+	return EOK;
+}
+
+/**
  * @brief		Create routing table instance
  * @details		Creates and initializes routing table at given memory location.
  * @param[in]	class The classifier instance implementing the routing
@@ -2242,97 +2386,103 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 		else
 		{
 			if (EOK == oal_mutex_init(rtable->lock))
-            {
-                /*	Store properties */
-                rtable->htable_base_va = htable_base_va;
-                rtable->htable_base_pa = (addr_t)oal_mm_virt_to_phys_contig((void *)htable_base_va);
-                rtable->htable_size = htable_size;
-                rtable->htable_end_va = rtable->htable_base_va + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1U;
-                rtable->htable_end_pa = rtable->htable_base_pa + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1U;
+			{
+				/*	Store properties */
+				rtable->htable_base_va = htable_base_va;
+				rtable->htable_base_pa = (addr_t)oal_mm_virt_to_phys_contig((void *)htable_base_va);
+				rtable->htable_size = htable_size;
+				rtable->htable_end_va = rtable->htable_base_va + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1U;
+				rtable->htable_end_pa = rtable->htable_base_pa + (rtable->htable_size * sizeof(pfe_ct_rtable_entry_t)) - 1U;
 
-                rtable->pool_base_va = pool_base_va;
-                rtable->pool_base_pa = rtable->htable_base_pa + (pool_base_va - htable_base_va);
-                rtable->pool_size = pool_size;
-                rtable->pool_end_va = rtable->pool_base_va + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1U;
-                rtable->pool_end_pa = rtable->pool_base_pa + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1U;
-                rtable->bridge = bridge;
-                rtable->class = class;
-                rtable->active_entries_count = 0;
+				rtable->pool_base_va = pool_base_va;
+				rtable->pool_base_pa = rtable->htable_base_pa + (pool_base_va - htable_base_va);
+				rtable->pool_size = pool_size;
+				rtable->pool_end_va = rtable->pool_base_va + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1U;
+				rtable->pool_end_pa = rtable->pool_base_pa + (rtable->pool_size * sizeof(pfe_ct_rtable_entry_t)) - 1U;
+				rtable->bridge = bridge;
+				rtable->class = class;
+				rtable->active_entries_count = 0;
 
-                if ((NULL_ADDR == rtable->htable_base_va) || (NULL_ADDR == rtable->pool_base_va))
-                {
-                    NXP_LOG_ERROR("Can't map the table memory\n");
-                    goto free_and_fail;
-                }
-                else
-                {
-                    /*	Pre-compute conversion offsets */
-                    rtable->htable_va_pa_offset = rtable->htable_base_va - rtable->htable_base_pa;
-                    rtable->pool_va_pa_offset = rtable->pool_base_va - rtable->pool_base_pa;
-                }
+				rtable->conntrack_stats_table_size = PFE_CFG_CONN_STATS_SIZE;
 
-                /*	Configure the classifier */
-                if (EOK != pfe_class_set_rtable(class, rtable->htable_base_pa, rtable->htable_size, sizeof(pfe_ct_rtable_entry_t)))
-                {
-                    NXP_LOG_ERROR("Unable to set routing table address\n");
-                    goto free_and_fail;
-                }
+				(void)memset(&stats_index, 0, sizeof(stats_index));
 
-                /*	Initialize the table */
-                pfe_rtable_invalidate(rtable);
+				rtable->conntrack_stats_table_addr = pfe_rtable_create_stats_table(class ,PFE_CFG_CONN_STATS_SIZE + 1);
 
-                /*	Create pool. No protection needed. */
-                rtable->pool_va = fifo_create(rtable->pool_size);
+				if ((NULL_ADDR == rtable->htable_base_va) || (NULL_ADDR == rtable->pool_base_va))
+				{
+					NXP_LOG_ERROR("Can't map the table memory\n");
+					goto free_and_fail;
+				}
+				else
+				{
+					/* Pre-compute conversion offsets */
+					rtable->htable_va_pa_offset = rtable->htable_base_va - rtable->htable_base_pa;
+					rtable->pool_va_pa_offset = rtable->pool_base_va - rtable->pool_base_pa;
+				}
 
-                if (NULL == rtable->pool_va)
-                {
-                    NXP_LOG_ERROR("Can't create pool\n");
-                    goto free_and_fail;
-                }
+				/* Configure the classifier */
+				if (EOK != pfe_class_set_rtable(class, rtable->htable_base_pa, rtable->htable_size, sizeof(pfe_ct_rtable_entry_t)))
+				{
+					NXP_LOG_ERROR("Unable to set routing table address\n");
+					goto free_and_fail;
+				}
 
-                /*	Fill the pool */
-                table_va = (pfe_ct_rtable_entry_t *)rtable->pool_base_va;
+				/* Initialize the table */
+				pfe_rtable_invalidate(rtable);
 
-                for (ii=0U; ii<rtable->pool_size; ii++)
-                {
-                    ret = fifo_put(rtable->pool_va, (void *)&table_va[ii]);
-                    if (EOK != ret)
-                    {
-                        NXP_LOG_ERROR("Pool filling failed (VA pool)\n");
-                        goto free_and_fail;
-                    }
-                }
+				/* Create pool. No protection needed. */
+				rtable->pool_va = fifo_create(rtable->pool_size);
 
-                /*	Create list */
-                LLIST_Init(&rtable->active_entries);
+				if (NULL == rtable->pool_va)
+				{
+					NXP_LOG_ERROR("Can't create pool\n");
+					goto free_and_fail;
+				}
 
-        #if !defined(PFE_CFG_TARGET_OS_AUTOSAR)
-                /*	Create mbox */
-                rtable->mbox = oal_mbox_create();
-                if (NULL == rtable->mbox)
-                {
-                    NXP_LOG_ERROR("Mbox creation failed\n");
-                    goto free_and_fail;
-                }
+				/*  Fill the pool */
+				table_va = (pfe_ct_rtable_entry_t *)rtable->pool_base_va;
 
-                /*	Create worker thread */
-                rtable->worker = oal_thread_create(&rtable_worker_func, rtable, "rtable worker", 0);
-                if (NULL == rtable->worker)
-                {
-                    NXP_LOG_ERROR("Couldn't start worker thread\n");
-                    goto free_and_fail;
-                }
-                else
-                {
-                    if (EOK != oal_mbox_attach_timer(rtable->mbox, (uint32_t)PFE_RTABLE_CFG_TICK_PERIOD_SEC * 1000U, SIG_TIMER_TICK))
-                    {
-                        NXP_LOG_ERROR("Unable to attach timer\n");
-                        goto free_and_fail;
-                    }
-                }
-        #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
-            }
-        }
+				for (ii=0U; ii<rtable->pool_size; ii++)
+				{
+					ret = fifo_put(rtable->pool_va, (void *)&table_va[ii]);
+					if (EOK != ret)
+					{
+						NXP_LOG_ERROR("Pool filling failed (VA pool)\n");
+						goto free_and_fail;
+					}
+				}
+
+				/* Create list */
+				LLIST_Init(&rtable->active_entries);
+
+				#if !defined(PFE_CFG_TARGET_OS_AUTOSAR)
+				/* Create mbox */
+				rtable->mbox = oal_mbox_create();
+				if (NULL == rtable->mbox)
+				{
+					NXP_LOG_ERROR("Mbox creation failed\n");
+					goto free_and_fail;
+				}
+
+				/* Create worker thread */
+				rtable->worker = oal_thread_create(&rtable_worker_func, rtable, "rtable worker", 0);
+				if (NULL == rtable->worker)
+				{
+					NXP_LOG_ERROR("Couldn't start worker thread\n");
+					goto free_and_fail;
+				}
+				else
+				{
+					if (EOK != oal_mbox_attach_timer(rtable->mbox, (uint32_t)PFE_RTABLE_CFG_TICK_PERIOD_SEC * 1000U, SIG_TIMER_TICK))
+					{
+						NXP_LOG_ERROR("Unable to attach timer\n");
+						goto free_and_fail;
+					}
+				}
+				#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
+			}
+		}
 	}
 
 	return rtable;
@@ -2344,9 +2494,9 @@ free_and_fail:
 }
 
 /**
-* @brief		Returns total count of entries within the table 
+* @brief		Returns total count of entries within the table
 * @param[in]	rtable The routing table instance
-* @return		Total count of entries within the table 
+* @return		Total count of entries within the table
 */
 uint32_t pfe_rtable_get_size(const pfe_rtable_t *rtable)
 {
@@ -2376,27 +2526,27 @@ void pfe_rtable_destroy(pfe_rtable_t *rtable)
 		if (NULL != rtable->mbox)
 		{
 			oal_mbox_detach_timer(rtable->mbox);
-		}
 
-		if (NULL != rtable->worker)
-		{
-			NXP_LOG_INFO("Stopping rtable worker...\n");
+			if (NULL != rtable->worker)
+			{
+				NXP_LOG_INFO("Stopping rtable worker...\n");
 
-			err = oal_mbox_send_signal(rtable->mbox, SIG_WORKER_STOP);
-			if (EOK != err)
-			{
-				NXP_LOG_ERROR("Signal failed: %d\n", err);
-			}
-			else
-			{
-				err = oal_thread_join(rtable->worker, NULL);
+				err = oal_mbox_send_signal(rtable->mbox, SIG_WORKER_STOP);
 				if (EOK != err)
 				{
-					NXP_LOG_ERROR("Can't join the worker thread: %d\n", err);
+					NXP_LOG_ERROR("Signal failed: %d\n", err);
 				}
 				else
 				{
-					NXP_LOG_INFO("rtable worker stopped\n");
+					err = oal_thread_join(rtable->worker, NULL);
+					if (EOK != err)
+					{
+						NXP_LOG_ERROR("Can't join the worker thread: %d\n", err);
+					}
+					else
+					{
+						NXP_LOG_INFO("rtable worker stopped\n");
+					}
 				}
 			}
 		}
@@ -2426,12 +2576,17 @@ void pfe_rtable_destroy(pfe_rtable_t *rtable)
 			rtable->pool_va = NULL;
 		}
 
+		if (EOK != pfe_rtable_destroy_stats_table(rtable->class, rtable->conntrack_stats_table_addr))
+		{
+			NXP_LOG_DEBUG("Could not destroy conntrack stats\n");
+		}
+
 		if (NULL != rtable->lock)
 		{
 			if (EOK != oal_mutex_destroy(rtable->lock))
-            {
-                NXP_LOG_ERROR("Failed to destroy rtable\n");
-            }
+			{
+				NXP_LOG_ERROR("Failed to destroy rtable\n");
+			}
 			oal_mm_free(rtable->lock);
 			rtable->lock = NULL;
 		}
@@ -2599,7 +2754,7 @@ static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, const 
 			{
 				match = (0 == memcmp(&five_tuple, &arg->five_tuple, sizeof(pfe_5_tuple_t)));
 			}
-			break;       
+			break;
 
 		default:
 			NXP_LOG_ERROR("Unknown criterion\n");
@@ -2694,7 +2849,7 @@ pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_cr
 				}
 			}
 		}
-        
+
         if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
         {
             NXP_LOG_DEBUG("Mutex unlock failed\n");
@@ -2762,7 +2917,7 @@ pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 				}
 			}
 		}
-        
+
         if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
         {
             NXP_LOG_DEBUG("Mutex unlock failed\n");
@@ -2777,4 +2932,161 @@ pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 	{
 		return NULL;
 	}
+}
+
+/**
+ * @brief		Get conntrack statistics
+ * @param[in]	rtable		The routing table instance
+ * @param[in]	conntrack_index 	Index in conntrack statistics table
+ * @param[out]	stat        Statistic structure
+ * @retval		EOK         Success
+ * @retval		ENOMEM       Not possible to allocate memory for read
+ */
+errno_t pfe_rtable_get_stats(const pfe_rtable_t *rtable, pfe_ct_conntrack_stats_t *stat, uint8_t conntrack_index)
+{
+	uint32_t i = 0U;
+	errno_t ret = EOK;
+	pfe_ct_conntrack_stats_t * stats = NULL;
+	uint16_t offset = 0;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == rtable) || (NULL == stat)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (conntrack_index > rtable->conntrack_stats_table_size)
+	{
+		NXP_LOG_ERROR("Invalid conntrack index\n");
+	}
+
+	(void)memset(stat,0,sizeof(pfe_ct_conntrack_stats_t));
+
+	stats = oal_mm_malloc(sizeof(pfe_ct_conntrack_stats_t));
+
+	if (NULL == stats)
+	{
+		NXP_LOG_ERROR("Memory allocation failed\n");
+		return ENOMEM;
+	}
+
+	(void)memset(stats, 0, sizeof(pfe_ct_conntrack_stats_t));
+
+	offset = sizeof(pfe_ct_conntrack_stats_t) * (uint16_t)conntrack_index;
+
+	while(i < pfe_class_get_num_of_pes(rtable->class))
+	{
+		/* Gather memory from all PEs*/
+		ret = pfe_class_read_dmem((void *)rtable->class, (int32_t)i, stats, rtable->conntrack_stats_table_addr + offset, sizeof(pfe_ct_conntrack_stats_t));
+		if (EOK != ret)
+		{
+			break;
+		}
+
+		/* Calculate total statistics */
+		stat->hit += oal_ntohl(stats->hit);
+		stat->hit_bytes += oal_ntohl(stats->hit_bytes);
+		(void)memset(stats, 0, sizeof(pfe_ct_conntrack_stats_t));
+		++i;
+	}
+
+	oal_mm_free(stats);
+
+	return ret;
+}
+
+/**
+ * @brief		Clear conntrack statistics
+ * @param[in]	rtable		The routing table instance
+ * @param[in]	conntrack_index	Index in conntrack statistics table
+ * @retval		EOK Success
+ * @retval		NOMEM Not possible to allocate memory for read
+ */
+errno_t pfe_rtable_clear_stats(const pfe_rtable_t *rtable, uint8_t conntrack_index)
+{
+	errno_t ret = EOK;
+	static const pfe_ct_conntrack_stats_t stat = {0};
+	uint16_t offset = 0;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == rtable))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (conntrack_index > rtable->conntrack_stats_table_size)
+	{
+		NXP_LOG_ERROR("Invalid conntrack index\n");
+		return EINVAL;
+	}
+
+	offset = sizeof(pfe_ct_conntrack_stats_t) * (uint16_t)conntrack_index;
+
+	ret = pfe_class_write_dmem((void *)rtable->class, -1, rtable->conntrack_stats_table_addr + offset, &stat, sizeof(pfe_ct_conntrack_stats_t));
+
+	return ret;
+}
+
+/**
+ * @brief		Return conntrack statistics in text form
+ * @details		Function writes formatted text into given buffer.
+ * @param[in]	rtable		The routing table instance
+ * @param[in]	buf 		Pointer to the buffer to write to
+ * @param[in]	buf_len 	Buffer length
+ * @param[in]	verb_level 	Verbosity level
+ * @return		Number of bytes written to the buffer
+ */
+uint32_t pfe_rtable_get_text_statistics(pfe_rtable_t *rtable, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+{
+	uint32_t len = 0U;
+	errno_t ret;
+	pfe_ct_conntrack_stats_t stats = {0};
+	LLIST_t *item;
+	pfe_rtable_entry_t *entry;
+
+	/* We keep unused parameter verb_level for consistency with rest of the *_get_text_statistics() functions */
+	(void)verb_level;
+
+	ret = pfe_rtable_get_stats(rtable, &stats, 0);
+
+	if (EOK != ret)
+	{
+		return len;
+	}
+
+	len += oal_util_snprintf(buf + len, buf_len - len, "Default               hit: %12d hit_bytes: %12d\n", stats.hit, stats.hit_bytes);
+
+	/*	Protect table accesses */
+	if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	LLIST_ForEach(item, &rtable->active_entries)
+	{
+		entry = LLIST_Data(item, pfe_rtable_entry_t, list_entry);
+
+		if (oal_ntohs(entry->phys_entry->conntrack_stats_index) != 0)
+		{
+			ret = pfe_rtable_get_stats(rtable, &stats, oal_ntohs(entry->phys_entry->conntrack_stats_index));
+
+			if (EOK != ret)
+			{
+				continue;
+			}
+
+			len += oal_util_snprintf(buf + len, buf_len - len, "Conntrack route_id %2d hit: %12d hit_bytes: %12d\n", oal_ntohl(entry->route_id) , stats.hit, stats.hit_bytes);
+		}
+	}
+
+	if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+	return len;
 }

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -10,10 +10,15 @@
 #ifndef PFE_TMU_H_
 #define PFE_TMU_H_
 
+#include "pfe_class.h"
+
 #define PFE_TMU_INVALID_QUEUE		255U
 #define PFE_TMU_INVALID_SCHEDULER	255U
 #define PFE_TMU_INVALID_SHAPER		255U
 #define PFE_TMU_INVALID_POSITION	255U
+
+#define PFE_TMU_ERR051211_Q_OFFSET	(40U + 1U)	/* (S2+S3+8 +1) See ERR051211 errata ; extra '+1' compensates for the fact that HIF BD Rings have one permanently disabled 'terminator' BD. */
+#define PFE_TMU_ERR051211_MINIMAL_REQUIRED_RX_RING_LENGTH	((PFE_TMU_ERR051211_Q_OFFSET) + 2U)	/* See ERR051211 errata ; extra '+2' is for two theoretical minimalistic HIF queues (each with one slot). */
 
 /**
  * @brief	Scheduler disciplines
@@ -62,6 +67,7 @@ typedef struct
 	uint32_t pe_sys_clk_ratio;		/*	Clock mode ratio for sys_clk and pe_clk */
 } pfe_tmu_cfg_t;
 
+errno_t pfe_tmu_check_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue);
 errno_t pfe_tmu_queue_get_fill_level(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *level);
 errno_t pfe_tmu_queue_get_drop_count(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
 errno_t pfe_tmu_queue_get_tx_count(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt);
@@ -71,7 +77,10 @@ errno_t pfe_tmu_queue_set_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy
 errno_t pfe_tmu_queue_get_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t *prob);
 uint8_t pfe_tmu_queue_get_wred_zones(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue);
 uint8_t pfe_tmu_queue_get_cnt(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy);
+errno_t pfe_tmu_queue_reset_tail_drop_policy(const pfe_tmu_t *tmu);
+errno_t pfe_tmu_queue_err051211_sync(const pfe_tmu_t *tmu);
 
+errno_t pfe_tmu_check_shaper(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
 errno_t pfe_tmu_shp_enable(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
 errno_t pfe_tmu_shp_disable(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
 errno_t pfe_tmu_shp_set_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, pfe_tmu_rate_mode_t mode);
@@ -83,6 +92,7 @@ errno_t pfe_tmu_shp_get_limits(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
 errno_t pfe_tmu_shp_set_position(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint8_t pos);
 uint8_t pfe_tmu_shp_get_position(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp);
 
+errno_t pfe_tmu_check_scheduler(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch);
 errno_t pfe_tmu_sch_set_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, pfe_tmu_rate_mode_t mode);
 pfe_tmu_rate_mode_t pfe_tmu_sch_get_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch);
 errno_t pfe_tmu_sch_set_algo(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, pfe_tmu_sched_algo_t algo);
@@ -95,7 +105,7 @@ uint8_t pfe_tmu_sch_get_bound_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy
 errno_t pfe_tmu_sch_bind_sch_output(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t src_sch, uint8_t dst_sch, uint8_t input);
 uint8_t pfe_tmu_sch_get_bound_sch_output(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input);
 
-pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cfg_t *cfg);
+pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cfg_t *cfg, pfe_class_t *class);
 void pfe_tmu_enable(const pfe_tmu_t *tmu);
 void pfe_tmu_reset(const pfe_tmu_t *tmu);
 void pfe_tmu_disable(const pfe_tmu_t *tmu);

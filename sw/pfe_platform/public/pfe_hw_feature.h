@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2021 NXP
+ *  Copyright 2021-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -10,7 +10,7 @@
 
 typedef struct pfe_hw_feature_tag pfe_hw_feature_t;
 
-errno_t pfe_hw_feature_init_all(uint32_t *cbus_base, pfe_hw_feature_t ***hw_features, uint32_t *hw_features_count);
+errno_t pfe_hw_feature_init_all(const uint32_t *cbus_base, pfe_hw_feature_t **hw_features, uint32_t *hw_features_count);
 errno_t pfe_hw_feature_set_val(pfe_hw_feature_t *feature, uint8_t val);
 void pfe_hw_feature_destroy(const pfe_hw_feature_t *feature);
 errno_t pfe_hw_feature_get_name(const pfe_hw_feature_t *feature, const char **name);

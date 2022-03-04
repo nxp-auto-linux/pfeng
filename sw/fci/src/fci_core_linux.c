@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -23,12 +23,17 @@
 
 #include <linux/sched.h>
 #include <linux/netlink.h>
+#include <linux/moduleparam.h>
 #include <net/sock.h>
 #include <net/net_namespace.h>
 
 #define NETLINK_TYPE_CUSTOM_FCI 17
 
 #include <linux/rtnetlink.h>
+
+static bool disable_netlink = false;
+module_param(disable_netlink, bool, 0644);
+MODULE_PARM_DESC(disable_netlink, "\t Do not create netlink socket for FCI communication (default: false)");
 
 static errno_t fci_netlink_send(uint32_t port_id, fci_msg_t *msg);
 static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_id);
@@ -133,11 +138,19 @@ errno_t fci_core_init(const char_t *const id)
 	}
 
 	/*  Initialize netlink */
-	core->handle = netlink_kernel_create(&init_net, NETLINK_TYPE_CUSTOM_FCI, &fci_netlink_cfg);
-	if (NULL == core->handle)
+	if (false == disable_netlink)
 	{
-		NXP_LOG_ERROR("Error creating netlink\n");
-		goto free_and_fail;
+		NXP_LOG_DEBUG("Do netlink initialization\n");
+		core->handle = netlink_kernel_create(&init_net, NETLINK_TYPE_CUSTOM_FCI, &fci_netlink_cfg);
+		if (NULL == core->handle)
+		{
+			NXP_LOG_ERROR("Error creating netlink\n");
+			goto free_and_fail;
+		}
+	}
+	else
+	{
+		NXP_LOG_DEBUG("Skip netlink initialization\n");
 	}
 
 	return EOK;

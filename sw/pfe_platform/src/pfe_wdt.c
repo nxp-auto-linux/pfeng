@@ -27,13 +27,13 @@ pfe_wdt_t *pfe_wdt_create(addr_t cbus_base_va, addr_t wdt_base)
 {
 	pfe_wdt_t *wdt;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL_ADDR == cbus_base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return NULL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	wdt = oal_mm_malloc(sizeof(pfe_wdt_t));
 
@@ -114,13 +114,13 @@ errno_t pfe_wdt_isr(pfe_wdt_t *wdt)
 {
 	errno_t ret = EINVAL;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == wdt))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	if (EOK != oal_mutex_lock(&wdt->lock))
 	{
@@ -193,13 +193,13 @@ uint32_t pfe_wdt_get_text_statistics(const pfe_wdt_t *wdt, char_t *buf, uint32_t
 {
 	uint32_t len = 0U;
 
-#if defined(GLOBAL_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == wdt))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;
 	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 		len += pfe_wdt_cfg_get_text_stat(wdt->wdt_base_va, buf, buf_len, verb_level);
 

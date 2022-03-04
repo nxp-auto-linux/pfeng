@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -196,6 +196,14 @@
 
 #define TLITE_INQ_FIFODEPTH		256U
 
+/* Max number of buffers in ALL queues for one phy is 255, queues are 8 */
+#define TLITE_MAX_ENTRIES		(TLITE_INQ_FIFODEPTH - 1)
+#define TLITE_MAX_Q_SIZE		(TLITE_MAX_ENTRIES / 8)
+#define TLITE_HIF_MAX_Q_SIZE	16 /* Agreed default hardcoded value for ERR051211 workaround */
+#define TLITE_HIF_MAX_ENTRIES	(2 * TLITE_HIF_MAX_Q_SIZE)
+#define TLITE_OPT_Q0_SIZE		150U /* optimal size for the default queue (q0) */
+#define TLITE_OPT_Q1_7_SIZE		((TLITE_MAX_ENTRIES - TLITE_OPT_Q0_SIZE) / 8)
+
 /*	Implementation of the pfe_tmu_phy_cfg_t */
 struct pfe_tmu_phy_cfg_tag
 {
@@ -217,6 +225,7 @@ errno_t pfe_tmu_q_mode_set_wred(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uin
 errno_t pfe_tmu_q_set_wred_probability(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t prob);
 errno_t pfe_tmu_q_get_wred_probability(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t *prob);
 uint8_t pfe_tmu_q_get_wred_zones(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue);
+errno_t pfe_tmu_q_reset_tail_drop_policy(addr_t cbus_base_va);
 
 void pfe_tmu_shp_cfg_init(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);
 errno_t pfe_tmu_shp_cfg_enable(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t shp);

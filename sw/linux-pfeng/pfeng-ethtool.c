@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2021 NXP
+ * Copyright 2018-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -63,7 +63,7 @@ static void pfeng_ethtool_get_pauseparam(struct net_device *netdev, struct ethto
 	struct pfeng_netif *netif = netdev_priv(netdev);
 	bool_t rx_pause, tx_pause;
 
-	pfe_phy_if_get_flow_control(netif->priv->emac[netif->cfg->emac].phyif_emac, &tx_pause, &rx_pause);
+	pfe_phy_if_get_flow_control(netif->priv->emac[netif->cfg->emac_id].phyif_emac, &tx_pause, &rx_pause);
 	epauseparm->rx_pause = rx_pause;
 	epauseparm->tx_pause = tx_pause;
 	epauseparm->autoneg = AUTONEG_DISABLE;
@@ -77,8 +77,8 @@ static int pfeng_ethtool_set_pauseparam(struct net_device *netdev, struct ethtoo
 	if (epauseparm->autoneg)
 		return -EOPNOTSUPP;
 
-	pfe_phy_if_set_tx_flow_control(netif->priv->emac[netif->cfg->emac].phyif_emac, epauseparm->tx_pause);
-	pfe_phy_if_set_rx_flow_control(netif->priv->emac[netif->cfg->emac].phyif_emac, epauseparm->rx_pause);
+	pfe_phy_if_set_tx_flow_control(netif->priv->emac[netif->cfg->emac_id].phyif_emac, epauseparm->tx_pause);
+	pfe_phy_if_set_rx_flow_control(netif->priv->emac[netif->cfg->emac_id].phyif_emac, epauseparm->rx_pause);
 
 	return 0;
 }

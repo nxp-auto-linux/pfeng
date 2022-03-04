@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2021 NXP
+ *  Copyright 2017-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -27,7 +27,7 @@
 
 #ifdef PFE_CFG_FCI_ENABLE
 
-static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, fci_rt_db_entry_t *entry);
+static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, const fci_rt_db_entry_t *entry);
 
 /**
  * @brief		Match entry with latest criterion provided via fci_rt_db_get_first()
@@ -36,7 +36,7 @@ static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, fci_rt_db_entry_t *entr
  * @retval		True Entry matches the criterion
  * @retval		False Entry does not match the criterion
  */
-static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, fci_rt_db_entry_t *entry)
+static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, const fci_rt_db_entry_t *entry)
 {
 	bool_t match = FALSE;
 
@@ -73,7 +73,7 @@ static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, fci_rt_db_entry_t *entr
 			match = (0 == memcmp(&db->cur_crit_arg.dst_ip, &entry->dst_ip, sizeof(pfe_ip_addr_t)));
 			break;
 		}
-		
+
 		case RT_DB_CRIT_BY_MAC:
 		{
 			match = (0 == memcmp(&db->cur_crit_arg.dst_mac, &entry->dst_mac, sizeof(pfe_mac_addr_t)));
@@ -90,6 +90,7 @@ static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, fci_rt_db_entry_t *entr
 		{
 			NXP_LOG_ERROR("Unknown criterion\n");
 			match = FALSE;
+			break;
 		}
 	}
 
@@ -127,7 +128,7 @@ void fci_rt_db_init(fci_rt_db_t *db)
  * @retval		ENOMEM Memory allocation failed
  * @retval		EPERM Attempt to insert already existing entry without 'overwrite' set to 'true'
  */
-errno_t fci_rt_db_add(fci_rt_db_t *db,  pfe_ip_addr_t *dst_ip, 
+errno_t fci_rt_db_add(fci_rt_db_t *db,  pfe_ip_addr_t *dst_ip,
 					pfe_mac_addr_t *src_mac, pfe_mac_addr_t *dst_mac,
 					pfe_phy_if_t *iface, uint32_t id, void *refptr, bool_t overwrite)
 {
@@ -154,7 +155,7 @@ errno_t fci_rt_db_add(fci_rt_db_t *db,  pfe_ip_addr_t *dst_ip,
 		}
 		else
 		{
-			memset(new_entry, 0, sizeof(fci_rt_db_entry_t));
+			(void)memset(new_entry, 0, sizeof(fci_rt_db_entry_t));
 		}
 	}
 	else
@@ -168,9 +169,9 @@ errno_t fci_rt_db_add(fci_rt_db_t *db,  pfe_ip_addr_t *dst_ip,
 	}
 
 	/*	Store values */
-	memcpy(&new_entry->dst_ip, dst_ip, sizeof(pfe_ip_addr_t));
-	memcpy(&new_entry->src_mac, src_mac, sizeof(pfe_mac_addr_t));
-	memcpy(&new_entry->dst_mac, dst_mac, sizeof(pfe_mac_addr_t));
+	(void)memcpy(&new_entry->dst_ip, dst_ip, sizeof(pfe_ip_addr_t));
+	(void)memcpy(&new_entry->src_mac, src_mac, sizeof(pfe_mac_addr_t));
+	(void)memcpy(&new_entry->dst_mac, dst_mac, sizeof(pfe_mac_addr_t));
 	new_entry->iface = iface;
 	new_entry->id = id;
 	new_entry->mtu = 0; /* Not supported yet */
@@ -225,11 +226,12 @@ errno_t fci_rt_db_remove(fci_rt_db_t *db, fci_rt_db_entry_t *entry)
  * @warning		The returned entry must not be accessed after fci_rt_db_remove(entry)
  *				or fci_rt_db_drop_all() has been called.
  */
-fci_rt_db_entry_t *fci_rt_db_get_first(fci_rt_db_t *db, fci_rt_db_get_criterion_t crit, void *arg)
+fci_rt_db_entry_t *fci_rt_db_get_first(fci_rt_db_t *db, fci_rt_db_get_criterion_t crit, const void *arg)
 {
 	fci_rt_db_entry_t *entry = NULL;
 	LLIST_t *item;
 	bool_t match = false;
+	bool_t is_unknown_crit = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == db))
@@ -257,40 +259,46 @@ fci_rt_db_entry_t *fci_rt_db_get_first(fci_rt_db_t *db, fci_rt_db_get_criterion_
 
 		case RT_DB_CRIT_BY_IF:
 		{
-			db->cur_crit_arg.iface = (pfe_phy_if_t *)arg;
+			db->cur_crit_arg.iface = (const pfe_phy_if_t *)arg;
 			break;
 		}
 
 		case RT_DB_CRIT_BY_IF_NAME:
 		{
-			memset(db->cur_crit_arg.outif_name, 0, sizeof(db->cur_crit_arg.outif_name));
-			strncpy(db->cur_crit_arg.outif_name, arg, sizeof(db->cur_crit_arg.outif_name)-1);
+			(void)memset(db->cur_crit_arg.outif_name, 0, sizeof(db->cur_crit_arg.outif_name));
+			(void)strncpy(db->cur_crit_arg.outif_name, arg, sizeof(db->cur_crit_arg.outif_name)-1U);
 			break;
 		}
 
 		case RT_DB_CRIT_BY_IP:
 		{
-			memcpy(&db->cur_crit_arg.dst_ip, arg, sizeof(db->cur_crit_arg.dst_ip));
+			(void)memcpy(&db->cur_crit_arg.dst_ip, arg, sizeof(db->cur_crit_arg.dst_ip));
 			break;
 		}
-		
+
 		case RT_DB_CRIT_BY_MAC:
 		{
-			memcpy(&db->cur_crit_arg.dst_mac, arg, sizeof(db->cur_crit_arg.dst_mac));
+			(void)memcpy(&db->cur_crit_arg.dst_mac, arg, sizeof(db->cur_crit_arg.dst_mac));
 			break;
 		}
 
 		case RT_DB_CRIT_BY_ID:
 		{
-			memcpy(&db->cur_crit_arg.id, arg, sizeof(db->cur_crit_arg.id));
+			(void)memcpy(&db->cur_crit_arg.id, arg, sizeof(db->cur_crit_arg.id));
 			break;
 		}
 
 		default:
 		{
 			NXP_LOG_ERROR("Unknown criterion\n");
-			return NULL;
+			is_unknown_crit = TRUE;
+			break;
 		}
+	}
+	
+	if(TRUE == is_unknown_crit)
+	{
+		return NULL;
 	}
 
 	if (false == LLIST_IsEmpty(&db->theList))

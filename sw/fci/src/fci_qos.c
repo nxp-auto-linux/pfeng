@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -84,7 +84,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 	errno_t ret = EOK;
 	pfe_phy_if_t *phy_if = NULL;
 	fci_t *fci = (fci_t *)&__context;
-	uint32_t cnt, ii;
+	uint8_t cnt, ii;
 	static const pfe_tmu_queue_mode_t fci_qmode_to_qmode[] =
 		{TMU_Q_MODE_INVALID, TMU_Q_MODE_DEFAULT, TMU_Q_MODE_TAIL_DROP, TMU_Q_MODE_WRED};
 
@@ -114,7 +114,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 	}
 
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(fpp_qos_queue_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_qos_queue_cmd_t));
 	q = (fpp_qos_queue_cmd_t *)msg->msg_cmd.payload;
 
 	switch(q->action)
@@ -127,8 +127,9 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 			phy_if = fci_get_phy_if_by_name(q->if_name);
 			if (NULL == phy_if)
 			{
-				*fci_ret = FPP_ERR_QOS_QUEUE_NOT_FOUND;
-				ret = ENOENT;
+				/* FCI command requested nonexistent entity. Respond with FCI error code. */
+				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
+				ret = EOK;
 				break;
 			}
 
@@ -136,9 +137,11 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 			cnt = pfe_tmu_queue_get_cnt(fci->tmu, pfe_phy_if_get_id(phy_if));
 			if (q->id > cnt)
 			{
+				/* FCI command requested nonexistent entity. Respond with FCI error code. */
 				NXP_LOG_ERROR("Queue ID %d out of range. Interface %s implements %d queues\n",
 						(int_t)q->id, q->if_name, (int_t)cnt);
 				*fci_ret = FPP_ERR_QOS_QUEUE_NOT_FOUND;
+				ret = EOK;
 				break;
 			}
 
@@ -147,8 +150,10 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 
 			if (q->mode > 3U)
 			{
+				/* FCI command has wrong data. Respond with FCI error code. */
 				NXP_LOG_ERROR("Unsupported queue mode: %d\n", q->mode);
 				*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+				ret = EOK;
 				break;
 			}
 			else
@@ -167,12 +172,24 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 
 				if (EOK != ret)
 				{
-					NXP_LOG_ERROR("Could not set queue %d mode %d: %d\n", q->id, q->mode, ret);
-					*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+					if (ENOSPC == ret)
+					{
+						/* FCI command requested unfulfillable action. Respond with FCI error code. */
+						NXP_LOG_ERROR("Refused to set max length of %s queue %d to %u, because then the sum of %s queue lengths would exceed allowed total limit.\n", pfe_phy_if_get_name(phy_if), q->id, (uint_t)oal_ntohl(q->max), pfe_phy_if_get_name(phy_if));
+						*fci_ret = FPP_ERR_QOS_QUEUE_SUM_OF_LENGTHS_EXCEEDED;
+						ret = EOK;
+					}
+					else
+					{
+						/* FCI command has wrong data. Respond with FCI error code. */
+						NXP_LOG_ERROR("Could not set queue %d mode %d: %d\n", q->id, q->mode, ret);
+						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+						ret = EOK;
+					}
 					break;
 				}
 
-				if (q->mode == 3)
+				if (q->mode == 3U)
 				{
 					NXP_LOG_DEBUG("Setting WRED zones probabilities\n");
 
@@ -180,9 +197,10 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 
 					if (cnt > 32U)
 					{
+						/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 						NXP_LOG_DEBUG("Invalid zones count...\n");
-						ret = EINVAL;
 						*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+						ret = EINVAL;
 						break;
 					}
 
@@ -194,9 +212,11 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 								pfe_phy_if_get_id(phy_if), q->id, ii, q->zprob[ii]);
 						if (EOK != ret)
 						{
+							/* FCI command has wrong data. Respond with FCI error code. */
 							NXP_LOG_ERROR("Could not set queue %d zone %d probability %d: %d\n",
 									(int_t)q->id, (int_t)ii, (int_t)q->zprob[ii], (int_t)ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+							ret = EOK;
 							break; /* for */
 						}
 					}
@@ -214,26 +234,27 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 			phy_if = fci_get_phy_if_by_name(q->if_name);
 			if (NULL == phy_if)
 			{
-				*fci_ret = FPP_ERR_QOS_QUEUE_NOT_FOUND;
-				ret = ENOENT;
+				/* FCI command requested nonexistent entity. Respond with FCI error code. */
+				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
+				ret = EOK;
 				break;
 			}
 
-			/*	Check queue ID */
-			cnt = pfe_tmu_queue_get_cnt(fci->tmu, pfe_phy_if_get_id(phy_if));
-			if (q->id > cnt)
+			/*	Check queue */
+			ret = pfe_tmu_check_queue(fci->tmu, pfe_phy_if_get_id(phy_if), q->id);
+			if (EOK != ret)
 			{
-				NXP_LOG_ERROR("Queue ID %d out of range. Interface %s implements %d queues\n",
-						(int_t)q->id, q->if_name, (int_t)cnt);
+				/* FCI command requested nonexistent entity. Respond with FCI error code. */
 				*fci_ret = FPP_ERR_QOS_QUEUE_NOT_FOUND;
+				ret = EOK;
 				break;
 			}
 
 			/*	Copy original command properties into reply structure */
 			reply_buf->action = q->action;
 			reply_buf->id = q->id;
-			strncpy(reply_buf->if_name, q->if_name, sizeof(reply_buf->if_name));
-			reply_buf->if_name[sizeof(reply_buf->if_name) - 1] = '\0';
+			(void)strncpy(reply_buf->if_name, q->if_name, sizeof(reply_buf->if_name));
+			reply_buf->if_name[sizeof(reply_buf->if_name) - 1U] = '\0';
 
 			/*	Get queue mode */
 			switch (pfe_tmu_queue_get_mode(fci->tmu, pfe_phy_if_get_id(phy_if),
@@ -281,6 +302,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 									fci->tmu, pfe_phy_if_get_id(phy_if), q->id, ii, &reply_buf->zprob[ii]);
 							if (EOK != ret)
 							{
+								/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 								NXP_LOG_ERROR("Could not get queue %d zone %d probability: %d\n", (int_t)q->id, (int_t)ii, (int_t)ret);
 								*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 								break; /* for */
@@ -297,6 +319,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 
 				default:
 				{
+					/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 					NXP_LOG_ERROR("Can't get queue %d mode\n", q->id);
 					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 					break;
@@ -333,8 +356,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 	errno_t ret = EOK;
 	pfe_phy_if_t *phy_if = NULL;
 	fci_t *fci = (fci_t *)&__context;
-	uint32_t ii, cnt;
-	uint8_t queue;
+	uint8_t ii, cnt, queue;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -362,7 +384,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 	}
 
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(fpp_qos_scheduler_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_qos_scheduler_cmd_t));
 	sch = (fpp_qos_scheduler_cmd_t *)msg->msg_cmd.payload;
 
 	switch(sch->action)
@@ -375,8 +397,19 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 			phy_if = fci_get_phy_if_by_name(sch->if_name);
 			if (NULL == phy_if)
 			{
+				/* FCI command requested nonexistent entity. Respond with FCI error code. */
+				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
+				ret = EOK;
+				break;
+			}
+
+			/*	Check scheduler */
+			ret = pfe_tmu_check_scheduler(fci->tmu, pfe_phy_if_get_id(phy_if), sch->id);
+			if (EOK != ret)
+			{
+				/* FCI command requested nonexistent entity. Respond with FCI error code. */
 				*fci_ret = FPP_ERR_QOS_SCHEDULER_NOT_FOUND;
-				ret = ENOENT;
+				ret = EOK;
 				break;
 			}
 
@@ -408,17 +441,20 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 
 			if (EOK != ret)
 			{
+				/* FCI command has wrong data. Respond with FCI error code. */
 				NXP_LOG_WARNING("Scheduler mode not set: %d\n", ret);
 				*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+				ret = EOK;
 				break;
 			}
 
 			/*	Set scheduler algorithm */
 			if (sch->algo > 3U)
 			{
+				/* FCI command has wrong data. Respond with FCI error code. */
 				NXP_LOG_ERROR("Unsupported scheduler algorithm: 0x%x\n", sch->algo);
-				ret = EOK;
 				*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+				ret = EOK;
 				break;
 			}
 
@@ -428,6 +464,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 					sch->id, sch_algos[sch->algo]);
 			if (EOK != ret)
 			{
+				/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 				NXP_LOG_WARNING("Scheduler algorithm not set: %d\n", ret);
 				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				break;
@@ -438,13 +475,14 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 			sch->input_en = oal_ntohl(sch->input_en);
 			for (ii=0U; ii<cnt; ii++)
 			{
-				if ((0U == ((1U << ii) & sch->input_en)) || (sch->input_src[ii] == 255U))
+				if ((0U == (((uint32_t)1U << ii) & sch->input_en)) || (sch->input_src[ii] == 255U))
 				{
 					NXP_LOG_DEBUG("Disabling scheduler %d input %d\n", (int_t)sch->id, (int_t)ii);
 					ret = pfe_tmu_sch_bind_queue(fci->tmu, pfe_phy_if_get_id(phy_if),
 								sch->id, ii, PFE_TMU_INVALID_QUEUE);
 					if (EOK != ret)
 					{
+						/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 						NXP_LOG_ERROR("Could not invalidate scheduler input %d: %d\n", (int_t)ii, (int_t)ret);
 						*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 						break; /* for */
@@ -460,9 +498,11 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 								sch->id, ii, sch->input_src[ii]);
 						if (EOK != ret)
 						{
+							/* FCI command has wrong data. Respond with FCI error code. */
 							NXP_LOG_ERROR("Could not connect source %d to scheduler input %d\n",
 									(int_t)sch->input_src[ii], (int_t)ii);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+							ret = EOK;
 							break; /* for */
 						}
 					}
@@ -474,16 +514,20 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 								sch->id-1U, sch->id, ii);
 						if (EOK != ret)
 						{
+							/* FCI command has wrong data. Respond with FCI error code. */
 							NXP_LOG_ERROR("Could not connect scheduler %d output to scheduler %d input %d: %d\n",
 									(int_t)(sch->id-1U), (int_t)sch->id, (int_t)ii, (int_t)ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+							ret = EOK;
 							break; /* for */
 						}
 					}
 					else
 					{
+						/* FCI command has wrong data. Respond with FCI error code. */
 						NXP_LOG_ERROR("Unsupported scheduler input %d source: %d\n", (int_t)ii, (int_t)sch->input_src[ii]);
 						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+						ret = EOK;
 						break; /* for */
 					}
 
@@ -493,9 +537,11 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 							sch->id, ii, oal_ntohl(sch->input_w[ii]));
 					if (EOK != ret)
 					{
+						/* FCI command has wrong data. Respond with FCI error code. */
 						NXP_LOG_ERROR("Could not set scheduler %d input %d weight %d: %d\n",
 								(int_t)sch->id, (int_t)ii, (int_t)oal_ntohl(sch->input_w[ii]), (int_t)ret);
 						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+						ret = EOK;
 						break; /* for */
 					}
 				}
@@ -512,16 +558,27 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 			phy_if = fci_get_phy_if_by_name(sch->if_name);
 			if (NULL == phy_if)
 			{
+				/* FCI command requested nonexistent entity. Respond with FCI error code. */
+				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
+				ret = EOK;
+				break;
+			}
+
+			/*	Check scheduler */
+			ret = pfe_tmu_check_scheduler(fci->tmu, pfe_phy_if_get_id(phy_if), sch->id);
+			if (EOK != ret)
+			{
+				/* FCI command requested nonexistent entity. Respond with FCI error code. */
 				*fci_ret = FPP_ERR_QOS_SCHEDULER_NOT_FOUND;
-				ret = ENOENT;
+				ret = EOK;
 				break;
 			}
 
 			/*	Copy original command properties into reply structure */
 			reply_buf->action = sch->action;
 			reply_buf->id = sch->id;
-			strncpy(reply_buf->if_name, sch->if_name, sizeof(reply_buf->if_name));
-			reply_buf->if_name[sizeof(reply_buf->if_name) - 1] = '\0';
+			(void)strncpy(reply_buf->if_name, sch->if_name, sizeof(reply_buf->if_name));
+			reply_buf->if_name[sizeof(reply_buf->if_name) - 1U] = '\0';
 
 			/*	Get scheduler mode */
 			switch (pfe_tmu_sch_get_rate_mode(fci->tmu, pfe_phy_if_get_id(phy_if), sch->id))
@@ -540,8 +597,9 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 
 				default:
 				{
+					/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 					NXP_LOG_ERROR("Can't get scheduler %d mode or the mode is invalid\n", sch->id);
-					*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 					ret = EINVAL;
 					break;
 				}
@@ -552,8 +610,9 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 					pfe_phy_if_get_id(phy_if), sch->id);
 			if (reply_buf->algo == (uint8_t)SCHED_ALGO_INVALID)
 			{
+				/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 				NXP_LOG_ERROR("Can't get scheduler %d algo or the algo is invalid\n", sch->id);
-				*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				ret = EINVAL;
 				break;
 			}
@@ -579,7 +638,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 						reply_buf->input_src[ii] = 8U;
 						reply_buf->input_w[ii] = oal_htonl(pfe_tmu_sch_get_input_weight(fci->tmu,
 								pfe_phy_if_get_id(phy_if), sch->id, ii));
-						reply_buf->input_en |= (1U << ii);
+						reply_buf->input_en |= ((uint32_t)1U << ii);
 					}
 				}
 				else
@@ -588,7 +647,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 					reply_buf->input_src[ii] = queue;
 					reply_buf->input_w[ii] = oal_htonl(pfe_tmu_sch_get_input_weight(fci->tmu,
 							pfe_phy_if_get_id(phy_if), sch->id, ii));
-					reply_buf->input_en |= (1U << ii);
+					reply_buf->input_en |= ((uint32_t)1U << ii);
 				}
 			}
 
@@ -624,7 +683,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 	fpp_qos_shaper_cmd_t *shp;
 	errno_t ret = EOK;
 	pfe_phy_if_t *phy_if = NULL;
-	fci_t *fci = (fci_t *)&__context;
+	const fci_t *fci = (fci_t *)&__context;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -652,7 +711,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 	}
 
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(fpp_qos_shaper_cmd_t));
+	(void)memset(reply_buf, 0, sizeof(fpp_qos_shaper_cmd_t));
 	shp = (fpp_qos_shaper_cmd_t *)msg->msg_cmd.payload;
 
 	switch(shp->action)
@@ -665,8 +724,19 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 			phy_if = fci_get_phy_if_by_name(shp->if_name);
 			if (NULL == phy_if)
 			{
+				/* FCI command requested nonexistent entity. Respond with FCI error code. */
+				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
+				ret = EOK;
+				break;
+			}
+
+			/*	Check shaper */
+			ret = pfe_tmu_check_shaper(fci->tmu, pfe_phy_if_get_id(phy_if), shp->id);
+			if (EOK != ret)
+			{
+				/* FCI command requested nonexistent entity. Respond with FCI error code. */
 				*fci_ret = FPP_ERR_QOS_SHAPER_NOT_FOUND;
-				ret = ENOENT;
+				ret = EOK;
 				break;
 			}
 
@@ -679,8 +749,9 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 							shp->id, PFE_TMU_INVALID_POSITION);
 					if (EOK != ret)
 					{
+						/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 						NXP_LOG_ERROR("Could not disconnect shaper %d: %d\n", shp->id, ret);
-						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+						*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 						break;
 					}
 				}
@@ -689,8 +760,9 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 				ret = pfe_tmu_shp_disable(fci->tmu, pfe_phy_if_get_id(phy_if), shp->id);
 				if (EOK != ret)
 				{
+					/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 					NXP_LOG_ERROR("Could not disable shaper %d: %d\n", shp->id, ret);
-					*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 					break;
 				}
 			}
@@ -700,8 +772,9 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 				ret = pfe_tmu_shp_enable(fci->tmu, pfe_phy_if_get_id(phy_if), shp->id);
 				if (EOK != ret)
 				{
+					/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 					NXP_LOG_ERROR("Could not enable shaper %d: %d\n", shp->id, ret);
-					*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 					break;
 				}
 
@@ -718,16 +791,19 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 				}
 				else
 				{
+					/* FCI command has wrong data. Respond with FCI error code. */
 					NXP_LOG_ERROR("Invalid shaper rate mode value: %d\n", shp->mode);
 					*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+					ret = EOK;
 					break;
 				}
 
 				if (EOK != ret)
 				{
+					/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 					NXP_LOG_ERROR("Unable to set shaper %d rate mode %d: %d\n",
 							shp->id, shp->mode, ret);
-					*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 					break;
 				}
 
@@ -737,8 +813,10 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 						oal_ntohl(shp->max_credit), oal_ntohl(shp->min_credit));
 				if (EOK != ret)
 				{
+					/* FCI command has wrong data. Respond with FCI error code. */
 					NXP_LOG_ERROR("Unable to set shaper %d limits: %d\n", shp->id, ret);
 					*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+					ret = EOK;
 					break;
 				}
 
@@ -747,9 +825,11 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 						shp->id, shp->position);
 				if (EOK != ret)
 				{
+					/* FCI command has wrong data. Respond with FCI error code. */
 					NXP_LOG_ERROR("Can't set shaper %d at position %d: %d\n",
 							shp->id, shp->position, ret);
 					*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+					ret = EOK;
 					break;
 				}
 
@@ -759,9 +839,11 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 						oal_ntohl(shp->isl));
 				if (EOK != ret)
 				{
+					/* FCI command has wrong data. Respond with FCI error code. */
 					NXP_LOG_ERROR("Can't set shaper %d idle slope %d: %d\n",
 							(int_t)shp->id, (int_t)oal_ntohl(shp->isl), (int_t)ret);
 					*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+					ret = EOK;
 					break;
 				}
 			}
@@ -777,16 +859,27 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 			phy_if = fci_get_phy_if_by_name(shp->if_name);
 			if (NULL == phy_if)
 			{
+				/* FCI command requested nonexistent entity. Respond with FCI error code. */
+				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
+				ret = EOK;
+				break;
+			}
+
+			/*	Check shaper */
+			ret = pfe_tmu_check_shaper(fci->tmu, pfe_phy_if_get_id(phy_if), shp->id);
+			if (EOK != ret)
+			{
+				/* FCI command requested nonexistent entity. Respond with FCI error code. */
 				*fci_ret = FPP_ERR_QOS_SHAPER_NOT_FOUND;
-				ret = ENOENT;
+				ret = EOK;
 				break;
 			}
 
 			/*	Copy original command properties into reply structure */
 			reply_buf->action = shp->action;
 			reply_buf->id = shp->id;
-			strncpy(reply_buf->if_name, shp->if_name, sizeof(reply_buf->if_name));
-			reply_buf->if_name[sizeof(reply_buf->if_name) - 1] = '\0';
+			(void)strncpy(reply_buf->if_name, shp->if_name, sizeof(reply_buf->if_name));
+			reply_buf->if_name[sizeof(reply_buf->if_name) - 1U] = '\0';
 
 			/*	Get shaper mode */
 			switch (pfe_tmu_shp_get_rate_mode(fci->tmu, pfe_phy_if_get_id(phy_if), shp->id))
@@ -848,17 +941,20 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 	return ret;
 }
 
-static pfe_gpi_t *fci_qos_get_gpi(pfe_phy_if_t *phy_if)
+static pfe_gpi_t *fci_qos_get_gpi(const pfe_phy_if_t *phy_if)
 {
-	pfe_emac_t *emac = pfe_phy_if_get_emac(phy_if);
+	const pfe_emac_t *emac = pfe_phy_if_get_emac(phy_if);
+	pfe_gpi_t *gpi = NULL;
 
-	if (NULL == emac)
-		return NULL;
-
-	return pfe_emac_get_gpi(emac);
+	if (NULL != emac)
+	{
+		  gpi = pfe_emac_get_gpi(emac);
+	}
+	   
+	return gpi;
 }
 
-static errno_t fci_validate_cmd_params(fci_msg_t *msg, uint16_t *fci_ret, void *reply_buf, uint32_t *reply_len, uint32_t cmd_len)
+static errno_t fci_validate_cmd_params(const fci_msg_t *msg, uint16_t *fci_ret, void *reply_buf, uint32_t *reply_len, uint32_t cmd_len)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -912,7 +1008,7 @@ errno_t fci_qos_policer_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_c
 		*reply_len = 0U;
 	}
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(*reply_buf));
+	(void)memset(reply_buf, 0, sizeof(*reply_buf));
 
 	pol_cmd = (fpp_qos_policer_cmd_t *)msg->msg_cmd.payload;
 
@@ -937,7 +1033,7 @@ errno_t fci_qos_policer_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_c
 	{
 		case FPP_ACTION_UPDATE:
 		{
-			if (0 != pol_cmd->enable)
+			if (0U != pol_cmd->enable)
 			{
 				ret = pfe_gpi_qos_enable(gpi);
 			}
@@ -958,8 +1054,8 @@ errno_t fci_qos_policer_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_c
 		{
 			/*	Copy original command properties into reply structure */
 			reply_buf->action = pol_cmd->action;
-			strncpy(reply_buf->if_name, pol_cmd->if_name, sizeof(reply_buf->if_name));
-			reply_buf->if_name[sizeof(reply_buf->if_name) - 1] = '\0';
+			(void)strncpy(reply_buf->if_name, pol_cmd->if_name, sizeof(reply_buf->if_name));
+			reply_buf->if_name[sizeof(reply_buf->if_name) - 1U] = '\0';
 
 			/*	get policer data */
 			reply_buf->enable = pfe_gpi_qos_is_enabled(gpi);
@@ -981,48 +1077,48 @@ static errno_t fci_qos_flow_entry_validate_and_fixup_masks(pfe_iqos_flow_spec_t 
 {
 	pfe_iqos_flow_args_t *args = &flow->args;
 
-	if (flow->type_mask >= (PFE_IQOS_FLOW_TYPE_MAX << 1) ||
-	    flow->arg_type_mask >= (PFE_IQOS_ARG_MAX << 1) ||
-	    flow->action >= PFE_IQOS_FLOW_COUNT)
+	if (((uint16_t)flow->type_mask >= ((uint16_t)PFE_IQOS_FLOW_TYPE_MAX << 1)) ||
+	    ((uint16_t)flow->arg_type_mask >= ((uint16_t)PFE_IQOS_ARG_MAX << 1)) ||
+	    (flow->action >= PFE_IQOS_FLOW_COUNT))
 	{
 		return EINVAL;
 	}
 
-	if (flow->arg_type_mask & PFE_IQOS_ARG_VLAN)
+	if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_VLAN) != 0U)
 	{
-		if (args->vlan > PFE_IQOS_VLAN_ID_MASK || args->vlan_m > PFE_IQOS_VLAN_ID_MASK)
+		if ((args->vlan > PFE_IQOS_VLAN_ID_MASK) || (args->vlan_m > PFE_IQOS_VLAN_ID_MASK))
 		{
 			return EINVAL;
 		}
 		/* fixup */
-		if (args->vlan_m == 0)
+		if (args->vlan_m == 0U)
 		{
 			/* mask not specified */
 			args->vlan_m = PFE_IQOS_VLAN_ID_MASK;
 		}
 	}
 
-	if (flow->arg_type_mask & PFE_IQOS_ARG_TOS)
+	if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_TOS) != 0U)
 	{
 		/* fixup */
-		if (args->tos_m == 0)
+		if (args->tos_m == 0U)
 		{
 			/* mask not specified */
 			args->tos_m = PFE_IQOS_TOS_MASK;
 		}
 	}
 
-	if (flow->arg_type_mask & PFE_IQOS_ARG_L4PROTO)
+	if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_L4PROTO) != 0U)
 	{
 		/* fixup */
-		if (args->l4proto_m == 0)
+		if (args->l4proto_m == 0U)
 		{
 			/* mask not specified */
 			args->l4proto_m = PFE_IQOS_L4PROTO_MASK;
 		}
 	}
 
-	if (flow->arg_type_mask & PFE_IQOS_ARG_SIP)
+	if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_SIP) != 0U)
 	{
 		if (args->sip_m > PFE_IQOS_SDIP_MASK)
 		{
@@ -1030,7 +1126,7 @@ static errno_t fci_qos_flow_entry_validate_and_fixup_masks(pfe_iqos_flow_spec_t 
 		}
 	}
 
-	if (flow->arg_type_mask & PFE_IQOS_ARG_DIP)
+	if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_DIP) != 0U)
 	{
 		if (args->dip_m > PFE_IQOS_SDIP_MASK)
 		{
@@ -1038,7 +1134,7 @@ static errno_t fci_qos_flow_entry_validate_and_fixup_masks(pfe_iqos_flow_spec_t 
 		}
 	}
 
-	if (flow->arg_type_mask & PFE_IQOS_ARG_SPORT)
+	if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_SPORT) != 0U)
 	{
 		if (args->sport_min > args->sport_max)
 		{
@@ -1046,7 +1142,7 @@ static errno_t fci_qos_flow_entry_validate_and_fixup_masks(pfe_iqos_flow_spec_t 
 		}
 	}
 
-	if (flow->arg_type_mask & PFE_IQOS_ARG_DPORT)
+	if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_DPORT) != 0U)
 	{
 		if (args->dport_min > args->dport_max)
 		{
@@ -1121,7 +1217,7 @@ errno_t fci_qos_policer_flow_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 	pfe_gpi_t *gpi = NULL;
 	errno_t ret = EOK;
 
-    memset(&gpi_flow, 0, sizeof(pfe_iqos_flow_spec_t));
+    (void)memset(&gpi_flow, 0, sizeof(pfe_iqos_flow_spec_t));
 	ret = fci_validate_cmd_params(msg, fci_ret, reply_buf, reply_len, sizeof(*flow_cmd));
 	if (EOK != ret)
 	{
@@ -1133,7 +1229,7 @@ errno_t fci_qos_policer_flow_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 		*reply_len = 0U;
 	}
 	/*	Initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(*reply_buf));
+	(void)memset(reply_buf, 0, sizeof(*reply_buf));
 
 	flow_cmd = (fpp_qos_policer_flow_cmd_t *)msg->msg_cmd.payload;
 
@@ -1169,7 +1265,7 @@ errno_t fci_qos_policer_flow_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 			}
 
 			/* id == 0xFF means the driver chooses the entry position */
-			if (flow_cmd->id >= PFE_IQOS_FLOW_TABLE_SIZE && flow_cmd->id != 0xFF)
+			if ((flow_cmd->id >= PFE_IQOS_FLOW_TABLE_SIZE) && (flow_cmd->id != 0xFFU))
 			{
 				*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 				break;
@@ -1186,6 +1282,10 @@ errno_t fci_qos_policer_flow_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 			{
 				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				break;
+			}
+			else
+			{
+				;/* Required by Misra */
 			}
 			break;
 		}
@@ -1209,8 +1309,8 @@ errno_t fci_qos_policer_flow_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 		{
 			/*	Copy original command properties into reply structure */
 			reply_buf->action = flow_cmd->action;
-			strncpy(reply_buf->if_name, flow_cmd->if_name, sizeof(reply_buf->if_name));
-			reply_buf->if_name[sizeof(reply_buf->if_name) - 1] = '\0';
+			(void)strncpy(reply_buf->if_name, flow_cmd->if_name, sizeof(reply_buf->if_name));
+			reply_buf->if_name[sizeof(reply_buf->if_name) - 1U] = '\0';
 
 			ret = pfe_gpi_qos_get_first_flow(gpi, &reply_buf->id, &gpi_flow);
 			if (ret != EOK)
@@ -1231,8 +1331,8 @@ errno_t fci_qos_policer_flow_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 		{
 			/*	Copy original command properties into reply structure */
 			reply_buf->action = flow_cmd->action;
-			strncpy(reply_buf->if_name, flow_cmd->if_name, sizeof(reply_buf->if_name));
-			reply_buf->if_name[sizeof(reply_buf->if_name) - 1] = '\0';
+			(void)strncpy(reply_buf->if_name, flow_cmd->if_name, sizeof(reply_buf->if_name));
+			reply_buf->if_name[sizeof(reply_buf->if_name) - 1U] = '\0';
 
 			ret = pfe_gpi_qos_get_next_flow(gpi, &reply_buf->id, &gpi_flow);
 			if (ret != EOK)
@@ -1267,7 +1367,7 @@ errno_t fci_qos_policer_wred_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 	pfe_phy_if_t *phy_if;
 	pfe_gpi_t *gpi;
 	errno_t ret;
-	int i;
+	uint32_t i;
 
 	ret = fci_validate_cmd_params(msg, fci_ret, reply_buf, reply_len, sizeof(*wred_cmd));
 	if (EOK != ret)
@@ -1280,7 +1380,7 @@ errno_t fci_qos_policer_wred_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 		*reply_len = 0U;
 	}
 	/* initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(*reply_buf));
+	(void)memset(reply_buf, 0, sizeof(*reply_buf));
 
 	/* map command structure to message payload (requires casting) */
 	wred_cmd = (fpp_qos_policer_wred_cmd_t *)msg->msg_cmd.payload;
@@ -1314,7 +1414,7 @@ errno_t fci_qos_policer_wred_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 	{
 		case FPP_ACTION_UPDATE:
 		{
-			if (0 != wred_cmd->enable)
+			if (0U != wred_cmd->enable)
 			{
 				ret = pfe_gpi_wred_enable(gpi, (pfe_iqos_queue_t)queue);
 			}
@@ -1335,7 +1435,7 @@ errno_t fci_qos_policer_wred_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 				break;
 			}
 
-			for (i = 0; i < FPP_IQOS_WRED_THR_COUNT; i++)
+			for (i = 0; i < (uint32_t)FPP_IQOS_WRED_THR_COUNT; i++)
 			{
 				wred_thr = oal_ntohs(wred_cmd->thr[i]);
 				if (PFE_IQOS_WRED_THR_SKIP == wred_thr)
@@ -1358,7 +1458,7 @@ errno_t fci_qos_policer_wred_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 				break;
 			}
 
-			for (i = 0; i < FPP_IQOS_WRED_ZONES_COUNT; i++)
+			for (i = 0; i < (uint32_t)FPP_IQOS_WRED_ZONES_COUNT; i++)
 			{
 				if (PFE_IQOS_WRED_ZONE_PROB_SKIP == wred_cmd->zprob[i])
 				{
@@ -1387,14 +1487,14 @@ errno_t fci_qos_policer_wred_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 		{
 			/* copy original command properties into reply structure */
 			reply_buf->action = wred_cmd->action;
-			strncpy(reply_buf->if_name, wred_cmd->if_name, sizeof(reply_buf->if_name));
-			reply_buf->if_name[sizeof(reply_buf->if_name) - 1] = '\0';
+			(void)strncpy(reply_buf->if_name, wred_cmd->if_name, sizeof(reply_buf->if_name));
+			reply_buf->if_name[sizeof(reply_buf->if_name) - 1U] = '\0';
 			reply_buf->queue = queue;
 
 			/* get WRED data */
 			reply_buf->enable = pfe_gpi_wred_is_enabled(gpi, (pfe_iqos_queue_t)queue);
 
-			for (i = 0; i < FPP_IQOS_WRED_THR_COUNT; i++)
+			for (i = 0; i < (uint32_t)FPP_IQOS_WRED_THR_COUNT; i++)
 			{
 				ret = pfe_gpi_wred_get_thr(gpi, (pfe_iqos_queue_t)queue, (pfe_iqos_wred_thr_t)i, &wred_thr);
 				if (EOK != ret)
@@ -1405,7 +1505,7 @@ errno_t fci_qos_policer_wred_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 				reply_buf->thr[i] = oal_htons(wred_thr);
 			}
 
-			for (i = 0; i < FPP_IQOS_WRED_ZONES_COUNT; i++)
+			for (i = 0; i < (uint32_t)FPP_IQOS_WRED_ZONES_COUNT; i++)
 			{
 				ret = pfe_gpi_wred_get_prob(gpi, (pfe_iqos_queue_t)queue, (pfe_iqos_wred_zone_t)i, &reply_buf->zprob[i]);
 				if (EOK != ret)
@@ -1442,8 +1542,8 @@ errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_polic
 	pfe_gpi_t *gpi;
 	errno_t ret;
 
-    memset(&shp_type, 0, sizeof(fpp_iqos_shp_type_t));
-    memset(&shp_mode, 0, sizeof(fpp_iqos_shp_rate_mode_t));
+    (void)memset(&shp_type, 0, sizeof(fpp_iqos_shp_type_t));
+    (void)memset(&shp_mode, 0, sizeof(fpp_iqos_shp_rate_mode_t));
 	ret = fci_validate_cmd_params(msg, fci_ret, reply_buf, reply_len, sizeof(*shp_cmd));
 	if (EOK != ret)
 	{
@@ -1455,7 +1555,7 @@ errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_polic
 		*reply_len = 0U;
 	}
 	/* initialize the reply buffer */
-	memset(reply_buf, 0, sizeof(*reply_buf));
+	(void)memset(reply_buf, 0, sizeof(*reply_buf));
 
 	/* map command structure to message payload (requires casting) */
 	shp_cmd = (fpp_qos_policer_shp_cmd_t *)msg->msg_cmd.payload;
@@ -1489,7 +1589,7 @@ errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_polic
 	{
 		case FPP_ACTION_UPDATE:
 		{
-			if (0 != shp_cmd->enable)
+			if (0U != shp_cmd->enable)
 			{
 				ret = pfe_gpi_shp_enable(gpi, shp_id);
 			}
@@ -1531,7 +1631,7 @@ errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_polic
 				break;
 			}
 
-			NXP_LOG_DEBUG("Setting shaper %d idle slope: %d\n", shp_id, shp_isl);
+			NXP_LOG_DEBUG("Setting shaper %d idle slope: %u\n", shp_id, (uint_t)shp_isl);
 			ret = pfe_gpi_shp_set_idle_slope(gpi, shp_id, shp_isl);
 			if (EOK != ret)
 			{
@@ -1540,7 +1640,7 @@ errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_polic
 			}
 
 			NXP_LOG_DEBUG("Setting shaper %d credit limits: [%d, %d]\n",
-				      shp_id, shp_min_credit, shp_max_credit);
+				      shp_id, (int_t)shp_min_credit, (int_t)shp_max_credit);
 			ret = pfe_gpi_shp_set_limits(gpi, shp_id, shp_max_credit, shp_min_credit);
 			if (EOK != ret)
 			{
@@ -1555,8 +1655,8 @@ errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_polic
 		{
 			/* copy original command properties into reply structure */
 			reply_buf->action = shp_cmd->action;
-			strncpy(reply_buf->if_name, shp_cmd->if_name, sizeof(reply_buf->if_name));
-			reply_buf->if_name[sizeof(reply_buf->if_name) - 1] = '\0';
+			(void)strncpy(reply_buf->if_name, shp_cmd->if_name, sizeof(reply_buf->if_name));
+			reply_buf->if_name[sizeof(reply_buf->if_name) - 1U] = '\0';
 			reply_buf->id = shp_id;
 
 			/* get shaper data */

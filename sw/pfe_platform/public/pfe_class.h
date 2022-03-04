@@ -39,7 +39,7 @@ void pfe_class_reset(pfe_class_t *class);
 void pfe_class_disable(pfe_class_t *class);
 errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf);
 errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_class_mmap_t *mmap);
-errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, addr_t dst_addr, void *src_ptr, uint32_t len);
+errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, addr_t dst_addr, const void *src_ptr, uint32_t len);
 errno_t pfe_class_read_dmem(void *class_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len);
 errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst_ptr, addr_t src_addr, uint32_t buffer_len, uint32_t read_len);
 errno_t pfe_class_set_rtable(pfe_class_t *class, addr_t rtable_pa, uint32_t rtable_len, uint32_t entry_size);
@@ -49,7 +49,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 void pfe_class_destroy(pfe_class_t *class);
 addr_t pfe_class_dmem_heap_alloc(const pfe_class_t *class, uint32_t size);
 void pfe_class_dmem_heap_free(const pfe_class_t *class, addr_t addr);
-uint32_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf);
+errno_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf);
 errno_t pfe_class_get_fw_version(const pfe_class_t *class, pfe_ct_version_t *ver);
 
 errno_t pfe_class_get_feature_first(pfe_class_t *class, pfe_fw_feature_t **feature);

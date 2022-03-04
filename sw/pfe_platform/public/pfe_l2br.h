@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -81,12 +81,12 @@ pfe_l2br_domain_t *pfe_l2br_get_first_domain(pfe_l2br_t *bridge, pfe_l2br_domain
 pfe_l2br_domain_t *pfe_l2br_get_next_domain(pfe_l2br_t *bridge);
 uint32_t pfe_l2br_get_text_statistics(const pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 uint32_t pfe_l2br_domain_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-errno_t pfe_l2br_clear_domain_stats(pfe_l2br_t *bridge, uint8_t vlan_index);
-errno_t pfe_l2br_get_domain_stats(pfe_l2br_t *bridge, pfe_ct_vlan_stats_t *stat, uint8_t vlan_index);
-uint8_t pfe_l2br_get_vlan_stats_index(pfe_l2br_domain_t *domain);
+errno_t pfe_l2br_clear_domain_stats(const pfe_l2br_t *bridge, uint8_t vlan_index);
+errno_t pfe_l2br_get_domain_stats(const pfe_l2br_t *bridge, pfe_ct_vlan_stats_t *stat, uint8_t vlan_index);
+uint8_t pfe_l2br_get_vlan_stats_index(const pfe_l2br_domain_t *domain);
 
 errno_t pfe_l2br_flush_learned(pfe_l2br_t *bridge);
 errno_t pfe_l2br_flush_static(pfe_l2br_t *bridge);
 errno_t pfe_l2br_flush_all(pfe_l2br_t *bridge);
-pfe_l2br_table_entry_t *pfe_l2br_static_entry_get_entry(pfe_l2br_static_entry_t *static_ent);
+pfe_l2br_table_entry_t *pfe_l2br_static_entry_get_entry(const pfe_l2br_static_entry_t *static_ent);
 #endif /* PUBLIC_PFE_L2BR_H_ */

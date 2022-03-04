@@ -292,9 +292,6 @@ pfe_if_db_t * pfe_if_db_create(pfe_if_db_type_t type)
 	/* Create global DB lock */
 	if(0U == if_db_context.ref_cnt)
 	{
-		/* Lock the data */
-		if_db_context.is_locked = TRUE;
-
 		if(EOK != oal_mutex_init(&if_db_context.mutex))
 		{
 			/* Handle errors*/
@@ -605,7 +602,7 @@ errno_t pfe_if_db_remove(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry_t
 
 	LLIST_Remove(&(entry->list_member));
 	oal_mm_free(entry);
-
+	
 	if(EOK != oal_mutex_unlock(&if_db_context.mutex))
 	{
 		NXP_LOG_DEBUG("DB mutex unlock failed\n");

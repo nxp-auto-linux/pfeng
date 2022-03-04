@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 NXP
+ * Copyright 2021-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -17,7 +17,7 @@ int pfeng_ptp_adjfreq(struct ptp_clock_info *ptp, s32 delta)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
-        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac];
+        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac_id];
 	bool_t sgn = TRUE;
 	errno_t ret = 0;
 
@@ -42,7 +42,7 @@ int pfeng_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
-        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac];
+        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac_id];
 	errno_t ret = 0;
 	bool_t sgn = TRUE;
 	uint32_t sec = 0, nsec = 0;
@@ -71,14 +71,14 @@ int pfeng_ptp_gettime64(struct ptp_clock_info *ptp, struct timespec64 *ts)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
-        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac];
+        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac_id];
 	uint32_t sec = 0, nsec = 0;
-	uint64_t nsts = 0;
+	uint16_t sec_hi = 0;
 	errno_t ret;
 
-	ret = pfe_emac_get_ts_time(emac, &sec, &nsec);
-	nsts = nsec + sec * NS_IN_S;
-	*ts = ns_to_timespec64(nsts);
+	ret = pfe_emac_get_ts_time(emac, &sec, &nsec, &sec_hi);
+	ts->tv_nsec = nsec;
+	ts->tv_sec = ((uint64_t)sec_hi << 32U) + sec;
 
 	PTP_DEBUG(netif->netdev, "%s, returned s %lld ns %ld \n",__func__, ts->tv_sec, ts->tv_nsec);
 
@@ -94,12 +94,14 @@ int pfeng_ptp_settime64(struct ptp_clock_info *ptp, const struct timespec64 *ts)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
-        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac];
+	pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac_id];
 	errno_t ret;
+	uint32_t sec = (uint64_t)ts->tv_sec & 0x00000000FFFFFFFFU;
+	uint16_t sec_hi = (uint16_t)(ts->tv_sec >> 32);
 
 	PTP_DEBUG(netif->netdev, "%s, s %lld ns %ld \n",__func__, ts->tv_sec, ts->tv_nsec);
 
-	ret = pfe_emac_set_ts_time(emac, ts->tv_sec, ts->tv_nsec);
+	ret = pfe_emac_set_ts_time(emac, sec, ts->tv_nsec, sec_hi);
 
 	if (ret != 0) {
 		netdev_err(netif->netdev, "Set time failed (err %d)\n", ret);
@@ -150,7 +152,7 @@ static void pfeng_ptp_prepare_clock_adjustement(struct pfeng_netif *netif, unsig
 void pfeng_ptp_register(struct pfeng_netif *netif)
 {
 	struct pfeng_priv *priv = netif->priv;
-        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac];
+        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac_id];
 	errno_t ret;
 
 	/* Set PTP clock to null in case of error */
@@ -168,7 +170,7 @@ void pfeng_ptp_register(struct pfeng_netif *netif)
 				 priv->clk_ptp_reference / 2LLU);
 
 	if(ret) {
-		dev_err(netif->dev, "Failed to register PTP clock on EMAC%d\n", netif->cfg->emac);
+		dev_err(netif->dev, "Failed to register PTP clock on EMAC%d\n", netif->cfg->emac_id);
 		return;
 	}
 
@@ -177,9 +179,9 @@ void pfeng_ptp_register(struct pfeng_netif *netif)
 	netif->ptp_clock = ptp_clock_register(&netif->ptp_ops, netif->dev);
 
 	if (IS_ERR(netif->ptp_clock))
-		netdev_err(netif->netdev, "Failed to register PTP clock on EMAC%d\n", netif->cfg->emac);
+		netdev_err(netif->netdev, "Failed to register PTP clock on EMAC%d\n", netif->cfg->emac_id);
 	else if (netif->ptp_clock)
-		netdev_info(netif->netdev, "Registered PTP HW clock successfully on EMAC%d\n", netif->cfg->emac);
+		netdev_info(netif->netdev, "Registered PTP HW clock successfully on EMAC%d\n", netif->cfg->emac_id);
 }
 
 void pfeng_ptp_unregister(struct pfeng_netif *netif)
@@ -187,6 +189,6 @@ void pfeng_ptp_unregister(struct pfeng_netif *netif)
 	if (netif->ptp_clock) {
 		ptp_clock_unregister(netif->ptp_clock);
 		netif->ptp_clock = NULL;
-		netdev_info(netif->netdev, "Unregistered PTP HW clock successfully on EMAC%d\n", netif->cfg->emac);
+		netdev_info(netif->netdev, "Unregistered PTP HW clock successfully on EMAC%d\n", netif->cfg->emac_id);
 	}
 }

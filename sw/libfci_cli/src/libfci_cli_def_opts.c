@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -7976,12 +7976,12 @@ static const char* txt_mandopts[MANDOPT_OPTS_LN] = {NULL};
 
 /* ==== PUBLIC FUNCTIONS : MANDOPT ========================================= */
 
-void cli_mandopt_print(const char* p_txt_delim)
+void cli_mandopt_print(const char* p_txt_indent, const char* p_txt_delim)
 {
     assert(NULL != p_txt_delim);
     
     
-    const char* p_txt_tmp = "";  /* there should be no delimiter in front of the very first item */
+    const char* p_txt_tmp = p_txt_indent;
     for (uint8_t i = 0u; (MANDOPT_OPTS_LN > i); (++i))
     {
         const char* p_txt_opt = txt_mandopts[i];

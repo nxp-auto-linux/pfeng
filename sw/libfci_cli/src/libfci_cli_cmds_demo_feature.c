@@ -55,24 +55,20 @@ typedef struct demo_menu_item_tt {
 } demo_feature_t;
 
 extern int demo_feature_physical_interface(FCI_CLIENT* p_cl);
-extern int demo_feature_L2_bridge_simple(FCI_CLIENT* p_cl);
 extern int demo_feature_L2_bridge_vlan(FCI_CLIENT* p_cl);
 extern int demo_feature_router_simple(FCI_CLIENT* p_cl);
 extern int demo_feature_router_nat(FCI_CLIENT* p_cl);
-extern int demo_feature_L2L3_bridge_simple(FCI_CLIENT* p_cl);
 extern int demo_feature_L2L3_bridge_vlan(FCI_CLIENT* p_cl);
 extern int demo_feature_flexible_filter(FCI_CLIENT* p_cl);
 extern int demo_feature_flexible_router(FCI_CLIENT* p_cl);
 extern int demo_feature_spd(FCI_CLIENT* p_cl);
 extern int demo_feature_qos(FCI_CLIENT* p_cl);
+extern int demo_feature_qos_policer(FCI_CLIENT* p_cl);
  
 static const demo_feature_t demo_features[] = 
 {
     { demo_feature_physical_interface,
                   "physical_interface" },
-    
-    { demo_feature_L2_bridge_simple,
-                  "L2_bridge_simple" },
     
     { demo_feature_L2_bridge_vlan,
                   "L2_bridge_vlan" },
@@ -83,9 +79,6 @@ static const demo_feature_t demo_features[] =
     { demo_feature_router_nat,
                   "router_nat" },
      
-    { demo_feature_L2L3_bridge_simple,
-                  "L2L3_bridge_simple" },
-    
     { demo_feature_L2L3_bridge_vlan,
                   "L2L3_bridge_vlan" },
     
@@ -100,6 +93,9 @@ static const demo_feature_t demo_features[] =
     
     { demo_feature_qos,
                   "qos" },
+    
+    { demo_feature_qos_policer,
+                  "qos_policer" },
 }; 
 
 #define DEMO_FEATURES_LN (uint8_t)(sizeof(demo_features) / sizeof(demo_feature_t))

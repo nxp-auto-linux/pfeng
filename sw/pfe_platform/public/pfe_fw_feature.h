@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -11,7 +11,7 @@
 #define PFE_FW_FEATURE_H
 
 typedef errno_t(*dmem_read_func_t)(void *, int32_t, void *, addr_t, uint32_t);
-typedef errno_t(*dmem_write_func_t)(void *, int32_t, addr_t, void *, uint32_t);
+typedef errno_t(*dmem_write_func_t)(void *, int32_t, addr_t, const void *, uint32_t);
 typedef struct pfe_fw_feature_tag pfe_fw_feature_t;
 
 pfe_fw_feature_t *pfe_fw_feature_create(void);

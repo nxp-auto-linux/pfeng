@@ -44,21 +44,32 @@
 /*
  * @brief      Use libFCI to configure PFE as a VLAN-aware L2 bridge.
  * @details    Scenario description:
- *               [*] Let there be four computers (PCs):
- *                     --> Two PCs (PC0_100 and PC0_200) are accessible via
+ *               [*] Let there be six computers (PCs):
+ *                     --> Three PCs (PC0_NOVLAN, PC0_100 and PC0_200) are accessible via
  *                         PFE's emac0 physical interface.
- *                     --> Two PCs (PC1_100 and PC1_200) are accessible via
+ *                     --> Three PCs (PC1_NOVLAN, PC1_100 and PC1_200) are accessible via
  *                         PFE's emac1 physical interface.
  *               [*] Use libFCI to configure PFE as a VLAN-aware L2 bridge, allowing the PCs 
- *                   in respective VLAN domains to communicate with each other.
- *                     --> PC0_100 and PC1_100 are both in the VLAN domain 100.
- *                     --> PC0_200 and PC1_200 are both in the VLAN domain 200.
+ *                   to communicate as follows:
+ *                     --> PC0_NOVLAN and PC1_NOVLAN  (untagged traffic)
+ *                     --> PC0_100 and PC1_100        (VLAN 100 tagged traffic)
+ *                     --> PC0_200 and PC1_200        (VLAN 200 tagged traffic)
  *               [*] Additional requirements:
  *                     --> Dynamic learning of MAC addresses shall be disabled on 
  *                         emac0 and emac1 interfaces.
  *                     --> In VLAN 200 domain, a replica of all passing traffic shall be sent 
  *                         to a host.
  *             PC description:
+ *               PC0_NOVLAN
+ *                 --> IP  address: 10.3.0.2/24
+ *                 --> MAC address: 0A:01:23:45:67:89
+ *                 --> Accessible via PFE's emac0 physical interface.
+ *                 --> Sends untagged traffic
+ *               PC1_NOVLAN
+ *                 --> IP  address: 10.3.0.5/24
+ *                 --> MAC address: 0A:FE:DC:BA:98:76
+ *                 --> Accessible via PFE's emac1 physical interface.
+ *                 --> Sends untagged traffic
  *               PC0_100:
  *                 --> IP  address: 10.100.0.2/24
  *                 --> MAC address: 02:11:22:33:44:55
@@ -110,6 +121,29 @@ int demo_feature_L2_bridge_vlan(FCI_CLIENT* p_cl)
     {
         fpp_l2_bd_cmd_t bd = {0};
         
+        /* Default BD (VLAN == 1) */
+        /* ---------------------- */
+        /* This bridge domain already exists (automatically created at driver startup). */
+        /* It is used by PFE to process untagged traffic. */
+        if (FPP_ERR_OK == rtn)
+        {
+            /* get data from PFE and store them in the local variable "bd" */
+            rtn = demo_l2_bd_get_by_vlan(p_cl, &bd, 1u);
+            if (FPP_ERR_OK == rtn)
+            {
+                /* modify locally stored data */
+                demo_l2_bd_ld_insert_phyif(&bd, 0u, false);  /* 0u == ID of emac0 */
+                demo_l2_bd_ld_insert_phyif(&bd, 1u, false);  /* 1u == ID of emac1 */
+                demo_l2_bd_ld_set_ucast_hit(&bd, 0u);   /* 0u == bridge action "FORWARD" */
+                demo_l2_bd_ld_set_ucast_miss(&bd, 1u);  /* 1u == bridge action "FLOOD" */
+                demo_l2_bd_ld_set_mcast_hit(&bd, 0u);   /* 0u == bridge action "FORWARD" */
+                demo_l2_bd_ld_set_mcast_miss(&bd, 1u);  /* 1u == bridge action "FLOOD" */
+                
+                /* update data in PFE */
+                rtn = demo_l2_bd_update(p_cl, &bd);
+            }
+        }
+        
         /* bridge domain 100 */
         /* ----------------- */
         if (FPP_ERR_OK == rtn)
@@ -159,6 +193,45 @@ int demo_feature_L2_bridge_vlan(FCI_CLIENT* p_cl)
     if (FPP_ERR_OK == rtn)
     {
         fpp_l2_static_ent_cmd_t stent = {0};
+
+        /* static entry for bridge domain 1 (MAC of PC0_NOVLAN) */
+        /* ---------------------------------------------------- */
+        if (FPP_ERR_OK == rtn)
+        {
+            /* create a new static entry in PFE */
+            rtn = demo_l2_stent_add(p_cl, &stent, 1u,
+                                    (uint8_t[6]){0x0A,0x01,0x23,0x45,0x67,0x89});
+
+            if (FPP_ERR_OK == rtn)
+            {
+                /* modify locally stored data of the new static entry */
+                /* 0u == ID of emac0 */
+                demo_l2_stent_ld_set_fwlist(&stent, (1uL << 0u));
+
+                /* update the new static entry in PFE */
+                rtn = demo_l2_stent_update(p_cl, &stent);
+            }
+        }
+
+        /* static entry for bridge domain 1 (MAC of PC1_NOVLAN) */
+        /* ---------------------------------------------------- */
+        if (FPP_ERR_OK == rtn)
+        {
+            /* create a new static entry in PFE */
+            rtn = demo_l2_stent_add(p_cl, &stent, 1u,
+                                    (uint8_t[6]){0x0A,0xFE,0xDC,0xBA,0x98,0x76});
+
+            if (FPP_ERR_OK == rtn)
+            {
+                /* modify locally stored data of the new static entry */
+                /* 1u == ID of emac1 */
+                demo_l2_stent_ld_set_fwlist(&stent, (1uL << 1u));
+
+                /* update the new static entry in PFE */
+                rtn = demo_l2_stent_update(p_cl, &stent);
+            }
+        }
+
         
         /* static entry for bridge domain 100 (MAC of PC0_100) */
         /* --------------------------------------------------- */

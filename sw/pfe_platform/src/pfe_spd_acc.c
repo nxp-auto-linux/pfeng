@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -10,22 +10,21 @@
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "pfe_ct.h"
-
 #include "blalloc.h"
-#include "pfe_class.h"
-#include "pfe_rtable.h"
-#include "pfe_if_db.h"
-
 #include "pfe_spd.h"
+#include "pfe_spd_acc.h"
 
 #ifdef PFE_CFG_FCI_ENABLE
 
 /* HW acceleration of the SPD entry search must be supported by a proper configuration
    which we do here */
 
-blalloc_t *pfe_spd_acc_id_pool = NULL;
-pfe_rtable_t *rtable_ptr = NULL;
-
+#if 0 /* todo AAVB-2539 */
+#if defined(PFE_CFG_RTABLE_ENABLE)
+static blalloc_t *pfe_spd_acc_id_pool = NULL;
+static pfe_rtable_t *rtable_ptr = NULL;
+#endif
+#endif
 
 /**
 * @brief Initializes the module
@@ -34,7 +33,7 @@ pfe_rtable_t *rtable_ptr = NULL;
 * @return EOK or an error code in case of failure
 * @note No other function call is allowed before call of the pfe_spd_acc_init()
 */
-errno_t pfe_spd_acc_init(pfe_class_t *class, pfe_rtable_t *rtable)
+errno_t pfe_spd_acc_init(pfe_class_t *class, const pfe_rtable_t *rtable)
 {
     errno_t ret = EOK;
 #if 0 /* todo AAVB-2539 */
@@ -89,9 +88,13 @@ void pfe_spd_acc_destroy(pfe_if_db_t *phy_if_db)
 
     pfe_spd_destroy(phy_if_db);
 
+#if 0 /* todo AAVB-2539 */
+#if defined(PFE_CFG_RTABLE_ENABLE)
     /* Forget platform instances */
     pfe_spd_acc_id_pool = NULL;
     rtable_ptr = NULL;
+#endif
+#endif
 }
 
 #if 0 /* todo AAVB-2539 */
@@ -341,7 +344,7 @@ errno_t pfe_spd_acc_remove_rule(pfe_phy_if_t * phy_if, uint16_t position)
 * @param[in] position Position of the rule to be read
 * @param[out] entry Retrieved rule, valid only if EOK is returned
 */
-errno_t pfe_spd_acc_get_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd_entry_t *entry)
+errno_t pfe_spd_acc_get_rule(const pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd_entry_t *entry)
 {
     return pfe_spd_get_rule(phy_if, position, entry);
 }

@@ -204,7 +204,7 @@ bool_t pfe_fw_feature_is_in_class(const pfe_fw_feature_t *feature)
     
     (void)pfe_fw_feature_get_flags(feature, &flags);
     
-    return (F_NONE == (flags & F_CLASS))? FALSE : TRUE;
+    return ((uint8_t)F_NONE == ((uint8_t)flags & (uint8_t)F_CLASS))? FALSE : TRUE;
 }
 
 /**
@@ -227,7 +227,7 @@ bool_t pfe_fw_feature_is_in_util(const pfe_fw_feature_t *feature)
     
     (void)pfe_fw_feature_get_flags(feature, &flags);
     
-    return (F_NONE == (flags & F_UTIL))? FALSE : TRUE;
+    return ((uint8_t)F_NONE == ((uint8_t)flags & (uint8_t)F_UTIL))? FALSE : TRUE;
 }
 
 

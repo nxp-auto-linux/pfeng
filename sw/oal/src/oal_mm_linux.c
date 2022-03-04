@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -240,6 +240,11 @@ static void __oal_mm_reserved_sys_mem_free_htable(struct pfe_kmem *hnode)
 {
 	bmu_start_va = NULL;
 	kfree(hnode);
+}
+
+struct device *oal_mm_get_dev(void)
+{
+	return __dev;
 }
 
 /**

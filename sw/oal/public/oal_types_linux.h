@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -12,25 +12,64 @@
 #include <linux/types.h>
 #include <stddef.h>
 
+#include <linux/string.h>
+#include <linux/platform_device.h>
+
+/* get device from oal_mm_linux */
+extern struct device *oal_mm_get_dev(void);
+/* msg_verbosity from pfeng driver M/S */
+extern int msg_verbosity;
+
 #define __STR_HELPER(x) #x
 #define __STR(x) __STR_HELPER(x)
 
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+
 #define NXP_LOG_ENABLED
 
-#define NXP_LOG_WARNING(...) printk(KERN_WARNING "["__FILE__":"__STR(__LINE__)"] WRN: " __VA_ARGS__)
-#define NXP_LOG_ERROR(...) printk(KERN_ERR "["__FILE__":"__STR(__LINE__)"] ERR: " __VA_ARGS__)
+#define NXP_LOG_WARNING(format, ...) { \
+	struct device *dev = oal_mm_get_dev(); \
+	if (dev) { \
+		if (msg_verbosity >= 7) { \
+			dev_warn(dev, "[%s:"__STR(__LINE__)"] " format, __FILENAME__, ##__VA_ARGS__); \
+		} else { \
+			dev_warn(dev, format, ##__VA_ARGS__); \
+		} \
+	} \
+}
 
-#if (PFE_CFG_VERBOSITY_LEVEL >= 4)
-#define NXP_LOG_INFO(...) printk(KERN_INFO "["__FILE__":"__STR(__LINE__)"] INF: " __VA_ARGS__)
-#else
-#define NXP_LOG_INFO(...)
-#endif
+#define NXP_LOG_ERROR(format, ...) { \
+	struct device *dev = oal_mm_get_dev(); \
+	if (dev) { \
+		if (msg_verbosity >= 7) { \
+			dev_err(dev, "[%s:"__STR(__LINE__)"] " format, __FILENAME__, ##__VA_ARGS__); \
+		} else { \
+			dev_err(dev, format, ##__VA_ARGS__); \
+		} \
+	} \
+}
 
-#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
-#define NXP_LOG_DEBUG(...) printk(KERN_DEBUG "["__FILE__":"__STR(__LINE__)"] DBG: " __VA_ARGS__)
-#else
-#define NXP_LOG_DEBUG(...)
-#endif
+#define NXP_LOG_INFO(format, ...) { \
+	struct device *dev = oal_mm_get_dev(); \
+	if (dev) { \
+		if (msg_verbosity >= 7) { \
+			dev_info(dev, "[%s:"__STR(__LINE__)"] " format, __FILENAME__, ##__VA_ARGS__); \
+		} else { \
+			dev_info(dev, format, ##__VA_ARGS__); \
+		} \
+	} \
+}
+
+#define NXP_LOG_DEBUG(format, ...) { \
+	struct device *dev = oal_mm_get_dev(); \
+	if (dev) { \
+		if (msg_verbosity >= 7) { \
+			dev_dbg(dev, "[%s:"__STR(__LINE__)"] " format, __FILENAME__, ##__VA_ARGS__); \
+		} else { \
+			dev_dbg(dev, format, ##__VA_ARGS__); \
+		} \
+	} \
+}
 
 #if defined(PFE_CFG_TARGET_ARCH_i386)
 typedef unsigned int addr_t;

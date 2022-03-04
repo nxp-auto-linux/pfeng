@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -18,6 +18,10 @@
 #include "pfe_ct.h"
 #include "pfe_idex.h"
 
+#ifdef PFE_CFG_FCI_ENABLE
+#include "fci.h"
+#endif /* PFE_CFG_FCI_ENABLE */
+
 static pfe_platform_t pfe = {.probed = FALSE};
 
 /**
@@ -26,6 +30,11 @@ static pfe_platform_t pfe = {.probed = FALSE};
 void pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg)
 {
 	pfe_platform_t *platform = (pfe_platform_t *)arg;
+
+	(void)sender;
+	(void)id;
+	(void)buf;
+	(void)buf_len;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == platform))
@@ -56,13 +65,71 @@ static errno_t pfe_platform_create_hif(pfe_platform_t *platform, const pfe_platf
 	uint32_t ii;
 	static pfe_hif_chnl_id_t ids[HIF_CFG_MAX_CHANNELS] = {HIF_CHNL_0, HIF_CHNL_1, HIF_CHNL_2, HIF_CHNL_3};
 	pfe_hif_chnl_t *chnl;
+	pfe_hif_chnl_id_t channel_mask;
+	addr_t hif_cbus_base_va = platform->cbus_baseaddr + CBUS_HIF_BASE_ADDR;
+	bool_t master_up = FALSE;
+	uint32_t slave_tmout = PFE_CFG_SLAVE_HIF_MASTER_UP_TMOUT;
 
-	platform->hif = pfe_hif_create(platform->cbus_baseaddr + CBUS_HIF_BASE_ADDR, config->hif_chnls_mask);
+	if (FALSE == config->disable_master_detect)
+	{
+
+		/*	Wait for Master up before creation of the HIF channels. If the Slave were not waiting here for
+			Master and continue with HIF channel initialization, then the Master would reset Slave's HIF
+			configuration during Master init. */
+		NXP_LOG_INFO("Wait for Master UP ...\n");
+		while(FALSE == master_up)
+		{
+			channel_mask = config->hif_chnls_mask;
+			for (ii = 0U; ii < HIF_CFG_MAX_CHANNELS; (channel_mask >>= 1), ii++)
+			{
+				if (0 != (channel_mask & 0x01U))
+				{
+					if (0U != (pfe_hif_chnl_cfg_ltc_get(hif_cbus_base_va, ii) & MASTER_UP))
+					{
+						master_up = TRUE;
+						break;
+					}
+				}
+
+				if (TRUE == master_up)
+				{
+					break;
+				}
+			}
+
+			if (FALSE == master_up)
+			{
+				oal_time_usleep(1000);
+			}
+
+			/*	Decrement only for slave_tmout > 0 */
+			if (0U != slave_tmout)
+			{
+				slave_tmout--;
+				if (0U == slave_tmout)
+				{
+					NXP_LOG_INFO("Detection Master UP timeouted\n");
+					return ETIMEDOUT;
+				}
+			}
+		}
+		NXP_LOG_INFO("Detected Master UP\n");
+	}
+	else
+	{
+		NXP_LOG_INFO("Master UP detectection disabled\n");
+	}
+
+	platform->hif = pfe_hif_create(hif_cbus_base_va, config->hif_chnls_mask);
 	if (NULL == platform->hif)
 	{
 		NXP_LOG_ERROR("Couldn't create HIF instance\n");
 		return ENODEV;
 	}
+
+	#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	pfe_hif_set_master_detect_cfg(platform->hif, !config->disable_master_detect);
+	#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	/*	Enable channel interrupts */
 	for (ii = 0U; ii < HIF_CFG_MAX_CHANNELS; ii++)
@@ -366,6 +433,36 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 	return ret;
 }
 
+#if defined(PFE_CFG_FCI_ENABLE)
+/**
+ * @brief		Start the FCI endpoint
+ *
+ */
+static errno_t pfe_platform_create_fci(pfe_platform_t *platform)
+{
+	errno_t ret = EOK;
+
+	ret = fci_init(NULL, "pfe_fci");
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Could not create the FCI endpoint\n");
+		return ret;
+	}
+
+	platform->fci_created = TRUE;
+	return EOK;
+}
+
+/**
+ * @brief		Release FCI-related resources
+ */
+static void pfe_platform_destroy_fci(pfe_platform_t *platform)
+{
+	fci_fini();
+	platform->fci_created = FALSE;
+}
+#endif /* PFE_CFG_FCI_ENABLE */
+
 /**
  * @brief	The platform initialization function
  * @details	Initializes the PFE HW platform and prepares it for usage according to configuration.
@@ -403,6 +500,14 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	}
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
+#if defined(PFE_CFG_FCI_ENABLE)
+	ret = pfe_platform_create_fci(&pfe);
+	if (EOK != ret)
+	{
+		goto exit;
+	}
+#endif /* PFE_CFG_FCI_ENABLE */
+
 	pfe.probed = TRUE;
 
 	return EOK;
@@ -418,6 +523,10 @@ exit:
 errno_t pfe_platform_remove(void)
 {
 	errno_t ret;
+
+#if defined(PFE_CFG_FCI_ENABLE)
+	pfe_platform_destroy_fci(&pfe);
+#endif /* PFE_CFG_FCI_ENABLE */
 
 	pfe_platform_destroy_hif(&pfe);
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)

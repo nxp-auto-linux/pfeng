@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -320,6 +320,30 @@ typedef struct __attribute__((packed, aligned(4)))
 } pfe_ct_vlan_statistics_t;
 
 /*
+* @brief Statistic entry for conntrack
+*/
+typedef struct __attribute__((packed, aligned(4)))
+{
+	/* Number of frames that hit the conntrack */
+	uint32_t hit;
+	/* Number of bytes of frames that hit the conntrack */
+	uint32_t hit_bytes;
+} pfe_ct_conntrack_stats_t;
+
+/*
+* @brief Statistics gathered for each conntrack
+*/
+typedef struct __attribute__((packed, aligned(4)))
+{
+	/* Number of configured conntracks */
+	uint16_t conntrack_count;
+	/* Reserved variables to keep "stats" aligned */
+	uint16_t reserved16;
+	/* Pointer to conntrack stats table */
+	PFE_PTR (pfe_ct_conntrack_stats_t) stats_table;
+} pfe_ct_conntrack_statistics_t;
+
+/*
 * @brief Statistics gathered for the whole processing engine (PE)
 */
 typedef struct __attribute__((packed, aligned(4)))
@@ -342,13 +366,11 @@ typedef struct __attribute__((packed, aligned(4)))
  */
 typedef enum __attribute__((packed))
 {
-	IF_OP_DEFAULT = 0U,				/*!< Default operational mode */
-	IF_OP_BRIDGE = 1U,				/*!< L2 bridge */
-	IF_OP_ROUTER = 2U,				/*!< L3 router */
-	IF_OP_VLAN_BRIDGE = 3U,			/*!< L2 bridge with VLAN */
-	IF_OP_FLEX_ROUTER = 4U,			/*!< Flexible router */
-	IF_OP_L2L3_BRIDGE = 5U,			/*!< L2-L3 bridge */
-	IF_OP_L2L3_VLAN_BRIDGE = 6U,	/*!< L2-L3 bridge with VLAN */
+	IF_OP_DEFAULT = 0U,		/*!< Default operational mode */
+	IF_OP_VLAN_BRIDGE = 1U,		/*!< L2 bridge with VLAN */
+	IF_OP_ROUTER = 2U,		/*!< L3 router */
+	IF_OP_FLEX_ROUTER = 3U,		/*!< Flexible router */
+	IF_OP_L2L3_VLAN_BRIDGE = 4U,	/*!< L2-L3 bridge with VLAN */
 } pfe_ct_if_op_mode_t;
 
 /*	We expect given pfe_ct_if_op_mode_t size due to byte order compatibility. */
@@ -627,7 +649,7 @@ typedef union __attribute__((packed))
 	{
 		/*	[55 : 63] */ /* Reserved */
 		uint64_t hw_reserved : 9;
-		/*	[54:48]  Index in vlan stats table (pfe_ct_vlan_statistics_t) */
+		/*	[54:48] Index in vlan stats table (pfe_ct_vlan_statistics_t) */
 		uint64_t stats_index : 7;
 		/*	[47:45] Multicast miss action (pfe_ct_l2br_action_t) */
 		uint64_t mcast_miss_action : 3;
@@ -716,12 +738,12 @@ ct_assert(sizeof(pfe_ct_feature_flags_t) == 1U);
 */
 typedef struct __attribute__((packed,aligned(4)))
 {
-	PFE_PTR(const char)name;          /* Feature name */
-	PFE_PTR(const char)description;   /* Feature description */
-	PFE_PTR(uint8_t) position;        /* Position of the run-time enable byte */
+	PFE_PTR(const char)name;               /* Feature name */
+	PFE_PTR(const char)description;        /* Feature description */
+	PFE_PTR(uint8_t) position;             /* Position of the run-time enable byte */
 	const pfe_ct_feature_flags_t flags;    /* Configuration variant: 0 = disabled, 1 = enabled, 2 = runtime configured */
-	const uint8_t def_val;            /* Enable/disable default value used for runtime configuration */
-	const uint8_t reserved[2];        /* Pad */
+	const uint8_t def_val;                 /* Enable/disable default value used for runtime configuration */
+	const uint8_t reserved[2];             /* Pad */
 } pfe_ct_feature_desc_t;
 
 ct_assert(sizeof(pfe_ct_feature_desc_t) == 16);
@@ -792,6 +814,19 @@ typedef struct __attribute__ (( packed, aligned (4) ))
 	uint16_t l2_mac_aging_timeout;
 } pfe_ct_misc_config_t;
 
+/*
+* @brief Statistics gathered during IHC classification
+*/
+typedef struct __attribute__((packed, aligned(4)))
+{
+	/* Number of send IHC frames */
+	uint32_t tx;
+	/* Number of received IHC frames */
+	uint32_t rx;
+	/* Number of IHC frames marked to be dropped */
+	uint32_t discarded;
+} pfe_ct_class_ihc_stats_t;
+
 /**
  * @brief Statistics gathered for each classification algorithm
  * @details NULL pointer means that given statistics are no available
@@ -802,54 +837,65 @@ typedef struct __attribute__((packed, aligned(4)))
 	pfe_ct_class_algo_stats_t flexible_router;
 	/* Statistics gathered by IP router algorithm (IF_OP_ROUTER) */
 	pfe_ct_class_algo_stats_t ip_router;
-	/* Statistics gathered by L2 bridge algorithm (IF_OP_BRIDGE) */
-	pfe_ct_class_algo_stats_t l2_bridge;
 	/* Statistics gathered by VLAN bridge algorithm (IF_OP_VLAN_BRIDGE) */
 	pfe_ct_class_algo_stats_t vlan_bridge;
 	/* Statistics gathered by logical interface matching algorithm (IF_OP_DEFAULT) */
 	pfe_ct_class_algo_stats_t log_if;
 	/* Statistics gathered when hif-to-hif classification is done */
-	pfe_ct_class_algo_stats_t hif_to_hif;
+	pfe_ct_class_ihc_stats_t hif_to_hif[PFE_PHY_IF_ID_MAX + 1];
 	/* Statisctics gathered by Flexible Filter */
 	pfe_ct_class_flexi_parser_stats_t flexible_filter;
 } pfe_ct_classify_stats_t;
 
 /**
- * @brief Number of FW error reports which can be stored in pfe_ct_error_record_t
+ * @brief Number of FW messages which can be stored in pfe_ct_message_record_t
  * @details The value must be power of 2.
  */
-#define FP_ERROR_RECORD_SIZE 64U
+#define FP_MESSAGE_RECORD_SIZE 64U
 
 /**
- * @brief Reported error storage
- * @note Instances of this structure are stored in an elf-file section .errors which
+ * @brief	List of message levels
+ */
+typedef enum __attribute__((packed))
+{
+	PFE_MESSAGE_EXCEPTION = 0U,
+	PFE_MESSAGE_ERROR     = 1U,
+	PFE_MESSAGE_WARNING   = 2U,
+	PFE_MESSAGE_INFO      = 3U,
+	PFE_MESSAGE_DEBUG     = 4U
+} pfe_ct_message_level_t;
+
+/**
+ * @brief Reported message storage
+ * @note Instances of this structure are stored in an elf-file section .messages which
  *       is not loaded into any memory and the driver accesses it only through the
  *       elf-file.
  */
 typedef struct __attribute__((packed, aligned(4)))
 {
-	/* Error description - string in .errors section */
+	/* Message content - string in .messages section */
 	PFE_PTR(const char_t)message;
-	/* File name where error occurred - string in .errors section */
+	/* File name where message was logged - string in .messages section */
 	PFE_PTR(const char_t)file;
-	/* Line where error occurred */
+	/* Line where message was logged */
 	const uint32_t line;
-} pfe_ct_error_t;
+} pfe_ct_message_t;
 
 /**
- * @brief Storage for runtime errors
- * @note The pointers cannot be dereferenced because the .errors section is not loaded
+ * @brief Storage for runtime messeges
+ * @note The pointers cannot be dereferenced because the .messages section is not loaded
  *       into memory and the elf-file parsing is needed to translate them.
  */
 typedef struct __attribute__((packed, aligned(4)))
 {
-	/* Next position to write: (write_index & (FP_ERROR_RECORD_SIZE - 1)) */
+	/* Next position to write: (write_index & (FP_MESSAGE_RECORD_SIZE - 1)) */
 	uint32_t write_index;
-	/* Stored errors - pointers point to section .errors which is not
+	/* Stored messages - pointers point to section .messages which is not
 	    part of any memory, just the elf-file */
-	PFE_PTR(const pfe_ct_error_t) errors[FP_ERROR_RECORD_SIZE];
-	uint32_t values[FP_ERROR_RECORD_SIZE];
-} pfe_ct_error_record_t;
+	PFE_PTR(const pfe_ct_message_t) messages[FP_MESSAGE_RECORD_SIZE];
+	uint32_t values[FP_MESSAGE_RECORD_SIZE];
+	pfe_ct_message_level_t  level[FP_MESSAGE_RECORD_SIZE];
+} pfe_ct_message_record_t;
 
 /**
  * @brief The firmware internal state
@@ -937,8 +983,8 @@ typedef struct __attribute__((packed, aligned(4)))
 	PFE_PTR(pfe_ct_pe_misc_control_t) pe_misc_control;
 	/*	Misc. config  */
 	PFE_PTR(pfe_ct_misc_config_t) misc_config;
-	/*	Errors reported by the FW */
-	PFE_PTR(pfe_ct_error_record_t) error_record;
+	/*	Messages logged by the FW */
+	PFE_PTR(pfe_ct_message_record_t) message_record;
 	/*	FW state */
 	PFE_PTR(pfe_ct_pe_sw_state_monitor_t) state_monitor;
 	/*	Count of the measurement storages - 0 = feature not enabled */
@@ -946,6 +992,16 @@ typedef struct __attribute__((packed, aligned(4)))
 	/*	Performance measurement storages - NULL = none (feature not enabled) */
 	PFE_PTR(pfe_ct_measurement_t) measurements;
 } pfe_ct_common_mmap_t;
+
+/**
+ * @brief Information about configured HIF TMU queue sizes 
+ * @details The value is sum of TMU Queue sizes belonging to the HIF channel with number
+ *          equal to array index.
+ */
+typedef struct
+{
+	uint16_t hif_channel[4U];
+} pfe_ct_hif_tmu_queue_sizes_t;
 
 /**
  * @brief Class PE memory map representation type shared between host and PFE
@@ -972,12 +1028,16 @@ typedef struct __attribute__((packed, aligned(4)))
 	PFE_PTR(pfe_ct_classify_stats_t) classification_stats;
 	/*	Statistics provided for each vlan */
 	PFE_PTR(pfe_ct_vlan_statistics_t) vlan_statistics;
+	/*	Statistics provided for each conntrack */
+	PFE_PTR(pfe_ct_conntrack_statistics_t) conntrack_statistics;
 	/*	Flexible Filter */
 	PFE_PTR(pfe_ct_flexible_filter_t) flexible_filter;
 	/*	Put buffer: FW-to-SW data transfers */
 	PFE_PTR(pfe_ct_buffer_t) put_buffer;
 	/*	Get buffer: SW-to-FW data transfers */
 	PFE_PTR(pfe_ct_buffer_t) get_buffer;
+	/*	HIF TMU Queue sizes information for errata ERR051211 workaround*/
+	PFE_PTR(pfe_ct_hif_tmu_queue_sizes_t) hif_tmu_queue_sizes;
 } pfe_ct_class_mmap_t;
 
 /**
@@ -1058,7 +1118,9 @@ typedef enum __attribute__((packed))
 	/*	Frame is Egress Timestamp Report */
 	HIF_RX_ETS = (1U << 9U),
 	/*	IPv6 checksum valid */
-	HIF_RX_IPV6_CSUM = (1U << 10U)
+	HIF_RX_IPV6_CSUM = (1U << 10U),
+	/*	ICMP checksum valid */
+	HIF_RX_ICMP_CSUM = (1U << 11U)
 } pfe_ct_hif_rx_flags_t;
 
 /*	We expect given pfe_ct_hif_rx_flags_t size due to byte order compatibility. */
@@ -1093,7 +1155,9 @@ typedef enum __attribute__((packed))
 	/*	No flag being set */
 	HIF_TX_NO_FLAG = 0U,
 	HIF_TX_RESERVED0 = (1U << 0U),
-	HIF_TX_RESERVED1 = (1U << 1U),
+	/*	ICMP checksum offload. If set then PFE will calculate and
+		insert ICMP header checksum. */
+	HIF_TX_ICMP_CSUM = (1U << 1U),    
 	/*	Generate egress timestamp */
 	HIF_TX_ETS = (1U << 2U),
 	/*	IP checksum offload. If set then PFE will calculate and
@@ -1112,6 +1176,7 @@ typedef enum __attribute__((packed))
 	HIF_TX_INJECT = (1U << 6U),
 	/*	Inter-HIF communication frame */
 	HIF_TX_IHC = (1U << 7U)
+
 } pfe_ct_hif_tx_flags_t;
 
 /*	We expect given pfe_ct_hif_rx_flags_t size due to byte order compatibility. */
@@ -1309,7 +1374,8 @@ typedef struct __attribute__((packed, aligned(4))) pfe_ct_rtable_entry_tag
 	pfe_ct_route_actions_args_t args;
 	/*	General purpose storage */
 	uint32_t id5t; /* 5-tuple identifier for the IPsec */
-	uint32_t dummy;
+	uint16_t conntrack_stats_index; /*index in the stats table*/
+	uint16_t dummy;
 	uint32_t rt_orig;
 } pfe_ct_rtable_entry_t;
 
