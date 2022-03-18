@@ -1027,16 +1027,6 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 	/* Each packet requires extra buffer for Tx header (metadata) */
 	netdev->needed_headroom = PFENG_TX_PKT_HEADER_SIZE;
 
-	ret = register_netdev(netdev);
-	if (ret) {
-		dev_err(dev, "Error registering the device: %d\n", ret);
-		goto err_netdev_reg;
-	}
-	netdev_info(netdev, "registered\n");
-
-	/* start without the RUNNING flag, phylink/idex controls it later */
-	netif_carrier_off(netdev);
-
 #ifdef PFE_CFG_PFE_MASTER
 	pfeng_ethtool_init(netdev);
 
@@ -1055,6 +1045,17 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 #ifdef PFE_CFG_PFE_MASTER
 	netdev->priv_flags |= IFF_UNICAST_FLT;
 #endif
+
+	ret = register_netdev(netdev);
+	if (ret) {
+		dev_err(dev, "Error registering the device: %d\n", ret);
+		goto err_netdev_reg;
+	}
+
+	/* start without the RUNNING flag, phylink/idex controls it later */
+	netif_carrier_off(netdev);
+
+	netdev_info(netdev, "registered\n");
 
 	/* Attach netif to HIF(s) */
 	ret = pfeng_netif_attach_hifs(netif);

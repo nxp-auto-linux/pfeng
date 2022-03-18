@@ -289,10 +289,10 @@ static int pfeng_drv_deferred_probe(void *arg)
 	return 0;
 
 err_drv:
-	pfeng_drv_remove(priv->pdev);
-
-	if (priv->deferred_probe_task && ret == -ETIMEDOUT)
+	if (priv->deferred_probe_task) {
+		priv->deferred_probe_task = NULL;
 		do_exit(0);
+	}
 
 	return ret;
 }

@@ -383,14 +383,14 @@ int pfeng_phylink_create(struct pfeng_netif *netif)
 				emac->xpcs = s32gen1_phy2xpcs(emac->serdes_phy);
 				emac->xpcs_ops = s32gen1_xpcs_get_ops();
 			} else {
-				netdev_err(netif->netdev, "SerDes PHY configuration failed on EMAC%d\n", netif->cfg->emac_id);
+				dev_err(netif->dev, "SerDes PHY configuration failed on EMAC%d\n", netif->cfg->emac_id);
 			}
 		} else {
-			netdev_err(netif->netdev, "SerDes PHY init failed on EMAC%d\n", netif->cfg->emac_id);
+			dev_err(netif->dev, "SerDes PHY init failed on EMAC%d\n", netif->cfg->emac_id);
 		}
 
 		if (!emac->xpcs || !emac->xpcs_ops) {
-			netdev_err(netif->netdev, "Can't get SGMII PCS on EMAC%d\n", netif->cfg->emac_id);
+			dev_err(netif->dev, "Can't get SGMII PCS on EMAC%d\n", netif->cfg->emac_id);
 			emac->xpcs_ops = NULL;
 			emac->xpcs = NULL;
 		}
