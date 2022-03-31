@@ -13,11 +13,20 @@ What is new in this release
 This release has BETA quality status in terms of testing and quality documentation.
 
 The main goals of this release are:
-1) TBD.
-2) Various bug fixes
+1) FCI proxy support
+2) Enhanced AUX interface
+3) Enhanced statistics
+4) PFE Linux Driver verification on RDB3 Boards
 
 The release includes also other features and many improvements,
 as well as an important number of bug fixes (see detailed list below).
+
+Note:
+The DDR Configuration for S32G platforms were updated in Linux BSP 32
+and some PFE performance use cases, especially fast-path, are impacted
+by new default DDR settings.
+The optimal PFE performance is obtained when buffers are placed in SRAM.
+More recommendations can be found in PFE_S32G_A53_LNX_UserManual.pdf - Performance Considerations chapter.
 
 ========================================================
 Installation
@@ -45,6 +54,8 @@ Release Specifics:
     - Evaluation board: S32G-VNP-EVB
         S32GRV-PLATEVB 700-30081
         X-S32G-PROCEVB-S 700-32170
+    - S32G2 Vehicle Networking Reference Design: S32G-VNP-RDB2
+    - S32G3 Vehicle Networking Reference Design: S32G-VNP-RDB3
 
 ========================================================
 Supported Features:
@@ -59,7 +70,7 @@ Supported Derivatives:
 ========================================================
 
 - PS32G274ABVUC 0P77B Rev. 2.0
-- P32G399AACVUC 0P72B
+- P32G399AACVUC 0P72B Rev. 1.0
 
 ========================================================
 Directory Structure:
@@ -95,26 +106,37 @@ Assumptions:
 ========================================================
 
 Compatible firmware: BLN_PFE-FW_S32G_RTM_1.2.0
-Compatible MCAL Master driver: For FCI-Proxy there the PFE Linux Kernel driver was tested with PFE MCAL BETA 0.9.7 CD1
+Compatible MCAL Master driver: PFE MCAL BETA 0.9.7 (for Master-Slave Scenarios)
+- FCI-Proxy configuration - FCI configuration from Linux Slave driver
+- ERR051211 Workaround
 Compatible Linux BSP: Linux BSP 32
 
 ========================================================
 Known Issues
 ========================================================
 
-[AAVB-2695] - [PFE_DRV_LINUX] Sometimes "0" throughput is observed for 64 bytes UDP packets (only for 64bytes). 64bytes RAW IPv4 traffic is ok.
 [AAVB-3197] - [PFE_DRV_LINUX] pinctrl-0/pinctrl-names properties are ignored
 [AAVB-3751] - [PFE_DRV_LINUX] Rare FW errors on unload
-[AAVB-3947] - [PFE_DRV_LINUX] pfeng driver does not check DMA mapping errors
 [AAVB-3970] - [PFE_DRV_LINUX] IDEX: remove use of in_atomic()
 [AAVB-4031] - [PFE_DRV_LINUX] Driver crash: rcu_preempt self-detected stall on CPU (~ 1 in a 1000 times)
-[AAVB-4103] - [PFE_DRV_LINUX] S32G BSP 31.0 - Autoneg from 2.5 to 1G on PFE0 - Error from  Aquantia PHY
+[AAVB-4103] - [PFE_DRV_LINUX] Autoneg from 2.5 to 1G on PFE0 - Error from  Aquantia PHY
+[AAVB-4352] - [PFE_DRV_LINUX] KASAN: stack-out-of-bounds in pfe_pe_memcpy_from_host_to_dmem_32_nolock+0xa8/0x174
+[AAVB-4505] - Not able to access PHY registers over MDIO using Phytool utility
+[AAVB-4508] - [PFE_DRV_LINUX] PHY can connect on higher, unsupported speed
+[AAVB-4607] - [PFE_DRV_LINUX] Failed to disable logical interface during driver unload
+[AAVB-4677] - [PFE_DRV_LINUX] Can not ping from/to PFE0 after suspend on RAM
+[AAVB-4679] - [PFE_DRV_LINUX] Datapath connection between aux0/aux0sl and emac0/emac2 do not work
 
 [AAVB-3527] - [PFE_PLATFORM] Platform doesn't clear all states on destroy (issue for suspend)
-[AAVB-3701] - [PFE_PLATFORM] HIF and HIF_NOCPY channels still receives data even if disable Rx path
-[AAVB-3768] - [PFE_PLATFORM] Multi-Instance: RPC will not work after create many logical interfaces ultil DMEM full
-[AAVB-3776] - [PFE_PLATFORM] HIF channel DMA is active even there is no traffic
+[AAVB-3701] - [PFE_PLATFORM] HIF and HIF_NOCPY channels still receive data even if Rx path is disabled
+[AAVB-3768] - [PFE_PLATFORM] Multi-Instance: RPC will not work after many logical interfaces were created
+[AAVB-3776] - [PFE_PLATFORM] HIF channel DMA is active even when there is no traffic
+[AAVB-3968] - [PFE_PLATFORM] FCI: isl value of QoS shaper is decremented with each shaper update
 [AAVB-4072] - [PFE_PLATFORM] 'Reserved' packets are not dropped if DMEM queue level above WRED FULL threshold
+[AAVB-4218] - [PFE_PLATFORM] MMC interrupt may be triggered without being handled
+[AAVB-4308] - [PFE_PLATFORM] 'Unmanaged' packets are not dropped if DMEM queue level above WRED MAX threshold
+[AAVB-4492] - [PFE_PLATFORM] Ping fails for pfeX after Ingress QoS policer block is enabled
+[AAVB-4713] - [PFE_PLATFORM] FCI: cannot set conntrack timeout for TCP and UDP traffic via FPP_CMD_IPV4_SET_TIMEOUT
 
 ========================================================
 3rd Party Issues
@@ -124,34 +146,73 @@ Known Issues
 What's Modified in BETA_0.9.7
 ========================================================
 
-TBD.
-
-========================================================
-What's Modified in BETA_0.9.7_CD1
-========================================================
-
 # New Feature
-[AAVB-4226] - [PFE_DRV_LINUX][PFE_PLATFORM] Support for PFE Configuration from Linux Slave Driver through MCAL Driver as a Proxy
 
+[AAVB-4226] - [PFE_DRV_LINUX][PFE_PLATFORM] Support for PFE Configuration using FCI API from Linux Slave Driver through MCAL Master Driver as a Proxy
+[AAVB-4628] - [IMPLEMENTATION] Support RDB3 board in 2022 Q1 Releases
+
+# Improvement
+
+[AAVB-2128] - [PFE_QNX/LINUX] Create a common database module and use it in FCI
+[AAVB-2397] - [PFE_DRV_LINUX] pfeng: dt: move to reg-names
+[AAVB-3343] - [PFE_DRV_LINUX] mtu 64: Network is unreachable
+[AAVB-4144] - [PFE_DRV_LINUX] Driver message logging refactor
+[AAVB-4180] - [PFE_DRV_LINUX] Master warn about IHC msg on wrong HIF channel
+[AAVB-4316] - [PFE_DRV_LINUX] Improve IHC: optimize tx spinlock usage and reduce wait queue overhead
+[AAVB-4331] - [PFE_DRV_LINUX] Update documentation with details about FCI Proxy
+[AAVB-4360] - [PFE_DRV_LINUX] When HIF is used for AUX and Log interfaces it is not possible to bridge traffic
+[AAVB-4431] - [PFE_DRV_LINUX] ERR051211 - Update all comments in Source Code to make refference to ERR051211
+[AAVB-4472] - [PFE_DRV_LINUX] Rx datapath corner case fixes, optimizations and cleanup
+     
 # Bug
-[AAVB-3198] - [PFE_DRV_LINUX] phy-mode = ""rgmii-id"" makes the rgmii interface unusable
-[AAVB-4097] - [PFE_PLATFORM] Memory overrun in pfe_l2br_table_read_cmd
-[AAVB-4135] - [PFE_PLATFORM] TMU queues can have max 256packets across all queues on single PHY
+
+[AAVB-3908] - [PFE_DRV_LINUX] Slave driver corrupts L2 bridge behavior when using EMAC
 [AAVB-4140] - [PFE_DRV_LINUX] Slave: ifconfig doesn't update MAC address forwarding rule on EMAC logif
-[AAVB-4164] - [PFE_PLATFORM] RPC transport failed due to race condition between Rx and Tx confirmation
-[AAVB-4178] - [PFE_PLATFORM] GPI QOS reset timed-out in pfe_gpi_destroy()
 [AAVB-4244] - [PFE_DRV_LINUX] Ingress QoS IP address classification fails
 [AAVB-4276] - [PFE_DRV_LINUX] tcpdump exit or 'ifconfig up' breaks bridging
 [AAVB-4277] - [PFE_DRV_LINUX] typo in EMAC autoconfig
-[AAVB-4295] - [PFE_DRV_LINUX] More than 50% TCP Tx bandwidth regression due to TMU queue size reduction
+[AAVB-4296] - [PFE_DRV_LINUX] Reload pfeng driver fails and hang DUT
 [AAVB-4318] - [PFE_DRV_LINUX] FCI proxy - occasional crash when executing LOGIF-related FCI commands
+[AAVB-4323] - [PFE_DRV_LINUX] phydev is not dettached when placed on external mdio bus
 [AAVB-4330] - [PFE_DRV_LINUX] Inter host communication (IHC) sleep in atomic context bugs for Linux SLAVE and MASTER drivers
+[AAVB-4344] - [PFE_DRV_LINUX] Driver can crash when receiving IHC on not-ihc channel
+[AAVB-4349] - [PFE_DRV_LINUX] Buffer allocation error after repeated driver load unload
+[AAVB-4362] - [PFE_DRV_LINUX] PFE unresponsive after Tx of IP fragmented UDP packet of certain size
+[AAVB-4493] - [PFE_DRV_LINUX] Failed to unload the PFE Slave driver in Linux
+[AAVB-4561] - [PFE_DRV_LINUX] slave pfe and slave aux logical interfaces can not be exposed to the OS
 
+## PFE Platform changes (Common code among multiple drivers)
 
-# Improvement
-[AAVB-4008] - [PFE PLATFORM] Print error names in libfci_cli error messages
+# PFE Platform - New Feature
+
+[AAVB-3911] - [PFE_PLATFORM] Statistics for conntrack
+[AAVB-4315] - [PFE_PLATFORM] Improve granularity of statistics of idex communication
+
+# PFE Platform - Improvement
+
+[AAVB-4008] - [PFE_PLATFORM] Print error names in libfci_cli error messages
 [AAVB-4079] - [PFE_PLATFORM] Master/Slave: It should be possible to check if master was started using PFE Platform support
-[AAVB-4118] - [PFE_PLATFORM] Master-detect clean-up
+[AAVB-4088] - [PFE_PLATFORM] pfe_hif_drv_client_receive_pkt() return NULL even HIFs have frames in receive buffer when send and loopback PTP packets in single client mode
+[AAVB-4099] - [PFE_PLATFORM] Master-detect: allow disable
+[AAVB-4142] - [PFE_PLATFORM] Error messages - Platform shell discriminate between firmware and driver error messages
+[AAVB-4145] - [PFE_PLATFORM] Remove non-VLAN bridge algorithm
+[AAVB-4231] - [PFE_PLATFORM] Disable FW feature ERR051211 when not needed
+[AAVB-4421] - [PFE_PLATFORM] ERR051211 - TMU queues sizes should be limited to the number of available slots
+[AAVB-4443] - [PFE_PLATFORM] FCI: Remove unnecessary interface modifications from non-interface FCI commands
+
+# PFE Platform - Bug
+
+[AAVB-3945] - [PFE_PLATFORM] FCI command always return EOK when using unuse rules from FP table
+[AAVB-4097] - [PFE_PLATFORM] Memory overrun in pfe_l2br_table_read_cmd
+[AAVB-4116] - [PFE_PLATFORM] TMU queue statistic is incorrect after driver probe
+[AAVB-4135] - [PFE_PLATFORM] TMU queues can have max 256 packets across all queues on single PHY
+[AAVB-4164] - [PFE_PLATFORM] RPC transport failed due to race condition between Rx and Tx confirmation
+[AAVB-4178] - [PFE_PLATFORM] GPI QOS reset timed-out in pfe_gpi_destroy()
+[AAVB-4322] - [PFE_PLATFORM] FCI: cannot set position 16 for Egress QoS shapers
+[AAVB-4345] - [PFE_PLATFORM] Accessing UTIL text statistics while UTIL Firmware is not loaded crashes the driver
+[AAVB-4420] - [PFE_PLATFORM] fw feature ERR051211 is disabled by default on platform start-up
+[AAVB-4437] - [PFE_PLATFORM] FCI: wrong conntrack timeout when configured via FPP_CMD_IPV4_SET_TIMEOUT
+[AAVB-4491] - [PFE_PLATFORM] Ingress QoS WRED DMEM threshold cannot exceed the limit of 512
 
 ========================================================
 What's Modified in BETA_0.9.6
