@@ -809,6 +809,42 @@ errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_mac_db_crit_t crit, 
 }
 
 /**
+ * @brief			Set mask of egress interfaces
+ * @param[in]		iface The interface instance
+ * @param[in]		egress mask (in host format), constructed like
+ * 					egress |= 1 << phy_if_id (for each configured phy_if)
+ * @retval			EOK Success
+ */
+errno_t pfe_log_if_set_egress_ifs(pfe_log_if_t *iface, uint32_t egress)
+{
+	errno_t ret = EOK;
+	pfe_platform_rpc_pfe_log_if_set_egress_ifs_arg_t req = {0};
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+	req.log_if_id = iface->id;
+	req.phy_if_id = egress;
+
+	(void)pfe_log_if_db_lock();
+
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_SET_EGRESS_IFS, &req, sizeof(req), NULL, 0U);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("Can't set egress interfaces: %d\n", ret);
+	}
+
+	(void)pfe_log_if_db_unlock();
+
+	return ret;
+}
+
+/**
  * @brief			Get mask of egress interfaces
  * @param[in]		iface The interface instance
  * @param[in,out]	egress mask (in host format), constructed like
@@ -818,8 +854,8 @@ errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_mac_db_crit_t crit, 
 errno_t pfe_log_if_get_egress_ifs(pfe_log_if_t *iface, uint32_t *egress)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_log_if_get_egress_arg_t req = {0};
-	pfe_platform_rpc_pfe_log_if_get_egress_ret_t rpc_ret = {0};
+	pfe_platform_rpc_pfe_log_if_get_egress_ifs_arg_t req = {0};
+	pfe_platform_rpc_pfe_log_if_get_egress_ifs_ret_t rpc_ret = {0};
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == egress)))
@@ -833,7 +869,7 @@ errno_t pfe_log_if_get_egress_ifs(pfe_log_if_t *iface, uint32_t *egress)
 
 	(void)pfe_log_if_db_lock();
 
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_GET_EGRESS, &req, sizeof(req), &rpc_ret, sizeof(rpc_ret));
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_GET_EGRESS_IFS, &req, sizeof(req), &rpc_ret, sizeof(rpc_ret));
 	if (EOK != ret)
 	{
 		NXP_LOG_DEBUG("Can't get egress interfaces: %d\n", ret);
@@ -1150,6 +1186,45 @@ __attribute__((pure)) bool_t pfe_log_if_is_promisc(pfe_log_if_t *iface)
 	if (EOK != ret)
 	{
 		NXP_LOG_DEBUG("Can't get promiscuous status: %d\n", ret);
+		return FALSE;
+	}
+	else
+	{
+		return rpc_ret.status;
+	}
+}
+
+/**
+ * @brief               Check if interface is in loopback mode
+ * @param[in]   iface The interface instance
+ * @return              TRUE if loopback mode is enabled, FALSE otherwise
+ */
+__attribute__((pure)) bool_t pfe_log_if_is_loopback(pfe_log_if_t *iface)
+{
+	pfe_platform_rpc_pfe_log_if_is_loopback_arg_t req = {0};
+	pfe_platform_rpc_pfe_log_if_is_loopback_ret_t rpc_ret = {0};
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	req.log_if_id = iface->id;
+
+	(void)pfe_log_if_db_lock();
+
+	/*	Query the master driver */
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_IS_LOOPBACK, &req, sizeof(req), &rpc_ret, sizeof(rpc_ret));
+
+	(void)pfe_log_if_db_unlock();
+
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("Can't get loopback status: %d\n", ret);
 		return FALSE;
 	}
 	else

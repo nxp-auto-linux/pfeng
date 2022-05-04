@@ -1,5 +1,5 @@
 #
-# Copyright 2018-2021 NXP
+# Copyright 2018-2022 NXP
 #
 # SPDX-License-Identifier:     BSD OR GPL-2.0
 #
@@ -16,9 +16,12 @@ PLATFORM ?= aarch64-fsl-linux
 PFE_CFG_MULTI_INSTANCE_SUPPORT ?= 0
 PFE_CFG_LINUX_TRACE ?= 0
 PFE_CFG_HIF_USE_BD_TRIGGER ?= 1
-PFE_CFG_BD_MEM = "pfe-bdr-pool"
-PFE_CFG_SYS_MEM = "pfe-bmu2-pool"
+PFE_CFG_BD_MEM ?= "pfe-bdr-pool"
+PFE_CFG_SYS_MEM ?= "pfe-bmu2-pool"
+PFE_CFG_RT_MEM ?= "pfe-rt-pool"
 PFE_CFG_LINUX_NO_SERDES_SUPPORT ?= 0
+PFE_CFG_BMU2_BUF_COUNT ?= 256
+PFE_CFG_LINUX_RES_MEM_ENABLE ?= 0
 
 # Warning for PFE_CFG_LINUX_TRACE=1:
 # The compile time checker doesn't work well with -Og

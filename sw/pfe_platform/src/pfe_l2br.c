@@ -154,6 +154,7 @@ static bool_t pfe_l2br_domain_match_if_criterion(const pfe_l2br_domain_t *domain
 static bool_t pfe_l2br_domain_match_criterion(const pfe_l2br_t *bridge, pfe_l2br_domain_t *domain);
 static bool_t pfe_l2br_static_entry_match_criterion(const pfe_l2br_t *bridge, pfe_l2br_static_entry_t *static_ent);
 static errno_t pfe_l2br_set_mac_aging_timeout(pfe_class_t *class, const uint16_t timeout);
+static errno_t pfe_l2br_static_entry_destroy_nolock(const pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent);
 
 /**
  * @brief		Write bridge domain structure to classifier memory
@@ -1060,6 +1061,111 @@ errno_t pfe_l2br_domain_del_if(pfe_l2br_domain_t *domain, const pfe_phy_if_t *if
 	}
 
 	return EOK;
+}
+
+/**
+ * @brief		Flush all MAC table entries of given bridge domain which are related to target interface.
+ * @param[in]	domain The L2 bridge domain instance
+ * @param[in]	iface The interface
+ * @retval		EOK if success, error code if failure
+ */
+errno_t pfe_l2br_domain_flush_by_if(const pfe_l2br_domain_t *domain, const pfe_phy_if_t *iface)
+{
+	errno_t ret = EOK;
+	errno_t ret_query = EOK;
+	pfe_l2br_table_entry_t *entry = NULL;
+	pfe_l2br_static_entry_t *sentry = NULL;
+	pfe_l2br_table_iterator_t *l2t_iter = NULL;
+	LLIST_t *item, *dummy = NULL;
+	uint32_t iface_bitflag = 0U;
+	const pfe_l2br_t *bridge = NULL;
+	uint16_t entry_vlan = 0U;
+	pfe_ct_mac_table_result_t entry_action_data = {.val = 0U};
+
+	#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == domain) || (NULL == domain->bridge) || (NULL == iface)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+	#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	bridge = domain->bridge;
+	if (EOK != oal_mutex_lock(bridge->mutex))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+		return EPERM;
+	}
+
+	/*	Initalize auxiliary tools for MAC table searching */
+	iface_bitflag = (uint32_t)1 << (uint32_t)pfe_phy_if_get_id(iface);
+	entry = pfe_l2br_table_entry_create(bridge->mac_table);
+	l2t_iter = pfe_l2br_iterator_create();
+
+	/*	Flush interface-related static entries */
+	if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
+	{
+		LLIST_ForEachRemovable(item, dummy, &bridge->static_entries)
+		{
+			/*	Get static entry */
+			sentry = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
+			if (sentry == NULL)
+			{
+				NXP_LOG_ERROR("NULL static entry detected!\n");
+			}
+			else
+			{
+				/*	Check static entry */
+				if ((sentry->vlan == domain->vlan) && (0U != (sentry->u.action_data.item.forward_list & iface_bitflag)))
+				{
+					/*	Remove static entry. LLIST_Remove() is inside... */
+					ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
+					if (EOK != ret)
+					{
+						NXP_LOG_ERROR("Unable to remove static entry: %d\n", ret);
+					}
+				}
+			}
+		}
+	}
+	
+	/*	Flush interface-related dynamic entries */
+	if (EOK == ret)
+	{
+		ret_query = pfe_l2br_table_get_first(bridge->mac_table, l2t_iter, L2BR_TABLE_CRIT_VALID, entry);
+		while (EOK == ret_query)
+		{
+			entry_vlan = (uint16_t)pfe_l2br_table_entry_get_vlan(entry);
+			entry_action_data.val = (uint32_t)pfe_l2br_table_entry_get_action_data(entry);
+
+			/*	Check entry */
+			if ((entry_vlan == domain->vlan) && (0U != (entry_action_data.item.forward_list & iface_bitflag)))
+			{
+				/*	Remove entry */
+				ret = pfe_l2br_table_del_entry(bridge->mac_table, entry);
+				if (EOK != ret)
+				{
+					NXP_LOG_ERROR("Could not delete MAC table entry: %d\n", ret);
+				}
+			}
+
+			/* Get the next entry */
+			ret_query = pfe_l2br_table_get_next(bridge->mac_table, l2t_iter, entry);
+		}
+	}
+
+	if (EOK != oal_mutex_unlock(bridge->mutex))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
+
+	/*	Release entry storage */
+	(void)pfe_l2br_table_entry_destroy(entry);
+
+	/*  Release iterator */
+	(void)pfe_l2br_iterator_destroy(l2t_iter);
+
+	return ret;
 }
 
 /**

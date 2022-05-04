@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -453,17 +453,6 @@ errno_t pfe_hif_cfg_init(addr_t base_va)
 #endif /* PFE_HIF_CFG_USE_BD_POLLING */
 
     /*    MICS */
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-    hal_write32(0U
-                | SEQ_NUM_CHECK_EN
-                /* | BDPRD_AXI_WRITE_DONE */
-                /* | DBPWR_AXI_WRITE_DONE */
-                /* | RXDXR_AXI_WRITE_DONE */
-                /* | TXDXR_AXI_WRITE_DONE */
-                | HIF_TIMEOUT_EN
-                | BD_START_SEQ_NUM(0x0U)
-                , base_va + HIF_MISC);
-#else
     hal_write32(0U
             /* | BDPRD_AXI_WRITE_DONE */
             /* | DBPWR_AXI_WRITE_DONE */
@@ -472,7 +461,6 @@ errno_t pfe_hif_cfg_init(addr_t base_va)
             | HIF_TIMEOUT_EN
             | BD_START_SEQ_NUM(0x0U)
             , base_va + HIF_MISC);
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 
 	hal_write32(100000000U, base_va + HIF_TIMEOUT_REG);
 	hal_write32(0x33221100U, base_va + HIF_RX_QUEUE_MAP_CH_NO_ADDR);
@@ -881,42 +869,6 @@ bool_t pfe_hif_chnl_cfg_is_tx_dma_active(addr_t base_va, uint32_t channel_id)
 	else
 	{
 		return FALSE;
-	}
-}
-
-/**
- * @brief		Get current RX ring sequence number
- * @param[in]	base_va Base address of HIF channel register space (virtual)
- * @param[in]	channel_id Channel identifier
- * @return		The sequence number
- */
-uint16_t pfe_hif_chnl_cfg_get_rx_seqnum(addr_t base_va, uint32_t channel_id)
-{
-	if (0U == hal_read32(base_va + HIF_RX_PKT_CNT0_CHn(channel_id)))
-	{
-		return 0U;
-	}
-	else
-	{
-		return (uint16_t)((hal_read32(base_va + HIF_RX_STATUS_0_CHn(channel_id)) + 1U) & 0xffffU);
-	}
-}
-
-/**
- * @brief		Get current TX ring sequence number
- * @param[in]	base_va Base address of HIF channel register space (virtual)
- * @param[in]	channel_id Channel identifier
- * @return		The sequence number
- */
-uint16_t pfe_hif_chnl_cfg_get_tx_seqnum(addr_t base_va, uint32_t channel_id)
-{
-	if (0U == hal_read32(base_va + HIF_TX_PKT_CNT1_CHn(channel_id)))
-	{
-		return 0U;
-	}
-	else
-	{
-		return (uint16_t)((hal_read32(base_va + HIF_TX_STATUS_1_CHn(channel_id)) + 1U) & 0xffffU);
 	}
 }
 

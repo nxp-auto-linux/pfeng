@@ -442,7 +442,7 @@ static errno_t pfe_platform_create_fci(pfe_platform_t *platform)
 {
 	errno_t ret = EOK;
 
-	ret = fci_init(NULL, "pfe_fci");
+	ret = fci_init(NULL, "pfe_fci_slave");
 	if (EOK != ret)
 	{
 		NXP_LOG_ERROR("Could not create the FCI endpoint\n");

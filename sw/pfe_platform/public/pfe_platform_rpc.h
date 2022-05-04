@@ -43,7 +43,11 @@ typedef enum __attribute__((packed))
 	PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_DISABLE = 115U,		/* Arg: pfe_platform_rpc_pfe_phy_if_allmulti_disable_arg_t, Ret: None */
 	PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_ENABLE = 116U,             /* Arg: pfe_platform_rpc_pfe_phy_if_loopback_enable_arg_t, Ret: None */
 	PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_DISABLE = 117U,            /* Arg: pfe_platform_rpc_pfe_phy_if_loopback_disable_arg_t, Ret: None */
-	PFE_PLATFORM_RPC_PFE_PHY_IF_ID_COMPATIBLE_LAST = PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_DISABLE, /* last entry compatible with generic phy_if structure for args*/
+	PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE = 118U,          /* Arg: pfe_platform_rpc_pfe_phy_if_loadbalance_enable_arg_t, Ret: None */
+	PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE = 119U,         /* Arg: pfe_platform_rpc_pfe_phy_if_loadbalance_disable_arg_t, Ret: None */
+	PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE = 120U,				/* Arg: pfe_platform_rpc_pfe_phy_if_set_block_state_arg_t, Ret: None */
+	PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE = 121U,				/* Arg: pfe_platform_rpc_pfe_phy_if_get_block_state_arg_t, Ret: pfe_platform_rpc_pfe_phy_if_get_block_state_ret_t */
+	PFE_PLATFORM_RPC_PFE_PHY_IF_ID_COMPATIBLE_LAST = PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE, /* last entry compatible with generic phy_if structure for args*/
 
 	/* Lock for atomic operations */
 	PFE_PLATFORM_RPC_PFE_IF_LOCK = 190U,						/* Arg: None, Ret: None */
@@ -67,7 +71,7 @@ typedef enum __attribute__((packed))
 	PFE_PLATFORM_RPC_PFE_LOG_IF_PROMISC_ENABLE = 213U,		/* Arg: pfe_platform_rpc_pfe_log_if_promisc_enable_arg_t, Ret: None */
 	PFE_PLATFORM_RPC_PFE_LOG_IF_PROMISC_DISABLE = 214U,		/* Arg: pfe_platform_rpc_pfe_log_if_promisc_disable_arg_t, Ret: None */
 	PFE_PLATFORM_RPC_PFE_LOG_IF_IS_PROMISC = 215U,			/* Arg: pfe_platform_rpc_pfe_log_if_is_promisc_arg_t, Ret: pfe_platform_rpc_pfe_log_if_is_enabled_ret_t */
-	PFE_PLATFORM_RPC_PFE_LOG_IF_GET_EGRESS = 216U,			/* Arg: pfe_platform_rpc_pfe_log_if_get_egress_arg_t, Ret: pfe_platform_rpc_pfe_log_if_get_egress_ret_t */
+	PFE_PLATFORM_RPC_PFE_LOG_IF_GET_EGRESS_IFS = 216U,		/* Arg: pfe_platform_rpc_pfe_log_if_get_egress_ifs_arg_t, Ret: pfe_platform_rpc_pfe_log_if_get_egress_ifs_ret_t */
 	PFE_PLATFORM_RPC_PFE_LOG_IF_IS_MATCH_OR = 217U,			/* Arg: pfe_platform_rpc_pfe_log_if_is_match_or_arg_t, Ret: pfe_platform_rpc_pfe_log_if_is_match_or_ret_t */
 	PFE_PLATFORM_RPC_PFE_LOG_IF_SET_MATCH_OR = 218U,		/* Arg: pfe_platform_rpc_pfe_log_if_set_match_or_arg_t, Ret: None */
 	PFE_PLATFORM_RPC_PFE_LOG_IF_SET_MATCH_AND = 219U,		/* Arg: pfe_platform_rpc_pfe_log_if_set_match_andr_arg_t, Ret: None */
@@ -80,7 +84,10 @@ typedef enum __attribute__((packed))
 	PFE_PLATFORM_RPC_PFE_LOG_IF_IS_DISCARD = 226U,			/* Arg: pfe_platform_rpc_pfe_log_if_is_discard_arg_t, Ret: pfe_platform_rpc_pfe_log_if_is_discard_ret_t */
 	PFE_PLATFORM_RPC_PFE_LOG_IF_DISCARD_ENABLE = 227U,		/* Arg: pfe_platform_rpc_pfe_log_if_discard_enable_arg_t, Ret: None */
 	PFE_PLATFORM_RPC_PFE_LOG_IF_DISCARD_DISABLE = 228U,		/* Arg: pfe_platform_rpc_pfe_log_if_discard_disable_arg_t, Ret: None */
-	PFE_PLATFORM_RPC_PFE_LOG_IF_ID_COMPATIBLE_LAST = PFE_PLATFORM_RPC_PFE_LOG_IF_DISCARD_DISABLE, /* last entry compatible with generic log_if structure for args*/
+	PFE_PLATFORM_RPC_PFE_LOG_IF_SET_EGRESS_IFS = 229U,		/* Arg: pfe_platform_rpc_pfe_log_if_set_egress_ifs_arg_t, Ret: None */
+	PFE_PLATFORM_RPC_PFE_LOG_IF_IS_LOOPBACK = 230U,			/* Arg: pfe_platform_rpc_pfe_log_if_is_loopback_arg_t, Ret: pfe_platform_rpc_pfe_log_if_is_loopback_ret_t */
+
+	PFE_PLATFORM_RPC_PFE_LOG_IF_ID_COMPATIBLE_LAST = PFE_PLATFORM_RPC_PFE_LOG_IF_IS_LOOPBACK, /* last entry compatible with generic log_if structure for args*/
 
 #if defined(PFE_CFG_FCI_ENABLE)
 	PFE_PLATFORM_RPC_PFE_FCI_PROXY = 300U					/* Arg: pfe_platform_rpc_pfe_fci_proxy_arg_t, Ret: pfe_platform_rpc_pfe_fci_proxy_ret_t */
@@ -139,8 +146,8 @@ typedef pfe_platform_rpc_pfe_log_if_generic_t pfe_platform_rpc_pfe_log_if_promis
 ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_promisc_disable_arg_t, log_if_id));
 typedef pfe_platform_rpc_pfe_log_if_generic_t pfe_platform_rpc_pfe_log_if_is_promisc_arg_t;
 ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_is_promisc_arg_t, log_if_id));
-typedef pfe_platform_rpc_pfe_log_if_generic_t pfe_platform_rpc_pfe_log_if_get_egress_arg_t;
-ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_get_egress_arg_t, log_if_id));
+typedef pfe_platform_rpc_pfe_log_if_generic_t pfe_platform_rpc_pfe_log_if_get_egress_ifs_arg_t;
+ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_get_egress_ifs_arg_t, log_if_id));
 typedef pfe_platform_rpc_pfe_log_if_generic_t pfe_platform_rpc_pfe_log_if_is_match_or_arg_t;
 ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_is_match_or_arg_t, log_if_id));
 typedef pfe_platform_rpc_pfe_log_if_generic_t pfe_platform_rpc_pfe_log_if_set_match_and_arg_t;
@@ -163,6 +170,8 @@ typedef pfe_platform_rpc_pfe_log_if_generic_t pfe_platform_rpc_pfe_log_if_is_dis
 ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_is_discard_arg_t, log_if_id));
 typedef pfe_platform_rpc_pfe_log_if_generic_t pfe_platform_rpc_pfe_log_if_loopback_disable_arg_t;
 ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_loopback_disable_arg_t, log_if_id));
+typedef pfe_platform_rpc_pfe_log_if_generic_t pfe_platform_rpc_pfe_log_if_is_loopback_arg_t;
+ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_is_loopback_arg_t, log_if_id));
 
 typedef struct __attribute__((packed, aligned(4)))
 {
@@ -183,6 +192,7 @@ typedef pfe_platform_rpc_pfe_log_if_is_enabled_ret_t pfe_platform_rpc_pfe_log_if
 typedef pfe_platform_rpc_pfe_log_if_is_enabled_ret_t pfe_platform_rpc_pfe_phy_if_is_promisc_ret_t;
 typedef pfe_platform_rpc_pfe_log_if_is_enabled_ret_t pfe_platform_rpc_pfe_phy_if_is_enabled_ret_t;
 typedef pfe_platform_rpc_pfe_log_if_is_enabled_ret_t pfe_platform_rpc_pfe_log_if_is_discard_ret_t;
+typedef pfe_platform_rpc_pfe_log_if_is_enabled_ret_t pfe_platform_rpc_pfe_log_if_is_loopback_ret_t;
 
 typedef struct __attribute__((packed, aligned(4)))
 {
@@ -247,6 +257,8 @@ typedef struct __attribute__((packed, aligned(4)))
 } pfe_platform_rpc_pfe_log_if_add_egress_if_arg_t;
 ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_add_egress_if_arg_t, log_if_id));
 
+typedef pfe_platform_rpc_pfe_log_if_add_egress_if_arg_t pfe_platform_rpc_pfe_log_if_set_egress_ifs_arg_t;
+ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_set_egress_ifs_arg_t, log_if_id));
 typedef pfe_platform_rpc_pfe_log_if_add_egress_if_arg_t pfe_platform_rpc_pfe_log_if_del_egress_if_arg_t;
 ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_del_egress_if_arg_t, log_if_id));
 
@@ -284,6 +296,12 @@ typedef pfe_platform_rpc_pfe_phy_if_enable_arg_t pfe_platform_rpc_pfe_phy_if_loo
 ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_phy_if_loopback_enable_arg_t, phy_if_id));
 typedef pfe_platform_rpc_pfe_phy_if_enable_arg_t pfe_platform_rpc_pfe_phy_if_loopback_disable_arg_t;
 ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_phy_if_loopback_disable_arg_t, phy_if_id));
+typedef pfe_platform_rpc_pfe_phy_if_enable_arg_t pfe_platform_rpc_pfe_phy_if_loadbalance_enable_arg_t;
+ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_phy_if_loadbalance_enable_arg_t, phy_if_id));
+typedef pfe_platform_rpc_pfe_phy_if_enable_arg_t pfe_platform_rpc_pfe_phy_if_loadbalance_disable_arg_t;
+ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_phy_if_loadbalance_disable_arg_t, phy_if_id));
+typedef pfe_platform_rpc_pfe_phy_if_generic_t pfe_platform_rpc_pfe_phy_if_get_block_state_arg_t;
+ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_phy_if_get_block_state_arg_t, phy_if_id));
 
 typedef struct __attribute__((packed, aligned(4)))
 {
@@ -316,6 +334,15 @@ ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t,
 
 typedef struct __attribute__((packed, aligned(4)))
 {
+	/* Physical interface ID */
+	pfe_ct_phy_if_id_t phy_if_id;
+	/* Block state */
+	pfe_ct_block_state_t block_state;
+} pfe_platform_rpc_pfe_phy_if_set_block_state_arg_t;
+ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_phy_if_set_block_state_arg_t, phy_if_id));
+
+typedef struct __attribute__((packed, aligned(4)))
+{
 	/*	Physical interface ID */
 	pfe_ct_phy_if_id_t phy_if_id;
 	/*	Logical interface ID */
@@ -327,13 +354,19 @@ typedef struct __attribute__((packed, aligned(4)))
 {
 	/*	Mask of egress interfaces */
 	uint32_t egress;
-} pfe_platform_rpc_pfe_log_if_get_egress_ret_t;
+} pfe_platform_rpc_pfe_log_if_get_egress_ifs_ret_t;
 
-typedef struct __attribute__((packed, aligned(4))) pfe_platform_rpc_pfe_phy_if_get_op_mode_ret_t
+typedef struct __attribute__((packed, aligned(4)))
 {
 	/*	Current operation mode */
 	pfe_ct_if_op_mode_t mode;
 } pfe_platform_rpc_pfe_phy_if_get_op_mode_ret_t;
+
+typedef struct __attribute__((packed, aligned(4)))
+{
+	/* Current block state */
+	pfe_ct_block_state_t state;
+} pfe_platform_rpc_pfe_phy_if_get_block_state_ret_t;
 
 typedef struct __attribute__((packed, aligned(4)))
 {

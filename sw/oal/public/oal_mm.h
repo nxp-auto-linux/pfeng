@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -46,6 +46,7 @@
 #ifndef PUBLIC_OAL_MM_H_
 #define PUBLIC_OAL_MM_H_
 
+#if !defined(PFE_CFG_DETACHED_MINIHIF)
 /**
  * @brief		Initialize the memory management library
  * @details		The oal_mm must be initialized by this call before it can be used.
@@ -107,14 +108,6 @@ void *oal_mm_malloc_contig_named_aligned_cache(const char_t *pool, const addr_t 
 void oal_mm_free_contig(const void *vaddr);
 
 /**
- * @brief		Convert virtual address to physical
- * @details		Only applicable to memory allocated by oal_mm_alloc_config_xxx variants
- * @param[in]	vaddr The virtual address to be converted
- * @return		Physical address associated with the virtual one or NULL if failed
- */
-void *oal_mm_virt_to_phys_contig(void *vaddr);
-
-/**
  * @brief		Allocate memory
  * @details		This is intended to perform standard memory allocations (malloc-like).
  * @param[in]	size Number of bytes to allocate
@@ -128,6 +121,16 @@ void *oal_mm_malloc(const addr_t size);
  * @param[in]	vaddr Pointer to the memory to be released (virtual)
  */
 void oal_mm_free(const void *vaddr);
+
+#endif /* PFE_CFG_DETACHED_MINIHIF */
+
+/**
+ * @brief		Convert virtual address to physical
+ * @details		Only applicable to memory allocated by oal_mm_alloc_config_xxx variants
+ * @param[in]	vaddr The virtual address to be converted
+ * @return		Physical address associated with the virtual one or NULL if failed
+ */
+void *oal_mm_virt_to_phys_contig(void *vaddr);
 
 /**
  * @brief		Convert virtual address to physical

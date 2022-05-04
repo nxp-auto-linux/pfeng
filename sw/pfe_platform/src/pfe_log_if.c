@@ -1672,7 +1672,7 @@ errno_t pfe_log_if_loopback_enable(pfe_log_if_t *iface)
 	}
 
 	tmp = iface->log_if_class.flags;
-	iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp | IF_FL_LOOPBACK);
+	iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp | (uint32_t)IF_FL_LOOPBACK);
 
 	ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
 	if (EOK != ret)

@@ -108,7 +108,7 @@ static errno_t get_sum_of_queue_lengths(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t
 		}
 		else
 		{
-			pfe_tmu_queue_get_mode(tmu, phy, i, &tmp_min, &tmp_max);
+			(void)pfe_tmu_queue_get_mode(tmu, phy, i, &tmp_min, &tmp_max);
 			tmp_sum += tmp_max;
 		}
 	}
@@ -118,13 +118,13 @@ static errno_t get_sum_of_queue_lengths(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t
 	{	/* HIF */
 		if (TLITE_HIF_MAX_ENTRIES < tmp_sum)
 		{
-			NXP_LOG_ERROR("Sum of queue lengths (%u) exceeds max allowed sum (%u) for HIF interface.", tmp_sum, TLITE_HIF_MAX_ENTRIES);
+			NXP_LOG_ERROR("Sum of queue lengths (%u) exceeds max allowed sum (%u) for HIF interface.", (uint_t)tmp_sum, TLITE_HIF_MAX_ENTRIES);
 			ret_val = ENOSPC;
 		}
 		else if ((TRUE == pfe_feature_mgr_is_available("err051211_workaround")) && 
 				 (PFE_HIF_RX_RING_CFG_LENGTH < (tmp_sum + PFE_TMU_ERR051211_Q_OFFSET)))
 		{
-			NXP_LOG_ERROR("err051211_workaround is active and \"sum of queue lengths (%u) + Q_OFFSET (%u)\" exceeds HIF RX Ring length (%u).", tmp_sum, PFE_TMU_ERR051211_Q_OFFSET, PFE_HIF_RX_RING_CFG_LENGTH);
+			NXP_LOG_ERROR("err051211_workaround is active and \"sum of queue lengths (%u) + Q_OFFSET (%u)\" exceeds HIF RX Ring length (%u).", (uint_t)tmp_sum, PFE_TMU_ERR051211_Q_OFFSET, PFE_HIF_RX_RING_CFG_LENGTH);
 			ret_val = ENOSPC;
 		}
 		else
@@ -136,7 +136,7 @@ static errno_t get_sum_of_queue_lengths(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t
 	{	/* EMAC and 'others' */
 		if (TLITE_MAX_ENTRIES < tmp_sum)
 		{
-			NXP_LOG_ERROR("Sum of queue lengths (%u) exceeds max allowed sum (%u) for EMAC/UTIL/HIF_NOCPY interface.", tmp_sum, TLITE_MAX_ENTRIES);
+			NXP_LOG_ERROR("Sum of queue lengths (%u) exceeds max allowed sum (%u) for EMAC/UTIL/HIF_NOCPY interface.", (uint_t)tmp_sum, TLITE_MAX_ENTRIES);
 			ret_val = ENOSPC;
 		}
 		else
@@ -588,7 +588,7 @@ errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
 	/* Check and set mode + lengths */
 	if (min > max)
 	{
-		NXP_LOG_ERROR("Wrong queue lengths: min queue length (%u) is larger than max queue length (%u)\n", min, max);
+		NXP_LOG_ERROR("Wrong queue lengths: min queue length (%u) is larger than max queue length (%u)\n", (uint_t)min, (uint_t)max);
 		ret_val = EINVAL;
 	}
 	else if (EOK != pfe_tmu_check_queue(tmu, phy, queue))
@@ -790,7 +790,7 @@ errno_t pfe_tmu_queue_reset_tail_drop_policy(const pfe_tmu_t *tmu)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
+		return (errno_t)0;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
@@ -823,11 +823,11 @@ errno_t pfe_tmu_queue_err051211_sync(const pfe_tmu_t *tmu)
 	/*	Pre-compute safe default HIF queue length (in case it is needed). Consider the following two limits:
 			--> Size of HIF RX Ring
 			--> Max allowed queue size for HIF */
-	default_max = (PFE_HIF_RX_RING_CFG_LENGTH >= PFE_TMU_ERR051211_MINIMAL_REQUIRED_RX_RING_LENGTH) ? ((PFE_HIF_RX_RING_CFG_LENGTH - PFE_TMU_ERR051211_Q_OFFSET) / 2U) : (1UL);
+	default_max = (PFE_HIF_RX_RING_CFG_LENGTH >= PFE_TMU_ERR051211_MINIMAL_REQUIRED_RX_RING_LENGTH) ? (((uint32_t)PFE_HIF_RX_RING_CFG_LENGTH - PFE_TMU_ERR051211_Q_OFFSET) / 2U) : (1U);
 	default_max = (default_max >= TLITE_HIF_MAX_Q_SIZE) ? (TLITE_HIF_MAX_Q_SIZE) : (default_max);
 
 	/* Check all HIF interfaces and update data in FW. */
-	for (phy = PFE_PHY_IF_ID_HIF0; (PFE_PHY_IF_ID_HIF3 >= phy); phy = (pfe_ct_phy_if_id_t)(phy + 1U))
+	for (phy = PFE_PHY_IF_ID_HIF0; (PFE_PHY_IF_ID_HIF3 >= phy); phy = (pfe_ct_phy_if_id_t)((uint16_t)phy + 1U))
 	{
 		uint8_t queue = 0U;
 		const uint8_t queue_cnt = pfe_tmu_queue_get_cnt(tmu, phy);
@@ -836,16 +836,17 @@ errno_t pfe_tmu_queue_err051211_sync(const pfe_tmu_t *tmu)
 		if (ENOSPC == get_sum_of_queue_lengths(tmu, phy, 0xFF, 0xFF, &sum))
 		{
 			/* Reset queue lengths and then set them all to default_max length. This will update data in FW as well. */
-			set_all_queues_to_min_length(tmu, phy);
+			(void)set_all_queues_to_min_length(tmu, phy);
 			for (queue = 0U; (queue_cnt > queue); queue++)
 			{
 				mode = pfe_tmu_queue_get_mode(tmu, phy, queue, &min, &max);
-				pfe_tmu_queue_set_mode(tmu, phy, queue, mode, min, default_max);
+				(void)pfe_tmu_queue_set_mode(tmu, phy, queue, mode, min, default_max);
 			}
 
-			NXP_LOG_WARNING("Every TMU queue of physical interface id=%d was set to length %u, because err051211_workaround got activated "
-							"and \"original sum of queue lengths (%u) + Q_OFFSET (%u)\" for the given interface was exceeding HIF RX Ring length (%u).", 
-							phy, default_max, sum, (uint_t)PFE_TMU_ERR051211_Q_OFFSET, (uint_t)PFE_HIF_RX_RING_CFG_LENGTH);
+			NXP_LOG_WARNING("Every TMU queue of physical interface id=%d was set to length %u, because err051211_workaround got activated.",
+							phy, (uint_t)default_max);
+			NXP_LOG_WARNING("\"Original sum of queue lengths (%u) + Q_OFFSET (%u)\" for the given interface was exceeding HIF RX Ring length (%u).",
+							(uint_t)sum, (uint_t)PFE_TMU_ERR051211_Q_OFFSET, (uint_t)PFE_HIF_RX_RING_CFG_LENGTH);
 		}
 		else
 		{
@@ -853,7 +854,7 @@ errno_t pfe_tmu_queue_err051211_sync(const pfe_tmu_t *tmu)
 			for (queue = 0U; (queue_cnt > queue); queue++)
 			{
 				mode = pfe_tmu_queue_get_mode(tmu, phy, queue, &min, &max);
-				pfe_tmu_queue_set_mode(tmu, phy, queue, mode, min, max);
+				(void)pfe_tmu_queue_set_mode(tmu, phy, queue, mode, min, max);
 			}
 		}
 	}

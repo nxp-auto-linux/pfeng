@@ -237,21 +237,17 @@ typedef struct pfe_hif_drv_tag pfe_hif_drv_t;
 typedef struct pfe_hif_pkt_tag pfe_hif_pkt_t;
 typedef errno_t (* pfe_hif_drv_client_event_handler)(pfe_hif_drv_client_t *client, void *arg, uint32_t event, uint32_t qno);
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-/*  Metadata prepended to every TX buffer. Its size shall be multiple of 4. */
-typedef struct __attribute__((packed, aligned(4)))
-{
-	boolean bDoTxIndication;
-	boolean bDoTS; /* Used in pfe_hif_drv to request timestamp on demand */
-} trTxMeta;
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 pfe_hif_drv_t *pfe_hif_drv_create(pfe_hif_chnl_t *channel);
 void pfe_hif_drv_destroy(pfe_hif_drv_t *hif_drv);
 errno_t pfe_hif_drv_init(pfe_hif_drv_t *hif_drv);
 errno_t pfe_hif_drv_start(pfe_hif_drv_t *hif_drv);
 void pfe_hif_drv_stop(pfe_hif_drv_t *hif_drv);
 void pfe_hif_drv_exit(pfe_hif_drv_t *hif_drv);
+pfe_hif_chnl_t *pfe_hif_drv_get_chnl(const pfe_hif_drv_t *hif_drv);
+void pfe_hif_drv_rx_job(void *arg);
+#if (TRUE == HIF_CFG_DETACH_TX_CONFIRMATION_JOB)
+void pfe_hif_drv_tx_job(void *arg);
+#endif /* HIF_CFG_DETACH_TX_CONFIRMATION_JOB */
 
 #ifdef PFE_CFG_MC_HIF
 void pfe_hif_drv_show_ring_status(pfe_hif_drv_t *hif_drv, bool_t rx, bool_t tx);

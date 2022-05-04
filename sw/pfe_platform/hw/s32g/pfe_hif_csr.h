@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -275,8 +275,6 @@ void pfe_hif_chnl_cfg_set_rx_wb_table(addr_t base_va, uint32_t channel_id, const
 void pfe_hif_chnl_cfg_set_tx_wb_table(addr_t base_va, uint32_t channel_id, const void *wb_tbl_pa, uint32_t tbl_len);
 bool_t pfe_hif_chnl_cfg_is_rx_dma_active(addr_t base_va, uint32_t channel_id);
 bool_t pfe_hif_chnl_cfg_is_tx_dma_active(addr_t base_va, uint32_t channel_id);
-uint16_t pfe_hif_chnl_cfg_get_rx_seqnum(addr_t base_va, uint32_t channel_id);
-uint16_t pfe_hif_chnl_cfg_get_tx_seqnum(addr_t base_va, uint32_t channel_id);
 bool_t pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(addr_t base_va, uint32_t channel_id);
 bool_t pfe_hif_chnl_cfg_is_tx_bdp_fifo_empty(addr_t base_va, uint32_t channel_id);
 errno_t pfe_hif_chnl_cfg_set_rx_irq_coalesce(addr_t base_va, uint32_t channel_id, uint32_t frames, uint32_t cycles);

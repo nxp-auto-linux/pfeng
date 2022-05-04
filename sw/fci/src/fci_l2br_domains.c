@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -25,10 +25,11 @@
 #include "fci_internal.h"
 #include "fci.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
 static errno_t fci_l2br_domain_remove(pfe_l2br_domain_t *domain);
-static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *phy_if);
+static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, const pfe_phy_if_t *phy_if);
 uint32_t fci_l2br_static_entry_get_valid_fw_list(void);
 
 /**
@@ -43,7 +44,7 @@ uint32_t fci_l2br_static_entry_get_valid_fw_list(void);
  */
 errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *reply_buf, uint32_t *reply_len)
 {
-	fci_t *context = (fci_t *)&__context;
+	const fci_t *fci_context = (fci_t *)&__context;
 	fpp_l2_bd_cmd_t *bd_cmd;
 	errno_t ret = EOK;
 	pfe_l2br_domain_t *domain = NULL;
@@ -61,7 +62,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 		return EINVAL;
 	}
 
-    if (unlikely(FALSE == context->fci_initialized))
+    if (unlikely(FALSE == fci_context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -117,7 +118,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 			}
 
 			/*	Add new bridge domain */
-			ret = pfe_l2br_domain_create(context->l2_bridge, oal_ntohs(bd_cmd->vlan));
+			ret = pfe_l2br_domain_create(fci_context->l2_bridge, oal_ntohs(bd_cmd->vlan));
 			if (EPERM == ret)
 			{
 				NXP_LOG_ERROR("Domain %d already created\n", oal_ntohs(bd_cmd->vlan));
@@ -152,7 +153,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 			}
 
 			/*	Get the domain instance (by VLAN) */
-			domain = pfe_l2br_get_first_domain(context->l2_bridge, L2BD_CRIT_BY_VLAN, (void *)(addr_t)oal_ntohs(bd_cmd->vlan));
+			domain = pfe_l2br_get_first_domain(fci_context->l2_bridge, L2BD_CRIT_BY_VLAN, (void *)(addr_t)oal_ntohs(bd_cmd->vlan));
 			if (NULL == domain)
 			{
 				/*	This shall never happen */
@@ -190,7 +191,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 				if (0U != (oal_ntohl(bd_cmd->if_list) & (1U << ii)))
 				{
 					/*	Only add interfaces which are known to platform interface database */
-					ret = pfe_if_db_get_first(context->phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)ii, &if_db_entry);
+					ret = pfe_if_db_get_first(fci_context->phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)ii, &if_db_entry);
 
 					if(EOK != ret)
 					{
@@ -261,21 +262,12 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						if (EOK != ret)
 						{
 							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+							NXP_LOG_ERROR("Domain %d: Failed to remove interface %d\n", (int_t)oal_ntohs(bd_cmd->vlan), (int_t)ii);
 							break;
 						}
 						else
 						{
-							/*	Disable interface */
-							ret = fci_disable_if(phy_if);
-							if (EOK != ret)
-							{
-								NXP_LOG_ERROR("Unable to disable interface (%s): %d\n", pfe_phy_if_get_name(phy_if), ret);
-								*fci_ret = FPP_ERR_INTERNAL_FAILURE;
-							}
-							else
-							{
-								NXP_LOG_INFO("Domain %d: Interface %d removed\n", (int_t)oal_ntohs(bd_cmd->vlan), (int_t)ii);
-							}
+							NXP_LOG_INFO("Domain %d: Interface %d removed\n", (int_t)oal_ntohs(bd_cmd->vlan), (int_t)ii);
 						}
 					}
 				}
@@ -309,7 +301,7 @@ finalize_domain_registration:
 			}
 
 			/*	Get and delete bridge domain */
-			domain = pfe_l2br_get_first_domain(context->l2_bridge, L2BD_CRIT_BY_VLAN, (void *)(addr_t)oal_ntohs(bd_cmd->vlan));
+			domain = pfe_l2br_get_first_domain(fci_context->l2_bridge, L2BD_CRIT_BY_VLAN, (void *)(addr_t)oal_ntohs(bd_cmd->vlan));
 			if (NULL == domain)
 			{
 				NXP_LOG_ERROR("Domain %d not found\n", oal_ntohs(bd_cmd->vlan));
@@ -336,7 +328,7 @@ finalize_domain_registration:
 
 		case FPP_ACTION_QUERY:
 		{
-			domain = pfe_l2br_get_first_domain(context->l2_bridge, L2BD_CRIT_ALL, NULL);
+			domain = pfe_l2br_get_first_domain(fci_context->l2_bridge, L2BD_CRIT_ALL, NULL);
 			if (NULL == domain)
 			{
 				ret = EOK;
@@ -350,7 +342,7 @@ finalize_domain_registration:
 		{
 			if (NULL == domain)
 			{
-				domain = pfe_l2br_get_next_domain(context->l2_bridge);
+				domain = pfe_l2br_get_next_domain(fci_context->l2_bridge);
 				if (NULL == domain)
 				{
 					ret = EOK;
@@ -400,7 +392,7 @@ finalize_domain_registration:
 			bd_cmd->if_list = oal_htonl(pfe_l2br_domain_get_if_list(domain));
 			bd_cmd->untag_if_list = oal_htonl(pfe_l2br_domain_get_untag_if_list(domain));
 
-			fci_ret = FPP_ERR_OK;
+			*fci_ret = FPP_ERR_OK;
 			ret = EOK;
 
 			break;
@@ -434,7 +426,7 @@ finalize_domain_registration:
  */
 errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_static_ent_cmd_t *reply_buf, uint32_t *reply_len)
 {
-	fci_t *context = (fci_t *)&__context;
+	const fci_t *fci_context = (fci_t *)&__context;
 	errno_t ret = EOK;
 	fpp_l2_static_ent_cmd_t *br_ent_cmd;
 	pfe_l2br_static_entry_t *entry = NULL;
@@ -448,7 +440,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 		return EINVAL;
 	}
 
-    if (unlikely(FALSE == context->fci_initialized))
+    if (unlikely(FALSE == fci_context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -485,7 +477,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 			}
 
 			(void)memcpy(mac, br_ent_cmd->mac, sizeof(pfe_mac_addr_t));
-			ret = pfe_l2br_static_entry_create(context->l2_bridge, oal_ntohs(br_ent_cmd->vlan), mac, oal_ntohl(br_ent_cmd->forward_list));
+			ret = pfe_l2br_static_entry_create(fci_context->l2_bridge, oal_ntohs(br_ent_cmd->vlan), mac, oal_ntohl(br_ent_cmd->forward_list));
 			if (EOK == ret) {
 				NXP_LOG_DEBUG("Static entry %02x:%02x:%02x:%02x:%02x:%02x added to vlan %d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], oal_ntohs(br_ent_cmd->vlan));
 				*fci_ret = FPP_ERR_OK;
@@ -514,7 +506,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 			}
 
 			/* search for entry update fw list */
-			entry = pfe_l2br_static_entry_get_first(context->l2_bridge, L2SENT_CRIT_BY_MAC_VLAN, (void*)(addr_t)oal_ntohs(br_ent_cmd->vlan), (void*)br_ent_cmd->mac);
+			entry = pfe_l2br_static_entry_get_first(fci_context->l2_bridge, L2SENT_CRIT_BY_MAC_VLAN, (void*)(addr_t)oal_ntohs(br_ent_cmd->vlan), (void*)br_ent_cmd->mac);
 			if (NULL == entry)
 			{
 				*fci_ret = FPP_ERR_L2_STATIC_EN_NOT_FOUND;
@@ -523,19 +515,19 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 			{
 				*fci_ret = FPP_ERR_OK;
 
-				if (EOK != pfe_l2br_static_entry_replace_fw_list(context->l2_bridge, entry, oal_ntohl(br_ent_cmd->forward_list)))
+				if (EOK != pfe_l2br_static_entry_replace_fw_list(fci_context->l2_bridge, entry, oal_ntohl(br_ent_cmd->forward_list)))
 				{
 					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				}
-				if (EOK != pfe_l2br_static_entry_set_local_flag(context->l2_bridge, entry, br_ent_cmd->local))
+				if (EOK != pfe_l2br_static_entry_set_local_flag(fci_context->l2_bridge, entry, br_ent_cmd->local))
 				{
 					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				}
-				if (EOK != pfe_l2br_static_entry_set_src_discard_flag(context->l2_bridge, entry, br_ent_cmd->src_discard))
+				if (EOK != pfe_l2br_static_entry_set_src_discard_flag(fci_context->l2_bridge, entry, br_ent_cmd->src_discard))
 				{
 					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				}
-				if (EOK != pfe_l2br_static_entry_set_dst_discard_flag(context->l2_bridge, entry, br_ent_cmd->dst_discard))
+				if (EOK != pfe_l2br_static_entry_set_dst_discard_flag(fci_context->l2_bridge, entry, br_ent_cmd->dst_discard))
 				{
 					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				}
@@ -545,7 +537,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 		case FPP_ACTION_DEREGISTER:
 		{
 			/* search for entry and delete if the entery exists */
-			entry = pfe_l2br_static_entry_get_first(context->l2_bridge, L2SENT_CRIT_BY_MAC_VLAN, (void*)(addr_t)oal_ntohs(br_ent_cmd->vlan), (void*)br_ent_cmd->mac);
+			entry = pfe_l2br_static_entry_get_first(fci_context->l2_bridge, L2SENT_CRIT_BY_MAC_VLAN, (void*)(addr_t)oal_ntohs(br_ent_cmd->vlan), (void*)br_ent_cmd->mac);
 			if (NULL == entry)
 			{
 				*fci_ret = FPP_ERR_L2_STATIC_EN_NOT_FOUND;
@@ -554,7 +546,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 			{
 				*fci_ret = FPP_ERR_OK;
 
-				if (EOK != pfe_l2br_static_entry_destroy(context->l2_bridge, entry))
+				if (EOK != pfe_l2br_static_entry_destroy(fci_context->l2_bridge, entry))
 				{
 					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				}
@@ -563,7 +555,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 		}
 		case FPP_ACTION_QUERY:
 		{
-			entry = pfe_l2br_static_entry_get_first(context->l2_bridge, L2SENT_CRIT_ALL, NULL, NULL);
+			entry = pfe_l2br_static_entry_get_first(fci_context->l2_bridge, L2SENT_CRIT_ALL, NULL, NULL);
 			if (NULL == entry)
 			{
 				ret = EOK;
@@ -576,7 +568,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 		{
 			if (NULL == entry)
 			{
-				entry = pfe_l2br_static_entry_get_next(context->l2_bridge);
+				entry = pfe_l2br_static_entry_get_next(fci_context->l2_bridge);
 				if (NULL == entry)
 				{
 					ret = EOK;
@@ -598,9 +590,9 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 			/* FW list */
 			br_ent_cmd->forward_list = oal_htonl(pfe_l2br_static_entry_get_fw_list(entry));
 			/* misc flags */
-			(void)pfe_l2br_static_entry_get_local_flag(context->l2_bridge, entry, (bool_t *)&br_ent_cmd->local);
-			(void)pfe_l2br_static_entry_get_src_discard_flag(context->l2_bridge, entry, (bool_t *)&br_ent_cmd->src_discard);
-			(void)pfe_l2br_static_entry_get_dst_discard_flag(context->l2_bridge, entry, (bool_t *)&br_ent_cmd->dst_discard);
+			(void)pfe_l2br_static_entry_get_local_flag(fci_context->l2_bridge, entry, (bool_t *)&br_ent_cmd->local);
+			(void)pfe_l2br_static_entry_get_src_discard_flag(fci_context->l2_bridge, entry, (bool_t *)&br_ent_cmd->src_discard);
+			(void)pfe_l2br_static_entry_get_dst_discard_flag(fci_context->l2_bridge, entry, (bool_t *)&br_ent_cmd->dst_discard);
 			*fci_ret = FPP_ERR_OK;
 			break;
 		}
@@ -623,7 +615,7 @@ uint32_t fci_l2br_static_entry_get_valid_fw_list(void)
 	uint32_t ii;
 	uint32_t session_id, valid_if_list = 0U;
 	errno_t ret = EOK;
-	fci_t *context = (fci_t *)&__context;
+	const fci_t *fci_context = (fci_t *)&__context;
 	pfe_if_db_entry_t *if_db_entry = NULL;
 
 	ret = pfe_if_db_lock(&session_id);
@@ -637,7 +629,7 @@ uint32_t fci_l2br_static_entry_get_valid_fw_list(void)
 	{
 			/*	Only add interfaces which are known to platform interface database */
 			if_db_entry = NULL;
-			ret = pfe_if_db_get_first(context->phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)ii, &if_db_entry);
+			ret = pfe_if_db_get_first(fci_context->phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)ii, &if_db_entry);
 			if (EOK != ret)
 			{
 				valid_if_list = 0;
@@ -665,23 +657,15 @@ uint32_t fci_l2br_static_entry_get_valid_fw_list(void)
  * @param[in]	phy_if Interface instance
  * @retval		EOK Success
  */
-static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *phy_if)
+static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, const pfe_phy_if_t *phy_if)
 {
-	fci_t *context = (fci_t *)&__context;
 	errno_t ret = EOK;
-	pfe_ct_phy_if_id_t id;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == domain)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
-	}
-
-    if (unlikely(FALSE == context->fci_initialized))
-	{
-    	NXP_LOG_ERROR("Context not initialized\n");
-		return EPERM;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
@@ -695,40 +679,9 @@ static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, pfe_phy_if_t
 		}
 		else
 		{
-			/*	Find out if there is another domain containing given physical interface */
-			if (NULL != pfe_l2br_get_first_domain(context->l2_bridge, L2BD_BY_PHY_IF, phy_if))
-			{
-				/*	Interface is still member of some bridge domain */
-				;
-			}
-			else
-			{
-				/*	Get ID (sanity check) */
-				id = pfe_phy_if_get_id(phy_if);
-
-				NXP_LOG_INFO("Interface %d is not member of any bridge domain. Setting default operational mode.\n", id);
-
-				ret = pfe_phy_if_set_op_mode(phy_if, IF_OP_DEFAULT);
-				if (EOK != ret)
-				{
-					NXP_LOG_DEBUG("Could not set interface operational mode\n");
-					return ret;
-				}
-				else
-				{
-					NXP_LOG_INFO("Interface %d: Disabling promiscuous mode\n", id);
-					ret = pfe_phy_if_promisc_disable(phy_if);
-					if (EOK != ret)
-					{
-						NXP_LOG_ERROR("Could not disable promiscuous mode: %d\n", ret);
-						return ret;
-					}
-				}
-			}
+			ret = pfe_l2br_domain_flush_by_if(domain, phy_if);
 		}
 	}
-	
-	(void)id;
 
 	return ret;
 }
@@ -740,7 +693,7 @@ static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, pfe_phy_if_t
  */
 static errno_t fci_l2br_domain_remove(pfe_l2br_domain_t *domain)
 {
-	pfe_phy_if_t *phy_if;
+	const pfe_phy_if_t *phy_if;
 	errno_t ret = EOK;
 	uint16_t vlan;
 
@@ -781,5 +734,6 @@ static errno_t fci_l2br_domain_remove(pfe_l2br_domain_t *domain)
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
+#endif /* PFE_CFG_PFE_MASTER */
 
 /** @}*/

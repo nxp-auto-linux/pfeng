@@ -26,6 +26,7 @@
 #include "fci_internal.h"
 #include "fci.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
 static void fci_routes_remove_related_connections(fci_rt_db_entry_t *route);
@@ -39,7 +40,7 @@ static void fci_routes_remove_related_connections(fci_rt_db_entry_t *route);
  */
 static void fci_routes_remove_related_connections(fci_rt_db_entry_t *route)
 {
-	fci_t *context = (fci_t *)&__context;
+	const fci_t *fci_context = (fci_t *)&__context;
 	pfe_rtable_entry_t *entry;
 	errno_t ret;
 
@@ -50,14 +51,14 @@ static void fci_routes_remove_related_connections(fci_rt_db_entry_t *route)
 		return;
 	}
 
-    if (unlikely(FALSE == context->fci_initialized))
+    if (unlikely(FALSE == fci_context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	entry = pfe_rtable_get_first(context->rtable, RTABLE_CRIT_BY_ROUTE_ID, &route->id);
+	entry = pfe_rtable_get_first(fci_context->rtable, RTABLE_CRIT_BY_ROUTE_ID, &route->id);
 	while (NULL != entry)
 	{
 		ret = fci_connections_drop_one(entry);
@@ -66,7 +67,7 @@ static void fci_routes_remove_related_connections(fci_rt_db_entry_t *route)
 			NXP_LOG_WARNING("Couldn't properly drop a connection: %d\n", ret);
 		}
 
-		entry = pfe_rtable_get_next(context->rtable);
+		entry = pfe_rtable_get_next(fci_context->rtable);
 	}
 }
 
@@ -82,7 +83,7 @@ static void fci_routes_remove_related_connections(fci_rt_db_entry_t *route)
  */
 errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_buf, uint32_t *reply_len)
 {
-	fci_t *context = (fci_t *)&__context;
+	fci_t *fci_context = (fci_t *)&__context;
 	fpp_rt_cmd_t *rt_cmd;
 	bool_t is_ipv6 = FALSE;
 	errno_t ret = EOK;
@@ -101,7 +102,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 		return EINVAL;
 	}
 
-    if (unlikely(FALSE == context->fci_initialized))
+    if (unlikely(FALSE == fci_context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -150,7 +151,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			if (EOK == ret)
 			{
 				/*	Validate the interface */
-				ret = pfe_if_db_get_first(context->phy_if_db, session_id, IF_DB_CRIT_BY_NAME, (void *)rt_cmd->output_device, &if_entry);
+				ret = pfe_if_db_get_first(fci_context->phy_if_db, session_id, IF_DB_CRIT_BY_NAME, (void *)rt_cmd->output_device, &if_entry);
 				if(EOK != ret)
 				{
 					NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: DB is locked in different session, entry was not retrieved from DB\n");
@@ -189,7 +190,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			}
 
 			/*	Add entry to database (values in network endian) */
-			ret = fci_rt_db_add(&context->route_db,	&ip, &src_mac, &dst_mac,
+			ret = fci_rt_db_add(&fci_context->route_db,	&ip, &src_mac, &dst_mac,
 								phy_if,
 								rt_cmd->id,
 								msg->client,
@@ -219,7 +220,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 		case FPP_ACTION_DEREGISTER:
 		{
 			/*	Validate the route */
-			rt_entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_ID, (void *)&rt_cmd->id);
+			rt_entry = fci_rt_db_get_first(&fci_context->route_db, RT_DB_CRIT_BY_ID, (void *)&rt_cmd->id);
 			if (NULL == rt_entry)
 			{
 				NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Requested route %d not found\n", (int_t)oal_ntohl(rt_cmd->id));
@@ -253,7 +254,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 
 		case FPP_ACTION_QUERY:
 		{
-			rt_entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_ALL, NULL);
+			rt_entry = fci_rt_db_get_first(&fci_context->route_db, RT_DB_CRIT_ALL, NULL);
 			if (NULL == rt_entry)
 			{
 				ret = EOK;
@@ -267,7 +268,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 		{
 			if (NULL == rt_entry)
 			{
-				rt_entry = fci_rt_db_get_next(&context->route_db);
+				rt_entry = fci_rt_db_get_next(&fci_context->route_db);
 				if (NULL == rt_entry)
 				{
 					ret = EOK;
@@ -300,7 +301,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			reply_buf->id = rt_entry->id;
 			(void)strncpy(reply_buf->output_device, pfe_phy_if_get_name(rt_entry->iface), (uint32_t)IFNAMSIZ-1U);
 
-			fci_ret = FPP_ERR_OK;
+			*fci_ret = FPP_ERR_OK;
 			ret = EOK;
 
 			break;
@@ -335,7 +336,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
  */
 errno_t fci_routes_drop_one(fci_rt_db_entry_t *route)
 {
-	fci_t *context = (fci_t *)&__context;
+	fci_t *fci_context = (fci_t *)&__context;
 	fci_msg_t msg;
 	fpp_rt_cmd_t *rt_cmd = NULL;
 	errno_t ret;
@@ -347,7 +348,7 @@ errno_t fci_routes_drop_one(fci_rt_db_entry_t *route)
 		return EINVAL;
 	}
 
-	if (unlikely(FALSE == context->fci_initialized))
+	if (unlikely(FALSE == fci_context->fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -366,7 +367,8 @@ errno_t fci_routes_drop_one(fci_rt_db_entry_t *route)
 	{
 		rt_cmd->id = route->id;
 
-		if (EOK != fci_core_client_send((fci_core_client_t *)route->refptr, &msg, NULL))
+		ret = fci_core_client_send((fci_core_client_t *)route->refptr, &msg, NULL);
+		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("Could not notify FCI client\n");
 		}
@@ -378,7 +380,7 @@ errno_t fci_routes_drop_one(fci_rt_db_entry_t *route)
 	fci_routes_remove_related_connections(route);
 
 	/*	Remove the route */
-	ret = fci_rt_db_remove(&context->route_db, route);
+	ret = fci_rt_db_remove(&fci_context->route_db, route);
 	if (EOK != ret)
 	{
 		NXP_LOG_ERROR("Can't remove route: %d\n", ret);
@@ -394,12 +396,12 @@ errno_t fci_routes_drop_one(fci_rt_db_entry_t *route)
  */
 void fci_routes_drop_all(void)
 {
-	fci_t *context = (fci_t *)&__context;
+	fci_t *fci_context = (fci_t *)&__context;
 	fci_rt_db_entry_t *entry = NULL;
 	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(FALSE == context->fci_initialized))
+	if (unlikely(FALSE == fci_context->fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
 		return;
@@ -408,7 +410,7 @@ void fci_routes_drop_all(void)
 
 	NXP_LOG_DEBUG("Removing all routes\n");
 
-	entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_ALL, NULL);
+	entry = fci_rt_db_get_first(&fci_context->route_db, RT_DB_CRIT_ALL, NULL);
 	while (NULL != entry)
 	{
 		ret = fci_routes_drop_one(entry);
@@ -417,7 +419,7 @@ void fci_routes_drop_all(void)
 			NXP_LOG_WARNING("Couldn't properly drop a route: %d\n", ret);
 		}
 
-		entry = fci_rt_db_get_next(&context->route_db);
+		entry = fci_rt_db_get_next(&fci_context->route_db);
 	}
 }
 
@@ -428,12 +430,12 @@ void fci_routes_drop_all(void)
  */
 void fci_routes_drop_all_ipv4(void)
 {
-	fci_t *context = (fci_t *)&__context;
+	fci_t *fci_context = (fci_t *)&__context;
 	fci_rt_db_entry_t *entry = NULL;
 	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    if (unlikely(FALSE == context->fci_initialized))
+    if (unlikely(FALSE == fci_context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return;
@@ -442,7 +444,7 @@ void fci_routes_drop_all_ipv4(void)
 
 	NXP_LOG_DEBUG("Removing all IPv4 routes\n");
 
-	entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_ALL, NULL);
+	entry = fci_rt_db_get_first(&fci_context->route_db, RT_DB_CRIT_ALL, NULL);
 	while (NULL != entry)
 	{
 		if (entry->dst_ip.is_ipv4)
@@ -454,7 +456,7 @@ void fci_routes_drop_all_ipv4(void)
 			}
 		}
 
-		entry = fci_rt_db_get_next(&context->route_db);
+		entry = fci_rt_db_get_next(&fci_context->route_db);
 	}
 }
 
@@ -465,12 +467,12 @@ void fci_routes_drop_all_ipv4(void)
  */
 void fci_routes_drop_all_ipv6(void)
 {
-	fci_t *context = (fci_t *)&__context;
+	fci_t *fci_context = (fci_t *)&__context;
 	fci_rt_db_entry_t *entry = NULL;
 	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    if (unlikely(FALSE == context->fci_initialized))
+    if (unlikely(FALSE == fci_context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return;
@@ -479,7 +481,7 @@ void fci_routes_drop_all_ipv6(void)
 
 	NXP_LOG_DEBUG("Removing all IPv6 routes\n");
 
-	entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_ALL, NULL);
+	entry = fci_rt_db_get_first(&fci_context->route_db, RT_DB_CRIT_ALL, NULL);
 	while (NULL != entry)
 	{
 		if (!entry->dst_ip.is_ipv4)
@@ -491,9 +493,10 @@ void fci_routes_drop_all_ipv6(void)
 			}
 		}
 
-		entry = fci_rt_db_get_next(&context->route_db);
+		entry = fci_rt_db_get_next(&fci_context->route_db);
 	}
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
+#endif /* PFE_CFG_PFE_MASTER */
 /** @}*/

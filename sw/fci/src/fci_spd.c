@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -19,11 +19,12 @@
 #include "fci.h"
 #include "fci_spd.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
 errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf, uint32_t *reply_len)
 {
-    fci_t *context = (fci_t *)&__context;
+    fci_t *fci_context = (fci_t *)&__context;
     errno_t ret = EOK;
     fpp_spd_cmd_t *spd_cmd;
     pfe_if_db_entry_t *pfe_if_db_entry = NULL;
@@ -38,7 +39,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
 		return EINVAL;
 	}
 
-    if (unlikely(FALSE == context->fci_initialized))
+    if (unlikely(FALSE == fci_context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -71,16 +72,16 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
 
 	spd_cmd = (fpp_spd_cmd_t *)(msg->msg_cmd.payload);
     /* Get the physical interface reference - needed for all commands */
-    ret = pfe_if_db_lock(&context->if_session_id);
+    ret = pfe_if_db_lock(&fci_context->if_session_id);
     if (EOK != ret)
     {
         *fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;
         NXP_LOG_DEBUG("DB lock failed\n");
         return ret;
     }
-    ret = pfe_if_db_get_first(context->phy_if_db, context->if_session_id, IF_DB_CRIT_BY_NAME, spd_cmd->name, &pfe_if_db_entry);
+    ret = pfe_if_db_get_first(fci_context->phy_if_db, fci_context->if_session_id, IF_DB_CRIT_BY_NAME, spd_cmd->name, &pfe_if_db_entry);
     /* We first unlock the database and then examine the result */
-    if (EOK != pfe_if_db_unlock(context->if_session_id))
+    if (EOK != pfe_if_db_unlock(fci_context->if_session_id))
     {
         *fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
         NXP_LOG_DEBUG("DB unlock failed\n");
@@ -219,3 +220,4 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
+#endif /* PFE_CFG_PFE_MASTER */

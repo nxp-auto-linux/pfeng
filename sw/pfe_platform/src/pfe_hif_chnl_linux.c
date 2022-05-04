@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1872,7 +1872,6 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *ch
 static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 {
 	pfe_hif_ring_t *tx_ring, *rx_ring;
-	uint16_t seqnum;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -1899,14 +1898,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 		goto free_and_fail;
 	}
 
-	/*	Get current valid RX ring sequence number */
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-	seqnum = pfe_hif_chnl_cfg_get_rx_seqnum(chnl->cbus_base_va, chnl->id);
-	NXP_LOG_DEBUG("Using initial RX ring seqnum 0x%x\n", seqnum);
-#else
-	seqnum = 0U;
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
-	rx_ring = pfe_hif_ring_create(TRUE, seqnum, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
+	rx_ring = pfe_hif_ring_create(TRUE, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
 	if (NULL == rx_ring)
 	{
 		NXP_LOG_ERROR("Couldn't create RX BD ring\n");
@@ -1928,14 +1920,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 		goto free_and_fail;
 	}
 
-	/*	Get current valid TX ring sequence number */
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-	seqnum = pfe_hif_chnl_cfg_get_tx_seqnum(chnl->cbus_base_va, chnl->id);
-	NXP_LOG_DEBUG("Using initial TX ring seqnum 0x%x\n", seqnum);
-#else
-	seqnum = 0U;
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
-	tx_ring = pfe_hif_ring_create(FALSE, seqnum, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
+	tx_ring = pfe_hif_ring_create(FALSE, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
 	if (NULL == tx_ring)
 	{
 		NXP_LOG_ERROR("Couldn't create TX BD ring\n");

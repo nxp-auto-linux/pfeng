@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -76,14 +76,13 @@ struct fci_tag
  /* Global variable used across all fci files */
 extern fci_t __context;
 
-errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg);
 errno_t fci_interfaces_session_cmd(uint32_t code, uint16_t *fci_ret);
 errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_buf, uint32_t *reply_len);
-errno_t fci_connections_ipv4_ct_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_ct_cmd_t *reply_buf, uint32_t *reply_len);
-errno_t fci_connections_ipv6_ct_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_ct6_cmd_t *reply_buf, uint32_t *reply_len);
+errno_t fci_connections_ipv4_ct_cmd(const fci_msg_t *msg, uint16_t *fci_ret, fpp_ct_cmd_t *reply_buf, uint32_t *reply_len);
+errno_t fci_connections_ipv6_ct_cmd(const fci_msg_t *msg, uint16_t *fci_ret, fpp_ct6_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_connections_ipv4_timeout_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_timeout_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_static_ent_cmd_t *reply_buf, uint32_t *reply_len);
@@ -96,8 +95,6 @@ errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry);
 void fci_connections_drop_all(void);
 errno_t fci_connections_set_default_timeout(uint8_t ip_proto, uint32_t timeout);
 uint32_t fci_connections_get_default_timeout(uint8_t ip_proto);
-errno_t fci_enable_if(pfe_phy_if_t *phy_if);
-errno_t fci_disable_if(pfe_phy_if_t *phy_if);
 errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_scheduler_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd_t *reply_buf, uint32_t *reply_len);

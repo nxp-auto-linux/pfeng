@@ -28,6 +28,7 @@
 #include "pfe_mirror.h"
 #include "pfe_feature_mgr.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
 
@@ -44,6 +45,7 @@ static errno_t fci_interfaces_get_arg_info(fpp_if_m_args_t *m_arg, pfe_ct_if_m_r
 static errno_t fci_interfaces_get_arg_info(fpp_if_m_args_t *m_arg, pfe_ct_if_m_rules_t rule, void **offset, size_t *size, uint32_t *fp_table_addr)
 {
 	errno_t retval = EOK; /* Function return value */
+	uint32_t table_addr;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == m_arg) || (NULL == offset) || (NULL == size)))
 	{
@@ -120,7 +122,8 @@ static errno_t fci_interfaces_get_arg_info(fpp_if_m_args_t *m_arg, pfe_ct_if_m_r
 		case IF_MATCH_FP0:
 		{
 			/* Get the table address in the HW */
-			*fp_table_addr = oal_htonl(fci_fp_db_get_table_dmem_addr(m_arg->fp_table0));
+			table_addr = fci_fp_db_get_table_dmem_addr(m_arg->fp_table0);
+			*fp_table_addr = oal_htonl(table_addr);
 			if(0U == *fp_table_addr)
 			{
 				retval = ENOENT;
@@ -133,7 +136,8 @@ static errno_t fci_interfaces_get_arg_info(fpp_if_m_args_t *m_arg, pfe_ct_if_m_r
 		case IF_MATCH_FP1:
 		{
 			/* Get the table address in the HW */
-			*fp_table_addr = oal_htonl(fci_fp_db_get_table_dmem_addr(m_arg->fp_table1));
+			table_addr = fci_fp_db_get_table_dmem_addr(m_arg->fp_table1);
+			*fp_table_addr = oal_htonl(table_addr);
 			if(0U == *fp_table_addr)
 			{
 				retval = ENOENT;
@@ -221,7 +225,7 @@ static errno_t fci_interfaces_destroy_fptables(const fpp_if_m_rules_t match, con
  */
 errno_t fci_interfaces_session_cmd(uint32_t code, uint16_t *fci_ret)
 {
-	fci_t *context = (fci_t *)&__context;
+	fci_t *fci_context = (fci_t *)&__context;
 	errno_t ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -237,7 +241,7 @@ errno_t fci_interfaces_session_cmd(uint32_t code, uint16_t *fci_ret)
 		case FPP_CMD_IF_LOCK_SESSION:
 		{
 			*fci_ret = FPP_ERR_OK;
-			if (EOK != pfe_if_db_lock(&context->if_session_id))
+			if (EOK != pfe_if_db_lock(&fci_context->if_session_id))
 			{
 				*fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;
 				NXP_LOG_DEBUG("DB lock failed\n");
@@ -247,7 +251,7 @@ errno_t fci_interfaces_session_cmd(uint32_t code, uint16_t *fci_ret)
 		case FPP_CMD_IF_UNLOCK_SESSION:
 		{
 			*fci_ret = FPP_ERR_OK;
-			if (EOK != pfe_if_db_unlock(context->if_session_id))
+			if (EOK != pfe_if_db_unlock(fci_context->if_session_id))
 			{
 				*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
 				NXP_LOG_DEBUG("DB unlock failed due to incorrect session ID\n");
@@ -276,7 +280,7 @@ errno_t fci_interfaces_session_cmd(uint32_t code, uint16_t *fci_ret)
  */
 errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd_t *reply_buf, uint32_t *reply_len)
 {
-	fci_t *context = (fci_t *)&__context;
+	const fci_t *fci_context = (fci_t *)&__context;
 	fpp_log_if_cmd_t *if_cmd;
 	errno_t ret = EOK;
 	pfe_ct_if_m_args_t args;
@@ -299,7 +303,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 		return EINVAL;
 	}
 
-	if (unlikely(FALSE == context->fci_initialized))
+	if (unlikely(FALSE == fci_context->fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -327,7 +331,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 		case FPP_ACTION_REGISTER:
 		{
 			/* Get the intended parent physical interface */
-			ret = pfe_if_db_get_first(context->phy_if_db, context->if_session_id, IF_DB_CRIT_BY_NAME, if_cmd->parent_name, &entry);
+			ret = pfe_if_db_get_first(fci_context->phy_if_db, fci_context->if_session_id, IF_DB_CRIT_BY_NAME, if_cmd->parent_name, &entry);
 			if(EOK != ret)
 			{
 				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
@@ -349,7 +353,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 				break;
 			}
 			/* Add the interface into the database */
-			ret = pfe_if_db_add(context->log_if_db, context->if_session_id, log_if, pfe_phy_if_get_id(phy_if));
+			ret = pfe_if_db_add(fci_context->log_if_db, fci_context->if_session_id, log_if, pfe_phy_if_get_id(phy_if));
 			if(EOK != ret)
 			{
 				pfe_log_if_destroy(log_if);
@@ -362,7 +366,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 
 		case FPP_ACTION_DEREGISTER:
 		{
-			ret = pfe_if_db_get_first(context->log_if_db, context->if_session_id, IF_DB_CRIT_BY_NAME, if_cmd->name, &entry);
+			ret = pfe_if_db_get_first(fci_context->log_if_db, fci_context->if_session_id, IF_DB_CRIT_BY_NAME, if_cmd->name, &entry);
 
 			if(EOK != ret)
 			{
@@ -394,11 +398,11 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 				args.fp1_table = oal_ntohl(args.fp1_table);
 
 				/* Destroy FP tables */
-				fci_interfaces_destroy_fptables((fpp_if_m_rules_t)rules, &args);
+				(void)fci_interfaces_destroy_fptables((fpp_if_m_rules_t)rules, &args);
 			}
 
 			/* Remove interface from the database */
-			(void)pfe_if_db_remove(context->log_if_db, context->if_session_id, entry);
+			(void)pfe_if_db_remove(fci_context->log_if_db, fci_context->if_session_id, entry);
 			/* Destroy the interface */
 			pfe_log_if_destroy(log_if);
 			break;
@@ -409,7 +413,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			*fci_ret = FPP_ERR_OK;
 			*reply_len = sizeof(fpp_log_if_cmd_t);
 
-			ret = pfe_if_db_get_first(context->log_if_db, context->if_session_id, IF_DB_CRIT_BY_NAME, if_cmd->name, &entry);
+			ret = pfe_if_db_get_first(fci_context->log_if_db, fci_context->if_session_id, IF_DB_CRIT_BY_NAME, if_cmd->name, &entry);
 
 			if(EOK != ret)
 			{
@@ -450,7 +454,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			ret = pfe_log_if_del_match_rule(log_if, rules);
 
 			/* Destroy FP tables if they are not used by new rules */
-			fci_interfaces_destroy_fptables((fpp_if_m_rules_t)rules, &args);
+			(void)fci_interfaces_destroy_fptables((fpp_if_m_rules_t)rules, &args);
 
 			if(EOK == ret)
 			{
@@ -471,7 +475,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 				fp_table_addr = fci_fp_db_get_table_dmem_addr(if_cmd->arguments.fp_table0);
 				if(0U == fp_table_addr)
 				{   /* Table has not been created yet */
-					ret = fci_fp_db_push_table_to_hw(context->class, if_cmd->arguments.fp_table0);
+					ret = fci_fp_db_push_table_to_hw(fci_context->class, if_cmd->arguments.fp_table0);
 					if(EOK != ret)
 					{   /* Failed to write */
 						*fci_ret = FPP_ERR_IF_MATCH_UPDATE_FAILED;
@@ -506,7 +510,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 				fp_table_addr = fci_fp_db_get_table_dmem_addr(if_cmd->arguments.fp_table1);
 				if(0U == fp_table_addr)
 				{   /* Table has not been created yet */
-					ret = fci_fp_db_push_table_to_hw(context->class, if_cmd->arguments.fp_table1);
+					ret = fci_fp_db_push_table_to_hw(fci_context->class, if_cmd->arguments.fp_table1);
 					if(EOK != ret)
 					{   /* Failed to write */
 						*fci_ret = FPP_ERR_IF_MATCH_UPDATE_FAILED;
@@ -595,7 +599,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 #endif
 
 					/* For each bit in egress mask search if the phy if exists */
-					ret = pfe_if_db_get_first(context->phy_if_db, context->if_session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)index, &entry);
+					ret = pfe_if_db_get_first(fci_context->phy_if_db, fci_context->if_session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)index, &entry);
 					if((EOK == ret) && (NULL != entry))
 					{   /* phy if does exist */
 						phy_if = pfe_if_db_entry_get_phy_if(entry);
@@ -724,7 +728,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 		}
 		case FPP_ACTION_QUERY:
 		{
-			ret = pfe_if_db_get_first(context->log_if_db, context->if_session_id, IF_DB_CRIT_ALL, NULL, &entry);
+			ret = pfe_if_db_get_first(fci_context->log_if_db, fci_context->if_session_id, IF_DB_CRIT_ALL, NULL, &entry);
 			if (NULL == entry)
 			{
 				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
@@ -742,7 +746,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 		{
 			if (NULL == entry)
 			{
-				ret = pfe_if_db_get_next(context->log_if_db, context->if_session_id, &entry);
+				ret = pfe_if_db_get_next(fci_context->log_if_db, fci_context->if_session_id, &entry);
 				if (NULL == entry)
 				{
 					*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
@@ -774,8 +778,8 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 				break;
 			}
-
-			if(EOK != (ret = pfe_log_if_get_stats(log_if,&stats)))
+			ret = pfe_log_if_get_stats(log_if,&stats);
+			if(EOK != ret)
 			{
 				NXP_LOG_ERROR("Could not get interface statistics\n");
 				break;
@@ -884,7 +888,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
  */
 errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd_t *reply_buf, uint32_t *reply_len)
 {
-	fci_t *context = (fci_t *)&__context;
+	const fci_t *fci_context = (fci_t *)&__context;
 	fpp_phy_if_cmd_t *if_cmd;
 	errno_t ret = EOK;
 	pfe_if_db_entry_t *entry = NULL;
@@ -906,7 +910,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 		return EINVAL;
 	}
 
-	if (unlikely(FALSE == context->fci_initialized))
+	if (unlikely(FALSE == fci_context->fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -934,7 +938,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 		case FPP_ACTION_UPDATE:
 		{
 			/* Get the requested interface */
-			ret = pfe_if_db_get_first(context->phy_if_db, context->if_session_id, IF_DB_CRIT_BY_NAME, if_cmd->name, &entry);
+			ret = pfe_if_db_get_first(fci_context->phy_if_db, fci_context->if_session_id, IF_DB_CRIT_BY_NAME, if_cmd->name, &entry);
 
 			if(EOK != ret)
 			{
@@ -974,7 +978,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				break;
 			}
 
-			for(i = 0U; i < FPP_MIRRORS_CNT; i++)
+			for(i = 0U; i < (uint32_t)FPP_MIRRORS_CNT; i++)
 			{
 				/* RX */
 				if('\0' == if_cmd->rx_mirrors[i][0])
@@ -1218,7 +1222,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 					addr = fci_fp_db_get_table_dmem_addr((char_t *)if_cmd->ftable);
 					if (0U == addr)
 					{
-						(void)fci_fp_db_push_table_to_hw(context->class, (char_t *)if_cmd->ftable);
+						(void)fci_fp_db_push_table_to_hw(fci_context->class, (char_t *)if_cmd->ftable);
 						addr = fci_fp_db_get_table_dmem_addr((char_t *)if_cmd->ftable);
 					}
 
@@ -1257,7 +1261,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 
 		case FPP_ACTION_QUERY:
 		{
-			ret = pfe_if_db_get_first(context->phy_if_db, context->if_session_id, IF_DB_CRIT_ALL, NULL, &entry);
+			ret = pfe_if_db_get_first(fci_context->phy_if_db, fci_context->if_session_id, IF_DB_CRIT_ALL, NULL, &entry);
 
 			if(EOK != ret)
 			{
@@ -1278,7 +1282,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 		{
 			if (NULL == entry)
 			{
-				ret = pfe_if_db_get_next(context->phy_if_db, context->if_session_id, &entry);
+				ret = pfe_if_db_get_next(fci_context->phy_if_db, fci_context->if_session_id, &entry);
 				if(EOK != ret)
 				{
 					ret = EOK;
@@ -1301,8 +1305,8 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 				break;
 			}
-
-			if(EOK != (ret = pfe_phy_if_get_stats(phy_if, &stats)))
+			ret = pfe_phy_if_get_stats(phy_if, &stats);
+			if(EOK != ret)
 			{
 				NXP_LOG_ERROR("Could not get interface statistics\n");
 				break;
@@ -1318,11 +1322,11 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 
 			reply_buf->flags |= (TRUE == pfe_phy_if_is_promisc(phy_if)) ? oal_htonl(FPP_IF_PROMISC) : 0U;
 			reply_buf->flags |= (TRUE == pfe_phy_if_is_enabled(phy_if)) ? oal_htonl(FPP_IF_ENABLED) : 0U;
-			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_VLAN_CONF_CHECK)) ? oal_htonl(FPP_IF_VLAN_CONF_CHECK) : 0U;
-			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_PTP_CONF_CHECK)) ? oal_htonl(FPP_IF_PTP_CONF_CHECK) : 0U;
-			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_PTP_PROMISC)) ? oal_htonl(FPP_IF_PTP_PROMISC) : 0U;
-			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_ALLOW_Q_IN_Q)) ? oal_htonl(FPP_IF_ALLOW_Q_IN_Q) : 0U;
-			reply_buf->flags |= (IF_FL_NONE != pfe_phy_if_get_flag(phy_if, IF_FL_DISCARD_TTL)) ? oal_htonl(FPP_IF_DISCARD_TTL) : 0U;
+			reply_buf->flags |= ((uint32_t)IF_FL_NONE != (uint32_t)pfe_phy_if_get_flag(phy_if, IF_FL_VLAN_CONF_CHECK)) ? oal_htonl(FPP_IF_VLAN_CONF_CHECK) : 0U;
+			reply_buf->flags |= ((uint32_t)IF_FL_NONE != (uint32_t)pfe_phy_if_get_flag(phy_if, IF_FL_PTP_CONF_CHECK)) ? oal_htonl(FPP_IF_PTP_CONF_CHECK) : 0U;
+			reply_buf->flags |= ((uint32_t)IF_FL_NONE != (uint32_t)pfe_phy_if_get_flag(phy_if, IF_FL_PTP_PROMISC)) ? oal_htonl(FPP_IF_PTP_PROMISC) : 0U;
+			reply_buf->flags |= ((uint32_t)IF_FL_NONE != (uint32_t)pfe_phy_if_get_flag(phy_if, IF_FL_ALLOW_Q_IN_Q)) ? oal_htonl(FPP_IF_ALLOW_Q_IN_Q) : 0U;
+			reply_buf->flags |= ((uint32_t)IF_FL_NONE != (uint32_t)pfe_phy_if_get_flag(phy_if, IF_FL_DISCARD_TTL)) ? oal_htonl(FPP_IF_DISCARD_TTL) : 0U;
 
 			/* Get the mode - use the fact enums have same values */
 			reply_buf->mode = (fpp_phy_if_op_mode_t) pfe_phy_if_get_op_mode(phy_if);
@@ -1332,7 +1336,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			/* Use the fact that the enums have same values */
 			reply_buf->block_state = (fpp_phy_if_block_state_t)block_state;
 
-			for(i = 0U; i < FPP_MIRRORS_CNT; i++)
+			for(i = 0U; i < (uint32_t)FPP_MIRRORS_CNT; i++)
 			{
 				/* RX */
 				mirror = pfe_phy_if_get_rx_mirror(phy_if, i);
@@ -1419,7 +1423,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
  */
 errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd_t *reply_buf, uint32_t *reply_len)
 {
-	fci_t *context = (fci_t *)&__context;
+	const fci_t *fci_context = (fci_t *)&__context;
 	fpp_if_mac_cmd_t *if_mac_cmd;
 	errno_t ret = EOK;
 	pfe_if_db_entry_t *entry = NULL;
@@ -1433,7 +1437,7 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 		return EINVAL;
 	}
 
-	if (unlikely(FALSE == context->fci_initialized))
+	if (unlikely(FALSE == fci_context->fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -1463,7 +1467,7 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 
 	/*	Preparation: get the requested interface */
 	{
-		ret = pfe_if_db_get_single(context->phy_if_db, context->if_session_id, IF_DB_CRIT_BY_NAME, if_mac_cmd->name, &entry);
+		ret = pfe_if_db_get_single(fci_context->phy_if_db, fci_context->if_session_id, IF_DB_CRIT_BY_NAME, if_mac_cmd->name, &entry);
 
 		if(EOK != ret)
 		{
@@ -1565,7 +1569,7 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 					break;
 				}
 			}
-			
+
 			/* Store phy_if name into reply message */
 			(void)strncpy(reply_buf->name, pfe_phy_if_get_name(phy_if), (uint32_t)IFNAMSIZ-1U);
 
@@ -1620,3 +1624,4 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
+#endif /* PFE_CFG_PFE_MASTER */

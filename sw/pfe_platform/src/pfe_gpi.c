@@ -21,7 +21,7 @@
 	uint32_t name[SIZE]
 
 /* PFE uses the value of 32 to represent the 6 bit encoding of the IP address mask of 0 */
-#define IGQOS_IP_MASK_0 32
+#define IGQOS_IP_MASK_0 32U
 
 struct pfe_gpi_tag
 {
@@ -425,9 +425,9 @@ static uint8_t igqos_class_get_next_active(pfe_gpi_t *gpi)
  */
 static uint8_t igqos_ip_mask_hw_encode(uint8_t ip_m)
 {
-	if (0 != ip_m)
+	if (0U != ip_m)
 	{
-		return ip_m - 1;
+		return ip_m - 1U;
 	}
 	else
 	{
@@ -439,11 +439,11 @@ static uint8_t igqos_ip_mask_hw_decode(uint8_t ip_m)
 {
 	if (IGQOS_IP_MASK_0 != ip_m)
 	{
-		return ip_m + 1;
+		return ip_m + 1U;
 	}
 	else
 	{
-		return 0;
+		return 0U;
 	}
 }
 
@@ -491,8 +491,8 @@ static void igqos_convert_entry_to_flow(const uint32_t entry[], pfe_iqos_flow_sp
 	val = entry[6];
 	args->tos_m |= (uint8_t)entry_arg_get_upper(TOS_M, val);
 	args->l4proto_m = (uint8_t)entry_arg_get(PROT_M, val);
-	args->sip_m = igqos_ip_mask_hw_decode(entry_arg_get(SIP_M, val));
-	args->dip_m = igqos_ip_mask_hw_decode(entry_arg_get(DIP_M, val));
+	args->sip_m = igqos_ip_mask_hw_decode((uint8_t)entry_arg_get(SIP_M, val));
+	args->dip_m = igqos_ip_mask_hw_decode((uint8_t)entry_arg_get(DIP_M, val));
 
 	if (entry_arg_get(ACT_DROP, val) == 1U)
 	{
@@ -665,11 +665,11 @@ errno_t pfe_gpi_qos_get_flow(const pfe_gpi_t *gpi, uint8_t id, pfe_iqos_flow_spe
 	}
 	else
 	{
-		pfe_gpi_cfg_qos_read_flow_entry_req(gpi->gpi_base_va, id);
+		pfe_gpi_cfg_qos_rd_fl_entry_req(gpi->gpi_base_va, id);
 		ret = igqos_entry_ready_timeout(gpi);
 		if (ret == EOK)
 		{
-			pfe_gpi_cfg_qos_read_flow_entry_resp(gpi->gpi_base_va, class_table_entry);
+			pfe_gpi_cfg_qos_rd_fl_entry_resp(gpi->gpi_base_va, class_table_entry);
 			igqos_convert_entry_to_flow(class_table_entry, flow);
 		}
 	}

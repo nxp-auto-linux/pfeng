@@ -86,9 +86,9 @@ void pfe_tmu_reclaim_init(addr_t cbus_base_va)
 	hal_write32(0x1U, cbus_base_va + TMU_CNTX_ACCESS_CTRL);
 
 	/*	Initialize queues */
-	for (ii=0U; ii < TLITE_PHYS_CNT; ii++)
+	for (ii = 0U; ii < (uint32_t)TLITE_PHYS_CNT; ii++)
 	{
-		for (queue=0U; queue<TLITE_PHY_QUEUES_CNT; queue++)
+		for (queue = 0U; queue < (uint8_t)TLITE_PHY_QUEUES_CNT; queue++)
 		{
 			hal_write32(((ii & 0x1fUL) << 8U) | ((uint32_t)queue & 0x7UL), cbus_base_va + TMU_PHY_QUEUE_SEL);
 			hal_nop();
@@ -115,7 +115,7 @@ void pfe_tmu_reclaim_init(addr_t cbus_base_va)
 		}
 
 		/* Initialize internal TMU FIFO (length is hard coded in verilog)*/
-		for(ii = 0U; ii < TLITE_INQ_FIFODEPTH; ii++)
+		for(ii = 0U; ii < (uint32_t)TLITE_INQ_FIFODEPTH; ii++)
 		{
 			hal_write32(0UL, cbus_base_va + TMU_PHY_INQ_PKTINFO);
 		}
@@ -147,20 +147,21 @@ errno_t pfe_tmu_q_reset_tail_drop_policy(addr_t cbus_base_va)
 	uint32_t ii;
 	errno_t ret;
 
-	for (ii = 0U; ii < TLITE_PHYS_CNT; ii++)
+	for (ii = 0U; ii < (uint32_t)TLITE_PHYS_CNT; ii++)
 	{
-		if (PFE_PHY_IF_ID_EMAC2 >= ii)
-		{   /* EMACs - for endpoint performance improvement */
-			ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], 0, TLITE_OPT_Q0_SIZE);
+		if ((uint32_t)PFE_PHY_IF_ID_EMAC2 >= ii)
+		{
+            /* EMACs - for endpoint performance improvement */
+			ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], 0U, TLITE_OPT_Q0_SIZE);
 			if (EOK != ret)
 			{
 				NXP_LOG_ERROR("Can't set the default queue size for PHY#%u queue 0: %d\n", (uint_t)ii, (int_t)ret);
 				return ret;
 			}
 
-			for (queue = 1U; queue < TLITE_PHY_QUEUES_CNT; queue++)
+			for (queue = 1U; queue < (uint8_t)TLITE_PHY_QUEUES_CNT; queue++)
 			{
-				ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, TLITE_OPT_Q1_7_SIZE);
+				ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, (uint16_t)TLITE_OPT_Q1_7_SIZE);
 				if (EOK != ret)
 				{
 					NXP_LOG_ERROR("Can't set the default queue size for PHY#%u queue %hhu: %d\n", (uint_t)ii, queue, (int_t)ret);
@@ -168,7 +169,7 @@ errno_t pfe_tmu_q_reset_tail_drop_policy(addr_t cbus_base_va)
 				}
 			}
 		}
-		else if(PFE_PHY_IF_ID_HIF == ii)
+		else if((uint32_t)PFE_PHY_IF_ID_HIF == ii)
 		{   /* HIF - special case for ERR051211 workaround */
 			for (queue = 0U; queue < TLITE_PHY_QUEUES_CNT; queue++)
 			{
@@ -182,9 +183,9 @@ errno_t pfe_tmu_q_reset_tail_drop_policy(addr_t cbus_base_va)
 		}
 		else
 		{   /* Other: UTIL, HIF_NOCPY */
-			for (queue = 0U; queue < TLITE_PHY_QUEUES_CNT; queue++)
+			for (queue = 0U; queue < (uint8_t)TLITE_PHY_QUEUES_CNT; queue++)
 			{
-				ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, TLITE_MAX_Q_SIZE);
+				ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, (uint16_t)TLITE_MAX_Q_SIZE);
 				if (EOK != ret)
 				{
 					NXP_LOG_ERROR("Can't set the default queue size for PHY#%u queue %hhu: %d\n", (uint_t)ii, queue, (int_t)ret);
@@ -236,7 +237,7 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + UTIL_INQ_PKTPTR, cbus_base_va + TMU_PHY5_INQ_ADDR); /* UTIL */
 
 	/*	Context memory initialization */
-	for (ii=0U; ii < TLITE_PHYS_CNT; ii++)
+	for (ii = 0U; ii < (uint32_t)TLITE_PHYS_CNT; ii++)
 	{
 		/* NOTE: Do not access the direct registers here it may result in bus fault.*/
 
@@ -255,7 +256,7 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 			 - Scheduler 0 is not used
 			 - Queue[n]->SCH1.input[n]
 		*/
-		for (queue=0U; queue<TLITE_PHY_QUEUES_CNT; queue++)
+		for (queue = 0U; queue < (uint8_t)TLITE_PHY_QUEUES_CNT; queue++)
 		{
 			/*	Scheduler 1 */
 			ret = pfe_tmu_sch_cfg_bind_queue(cbus_base_va, phy_if_id_temp[ii], 1U, queue, queue);
@@ -281,9 +282,9 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 		}
 
 		/*	Set default queue mode */
-		for (queue=0U; queue<TLITE_PHY_QUEUES_CNT; queue++)
+		for (queue = 0U; queue < (uint8_t)TLITE_PHY_QUEUES_CNT; queue++)
 		{
-			if(PFE_PHY_IF_ID_HIF == ii)
+			if((uint32_t)PFE_PHY_IF_ID_HIF == ii)
 			{   /* HIF - special case for ERR051211 workaround */
 				ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, TLITE_HIF_MAX_Q_SIZE);
 			}
@@ -797,7 +798,7 @@ errno_t pfe_tmu_q_mode_set_tail_drop(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy
 	}
 
 	/*	curQ_Qmax[8:0], curQ_Qmin[8:0], curQ_cfg[1:0] are @ position 4 per queue */
-	reg = ((uint32_t)max << 11U) | ((uint32_t)0U << 2U) | ((uint32_t)0x1U << 0U);
+	reg = ((uint32_t)max << (uint32_t)11U) | ((uint32_t)0U << (uint32_t)2U) | ((uint32_t)0x1U << 0U);
 	return pfe_tmu_cntx_mem_write(cbus_base_va, phy, (8U * queue_temp) + 4U, reg);
 }
 

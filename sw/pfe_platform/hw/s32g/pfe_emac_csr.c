@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -16,12 +16,13 @@
 static inline uint32_t reverse_bits_32(uint32_t u32Data)
 {
     uint8_t u8Index;
+    uint32_t u32DataTemp = u32Data;
 	uint32_t u32RevData = 0U;
 
 	for(u8Index = 0U; u8Index < 32U; u8Index++)
 	{
-		u32RevData = (u32RevData << 1U) | (u32Data & 0x1U);
-		u32Data >>= 1U;
+		u32RevData = (u32RevData << 1U) | (u32DataTemp & 0x1U);
+		u32DataTemp >>= 1U;
 	}
 
 	return u32RevData;
@@ -154,6 +155,9 @@ errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,  pfe_emac_sp
 	reg &= ~TX_FLOW_CONTROL_ENABLE(1U);
 	hal_write32(reg, base_va + MAC_Q0_TX_FLOW_CTRL);
 	hal_write32(0U, base_va + MAC_INTERRUPT_ENABLE);
+	hal_write32(0xffffffffU, base_va + MMC_RX_INTERRUPT_MASK);
+	hal_write32(0xffffffffU, base_va + MMC_TX_INTERRUPT_MASK);
+	hal_write32(0xffffffffU, base_va + MMC_IPC_RX_INTERRUPT_MASK);
 	hal_write32(0U
 			| ARP_OFFLOAD_ENABLE(0U)
 			| SA_INSERT_REPLACE_CONTROL(CTRL_BY_SIGNALS)
@@ -958,14 +962,14 @@ void pfe_emac_cfg_get_tx_flow_control(addr_t base_va, bool_t* en)
 {
 	uint32_t reg = hal_read32(base_va + MAC_Q0_TX_FLOW_CTRL);
 
-	*en = reg & TX_FLOW_CONTROL_ENABLE(1);
+	*en = (0U == (reg & TX_FLOW_CONTROL_ENABLE(1))) ? FALSE : TRUE;
 }
 
 void pfe_emac_cfg_get_rx_flow_control(addr_t base_va, bool_t* en)
 {
 	uint32_t reg = hal_read32(base_va + MAC_RX_FLOW_CTRL);
 
-	*en = reg & RX_FLOW_CONTROL_ENABLE(1);
+	*en = (0U == (reg & RX_FLOW_CONTROL_ENABLE(1))) ? FALSE : TRUE;
 }
 
 /**

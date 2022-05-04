@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -234,7 +234,7 @@ typedef struct __attribute__((packed))
     uint32_t   u32ProgScanIdx;
     uint32_t   u32FileSize;
     bool_t     bIs64Bit;
-    void       *pvData; /* Raw file */
+    void __attribute__((aligned(4))) *pvData; /* Raw file */
 } ELF_File_t;
 
 /*==================================================================================================

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -83,6 +83,9 @@
 #define MMC_TX_INTERRUPT						0x0708U
 #define MMC_RX_INTERRUPT_MASK					0x070cU
 #define MMC_TX_INTERRUPT_MASK					0x0710U
+
+#define MMC_IPC_RX_INTERRUPT_MASK				0x800U
+#define MMC_IPC_RX_INTERRUPT					0x808U
 
 #define TX_OCTET_COUNT_GOOD_BAD					0x0714U
 #define TX_PACKET_COUNT_GOOD_BAD				0x0718U

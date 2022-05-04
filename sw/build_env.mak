@@ -90,6 +90,8 @@ export PFE_CFG_IEEE1588_I_CLK_HZ?=0
 export PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ?=0
 export PFE_CFG_IEEE1588_EMAC1_O_CLK_HZ?=0
 export PFE_CFG_IEEE1588_EMAC2_O_CLK_HZ?=0
+#enable reserved memory for the Slave driver
+export PFE_CFG_LINUX_RES_MEM_ENABLE?=0
 #PFE system buffers location
 export PFE_CFG_SYS_MEM?="pfe_ddr"
 #Buffer descriptors location
@@ -176,10 +178,6 @@ ifeq ($(PFE_CFG_PFE_MASTER),0)
     $(warning HIF nocpy is not supported in SLAVE mode)
     PFE_CFG_HIF_NOCPY_SUPPORT=0
   endif
-  # Linux supports FCI netlink on Slave
-  ifneq ($(TARGET_OS),LINUX)
-  export PFE_CFG_FCI_ENABLE=0
-  endif
 endif
 
 #Set default verbosity level for sysfs. Valid values are from 1 to 10.
@@ -211,6 +209,11 @@ ifneq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_MULTI_INSTANCE_SUPPORT
     GLOBAL_CCFLAGS+=-DPFE_CFG_SLAVE_HIF_MASTER_UP_TMOUT=$(PFE_CFG_SLAVE_HIF_MASTER_UP_TMOUT)
     GLOBAL_CCFLAGS+=-DPFE_CFG_IP_READY_MS_TMOUT=$(PFE_CFG_IP_READY_MS_TMOUT)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_ERR051211_WORKAROUND_ENABLE
+endif
+
+ifneq ($(PFE_CFG_LINUX_RES_MEM_ENABLE),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_LINUX_RES_MEM_ENABLE
 endif
 
 ifneq ($(PFE_CFG_PFE_MASTER),0)

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -25,6 +25,8 @@
 
 #ifndef OAL_UTIL_NET_H_
 #define OAL_UTIL_NET_H_
+
+#include "oal_types.h"
 
 /*
  * QNX
@@ -66,7 +68,7 @@
  *
  * @return		The pointer the to buffer, NULL if error occured
  */
-char_t *oal_util_net_inet_ntop(int af, const void *src, char_t *dst, uint32_t size);
+char_t *oal_util_net_inet_ntop(int32_t af, const void *src, char_t *dst, uint32_t size);
 
 #endif /* OAL_UTIL_NET_H_ */
 

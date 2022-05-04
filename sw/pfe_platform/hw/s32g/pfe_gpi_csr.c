@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -248,12 +248,12 @@ void pfe_gpi_cfg_qos_clear_lru_entry_req(addr_t base_va, uint32_t addr)
 	igqos_class_write_lru_cmd(base_va, addr);
 }
 
-void pfe_gpi_cfg_qos_read_flow_entry_req(addr_t base_va, uint32_t addr)
+void pfe_gpi_cfg_qos_rd_fl_entry_req(addr_t base_va, uint32_t addr)
 {
 	igqos_class_read_flow_cmd(base_va, addr);
 }
 
-void pfe_gpi_cfg_qos_read_flow_entry_resp(addr_t base_va, uint32_t entry[])
+void pfe_gpi_cfg_qos_rd_fl_entry_resp(addr_t base_va, uint32_t entry[])
 {
 	igqos_class_read_entry_data(base_va, entry);
 }

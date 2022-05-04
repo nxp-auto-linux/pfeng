@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -14,5 +14,11 @@
 #define PFE_CFG_H
 
 /*  Find the configuration parameters defined in makefiles  */
+
+/**
+ * @def	    PFE_CFG_HIF_IRQ_ENABLED
+ * @brief	If TRUE then HIF interrupt will be used.
+ */
+#define PFE_CFG_HIF_IRQ_ENABLED       TRUE
 
 #endif /*PFE_CFG_H*/

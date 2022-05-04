@@ -58,14 +58,14 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 	/* Normal FCI processing */
 
 	errno_t ret = EOK; /* Return value */
-	fci_t *context = (fci_t *)&__context;
+	fci_t *fci_context = (fci_t *)&__context;
 	uint16_t fci_ret = FPP_ERR_OK; /* FCI command return value */
 	uint32_t *reply_buf_ptr = NULL;
 	uint32_t *reply_buf_len_ptr = NULL;
 	uint16_t *reply_retval_ptr = NULL;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == context) || (NULL == msg) || (NULL == rep_msg)))
+	if (unlikely((NULL == fci_context) || (NULL == msg) || (NULL == rep_msg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -110,7 +110,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 						buf.len = fci_buf->len;
 						(void)memcpy(&buf.payload, fci_buf->payload, fci_buf->len);
 
-						ret = pfe_class_put_data(context->class, &buf);
+						ret = pfe_class_put_data(fci_context->class, &buf);
 						if (EOK != ret)
 						{
 							NXP_LOG_DEBUG("pfe_class_buf_put() failed: %d\n", ret);
@@ -152,11 +152,11 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				case FPP_CMD_IP_ROUTE:
 				{
 					/*	Process 'route' commands (add/del/update/query/...) */
-					ret = oal_mutex_lock(&context->db_mutex);
+					ret = oal_mutex_lock(&fci_context->db_mutex);
 					if (EOK == ret)
 					{
 						ret = fci_routes_cmd(msg, &fci_ret, (fpp_rt_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-						(void)oal_mutex_unlock(&context->db_mutex);
+						(void)oal_mutex_unlock(&fci_context->db_mutex);
 					}
 
 					break;
@@ -166,11 +166,11 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				{
 					/*	Update default timeouts for connections */
 
-					ret = oal_mutex_lock(&context->db_mutex);
+					ret = oal_mutex_lock(&fci_context->db_mutex);
 					if (EOK == ret)
 					{
 						ret = fci_connections_ipv4_timeout_cmd(msg, &fci_ret, (fpp_timeout_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-						(void)oal_mutex_unlock(&context->db_mutex);
+						(void)oal_mutex_unlock(&fci_context->db_mutex);
 					}
 
 					break;
@@ -179,11 +179,11 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				case FPP_CMD_IPV4_CONNTRACK:
 				{
 					/*	Process 'ipv4 connection' commands (add/del/updated/query/...) */
-					ret = oal_mutex_lock(&context->db_mutex);
+					ret = oal_mutex_lock(&fci_context->db_mutex);
 					if (EOK == ret)
 					{
 						ret = fci_connections_ipv4_ct_cmd(msg, &fci_ret, (fpp_ct_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-						(void)oal_mutex_unlock(&context->db_mutex);
+						(void)oal_mutex_unlock(&fci_context->db_mutex);
 					}
 
 					break;
@@ -192,11 +192,11 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				case FPP_CMD_IPV6_CONNTRACK:
 				{
 					/*	Process 'ipv6 connection' commands (add/del/updated/query/...) */
-					ret = oal_mutex_lock(&context->db_mutex);
+					ret = oal_mutex_lock(&fci_context->db_mutex);
 					if (EOK == ret)
 					{
 						ret = fci_connections_ipv6_ct_cmd(msg, &fci_ret, (fpp_ct6_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-						(void)oal_mutex_unlock(&context->db_mutex);
+						(void)oal_mutex_unlock(&fci_context->db_mutex);
 					}
 
 					break;
@@ -205,11 +205,11 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				case FPP_CMD_IPV4_RESET:
 				{
 					/*	Remove all IPv4 routes, including connections */
-					ret = oal_mutex_lock(&context->db_mutex);
+					ret = oal_mutex_lock(&fci_context->db_mutex);
 					if (EOK == ret)
 					{
 						fci_routes_drop_all_ipv4();
-						(void)oal_mutex_unlock(&context->db_mutex);
+						(void)oal_mutex_unlock(&fci_context->db_mutex);
 					}
 
 					break;
@@ -218,11 +218,11 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 				case FPP_CMD_IPV6_RESET:
 				{
 					/*	Remove all IPv6 routes, including connections */
-					ret = oal_mutex_lock(&context->db_mutex);
+					ret = oal_mutex_lock(&fci_context->db_mutex);
 					if (EOK == ret)
 					{
 						fci_routes_drop_all_ipv6();
-						(void)oal_mutex_unlock(&context->db_mutex);
+						(void)oal_mutex_unlock(&fci_context->db_mutex);
 					}
 
 					break;
@@ -374,7 +374,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
  */
 errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 {
-	fci_t *context = (fci_t *)&__context;
+	fci_t *fci_context = (fci_t *)&__context;
 	errno_t err = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -385,21 +385,21 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if(TRUE == context->fci_initialized)
+	if(TRUE == fci_context->fci_initialized)
 	{
 		NXP_LOG_ERROR("FCI has already been initialized!\n");
 		return EINVAL;
 	}
 
-	(void)memset(context, 0, sizeof(fci_t));
+	(void)memset(fci_context, 0, sizeof(fci_t));
 
-	context->db_mutex_initialized = FALSE;
-	context->log_if_db_initialized = FALSE;
-	context->phy_if_db_initialized = FALSE;
-	context->rt_db_initialized = FALSE;
-	context->rtable_initialized = FALSE;
-	context->tmu_initialized = FALSE;
-	
+	fci_context->db_mutex_initialized = FALSE;
+	fci_context->log_if_db_initialized = FALSE;
+	fci_context->phy_if_db_initialized = FALSE;
+	fci_context->rt_db_initialized = FALSE;
+	fci_context->rtable_initialized = FALSE;
+	fci_context->tmu_initialized = FALSE;
+
 	/*	Sanity check */
 	if (6U != sizeof(pfe_mac_addr_t))
 	{
@@ -416,83 +416,83 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 	}
 
 #ifdef PFE_CFG_PFE_MASTER
-	err = oal_mutex_init(&context->db_mutex);
+	err = oal_mutex_init(&fci_context->db_mutex);
 	if (EOK != err)
 	{
 		goto free_and_fail;
 	}
 	else
 	{
-		context->db_mutex_initialized = TRUE;
+		fci_context->db_mutex_initialized = TRUE;
 	}
 
 	/*	Initialize the Flexible Parser databases */
 	fci_fp_db_init();
 	if (NULL != info)
 	{
-		context->class = info->class;
+		fci_context->class = info->class;
 	}
 
 	/*	Initialize the physical interface database */
 	if (NULL != info)
 	{
-		context->phy_if_db = info->phy_if_db;
+		fci_context->phy_if_db = info->phy_if_db;
 	}
 
-	if(NULL != context->log_if_db)
+	if(NULL != fci_context->log_if_db)
 	{
-		context->phy_if_db_initialized = TRUE;
+		fci_context->phy_if_db_initialized = TRUE;
 	}
 
 	/*	Initialize the logical interface database */
 	if (NULL != info)
 	{
-		context->log_if_db = info->log_if_db;
+		fci_context->log_if_db = info->log_if_db;
 	}
 
-	if(NULL != context->log_if_db)
+	if(NULL != fci_context->log_if_db)
 	{
-		context->log_if_db_initialized = TRUE;
+		fci_context->log_if_db_initialized = TRUE;
 	}
 
 	/*	Initialize the route database */
-	fci_rt_db_init(&context->route_db);
-	context->rt_db_initialized = TRUE;
+	fci_rt_db_init(&fci_context->route_db);
+	fci_context->rt_db_initialized = TRUE;
 
 	/*	Store the routing table and bridge reference */
 	if (NULL != info)
 	{
 		if (NULL != info->rtable)
 		{
-			context->rtable = info->rtable;
-			context->rtable_initialized = TRUE;
+			fci_context->rtable = info->rtable;
+			fci_context->rtable_initialized = TRUE;
 		}
 
 		if (NULL != info->l2_bridge)
 		{
-			context->l2_bridge = info->l2_bridge;
-			context->l2_bridge_initialized = TRUE;
+			fci_context->l2_bridge = info->l2_bridge;
+			fci_context->l2_bridge_initialized = TRUE;
 		}
 	}
 
 	if (NULL != info)
 	{
 		/*	Initialize the TMU  */
-		context->tmu = info->tmu;
+		fci_context->tmu = info->tmu;
 	}
 
-	if(NULL != context->tmu)
+	if(NULL != fci_context->tmu)
 	{
-		context->tmu_initialized = TRUE;
+		fci_context->tmu_initialized = TRUE;
 	}
 #else
 	(void)info;
 #endif /* PFE_CFG_PFE_MASTER */
 
-	context->default_timeouts.timeout_tcp = 5U * 24U * 60U * 60U; 	/* 5 days */
-	context->default_timeouts.timeout_udp = 300U; 					/* 5 min */
-	context->default_timeouts.timeout_other = 240U; 				/* 4 min */
-	context->fci_initialized = TRUE;
+	fci_context->default_timeouts.timeout_tcp = 5U * 24U * 60U * 60U; 	/* 5 days */
+	fci_context->default_timeouts.timeout_udp = 300U; 					/* 5 min */
+	fci_context->default_timeouts.timeout_other = 240U; 				/* 4 min */
+	fci_context->fci_initialized = TRUE;
 	return err;
 
 free_and_fail:
@@ -505,155 +505,67 @@ free_and_fail:
  */
 void fci_fini(void)
 {
-	fci_t *context = (fci_t *)&__context;
+	fci_t *fci_context = (fci_t *)&__context;
 #ifdef PFE_CFG_PFE_MASTER
 	uint32_t session_id = 0U;
 #endif /* PFE_CFG_PFE_MASTER */
 
-	if (FALSE == context->fci_initialized)
+	if (FALSE == fci_context->fci_initialized)
 	{
 		return;
 	}
 
 	/*	Shut down the endpoint */
-	if (NULL != context->core)
+	if (NULL != fci_context->core)
 	{
 		fci_core_fini();
-		context->core = NULL;
+		fci_context->core = NULL;
 	}
 
 #ifdef PFE_CFG_PFE_MASTER
 	(void)pfe_if_db_lock(&session_id);
 	/*	Shutdown the logical IF DB */
-	if (TRUE == context->log_if_db_initialized)
+	if (TRUE == fci_context->log_if_db_initialized)
 	{
 		/* Freeing of the DB is handled by platfrom driver*/
-		context->log_if_db = NULL;
-		context->log_if_db_initialized = FALSE;
+		fci_context->log_if_db = NULL;
+		fci_context->log_if_db_initialized = FALSE;
 	}
 
 	/*  Shutdown the physical IF DB */
-	if (TRUE == context->phy_if_db_initialized)
+	if (TRUE == fci_context->phy_if_db_initialized)
 	{
 		/* Freeing of the DB is handled by platfrom driver*/
-		context->phy_if_db = NULL;
-		context->phy_if_db_initialized = FALSE;
+		fci_context->phy_if_db = NULL;
+		fci_context->phy_if_db_initialized = FALSE;
 	}
 	(void)pfe_if_db_unlock(session_id);
 
 	/*	Shutdown the RT DB */
-	if (TRUE == context->rt_db_initialized)
+	if (TRUE == fci_context->rt_db_initialized)
 	{
-		if (TRUE == context->db_mutex_initialized)
+		if (TRUE == fci_context->db_mutex_initialized)
 		{
-			(void)oal_mutex_lock(&context->db_mutex);
+			(void)oal_mutex_lock(&fci_context->db_mutex);
 			fci_routes_drop_all();
-			(void)oal_mutex_unlock(&context->db_mutex);
+			(void)oal_mutex_unlock(&fci_context->db_mutex);
 		}
 
-		context->rt_db_initialized = FALSE;
+		fci_context->rt_db_initialized = FALSE;
 	}
 
 	/*	Invalidate the routing table */
-	context->rtable = NULL;
-	context->rtable_initialized = FALSE;
+	fci_context->rtable = NULL;
+	fci_context->rtable_initialized = FALSE;
 
-	if (TRUE == context->db_mutex_initialized)
+	if (TRUE == fci_context->db_mutex_initialized)
 	{
-		(void)oal_mutex_destroy(&context->db_mutex);
+		(void)oal_mutex_destroy(&fci_context->db_mutex);
 	}
 #endif /* PFE_CFG_PFE_MASTER */
 
-	(void)memset(context, 0, sizeof(fci_t));
-	context->fci_initialized = FALSE;
+	(void)memset(fci_context, 0, sizeof(fci_t));
+	fci_context->fci_initialized = FALSE;
 }
-
-/**
- * @brief		Enable interface to receive/transmit data
- * @param[in]	phy_if The interface instance
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- */
-errno_t fci_enable_if(pfe_phy_if_t *phy_if)
-{
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == phy_if))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	return pfe_phy_if_enable(phy_if);
-}
-
-#ifdef PFE_CFG_PFE_MASTER
-/**
- * @brief		Disable transmission/reception on interface
- * @param[in]	phy_if The interface instance
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- */
-errno_t fci_disable_if(pfe_phy_if_t *phy_if)
-{
-	fci_t *context = (fci_t *)&__context;
-	fci_rt_db_entry_t *route_entry;
-#if defined(PFE_CFG_RTABLE_ENABLE)
-	pfe_rtable_entry_t *rtable_entry;
-#endif /* PFE_CFG_RTABLE_ENABLE */
-	errno_t ret = EOK;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == phy_if))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-
-	if (unlikely(FALSE == context->fci_initialized))
-	{
-		NXP_LOG_ERROR("Context not initialized\n");
-		return EPERM;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	Don't disable the interface if some routing table entry is using it */
-	route_entry = fci_rt_db_get_first(&context->route_db, RT_DB_CRIT_BY_IF, phy_if);
-	while (NULL != route_entry)
-	{
-#if defined(PFE_CFG_RTABLE_ENABLE)
-		rtable_entry = pfe_rtable_get_first(context->rtable, RTABLE_CRIT_BY_ROUTE_ID, &route_entry->id);
-		if (NULL != rtable_entry)
-		{
-			/*	There is routing table entry using the interface */
-			return EOK;
-		}
-#endif /* PFE_CFG_RTABLE_ENABLE */
-
-		route_entry = fci_rt_db_get_next(&context->route_db);
-	}
-
-#if defined(PFE_CFG_L2BRIDGE_ENABLE)
-	/*	Also don't disable it when interface is in bridge */
-	if (NULL != pfe_l2br_get_first_domain(context->l2_bridge, L2BD_BY_PHY_IF, (void *)phy_if))
-	{
-		/*	Interface is assigned to some L2 bridge domain */
-		return EOK;
-	}
-#endif /* PFE_CFG_L2BRIDGE_ENABLE */
-
-	/*	Interface is not being used by FCI logic, disable it. Note that
-	 	if some logical interface associated with this physical one is
-	 	active, the interface will not be disabled. */
-	ret = pfe_phy_if_disable(phy_if);
-	if (EOK != ret)
-	{
-		NXP_LOG_ERROR("Can't disable interface (%s)\n", pfe_phy_if_get_name(phy_if));
-	}
-
-	return ret;
-}
-#endif /* PFE_CFG_PFE_MASTER */
 
 #endif /* PFE_CFG_FCI_ENABLE */

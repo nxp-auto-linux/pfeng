@@ -23,13 +23,13 @@
 #include "fci_internal.h"
 #include "fci.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
 /*
  * 	This is storage of scheduler algorithms ordered in way
  *	as defined by the FCI (see fpp_ext.h::fpp_qos_scheduler_cmd_t)
  */
-static const pfe_tmu_sched_algo_t sch_algos[] = {SCHED_ALGO_PQ, SCHED_ALGO_DWRR, SCHED_ALGO_RR, SCHED_ALGO_WRR};
 #ifdef NXP_LOG_ENABLED
 static const char_t *sch_algos_str[] = {"SCHED_ALGO_PQ", "SCHED_ALGO_DWRR", "SCHED_ALGO_RR", "SCHED_ALGO_WRR"};
 #endif /* NXP_LOG_ENABLED */
@@ -83,7 +83,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 	fpp_qos_queue_cmd_t *q;
 	errno_t ret = EOK;
 	pfe_phy_if_t *phy_if = NULL;
-	fci_t *fci = (fci_t *)&__context;
+	const fci_t *fci = (fci_t *)&__context;
 	uint8_t cnt, ii;
 	static const pfe_tmu_queue_mode_t fci_qmode_to_qmode[] =
 		{TMU_Q_MODE_INVALID, TMU_Q_MODE_DEFAULT, TMU_Q_MODE_TAIL_DROP, TMU_Q_MODE_WRED};
@@ -355,8 +355,10 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 	fpp_qos_scheduler_cmd_t *sch;
 	errno_t ret = EOK;
 	pfe_phy_if_t *phy_if = NULL;
-	fci_t *fci = (fci_t *)&__context;
+	const fci_t *fci = (fci_t *)&__context;
 	uint8_t ii, cnt, queue;
+	uint32_t weight;
+	static const pfe_tmu_sched_algo_t sch_algos[] = {SCHED_ALGO_PQ, SCHED_ALGO_DWRR, SCHED_ALGO_RR, SCHED_ALGO_WRR};
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -635,18 +637,18 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 					else
 					{
 						/*	Scheduler input 'ii' is connected to prepend scheduler output */
+						weight = pfe_tmu_sch_get_input_weight(fci->tmu, pfe_phy_if_get_id(phy_if), sch->id, ii);
+						reply_buf->input_w[ii] = oal_htonl(weight);
 						reply_buf->input_src[ii] = 8U;
-						reply_buf->input_w[ii] = oal_htonl(pfe_tmu_sch_get_input_weight(fci->tmu,
-								pfe_phy_if_get_id(phy_if), sch->id, ii));
 						reply_buf->input_en |= ((uint32_t)1U << ii);
 					}
 				}
 				else
 				{
 					/*	Scheduler input 'ii' is connected to queue */
+					weight = pfe_tmu_sch_get_input_weight(fci->tmu, pfe_phy_if_get_id(phy_if), sch->id, ii);
+					reply_buf->input_w[ii] = oal_htonl(weight);
 					reply_buf->input_src[ii] = queue;
-					reply_buf->input_w[ii] = oal_htonl(pfe_tmu_sch_get_input_weight(fci->tmu,
-							pfe_phy_if_get_id(phy_if), sch->id, ii));
 					reply_buf->input_en |= ((uint32_t)1U << ii);
 				}
 			}
@@ -684,6 +686,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 	errno_t ret = EOK;
 	pfe_phy_if_t *phy_if = NULL;
 	const fci_t *fci = (fci_t *)&__context;
+	uint32_t isl;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -810,7 +813,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 				NXP_LOG_DEBUG("Setting shaper %d credit limits %d-%d\n",
 						(int_t)shp->id, (int_t)oal_ntohl(shp->max_credit), (int_t)oal_ntohl(shp->min_credit));
 				ret = pfe_tmu_shp_set_limits(fci->tmu, pfe_phy_if_get_id(phy_if), shp->id,
-						oal_ntohl(shp->max_credit), oal_ntohl(shp->min_credit));
+						(int32_t)oal_ntohl(shp->max_credit), (int32_t)oal_ntohl(shp->min_credit));
 				if (EOK != ret)
 				{
 					/* FCI command has wrong data. Respond with FCI error code. */
@@ -914,13 +917,13 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 			else
 			{
 				/*	Ensure expected endianness */
-				reply_buf->max_credit = oal_htonl(reply_buf->max_credit);
-				reply_buf->min_credit = oal_htonl(reply_buf->min_credit);
+				reply_buf->max_credit = (int32_t)oal_htonl(reply_buf->max_credit);
+				reply_buf->min_credit = (int32_t)oal_htonl(reply_buf->min_credit);
 			}
 
 			/*	Get idle slope */
-			reply_buf->isl = oal_htonl(
-					pfe_tmu_shp_get_idle_slope(fci->tmu, pfe_phy_if_get_id(phy_if), shp->id));
+			isl = pfe_tmu_shp_get_idle_slope(fci->tmu, pfe_phy_if_get_id(phy_if), shp->id);
+			reply_buf->isl = oal_htonl(isl);
 
 			/*	Get shaper position */
 			reply_buf->position =
@@ -1613,8 +1616,8 @@ errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_polic
 			shp_type = shp_cmd->type;
 			shp_mode = shp_cmd->mode;
 			shp_isl = oal_ntohl(shp_cmd->isl);
-			shp_max_credit = oal_ntohl(shp_cmd->max_credit);
-			shp_min_credit = oal_ntohl(shp_cmd->min_credit);
+			shp_max_credit = (int32_t)oal_ntohl(shp_cmd->max_credit);
+			shp_min_credit = (int32_t)oal_ntohl(shp_cmd->min_credit);
 
 			/* commit command to h/w */
 			ret = pfe_gpi_shp_set_type(gpi, shp_id, (pfe_iqos_shp_type_t)shp_type);
@@ -1693,8 +1696,8 @@ errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_polic
 			reply_buf->type = shp_type;
 			reply_buf->mode = shp_mode;
 			reply_buf->isl = oal_htonl(shp_isl);
-			reply_buf->max_credit = oal_htonl(shp_max_credit);
-			reply_buf->min_credit = oal_htonl(shp_min_credit);
+			reply_buf->max_credit = (int32_t)oal_htonl(shp_max_credit);
+			reply_buf->min_credit = (int32_t)oal_htonl(shp_min_credit);
 
 			*reply_len = sizeof(*shp_cmd);
 			break;
@@ -1711,4 +1714,5 @@ errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_polic
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
+#endif /* PFE_CFG_PFE_MASTER */
 /** @}*/

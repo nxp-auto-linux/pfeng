@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -287,8 +287,8 @@ bool_t pfe_gpi_cfg_qos_is_enabled(addr_t base_va);
 void pfe_gpi_cfg_qos_write_flow_entry_req(addr_t base_va, uint32_t addr, const uint32_t entry[]);
 void pfe_gpi_cfg_qos_clear_flow_entry_req(addr_t base_va, uint32_t addr);
 void pfe_gpi_cfg_qos_clear_lru_entry_req(addr_t base_va, uint32_t addr);
-void pfe_gpi_cfg_qos_read_flow_entry_req(addr_t base_va, uint32_t addr);
-void pfe_gpi_cfg_qos_read_flow_entry_resp(addr_t base_va, uint32_t entry[]);
+void pfe_gpi_cfg_qos_rd_fl_entry_req(addr_t base_va, uint32_t addr);
+void pfe_gpi_cfg_qos_rd_fl_entry_resp(addr_t base_va, uint32_t entry[]);
 bool_t pfe_gpi_cfg_qos_entry_ready(addr_t base_va);
 /* IGQOS WRED API */
 void pfe_gpi_cfg_wred_default_init(addr_t base_va);

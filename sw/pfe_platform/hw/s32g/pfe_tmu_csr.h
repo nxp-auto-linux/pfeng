@@ -197,12 +197,14 @@
 #define TLITE_INQ_FIFODEPTH		256U
 
 /* Max number of buffers in ALL queues for one phy is 255, queues are 8 */
-#define TLITE_MAX_ENTRIES		(TLITE_INQ_FIFODEPTH - 1)
-#define TLITE_MAX_Q_SIZE		(TLITE_MAX_ENTRIES / 8)
-#define TLITE_HIF_MAX_Q_SIZE	16 /* Agreed default hardcoded value for ERR051211 workaround */
-#define TLITE_HIF_MAX_ENTRIES	(2 * TLITE_HIF_MAX_Q_SIZE)
+
+#define TLITE_MAX_ENTRIES		(TLITE_INQ_FIFODEPTH - 1U)
+#define TLITE_MAX_Q_SIZE		((uint16_t)TLITE_MAX_ENTRIES / 8U)
+#define TLITE_HIF_MAX_Q_SIZE	16U /* Agreed default hardcoded value for ERR051211 workaround */
+#define TLITE_HIF_MAX_ENTRIES	(2U * TLITE_HIF_MAX_Q_SIZE)
+
 #define TLITE_OPT_Q0_SIZE		150U /* optimal size for the default queue (q0) */
-#define TLITE_OPT_Q1_7_SIZE		((TLITE_MAX_ENTRIES - TLITE_OPT_Q0_SIZE) / 8)
+#define TLITE_OPT_Q1_7_SIZE		((uint16_t)((uint16_t)TLITE_MAX_ENTRIES - TLITE_OPT_Q0_SIZE) / 8U)
 
 /*	Implementation of the pfe_tmu_phy_cfg_t */
 struct pfe_tmu_phy_cfg_tag

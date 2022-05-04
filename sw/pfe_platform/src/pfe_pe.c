@@ -963,7 +963,20 @@ static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(
 		/*	Write unaligned bytes to align the destination address */
 		offset = BYTES_TO_4B_ALIGNMENT(dst_temp);
 		offset = (len < offset) ? len : offset;
-		val = *(uint32_t *)src_byteptr;
+		/* Check if src_byteptr is 4 bytes alignment */
+		if (((uintptr_t)src_byteptr & 0x3U) == 0U)
+		{
+			/* src_byteptr aligns 4 bytes */
+			val = *(uint32_t *)src_byteptr;
+		}
+		else
+		{
+			/* src_byteptr doesn't align 4 bytes : access each byte */
+			val =  ((uint32_t)*(src_byteptr + 0U)) << 0U;
+			val += ((uint32_t)*(src_byteptr + 1U)) << 8U;
+			val += ((uint32_t)*(src_byteptr + 2U)) << 16U;
+			val += ((uint32_t)*(src_byteptr + 3U)) << 24U;
+		}
 		pfe_pe_mem_write(pe, PFE_PE_DMEM, val, dst_temp, (uint8_t)offset);
 		src_byteptr += offset;
 		dst_temp = dst_addr + offset;
@@ -1277,20 +1290,27 @@ static errno_t pfe_pe_load_dmem_section_nolock(pfe_pe_t *pe, const void *sdata, 
 				{
 		#if defined(FW_WRITE_CHECK_EN)
 					void *buf = oal_mm_malloc(size);
+					if (NULL == buf)
+					{
+						ret = ENOMEM;
+					}
+					else
+					{
 		#endif /* FW_WRITE_CHECK_EN */
 
-					/*	Write section data */
-					pe->fw_load_ops->pe_memcpy(pe, PFE_PE_DMEM, addr - pe->dmem_elf_base_va, sdata, size);
+						/*	Write section data */
+						pe->fw_load_ops->pe_memcpy(pe, PFE_PE_DMEM, addr - pe->dmem_elf_base_va, sdata, size);
 
 		#if defined(FW_WRITE_CHECK_EN)
-					pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, buf, addr, size);
+						pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, buf, addr, size);
 
-					if (0 != memcmp(buf, sdata, size))
-					{
-						NXP_LOG_ERROR("DMEM data inconsistent\n");
+						if (0 != memcmp(buf, sdata, size))
+						{
+							NXP_LOG_ERROR("DMEM data inconsistent\n");
+						}
+
+						oal_mm_free(buf);
 					}
-
-					oal_mm_free(buf);
 		#endif /* FW_WRITE_CHECK_EN */
 
 					break;
@@ -1373,21 +1393,27 @@ static errno_t pfe_pe_load_imem_section_nolock(pfe_pe_t *pe, const void *data, a
 		{
 #if defined(FW_WRITE_CHECK_EN)
 			void *buf = oal_mm_malloc(size);
+			if (NULL == buf)
+			{
+				ret = ENOMEM;
+			}
+			else
+			{
 #endif /* FW_WRITE_CHECK_EN */
 
-			/*	Write section data */
-			pe->fw_load_ops->pe_memcpy(pe, PFE_PE_IMEM, addr - pe->imem_elf_base_va, data, size);
+				/*	Write section data */
+				pe->fw_load_ops->pe_memcpy(pe, PFE_PE_IMEM, addr - pe->imem_elf_base_va, data, size);
 
 #if defined(FW_WRITE_CHECK_EN)
-			pfe_pe_memcpy_from_imem_to_host_32_nolock(pe, buf, addr, size);
+				pfe_pe_memcpy_from_imem_to_host_32_nolock(pe, buf, addr, size);
 
-			if (0 != memcmp(buf, data, size))
-			{
-				NXP_LOG_ERROR("IMEM data inconsistent\n");
+				if (0 != memcmp(buf, data, size))
+				{
+					NXP_LOG_ERROR("IMEM data inconsistent\n");
+				}
+
+				oal_mm_free(buf);
 			}
-
-			oal_mm_free(buf);
-			buf = NULL;
 #endif /* FW_WRITE_CHECK_EN */
 
 			break;
@@ -1843,6 +1869,10 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		{
 			ret = ENOMEM;
 			pfe_pe_free_mem(pe, pe_num);
+			if (NULL != tmp_mmap)
+			{
+				oal_mm_free(tmp_mmap);
+			}
 			return ret;
 		}
 		else
@@ -1869,6 +1899,14 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		{
 			ret = ENOMEM;
 			pfe_pe_free_mem(pe, pe_num);
+			if (NULL != tmp_mmap)
+			{
+				oal_mm_free(tmp_mmap);
+			}
+			if (NULL != messages_mem)
+			{
+				oal_mm_free(messages_mem);
+			}
 			return ret;
 		}
 		else
@@ -1888,6 +1926,18 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		NXP_LOG_DEBUG("Unexpected .elf format (little endian)\n");
 		ret = EINVAL;
 		pfe_pe_free_mem(pe, pe_num);
+		if (NULL != tmp_mmap)
+		{
+			oal_mm_free(tmp_mmap);
+		}
+		if (NULL != messages_mem)
+		{
+			oal_mm_free(messages_mem);
+		}
+		if (NULL != features_mem)
+		{
+			oal_mm_free(features_mem);
+		}
 		return ret;
 	}
 
@@ -1895,6 +1945,18 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 	ret = pfe_pe_upload_sections(pe, pe_num, elf_file);
 	if (EOK != ret)
 	{
+		if (NULL != tmp_mmap)
+		{
+			oal_mm_free(tmp_mmap);
+		}
+		if (NULL != messages_mem)
+		{
+			oal_mm_free(messages_mem);
+		}
+		if (NULL != features_mem)
+		{
+			oal_mm_free(features_mem);
+		}
 		return ret;
 	}
 

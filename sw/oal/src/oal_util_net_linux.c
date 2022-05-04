@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2020 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -38,9 +38,9 @@
 		ntohs(((struct in6_addr *)addr)->s6_addr16[6]), \
 		ntohs(((struct in6_addr *)addr)->s6_addr16[7])
 
-char_t *oal_util_net_inet_ntop(int af, const void *src, char_t *dst, uint32_t size)
+char_t *oal_util_net_inet_ntop(int32_t af, const void *src, char_t *dst, uint32_t size)
 {
-	int ret;
+	int32_t ret;
 
 	switch(af) {
 		case AF_INET:

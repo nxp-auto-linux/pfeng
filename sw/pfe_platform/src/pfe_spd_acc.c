@@ -14,6 +14,7 @@
 #include "pfe_spd.h"
 #include "pfe_spd_acc.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
 /* HW acceleration of the SPD entry search must be supported by a proper configuration
@@ -350,3 +351,4 @@ errno_t pfe_spd_acc_get_rule(const pfe_phy_if_t *phy_if, uint16_t position, pfe_
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
+#endif /* PFE_CFG_PFE_MASTER */

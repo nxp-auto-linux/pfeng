@@ -1593,7 +1593,7 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 		NXP_LOG_DEBUG("mutex lock failed\n");
 	}
 
-	ret = (0U != (oal_ntohl(iface->phy_if_class.flags) & IF_FL_PROMISC));
+	ret = (0U != (oal_ntohl(iface->phy_if_class.flags) & (uint32_t)IF_FL_PROMISC));
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{

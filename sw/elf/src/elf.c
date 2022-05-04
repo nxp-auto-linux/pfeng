@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -754,7 +754,7 @@ static void ELF32_PrintSections(const ELF_File_t *pElfFile)
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     /* Check prerequisities */
-    if (unlikely ((NULL == pElfFile)
+    if ((NULL == pElfFile)
   #if TRUE == ELF_CFG_SECTION_TABLE_USED
      || (NULL == pElfFile->arSectHead32)
      || (NULL == pElfFile->acSectNames)
@@ -762,7 +762,7 @@ static void ELF32_PrintSections(const ELF_File_t *pElfFile)
   #if TRUE == ELF_CFG_PROGRAM_TABLE_USED
      || (NULL == pElfFile->arProgHead32)
   #endif /* ELF_CFG_PROGRAM_TABLE_USED */
-      ))
+      )
     {
         NXP_LOG_ERROR("NXP_LOG_INFOSections: Failed - elf not opened!\n");
     }

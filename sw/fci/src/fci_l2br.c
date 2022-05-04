@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2021 NXP
+ *  Copyright 2021-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -25,6 +25,7 @@
 #include "fci_internal.h"
 #include "fci.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
 /**
@@ -35,7 +36,7 @@
  */
 errno_t fci_l2br_flush_cmd(uint32_t code, uint16_t *fci_ret)
 {
-	fci_t *context = (fci_t *)&__context;
+	const fci_t *fci_context = (fci_t *)&__context;
 	errno_t ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -52,7 +53,7 @@ errno_t fci_l2br_flush_cmd(uint32_t code, uint16_t *fci_ret)
 	{
 		case FPP_CMD_L2_FLUSH_ALL:
 		{
-			ret = pfe_l2br_flush_all(context->l2_bridge);
+			ret = pfe_l2br_flush_all(fci_context->l2_bridge);
 			if (EOK != ret)
 			{
 				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
@@ -64,25 +65,25 @@ errno_t fci_l2br_flush_cmd(uint32_t code, uint16_t *fci_ret)
 
 		case FPP_CMD_L2_FLUSH_LEARNED:
 		{
-			ret = pfe_l2br_flush_learned(context->l2_bridge);
+			ret = pfe_l2br_flush_learned(fci_context->l2_bridge);
 			if (EOK != ret)
 			{
 				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				NXP_LOG_DEBUG("Can't flush learned MAC table entries: %d\n", ret);
 			}
-			
+
 			break;
 		}
 
 		case FPP_CMD_L2_FLUSH_STATIC:
 		{
-			ret = pfe_l2br_flush_static(context->l2_bridge);
+			ret = pfe_l2br_flush_static(fci_context->l2_bridge);
 			if (EOK != ret)
 			{
 				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				NXP_LOG_DEBUG("Can't flush static MAC table entries: %d\n", ret);
 			}
-			
+
 			break;
 		}
 
@@ -98,3 +99,4 @@ errno_t fci_l2br_flush_cmd(uint32_t code, uint16_t *fci_ret)
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
+#endif /* PFE_CFG_PFE_MASTER */

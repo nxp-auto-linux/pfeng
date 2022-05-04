@@ -90,7 +90,7 @@ MODULE_PARM_DESC(fw_class_name, "\t The name of CLASS firmware file (default: re
 
 static char *fw_util_name;
 module_param(fw_util_name, charp, 0444);
-MODULE_PARM_DESC(fw_util_name, "\t The name of UTIL firmware file (default: read from device-tree or " PFENG_FW_UTIL_NAME ")");
+MODULE_PARM_DESC(fw_util_name, "\t The name of UTIL firmware file (default: read from device-tree or " PFENG_FW_UTIL_NAME "). Use \"NONE\" to run without UTIL firmware.");
 
 static int l2br_vlan_id = 1;
 module_param(l2br_vlan_id, int, 0644);
@@ -588,7 +588,11 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		}
 	}
 
-	oal_mm_init(dev);
+	ret = oal_mm_init(dev);
+	if (ret) {
+		dev_err(dev, "OAL memory managment init failed\n");
+		goto err_drv;
+	}
 
 	/* Build CLASS firmware name */
 	if (fw_class_name && strlen(fw_class_name))
@@ -601,7 +605,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 
 	/* Build UTIL firmware name */
 	if (fw_util_name && strlen(fw_util_name))
-		priv->fw_util_name = fw_util_name;
+		priv->fw_util_name = ((strlen(fw_util_name) == 4) && !strncmp(fw_util_name, "NONE", 4)) ? (NULL) : (fw_util_name);
 	if (!priv->fw_util_name || !strlen(priv->fw_util_name)) {
 		dev_info(dev, "UTIL firmware not requested. Disable UTIL\n");
 		priv->pfe_cfg->enable_util = false;

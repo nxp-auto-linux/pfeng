@@ -17,6 +17,7 @@
 #include "fci_flexible_filter.h"
 #include "fci_fp.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
 /**
@@ -89,7 +90,7 @@ static void fci_fp_construct_rule_reply(fpp_fp_rule_props_t *r, char *rule_name,
 errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *reply_buf, uint32_t *reply_len)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    const fci_t *context = (fci_t *)&__context;
+    const fci_t *fci_context = (fci_t *)&__context;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     fpp_fp_table_cmd_t *fp_cmd;
     errno_t ret = EOK;
@@ -101,7 +102,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
 		return EINVAL;
 	}
 
-    if (unlikely(FALSE == context->fci_initialized))
+    if (unlikely(FALSE == fci_context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -238,7 +239,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
 errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *reply_buf, uint32_t *reply_len)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    const fci_t *context = (fci_t *)&__context;
+    const fci_t *fci_context = (fci_t *)&__context;
 #endif
     fpp_fp_rule_cmd_t *fp_cmd;
     errno_t ret = EOK;
@@ -250,7 +251,7 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
 		return EINVAL;
 	}
 
-    if (unlikely(FALSE == context->fci_initialized))
+    if (unlikely(FALSE == fci_context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -389,4 +390,4 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
-
+#endif /* PFE_CFG_PFE_MASTER */

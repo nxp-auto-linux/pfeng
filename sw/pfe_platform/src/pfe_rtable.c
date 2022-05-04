@@ -159,7 +159,7 @@ enum pfe_rtable_worker_signals
 };
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
 
-static uint8_t stats_index[PFE_CFG_CONN_STATS_SIZE + 1];
+static uint8_t stats_tbl_index[PFE_CFG_CONN_STATS_SIZE + 1];
 
 static uint32_t pfe_get_crc32_be(uint32_t crc, uint8_t *data, uint16_t len);
 static void pfe_rtable_invalidate(pfe_rtable_t *rtable);
@@ -191,13 +191,13 @@ static uint8_t pfe_rtable_get_free_stats_index(const pfe_rtable_t *rtable)
 {
 	/* Index 0 is the default one. All conntracks that have no space
 	   in the table will be counted on default index */
-	uint8_t index = 1;
+	uint8_t index = 1U;
 
 	while (index < rtable->conntrack_stats_table_size)
 	{
-		if (stats_index[index] == 0U)
+		if (stats_tbl_index[index] == 0U)
 		{
-			stats_index[index] = 1U;
+			stats_tbl_index[index] = 1U;
 			break;
 		}
 		index ++;
@@ -218,9 +218,9 @@ static uint8_t pfe_rtable_get_free_stats_index(const pfe_rtable_t *rtable)
  */
 static void pfe_rtable_free_stats_index(uint8_t index)
 {
-	if (index < PFE_CFG_CONN_STATS_SIZE + 1)
+	if (index < (PFE_CFG_CONN_STATS_SIZE + 1U))
 	{
-		stats_index[index] = 0U;
+		stats_tbl_index[index] = 0U;
 	}
 }
 
@@ -1672,6 +1672,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 	pfe_ct_rtable_entry_t *new_phys_entry_va = NULL, *new_phys_entry_pa = NULL, *last_phys_entry_va = NULL;
     errno_t ret;
     pfe_l2br_domain_t *domain;
+	uint8_t index;
 
 #if (TRUE == PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE)
 	pfe_ct_rtable_flags_t valid_tmp;
@@ -1707,7 +1708,8 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 	hash = pfe_rtable_entry_get_hash(entry, hash_type, (rtable->htable_size - 1U));
 	entry->temp_phys_entry->flags = RT_FL_NONE;
 	entry->temp_phys_entry->status &= ~(uint8_t)RT_STATUS_ACTIVE;
-	entry->temp_phys_entry->conntrack_stats_index = oal_htons((uint16_t)pfe_rtable_get_free_stats_index(rtable));
+	index = pfe_rtable_get_free_stats_index(rtable);
+	entry->temp_phys_entry->conntrack_stats_index = oal_htons((uint16_t)index);
 
 	/* Add vlan stats index into the phy_entry structure */
 	if (0U != (oal_ntohl(entry->temp_phys_entry->actions) & ((uint32_t)RT_ACT_ADD_VLAN_HDR | (uint32_t)RT_ACT_MOD_VLAN_HDR)))
@@ -1936,9 +1938,9 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 	{
 		/*	Invalidate the found entry. This will disable the whole chain. */
 		entry->phys_entry->flags = RT_FL_NONE;
-		if ( entry->temp_phys_entry->conntrack_stats_index != 0)
+		if ( entry->temp_phys_entry->conntrack_stats_index != 0U)
 		{
-			pfe_rtable_clear_stats(rtable, oal_ntohs(entry->temp_phys_entry->conntrack_stats_index));
+			(void)pfe_rtable_clear_stats(rtable, oal_ntohs(entry->temp_phys_entry->conntrack_stats_index));
 			pfe_rtable_free_stats_index(oal_ntohs(entry->temp_phys_entry->conntrack_stats_index));
 		}
 
@@ -2405,9 +2407,9 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 
 				rtable->conntrack_stats_table_size = PFE_CFG_CONN_STATS_SIZE;
 
-				(void)memset(&stats_index, 0, sizeof(stats_index));
+				(void)memset(&stats_tbl_index, 0, sizeof(stats_tbl_index));
 
-				rtable->conntrack_stats_table_addr = pfe_rtable_create_stats_table(class ,PFE_CFG_CONN_STATS_SIZE + 1);
+				rtable->conntrack_stats_table_addr = pfe_rtable_create_stats_table(class ,PFE_CFG_CONN_STATS_SIZE + 1U);
 
 				if ((NULL_ADDR == rtable->htable_base_va) || (NULL_ADDR == rtable->pool_base_va))
 				{
@@ -3040,13 +3042,13 @@ errno_t pfe_rtable_clear_stats(const pfe_rtable_t *rtable, uint8_t conntrack_ind
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_rtable_get_text_statistics(pfe_rtable_t *rtable, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_rtable_get_text_statistics(const pfe_rtable_t *rtable, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 	errno_t ret;
 	pfe_ct_conntrack_stats_t stats = {0};
 	LLIST_t *item;
-	pfe_rtable_entry_t *entry;
+	const pfe_rtable_entry_t *entry;
 
 	/* We keep unused parameter verb_level for consistency with rest of the *_get_text_statistics() functions */
 	(void)verb_level;
@@ -3070,7 +3072,7 @@ uint32_t pfe_rtable_get_text_statistics(pfe_rtable_t *rtable, char_t *buf, uint3
 	{
 		entry = LLIST_Data(item, pfe_rtable_entry_t, list_entry);
 
-		if (oal_ntohs(entry->phys_entry->conntrack_stats_index) != 0)
+		if (oal_ntohs(entry->phys_entry->conntrack_stats_index) != 0U)
 		{
 			ret = pfe_rtable_get_stats(rtable, &stats, oal_ntohs(entry->phys_entry->conntrack_stats_index));
 

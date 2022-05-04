@@ -64,6 +64,7 @@ errno_t pfe_class_isr(const pfe_class_t *class)
 #ifdef PFE_CFG_FCI_ENABLE
 	pfe_ct_buffer_t buf;
 	fci_msg_t msg;
+	errno_t ret;
 #endif /* PFE_CFG_FCI_ENABLE */
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -101,7 +102,8 @@ errno_t pfe_class_isr(const pfe_class_t *class)
 			else
 			{
 				(void)memcpy(&msg.msg_cmd.payload, buf.payload, buf.len);
-				if (EOK != fci_core_client_send_broadcast(&msg, NULL))
+				ret = fci_core_client_send_broadcast(&msg, NULL);
+				if (EOK != ret)
 				{
 					NXP_LOG_ERROR("Can't report data to FCI clients\n");
 				}
@@ -1233,7 +1235,7 @@ errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
 	pfe_ct_pe_mmap_t mmap;
 	uint32_t i = 0U, j = 0U;
 	errno_t ret = EOK;
-	uint32_t buff_len = 0;
+	uint32_t buff_len = 0U;
 	pfe_ct_classify_stats_t * stats = NULL;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1274,7 +1276,8 @@ errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
 		pfe_class_alg_stats_endian(&stats[i].ip_router);
 		pfe_class_alg_stats_endian(&stats[i].vlan_bridge);
 		pfe_class_alg_stats_endian(&stats[i].log_if);
-		for (j = 0; j < PFE_PHY_IF_ID_MAX + 1; j++)
+
+		for (j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)
 		{
 			pfe_class_ihc_stats_endian(&stats[i].hif_to_hif[j]);
 		}
@@ -1284,7 +1287,8 @@ errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
 		pfe_class_sum_pe_algo_stats(&stat->ip_router, &stats[i].ip_router);
 		pfe_class_sum_pe_algo_stats(&stat->vlan_bridge, &stats[i].vlan_bridge);
 		pfe_class_sum_pe_algo_stats(&stat->log_if, &stats[i].log_if);
-		for (j = 0; j < PFE_PHY_IF_ID_MAX + 1; j++)
+
+		for (j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)
 		{
 			pfe_class_sum_pe_ihc_stats(&stat->hif_to_hif[j], &stats[i].hif_to_hif[j]);
 		}
@@ -1302,20 +1306,6 @@ errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
                           |((uint32_t)1U << (uint32_t)PFE_PHY_IF_ID_HIF2)\
                           |((uint32_t)1U << (uint32_t)PFE_PHY_IF_ID_HIF3)\
                           |((uint32_t)1U << (uint32_t)PFE_PHY_IF_ID_HIF_NOCPY))
-
-char_t phyif_name[][20] =
-{
-        "EMAC0",
-        "EMAC1",
-        "EMAC2",
-        "HIF",
-        "HIF_NOCPY",
-        "UTIL",
-        "HIF0",
-        "HIF1",
-        "HIF2",
-        "HIF3"
-};
 
 /**
  * @brief		Return CLASS runtime statistics in text form
@@ -1336,6 +1326,19 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	pfe_ct_pe_stats_t *pe_stats;
 	pfe_ct_classify_stats_t c_alg_stats;
 	pfe_ct_version_t fw_ver;
+	char_t phyif_name[][20] =
+	{
+        "EMAC0",
+        "EMAC1",
+        "EMAC2",
+        "HIF",
+        "HIF_NOCPY",
+        "UTIL",
+        "HIF0",
+        "HIF1",
+        "HIF2",
+        "HIF3"
+	};
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == class))
@@ -1489,9 +1492,10 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	len += oal_util_snprintf(buf + len, buf_len - len, "- Global Flexible filter -\n");
 	len += pfe_class_fp_stat_to_str(&c_alg_stats.flexible_filter, buf + len, buf_len - len, verb_level);
 	len += oal_util_snprintf(buf + len, buf_len - len, "- InterHIF -\n");
-	for (j = 0; j < PFE_PHY_IF_ID_MAX + 1; j++)
+
+	for (j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)
 	{
-		if ( ((uint32_t)(1 << j)) & HIF_CHANNELS_MASK)
+		if (0U != (((uint32_t)1U << j) & (uint32_t)HIF_CHANNELS_MASK))
 		{
 			len += oal_util_snprintf(buf + len, buf_len - len, "Interface: %s\n", phyif_name[j]);
 			len += pfe_class_ihc_stat_to_str(&c_alg_stats.hif_to_hif[j], buf + len, buf_len - len, verb_level);

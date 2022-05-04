@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -230,9 +230,6 @@ struct __attribute__((aligned (HAL_CACHE_LINE_SIZE), packed)) pfe_hif_ring_tag
 	/*	Every 'enqueue' and 'dequeue' access */
 	void *base_va;				/*	Ring base address (virtual) */
 	void *wb_tbl_base_va;		/*	Write-back table base address (virtual) */
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-	uint16_t seqnum;			/*	Current sequence number */
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 
 	/*	Every 'enqueue' access */
 	uint32_t write_idx;			/*	BD index to be written */
@@ -278,7 +275,7 @@ struct __attribute__((aligned (HAL_CACHE_LINE_SIZE), packed)) pfe_hif_ring_tag
 __attribute__((hot)) static inline void inc_write_index_std(pfe_hif_ring_t *ring);
 __attribute__((hot)) static inline void dec_write_index_std(pfe_hif_ring_t *ring);
 __attribute__((hot)) static inline void inc_read_index_std(pfe_hif_ring_t *ring);
-__attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t seqnum, bool_t rx);
+__attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(bool_t rx);
 static inline errno_t pfe_hif_ring_enqueue_buf_std(pfe_hif_ring_t *ring, const void *buf_pa, uint32_t length, bool_t lifm);
 static inline errno_t pfe_hif_ring_dequeue_buf_std(pfe_hif_ring_t *ring, void **buf_pa, uint32_t *length, bool_t *lifm);
 static inline errno_t pfe_hif_ring_dequeue_plain_std(pfe_hif_ring_t *ring, bool_t *lifm);
@@ -286,7 +283,7 @@ __attribute__((cold)) static void pfe_hif_ring_invalidate_std(const pfe_hif_ring
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 __attribute__((hot)) static inline void inc_write_index_nocpy(pfe_hif_ring_t *ring);
 __attribute__((hot)) static inline void inc_read_index_nocpy(pfe_hif_ring_t *ring);
-__attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_nocpy(uint16_t seqnum, bool_t rx);
+__attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_nocpy(bool_t rx);
 static inline errno_t pfe_hif_ring_enqueue_buf_nocpy(pfe_hif_ring_t *ring, const void *buf_pa, uint32_t length, bool_t lifm);
 static inline errno_t pfe_hif_ring_dequeue_buf_nocpy(pfe_hif_ring_t *ring, void **buf_pa, uint32_t *length, bool_t *lifm);
 static inline errno_t pfe_hif_ring_dequeue_plain_nocpy(pfe_hif_ring_t *ring, bool_t *lifm);
@@ -631,14 +628,6 @@ static inline errno_t pfe_hif_ring_enqueue_buf_std(pfe_hif_ring_t *ring, const v
 			tmp_ctrl_seq_w0 &= ~HIF_RING_BD_W0_LIFM;
 		}
 
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-		/* Discard old SEQ */
-		tmp_ctrl_seq_w0 &= ~(HIF_RING_BD_W0_BD_SEQNUM_MASK << HIF_RING_BD_W0_BD_SEQNUM_OFFSET);
-		/* Set new SEQ counter */
-		tmp_ctrl_seq_w0 |= HIF_RING_BD_W0_BD_SEQNUM(ring->seqnum);
-		ring->seqnum++;
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
-
 #ifdef EQ_DQ_RX_DEBUG
 		if (ring->is_rx)
 		{
@@ -773,23 +762,14 @@ static inline errno_t pfe_hif_ring_dequeue_buf_std(pfe_hif_ring_t *ring, void **
 
 	/*	BD must be ENABLED. This indicates that SW has previously enqueued it. */
 	tmp_bd_ctrl_seq_w0 = ring->rd_bd->ctrl_seqnum_w0;
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-	tmp_wb_bd_seq_buf_w1 = ring->rd_wb_bd->seqnum_buflen_w1;
-#endif
 
-	if (unlikely(0U == (tmp_bd_ctrl_seq_w0 & HIF_RING_BD_W0_DESC_EN))
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-		|| (HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_GET(tmp_wb_bd_seq_buf_w1) != HIF_RING_BD_W0_BD_SEQNUM_GET(tmp_ctrl_seq_w0))
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
-		)
+	if (unlikely(0U == (tmp_bd_ctrl_seq_w0 & HIF_RING_BD_W0_DESC_EN)))
 	{
 		return EAGAIN;
 	}
 	else
 	{
-#ifndef PFE_CFG_HIF_SEQNUM_CHECK
 		tmp_wb_bd_seq_buf_w1 = ring->rd_wb_bd->seqnum_buflen_w1;
-#endif
 
 		/*	1.) Process the BD data. */
 		*buf_pa = (void *)(addr_t)(ring->rd_bd->data);
@@ -908,9 +888,6 @@ static inline errno_t pfe_hif_ring_dequeue_plain_std(pfe_hif_ring_t *ring, bool_
 {
 	uint32_t tmp_bd_ctrl_seq_w0;
 	uint32_t tmp_wb_bd_ctrl_w0;
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-	uint32_t tmp_wb_bd_seq_buf_w1;
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == ring))
@@ -932,16 +909,8 @@ static inline errno_t pfe_hif_ring_dequeue_plain_std(pfe_hif_ring_t *ring, bool_
 	/* Perform single read */
 	tmp_bd_ctrl_seq_w0 = ring->rd_bd->ctrl_seqnum_w0;
 
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-	tmp_wb_bd_seq_buf_w1 = ring->rd_wb_bd->seqnum_buflen_w1;
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
-
 	/*	BD must be ENABLED. This indicates that SW has previously enqueued it. */
-	if ((0U == (tmp_bd_ctrl_seq_w0 & HIF_RING_BD_W0_DESC_EN))
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-		|| (HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_GET(tmp_wb_bd_seq_buf_w1) != HIF_RING_BD_W0_BD_SEQNUM_GET(tmp_ctrl_seq_w0))
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
-		)
+	if ((0U == (tmp_bd_ctrl_seq_w0 & HIF_RING_BD_W0_DESC_EN)))
 	{
 		return EAGAIN;
 	}
@@ -1031,9 +1000,6 @@ __attribute__((cold)) errno_t pfe_hif_ring_drain_buf(pfe_hif_ring_t *ring, void 
 				*buf_pa = (void *)(addr_t)ring->wr_bd->data;
 				ring->wr_bd->ctrl_seqnum_w0 &= ~HIF_RING_BD_W0_DESC_EN;
 				ring->wr_wb_bd->rsvd_ctrl_w0 |= HIF_RING_WB_BD_W0_DESC_EN;
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-				ring->seqnum--;
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 				dec_write_index_std(ring);
 			}
 			else
@@ -1166,9 +1132,6 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 	len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Ring %s: len %d\n", name, RING_LEN);
 	len += (uint32_t)oal_util_snprintf(buf + len, size - len, "  Type: %s\n", ring->is_rx ? "RX" : "TX");
 	len += (uint32_t)oal_util_snprintf(buf + len, size - len, "  Index w/r: %d/%d (%d/%d)\n", ring->write_idx & RING_LEN_MASK, ring->read_idx & RING_LEN_MASK, ring->write_idx, ring->read_idx);
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-	len += (uint32_t)oal_util_snprintf(buf + len, size - len, "  Seqn: 0x%x\n", ring->seqnum);
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 
 	if(verb_level >= 8) {
 		/* BD ring */
@@ -1232,12 +1195,11 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 /**
  * @brief		Create new PFE buffer descriptor ring
  * @param[in]	rx If TRUE the ring is RX, if FALSE the the ring is TX
- * @param[in]	seqnum Initial sequence number
  * @param[in]	nocpy If TRUE then ring will be treated as HIF NOCPY variant
  * @return		The new ring instance or NULL if the call has failed
  * @note		Must not be preempted by any of the remaining API functions
  */
-__attribute__((cold)) pfe_hif_ring_t *pfe_hif_ring_create(bool_t rx, uint16_t seqnum, bool_t nocpy)
+__attribute__((cold)) pfe_hif_ring_t *pfe_hif_ring_create(bool_t rx, bool_t nocpy)
 {
 #if !defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (TRUE == nocpy)
@@ -1248,12 +1210,12 @@ __attribute__((cold)) pfe_hif_ring_t *pfe_hif_ring_create(bool_t rx, uint16_t se
 #else
 	if (TRUE == nocpy)
 	{
-		return pfe_hif_ring_create_nocpy(seqnum, rx);
+		return pfe_hif_ring_create_nocpy(rx);
 	}
 	else
 #endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	{
-		return pfe_hif_ring_create_std(seqnum, rx);
+		return pfe_hif_ring_create_std(rx);
 	}
 }
 
@@ -1380,7 +1342,7 @@ free_and_fail:
 /**
  * @brief		The "standard" HIF variant
  */
-__attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t seqnum, bool_t rx)
+__attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(bool_t rx)
 {
 	pfe_hif_ring_t *ring;
 	uint32_t ii, size;
@@ -1388,10 +1350,6 @@ __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t se
 #if (PFE_CFG_VERBOSITY_LEVEL >= 8)
 	char_t *variant_str;
 #endif /* PFE_CFG_VERBOSITY_LEVEL */
-
-#ifndef PFE_CFG_HIF_SEQNUM_CHECK
-	(void)seqnum;
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 
 	/*	Allocate the ring structure */
 	ring = oal_mm_malloc_contig_aligned_cache(sizeof(pfe_hif_ring_t), HAL_CACHE_LINE_SIZE);
@@ -1443,10 +1401,6 @@ __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(uint16_t se
 	}
 
 	ring->base_pa = oal_mm_virt_to_phys_contig(ring->base_va);
-
-#ifdef PFE_CFG_HIF_SEQNUM_CHECK
-	ring->seqnum = seqnum;
-#endif /* PFE_CFG_HIF_SEQNUM_CHECK */
 
 	/*	Allocate memory for write-back descriptors */
 	size = RING_LEN * sizeof(pfe_hif_wb_bd_t);

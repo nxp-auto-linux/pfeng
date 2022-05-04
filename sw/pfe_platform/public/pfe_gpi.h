@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -30,7 +30,7 @@ typedef enum __attribute__((packed))
 
     PFE_IQOS_FLOW_TYPE_MAX = PFE_IQOS_FLOW_TYPE_VLAN,
     /* Ensure proper size */
-    PFE_IQOS_FLOW_TYPE_MAX_ = (uint16_t)(1U << 15U)
+    PFE_IQOS_FLOW_TYPE_RESERVED = (uint16_t)(1U << 15U)
 } pfe_iqos_flow_type_t;
 ct_assert(sizeof(pfe_iqos_flow_type_t) == sizeof(uint16_t));
 
@@ -47,7 +47,7 @@ typedef enum __attribute__((packed))
 
     PFE_IQOS_ARG_MAX = PFE_IQOS_ARG_DPORT,
     /* Ensure proper size */
-    PFE_IQOS_ARG_MAX_ = (uint16_t)(1U << 15U)
+    PFE_IQOS_ARG_RESERVED = (uint16_t)(1U << 15U)
 } pfe_iqos_flow_arg_type_t;
 ct_assert(sizeof(pfe_iqos_flow_arg_type_t) == sizeof(uint16_t));
 

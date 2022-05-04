@@ -73,7 +73,7 @@ errno_t pfe_hw_feature_init_all(const uint32_t *cbus_base, pfe_hw_feature_t **hw
 	if (NULL != feature)
 	{
 		/*      Detect S32G silicon version */
-		val = hal_read32((void *)(CBUS_GLOBAL_CSR_BASE_ADDR + WSP_VERSION + (addr_t)cbus_base));
+		val = hal_read32((addr_t)CBUS_GLOBAL_CSR_BASE_ADDR + (addr_t)WSP_VERSION + (addr_t)cbus_base);
 		if(0x00050300U == val)
 		{       /* S32G2 */
 			NXP_LOG_INFO("Silicon S32G2\n");

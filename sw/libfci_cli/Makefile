@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2021 NXP
+#  Copyright 2018-2022 NXP
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -60,7 +60,7 @@ ifeq ($(TARGET_OS),LINUX)
 	GLOBAL_CCFLAGS := $(shell echo $(GLOBAL_CCFLAGS))
 	
 	CLI_TARGET_OS = "LNX"
-	CLI_DRV_VERSION = "BETA 0.9.7"
+	CLI_DRV_VERSION = "RTM 1.0.0 RC1"
 else
 #This branch by defaut means QNX.
 	LIBS += -L../xfci/libfci/build/$(PLATFORM)-$(BUILD_PROFILE) -l:libfci.a

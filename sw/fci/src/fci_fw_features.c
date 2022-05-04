@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -19,6 +19,7 @@
 #include "pfe_feature_mgr.h"
 #include "fci_fw_features.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
 /**
@@ -183,3 +184,4 @@ errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_c
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
+#endif /* PFE_CFG_PFE_MASTER */

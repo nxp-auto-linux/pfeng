@@ -25,7 +25,11 @@
 |FCI|----uses-------------/    |                 ----------             |  |
 -----                          |                                        V  V
                                |                                     ----------------
-                               \------------------------------uses-->|pfe_fw_feature|
+                               |------------------------------uses-->|pfe_fw_feature|
+                               |                                     ----------------
+                               |
+                               |                                     ----------------
+                               \------------------------------uses-->|pfe_hw_feature|
                                                                      ----------------
 */
 
@@ -793,12 +797,14 @@ errno_t pfe_feature_mgr_get_def_val(const char *feature_name, uint8_t *val)
 
 	/* The data shall be consistent between util and class thus it is enough to read
 	   them from class */
-	if(EOK == pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name))
+	   
+	ret = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
+	if(EOK == ret)
 	{
 		ret = pfe_fw_feature_get_def_val(fw_feature_class, val);
 	}
 
-	return ret;
+	return ret;   
 }
 
 /**
@@ -841,12 +847,13 @@ errno_t pfe_feature_mgr_get_desc(const char *feature_name, const char **desc)
 
 	/* The data shall be consistent between util and class thus it is enough to read
 	   them from class */
-	if(EOK == pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name))
+	ret = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
+	if(EOK == ret)
 	{
 		ret = pfe_fw_feature_get_desc(fw_feature_class, desc);
 	}
-
-	return ret;
+	
+	return ret; 
 }
 
 /**
@@ -894,7 +901,8 @@ errno_t pfe_feature_mgr_get_variant(const char *feature_name, uint8_t *val)
 
 	/* The data shall be consistent between util and class thus it is enough to read
 	   them from class */
-	if(EOK == pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name))
+	ret = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
+	if(EOK == ret)
 	{
 		ret = pfe_fw_feature_get_flags(fw_feature_class, &tmp);
 		if(EOK == ret)
@@ -902,7 +910,7 @@ errno_t pfe_feature_mgr_get_variant(const char *feature_name, uint8_t *val)
 			*val = (uint8_t)tmp & ((uint8_t)F_PRESENT | (uint8_t)F_RUNTIME);
 		}
 	}
-
+	
 	return ret;
 }
 

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -55,6 +55,10 @@
 #define WDT_TIMER_VAL_4			(0x94U)
 #define WSP_DBUG_BUS1			(0x98U)
 #define WSP_DBUG_BUS1_G3		(0xA4U)
+
+#define WSP_FAIL_STOP_MODE_INT_EN (0xc0U)
+#define WSP_FAIL_STOP_MODE_EN   (0xb4U)
+#define WSP_ECC_ERR_INT_EN      (0x130U)
 
 /* WSP_SYS_GENERIC_CONTROL bits */
 #define WSP_SYS_GEN_SOFT_RST_BIT					(1UL << 30U)

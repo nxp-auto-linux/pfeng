@@ -18,6 +18,7 @@
 #include "oal.h"
 #include "fci_mirror.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
 /**
@@ -31,7 +32,7 @@
  */
 errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *reply_buf, uint32_t *reply_len)
 {
-	fci_t *context = (fci_t *)&__context;
+	fci_t *fci_context = (fci_t *)&__context;
 	fpp_mirror_cmd_t *mirror_cmd;
 	const char *str;
 	errno_t ret = EOK;
@@ -50,7 +51,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 		return EINVAL;
 	}
 
-	if (unlikely(FALSE == context->fci_initialized))
+	if (unlikely(FALSE == fci_context->fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -123,7 +124,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 			/* 1) Set egress port */
 
 			/* Lock interface db and get the requested interface */
-			ret = pfe_if_db_lock(&context->if_session_id);
+			ret = pfe_if_db_lock(&fci_context->if_session_id);
 			if(EOK != ret)
 			{
 				/* FCI command requested unfulfillable action. Respond with FCI error code. */
@@ -132,7 +133,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 				break;
 			}
 
-			ret = pfe_if_db_get_first(context->phy_if_db, context->if_session_id, IF_DB_CRIT_BY_NAME, mirror_cmd->egress_phy_if, &entry);
+			(void)pfe_if_db_get_first(fci_context->phy_if_db, fci_context->if_session_id, IF_DB_CRIT_BY_NAME, mirror_cmd->egress_phy_if, &entry);
 			if (NULL != entry)
 			{
 				phy_if = pfe_if_db_entry_get_phy_if(entry);
@@ -141,7 +142,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 			if((NULL == entry) || (NULL == phy_if))
 			{
 				/* FCI command requested nonexistent entity. Respond with FCI error code. */
-				pfe_if_db_unlock(context->if_session_id);
+				(void)pfe_if_db_unlock(fci_context->if_session_id);
 				NXP_LOG_DEBUG("No interface '%s'\n", mirror_cmd->egress_phy_if);
 				*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 				ret = EOK;
@@ -154,13 +155,13 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 			if(EOK != ret)
 			{
 				/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
-				pfe_if_db_unlock(context->if_session_id);
+				(void)pfe_if_db_unlock(fci_context->if_session_id);
 				NXP_LOG_DEBUG("Cannot set egress port for '%s'\n", mirror_cmd->name);
 				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				break;
 			}
 
-			pfe_if_db_unlock(context->if_session_id);
+			(void)pfe_if_db_unlock(fci_context->if_session_id);
 
 			/* 2) Set filter to select frames */
 
@@ -233,7 +234,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 				{	/* Requested filter table (from FCI command) is not used anywhere yet. Good. Use it as filter. */
 
                     /* Add filter table to HW */
-					ret = fci_fp_db_push_table_to_hw(context->class, (char_t *)mirror_cmd->filter_table_name);
+					ret = fci_fp_db_push_table_to_hw(fci_context->class, (char_t *)mirror_cmd->filter_table_name);
 					addr = fci_fp_db_get_table_dmem_addr((char_t *)mirror_cmd->filter_table_name);
 
                     /* Update filter address of mirror */
@@ -262,7 +263,13 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 			mirror_cmd->m_actions = (fpp_modify_actions_t)oal_ntohl(mirror_cmd->m_actions);
 			if(MODIFY_ACT_NONE == mirror_cmd->m_actions)
 			{	/* No modifications */
-				pfe_mirror_set_actions(mirror, RT_ACT_NONE, NULL);
+				ret = pfe_mirror_set_actions(mirror, RT_ACT_NONE, NULL);
+                if(EOK != ret)
+                {
+                    NXP_LOG_ERROR("Failed to set modification action: MODIFY_ACT_NONE.\n");
+                    *fci_ret = FPP_ERR_INTERNAL_FAILURE;
+                    break;
+                }
 			}
 			else
 			{	/* Some actions to be set - add one by one */
@@ -280,7 +287,13 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 
 				/* Apply */
 				m_actions = (pfe_ct_route_actions_t) oal_htonl(m_actions);  /* PFE has modification actions in big endian. */
-				pfe_mirror_set_actions(mirror, m_actions, &m_args);
+				ret = pfe_mirror_set_actions(mirror, m_actions, &m_args);
+                if(EOK != ret)
+                {
+                    NXP_LOG_ERROR("Failed to set modification actions.\n");
+                    *fci_ret = FPP_ERR_INTERNAL_FAILURE;
+                    break;
+                }
 			}
 
 			break;
@@ -360,7 +373,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 
 			/* Get egress port name, step #1 - find the egress interface in the interface db */
 			egress_id = pfe_mirror_get_egress_port(mirror);
-			ret = pfe_if_db_lock(&context->if_session_id);
+			ret = pfe_if_db_lock(&fci_context->if_session_id);
 			if(EOK != ret)
 			{
 				/* FCI command requested unfulfillable action. Respond with FCI error code. */
@@ -369,7 +382,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 				break;
 			}
 
-            ret = pfe_if_db_get_single(context->phy_if_db, context->if_session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)egress_id, &entry);
+            (void)pfe_if_db_get_single(fci_context->phy_if_db, fci_context->if_session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)egress_id, &entry);
 			if (NULL != entry)
 			{
 				phy_if = pfe_if_db_entry_get_phy_if(entry);
@@ -378,7 +391,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
             if((NULL == entry) || (NULL == phy_if))
 			{
 				/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
-				(void)pfe_if_db_unlock(context->if_session_id);
+				(void)pfe_if_db_unlock(fci_context->if_session_id);
 				NXP_LOG_DEBUG("Cannot get egress interface of the mirror '%s'.\n", pfe_mirror_get_name(mirror));
 				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 				ret = ENOENT;
@@ -389,7 +402,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 			str = pfe_phy_if_get_name(phy_if);
 			(void)strncpy(reply_buf->egress_phy_if, str, (uint32_t)IFNAMSIZ - 1U);
 			reply_buf->egress_phy_if[(uint32_t)IFNAMSIZ - 1U] = '\0';  /* Ensure termination */
-			pfe_if_db_unlock(context->if_session_id);
+			(void)pfe_if_db_unlock(fci_context->if_session_id);
 
 			/* Get filter name */
 			(void)memset(reply_buf->filter_table_name, 0, IFNAMSIZ);
@@ -440,3 +453,4 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
+#endif /* PFE_CFG_PFE_MASTER */

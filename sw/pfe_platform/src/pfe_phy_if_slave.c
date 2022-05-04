@@ -475,6 +475,108 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 }
 
 /**
+ * @brief Set the block state
+ * @param[in] iface The interface instance
+ * @param[out] block_state Block state to set
+ * @return EOK on success or an error code
+ */
+errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t block_state)
+{
+	errno_t ret;
+	pfe_platform_rpc_pfe_phy_if_set_block_state_arg_t arg = {0};
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+	(void)pfe_phy_if_db_lock();
+
+	/*	Ask the master driver to change the block state */
+	arg.phy_if_id = iface->id;
+	arg.block_state = block_state;
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE, &arg, sizeof(arg), NULL, 0U);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE failed: %d\n", ret);
+	}
+
+	(void)pfe_phy_if_db_unlock();
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+	return ret;
+}
+
+/**
+ * @brief Get the block state
+ * @param[in] iface The interface instance
+ * @param[out] block_state Current block state
+ * @return EOK On success or an error code
+ */
+errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *block_state)
+{
+	errno_t ret = EOK;
+	pfe_platform_rpc_pfe_phy_if_get_block_state_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_get_block_state_ret_t rpc_ret = {0};
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == iface) || (NULL == block_state)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+	(void)pfe_phy_if_db_lock();
+
+	/*	Ask the master driver to get the block state */
+	arg.phy_if_id = iface->id;
+
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE failed: %d\n", ret);
+	}
+	else
+	{
+		*block_state = rpc_ret.state;
+	}
+
+	(void)pfe_phy_if_db_unlock();
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+	return ret;
+}
+/**
  * @brief		Bind interface with EMAC
  * @param[in]	iface The interface instance
  * @param[in]	emac The EMAC instance
@@ -1057,6 +1159,102 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 	if (EOK != ret)
 	{
 		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
+	}
+
+	(void)pfe_phy_if_db_unlock();
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+	return ret;
+}
+
+/**
+ * @brief		Enable loadbalance mode
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
+{
+	errno_t ret = EOK;
+	pfe_platform_rpc_pfe_phy_if_loadbalance_enable_arg_t arg = {0};
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+	(void)pfe_phy_if_db_lock();
+
+	/* Ask the master driver to enable the loadbalance mode */
+	arg.phy_if_id = iface->id;
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE, &arg, sizeof(arg), NULL, 0U);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE failed: %d\n", ret);
+	}
+
+	(void)pfe_phy_if_db_unlock();
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+	return ret;
+}
+
+/**
+ * @brief		Disable loadbalance mode
+ * @param[in]	iface The interface instance
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
+{
+	errno_t ret = EOK;
+	pfe_platform_rpc_pfe_phy_if_loadbalance_disable_arg_t arg = {0};
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+	(void)pfe_phy_if_db_lock();
+
+	/* Ask the master driver to disable the loadbalance mode */
+	arg.phy_if_id = iface->id;
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE, &arg, sizeof(arg), NULL, 0U);
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE failed: %d\n", ret);
 	}
 
 	(void)pfe_phy_if_db_unlock();

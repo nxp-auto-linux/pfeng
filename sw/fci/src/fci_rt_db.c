@@ -25,6 +25,7 @@
 #include "linked_list.h"
 #include "fci_rt_db.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
 static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, const fci_rt_db_entry_t *entry);
@@ -420,4 +421,5 @@ errno_t fci_rt_db_drop_all(fci_rt_db_t *db)
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
+#endif /* PFE_CFG_PFE_MASTER */
 /** @}*/

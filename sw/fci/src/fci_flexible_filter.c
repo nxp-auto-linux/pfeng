@@ -17,6 +17,7 @@
 #include "pfe_flexible_filter.h"
 #include "pfe_feature_mgr.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
 /**
@@ -31,7 +32,7 @@
  */
 errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_filter_cmd_t *reply_buf, uint32_t *reply_len)
 {
-    fci_t *context = (fci_t *)&__context;
+    const fci_t *fci_context = (fci_t *)&__context;
 
     fpp_flexible_filter_cmd_t *fp_cmd;
     errno_t ret = EOK;
@@ -43,7 +44,7 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
 		return EINVAL;
 	}
 
-    if (unlikely(FALSE == context->fci_initialized))
+    if (unlikely(FALSE == fci_context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
 		return EPERM;
@@ -79,7 +80,7 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
         {
             uint32_t addr;
             /* Write the finished table into the DMEM */
-            ret = fci_fp_db_push_table_to_hw(context->class, (char_t *)fp_cmd->table_name);
+            ret = fci_fp_db_push_table_to_hw(fci_context->class, (char_t *)fp_cmd->table_name);
             if(EOK == ret)
             {
                 /* Get the DMEM address */
@@ -87,7 +88,7 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
                 if(0U != addr)
                 {
                     /* Let the classifier use the address of the table as flexible filter */
-                    ret = pfe_flexible_filter_set(context->class, oal_htonl(addr));
+                    ret = pfe_flexible_filter_set(fci_context->class, oal_htonl(addr));
                 }
                 else
                 {
@@ -108,7 +109,7 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
 		case FPP_ACTION_DEREGISTER:
         {
             /* Write zero (NULL) into the classifier to prevent table being used */
-            ret = pfe_flexible_filter_set(context->class, 0U);
+            ret = pfe_flexible_filter_set(fci_context->class, 0U);
             if(EOK == ret)
             {
                 /* Delete the table from DMEM - no longer in use, copy is in database */
@@ -134,3 +135,4 @@ errno_t fci_flexible_filter_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_flexible_
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
+#endif /* PFE_CFG_PFE_MASTER */

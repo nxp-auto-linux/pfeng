@@ -9,9 +9,10 @@
 
 #include "pfe_spd.h"
 
+#ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
-static pfe_ct_ipsec_spd_t *pfe_spds[PFE_PHY_IF_ID_MAX] = {NULL};
+static pfe_ct_ipsec_spd_t *pfe_spds[PFE_PHY_IF_ID_MAX];
 static pfe_class_t *class_ptr = NULL;
 
 /*
@@ -260,8 +261,7 @@ errno_t pfe_spd_add_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd_ent
                Copy data from existing database to the new one leaving space for the new entry
                Copy the new entry into the reserved space */
             if(position >= old_count)
-            {   /* Adding to the last position */
-                position = (uint16_t)old_count;
+            {
                 (void)memcpy(&entries[0], &old_entries[0], old_count * sizeof(pfe_ct_spd_entry_t));
                 (void)memcpy(&entries[old_count], entry, sizeof(pfe_ct_spd_entry_t));
             }
@@ -440,3 +440,4 @@ errno_t pfe_spd_get_rule(const pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_s
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
+#endif /* PFE_CFG_PFE_MASTER */

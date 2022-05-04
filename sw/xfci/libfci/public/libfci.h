@@ -789,11 +789,12 @@
  *
  *              @if S32G2
  *                The following applies for each @b S32G2/PFE QoS block:
- *                - @b Queues:
+ *                - @b Queues: @anchor ref__queues
  *                     - Number of queues: 8
- *                     - Maximum queue depth: 255
+ *                     - Size of a @link ref__queue_slot_pools queue slot pool @endlink for each @b emac : 255
+ *                     - Size of a queue slot pool for each @b hif : 32
  *                     - Probability zones per queue: 8
- *                       <small><br>
+ *                       <small><br><br>
  *                       Queues of @b hif interfaces:
  *                       Every hif interface has only @b 2 queues, indexed as follows:
  *                         - [0] : low priority queue (L)
@@ -801,7 +802,6 @@
  *
  *                       Use only these indexes if hif queues are configured via FCI commands.
  *                       </small>
- *
  *                - @b Schedulers:
  *                     - Number of schedulers: 2
  *                     - Number of scheduler inputs: 8
@@ -826,6 +826,27 @@
  *                     Note that only shapers connected to common scheduler inputs are aware
  *                     of each other and do share the 'conflicting transmission' signal.
  *              @endif
+ *
+ *              Queue slot pools @anchor ref__queue_slot_pools
+ *              ----------------
+ *              Every QoS block has it own pool of queue slots. These slots can be assigned to particular queues.
+ *              Length of a queue is equal to number of assigned slots. It is possible to configure queue lengths via FCI API.
+ *              Setting a queue length (@link fpp_qos_queue_cmd_t @endlink.max) means assigning given number of slots to the given queue.
+ *              Sum of all queue lengths of the particular physical interface cannot be bigger than size of its queue slot pool.
+ *
+ *              See section @link ref__queues Queues @endlink for info about queue slot pool sizes for various physical interfaces.
+ *              <small><br><br>
+ *              Examples of queue slots distribution:
+ *              - Asymmetrical queue slots distribution for @b emac0.
+ *                Only 241 slots of the emac0 are used. Emac0 still has 14 free queue slots which could be used to
+ *                lenghten some emac0 queues, if needed.
+ *                  - queue 0 : 150 slots
+ *                  - queues 1 .. 7 : 13 slots per each queue
+ *              - Symmetrical queue slots distribution for @b hif0.
+ *                All 32 queue slots of the hif0 are used. There are no free queue slots left on hif0.
+ *                  - queue 0 : 16 slots
+ *                  - queue 1 : 16 slots
+ *              </small>
  *
  *              Traffic queueing algorithm
  *              --------------------------
