@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -483,7 +483,9 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t block_state)
 {
 	errno_t ret;
-	pfe_platform_rpc_pfe_phy_if_set_block_state_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_set_block_state_arg_t arg;
+
+	(void)memset(&arg, 0, sizeof(pfe_platform_rpc_pfe_phy_if_set_block_state_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -533,7 +535,9 @@ errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *bl
 {
 	errno_t ret = EOK;
 	pfe_platform_rpc_pfe_phy_if_get_block_state_arg_t arg = {0};
-	pfe_platform_rpc_pfe_phy_if_get_block_state_ret_t rpc_ret = {0};
+	pfe_platform_rpc_pfe_phy_if_get_block_state_ret_t rpc_ret;
+
+	(void)memset(&rpc_ret, 0, sizeof(pfe_platform_rpc_pfe_phy_if_get_block_state_ret_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == block_state)))
@@ -1182,7 +1186,9 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_loadbalance_enable_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_loadbalance_enable_arg_t arg;
+
+	(void)memset(&arg, 0, sizeof(pfe_platform_rpc_pfe_phy_if_loadbalance_enable_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -1230,7 +1236,9 @@ errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
 errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
-	pfe_platform_rpc_pfe_phy_if_loadbalance_disable_arg_t arg = {0};
+	pfe_platform_rpc_pfe_phy_if_loadbalance_disable_arg_t arg;
+
+	(void)memset(&arg, 0, sizeof(pfe_platform_rpc_pfe_phy_if_loadbalance_disable_arg_t));
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))

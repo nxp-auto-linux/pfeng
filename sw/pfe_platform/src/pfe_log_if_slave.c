@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -829,7 +829,7 @@ errno_t pfe_log_if_set_egress_ifs(pfe_log_if_t *iface, uint32_t egress)
 #endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 
 	req.log_if_id = iface->id;
-	req.phy_if_id = egress;
+	req.phy_if_id_mask = egress;
 
 	(void)pfe_log_if_db_lock();
 

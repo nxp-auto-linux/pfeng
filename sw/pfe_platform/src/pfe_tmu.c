@@ -347,27 +347,6 @@ void pfe_tmu_disable(const pfe_tmu_t *tmu)
 }
 
 /**
- * @brief		Send packet to HIF directly via TMU
- * @param[in]	tmu The TMU instance
- * @param[in]	phy Physical interface identifier
- * @param[in]	queue TX queue identifier
- * @param[in]	buf_pa Buffer physical address
- * @param[in]	len Number of bytes to send
- */
-void pfe_tmu_send(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, const void *buf_pa, uint16_t len)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == tmu) || (NULL == buf_pa)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_tmu_cfg_send_pkt(tmu->cbus_base_va, phy, queue, buf_pa, len);
-}
-
-/**
  * @brief		Destroy TMU instance
  * @param[in]	tmu The TMU instance
  */
@@ -573,7 +552,7 @@ errno_t pfe_tmu_queue_get_tx_count(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue,
 		pfe_tmu_queue_mode_t mode, uint32_t min, uint32_t max)
 {
-	errno_t ret_val;
+	errno_t ret_val = EOK;
 	uint16_t sum = 0U;	/* Sum of queue lengths */
 	uint8_t err051211_hif_idx = 0xFF;	/* Index of HIF in  pfe_ct_hif_tmu_queue_sizes_t */
 
@@ -601,38 +580,7 @@ errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
 	}
 	else
 	{
-		switch (mode)
-		{
-			case TMU_Q_MODE_TAIL_DROP:
-			{
-				ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, (uint16_t)max);
-				break;
-			}
-
-			case TMU_Q_MODE_WRED:
-			{
-				ret_val = pfe_tmu_q_mode_set_wred(tmu->cbus_base_va, phy, queue, (uint16_t)min, (uint16_t)max);
-				break;
-			}
-
-			case TMU_Q_MODE_DEFAULT:
-			{
-				ret_val = pfe_tmu_q_mode_set_default(tmu->cbus_base_va, phy, queue);
-				break;
-			}
-
-			default:
-			{
-				NXP_LOG_ERROR("Unknown queue mode: %d\n", mode);
-				ret_val = EINVAL;
-				break;
-			}
-		}
-	}
-
-	/* If err051211_workaround is active and queue of some HIF was modified, then update sum of queue lengths in firmware. */
-	if (EOK == ret_val)
-	{
+		/* If err051211_workaround is active and queue of some HIF was modified, then update sum of queue lengths in firmware. */
 		if ((TRUE == is_hif_by_id(phy, &err051211_hif_idx)) &&
 			(TRUE == pfe_feature_mgr_is_available("err051211_workaround")))
 		{
@@ -643,6 +591,38 @@ errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
 				const uint32_t addr = oal_ntohl(mmap.hif_tmu_queue_sizes) + (err051211_hif_idx * sizeof(uint16_t));
 				sum = oal_htons(sum);
 				ret_val = pfe_class_write_dmem(tmu->class, -1, addr, (void *)&sum, sizeof(uint16_t));
+			}
+		}
+
+		/* Set new tmu configuration */
+		if (EOK == ret_val)
+		{
+			switch (mode)
+			{
+				case TMU_Q_MODE_TAIL_DROP:
+				{
+					ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, (uint16_t)max);
+					break;
+				}
+
+				case TMU_Q_MODE_WRED:
+				{
+					ret_val = pfe_tmu_q_mode_set_wred(tmu->cbus_base_va, phy, queue, (uint16_t)min, (uint16_t)max);
+					break;
+				}
+
+				case TMU_Q_MODE_DEFAULT:
+				{
+					ret_val = pfe_tmu_q_mode_set_default(tmu->cbus_base_va, phy, queue);
+					break;
+				}
+
+				default:
+				{
+					NXP_LOG_ERROR("Unknown queue mode: %d\n", mode);
+					ret_val = EINVAL;
+					break;
+				}
 			}
 		}
 	}

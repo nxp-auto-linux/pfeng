@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -464,6 +464,24 @@ pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_
 	}
 
 	return emac;
+}
+
+/**
+ * @brief		Get EMAC instance index
+ * @param[in]	emac The EMAC instance
+ * @return		Index (0, 1, 2, ..) or 255 if failed
+ */
+uint8_t pfe_emac_get_index(pfe_emac_t *emac)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 255U;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	
+	return pfe_emac_cfg_get_index(emac->emac_base_va, emac->cbus_base_va);
 }
 
 errno_t pfe_emac_bind_gpi(pfe_emac_t *emac, pfe_gpi_t *gpi)
@@ -1069,7 +1087,7 @@ errno_t pfe_emac_get_link_status(const pfe_emac_t *emac, pfe_emac_link_speed_t *
  */
 errno_t pfe_emac_set_link_speed(const pfe_emac_t *emac, pfe_emac_speed_t link_speed)
 {
-	errno_t ret;
+	errno_t ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))

@@ -19,7 +19,6 @@ pfe_pe_t * pfe_pe_create(addr_t cbus_base_va, pfe_ct_pe_type_t type, uint8_t id)
 void pfe_pe_set_dmem(pfe_pe_t *pe, addr_t elf_base, addr_t len);
 void pfe_pe_set_imem(pfe_pe_t *pe, addr_t elf_base, addr_t len);
 void pfe_pe_set_lmem(pfe_pe_t *pe, addr_t elf_base, addr_t len);
-void pfe_pe_set_ddr(pfe_pe_t *pe, addr_t base_pa, addr_t base_va, addr_t len);
 void pfe_pe_set_iaccess(pfe_pe_t *pe, uint32_t wdata_reg, uint32_t rdata_reg, uint32_t addr_reg);
 errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf);
 errno_t pfe_pe_get_mmap(const pfe_pe_t *pe, pfe_ct_pe_mmap_t *mmap);

@@ -1427,13 +1427,13 @@ errno_t fci_connections_ipv4_timeout_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_
 	timeout_cmd = (fpp_timeout_cmd_t *)(msg->msg_cmd.payload);
 
 	/*	Update FCI-wide defaults applicable for new connections */
-	if (EOK != fci_connections_set_default_timeout((uint8_t)timeout_cmd->protocol, oal_ntohl(timeout_cmd->timeout_value1)))
+	if (EOK != fci_connections_set_default_timeout((uint8_t)oal_ntohs(timeout_cmd->protocol), oal_ntohl(timeout_cmd->timeout_value1)))
 	{
 		NXP_LOG_WARNING("Can't set default timeout\n");
 	}
 	else
 	{
-		NXP_LOG_DEBUG("Default timeout for protocol %u set to %u seconds\n", (uint_t)timeout_cmd->protocol, (uint_t)oal_ntohl(timeout_cmd->timeout_value1));
+		NXP_LOG_DEBUG("Default timeout for protocol %u set to %u seconds\n", (uint_t)oal_ntohs(timeout_cmd->protocol), (uint_t)oal_ntohl(timeout_cmd->timeout_value1));
 	}
 
 	/*	Update existing connections */

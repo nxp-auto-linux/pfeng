@@ -23,14 +23,6 @@
 
 #include "pfe_cfg.h"
 
-/* Logical interface represents DT ethernet@ node */
-#define PFENG_DT_COMPATIBLE_LOGIF		"fsl,pfeng-logif"
-/* HIF represents DT hif@ node */
-#define PFENG_DT_COMPATIBLE_HIF			"fsl,pfeng-hif"
-/* EMAC represents DT emac@ node */
-#define PFENG_DT_COMPATIBLE_EMAC		"fsl,pfeng-emac"
-/* MDIO represents DT mdio@ node */
-#define PFENG_DT_COMPATIBLE_MDIO		"fsl,pfeng-mdio"
 /* PFE controller cbus resource name*/
 #define PFE_RES_NAME_PFE_CBUS			"pfe-cbus"
 /* S32G_MAIN_GPR memory map resource name */
@@ -55,6 +47,17 @@ static int pfeng_of_get_phy_mode(struct device_node *np, phy_interface_t *mode)
 #else
 	return of_get_phy_mode(np, mode);
 #endif
+}
+
+static int pfeng_of_get_addr(struct device_node *node)
+{
+	const __be32 *valp;
+
+	valp = of_get_address(node, 0, NULL, NULL);
+	if (!valp)
+		return -EINVAL;
+
+	return be32_to_cpu(*valp);
 }
 
 #endif /* PFE_CFG_PFE_MASTER */
@@ -93,17 +96,6 @@ int pfeng_dt_release_config(struct pfeng_priv *priv)
 	return 0;
 }
 
-static int pfeng_of_get_addr(struct device_node *node)
-{
-	const __be32 *valp;
-
-	valp = of_get_address(node, 0, NULL, NULL);
-	if (!valp)
-		return -EINVAL;
-
-	return be32_to_cpu(*valp);
-}
-
 #if defined(PFE_CFG_PFE_MASTER) && !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
 static bool pfeng_manged_inband(struct device_node *node)
 {
@@ -124,8 +116,9 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 	pfe_platform_config_t *pfe_cfg = priv->pfe_cfg;
 	struct resource *res;
 	struct device_node *child = NULL;
-	int irq, ret = 0;
-	u32 propval, emac_list = 0;
+	int irq, i, ret = 0;
+	u32 propval;
+	char propname[32];
 
 	/* Get the base address of device */
 	res = platform_get_resource_byname(priv->pdev, IORESOURCE_MEM, PFE_RES_NAME_PFE_CBUS);
@@ -149,15 +142,15 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 	dev_dbg(dev, "Syscon addr 0x%llx size 0x%llx\n", priv->syscon.start, priv->syscon.end - priv->syscon.start + 1);
 
 	/* Firmware CLASS name */
-	if (of_find_property(np, "fsl,fw-class-name", NULL))
-		if (!of_property_read_string(np, "fsl,fw-class-name", &priv->fw_class_name)) {
-			dev_info(dev, "fsl,fw-class-name: %s\n", priv->fw_class_name);
+	if (of_find_property(np, "nxp,fw-class-name", NULL))
+		if (!of_property_read_string(np, "nxp,fw-class-name", &priv->fw_class_name)) {
+			dev_info(dev, "nxp,fw-class-name: %s\n", priv->fw_class_name);
 		}
 
 	/* Firmware UTIL name */
-	if (of_find_property(np, "fsl,fw-util-name", NULL))
-		if (!of_property_read_string(np, "fsl,fw-util-name", &priv->fw_util_name)) {
-			dev_info(dev, "fsl,fw-util-name: %s\n", priv->fw_util_name);
+	if (of_find_property(np, "nxp,fw-util-name", NULL))
+		if (!of_property_read_string(np, "nxp,fw-util-name", &priv->fw_util_name)) {
+			dev_info(dev, "nxp,fw-util-name: %s\n", priv->fw_util_name);
 		}
 
 	/* IRQ bmu */
@@ -188,22 +181,59 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 	dev_dbg(dev, "irq 'safety' : %u\n", irq);
 
 	/* L2BR default vlan id */
-	if (of_find_property(np, "fsl,l2br-default-vlan", NULL)) {
-		ret = of_property_read_u32(np, "fsl,l2br-default-vlan", &propval);
+	if (of_find_property(np, "nxp,pfeng-l2br-default-vlan", NULL)) {
+		ret = of_property_read_u32(np, "nxp,pfeng-l2br-default-vlan", &propval);
 		if (!ret)
 			pfe_cfg->vlan_id = propval;
 	}
 
 	/* L2BR vlan stats size */
-	if (of_find_property(np, "fsl,l2br-vlan-stats-size", NULL)) {
-		ret = of_property_read_u32(np, "fsl,l2br-vlan-stats-size", &propval);
+	if (of_find_property(np, "nxp,pfeng-l2br-vlan-stats-size", NULL)) {
+		ret = of_property_read_u32(np, "nxp,pfeng-l2br-vlan-stats-size", &propval);
 		if (!ret)
 			pfe_cfg->vlan_stats_size = propval;
 	}
 #endif /* PFE_CFG_PFE_MASTER */
 
+	/* IRQ per HIF */
+	for (i = 0; i < PFENG_PFE_HIF_CHANNELS; i++) {
+		ret = of_property_read_u32_index(np, "nxp,pfeng-hif-channels", i, &propval);
+		if (ret)
+			continue;
+		if (propval > PFENG_PFE_HIF_CHANNELS) {
+			dev_err(dev, "HIF channel id=%u is invalid, aborting\n", propval);
+			return -EIO;
+		}
+		scnprintf(propname, sizeof(propname), "hif%d", propval);
+		irq = platform_get_irq_byname(priv->pdev, propname);
+		if (irq < 0) {
+			dev_err(dev, "Cannot find irq resource '%s', aborting\n", propname);
+			return -EIO;
+		}
+		pfe_cfg->irq_vector_hif_chnls[propval] = irq;
+		dev_info(dev, "irq '%s' : %u\n", propname, irq);
+
+		priv->hif_chnl[propval].refcount = 0;
+		priv->hif_chnl[propval].ihc = false;
+
+		priv->hif_chnl[propval].status = PFENG_HIF_STATUS_REQUESTED;
+		pfe_cfg->hif_chnls_mask |= 1 << propval;
+	}
+	dev_info(dev, "HIF channels mask: 0x%04x", pfe_cfg->hif_chnls_mask);
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	if (of_property_read_u32(np, "nxp,pfeng-ihc-channel", &propval)) {
+		dev_err(dev, "Invalid IHC hif-channel value");
+		return -EIO;
+	} else {
+		priv->hif_chnl[propval].ihc = true;
+		priv->hif_chnl[propval].refcount++;
+		dev_info(dev, "IHC channel: %d", propval);
+	}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
 #ifdef PFE_CFG_PFE_SLAVE
-	if (of_property_read_u32(np, "fsl,pfeng-master-hif-channel", &propval)) {
+	if (of_property_read_u32(np, "nxp,pfeng-master-channel", &propval)) {
 		dev_err(dev, "Invalid hif-channel value");
 		priv->ihc_master_chnl = HIF_CFG_MAX_CHANNELS + 1;
 	} else {
@@ -214,22 +244,20 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 
 	/*
 	 * Network interface
-	 * ("fsl,pfeng-logif")
+	 * ("nxp,s32g-pfe-netif")
 	 *
 	 * Describes Linux network interface
 	 */
 	for_each_available_child_of_node(np, child) {
 		struct pfeng_netif_cfg *netif_cfg;
-		struct device_node *dn;
 		int id, i, hifs;
 		u32 hifmap;
 
 		if (!of_device_is_available(child))
 			continue;
 
-		if (!of_device_is_compatible(child, PFENG_DT_COMPATIBLE_LOGIF))
+		if (!of_device_is_compatible(child, "nxp,s32g-pfe-netif"))
 			continue;
-
 
 		netif_cfg = devm_kzalloc(dev, sizeof(*netif_cfg), GFP_KERNEL);
 		if (!netif_cfg) {
@@ -239,130 +267,79 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 		}
 
 		/* Linux interface name */
-		if (!of_find_property(child, "fsl,pfeng-if-name", NULL) ||
-			of_property_read_string(child, "fsl,pfeng-if-name", &netif_cfg->name)) {
-			dev_warn(dev, "Valid ethernet name is missing (property 'fsl,pfeng-if-name')\n");
+		if (!of_find_property(child, "nxp,pfeng-if-name", NULL) ||
+			of_property_read_string(child, "nxp,pfeng-if-name", &netif_cfg->name)) {
+			dev_warn(dev, "Valid ethernet name is missing (property 'nxp,pfeng-if-name')\n");
 
 			continue;
 		}
-		dev_dbg(dev, "netif name: %s", netif_cfg->name);
+		dev_info(dev, "netif name: %s", netif_cfg->name);
 
 		/* MAC eth address */
 		netif_cfg->macaddr = (u8 *)of_get_mac_address(child);
 		if (netif_cfg->macaddr)
-			dev_dbg(dev, "DT mac addr: %pM", netif_cfg->macaddr);
+			dev_info(dev, "DT mac addr: %pM", netif_cfg->macaddr);
 
-		/* logif mode */
-		if (of_find_property(child, "fsl,pfeng-logif-mode", NULL)) {
-			ret = of_property_read_u32(child, "fsl,pfeng-logif-mode", &id);
-			if (ret) {
-				dev_err(dev, "The logif mode is invalid: %d\n", id);
-				ret = -EINVAL;
-				goto err;
-			}
-			switch (id) {
-			default:
-				dev_err(dev, "The logif mode is invalid: %d\n", id);
-				ret = -EINVAL;
-				goto err;
-			case PFENG_LOGIF_MODE_TX_INJECT:
-				netif_cfg->tx_inject = true;
-				netif_cfg->aux = false;
-				break;
-			case PFENG_LOGIF_MODE_TX_CLASS:
-				netif_cfg->tx_inject = false;
-				netif_cfg->aux = false;
-				break;
-			case PFENG_LOGIF_MODE_AUX:
-				netif_cfg->tx_inject = false;
+		if (of_find_property(child, "nxp,pfeng-netif-mode-aux", NULL))
 				netif_cfg->aux = true;
-				break;
-			}
-		} else {
-			netif_cfg->tx_inject = true;
-			netif_cfg->aux = false;
-		}
 
-		if (of_find_property(child, "fsl,pfeng-logif-mode-mgmt-only", NULL))
+		if (of_find_property(child, "nxp,pfeng-netif-mode-mgmt-only", NULL))
 				netif_cfg->only_mgmt = true;
 
-		dev_info(dev, "logif(%s) mode: %s,%s", netif_cfg->name,
-			netif_cfg->aux ? "aux" : netif_cfg->only_mgmt ? "mgmt" : "std",
-			netif_cfg->tx_inject ? "tx-inject " : "tx-class");
+		dev_info(dev, "netif(%s) mode: %s", netif_cfg->name,
+			netif_cfg->only_mgmt ? "mgmt" : netif_cfg->aux ? "aux" : "std");
 
 		if (!netif_cfg->aux) {
-#ifdef PFE_CFG_PFE_MASTER
-			/* EMAC link */
-			dn = of_parse_phandle(child, "fsl,pfeng-emac-link", 0);
-			if (!dn) {
-				dev_err(dev, "Required EMAC link is missing\n");
-				ret = -EINVAL;
-				goto err;
-			}
-			id = pfeng_of_get_addr(dn);
-			if (id < 0) {
-				dev_err(dev, "Required EMAC link is invalid\n");
-				ret = -EINVAL;
-				goto err;
-			}
-#else
 			/* EMAC id */
-			if (!of_find_property(child, "fsl,pfeng-emac-id", NULL)) {
+			if (!of_find_property(child, "nxp,pfeng-emac-id", NULL)) {
 				dev_err(dev, "The required EMAC id is missing\n");
 				ret = -EINVAL;
 				goto err;
 			}
-			ret = of_property_read_u32(child, "fsl,pfeng-emac-id", &id);
+			ret = of_property_read_u32(child, "nxp,pfeng-emac-id", &id);
 			if (ret || id >= PFENG_PFE_EMACS) {
 				dev_err(dev, "The EMAC id is invalid: %d\n", id);
 				ret = -EINVAL;
 				goto err;
 			}
-			if (of_find_property(child, "fsl,pfeng-emac-router", NULL))
+#ifdef PFE_CFG_PFE_SLAVE
+			if (of_find_property(child, "nxp,pfeng-emac-router", NULL))
 				netif_cfg->emac_router = true;
-#endif /* PFE_CFG_PFE_MASTER */
+#endif /* PFE_CFG_PFE_SLAVE */
 
 			netif_cfg->emac_id = id;
-			emac_list |= 1 << id;
-			dev_info(dev, "logif(%s) EMAC: %u", netif_cfg->name, netif_cfg->emac_id);
+			dev_info(dev, "netif(%s) EMAC: %u", netif_cfg->name, netif_cfg->emac_id);
 		}
 
-		/* HIF phandle(s) */
+		/* netif HIF channel(s) */
 		hifmap = 0;
-		hifs = 0;
-		for (i = 0; i < PFENG_PFE_HIF_CHANNELS; i++) {
-			dn = of_parse_phandle(child, "fsl,pfeng-hif-channels", i);
-			if (dn) {
-				id = pfeng_of_get_addr(dn);
-				if (id < 0) {
-					dev_err(dev, "HIF phandle %i is invalid\n", i);
-					ret = -EINVAL;
-					goto err;
-				}
-
-				hifmap |= 1 << id;
-				hifs++;
-				continue;
-			}
-
-			/* End of phandles, got at least one, good */
-			if (!dn && hifs)
-				break;
-
-			/* No any phandle retieved */
-			dev_err(dev, "Required HIF phandle is missing\n");
+		hifs = of_property_count_elems_of_size(child, "nxp,pfeng-hif-channels", sizeof(u32));
+		if (hifs < 1) {
+			dev_err(dev, "Required HIF id list is missing\n");
 			ret = -EINVAL;
 			goto err;
 		}
+		for (i = 0; i < hifs; i++) {
+			ret = of_property_read_u32_index(child, "nxp,pfeng-hif-channels", i, &propval);
+			if (ret) {
+				dev_err(dev, "%pOFn: couldn't read HIF id at index %d, ret=%d\n", np, i, ret);
+				goto err;
+			}
+			hifmap |= 1 << propval;
+			priv->hif_chnl[propval].refcount++;
+		}
+
 		netif_cfg->hifmap = hifmap;
 		netif_cfg->hifs = hifs;
-		dev_info(dev, "logif(%s) HIFs: count %d map %02x", netif_cfg->name, netif_cfg->hifs, netif_cfg->hifmap);
+		dev_info(dev, "netif(%s) HIFs: count %d map %02x", netif_cfg->name, netif_cfg->hifs, netif_cfg->hifmap);
 
 		netif_cfg->dn = of_node_get(child);
+
 #ifdef PFE_CFG_PFE_MASTER
-		{
+		if (!netif_cfg->aux) {
 			struct pfeng_emac *emac = &priv->emac[netif_cfg->emac_id];
 			__maybe_unused struct device_node *phy_handle;
+			phy_interface_t intf_mode;
 
 			/* fixed-link check */
 			emac->link_an =  MLO_AN_PHY;
@@ -382,29 +359,114 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 				emac->phyless = true;
 			}
 #endif /* PFENG_CFG_LINUX_NO_SERDES_SUPPORT */
+
+			/* Interface mode */
+			ret = pfeng_of_get_phy_mode(child, &intf_mode);
+			if (ret) {
+				dev_warn(dev, "Failed to read phy-mode\n");
+				/* for non managable interface */
+				intf_mode = PHY_INTERFACE_MODE_INTERNAL;
+			}
+
+			dev_info(dev, "EMAC%d interface mode: %d", id, intf_mode);
+
+			if ((intf_mode != PHY_INTERFACE_MODE_INTERNAL) &&
+				(intf_mode != PHY_INTERFACE_MODE_SGMII) &&
+				!phy_interface_mode_is_rgmii(intf_mode) &&
+				(intf_mode != PHY_INTERFACE_MODE_RMII) &&
+				(intf_mode != PHY_INTERFACE_MODE_MII)) {
+				dev_err(dev, "Not supported phy interface mode: %s\n", phy_modes(intf_mode));
+				ret = -EINVAL;
+				goto err;
+			}
+
+			emac->intf_mode = intf_mode;
+			emac->enabled = true;
+
+			 /* Get max speed */
+			if (of_property_read_u32(child, "max-speed", &emac->max_speed)) {
+				if (id == 0)
+					/* S32G2: Only PFE_EMAC_0 supports 2.5G speed */
+					emac->max_speed = SPEED_2500;
+				else
+					emac->max_speed = SPEED_1000;
+#if !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
+				/* Standard SGMII AN is at 1G */
+				emac->serdes_an_speed = SPEED_1000;
+			} else {
+				/* Store actual max-speed */
+				emac->serdes_an_speed = emac->max_speed;
+				if (emac->link_an == MLO_AN_INBAND &&
+				    emac->serdes_an_speed != SPEED_1000 &&
+				    emac->serdes_an_speed != SPEED_2500)
+					dev_err(dev, "Unsupported SGMII AN max-speed");
+			}
+
+			if (emac->intf_mode == PHY_INTERFACE_MODE_SGMII) {
+				scnprintf(propname, sizeof(propname), "emac%d_xpcs", id);
+				emac->serdes_phy = devm_phy_get(dev, propname);
+				if (IS_ERR(emac->serdes_phy)) {
+					emac->serdes_phy = NULL;
+					dev_err(dev, "SerDes PHY for EMAC%d was not found\n", id);
+				} else {
+					/* Add device depeendency for SerDes */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0)
+					if (device_link_add(dev, &emac->serdes_phy->dev, DL_FLAG_STATELESS /*| DL_FLAG_PM_RUNTIME*/))
+						dev_err(dev, "Failed to enable SerDes PM dependency for EMAC%d\n", id);
+#endif
+				}
+			} else {
+				emac->serdes_phy = NULL;
+			}
+#endif /* PFENG_CFG_LINUX_NO_SERDES_SUPPORT */
+
+			/* optional: tx clock */
+			if (phy_interface_mode_is_rgmii(intf_mode))
+				strcpy(propname, "tx_rgmii");
+			else
+				scnprintf(propname, sizeof(propname), "tx_%s", phy_modes(intf_mode));
+			emac->tx_clk = devm_get_clk_from_child(dev, child, propname);
+			if (IS_ERR(emac->tx_clk)) {
+				emac->tx_clk = NULL;
+				dev_dbg(dev, "No TX clocks declared on EMAC%d for interface %s\n", id, phy_modes(intf_mode));
+			}
+
+			/* optional: rx clock */
+			if (phy_interface_mode_is_rgmii(intf_mode))
+				strcpy(propname, "rx_rgmii");
+			else
+				scnprintf(propname, sizeof(propname), "rx_%s", phy_modes(intf_mode));
+			emac->rx_clk = devm_get_clk_from_child(dev, child, propname);
+			if (IS_ERR(emac->rx_clk)) {
+				emac->rx_clk = NULL;
+				dev_dbg(dev, "No RX clocks declared on EMAC%d for interface %s\n", id, phy_modes(intf_mode));
+			}
 		}
 #endif /* PFE_CFG_PFE_MASTER */
 
 		list_add_tail(&netif_cfg->lnode, &priv->netif_cfg_list);
 	} /* foreach PFENG_DT_COMPATIBLE_LOGIF */
 
+	/* Decrement HIF refcount to use simple check for zero */
+	for (i = 0; i < PFENG_PFE_HIF_CHANNELS; i++)
+		if (priv->hif_chnl[i].refcount)
+			priv->hif_chnl[i].refcount--;
+
 #ifdef PFE_CFG_PFE_MASTER
 	/*
-	 * EMAC
-	 * ("fsl,pfeng-emac")
+	 * MDIO
+	 * ("nxp,s32g-pfe-mdio")
 	 *
-	 * Describes PFE_EMAC block
+	 * Describes PFE_MDIO block
 	 */
 	for_each_available_child_of_node(np, child) {
 		int id;
-		phy_interface_t intf_mode;
 		struct pfeng_emac *emac;
-		char tmp[32];
 
 		if (!of_device_is_available(child))
 			continue;
 
-		if (!of_device_is_compatible(child, PFENG_DT_COMPATIBLE_EMAC))
+		if (!of_device_is_compatible(child, "nxp,s32g-pfe-mdio"))
 			continue;
 
 		id = pfeng_of_get_addr(child);
@@ -417,154 +479,12 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 		emac = &priv->emac[id];
 
 		/* Link DT node for embedded MDIO bus */
-		emac->dn_mdio = of_get_compatible_child(child, PFENG_DT_COMPATIBLE_MDIO);
+		emac->dn_mdio = child;
 
-		if (!(emac_list & (1 << id))) {
-			dev_info(dev, "EMAC%d phy unused, skipping phy setting", id);
-			emac->enabled = true;
-			continue;
-		}
-
-		 /* Get max speed */
-		if (of_property_read_u32(child, "max-speed", &emac->max_speed)) {
-			if (id == 0)
-				/* S32G2: Only PFE_EMAC_0 supports 2.5G speed */
-				emac->max_speed = SPEED_2500;
-			else
-				emac->max_speed = SPEED_1000;
-#if !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
-			/* Standard SGMII AN is at 1G */
-			emac->serdes_an_speed = SPEED_1000;
-		} else {
-			/* Store actual max-speed */
-			emac->serdes_an_speed = emac->max_speed;
-			if (emac->link_an == MLO_AN_INBAND &&
-			    emac->serdes_an_speed != SPEED_1000 &&
-			    emac->serdes_an_speed != SPEED_2500)
-				dev_err(dev, "Unsupported SGMII AN max-speed");
-#endif /* PFENG_CFG_LINUX_NO_SERDES_SUPPORT */
-		}
-
-		/* Interface mode */
-		ret = pfeng_of_get_phy_mode(child, &intf_mode);
-		if (ret) {
-			dev_warn(dev, "Failed to read phy-mode\n");
-			/* for non managable interface */
-			intf_mode = PHY_INTERFACE_MODE_INTERNAL;
-		}
-
-		dev_dbg(dev, "EMAC%d interface mode: %d", id, intf_mode);
-
-		if ((intf_mode != PHY_INTERFACE_MODE_INTERNAL) &&
-			(intf_mode != PHY_INTERFACE_MODE_SGMII) &&
-			!phy_interface_mode_is_rgmii(intf_mode) &&
-			(intf_mode != PHY_INTERFACE_MODE_RMII) &&
-			(intf_mode != PHY_INTERFACE_MODE_MII)) {
-			dev_err(dev, "Not supported phy interface mode: %s\n", phy_modes(intf_mode));
-			ret = -EINVAL;
-			goto err;
-		}
-
-		emac->intf_mode = intf_mode;
 		emac->enabled = true;
 
-#if !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
-		if (emac->intf_mode == PHY_INTERFACE_MODE_SGMII) {
-			scnprintf(tmp, sizeof(tmp), "emac%d_xpcs", id);
-			emac->serdes_phy = devm_phy_get(dev, tmp);
-			if (IS_ERR(emac->serdes_phy)) {
-				emac->serdes_phy = NULL;
-				dev_err(dev, "SerDes PHY for EMAC%d was not found\n", id);
-			} else {
-				/* Add device depeendency for SerDes */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0)
-				if (device_link_add(dev, &emac->serdes_phy->dev, DL_FLAG_STATELESS /*| DL_FLAG_PM_RUNTIME*/))
-					dev_err(dev, "Failed to enable SerDes PM dependency for EMAC%d\n", id);
-#endif
-			}
-		} else {
-			emac->serdes_phy = NULL;
-		}
-#endif /* PFENG_CFG_LINUX_NO_SERDES_SUPPORT */
-
-		/* optional: tx clock */
-		if (phy_interface_mode_is_rgmii(intf_mode))
-			strcpy(tmp, "tx_rgmii");
-		else
-			scnprintf(tmp, sizeof(tmp), "tx_%s", phy_modes(intf_mode));
-		emac->tx_clk = devm_get_clk_from_child(dev, child, tmp);
-		if (IS_ERR(emac->tx_clk)) {
-			emac->tx_clk = NULL;
-			dev_dbg(dev, "No TX clocks declared on EMAC%d for interface %s\n", id, phy_modes(intf_mode));
-		}
-
-		/* optional: rx clock */
-		if (phy_interface_mode_is_rgmii(intf_mode))
-			strcpy(tmp, "rx_rgmii");
-		else
-			scnprintf(tmp, sizeof(tmp), "rx_%s", phy_modes(intf_mode));
-		emac->rx_clk = devm_get_clk_from_child(dev, child, tmp);
-		if (IS_ERR(emac->rx_clk)) {
-			emac->rx_clk = NULL;
-			dev_dbg(dev, "No RX clocks declared on EMAC%d for interface %s\n", id, phy_modes(intf_mode));
-		}
 	} /* foreach PFENG_DT_COMPATIBLE_EMAC */
 #endif
-
-
-
-	/*
-	 * HIF
-	 * ("fsl,pfeng-hif")
-	 *
-	 * Describes PFE HIF block
-	 */
-	for_each_available_child_of_node(np, child) {
-		int id;
-
-		if (!of_device_is_available(child))
-			continue;
-
-		if (!of_device_is_compatible(child, PFENG_DT_COMPATIBLE_HIF))
-			continue;
-
-		id = pfeng_of_get_addr(child);
-		if (id < 0)
-			continue;
-
-		if (id < PFENG_PFE_HIF_CHANNELS) {
-			/* HIF IRQ */
-			irq = of_irq_get(child, 0);
-			if (irq < 0) {
-				dev_err(dev, "Cannot find irq resource 'hif%i', aborting\n", id);
-				return -EIO;
-			}
-
-			/* HIF mode */
-			if (of_find_property(child, "fsl,pfeng-hif-mode", NULL)) {
-				if (of_property_read_u32(child, "fsl,pfeng-hif-mode", &propval)) {
-					dev_err(dev, "hif%d has invalid channel mode, aborting\n", id);
-					return -EIO;
-				}
-				priv->hif_chnl[id].cl_mode = propval;
-
-				pfe_cfg->irq_vector_hif_chnls[id] = irq;
-			} else {
-				dev_err(dev, "hif%d has missing channel mode, aborting\n", id);
-				return -EIO;
-			}
-
-			/* HIF IHC option */
-			if (of_find_property(child, "fsl,pfeng-ihc", NULL))
-				priv->hif_chnl[id].ihc = true;
-			else
-				priv->hif_chnl[id].ihc = false;
-
-			priv->hif_chnl[id].status = PFENG_HIF_STATUS_REQUESTED;
-			pfe_cfg->hif_chnls_mask |= 1 << id;
-		}
-	} /* foreach PFENG_DT_COMPATIBLE_HIF */
-	dev_info(dev, "HIF channels mask: 0x%04x", pfe_cfg->hif_chnls_mask);
 
 	return 0;
 

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -82,6 +82,7 @@ typedef struct
 	uint32_t rtable_collision_size;	/* Size (number of entries) of collision area within routing table */
 	uint16_t vlan_id;	/* VLAN ID used for L2 Bridge configuration */
 	uint16_t vlan_stats_size;	/*VLAN stats size(number of vlan entry) used to collect info from firmware */
+	pfe_emac_mii_mode_t emac_mode[3]; /* MII mode per PFE EMAC */
 } pfe_platform_config_t;
 
 typedef struct

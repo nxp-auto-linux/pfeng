@@ -436,6 +436,7 @@ errno_t pfe_l2br_domain_create(pfe_l2br_t *bridge, uint16_t vlan)
 	if (NULL == domain)
 	{
 		NXP_LOG_DEBUG("malloc() failed\n");
+		ret = ENOMEM;
 	}
 	else
 	{
@@ -537,7 +538,7 @@ errno_t pfe_l2br_domain_create(pfe_l2br_t *bridge, uint16_t vlan)
 		}
 	}
 
-	return EOK;
+	return ret;
 
 free_and_fail:
 	if (EOK != pfe_l2br_domain_destroy(domain))

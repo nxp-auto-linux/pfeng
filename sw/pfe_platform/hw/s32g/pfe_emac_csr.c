@@ -126,7 +126,8 @@ static const char *emac_speed_to_str(pfe_emac_speed_t speed)
  * @param[in]	duplex Duplex type to be configured @see pfe_emac_duplex_t
  * @return		EOK if success, error code if invalid configuration is detected
  */
-errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,  pfe_emac_speed_t speed, pfe_emac_duplex_t duplex)
+errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,
+							pfe_emac_speed_t speed, pfe_emac_duplex_t duplex)
 {
 	uint32_t reg;
 
@@ -215,6 +216,46 @@ errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,  pfe_emac_sp
 	}
 
 	return EOK;
+}
+
+/**
+ * @brief		Get EMAC instance index
+ * @param[in]	emac_base The EMAC base address
+ * @param[in]	cbus_base The PFE CBUS base address
+ * @return		Index (0, 1, 2, ..) or 255 if failed
+ */
+uint8_t pfe_emac_cfg_get_index(addr_t emac_base, addr_t cbus_base)
+{
+	uint8_t idx;
+	
+	switch ((addr_t)emac_base - (addr_t)cbus_base)
+	{
+		case CBUS_EMAC1_BASE_ADDR:
+		{
+			idx = 0U;
+			break;
+		}
+		
+		case CBUS_EMAC2_BASE_ADDR:
+		{
+			idx = 1U;
+			break;
+		}
+		
+		case CBUS_EMAC3_BASE_ADDR:
+		{
+			idx = 2U;
+			break;
+		}
+		
+		default:
+		{
+			idx = 255U;
+			break;
+		}
+	}
+	
+	return idx;
 }
 
 /**
@@ -597,10 +638,9 @@ errno_t pfe_emac_cfg_set_mii_mode(addr_t base_va, pfe_emac_mii_mode_t mode)
 	/*
 		 The PHY mode selection is done using a HW interface. See the "phy_intf_sel" signal.
 	*/
-	NXP_LOG_INFO("The PHY mode selection is done using a HW interface. See the 'phy_intf_sel' signal.\n");
 	(void)base_va;
 	(void)mode;
-
+	
 	return EOK;
 }
 
@@ -646,15 +686,18 @@ errno_t pfe_emac_cfg_set_speed(addr_t base_va, pfe_emac_speed_t speed)
 		}
 
 		default:
+		{
 			ret = EINVAL;
 			break;
+		}
 	}
 
-	if(ret == EOK)
+	if (EOK == ret)
 	{
+		/*	Configure speed in EMAC registers */
 		hal_write32(reg, base_va + MAC_CONFIGURATION);
 	}
-
+	
 	return ret;
 }
 

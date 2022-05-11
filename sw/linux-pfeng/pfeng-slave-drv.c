@@ -33,8 +33,7 @@ MODULE_DESCRIPTION("PFEng SLAVE driver");
 MODULE_VERSION(PFENG_DRIVER_VERSION);
 
 static const struct of_device_id pfeng_id_table[] = {
-	{ .compatible = "fsl,s32g-pfeng-slave" },
-	{ .compatible = "fsl,s32g274a-pfeng-slave" },
+	{ .compatible = "nxp,s32g-pfe-slave" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, pfeng_id_table);

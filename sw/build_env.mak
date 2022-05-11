@@ -178,6 +178,10 @@ ifeq ($(PFE_CFG_PFE_MASTER),0)
     $(warning HIF nocpy is not supported in SLAVE mode)
     PFE_CFG_HIF_NOCPY_SUPPORT=0
   endif
+  ifneq ($(PFE_CFG_IEEE1588_SUPPORT),0)
+    $(warning IEEE1588 timer is not supported in SLAVE mode)
+    PFE_CFG_IEEE1588_SUPPORT=0
+  endif
 endif
 
 #Set default verbosity level for sysfs. Valid values are from 1 to 10.

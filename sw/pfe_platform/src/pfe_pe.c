@@ -933,6 +933,38 @@ static void pfe_pe_mem_write(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_
 }
 
 /**
+ * @brief		Read 'len' limited upto 4 bytes to uint32_t val
+ * @note		Function expects the source data to be in host endian format
+ *				and reads only required number of bytes to avoid out-of-bound issues
+ * @param[in]	src_byteptr Buffer source address (virtual)
+ * @param[in]	len Number of bytes to read
+ * @return		The data read (LE).
+ */
+static inline uint32_t pfe_pe_get_u32_from_byteptr(const uint8_t *src_byteptr, uint32_t len)
+{
+	uint32_t val;
+
+	switch (len)
+	{
+		case 1:
+			val = *src_byteptr;
+			break;
+		case 2:
+			val = *(uint16_t *)src_byteptr;
+			break;
+		case 3:
+			val = *(uint16_t *)src_byteptr;
+			val += ((uint32_t)*(src_byteptr + 2U)) << 16U;
+			break;
+		default:
+			val = *(uint32_t *)src_byteptr;
+			break;
+	}
+
+	return val;
+}
+
+/**
  * @brief		Write 'len' bytes to DMEM
  * @note		Function expects the source data to be in host endian format.
  * @param[in]	pe The PE instance
@@ -967,15 +999,24 @@ static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(
 		if (((uintptr_t)src_byteptr & 0x3U) == 0U)
 		{
 			/* src_byteptr aligns 4 bytes */
-			val = *(uint32_t *)src_byteptr;
+			val = pfe_pe_get_u32_from_byteptr(src_byteptr, len);
 		}
 		else
 		{
 			/* src_byteptr doesn't align 4 bytes : access each byte */
 			val =  ((uint32_t)*(src_byteptr + 0U)) << 0U;
-			val += ((uint32_t)*(src_byteptr + 1U)) << 8U;
-			val += ((uint32_t)*(src_byteptr + 2U)) << 16U;
-			val += ((uint32_t)*(src_byteptr + 3U)) << 24U;
+			if (2U <= len)
+			{
+				val += ((uint32_t)*(src_byteptr + 1U)) << 8U;
+			}
+			if (3U <= len)
+			{
+				val += ((uint32_t)*(src_byteptr + 2U)) << 16U;
+			}
+			if (4U <= len)
+			{
+				val += ((uint32_t)*(src_byteptr + 3U)) << 24U;
+			}
 		}
 		pfe_pe_mem_write(pe, PFE_PE_DMEM, val, dst_temp, (uint8_t)offset);
 		src_byteptr += offset;
@@ -996,7 +1037,7 @@ static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(
 	if (0U != len_temp)
 	{
 		/*	The rest */
-		val = *(uint32_t *)src_byteptr;
+		val = pfe_pe_get_u32_from_byteptr(src_byteptr, len_temp);
 		pfe_pe_mem_write(pe, PFE_PE_DMEM, val, (uint32_t)dst_temp, (uint8_t)len_temp);
 	}
 }
@@ -1692,28 +1733,6 @@ void pfe_pe_set_lmem(pfe_pe_t *pe, addr_t elf_base, addr_t len)
 
 	pe->lmem_base_addr_pa = elf_base;
 	pe->lmem_size = len;
-}
-
-/**
- * @brief		Set DDR base address
- * @param[in]	pe The PE instance
- * @param[in]	base_pa DDR base physical address as seen by host
- * @param[in]	base_va DDR base virtual address
- * @param[in]	len DDR region length
- */
-void pfe_pe_set_ddr(pfe_pe_t *pe, addr_t base_pa, addr_t base_va, addr_t len)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == pe))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pe->ddr_base_addr_pa = base_pa;
-	pe->ddr_base_addr_va = base_va;
-	pe->ddr_size = len;
 }
 
 /**

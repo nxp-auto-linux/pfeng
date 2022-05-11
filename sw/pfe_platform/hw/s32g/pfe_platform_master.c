@@ -848,7 +848,7 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 			if (EOK == ret)
 			{
-				ret = pfe_log_if_set_egress_ifs(log_if_arg, (uint32_t)arg_p->phy_if_id);
+				ret = pfe_log_if_set_egress_ifs(log_if_arg, (uint32_t)arg_p->phy_if_id_mask);
 			}
 
 			/*	Report execution status to caller */
@@ -2244,7 +2244,7 @@ static void pfe_platform_destroy_util(pfe_platform_t *platform)
 /**
  * @brief		Assign EMAC to the platform
  */
-static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
+static errno_t pfe_platform_create_emac(pfe_platform_t *platform, const pfe_platform_config_t *config)
 {
 	/*	Create storage for instances */
 	platform->emac = oal_mm_malloc(platform->emac_count * sizeof(pfe_emac_t *));
@@ -2255,7 +2255,8 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 	}
 
 	/*	EMAC1 */
-	platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC1_BASE_ADDR, EMAC_MODE_SGMII, EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
+	platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC1_BASE_ADDR,
+							config->emac_mode[0], EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
 	if (NULL == platform->emac[0])
 	{
 		NXP_LOG_ERROR("Couldn't create EMAC1 instance\n");
@@ -2279,7 +2280,8 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 	}
 
 	/*	EMAC2 */
-	platform->emac[1] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC2_BASE_ADDR, EMAC_MODE_RGMII, EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
+	platform->emac[1] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC2_BASE_ADDR,
+							config->emac_mode[1], EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
 	if (NULL == platform->emac[1])
 	{
 		NXP_LOG_ERROR("Couldn't create EMAC2 instance\n");
@@ -2303,7 +2305,8 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform)
 	}
 
 	/*	EMAC3 */
-	platform->emac[2] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC3_BASE_ADDR, EMAC_MODE_RGMII, EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
+	platform->emac[2] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC3_BASE_ADDR,
+							config->emac_mode[2], EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
 	if (NULL == platform->emac[2])
 	{
 		NXP_LOG_ERROR("Couldn't create EMAC3 instance\n");
@@ -3101,7 +3104,7 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	}
 
 	/*	EMAC */
-	ret = pfe_platform_create_emac(&pfe);
+	ret = pfe_platform_create_emac(&pfe, config);
 	if (EOK != ret)
 	{
 		goto exit;

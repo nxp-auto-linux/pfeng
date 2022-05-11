@@ -280,7 +280,9 @@
 /* Default Tx time between frame control pkts */
 #define DEFAULT_PAUSE_QUANTA                   0xF000U
 
-errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode, pfe_emac_speed_t speed, pfe_emac_duplex_t duplex);
+errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,
+									pfe_emac_speed_t speed, pfe_emac_duplex_t duplex);
+uint8_t pfe_emac_cfg_get_index(addr_t emac_base, addr_t cbus_base);
 errno_t pfe_emac_cfg_enable_ts(addr_t base_va, bool_t eclk, uint32_t i_clk_hz, uint32_t o_clk_hz);
 void pfe_emac_cfg_disable_ts(addr_t base_va);
 errno_t pfe_emac_cfg_adjust_ts_freq(addr_t base_va, uint32_t i_clk_hz, uint32_t o_clk_hz, uint32_t ppb, bool_t sgn);

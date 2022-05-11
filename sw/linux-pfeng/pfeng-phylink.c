@@ -239,6 +239,7 @@ static int s32g_set_rgmii_speed(struct pfeng_netif *netif, unsigned int speed)
 {
 	struct clk *tx_clk = netif->priv->emac[netif->cfg->emac_id].tx_clk;
 	unsigned long rate = 0;
+	int ret = 0;
 
 	switch (speed) {
 	default:
@@ -256,11 +257,14 @@ static int s32g_set_rgmii_speed(struct pfeng_netif *netif, unsigned int speed)
 	}
 
 	if (tx_clk) {
-		clk_set_rate(tx_clk, rate);
-		netdev_info(netif->netdev, "Set TX clock to %luHz\n", rate);
+		ret = clk_set_rate(tx_clk, rate);
+		if (ret)
+			netdev_err(netif->netdev, "Unable to set TX clock to %luHz\n", rate);
+		else
+			netdev_info(netif->netdev, "Set TX clock to %luHz\n", rate);
 	}
 
-	return 0;
+	return ret;
 }
 
 static void pfeng_mac_config(struct phylink_config *config, unsigned int mode, const struct phylink_link_state *state)

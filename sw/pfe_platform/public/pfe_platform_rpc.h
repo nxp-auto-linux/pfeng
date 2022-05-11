@@ -257,10 +257,17 @@ typedef struct __attribute__((packed, aligned(4)))
 } pfe_platform_rpc_pfe_log_if_add_egress_if_arg_t;
 ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_add_egress_if_arg_t, log_if_id));
 
-typedef pfe_platform_rpc_pfe_log_if_add_egress_if_arg_t pfe_platform_rpc_pfe_log_if_set_egress_ifs_arg_t;
-ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_set_egress_ifs_arg_t, log_if_id));
 typedef pfe_platform_rpc_pfe_log_if_add_egress_if_arg_t pfe_platform_rpc_pfe_log_if_del_egress_if_arg_t;
 ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_del_egress_if_arg_t, log_if_id));
+
+typedef struct __attribute__((packed, aligned(4)))
+{
+	/*	Logical interface ID */
+	uint8_t log_if_id;
+	/*	Mask of the physical interface ID */
+	uint32_t phy_if_id_mask;
+} pfe_platform_rpc_pfe_log_if_set_egress_ifs_arg_t;
+ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_log_if_set_egress_ifs_arg_t, log_if_id));
 
 typedef struct __attribute__((packed, aligned(4)))
 {

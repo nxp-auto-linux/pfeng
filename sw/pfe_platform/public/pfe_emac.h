@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -97,6 +97,22 @@ typedef enum __attribute__ ((packed)) {
 	EMAC_CRIT_INVALID,
 } pfe_emac_crit_t;
 
+static inline const char_t *
+pfe_emac_mii_mode_to_str(pfe_emac_mii_mode_t mode)
+{
+	static const char_t * names[] =
+		{"Invalid", "MII", "RMII", "RGMII", "SGMII"};
+	
+	if (mode <= EMAC_MODE_SGMII)
+	{
+		return names[mode];
+	}
+	else
+	{
+		return "out-of-range";
+	}
+}
+
 /**
  * @brief		Check if given MAC address is zero
  * @param[in]	addr The address to check
@@ -169,6 +185,7 @@ static inline bool_t pfe_emac_check_crit_by_type(const pfe_mac_addr_t addr, pfe_
 }
 
 pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_mode_t mode, pfe_emac_speed_t speed, pfe_emac_duplex_t duplex);
+uint8_t pfe_emac_get_index(pfe_emac_t *emac);
 errno_t pfe_emac_bind_gpi(pfe_emac_t *emac, pfe_gpi_t *gpi);
 pfe_gpi_t *pfe_emac_get_gpi(const pfe_emac_t *emac);
 void pfe_emac_enable(const pfe_emac_t *emac);

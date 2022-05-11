@@ -363,20 +363,6 @@ void pfe_tmu_cfg_disable(addr_t cbus_base_va)
 }
 
 /**
- * @brief		Send packet directly via TMU
- * @param[in]	cbus_base_va The cbus base address
- * @param[in]	phy Physical interface identifier
- * @param[in]	queue TX queue identifier
- * @param[in]	buf_pa Buffer physical address
- * @param[in]	len Number of bytes to send
- */
-void pfe_tmu_cfg_send_pkt(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, const void *buf_pa, uint16_t len)
-{
-	hal_write32((uint32_t)((addr_t)PFE_CFG_MEMORY_PHYS_TO_PFE(buf_pa) & 0xffffffffU), cbus_base_va + TMU_PHY_INQ_PKTPTR);
-	hal_write32(((uint32_t)phy << 24) | ((uint32_t)queue << 16) | len, cbus_base_va + TMU_PHY_INQ_PKTINFO);
-}
-
-/**
  * @brief		Write TMU context memory
  * @param[in]	cbus_base_va The cbus base address
  * @param[in]	phy The physical interface
@@ -1194,19 +1180,20 @@ errno_t pfe_tmu_shp_cfg_set_idle_slope(addr_t cbus_base_va,
 	NXP_LOG_INFO("Using PFE sys_clk value %"PRINT64"uHz\n", sys_clk_hz);
 
 	/*	Set weight (added to credit counter with each sys_clk_hz/clk_div tick) */
+	/*	The '+1' in (isl + 1ULL) is needed for mitigating integer division inaccuracy */
 	switch (pfe_tmu_shp_cfg_get_rate_mode(cbus_base_va, phy, shp))
 	{
 		case RATE_MODE_DATA_RATE:
 		{
 			/*	ISL is bps, WGT is [bytes-per-tick] */
-			wgt = ((uint64_t)isl * CLK_DIV * (1ULL << 12)) / (8ULL * sys_clk_hz);
+			wgt = ((uint64_t)(isl + 1ULL) * CLK_DIV * (1ULL << 12)) / (8ULL * sys_clk_hz);
 			break;
 		}
 
 		case RATE_MODE_PACKET_RATE:
 		{
 			/*	ISL is pps, WGT is [packets-per-tick] */
-			wgt = ((uint64_t)isl * CLK_DIV * (1ULL << 12)) / (sys_clk_hz);
+			wgt = ((uint64_t)(isl + 1ULL) * CLK_DIV * (1ULL << 12)) / (sys_clk_hz);
 			break;
 		}
 

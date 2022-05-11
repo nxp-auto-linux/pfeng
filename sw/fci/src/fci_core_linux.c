@@ -320,6 +320,11 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 				}
 			}
 
+			if (EOK != ret)
+			{
+				break;
+			}
+
 			if (FCI_CFG_MAX_CLIENTS == ii)
 			{
 				NXP_LOG_ERROR("Can't register new event listener, storage is full\n");

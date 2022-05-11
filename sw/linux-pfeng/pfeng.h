@@ -39,7 +39,7 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"RTM 1.0.0 RC1"
+#define PFENG_DRIVER_VERSION		"RTM 1.0.0 RC2"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
@@ -125,7 +125,6 @@ struct pfeng_netif_cfg {
 	u8				emac_id;
 	u8				hifs;
 	u32				hifmap;
-	bool				tx_inject;
 	bool				aux;
 	bool				pause_rx;
 	bool				pause_tx;
@@ -195,7 +194,7 @@ struct pfeng_hif_chnl {
 	struct net_device		dummy_netdev;
 	struct device			*dev;
 	pfe_hif_chnl_t			*priv;
-	int				cl_mode;
+	u8				refcount;
 	bool				ihc;
 	bool				queues_stopped;
 	u8				status;
@@ -238,13 +237,13 @@ static inline struct pfeng_netif *pfeng_phy_if_id_to_netif(struct pfeng_hif_chnl
 
 static inline void pfeng_hif_shared_chnl_lock_tx(struct pfeng_hif_chnl *chnl)
 {
-	if (unlikely((chnl->cl_mode == PFENG_HIF_MODE_SHARED) || chnl->ihc))
+	if (unlikely(chnl->refcount))
 		spin_lock(&chnl->lock_tx);
 }
 
 static inline void pfeng_hif_shared_chnl_unlock_tx(struct pfeng_hif_chnl *chnl)
 {
-	if (unlikely((chnl->cl_mode == PFENG_HIF_MODE_SHARED) || chnl->ihc))
+	if (unlikely(chnl->refcount))
 		spin_unlock(&chnl->lock_tx);
 }
 

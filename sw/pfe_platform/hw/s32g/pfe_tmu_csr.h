@@ -258,7 +258,6 @@ void pfe_tmu_reclaim_init(addr_t cbus_base_va);
 void pfe_tmu_cfg_reset(addr_t cbus_base_va);
 void pfe_tmu_cfg_enable(addr_t cbus_base_va);
 void pfe_tmu_cfg_disable(addr_t cbus_base_va);
-void pfe_tmu_cfg_send_pkt(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, const void *buf_pa, uint16_t len);
 uint32_t pfe_tmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 
 #endif /* TMU_CSR_H_ */

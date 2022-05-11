@@ -133,7 +133,7 @@ static int pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coalesce
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 	struct pfeng_hif_chnl *chnl;
-	int ret;
+	int ret = 0;
 	u32 idx;
 
 	/* Right now we only support two modes:

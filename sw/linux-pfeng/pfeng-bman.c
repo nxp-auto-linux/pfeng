@@ -72,22 +72,18 @@ int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl)
 		return -ENOMEM;
 	}
 
-	rx_pool->id = pfe_hif_chnl_get_id(chnl->priv);
-	rx_pool->depth = pfe_hif_chnl_get_rx_fifo_depth(chnl->priv);
+	chnl->bman.rx_pool = rx_pool;
 	rx_pool->chnl = chnl->priv;
 	rx_pool->dev = chnl->dev;
+	rx_pool->id = pfe_hif_chnl_get_id(chnl->priv);
+	rx_pool->depth = PFE_CFG_HIF_RING_LENGTH;
+	rx_pool->idx_mask = PFE_CFG_HIF_RING_LENGTH - 1;
 
-	rx_pool->rx_tbl = kzalloc(sizeof(struct pfeng_rx_map) * rx_pool->depth, GFP_KERNEL);
+	rx_pool->rx_tbl = kcalloc(rx_pool->depth, sizeof(struct pfeng_rx_map), GFP_KERNEL);
 	if (!rx_pool->rx_tbl) {
 		dev_err(chnl->dev, "chnl%d: failed. No mem\n", rx_pool->id);
 		goto err;
 	}
-	rx_pool->rd_idx = 0;
-	rx_pool->wr_idx = 0;
-	rx_pool->alloc_idx = 0;
-	rx_pool->idx_mask = pfe_hif_chnl_get_rx_fifo_depth(chnl->priv) - 1;
-
-	chnl->bman.rx_pool = rx_pool;
 
 	/* TX pool */
 	tx_pool = kzalloc(sizeof(*tx_pool), GFP_KERNEL);
@@ -96,17 +92,15 @@ int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl)
 		goto err;
 	}
 
-	tx_pool->depth = pfe_hif_chnl_get_tx_fifo_depth(chnl->priv);
-	tx_pool->tx_tbl = kzalloc(sizeof(struct pfeng_tx_map) * tx_pool->depth, GFP_KERNEL);
+	chnl->bman.tx_pool = tx_pool;
+	tx_pool->depth = PFE_CFG_HIF_RING_LENGTH;
+	tx_pool->idx_mask = PFE_CFG_HIF_RING_LENGTH - 1;
+
+	tx_pool->tx_tbl = kcalloc(tx_pool->depth, sizeof(struct pfeng_tx_map), GFP_KERNEL);
 	if (!tx_pool->tx_tbl) {
 		dev_err(chnl->dev, "chnl%d: failed. No mem\n", rx_pool->id);
 		goto err;
 	}
-	tx_pool->rd_idx = 0;
-	tx_pool->wr_idx = 0;
-	tx_pool->idx_mask = tx_pool->depth - 1;
-
-	chnl->bman.tx_pool = tx_pool;
 
 	return 0;
 
@@ -415,9 +409,7 @@ int pfeng_hif_chnl_fill_rx_buffers(struct pfeng_hif_chnl *chnl)
 
 	while (pfe_hif_chnl_can_accept_rx_buf(chnl->priv)) {
 
-		preempt_disable();
 		ret = pfeng_hif_chnl_refill_rx_pool(chnl, 1);
-		preempt_enable();
 		if (ret)
 			break;
 		cnt++;

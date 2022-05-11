@@ -84,7 +84,7 @@ static void pfeng_hif_drv_chnl_isr(void *arg)
 		pfe_hif_chnl_rx_irq_mask(chnl->priv);
 		pfe_hif_chnl_tx_irq_mask(chnl->priv);
 
-		__napi_schedule_irqoff(&chnl->napi);
+		__napi_schedule(&chnl->napi);
 	}
 }
 
@@ -469,18 +469,6 @@ static int pfeng_hif_chnl_drv_remove(struct pfeng_priv *priv, u32 idx)
 	return ret;
 }
 
-static char *get_hif_chnl_mode_str(struct pfeng_hif_chnl *chnl)
-{
-	switch (chnl->cl_mode) {
-	case PFENG_HIF_MODE_EXCLUSIVE:
-		return "excl";
-	case PFENG_HIF_MODE_SHARED:
-		return "share";
-	default:
-		return "invalid";
-	}
-}
-
 static int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 idx)
 {
 	int irq = priv->pfe_cfg->irq_vector_hif_chnls[idx];
@@ -503,7 +491,7 @@ static int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 idx)
 	chnl->dev = dev;
 	chnl->idx = idx;
 
-	if (unlikely((chnl->cl_mode == PFENG_HIF_MODE_SHARED) || chnl->ihc))
+	if (unlikely(chnl->refcount))
 		spin_lock_init(&chnl->lock_tx);
 
 	/* Register HIF channel RX/TX callback */
@@ -511,7 +499,7 @@ static int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 idx)
 				   pfeng_hif_drv_chnl_isr, (void *)chnl);
 
 	/* Create interrupt name */
-	scnprintf(irq_name, sizeof(irq_name), "pfe-hif-%d:%s", idx, get_hif_chnl_mode_str(chnl));
+	scnprintf(irq_name, sizeof(irq_name), "pfe-hif-%d:%s", idx, chnl->refcount ? "shared" : "excl");
 
 	/* HIF channel IRQ */
 	ret = request_irq(irq, pfeng_hif_chnl_direct_isr, 0,
@@ -661,11 +649,22 @@ int pfeng_hif_create(struct pfeng_priv *priv)
  */
 void pfeng_hif_remove(struct pfeng_priv *priv)
 {
-	struct device *dev = &priv->pdev->dev;
+	struct device *dev;
 	int idx;
 
 	if (!priv)
 		return;
+
+	dev = &priv->pdev->dev;
+
+	/* Disable HIF logif first */
+	for (idx = (PFENG_PFE_HIF_CHANNELS - 1); idx >= 0; idx--) {
+		if (priv->hif_chnl[idx].logif_hif) {
+			dev_dbg(dev, "Disable %s\n", pfe_log_if_get_name(priv->hif_chnl[idx].logif_hif));
+			pfe_log_if_disable(priv->hif_chnl[idx].logif_hif);
+			priv->hif_chnl[idx].logif_hif = NULL;
+		}
+	}
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	pfeng_hif_idex_release(priv);

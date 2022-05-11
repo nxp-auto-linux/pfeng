@@ -68,8 +68,7 @@ MODULE_FIRMWARE(PFENG_FW_UTIL_NAME);
 MODULE_VERSION(PFENG_DRIVER_VERSION);
 
 static const struct of_device_id pfeng_id_table[] = {
-	{ .compatible = "fsl,s32g-pfeng" },
-	{ .compatible = "fsl,s32g274a-pfeng" },
+	{ .compatible = "nxp,s32g-pfe" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, pfeng_id_table);
@@ -754,8 +753,11 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	dev_info(dev, "Resuming driver\n");
 
 	/* Set HIF channels coherency */
-	if (of_dma_is_coherent(dev->of_node))
+	if (of_dma_is_coherent(dev->of_node)) {
 		ret = pfeng_s32g_set_port_coherency(priv);
+		if (ret)
+			return ret;
+	}
 
 	pinctrl_pm_select_default_state(dev);
 

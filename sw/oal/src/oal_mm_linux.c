@@ -96,9 +96,9 @@ static DEFINE_HASHTABLE(pfe_addr_htable, 8);
 static LIST_HEAD(pfe_reserved_mem_list);
 
 #ifdef PFE_CFG_PFE_MASTER
-static const char pfeng_res_no_map_name[PFE_REG_COUNT][20] = {
-	"pfe-bmu2-pool",
-	"pfe-rt-pool",
+static const char pfeng_res_no_map_name[PFE_REG_COUNT][16] = {
+	"bmu2-pool",
+	"rt-pool",
 };
 #endif
 
@@ -513,10 +513,10 @@ static int pfeng_reserved_no_map_region_init(struct device *dev, struct reserved
 		goto out;
 	}
 
-	scnprintf(compatible, sizeof(compatible), "fsl,%s", pfeng_res_no_map_name[rmem_id]);
+	scnprintf(compatible, sizeof(compatible), "nxp,s32g-pfe-%s", pfeng_res_no_map_name[rmem_id]);
 	if (!of_device_is_compatible(mem_node, compatible)) {
 		/* don't fail probing if node not found */
-		dev_warn(dev, "%s node missing\n", compatible);
+		dev_warn(dev, "memory-region: %s node missing\n", compatible);
 		goto out;
 	}
 
@@ -575,9 +575,9 @@ static int pfeng_reserved_bdr_pool_region_init(struct device *dev, struct gen_po
 		goto out;
 	}
 
-	if (!of_device_is_compatible(mem_node, "fsl,pfe-bdr-pool")) {
+	if (!of_device_is_compatible(mem_node, "nxp,s32g-pfe-bdr-pool")) {
 		/* don't fail probing if node not found */
-		dev_warn(dev, "fsl,pfe-bdr-pool node missing\n");
+		dev_warn(dev, "nxp,s32g-pfe-bdr-pool node missing\n");
 		goto out;
 	}
 

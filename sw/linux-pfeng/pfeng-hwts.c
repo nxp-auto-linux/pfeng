@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 NXP
+ * Copyright 2021-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -40,9 +40,9 @@ static void pfeng_hwts_work(struct work_struct *work)
 			if (ts_skb) {
 				/* Check for duplicity juts to be sure */
 				if (pfeng_hwts_check_dup(netif, ts_skb)){
+					/* Free socket buffer */
 					kfree_skb(ts_skb->skb);
-					kfree(ts_skb);
-					ts_skb = NULL;
+					/* Continue to get data from fifo into recycled ts_skb */
 					continue;
 				}
 				list_add(&ts_skb->list, &netif->ts_skb_list);
@@ -103,12 +103,12 @@ void pfeng_hwts_skb_set_rx_ts(struct pfeng_netif *netif, struct sk_buff *skb)
 int pfeng_hwts_store_tx_ref(struct pfeng_netif *netif, struct sk_buff *skb)
 {
 	int ret = 1;
-	struct pfeng_ts_skb ts_skb_entry;
-
 	/* Store info for future timestamp */
-	ts_skb_entry.skb = skb;
-	ts_skb_entry.jif_enlisted = jiffies;
-	ts_skb_entry.ref_num = netif->ts_ref_num++ & 0x0FFFU;
+	struct pfeng_ts_skb ts_skb_entry = {
+		.skb = skb,
+		.jif_enlisted = jiffies,
+		.ref_num = netif->ts_ref_num++ & 0x0FFFU
+	};
 
 	/* Send data to worker */
 	ret = kfifo_put(&netif->ts_skb_fifo, ts_skb_entry);
