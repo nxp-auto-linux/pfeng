@@ -128,33 +128,36 @@ static bool_t fci_fp_match_rule_by_criterion(fci_fp_rule_criterion_t crit, const
     if (unlikely((NULL == rule) || (NULL == arg)))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return FALSE;
+        match = FALSE;
     }
+    else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-    switch (crit)
     {
-        case FP_RULE_CRIT_ALL:
+        switch (crit)
         {
-            match = TRUE;
-            break;
-        }
-        case FP_RULE_CRIT_NAME:
-        {
-            if(0 == strcmp(arg->name, rule->name))
+            case FP_RULE_CRIT_ALL:
             {
                 match = TRUE;
+                break;
             }
-            else
+            case FP_RULE_CRIT_NAME:
             {
-                match = FALSE;
+                if(0 == strcmp(arg->name, rule->name))
+                {
+                    match = TRUE;
+                }
+                else
+                {
+                    match = FALSE;
+                }
+                break;
             }
-            break;
-        }
-        default:
-        {
-            NXP_LOG_ERROR("Unknown criterion\n");
-            match = FALSE;
-			break;
+            default:
+            {
+                NXP_LOG_ERROR("Unknown criterion\n");
+                match = FALSE;
+                break;
+            }
         }
     }
     return match;
@@ -173,94 +176,99 @@ static fci_fp_rule_t *fci_fp_rule_get_first(fci_fp_rule_db_t *db, fci_fp_rule_cr
     LLIST_t *item;
     fci_fp_rule_t *rule;
     bool_t match = FALSE;
+    bool_t cur_crit_remember_success = TRUE;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(NULL == db))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return NULL;
     }
-    if (unlikely((FP_RULE_CRIT_ALL != crit) && (NULL == arg)))
+    else if (unlikely((FP_RULE_CRIT_ALL != crit) && (NULL == arg)))
     {
         /*  All criterions except FP_RULE_CRIT_ALL require non-NULL argument */
         NXP_LOG_ERROR("NULL argument received\n");
-        return NULL;
     }
+    else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-    /* Free memory allocated by previous search (if any) */
-    if(FP_RULE_CRIT_NAME == db->cur_crit)
     {
-        if(NULL != db->cur_crit_arg.name)
+        /* Free memory allocated by previous search (if any) */
+        if(FP_RULE_CRIT_NAME == db->cur_crit)
         {
-            oal_mm_free(db->cur_crit_arg.name);
-            db->cur_crit_arg.name = NULL;
-        }
-    }
-    /*    Remember criterion and argument for possible subsequent fci_fp_rule_get_next() calls */
-    db->cur_crit = crit;
-    switch(db->cur_crit)
-    {
-        case FP_RULE_CRIT_ALL:
-        {
-            break;
-        }
-        case FP_RULE_CRIT_NAME:
-        {
-            char_t *mem;
-            /* Allocate string memory */
-            mem = oal_mm_malloc(strlen((char_t *)arg) + 1U);
-            if(NULL == mem)
+            if(NULL != db->cur_crit_arg.name)
             {
-                return NULL;
+                oal_mm_free(db->cur_crit_arg.name);
+                db->cur_crit_arg.name = NULL;
             }
-            db->cur_crit_arg.name = mem;
-            /* Copy the string */
-            (void)strcpy(mem, (char_t *)arg);
-            break;
         }
-        default:
+        /*    Remember criterion and argument for possible subsequent fci_fp_rule_get_next() calls */
+        db->cur_crit = crit;
+        switch(db->cur_crit)
         {
-            NXP_LOG_ERROR("Unknown criterion\n");
-            return NULL;
-        }
-    }
-
-    /*    Search for first matching rule */
-    if (FALSE == LLIST_IsEmpty(&db->rules))
-    {
-        /*    Get first matching rule */
-        LLIST_ForEach(item, &db->rules)
-        {
-            /*    Get data */
-            if(COMMON == dbase)
+            case FP_RULE_CRIT_ALL:
             {
-                rule = LLIST_Data(item, fci_fp_rule_t, db_entry);
+                break;
             }
-            else
+            case FP_RULE_CRIT_NAME:
             {
-                rule = LLIST_Data(item, fci_fp_rule_t, table_entry);
-            }
-
-            /*    Remember current item to know where to start later */
-            db->cur_item = item->prNext;
-            if (NULL != rule)
-            {
-                if (TRUE == fci_fp_match_rule_by_criterion(db->cur_crit, &db->cur_crit_arg, rule))
+                char_t *mem;
+                /* Allocate string memory */
+                mem = oal_mm_malloc(strlen((char_t *)arg) + 1U);
+                if(NULL == mem)
                 {
-                    match = TRUE;
-                    break;
+                    cur_crit_remember_success = FALSE;
+                }
+                else
+                {
+                    db->cur_crit_arg.name = mem;
+                    /* Copy the string */
+                    (void)strcpy(mem, (char_t *)arg);
+                }
+                break;
+            }
+            default:
+            {
+                NXP_LOG_ERROR("Unknown criterion\n");
+                cur_crit_remember_success = FALSE;
+            }
+        }
+        if (TRUE == cur_crit_remember_success)
+        {
+            /*    Search for first matching rule */
+            if (FALSE == LLIST_IsEmpty(&db->rules))
+            {
+                /*    Get first matching rule */
+                LLIST_ForEach(item, &db->rules)
+                {
+                    /*    Get data */
+                    if(COMMON == dbase)
+                    {
+                        rule = LLIST_Data(item, fci_fp_rule_t, db_entry);
+                    }
+                    else
+                    {
+                        rule = LLIST_Data(item, fci_fp_rule_t, table_entry);
+                    }
+
+                    /*    Remember current item to know where to start later */
+                    db->cur_item = item->prNext;
+                    if (NULL != rule)
+                    {
+                        if (TRUE == fci_fp_match_rule_by_criterion(db->cur_crit, &db->cur_crit_arg, rule))
+                        {
+                            match = TRUE;
+                            break;
+                        }
+                    }
                 }
             }
         }
     }
 
-    if (TRUE == match)
+    if (TRUE != match)
     {
-        return rule;
+        rule = NULL;
     }
-    else
-    {
-        return NULL;
-    }
+    return rule;
 }
 /**
  * @brief        Get next rule from the database
@@ -272,56 +280,50 @@ static fci_fp_rule_t *fci_fp_rule_get_first(fci_fp_rule_db_t *db, fci_fp_rule_cr
 static fci_fp_rule_t *fci_fp_rule_get_next(fci_fp_rule_db_t *db, dbase_t dbase)
 {
     fci_fp_rule_t *rule;
-    bool_t match = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(NULL == db))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return NULL;
-    }
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-    if (db->cur_item == &db->rules)
-    {
-        /*    No more entries */
         rule = NULL;
     }
     else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
     {
-        while (db->cur_item != &db->rules)
+        if (db->cur_item == &db->rules)
         {
-            /*    Get data */
-            if(COMMON == dbase)
+            /*    No more entries */
+            rule = NULL;
+        }
+        else
+        {
+            while (db->cur_item != &db->rules)
             {
-                rule = LLIST_Data(db->cur_item, fci_fp_rule_t, db_entry);
-            }
-            else
-            {
-                rule = LLIST_Data(db->cur_item, fci_fp_rule_t, table_entry);
-            }
-
-            /*    Remember current item to know where to start later */
-            db->cur_item = db->cur_item->prNext;
-
-            if (NULL != rule)
-            {
-                if (TRUE == fci_fp_match_rule_by_criterion(db->cur_crit, &db->cur_crit_arg, rule))
+                /*    Get data */
+                if(COMMON == dbase)
                 {
-                    match = TRUE;
-                    break;
+                    rule = LLIST_Data(db->cur_item, fci_fp_rule_t, db_entry);
+                }
+                else
+                {
+                    rule = LLIST_Data(db->cur_item, fci_fp_rule_t, table_entry);
+                }
+
+                /*    Remember current item to know where to start later */
+                db->cur_item = db->cur_item->prNext;
+
+                if (NULL != rule)
+                {
+                    if (TRUE == fci_fp_match_rule_by_criterion(db->cur_crit, &db->cur_crit_arg, rule))
+                    {
+                        break;
+                    }
                 }
             }
         }
     }
 
-    if (TRUE == match)
-    {
-        return rule;
-    }
-    else
-    {
-        return NULL;
-    }
+    return rule;
 }
 /**
  * @brief        Match table using given criterion
@@ -338,44 +340,47 @@ static bool_t fci_fp_match_table_by_criterion(fci_fp_table_criterion_t crit, con
     if (unlikely((NULL == fp_table) || (NULL == arg)))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return FALSE;
+        match = FALSE;
     }
+    else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-    switch (crit)
     {
-        case FP_TABLE_CRIT_ALL:
+        switch (crit)
         {
-            match = TRUE;
-            break;
-        }
-        case FP_TABLE_CRIT_NAME:
-        {
-            if(0 == strcmp(arg->name, fp_table->name))
+            case FP_TABLE_CRIT_ALL:
             {
                 match = TRUE;
+                break;
             }
-            else
+            case FP_TABLE_CRIT_NAME:
             {
+                if(0 == strcmp(arg->name, fp_table->name))
+                {
+                    match = TRUE;
+                }
+                else
+                {
+                    match = FALSE;
+                }
+                break;
+            }
+            case FP_TABLE_CRIT_ADDRESS:
+            {
+                if(arg->address == fp_table->dmem_addr)
+                {
+                    match = TRUE;
+                }
+                else
+                {
+                    match = FALSE;
+                }
+                break;
+            }
+            default:
+            {
+                NXP_LOG_ERROR("Unknown criterion\n");
                 match = FALSE;
             }
-            break;
-        }
-        case FP_TABLE_CRIT_ADDRESS:
-        {
-            if(arg->address == fp_table->dmem_addr)
-            {
-                match = TRUE;
-            }
-            else
-            {
-                match = FALSE;
-            }
-            break;
-        }
-        default:
-        {
-            NXP_LOG_ERROR("Unknown criterion\n");
-            match = FALSE;
         }
     }
     return match;
@@ -393,92 +398,98 @@ static fci_fp_table_t *fci_fp_table_get_first(fci_fp_table_db_t *db, fci_fp_tabl
     LLIST_t *item;
     fci_fp_table_t *fp_table;
     bool_t match = FALSE;
+    bool_t cur_crit_remember_success = TRUE;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(NULL == db))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return NULL;
     }
-    if (unlikely((FP_TABLE_CRIT_ALL != crit) && (NULL == arg)))
+    else if (unlikely((FP_TABLE_CRIT_ALL != crit) && (NULL == arg)))
     {
         /*  All criterions except FP_TABLE_CRIT_ALL require non-NULL argument */
         NXP_LOG_ERROR("NULL argument received\n");
-        return NULL;
     }
+    else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-    /* Free memory allocated by previous search (if any) */
-    if(FP_TABLE_CRIT_NAME == db->cur_crit)
     {
-        if(NULL != db->cur_crit_arg.name)
+        /* Free memory allocated by previous search (if any) */
+        if(FP_TABLE_CRIT_NAME == db->cur_crit)
         {
-            oal_mm_free(db->cur_crit_arg.name);
-            db->cur_crit_arg.name = NULL;
-        }
-    }
-    /*    Remember criterion and argument for possible subsequent fci_fp_table_get_next() calls */
-    db->cur_crit = crit;
-    switch(db->cur_crit)
-    {
-        case FP_TABLE_CRIT_ALL:
-        {
-            break;
-        }
-        case FP_TABLE_CRIT_NAME:
-        {
-            char_t *mem;
-            /* Allocate string memory */
-            mem = oal_mm_malloc(strlen((char_t *)arg) + 1U);
-            if(NULL == mem)
+            if(NULL != db->cur_crit_arg.name)
             {
-                return NULL;
+                oal_mm_free(db->cur_crit_arg.name);
+                db->cur_crit_arg.name = NULL;
             }
-            db->cur_crit_arg.name = mem;
-            /* Copy the string */
-            (void)strcpy(mem, (char_t *)arg);
-            break;
         }
-        case FP_TABLE_CRIT_ADDRESS:
+        /*    Remember criterion and argument for possible subsequent fci_fp_table_get_next() calls */
+        db->cur_crit = crit;
+        switch(db->cur_crit)
         {
-            db->cur_crit_arg.address = *(uint32_t *)arg;
-            break;
-        }
-        default:
-        {
-            NXP_LOG_ERROR("Unknown criterion\n");
-            return NULL;
-        }
-    }
-
-    /*    Search for first matching table */
-    if (FALSE == LLIST_IsEmpty(&db->tables))
-    {
-        /*    Get first matching table */
-        LLIST_ForEach(item, &db->tables)
-        {
-            /*    Get data */
-            fp_table = LLIST_Data(item, fci_fp_table_t, db_entry);
-
-            /*    Remember current item to know where to start later */
-            db->cur_item = item->prNext;
-            if (NULL != fp_table)
+            case FP_TABLE_CRIT_ALL:
             {
-                if (TRUE == fci_fp_match_table_by_criterion(db->cur_crit, &db->cur_crit_arg, fp_table))
+                break;
+            }
+            case FP_TABLE_CRIT_NAME:
+            {
+                char_t *mem;
+                /* Allocate string memory */
+                mem = oal_mm_malloc(strlen((char_t *)arg) + 1U);
+                if(NULL == mem)
                 {
-                    match = TRUE;
-                    break;
+                    cur_crit_remember_success = FALSE;
+                }
+                else
+                {
+                    db->cur_crit_arg.name = mem;
+                    /* Copy the string */
+                    (void)strcpy(mem, (char_t *)arg);
+                }
+                break;
+            }
+            case FP_TABLE_CRIT_ADDRESS:
+            {
+                db->cur_crit_arg.address = *(uint32_t *)arg;
+                break;
+            }
+            default:
+            {
+                NXP_LOG_ERROR("Unknown criterion\n");
+                cur_crit_remember_success = FALSE;
+            }
+        }
+
+        if (TRUE == cur_crit_remember_success)
+        {
+            /*    Search for first matching table */
+            if (FALSE == LLIST_IsEmpty(&db->tables))
+            {
+                /*    Get first matching table */
+                LLIST_ForEach(item, &db->tables)
+                {
+                    /*    Get data */
+                    fp_table = LLIST_Data(item, fci_fp_table_t, db_entry);
+
+                    /*    Remember current item to know where to start later */
+                    db->cur_item = item->prNext;
+                    if (NULL != fp_table)
+                    {
+                        if (TRUE == fci_fp_match_table_by_criterion(db->cur_crit, &db->cur_crit_arg, fp_table))
+                        {
+                            match = TRUE;
+                            break;
+                        }
+                    }
                 }
             }
         }
     }
 
-    if (TRUE == match)
+    if(TRUE != match)
     {
-        return fp_table;
+        fp_table = NULL;
     }
-    else
-    {
-        return NULL;
-    }
+    return fp_table;
 }
 
 #if 0 /* Function prepared for future */
@@ -548,6 +559,7 @@ static errno_t fci_fp_get_rule_pos_in_table(const fci_fp_table_t *fp_table, fci_
     uint8_t i = 0U;
     fci_fp_rule_t *rule_item;
     LLIST_t *item;
+    errno_t ret = ENOENT;
 
     LLIST_ForEach(item, &fp_table->rules_db.rules)
     {
@@ -555,11 +567,12 @@ static errno_t fci_fp_get_rule_pos_in_table(const fci_fp_table_t *fp_table, fci_
         if(rule_item == rule)
         {
             *pos = i;
-            return EOK;
+            ret = EOK;
+            break;
         }
         i++;
     }
-    return ENOENT;
+    return ret ;
 }
 
 /**
@@ -590,75 +603,86 @@ errno_t fci_fp_db_create_rule(char_t *name, uint32_t data, uint32_t mask, uint16
     uint32_t mem_size;
     fci_fp_rule_t *rule = NULL;
     bool_t ignore_next_rule = FALSE;
+    errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if(NULL == name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
-    }
-#endif
-    if((0U == ((uint8_t)flags & ((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT))) && (NULL == next_rule))
-    {   /* If flags are not FP_FL_REJECT and not FP_FL_ACCEPT we need the next rule name */
-        NXP_LOG_ERROR("Flags FP_FL_ACCEPT and FP_FL_REJECT are not set but next rule is not defined (NULL)\n");
-        return EINVAL;
-    }
-    if(((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT) == ((uint8_t)flags & ((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT)))
-    {   /* Cannot do both Accept and Reject action */
-        NXP_LOG_ERROR("Both flags FP_FL_ACCEPT and FP_FL_REJECT are set\n");
-        return EINVAL;
-    }
-    if((0U != ((uint8_t)flags & ((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT))) && (NULL != next_rule))
-    {   /* Ignored argument */
-        NXP_LOG_WARNING("Next rule is ignored with these flags: 0x%x\n", flags);
-        ignore_next_rule = TRUE;
-    }
-    /* Check that the name is unique in our database */
-    if(NULL != fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_NAME, name, COMMON))
-    {   /* Rule with same name found in database */
-        NXP_LOG_ERROR("Rule with name \"%s\" already exists\n", name);
-        return EEXIST;
-    }
-
-    /* Calculate needed memory size */
-    mem_size = sizeof(fci_fp_rule_t) + strlen(name) + 1U; /* Structure + name string */
-    if((NULL != next_rule) && (FALSE == ignore_next_rule))
-    {
-        mem_size += strlen(next_rule) + 1U; /* Add next rule name string space */
-    }
-    /* Allocate memory for the rule */
-    rule = oal_mm_malloc(mem_size);
-    if(NULL == rule)
-    {   /* Failed */
-        NXP_LOG_ERROR("No memory for rule\n");
-        return ENOMEM;
+        ret = EINVAL;
     }
     else
+#endif
     {
-        /* Initialize */
-        (void)memset(rule, 0, mem_size);
-        LLIST_Init(&rule->db_entry);
-        LLIST_Init(&rule->table_entry);
-        /* Store the input parameters */
-        rule->name = (char_t *)&rule[1];
-        (void)strcpy(rule->name, name);
-        rule->data = data;
-        rule->mask = mask;
-        rule->offset = offset;
-        if((NULL != next_rule) && (FALSE == ignore_next_rule))
-        {   /* Just store the next rule name, no validation yet because rule may be added later */
-            rule->next_rule = rule->name + strlen(name) + 1U;
-            (void)strcpy(rule->next_rule, next_rule);
+        if((0U == ((uint8_t)flags & ((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT))) && (NULL == next_rule))
+        {   /* If flags are not FP_FL_REJECT and not FP_FL_ACCEPT we need the next rule name */
+            NXP_LOG_ERROR("Flags FP_FL_ACCEPT and FP_FL_REJECT are not set but next rule is not defined (NULL)\n");
+            ret = EINVAL;
+        }
+        else if(((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT) == ((uint8_t)flags & ((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT)))
+        {   /* Cannot do both Accept and Reject action */
+            NXP_LOG_ERROR("Both flags FP_FL_ACCEPT and FP_FL_REJECT are set\n");
+            ret = EINVAL;
         }
         else
         {
-            rule->next_rule = NULL;
+            if((0U != ((uint8_t)flags & ((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT))) && (NULL != next_rule))
+            {   /* Ignored argument */
+                NXP_LOG_WARNING("Next rule is ignored with these flags: 0x%x\n", flags);
+                ignore_next_rule = TRUE;
+            }
+            /* Check that the name is unique in our database */
+            if(NULL != fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_NAME, name, COMMON))
+            {   /* Rule with same name found in database */
+                NXP_LOG_ERROR("Rule with name \"%s\" already exists\n", name);
+                ret = EEXIST;
+            }
+            else
+            {
+
+                /* Calculate needed memory size */
+                mem_size = sizeof(fci_fp_rule_t) + strlen(name) + 1U; /* Structure + name string */
+                if((NULL != next_rule) && (FALSE == ignore_next_rule))
+                {
+                    mem_size += strlen(next_rule) + 1U; /* Add next rule name string space */
+                }
+                /* Allocate memory for the rule */
+                rule = oal_mm_malloc(mem_size);
+                if(NULL == rule)
+                {   /* Failed */
+                    NXP_LOG_ERROR("No memory for rule\n");
+                    ret = ENOMEM;
+                }
+                else
+                {
+                    /* Initialize */
+                    (void)memset(rule, 0, mem_size);
+                    LLIST_Init(&rule->db_entry);
+                    LLIST_Init(&rule->table_entry);
+                    /* Store the input parameters */
+                    rule->name = (char_t *)&rule[1];
+                    (void)strcpy(rule->name, name);
+                    rule->data = data;
+                    rule->mask = mask;
+                    rule->offset = offset;
+                    if((NULL != next_rule) && (FALSE == ignore_next_rule))
+                    {   /* Just store the next rule name, no validation yet because rule may be added later */
+                        rule->next_rule = rule->name + strlen(name) + 1U;
+                        (void)strcpy(rule->next_rule, next_rule);
+                    }
+                    else
+                    {
+                        rule->next_rule = NULL;
+                    }
+                    rule->flags = flags;
+                    /* Add the rule into the global database */
+                    LLIST_AddAtEnd(&rule->db_entry, &fci_fp_rule_db.rules);
+                    ret = EOK;
+                }
+            }
         }
-        rule->flags = flags;
-        /* Add the rule into the global database */
-        LLIST_AddAtEnd(&rule->db_entry, &fci_fp_rule_db.rules);
     }
-    return EOK;
+    return ret;
 }
 
 /**
@@ -669,32 +693,43 @@ errno_t fci_fp_db_create_rule(char_t *name, uint32_t data, uint32_t mask, uint16
 errno_t fci_fp_db_destroy_rule(char_t *name)
 {
   fci_fp_rule_t *rule = NULL;
+  errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if(NULL == name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
+        ret = EINVAL;
     }
+    else
 #endif
-    /* Find the rule */
-    rule = fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_NAME, name, COMMON);
-    if(NULL == rule)
-    {   /* No such rule */
-        NXP_LOG_ERROR("Rule with name \"%s\" does not exist\n", name);
-        return ENOENT;
+    {
+        /* Find the rule */
+        rule = fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_NAME, name, COMMON);
+        if(NULL == rule)
+        {   /* No such rule */
+            NXP_LOG_ERROR("Rule with name \"%s\" does not exist\n", name);
+            ret = ENOENT;
+        }
+        else
+        {
+            /* Check that the rule is not in use */
+            if(NULL != rule->table)
+            {   /* Still in use */
+                NXP_LOG_ERROR("Rule \"%s\" is in use in table \"%s\"\n", name, rule->table->name);
+                ret = EACCES;
+            }
+            else
+            {
+                /* Remove rule from the database */
+                LLIST_Remove(&rule->db_entry);
+                /* Free the memory */
+                oal_mm_free(rule);
+                ret = EOK;
+            }
+        }
     }
-    /* Check that the rule is not in use */
-    if(NULL != rule->table)
-    {   /* Still in use */
-        NXP_LOG_ERROR("Rule \"%s\" is in use in table \"%s\"\n", name, rule->table->name);
-        return EACCES;
-    }
-    /* Remove rule from the database */
-    LLIST_Remove(&rule->db_entry);
-    /* Free the memory */
-    oal_mm_free(rule);
-    return EOK;
+    return ret;
 }
 
 /**
@@ -706,41 +741,48 @@ errno_t fci_fp_db_create_table(char_t *name)
 {
     uint32_t mem_size;
     fci_fp_table_t *fp_table;
+    errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if(NULL == name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
-    }
-#endif
-    /* Check that the name is unique in our database */
-    if(NULL != fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, name))
-    {   /* Rule with same name found in database */
-        NXP_LOG_ERROR("Table with name \"%s\" already exists\n", name);
-        return EEXIST;
-    }
-
-    /* Allocate memory for the table */
-    mem_size = sizeof(fci_fp_table_t) + strlen(name) + 1U;
-    fp_table = oal_mm_malloc(mem_size);
-    if(NULL == fp_table)
-    {
-        NXP_LOG_ERROR("No memory for the table\n");
-        return ENOMEM;
+        ret =  EINVAL;
     }
     else
+#endif
     {
-        /* Initialize */
-        (void)memset(fp_table, 0, mem_size);
-        LLIST_Init(&fp_table->db_entry);
-        LLIST_Init(&fp_table->rules_db.rules);
-        /* Store the input parameters */
-        fp_table->name = (char_t *)&fp_table[1];
-        (void)strcpy(fp_table->name, name);
-        /* Add the table into the global database */
-        LLIST_AddAtEnd(&fp_table->db_entry, &fci_fp_table_db.tables);
+        /* Check that the name is unique in our database */
+        if(NULL != fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, name))
+        {   /* Rule with same name found in database */
+            NXP_LOG_ERROR("Table with name \"%s\" already exists\n", name);
+            ret = EEXIST;
+        }
+        else
+        {
+            /* Allocate memory for the table */
+            mem_size = sizeof(fci_fp_table_t) + strlen(name) + 1U;
+            fp_table = oal_mm_malloc(mem_size);
+            if(NULL == fp_table)
+            {
+                NXP_LOG_ERROR("No memory for the table\n");
+                ret = ENOMEM;
+            }
+            else
+            {
+                /* Initialize */
+                (void)memset(fp_table, 0, mem_size);
+                LLIST_Init(&fp_table->db_entry);
+                LLIST_Init(&fp_table->rules_db.rules);
+                /* Store the input parameters */
+                fp_table->name = (char_t *)&fp_table[1];
+                (void)strcpy(fp_table->name, name);
+                /* Add the table into the global database */
+                LLIST_AddAtEnd(&fp_table->db_entry, &fci_fp_table_db.tables);
+                ret = EOK;
+            }
+        }
     }
-    return EOK;
+    return ret;
 
 }
 
@@ -755,51 +797,60 @@ errno_t fci_fp_db_destroy_table(char_t *name, bool_t force)
     fci_fp_table_t *fp_table;
     fci_fp_rule_t *rule;
     LLIST_t *item, *aux;
+    errno_t ret = EOK;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if(NULL == name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
+        ret = EINVAL;
     }
+    else
 #endif
-    /* Find the table */
-    fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, name);
-    if(NULL == fp_table)
     {
-        NXP_LOG_ERROR("Table with name \"%s\" does not exist\n", name);
-        return ENOENT;
-    }
-    /* Check that the table is not in use */
-    if(0U != fp_table->dmem_addr)
-    {   /* Table is still in use */
-        if(FALSE == force)
-        {   /* No override */
-            NXP_LOG_ERROR("Table \"%s\" is in use\n", name);
-            return EACCES;
+        /* Find the table */
+        fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, name);
+        if(NULL == fp_table)
+        {
+            NXP_LOG_ERROR("Table with name \"%s\" does not exist\n", name);
+            ret = ENOENT;
         }
         else
-        {   /* Override (and ride to hell) */
-            NXP_LOG_WARNING("Table \"%s\" is in use\n", name);
-            fp_table->dmem_addr = 0U;
-        }
-    }
-
-    /* Unlink all rules in the table if there are any */
-    if(FALSE == LLIST_IsEmpty(&fp_table->rules_db.rules))
-    {
-        LLIST_ForEachRemovable(item, aux, &fp_table->rules_db.rules)
         {
-            rule = LLIST_Data(item, fci_fp_rule_t, table_entry);
-            LLIST_Remove(item);
-            fp_table->rule_count -= 1U;
-            rule->table = NULL;
+            /* Check that the table is not in use */
+            if(0U != fp_table->dmem_addr)
+            {   /* Table is still in use */
+                if(FALSE == force)
+                {   /* No override */
+                    NXP_LOG_ERROR("Table \"%s\" is in use\n", name);
+                    ret = EACCES;
+                }
+                else
+                {   /* Override (and ride to hell) */
+                    NXP_LOG_WARNING("Table \"%s\" is in use\n", name);
+                    fp_table->dmem_addr = 0U;
+                }
+            }
+            if(EOK == ret)
+            {
+                /* Unlink all rules in the table if there are any */
+                if(FALSE == LLIST_IsEmpty(&fp_table->rules_db.rules))
+                {
+                    LLIST_ForEachRemovable(item, aux, &fp_table->rules_db.rules)
+                    {
+                        rule = LLIST_Data(item, fci_fp_rule_t, table_entry);
+                        LLIST_Remove(item);
+                        fp_table->rule_count -= 1U;
+                        rule->table = NULL;
+                    }
+                }
+                /* Remove table from the database */
+                LLIST_Remove(&fp_table->db_entry);
+                /* Free the memory */
+                oal_mm_free(fp_table);
+            }
         }
     }
-    /* Remove table from the database */
-    LLIST_Remove(&fp_table->db_entry);
-    /* Free the memory */
-    oal_mm_free(fp_table);
-    return EOK;
+    return ret;
 }
 
 
@@ -818,90 +869,106 @@ errno_t fci_fp_db_add_rule_to_table(char_t *table_name, char_t *rule_name, uint1
     fci_fp_rule_t *rule;
     LLIST_t *item;
     uint32_t i = 0U; /* Start search from position 0 */
+    errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == table_name)||(NULL == rule_name))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
-    }
-#endif
-    /* Check that the rule does exist */
-    rule = fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_NAME, rule_name, COMMON);
-    if(NULL == rule)
-    {
-        NXP_LOG_ERROR("Rule \"%s\" does not exist\n", rule_name);
-        return ENOENT;
-    }
-    /* Check that the rule does not belong to any other table */
-    if(NULL != rule->table)
-    {
-        NXP_LOG_ERROR("Rule \"%s\" is already part of the table \"%s\"\n", rule_name, rule->table->name);
-        return EACCES;
-    }
-    /* Check that the table does exist */
-    fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
-    if(NULL == fp_table)
-    {
-        NXP_LOG_ERROR("Table \"%s\" does not exist\n", table_name);
-        return ENOENT;
-    }
-
-    /* Add rule into the table */
-    if(LLIST_IsEmpty(&fp_table->rules_db.rules))
-    {   /* Empty list - ignore position */
-        if((position != FCI_FP_RULE_POSITION_FIRST) && (position != FCI_FP_RULE_POSITION_LAST))
-        {
-            NXP_LOG_WARNING("Adding into an empty table position %u ignored\n", position);
-        }
-        LLIST_AddAtBegin(&rule->table_entry, &fp_table->rules_db.rules);
-        rule->table = fp_table;
-        fp_table->rule_count = 1U; /* 1st rule in table */
+        ret = EINVAL;
     }
     else
-    {   /* Table not empty - need to handle position request */
-        if(position == FCI_FP_RULE_POSITION_FIRST)
-        {   /* Insert as the first one */
-            LLIST_AddAtBegin(&rule->table_entry, &fp_table->rules_db.rules);
-            rule->table = fp_table;
-            fp_table->rule_count += 1U;
-        }
-        else if(position >= FCI_FP_RULE_POSITION_LAST)
-        {   /* Add as the last one */
-            LLIST_AddAtEnd(&rule->table_entry, &fp_table->rules_db.rules);
-            rule->table = fp_table;
-            fp_table->rule_count += 1U;
-        }
-        else if(position > FCI_FP_RULE_POSITION_FIRST)
-        {   /* Insert at specified position */
-            bool_t added = FALSE;
-            LLIST_ForEach(item, &fp_table->rules_db.rules)
-            {
-                if(position == i)
-                {   /* This is the right position - put rule before the item */
-                    LLIST_Insert(&rule->table_entry, item);
-                    rule->table = fp_table;
-                    fp_table->rule_count += 1U;
-                    added = TRUE;
-                    break;
-                }
-                i++;
-            }
-            if(FALSE == added)
-            {   /* The requested position has not been found - add at the end */
-                NXP_LOG_WARNING("Position %u does not exist, adding at %u\n", (uint_t)position, (uint_t)i);
-                LLIST_AddAtEnd(&rule->table_entry, &fp_table->rules_db.rules);
-                rule->table = fp_table;
-                fp_table->rule_count += 1U;
-            }
+#endif
+    {
+        /* Check that the rule does exist */
+        rule = fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_NAME, rule_name, COMMON);
+        if(NULL == rule)
+        {
+            NXP_LOG_ERROR("Rule \"%s\" does not exist\n", rule_name);
+            ret = ENOENT;
         }
         else
-        {   /* Invalid value */
-            NXP_LOG_ERROR("Invalid value of position %u\n", position);
-            return EINVAL;
+        {
+            /* Check that the rule does not belong to any other table */
+            if(NULL != rule->table)
+            {
+                NXP_LOG_ERROR("Rule \"%s\" is already part of the table \"%s\"\n", rule_name, rule->table->name);
+                ret = EACCES;
+            }
+            else
+            {
+                /* Check that the table does exist */
+                fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
+                if(NULL == fp_table)
+                {
+                    NXP_LOG_ERROR("Table \"%s\" does not exist\n", table_name);
+                    ret = ENOENT;
+                }
+                else
+                {
+                    /* Add rule into the table */
+                    if(LLIST_IsEmpty(&fp_table->rules_db.rules))
+                    {   /* Empty list - ignore position */
+                        if((position != FCI_FP_RULE_POSITION_FIRST) && (position != FCI_FP_RULE_POSITION_LAST))
+                        {
+                            NXP_LOG_WARNING("Adding into an empty table position %u ignored\n", position);
+                        }
+                        LLIST_AddAtBegin(&rule->table_entry, &fp_table->rules_db.rules);
+                        rule->table = fp_table;
+                        fp_table->rule_count = 1U; /* 1st rule in table */
+                        ret = EOK;
+                    }
+                    else
+                    {   /* Table not empty - need to handle position request */
+                        if(position == FCI_FP_RULE_POSITION_FIRST)
+                        {   /* Insert as the first one */
+                            LLIST_AddAtBegin(&rule->table_entry, &fp_table->rules_db.rules);
+                            rule->table = fp_table;
+                            fp_table->rule_count += 1U;
+                            ret = EOK;
+                        }
+                        else if(position >= FCI_FP_RULE_POSITION_LAST)
+                        {   /* Add as the last one */
+                            LLIST_AddAtEnd(&rule->table_entry, &fp_table->rules_db.rules);
+                            rule->table = fp_table;
+                            fp_table->rule_count += 1U;
+                            ret = EOK;
+                        }
+                        else if(position > FCI_FP_RULE_POSITION_FIRST)
+                        {   /* Insert at specified position */
+                            bool_t added = FALSE;
+                            LLIST_ForEach(item, &fp_table->rules_db.rules)
+                            {
+                                if(position == i)
+                                {   /* This is the right position - put rule before the item */
+                                    LLIST_Insert(&rule->table_entry, item);
+                                    rule->table = fp_table;
+                                    fp_table->rule_count += 1U;
+                                    added = TRUE;
+                                    break;
+                                }
+                                i++;
+                            }
+                            if(FALSE == added)
+                            {   /* The requested position has not been found - add at the end */
+                                NXP_LOG_WARNING("Position %u does not exist, adding at %u\n", (uint_t)position, (uint_t)i);
+                                LLIST_AddAtEnd(&rule->table_entry, &fp_table->rules_db.rules);
+                                rule->table = fp_table;
+                                fp_table->rule_count += 1U;
+                            }
+                            ret = EOK;
+                        }
+                        else
+                        {   /* Invalid value */
+                            NXP_LOG_ERROR("Invalid value of position %u\n", position);
+                            ret = EINVAL;
+                        }
+                    }
+                }
+            }
         }
-     }
-    return EOK;
+    }
+    return ret;
 }
 
 /**
@@ -913,33 +980,41 @@ errno_t fci_fp_db_add_rule_to_table(char_t *table_name, char_t *rule_name, uint1
 errno_t fci_fp_db_remove_rule_from_table(char_t *rule_name)
 {
     fci_fp_rule_t *rule;
+    errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == rule_name))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
-    }
-#endif
-    /* Check that the rule does exist */
-    rule = fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_NAME, rule_name, COMMON);
-    if(NULL == rule)
-    {
-        NXP_LOG_ERROR("Rule \"%s\" does not exist\n", rule_name);
-        return ENOENT;
-    }
-    /* Check that the rule is in a table */
-    if(NULL != rule->table)
-    {   /* Rule in a table - remove it */
-        LLIST_Remove(&rule->table_entry);
-        rule->table->rule_count--;
-        rule->table = NULL;
+        ret = EINVAL;
     }
     else
-    {   /* Rule not in a table */
-        NXP_LOG_WARNING("Rule \"%s\" is not part of any table\n", rule_name);
+#endif
+    {
+        /* Check that the rule does exist */
+        rule = fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_NAME, rule_name, COMMON);
+        if(NULL == rule)
+        {
+            NXP_LOG_ERROR("Rule \"%s\" does not exist\n", rule_name);
+            ret = ENOENT;
+        }
+        else
+        {
+            /* Check that the rule is in a table */
+            if(NULL != rule->table)
+            {   /* Rule in a table - remove it */
+                LLIST_Remove(&rule->table_entry);
+                rule->table->rule_count--;
+                rule->table = NULL;
+            }
+            else
+            {   /* Rule not in a table */
+                NXP_LOG_WARNING("Rule \"%s\" is not part of any table\n", rule_name);
+            }
+            ret = EOK;
+        }
     }
-    return EOK;
+    return ret;
 }
 
 /**
@@ -956,19 +1031,21 @@ uint32_t fci_fp_db_get_table_dmem_addr(char_t *table_name)
     if(NULL == table_name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
-    }
-#endif
-
-    fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
-    if(NULL == fp_table)
-    {
-        NXP_LOG_WARNING("Table \"%s\" not found\n", table_name);
         retval = 0U;
     }
     else
+#endif
     {
-        retval = fp_table->dmem_addr;
+        fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
+        if(NULL == fp_table)
+        {
+            NXP_LOG_WARNING("Table \"%s\" not found\n", table_name);
+            retval = 0U;
+        }
+        else
+        {
+            retval = fp_table->dmem_addr;
+        }
     }
     return retval;
 }
@@ -991,69 +1068,80 @@ errno_t fci_fp_db_push_table_to_hw(pfe_class_t *class, char_t *table_name)
     fci_fp_rule_t *rule;
     uint16_t i = 0U;
     uint8_t pos;
+    errno_t ret = EOK;
 
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == class)||(NULL == table_name))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
+        ret = EINVAL;
     }
+    else
 #endif
-    /* Get the table */
-    fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
-    if(NULL == fp_table)
     {
-        NXP_LOG_WARNING("Table \"%s\" not found\n", table_name);
-        return ENOENT;
-    }
-
-    fp_table->dmem_addr = pfe_fp_create_table(class, fp_table->rule_count);
-    fp_table->class = class;
-    if(0U == fp_table->dmem_addr)
-    {
-        NXP_LOG_ERROR("Cannot write the table");
-        return EFAULT;
-    }
-
-    /* Write rules into the table */
-    LLIST_ForEach(item, &fp_table->rules_db.rules)
-    {
-        rule = LLIST_Data(item, fci_fp_rule_t, table_entry);
-        rule_buf.data = rule->data;
-        rule_buf.mask = rule->mask;
-        rule_buf.offset = rule->offset;
-        rule_buf.flags = rule->flags;
-        if(NULL != rule->next_rule)
-        {   /* Next rule is specified */
-            /* Convert next_rule name to position in the table */
-            next_rule = fci_fp_rule_get_first(&fp_table->rules_db, FP_RULE_CRIT_NAME, rule->next_rule, TABLE);
-            if(NULL == next_rule)
-            {   /* Failed - cannot proceed */
-                NXP_LOG_ERROR("Referenced rule \"%s\" is not part of the table \"%s\"\n", rule->next_rule, table_name);
-                pfe_fp_destroy_table(class, fp_table->dmem_addr);
-                fp_table->dmem_addr = 0U;
-                return ENOENT;
-            }
-            if(EOK != fci_fp_get_rule_pos_in_table(fp_table, next_rule, &pos))
-            {   /* Failed - cannot proceed */
-                NXP_LOG_ERROR("Referenced rule \"%s\" is not part of the table \"%s\"\n", rule->next_rule, table_name);
-                pfe_fp_destroy_table(class, fp_table->dmem_addr);
-                fp_table->dmem_addr = 0U;
-                return ENOENT;
-            }
-            rule_buf.next_idx = pos;
+        /* Get the table */
+        fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
+        if(NULL == fp_table)
+        {
+            NXP_LOG_WARNING("Table \"%s\" not found\n", table_name);
+            ret = ENOENT;
         }
         else
-        {   /* Next rule is not used */
-            rule_buf.next_idx = 0xFFU; /* If used it will cause FW internal check to detect it */
+        {
+
+            fp_table->dmem_addr = pfe_fp_create_table(class, fp_table->rule_count);
+            fp_table->class = class;
+            if(0U == fp_table->dmem_addr)
+            {
+                NXP_LOG_ERROR("Cannot write the table");
+                ret = EFAULT;
+            }
+            else
+            {
+
+                /* Write rules into the table */
+                LLIST_ForEach(item, &fp_table->rules_db.rules)
+                {
+                    rule = LLIST_Data(item, fci_fp_rule_t, table_entry);
+                    rule_buf.data = rule->data;
+                    rule_buf.mask = rule->mask;
+                    rule_buf.offset = rule->offset;
+                    rule_buf.flags = rule->flags;
+                    if(NULL != rule->next_rule)
+                    {   /* Next rule is specified */
+                        /* Convert next_rule name to position in the table */
+                        next_rule = fci_fp_rule_get_first(&fp_table->rules_db, FP_RULE_CRIT_NAME, rule->next_rule, TABLE);
+                        if(NULL == next_rule)
+                        {   /* Failed - cannot proceed */
+                            NXP_LOG_ERROR("Referenced rule \"%s\" is not part of the table \"%s\"\n", rule->next_rule, table_name);
+                            pfe_fp_destroy_table(class, fp_table->dmem_addr);
+                            fp_table->dmem_addr = 0U;
+                            ret = ENOENT;
+                            break;
+                        }
+                        if(EOK != fci_fp_get_rule_pos_in_table(fp_table, next_rule, &pos))
+                        {   /* Failed - cannot proceed */
+                            NXP_LOG_ERROR("Referenced rule \"%s\" is not part of the table \"%s\"\n", rule->next_rule, table_name);
+                            pfe_fp_destroy_table(class, fp_table->dmem_addr);
+                            fp_table->dmem_addr = 0U;
+                            ret = ENOENT;
+                            break;
+                        }
+                        rule_buf.next_idx = pos;
+                    }
+                    else
+                    {   /* Next rule is not used */
+                        rule_buf.next_idx = 0xFFU; /* If used it will cause FW internal check to detect it */
+                    }
+                    (void)pfe_fp_table_write_rule(class, fp_table->dmem_addr, &rule_buf, i);
+
+                    i++;
+                }
+            }
         }
-        (void)pfe_fp_table_write_rule(class, fp_table->dmem_addr, &rule_buf, i);
-
-        i++;
     }
-
-    return EOK;
+    return ret;
 }
 
 /**
@@ -1067,27 +1155,35 @@ errno_t fci_fp_db_push_table_to_hw(pfe_class_t *class, char_t *table_name)
 errno_t fci_fp_db_pop_table_from_hw(char_t *table_name)
 {
     fci_fp_table_t *fp_table;
+    errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if(NULL == table_name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
+        ret = EINVAL;
     }
+    else
 #endif
-    /* Get the table */
-    fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
-    if(NULL == fp_table)
     {
-        NXP_LOG_WARNING("Table \"%s\" not found\n", table_name);
-        return ENOENT;
-    }
+        /* Get the table */
+        fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
+        if(NULL == fp_table)
+        {
+            NXP_LOG_WARNING("Table \"%s\" not found\n", table_name);
+            ret = ENOENT;
+        }
+        else
+        {
 
-    /* Free the DMEM */
-    pfe_fp_destroy_table(fp_table->class, fp_table->dmem_addr);
-    /* Clear the references to DMEM */
-    fp_table->dmem_addr = 0U;
-    fp_table->class = NULL;
-    return EOK;
+            /* Free the DMEM */
+            pfe_fp_destroy_table(fp_table->class, fp_table->dmem_addr);
+            /* Clear the references to DMEM */
+            fp_table->dmem_addr = 0U;
+            fp_table->class = NULL;
+            ret = EOK;
+        }
+    }
+    return ret;
 }
 
 /**
@@ -1099,26 +1195,36 @@ errno_t fci_fp_db_pop_table_from_hw(char_t *table_name)
 errno_t fci_fp_db_get_table_from_addr(uint32_t addr, char_t **table_name)
 {
     const fci_fp_table_t *fp_table;
+    errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if(NULL == table_name)
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
+        ret = EINVAL;
     }
+    else
 #endif
-    if(0U == addr)
-    {   /* 0 is not valid table address, used as no-address */
-        return EINVAL;
-    }
-
-    fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_ADDRESS, &addr);
-    if(NULL == fp_table)
     {
-        NXP_LOG_WARNING("Table with address 0x%x not found\n", (uint_t)addr);
-        return ENOENT;
+        if(0U == addr)
+        {   /* 0 is not valid table address, used as no-address */
+            ret = EINVAL;
+        }
+        else
+        {
+            fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_ADDRESS, &addr);
+            if(NULL == fp_table)
+            {
+                NXP_LOG_WARNING("Table with address 0x%x not found\n", (uint_t)addr);
+                ret = ENOENT;
+            }
+            else
+            {
+                *table_name = fp_table->name;
+                ret = EOK;
+            }
+        }
     }
-    *table_name = fp_table->name;
-    return EOK;
+    return ret;
 }
 
 /**
@@ -1146,29 +1252,33 @@ fci_fp_table_t *fci_fp_db_get_first(fci_fp_table_criterion_t crit, void *arg)
 errno_t fci_fp_db_get_first_rule(char_t **rule_name, uint32_t *data, uint32_t *mask, uint16_t *offset, pfe_ct_fp_flags_t *flags, char_t **next_rule)
 {
     fci_fp_rule_t *rule;
+    errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == rule_name) || (NULL == data) || (NULL == mask) || (NULL == offset) || (NULL == flags) || (NULL == next_rule))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
-    }
-#endif
-
-    rule = fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_ALL, NULL, COMMON);
-    if(NULL == rule)
-    {
-        return ENOENT;
+        ret = EINVAL;
     }
     else
+#endif
     {
-        *rule_name = rule->name;
-        *data = rule->data;
-        *mask = rule->mask;
-        *offset = rule->offset;
-        *flags = rule->flags;
-        *next_rule = rule->next_rule;
-        return EOK;
+        rule = fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_ALL, NULL, COMMON);
+        if(NULL == rule)
+        {
+            ret = ENOENT;
+        }
+        else
+        {
+            *rule_name = rule->name;
+            *data = rule->data;
+            *mask = rule->mask;
+            *offset = rule->offset;
+            *flags = rule->flags;
+            *next_rule = rule->next_rule;
+            ret = EOK;
+        }
     }
+    return ret;
 }
 
 /**
@@ -1185,29 +1295,33 @@ errno_t fci_fp_db_get_first_rule(char_t **rule_name, uint32_t *data, uint32_t *m
 errno_t fci_fp_db_get_next_rule(char_t **rule_name, uint32_t *data, uint32_t *mask, uint16_t *offset, pfe_ct_fp_flags_t *flags, char_t **next_rule)
 {
     fci_fp_rule_t *rule;
+    errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == rule_name) || (NULL == data) || (NULL == mask) || (NULL == offset) || (NULL == flags) || (NULL == next_rule))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
-    }
-#endif
-
-    rule = fci_fp_rule_get_next(&fci_fp_rule_db, COMMON);
-    if(NULL == rule)
-    {
-        return ENOENT;
+        ret = EINVAL;
     }
     else
+#endif
     {
-        *rule_name = rule->name;
-        *data = rule->data;
-        *mask = rule->mask;
-        *offset = rule->offset;
-        *flags = rule->flags;
-        *next_rule = rule->next_rule;
-        return EOK;
+        rule = fci_fp_rule_get_next(&fci_fp_rule_db, COMMON);
+        if(NULL == rule)
+        {
+            ret = ENOENT;
+        }
+        else
+        {
+            *rule_name = rule->name;
+            *data = rule->data;
+            *mask = rule->mask;
+            *offset = rule->offset;
+            *flags = rule->flags;
+            *next_rule = rule->next_rule;
+            ret = EOK;
+        }
     }
+    return ret;
 }
 
 /**
@@ -1226,36 +1340,44 @@ errno_t fci_fp_db_get_table_first_rule(char_t *table_name, char_t **rule_name, u
 {
     fci_fp_table_t *fp_table;
     fci_fp_rule_t *rule;
+    errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == table_name) || (NULL == rule_name) || (NULL == data) || (NULL == mask) || (NULL == offset) || (NULL == flags) || (NULL == next_rule))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
-    }
-#endif
-    /* Get the table */
-    fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
-    if(NULL == fp_table)
-    {
-        NXP_LOG_WARNING("Table \"%s\" not found\n", table_name);
-        return ENOENT;
-    }
-    /* Get the first rule */
-    rule = fci_fp_rule_get_first(&fp_table->rules_db, FP_RULE_CRIT_ALL, NULL, TABLE);
-    if(NULL == rule)
-    {
-        return ENOENT;
+        ret = EINVAL;
     }
     else
+#endif
     {
-        *rule_name = rule->name;
-        *data = rule->data;
-        *mask = rule->mask;
-        *offset = rule->offset;
-        *flags = rule->flags;
-        *next_rule = rule->next_rule;
-        return EOK;
+        /* Get the table */
+        fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
+        if(NULL == fp_table)
+        {
+            NXP_LOG_WARNING("Table \"%s\" not found\n", table_name);
+            ret = ENOENT;
+        }
+        else
+        {
+            /* Get the first rule */
+            rule = fci_fp_rule_get_first(&fp_table->rules_db, FP_RULE_CRIT_ALL, NULL, TABLE);
+            if(NULL == rule)
+            {
+                ret = ENOENT;
+            }
+            else
+            {
+                *rule_name = rule->name;
+                *data = rule->data;
+                *mask = rule->mask;
+                *offset = rule->offset;
+                *flags = rule->flags;
+                *next_rule = rule->next_rule;
+                ret = EOK;
+            }
+        }
     }
+    return ret;
 }
 
 /**
@@ -1274,36 +1396,44 @@ errno_t fci_fp_db_get_table_next_rule(char_t *table_name, char_t **rule_name, ui
 {
     fci_fp_table_t *fp_table;
     fci_fp_rule_t *rule;
+    errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if((NULL == table_name) || (NULL == rule_name) || (NULL == data) || (NULL == mask) || (NULL == offset) || (NULL == flags) || (NULL == next_rule))
     {
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
-    }
-#endif
-    /* Get the table */
-    fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
-    if(NULL == fp_table)
-    {
-        NXP_LOG_WARNING("Table \"%s\" not found\n", table_name);
-        return ENOENT;
-    }
-    /* Get the rule */
-    rule = fci_fp_rule_get_next(&fp_table->rules_db, TABLE);
-    if(NULL == rule)
-    {
-        return ENOENT;
+        ret = EINVAL;
     }
     else
+#endif
     {
-        *rule_name = rule->name;
-        *data = rule->data;
-        *mask = rule->mask;
-        *offset = rule->offset;
-        *flags = rule->flags;
-        *next_rule = rule->next_rule;
-        return EOK;
+        /* Get the table */
+        fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
+        if(NULL == fp_table)
+        {
+            NXP_LOG_WARNING("Table \"%s\" not found\n", table_name);
+            ret = ENOENT;
+        }
+        else
+        {
+            /* Get the rule */
+            rule = fci_fp_rule_get_next(&fp_table->rules_db, TABLE);
+            if(NULL == rule)
+            {
+                ret = ENOENT;
+            }
+            else
+            {
+                *rule_name = rule->name;
+                *data = rule->data;
+                *mask = rule->mask;
+                *offset = rule->offset;
+                *flags = rule->flags;
+                *next_rule = rule->next_rule;
+                ret = EOK;
+            }
+        }
     }
+    return ret;
 }
 
 /**
@@ -1422,7 +1552,7 @@ uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_le
             {
                 NXP_LOG_ERROR("Memory allocation failed\n");
                 oal_mm_free(c_stats);
-                return len;
+                break;
             }
 
             (void)memset(c_stats, 0, sizeof(pfe_ct_class_flexi_parser_stats_t) * (pfe_class_get_num_of_pes(fp_table->class) + 1U));

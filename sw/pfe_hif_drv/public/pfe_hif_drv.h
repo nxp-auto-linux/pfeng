@@ -155,6 +155,14 @@ enum
 #error Impossible configuration
 #endif
 
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
+	#define TX_BUF_FRAME_OFFSET ((uint16_t)(sizeof(pfe_ct_hif_tx_hdr_t)) \
+								 + (uint16_t)256U \
+								)
+#else
+	#define TX_BUF_FRAME_OFFSET 0U
+#endif
+
 /**
  * @brief	HIF common RX/TX packet flags
  */
@@ -402,7 +410,23 @@ static inline bool_t pfe_hif_pkt_tcpv6_csum_valid(const pfe_hif_pkt_t *pkt)
 
 	return !!(pkt->flags.specific.rx_flags & HIF_RX_TCPV6_CSUM);
 }
+/**
+ * @brief		Get information that ICMP checksum has been verified by PFE
+ * @param[in]	pkt The packet
+ * @return		TRUE if ICMP checksum has been verified and is valid
+ */
+static inline bool_t pfe_hif_pkt_icmp_csum_valid(const pfe_hif_pkt_t *pkt)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == pkt))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return TRUE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 
+	return !!(pkt->flags.specific.rx_flags & HIF_RX_ICMP_CSUM);
+}
 /**
  * @brief		Get pointer to data buffer
  * @param[in]	pkt The packet

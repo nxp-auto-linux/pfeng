@@ -39,7 +39,7 @@ void pfe_class_cfg_set_config(addr_t base_va, const pfe_class_cfg_t *cfg)
 	hal_write32(0x1U, base_va + CLASS_USE_TMU_INQ);
 	hal_write32(0x1U, base_va + CLASS_PE_SYS_CLK_RATIO);
 	hal_write32(0U, base_va + CLASS_L4_CHKSUM);
-	hal_write32((PFE_CFG_RO_HDR_SIZE << 16) | PFE_CFG_LMEM_HDR_SIZE, base_va + CLASS_HDR_SIZE);
+	hal_write32((cfg->ro_header_size << 16) | cfg->lmem_header_size, base_va + CLASS_HDR_SIZE);
 	hal_write32(PFE_CFG_LMEM_BUF_SIZE, base_va + CLASS_LMEM_BUF_SIZE);
 	hal_write32(CLASS_TPID0_TPID1_VAL, base_va + CLASS_TPID0_TPID1);
 	hal_write32(CLASS_TPID2_VAL, base_va + CLASS_TPID2);
@@ -104,61 +104,76 @@ errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtab
 {
 	uint8_t ii;
 	uint32_t reg;
+	errno_t ret = EOK;
 
 	if (NULL_ADDR == rtable_pa)
 	{
 		pfe_class_cfg_rtable_lookup_disable(base_va);
-		return EOK;
+		ret = EOK;
 	}
-
-	/* rtable not NULL, add it */
-	if (entry_size > ROUTE_ENTRY_SIZE(0xffffffffu))
+	else
 	{
-		NXP_LOG_ERROR("Entry size exceeds maximum value\n");
-		return EINVAL;
-	}
 
-	/* Validate rtable entry size if route parsing is already enabled. */
-	reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
-	if (0U != (reg & PARSE_ROUTE_EN(TRUE)))
-	{
-		if (entry_size != 128U)
+		/* rtable not NULL, add it */
+		if (entry_size > ROUTE_ENTRY_SIZE(0xffffffffu))
 		{
-			NXP_LOG_ERROR("FATAL: Route table entry length exceeds 128bytes\n");
-			return EINVAL;
+			NXP_LOG_ERROR("Entry size exceeds maximum value\n");
+			ret = EINVAL;
+		}
+		else
+		{
+			/* Validate rtable entry size if route parsing is already enabled. */
+			reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
+			if (0U != (reg & PARSE_ROUTE_EN(TRUE)))
+			{
+				if (entry_size != 128U)
+				{
+					NXP_LOG_ERROR("FATAL: Route table entry length exceeds 128bytes\n");
+					ret = EINVAL;
+				}
+			}
+
+			if (EOK == ret)
+			{
+				/* Validate that rtable_len is a power of 2 and it's within boundaries. */
+				for (ii=0U; ii<(sizeof(rtable_len) * 8U); ii++)
+				{
+					if (0U != (rtable_len & (1UL << ii)))
+					{
+						if (0U != (rtable_len & ~(1UL << ii)))
+						{
+							NXP_LOG_ERROR("Routing table length is not a power of 2\n");
+							ret = EINVAL;
+						}
+						else if ((ii < 6U) || (ii > 20U))
+						{
+							NXP_LOG_ERROR("Table length out of boundaries\n");
+							ret = EINVAL;
+						}
+						else
+						{
+							/* Do Nothing */
+						}
+
+						break;
+					}
+				}
+
+				if (EOK == ret)
+				{
+					hal_write32((uint32_t)(rtable_pa & 0xffffffffU), base_va + CLASS_ROUTE_TABLE_BASE);
+					hal_write32(0UL
+								| ROUTE_HASH_SIZE(ii)
+								| ROUTE_ENTRY_SIZE(entry_size)
+								, base_va + CLASS_ROUTE_HASH_ENTRY_SIZE);
+
+					/* Don't enable PARSE_ROUTE_EN here as it will be enabled only when needed later. */
+				}
+			}
 		}
 	}
 
-	/* Validate that rtable_len is a power of 2 and it's within boundaries. */
-	for (ii=0U; ii<(sizeof(rtable_len) * 8U); ii++)
-	{
-		if (0U != (rtable_len & (1UL << ii)))
-		{
-			if (0U != (rtable_len & ~(1UL << ii)))
-			{
-				NXP_LOG_ERROR("Routing table length is not a power of 2\n");
-				return EINVAL;
-			}
-
-			if ((ii < 6U) || (ii > 20U))
-			{
-				NXP_LOG_ERROR("Table length out of boundaries\n");
-				return EINVAL;
-			}
-
-			break;
-		}
-	}
-
-	hal_write32((uint32_t)(rtable_pa & 0xffffffffU), base_va + CLASS_ROUTE_TABLE_BASE);
-	hal_write32(0UL
-				| ROUTE_HASH_SIZE(ii)
-				| ROUTE_ENTRY_SIZE(entry_size)
-				, base_va + CLASS_ROUTE_HASH_ENTRY_SIZE);
-
-	/* Don't enable PARSE_ROUTE_EN here as it will be enabled only when needed later. */
-
-	return EOK;
+	return ret;
 }
 
 /**
@@ -195,200 +210,202 @@ uint32_t pfe_class_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size,
 	if (unlikely(NULL_ADDR == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
+		len = 0U;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/* Debug registers */
-	if(verb_level >= 10U)
 	{
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE0_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE0_DEBUG));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE1_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE1_DEBUG));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE2_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE2_DEBUG));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE3_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE3_DEBUG));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE4_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE4_DEBUG));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE5_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE5_DEBUG));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE6_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE6_DEBUG));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE7_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE7_DEBUG));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_STATE\t0x%x\n", hal_read32(base_va + CLASS_STATE));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_QB_BUF_AVAIL\t0x%x\n", hal_read32(base_va + CLASS_QB_BUF_AVAIL));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_RO_BUF_AVAIL\t0x%x\n", hal_read32(base_va + CLASS_RO_BUF_AVAIL));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS01\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS01));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS23\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS23));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS45\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS45));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS67\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS67));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS89\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS89));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS1011\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS1011));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS12\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS12));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_RX_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_RX_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_L3_FAIL_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_L3_FAIL_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_V4_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_V4_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_V6_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_V6_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_CHKSUM_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_CHKSUM_ERR_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_TTL_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_TTL_ERR_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_RX_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_RX_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_L3_FAIL_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_L3_FAIL_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_V4_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_V4_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_V6_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_V6_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_CHKSUM_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_CHKSUM_ERR_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_TTL_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_TTL_ERR_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_RX_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_RX_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_L3_FAIL_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_L3_FAIL_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_V4_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_V4_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_V6_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_V6_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_CHKSUM_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_CHKSUM_ERR_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_TTL_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_TTL_ERR_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_RX_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_RX_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_L3_FAIL_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_L3_FAIL_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_V4_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_V4_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_V6_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_V6_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_CHKSUM_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_CHKSUM_ERR_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_TTL_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_TTL_ERR_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_RX_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_RX_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_L3_FAIL_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_L3_FAIL_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_V4_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_V4_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_V6_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_V6_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_CHKSUM_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_CHKSUM_ERR_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_TTL_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_TTL_ERR_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_ICMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_ICMP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_IGMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_IGMP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_TCP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_TCP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_UDP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_UDP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_ICMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_ICMP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_IGMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_IGMP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_TCP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_TCP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_UDP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_UDP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_ICMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_ICMP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_IGMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_IGMP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_TCP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_TCP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_UDP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_UDP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_ICMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_ICMP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_IGMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_IGMP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_TCP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_TCP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_UDP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_UDP_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_RX_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_RX_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_L3_FAIL_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_L3_FAIL_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_V4_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_V4_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_V6_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_V6_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_CHKSUM_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_CHKSUM_ERR_PKTS));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_TTL_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_TTL_ERR_PKTS));
+		/* Debug registers */
+		if(verb_level >= 10U)
+		{
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE0_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE0_DEBUG));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE1_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE1_DEBUG));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE2_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE2_DEBUG));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE3_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE3_DEBUG));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE4_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE4_DEBUG));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE5_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE5_DEBUG));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE6_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE6_DEBUG));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PE7_DEBUG\t0x%x\n", hal_read32(base_va + CLASS_PE7_DEBUG));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_STATE\t0x%x\n", hal_read32(base_va + CLASS_STATE));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_QB_BUF_AVAIL\t0x%x\n", hal_read32(base_va + CLASS_QB_BUF_AVAIL));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_RO_BUF_AVAIL\t0x%x\n", hal_read32(base_va + CLASS_RO_BUF_AVAIL));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS01\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS01));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS23\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS23));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS45\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS45));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS67\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS67));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS89\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS89));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS1011\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS1011));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_DEBUG_BUS12\t0x%x\n", hal_read32(base_va + CLASS_DEBUG_BUS12));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_RX_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_RX_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_L3_FAIL_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_L3_FAIL_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_V4_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_V4_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_V6_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_V6_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_CHKSUM_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_CHKSUM_ERR_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_TTL_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_TTL_ERR_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_RX_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_RX_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_L3_FAIL_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_L3_FAIL_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_V4_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_V4_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_V6_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_V6_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_CHKSUM_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_CHKSUM_ERR_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_TTL_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_TTL_ERR_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_RX_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_RX_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_L3_FAIL_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_L3_FAIL_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_V4_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_V4_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_V6_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_V6_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_CHKSUM_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_CHKSUM_ERR_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_TTL_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_TTL_ERR_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_RX_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_RX_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_L3_FAIL_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_L3_FAIL_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_V4_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_V4_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_V6_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_V6_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_CHKSUM_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_CHKSUM_ERR_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_TTL_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_TTL_ERR_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_RX_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_RX_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_L3_FAIL_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_L3_FAIL_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_V4_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_V4_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_V6_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_V6_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_CHKSUM_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_CHKSUM_ERR_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_TTL_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_TTL_ERR_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_ICMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_ICMP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_IGMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_IGMP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_TCP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_TCP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY1_UDP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY1_UDP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_ICMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_ICMP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_IGMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_IGMP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_TCP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_TCP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY2_UDP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY2_UDP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_ICMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_ICMP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_IGMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_IGMP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_TCP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_TCP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY3_UDP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY3_UDP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_ICMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_ICMP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_IGMP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_IGMP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_TCP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_TCP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_UDP_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_UDP_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_RX_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_RX_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_L3_FAIL_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_L3_FAIL_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_V4_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_V4_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_V6_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_V6_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_CHKSUM_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_CHKSUM_ERR_PKTS));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_PHY4_TTL_ERR_PKTS\t0x%x\n", hal_read32(base_va + CLASS_PHY4_TTL_ERR_PKTS));
+		}
+
+		if(verb_level >= 9U)
+		{
+			/*	Get version */
+			reg = hal_read32(base_va + CLASS_VERSION);
+			len += oal_util_snprintf(buf + len, size - len, "Revision\t0x%x\n", (reg >> 24U) & 0xffU);
+			len += oal_util_snprintf(buf + len, size - len, "Version \t0x%x\n", (reg >> 16U) & 0xffU);
+			len += oal_util_snprintf(buf + len, size - len, "ID      \t0x%x\n", reg & 0xffffU);
+		}
+			/*	CLASS_ROUTE_MULTI */
+			reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
+			len += oal_util_snprintf(buf + len, size - len, "CLASS_ROUTE_MULTI \t0x%x\n", reg);
+
+			/*	CLASS_STATE */
+			reg = hal_read32(base_va + CLASS_STATE);
+			len += oal_util_snprintf(buf + len, size - len, "CLASS_STATE       \t0x%x\n", reg);
+
+			reg = hal_read32(base_va + CLASS_QB_BUF_AVAIL);
+			len += oal_util_snprintf(buf + len, size - len, "CLASS_QB_BUF_AVAIL\t0x%x\n", reg);
+
+			reg = hal_read32(base_va + CLASS_RO_BUF_AVAIL);
+			len += oal_util_snprintf(buf + len, size - len, "CLASS_RO_BUF_AVAIL\t0x%x\n", reg);
+
+			reg = hal_read32(base_va + CLASS_PE0_DEBUG);
+			len += oal_util_snprintf(buf + len, size - len, "PE0 PC\t0x%x\n", reg & 0xffffU);
+			reg = hal_read32(base_va + CLASS_PE1_DEBUG);
+			len += oal_util_snprintf(buf + len, size - len, "PE1 PC\t0x%x\n", reg & 0xffffU);
+			reg = hal_read32(base_va + CLASS_PE2_DEBUG);
+			len += oal_util_snprintf(buf + len, size - len, "PE2 PC\t0x%x\n", reg & 0xffffU);
+			reg = hal_read32(base_va + CLASS_PE3_DEBUG);
+			len += oal_util_snprintf(buf + len, size - len, "PE3 PC\t0x%x\n", reg & 0xffffU);
+			reg = hal_read32(base_va + CLASS_PE4_DEBUG);
+			len += oal_util_snprintf(buf + len, size - len, "PE4 PC\t0x%x\n", reg & 0xffffU);
+			reg = hal_read32(base_va + CLASS_PE5_DEBUG);
+			len += oal_util_snprintf(buf + len, size - len, "PE5 PC\t0x%x\n", reg & 0xffffU);
+			reg = hal_read32(base_va + CLASS_PE6_DEBUG);
+			len += oal_util_snprintf(buf + len, size - len, "PE6 PC\t0x%x\n", reg & 0xffffU);
+			reg = hal_read32(base_va + CLASS_PE7_DEBUG);
+			len += oal_util_snprintf(buf + len, size - len, "PE7 PC\t0x%x\n", reg & 0xffffU);
+
+			/*	Get info per PHY */
+			len += oal_util_snprintf(buf + len, size - len, "[PHY1]\n");
+
+			len += oal_util_snprintf(buf + len, size - len, "RX\t%10u TX\t%10u\nIPV4\t%10u IPV6\t%10u\n",
+					hal_read32(base_va + CLASS_PHY1_RX_PKTS),
+					hal_read32(base_va + CLASS_PHY1_TX_PKTS),
+					hal_read32(base_va + CLASS_PHY1_V4_PKTS),
+					hal_read32(base_va + CLASS_PHY1_V6_PKTS));
+
+			len += oal_util_snprintf(buf + len, size - len, "ICMP\t%10u IGMP\t%10u TCP\t%10u UDP\t%10u\n",
+					hal_read32(base_va + CLASS_PHY1_ICMP_PKTS),
+					hal_read32(base_va + CLASS_PHY1_IGMP_PKTS),
+					hal_read32(base_va + CLASS_PHY1_TCP_PKTS),
+					hal_read32(base_va + CLASS_PHY1_UDP_PKTS));
+
+			len += oal_util_snprintf(buf + len, size - len, "L3 Fail\t%10u CSUM Fail\t%10u TTL Fail\t%10u\n",
+					hal_read32(base_va + CLASS_PHY1_L3_FAIL_PKTS),
+					hal_read32(base_va + CLASS_PHY1_CHKSUM_ERR_PKTS),
+					hal_read32(base_va + CLASS_PHY1_TTL_ERR_PKTS));
+
+			len += oal_util_snprintf(buf + len, size - len, "[PHY2]\n");
+
+			len += oal_util_snprintf(buf + len, size - len, "RX\t%10u TX\t%10u\t IPV4\t%10u IPV6\t%10u\n",
+					hal_read32(base_va + CLASS_PHY2_RX_PKTS),
+					hal_read32(base_va + CLASS_PHY2_TX_PKTS),
+					hal_read32(base_va + CLASS_PHY2_V4_PKTS),
+					hal_read32(base_va + CLASS_PHY2_V6_PKTS));
+
+			len += oal_util_snprintf(buf + len, size - len, "ICMP\t%10u IGMP\t%10u TCP\t%10u UDP\t%10u\n",
+					hal_read32(base_va + CLASS_PHY2_ICMP_PKTS),
+					hal_read32(base_va + CLASS_PHY2_IGMP_PKTS),
+					hal_read32(base_va + CLASS_PHY2_TCP_PKTS),
+					hal_read32(base_va + CLASS_PHY2_UDP_PKTS));
+
+			len += oal_util_snprintf(buf + len, size - len, "L3 Fail\t%10u CSUM Fail\t%10u TTL Fail\t%10u\n",
+					hal_read32(base_va + CLASS_PHY2_L3_FAIL_PKTS),
+					hal_read32(base_va + CLASS_PHY2_CHKSUM_ERR_PKTS),
+					hal_read32(base_va + CLASS_PHY2_TTL_ERR_PKTS));
+
+			len += oal_util_snprintf(buf + len, size - len, "[PHY3]\n");
+
+			len += oal_util_snprintf(buf + len, size - len, "RX\t%10u TX\t%10u\nIPV4\t%10u IPV6\t%10u\n",
+					hal_read32(base_va + CLASS_PHY3_RX_PKTS),
+					hal_read32(base_va + CLASS_PHY3_TX_PKTS),
+					hal_read32(base_va + CLASS_PHY3_V4_PKTS),
+					hal_read32(base_va + CLASS_PHY3_V6_PKTS));
+
+			len += oal_util_snprintf(buf + len, size - len, "ICMP\t%10u IGMP\t%10u TCP\t%10u UDP\t%10u\n",
+					hal_read32(base_va + CLASS_PHY3_ICMP_PKTS),
+					hal_read32(base_va + CLASS_PHY3_IGMP_PKTS),
+					hal_read32(base_va + CLASS_PHY3_TCP_PKTS),
+					hal_read32(base_va + CLASS_PHY3_UDP_PKTS));
+
+			len += oal_util_snprintf(buf + len, size - len, "L3 Fail\t%10u CSUM Fail\t%10u TTL Fail\t%10u\n",
+					hal_read32(base_va + CLASS_PHY3_L3_FAIL_PKTS),
+					hal_read32(base_va + CLASS_PHY3_CHKSUM_ERR_PKTS),
+					hal_read32(base_va + CLASS_PHY3_TTL_ERR_PKTS));
+
+			len += oal_util_snprintf(buf + len, size - len, "[PHY4]\n");
+
+			len += oal_util_snprintf(buf + len, size - len, "RX\t%10u TX\t%10u\nIPV4\t%10u IPV6\t%10u\n",
+					hal_read32(base_va + CLASS_PHY4_RX_PKTS),
+					hal_read32(base_va + CLASS_PHY4_TX_PKTS),
+					hal_read32(base_va + CLASS_PHY4_V4_PKTS),
+					hal_read32(base_va + CLASS_PHY4_V6_PKTS));
+
+			len += oal_util_snprintf(buf + len, size - len, "ICMP\t%10u IGMP\t%10u TCP\t%10u UDP\t%10u\n",
+					hal_read32(base_va + CLASS_PHY4_ICMP_PKTS),
+					hal_read32(base_va + CLASS_PHY4_IGMP_PKTS),
+					hal_read32(base_va + CLASS_PHY4_TCP_PKTS),
+					hal_read32(base_va + CLASS_PHY4_UDP_PKTS));
+
+			len += oal_util_snprintf(buf + len, size - len, "L3 Fail\t%10u CSUM Fail\t%10u TTL Fail\t%10u\n",
+					hal_read32(base_va + CLASS_PHY4_L3_FAIL_PKTS),
+					hal_read32(base_va + CLASS_PHY4_CHKSUM_ERR_PKTS),
+					hal_read32(base_va + CLASS_PHY4_TTL_ERR_PKTS));
 	}
-
-	if(verb_level >= 9U)
-	{
-		/*	Get version */
-		reg = hal_read32(base_va + CLASS_VERSION);
-		len += oal_util_snprintf(buf + len, size - len, "Revision\t0x%x\n", (reg >> 24U) & 0xffU);
-		len += oal_util_snprintf(buf + len, size - len, "Version \t0x%x\n", (reg >> 16U) & 0xffU);
-		len += oal_util_snprintf(buf + len, size - len, "ID      \t0x%x\n", reg & 0xffffU);
-	}
-		/*	CLASS_ROUTE_MULTI */
-		reg = hal_read32(base_va + CLASS_ROUTE_MULTI);
-		len += oal_util_snprintf(buf + len, size - len, "CLASS_ROUTE_MULTI \t0x%x\n", reg);
-
-		/*	CLASS_STATE */
-		reg = hal_read32(base_va + CLASS_STATE);
-		len += oal_util_snprintf(buf + len, size - len, "CLASS_STATE       \t0x%x\n", reg);
-
-		reg = hal_read32(base_va + CLASS_QB_BUF_AVAIL);
-		len += oal_util_snprintf(buf + len, size - len, "CLASS_QB_BUF_AVAIL\t0x%x\n", reg);
-
-		reg = hal_read32(base_va + CLASS_RO_BUF_AVAIL);
-		len += oal_util_snprintf(buf + len, size - len, "CLASS_RO_BUF_AVAIL\t0x%x\n", reg);
-
-		reg = hal_read32(base_va + CLASS_PE0_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE0 PC\t0x%x\n", reg & 0xffffU);
-		reg = hal_read32(base_va + CLASS_PE1_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE1 PC\t0x%x\n", reg & 0xffffU);
-		reg = hal_read32(base_va + CLASS_PE2_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE2 PC\t0x%x\n", reg & 0xffffU);
-		reg = hal_read32(base_va + CLASS_PE3_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE3 PC\t0x%x\n", reg & 0xffffU);
-		reg = hal_read32(base_va + CLASS_PE4_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE4 PC\t0x%x\n", reg & 0xffffU);
-		reg = hal_read32(base_va + CLASS_PE5_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE5 PC\t0x%x\n", reg & 0xffffU);
-		reg = hal_read32(base_va + CLASS_PE6_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE6 PC\t0x%x\n", reg & 0xffffU);
-		reg = hal_read32(base_va + CLASS_PE7_DEBUG);
-		len += oal_util_snprintf(buf + len, size - len, "PE7 PC\t0x%x\n", reg & 0xffffU);
-
-		/*	Get info per PHY */
-		len += oal_util_snprintf(buf + len, size - len, "[PHY1]\n");
-
-		len += oal_util_snprintf(buf + len, size - len, "RX\t%10u TX\t%10u\nIPV4\t%10u IPV6\t%10u\n",
-				hal_read32(base_va + CLASS_PHY1_RX_PKTS),
-				hal_read32(base_va + CLASS_PHY1_TX_PKTS),
-				hal_read32(base_va + CLASS_PHY1_V4_PKTS),
-				hal_read32(base_va + CLASS_PHY1_V6_PKTS));
-
-		len += oal_util_snprintf(buf + len, size - len, "ICMP\t%10u IGMP\t%10u TCP\t%10u UDP\t%10u\n",
-				hal_read32(base_va + CLASS_PHY1_ICMP_PKTS),
-				hal_read32(base_va + CLASS_PHY1_IGMP_PKTS),
-				hal_read32(base_va + CLASS_PHY1_TCP_PKTS),
-				hal_read32(base_va + CLASS_PHY1_UDP_PKTS));
-
-		len += oal_util_snprintf(buf + len, size - len, "L3 Fail\t%10u CSUM Fail\t%10u TTL Fail\t%10u\n",
-				hal_read32(base_va + CLASS_PHY1_L3_FAIL_PKTS),
-				hal_read32(base_va + CLASS_PHY1_CHKSUM_ERR_PKTS),
-				hal_read32(base_va + CLASS_PHY1_TTL_ERR_PKTS));
-
-		len += oal_util_snprintf(buf + len, size - len, "[PHY2]\n");
-
-		len += oal_util_snprintf(buf + len, size - len, "RX\t%10u TX\t%10u\t IPV4\t%10u IPV6\t%10u\n",
-				hal_read32(base_va + CLASS_PHY2_RX_PKTS),
-				hal_read32(base_va + CLASS_PHY2_TX_PKTS),
-				hal_read32(base_va + CLASS_PHY2_V4_PKTS),
-				hal_read32(base_va + CLASS_PHY2_V6_PKTS));
-
-		len += oal_util_snprintf(buf + len, size - len, "ICMP\t%10u IGMP\t%10u TCP\t%10u UDP\t%10u\n",
-				hal_read32(base_va + CLASS_PHY2_ICMP_PKTS),
-				hal_read32(base_va + CLASS_PHY2_IGMP_PKTS),
-				hal_read32(base_va + CLASS_PHY2_TCP_PKTS),
-				hal_read32(base_va + CLASS_PHY2_UDP_PKTS));
-
-		len += oal_util_snprintf(buf + len, size - len, "L3 Fail\t%10u CSUM Fail\t%10u TTL Fail\t%10u\n",
-				hal_read32(base_va + CLASS_PHY2_L3_FAIL_PKTS),
-				hal_read32(base_va + CLASS_PHY2_CHKSUM_ERR_PKTS),
-				hal_read32(base_va + CLASS_PHY2_TTL_ERR_PKTS));
-
-		len += oal_util_snprintf(buf + len, size - len, "[PHY3]\n");
-
-		len += oal_util_snprintf(buf + len, size - len, "RX\t%10u TX\t%10u\nIPV4\t%10u IPV6\t%10u\n",
-				hal_read32(base_va + CLASS_PHY3_RX_PKTS),
-				hal_read32(base_va + CLASS_PHY3_TX_PKTS),
-				hal_read32(base_va + CLASS_PHY3_V4_PKTS),
-				hal_read32(base_va + CLASS_PHY3_V6_PKTS));
-
-		len += oal_util_snprintf(buf + len, size - len, "ICMP\t%10u IGMP\t%10u TCP\t%10u UDP\t%10u\n",
-				hal_read32(base_va + CLASS_PHY3_ICMP_PKTS),
-				hal_read32(base_va + CLASS_PHY3_IGMP_PKTS),
-				hal_read32(base_va + CLASS_PHY3_TCP_PKTS),
-				hal_read32(base_va + CLASS_PHY3_UDP_PKTS));
-
-		len += oal_util_snprintf(buf + len, size - len, "L3 Fail\t%10u CSUM Fail\t%10u TTL Fail\t%10u\n",
-				hal_read32(base_va + CLASS_PHY3_L3_FAIL_PKTS),
-				hal_read32(base_va + CLASS_PHY3_CHKSUM_ERR_PKTS),
-				hal_read32(base_va + CLASS_PHY3_TTL_ERR_PKTS));
-
-		len += oal_util_snprintf(buf + len, size - len, "[PHY4]\n");
-
-		len += oal_util_snprintf(buf + len, size - len, "RX\t%10u TX\t%10u\nIPV4\t%10u IPV6\t%10u\n",
-				hal_read32(base_va + CLASS_PHY4_RX_PKTS),
-				hal_read32(base_va + CLASS_PHY4_TX_PKTS),
-				hal_read32(base_va + CLASS_PHY4_V4_PKTS),
-				hal_read32(base_va + CLASS_PHY4_V6_PKTS));
-
-		len += oal_util_snprintf(buf + len, size - len, "ICMP\t%10u IGMP\t%10u TCP\t%10u UDP\t%10u\n",
-				hal_read32(base_va + CLASS_PHY4_ICMP_PKTS),
-				hal_read32(base_va + CLASS_PHY4_IGMP_PKTS),
-				hal_read32(base_va + CLASS_PHY4_TCP_PKTS),
-				hal_read32(base_va + CLASS_PHY4_UDP_PKTS));
-
-		len += oal_util_snprintf(buf + len, size - len, "L3 Fail\t%10u CSUM Fail\t%10u TTL Fail\t%10u\n",
-				hal_read32(base_va + CLASS_PHY4_L3_FAIL_PKTS),
-				hal_read32(base_va + CLASS_PHY4_CHKSUM_ERR_PKTS),
-				hal_read32(base_va + CLASS_PHY4_TTL_ERR_PKTS));
 
 	return len;
 }

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -27,7 +27,7 @@ struct pfe_hif_nocpy_tag
  * @param[in]	bmu BMU providing buffers for HIF NOCPY operation
  * @return		The HIF_NOCPY instance or NULL if failed
  */
-pfe_hif_nocpy_t *pfe_hif_nocpy_create(addr_t base_va, const pfe_bmu_t *bmu)
+pfe_hif_nocpy_t *pfe_hif_nocpy_create(addr_t base_va, const pfe_bmu_t *bmu, uint16_t lmem_header_size)
 {
 	pfe_hif_nocpy_t *hif;
 	errno_t ret;
@@ -59,6 +59,8 @@ pfe_hif_nocpy_t *pfe_hif_nocpy_create(addr_t base_va, const pfe_bmu_t *bmu)
 		oal_mm_free(hif);
 		return NULL;
 	}
+
+    pfe_hif_chnl_set_lmem_hdr_size(hif->channel, lmem_header_size);
 
 	ret = pfe_hif_nocpy_cfg_init(hif->base_va);
 	if (EOK != ret)

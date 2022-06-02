@@ -451,6 +451,8 @@ static void pfe_idex_do_tx_conf(const pfe_hif_drv_client_t *client, const pfe_id
 				{
 					idex->txc_free_cbk(ref_ptr);
 				}
+		#else
+				(void)idex;
 		#endif
 				break;
 			}
@@ -471,6 +473,8 @@ static void pfe_idex_do_tx_conf(const pfe_hif_drv_client_t *client, const pfe_id
 				{
 					idex->txc_free_cbk(ref_ptr);
 				}
+		#else
+				(void)idex;
 		#endif
 				break;
 			}
@@ -920,7 +924,7 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 	/* TX buffer for HIF NOCPY is allocated directly from BMU2.
 	The whole IDEX frame needs to fit into it, so the IDEX header and payload are copied into the TX buffer. */
 #if (TRUE == IDEX_IS_NOCPY)
-	buf_offset = PFE_CFG_LMEM_HDR_SIZE + 256U + sizeof(pfe_ct_hif_tx_hdr_t);
+	buf_offset = pfe_hif_chnl_get_lmem_hdr_size(hif_chnl) + 256U + sizeof(pfe_ct_hif_tx_hdr_t);
 	(void)memcpy((void *)((addr_t)idex_hdr + buf_offset), idex_hdr, sizeof(pfe_idex_frame_header_t));
 #endif /* IDEX_IS_NOCPY */
 

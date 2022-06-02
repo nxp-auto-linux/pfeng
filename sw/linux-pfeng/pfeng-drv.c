@@ -528,10 +528,6 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 			goto err_drv;
 	}
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	hal_ip_ready_set(true);
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
 	/* Prepare EMAC RX/TX clocks */
 	for (id = 0; id < PFENG_PFE_EMACS; id++) {
 		struct pfeng_emac *emac = &priv->emac[id];
@@ -576,12 +572,16 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 				dev_err(dev, "Failed to set RX clock on EMAC%d for interface %s. Error %d\n", id, phy_modes(emac->intf_mode), ret);
 			else {
 				ret = clk_prepare_enable(emac->rx_clk);
-				if (ret)
-					dev_err(dev, "Failed to enable RX clocks on EMAC%d for interface %s. Error %d\n", id, phy_modes(emac->intf_mode), ret);
+				if (ret) {
+					dev_warn(dev, "Defer enabling of RX clock on EMAC%d for interface %s (ret: %d)\n", id, phy_modes(emac->intf_mode), ret);
+					emac->rx_clk_pending = true;
+				}
 			}
 			if (ret) {
-				devm_clk_put(dev, emac->rx_clk);
-				emac->rx_clk = NULL;
+				if (!emac->rx_clk_pending) {
+					devm_clk_put(dev, emac->rx_clk);
+					emac->rx_clk = NULL;
+				}
 			} else
 				dev_info(dev, "RX clock on EMAC%d for interface %s installed\n", id, phy_modes(emac->intf_mode));
 		}
@@ -626,6 +626,10 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto err_drv;
 	}
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	hal_ip_ready_set(true);
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	/* Create debugfs */
 	pfeng_debugfs_create(priv);
@@ -801,10 +805,6 @@ static int pfeng_drv_pm_resume(struct device *dev)
 		goto err_pfe_init;
 	}
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	hal_ip_ready_set(true);
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
 	/* Start PFE Platform */
 	ret = pfe_platform_init(priv->pfe_cfg);
 	if (ret) {
@@ -817,6 +817,10 @@ static int pfeng_drv_pm_resume(struct device *dev)
 		ret = -EINVAL;
 		goto err_pfe_get;
 	}
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	hal_ip_ready_set(true);
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	/* Create debugfs */
 	pfeng_debugfs_create(priv);

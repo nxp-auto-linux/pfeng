@@ -15,8 +15,8 @@
 #include "pfe_cbus.h"
 #include "pfe_gpi.h"
 
-#define IGQOS_BITMAP_ARR_SZ	2U
-#define BITMAP_BITS_U32		32U
+#define IGQOS_BITMAP_ARR_SZ 2U
+#define BITMAP_BITS_U32     32U
 #define DECLARE_BITMAP_U32(name, SIZE) \
 	uint32_t name[SIZE]
 
@@ -25,13 +25,13 @@
 
 struct pfe_gpi_tag
 {
-	addr_t cbus_base_va;		/* CBUS base virtual address */
-	addr_t gpi_base_offset;		/* GPI base offset within CBUS space */
-	addr_t gpi_base_va;		/* GPI base address (virtual) */
+	addr_t cbus_base_va;    /* CBUS base virtual address */
+	addr_t gpi_base_offset; /* GPI base offset within CBUS space */
+	addr_t gpi_base_va;     /* GPI base address (virtual) */
 
 	/* bitmap of all (PFE_IQOS_FLOW_TABLE_SIZE) active classification table entries */
 	DECLARE_BITMAP_U32(igqos_active_entries, IGQOS_BITMAP_ARR_SZ);
-	uint8_t igqos_entry_iter; /* classification table active entries interator */
+	uint8_t  igqos_entry_iter; /* classification table active entries interator */
 	uint32_t sys_clk_mhz;
 	uint32_t clk_div_log2;
 };
@@ -48,62 +48,67 @@ ct_assert(PFE_IQOS_FLOW_TABLE_SIZE <= (BITMAP_BITS_U32 * IGQOS_BITMAP_ARR_SZ));
  */
 pfe_gpi_t *pfe_gpi_create(addr_t cbus_base_va, addr_t gpi_base, const pfe_gpi_cfg_t *cfg)
 {
-	addr_t gpi_cbus_offset;
+	addr_t     gpi_cbus_offset;
 	pfe_gpi_t *gpi;
-	errno_t ret;
+	errno_t    ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL_ADDR == cbus_base_va) || (NULL == cfg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
+		gpi = NULL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	gpi = (pfe_gpi_t *)oal_mm_malloc(sizeof(pfe_gpi_t));
-
-	if (NULL != gpi)
 	{
-		(void)memset(gpi, 0, sizeof(pfe_gpi_t));
-		gpi->cbus_base_va = cbus_base_va;
-		gpi->gpi_base_offset = gpi_base;
-		gpi->gpi_base_va = (gpi->cbus_base_va + gpi->gpi_base_offset);
-		gpi->sys_clk_mhz = pfe_gpi_cfg_get_sys_clk_mhz(cbus_base_va);
-		gpi_cbus_offset = gpi->gpi_base_va - cbus_base_va;
+		gpi = (pfe_gpi_t *)oal_mm_malloc(sizeof(pfe_gpi_t));
 
-		ret = pfe_gpi_reset(gpi);
-		if (EOK != ret)
+		if (NULL != gpi)
 		{
-			oal_mm_free(gpi);
-			gpi = NULL;
-		}
-		else
-		{
-			switch (gpi_cbus_offset)
+			(void)memset(gpi, 0, sizeof(pfe_gpi_t));
+			gpi->cbus_base_va    = cbus_base_va;
+			gpi->gpi_base_offset = gpi_base;
+			gpi->gpi_base_va     = (gpi->cbus_base_va + gpi->gpi_base_offset);
+			gpi->sys_clk_mhz     = pfe_gpi_cfg_get_sys_clk_mhz(cbus_base_va);
+			gpi_cbus_offset      = gpi->gpi_base_va - cbus_base_va;
+
+			ret = pfe_gpi_reset(gpi);
+			if (EOK != ret)
 			{
-				case CBUS_EGPI1_BASE_ADDR:
-				case CBUS_EGPI2_BASE_ADDR:
-				case CBUS_EGPI3_BASE_ADDR:
-					/*
-					* includes initialization of CLASS tables
-					* required by the ECC module init
-					*/
-					ret = pfe_gpi_qos_reset(gpi);
-					if (EOK != ret)
-					{
-						NXP_LOG_ERROR("GPI QOS reset timed-out\n");
-						oal_mm_free(gpi);
-						return NULL;
-					}
-					break;
-				default:
-					/* Do Nothing */
-					break;
+				oal_mm_free(gpi);
+				gpi = NULL;
 			}
+			else
+			{
+				switch (gpi_cbus_offset)
+				{
+					case CBUS_EGPI1_BASE_ADDR:
+					case CBUS_EGPI2_BASE_ADDR:
+					case CBUS_EGPI3_BASE_ADDR:
+						/*
+						* includes initialization of CLASS tables
+						* required by the ECC module init
+						*/
+						ret = pfe_gpi_qos_reset(gpi);
+						if (EOK != ret)
+						{
+							NXP_LOG_ERROR("GPI QOS reset timed-out\n");
+							oal_mm_free(gpi);
+							gpi = NULL;
+						}
+						break;
+					default:
+						/* Do Nothing */
+						break;
+				}
 
-			pfe_gpi_disable(gpi);
+				if (NULL != gpi)
+				{
+					pfe_gpi_disable(gpi);
 
-			pfe_gpi_cfg_init(gpi->gpi_base_va, cfg);
+					pfe_gpi_cfg_init(gpi->gpi_base_va, cfg);
+				}
+			}
 		}
 	}
 
@@ -187,9 +192,7 @@ void pfe_gpi_destroy(pfe_gpi_t *gpi)
 	{
 		pfe_gpi_disable(gpi);
 
-		if ((gpi->gpi_base_offset == CBUS_EGPI1_BASE_ADDR) ||
-			(gpi->gpi_base_offset == CBUS_EGPI2_BASE_ADDR) ||
-			(gpi->gpi_base_offset == CBUS_EGPI3_BASE_ADDR))
+		if ((gpi->gpi_base_offset == CBUS_EGPI1_BASE_ADDR) || (gpi->gpi_base_offset == CBUS_EGPI2_BASE_ADDR) || (gpi->gpi_base_offset == CBUS_EGPI3_BASE_ADDR))
 		{
 			ret = pfe_gpi_qos_reset(gpi);
 			if (EOK != ret)
@@ -212,11 +215,16 @@ void pfe_gpi_destroy(pfe_gpi_t *gpi)
 
 bool_t pfe_gpi_qos_is_enabled(const pfe_gpi_t *gpi)
 {
-	bool_t is_enabled = FALSE;
-	errno_t ret = pfe_gpi_null_arg_check_return(gpi, EINVAL);
+	bool_t  is_enabled;
+	errno_t ret        = pfe_gpi_null_arg_check_return(gpi, EINVAL);
+
 	if (ret == EOK)
 	{
 		is_enabled = pfe_gpi_cfg_qos_is_enabled(gpi->gpi_base_va);
+	}
+	else
+	{
+		is_enabled = FALSE;
 	}
 
 	return is_enabled;
@@ -236,9 +244,9 @@ static void igqos_class_clear_active_all(pfe_gpi_t *gpi)
 
 static errno_t igqos_entry_ready_timeout(const pfe_gpi_t *gpi)
 {
-	errno_t ret = EOK;
+	errno_t  ret     = EOK;
 	uint32_t timeout = 200U;
-	bool_t ready;
+	bool_t   ready;
 
 	while (timeout > 0U)
 	{
@@ -267,7 +275,7 @@ static errno_t igqos_entry_ready_timeout(const pfe_gpi_t *gpi)
 static errno_t igqos_class_clear_flow_entry_table(const pfe_gpi_t *gpi)
 {
 	uint32_t ii;
-	errno_t ret = EOK;
+	errno_t  ret;
 
 	for (ii = 0U; ii < ENTRY_TABLE_SIZE; ii++)
 	{
@@ -286,7 +294,7 @@ static errno_t igqos_class_clear_flow_entry_table(const pfe_gpi_t *gpi)
 static errno_t igqos_class_clear_lru_entry_table(const pfe_gpi_t *gpi)
 {
 	uint32_t ii;
-	errno_t ret = EOK;
+	errno_t  ret;
 
 	for (ii = 0U; ii < ENTRY_TABLE_SIZE; ii++)
 	{
@@ -334,7 +342,7 @@ errno_t pfe_gpi_qos_enable(pfe_gpi_t *gpi)
 			ret = pfe_gpi_qos_reset(gpi);
 			if (EOK == ret)
 			{
-				pfe_gpi_cfg_qos_enable(gpi->gpi_base_va);;
+				pfe_gpi_cfg_qos_enable(gpi->gpi_base_va);
 			}
 		}
 	}
@@ -394,7 +402,7 @@ static uint8_t igqos_class_find_entry(const pfe_gpi_t *gpi, uint8_t start, bool_
 			}
 		}
 
-		ret = ii;  /* returns PFE_IQOS_FLOW_TABLE_SIZE if not found */
+		ret = ii; /* returns PFE_IQOS_FLOW_TABLE_SIZE if not found */
 	}
 
 	return ret;
@@ -425,39 +433,43 @@ static uint8_t igqos_class_get_next_active(pfe_gpi_t *gpi)
  */
 static uint8_t igqos_ip_mask_hw_encode(uint8_t ip_m)
 {
+	uint8_t hw_encoded;
 	if (0U != ip_m)
 	{
-		return ip_m - 1U;
+		hw_encoded  = ip_m - 1U;
 	}
 	else
 	{
-		return IGQOS_IP_MASK_0;
+		hw_encoded  = IGQOS_IP_MASK_0;
 	}
+	return hw_encoded ;
 }
 
 static uint8_t igqos_ip_mask_hw_decode(uint8_t ip_m)
 {
+	uint8_t hw_decoded;
 	if (IGQOS_IP_MASK_0 != ip_m)
 	{
-		return ip_m + 1U;
+		hw_decoded = ip_m + 1U;
 	}
 	else
 	{
-		return 0U;
+		hw_decoded = 0U;
 	}
+	return hw_decoded;
 }
 
 static void igqos_convert_entry_to_flow(const uint32_t entry[], pfe_iqos_flow_spec_t *flow)
 {
 	pfe_iqos_flow_args_t *args = &flow->args;
-	uint32_t val;
+	uint32_t              val;
 
 	/* entry reg0 */
-	val = entry[0];
+	val             = entry[0];
 	flow->type_mask = (pfe_iqos_flow_type_t)entry_arg_get(TYPE, val);
-	args->vlan = (uint16_t)entry_arg_get(VLAN_ID, val);
-	args->tos = (uint8_t)entry_arg_get(TOS, val);
-	args->l4proto = (uint8_t)entry_arg_get_lower(PROT, val);
+	args->vlan      = (uint16_t)entry_arg_get(VLAN_ID, val);
+	args->tos       = (uint8_t)entry_arg_get(TOS, val);
+	args->l4proto   = (uint8_t)entry_arg_get_lower(PROT, val);
 
 	/* entry reg1 */
 	val = entry[1];
@@ -485,14 +497,14 @@ static void igqos_convert_entry_to_flow(const uint32_t entry[], pfe_iqos_flow_sp
 	val = entry[5];
 	args->dport_min |= (uint16_t)entry_arg_get_upper(DPORT_MIN, val);
 	args->vlan_m = (uint16_t)entry_arg_get(VLAN_ID_M, val);
-	args->tos_m = (uint8_t)entry_arg_get_lower(TOS_M, val);
+	args->tos_m  = (uint8_t)entry_arg_get_lower(TOS_M, val);
 
 	/* entry reg6 */
 	val = entry[6];
 	args->tos_m |= (uint8_t)entry_arg_get_upper(TOS_M, val);
 	args->l4proto_m = (uint8_t)entry_arg_get(PROT_M, val);
-	args->sip_m = igqos_ip_mask_hw_decode((uint8_t)entry_arg_get(SIP_M, val));
-	args->dip_m = igqos_ip_mask_hw_decode((uint8_t)entry_arg_get(DIP_M, val));
+	args->sip_m     = igqos_ip_mask_hw_decode((uint8_t)entry_arg_get(SIP_M, val));
+	args->dip_m     = igqos_ip_mask_hw_decode((uint8_t)entry_arg_get(DIP_M, val));
 
 	if (entry_arg_get(ACT_DROP, val) == 1U)
 	{
@@ -508,7 +520,7 @@ static void igqos_convert_entry_to_flow(const uint32_t entry[], pfe_iqos_flow_sp
 static void igqos_convert_flow_to_entry(const pfe_iqos_flow_spec_t *flow, uint32_t entry[])
 {
 	const pfe_iqos_flow_args_t *args = &flow->args;
-	uint32_t val;
+	uint32_t                    val;
 
 	/* entry reg0 */
 	val = entry_arg_set(TYPE, (uint32_t)flow->type_mask);
@@ -656,8 +668,8 @@ static void igqos_convert_flow_to_entry(const pfe_iqos_flow_spec_t *flow, uint32
 
 errno_t pfe_gpi_qos_get_flow(const pfe_gpi_t *gpi, uint8_t id, pfe_iqos_flow_spec_t *flow)
 {
-	uint32_t class_table_entry[8] = {0U};
-	errno_t ret;
+	uint32_t class_table_entry[8] = { 0U };
+	errno_t  ret;
 
 	if (id >= PFE_IQOS_FLOW_TABLE_SIZE)
 	{
@@ -690,7 +702,7 @@ errno_t pfe_gpi_qos_rem_flow(pfe_gpi_t *gpi, uint8_t id)
 		if (igqos_class_is_active(gpi, id))
 		{
 			pfe_gpi_cfg_qos_clear_flow_entry_req(gpi->gpi_base_va, id);
-		
+
 			ret = igqos_entry_ready_timeout(gpi);
 			if (EOK == ret)
 			{
@@ -709,8 +721,8 @@ errno_t pfe_gpi_qos_rem_flow(pfe_gpi_t *gpi, uint8_t id)
 errno_t pfe_gpi_qos_add_flow(pfe_gpi_t *gpi, uint8_t id, const pfe_iqos_flow_spec_t *flow)
 {
 	uint32_t class_table_entry[8];
-	uint8_t entry_id;
-	errno_t ret;
+	uint8_t  entry_id;
+	errno_t  ret;
 
 	if ((id >= PFE_IQOS_FLOW_TABLE_SIZE) && (id != PFE_IQOS_FLOW_TABLE_ENTRY_SKIP))
 	{
@@ -783,7 +795,7 @@ errno_t pfe_gpi_qos_get_next_flow(pfe_gpi_t *gpi, uint8_t *id, pfe_iqos_flow_spe
 
 bool_t pfe_gpi_wred_is_enabled(const pfe_gpi_t *gpi, pfe_iqos_queue_t queue)
 {
-	bool_t is_enabled;
+	bool_t  is_enabled;
 	errno_t ret = pfe_gpi_null_arg_check_return(gpi, EINVAL);
 	if (ret != EOK)
 	{
@@ -848,7 +860,7 @@ errno_t pfe_gpi_wred_set_prob(const pfe_gpi_t *gpi, pfe_iqos_queue_t queue, pfe_
 	{
 		if ((queue >= PFE_IQOS_Q_COUNT) || (zone >= PFE_IQOS_WRED_ZONES_COUNT) || (val > PFE_IQOS_WRED_ZONE_PROB_MAX))
 		{
-			ret =  EINVAL;
+			ret = EINVAL;
 		}
 		else
 		{
@@ -942,8 +954,8 @@ static errno_t pfe_gpi_shp_args_checks(const pfe_gpi_t *gpi, uint8_t id)
 
 bool_t pfe_gpi_shp_is_enabled(const pfe_gpi_t *gpi, uint8_t id)
 {
-	bool_t is_enabled = FALSE;
-	errno_t ret = pfe_gpi_shp_args_checks(gpi, id);
+	bool_t  is_enabled = FALSE;
+	errno_t ret        = pfe_gpi_shp_args_checks(gpi, id);
 
 	if (ret == EOK)
 	{
@@ -961,7 +973,7 @@ errno_t pfe_gpi_shp_enable(pfe_gpi_t *gpi, uint8_t id)
 	{
 		if (TRUE != pfe_gpi_cfg_shp_is_enabled(gpi->gpi_base_va, id))
 		{
-			gpi->sys_clk_mhz = pfe_gpi_cfg_get_sys_clk_mhz(gpi->cbus_base_va);
+			gpi->sys_clk_mhz  = pfe_gpi_cfg_get_sys_clk_mhz(gpi->cbus_base_va);
 			gpi->clk_div_log2 = 0;
 			pfe_gpi_cfg_shp_default_init(gpi->gpi_base_va, id);
 			pfe_gpi_cfg_shp_enable(gpi->gpi_base_va, id);
@@ -1087,10 +1099,11 @@ static uint32_t igqos_convert_weight_to_isl(uint32_t wgt, uint32_t clk_div_log2,
 static uint32_t igqos_find_optimal_weight(uint32_t isl, uint32_t sys_clk_mhz, bool_t is_bps, uint32_t *wgt)
 {
 	const uint32_t w_max = IGQOS_PORT_SHP_WEIGHT_MASK;
-	uint32_t w, l, r, k;
+	uint32_t       w, l, r, k;
+	uint32_t       ret;
 
 	r = IGQOS_PORT_SHP_CLKDIV_MASK; /* max clk_div_log2 value */
-	l = 0; /* min clk_div_log2 value */
+	l = 0;                          /* min clk_div_log2 value */
 
 	/* check if 'isl' is out-of-range */
 	w = igqos_convert_isl_to_weight(isl, l, sys_clk_mhz, is_bps);
@@ -1098,51 +1111,61 @@ static uint32_t igqos_find_optimal_weight(uint32_t isl, uint32_t sys_clk_mhz, bo
 	{
 		NXP_LOG_WARNING("Shaper idle slope too high, weight (%u) exceeds max value\n", (uint_t)w);
 		*wgt = w;
-		return l;
+		ret  = l;
 	}
-
-	w = igqos_convert_isl_to_weight(isl, r, sys_clk_mhz, is_bps);
-	if (w == 0U)
+	else
 	{
-		NXP_LOG_WARNING("Shaper idle slope too small, computed weight is 0\n");
-		*wgt = w;
-		return r;
-	}
 
-	if (w <= w_max)
-	{
-		*wgt = w;
-		return r; /* optimum found */
-	}
-
-	/* binary search, worst case 4 iterations for r == 15 */
-	while ((l + 1U) < r)
-	{
-		k = (l + r) / 2U;
-		w = igqos_convert_isl_to_weight(isl, k, sys_clk_mhz, is_bps);
-
-		if (w <= w_max)
+		w = igqos_convert_isl_to_weight(isl, r, sys_clk_mhz, is_bps);
+		if (w == 0U)
 		{
-			l = k;
+			NXP_LOG_WARNING("Shaper idle slope too small, computed weight is 0\n");
+			*wgt = w;
+			ret  = r;
 		}
 		else
 		{
-			r = k;
+
+			if (w <= w_max)
+			{
+				*wgt = w;
+				ret  = r; /* optimum found */
+			}
+			else
+			{
+
+				/* binary search, worst case 4 iterations for r == 15 */
+				while ((l + 1U) < r)
+				{
+					k = (l + r) / 2U;
+					w = igqos_convert_isl_to_weight(isl, k, sys_clk_mhz, is_bps);
+
+					if (w <= w_max)
+					{
+						l = k;
+					}
+					else
+					{
+						r = k;
+					}
+				}
+
+				k = (l + r) / 2U;
+
+				*wgt = igqos_convert_isl_to_weight(isl, k, sys_clk_mhz, is_bps);
+				ret = k;
+			}
 		}
 	}
-
-	k = (l + r) / 2U;
-
-	*wgt = igqos_convert_isl_to_weight(isl, k, sys_clk_mhz, is_bps);
-	return k;
+	return ret;
 }
 
 errno_t pfe_gpi_shp_set_idle_slope(pfe_gpi_t *gpi, uint8_t id, uint32_t isl)
 {
 	pfe_iqos_shp_rate_mode_t mode;
-	uint32_t weight;
-	bool_t is_bps;
-	errno_t ret;
+	uint32_t                 weight;
+	bool_t                   is_bps;
+	errno_t                  ret;
 
 	ret = pfe_gpi_shp_args_checks(gpi, id);
 	if (ret == EOK)
@@ -1173,9 +1196,9 @@ errno_t pfe_gpi_shp_set_idle_slope(pfe_gpi_t *gpi, uint8_t id, uint32_t isl)
 errno_t pfe_gpi_shp_get_idle_slope(const pfe_gpi_t *gpi, uint8_t id, uint32_t *isl)
 {
 	pfe_iqos_shp_rate_mode_t mode;
-	uint32_t weight;
-	bool_t is_bps;
-	errno_t ret;
+	uint32_t                 weight;
+	bool_t                   is_bps;
+	errno_t                  ret;
 
 	ret = pfe_gpi_shp_args_checks(gpi, id);
 	if (ret == EOK)
@@ -1231,7 +1254,7 @@ errno_t pfe_gpi_shp_set_limits(const pfe_gpi_t *gpi, uint8_t id, int32_t max_cre
 errno_t pfe_gpi_shp_get_limits(const pfe_gpi_t *gpi, uint8_t id, int32_t *max_credit, int32_t *min_credit)
 {
 	uint32_t abs_max_cred, abs_min_cred;
-	errno_t ret;
+	errno_t  ret;
 
 	ret = pfe_gpi_shp_args_checks(gpi, id);
 	if (ret == EOK)
@@ -1270,14 +1293,15 @@ errno_t pfe_gpi_shp_get_drop_cnt(const pfe_gpi_t *gpi, uint8_t id, uint32_t *cnt
 uint32_t pfe_gpi_get_text_statistics(const pfe_gpi_t *gpi, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
-	errno_t ret = pfe_gpi_null_arg_check_return(gpi, EINVAL);
+	errno_t  ret = pfe_gpi_null_arg_check_return(gpi, EINVAL);
 	if (ret != EOK)
 	{
-		return 0U;
+		len = 0U;
 	}
-
-	len += pfe_gpi_cfg_get_text_stat(gpi->gpi_base_va, buf, buf_len, verb_level);
-
+	else
+	{
+		len += pfe_gpi_cfg_get_text_stat(gpi->gpi_base_va, buf, buf_len, verb_level);
+	}
 
 	return len;
 }

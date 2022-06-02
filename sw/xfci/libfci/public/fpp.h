@@ -1,7 +1,7 @@
 /* =========================================================================
  *  Copyright (C) 2010 Mindspeed Technologies, Inc.
  *  Copyright 2014-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2021 NXP
+ *  Copyright 2017-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -653,6 +653,18 @@ typedef enum {
 #define FPP_CMD_IPV6_CONNTRACK          		0x0414
 
 /**
+ * @brief       Conntrack statistics.
+ * @details     Related data types: @ref fpp_ct_cmd_t and @ref fpp_ct6_cmd_t
+ * @note        @b All values are in a network byte order [@b NBO].
+ *
+ * @snippet     fpp.h  fpp_conntrack_stats_t
+ */
+typedef struct CAL_PACKED_ALIGNED(4) {
+    uint32_t hit;        /*< Number of frames that hit the conntrack */
+    uint32_t hit_bytes;  /*< Sum of bytesizes of all frames that hit the conntrack */
+} fpp_conntrack_stats_t;
+
+/**
  * @brief       Data structure for IPv4 conntrack.
  * @details     Related FCI commands: @ref FPP_CMD_IPV4_CONNTRACK, @ref FPP_CMD_IP_ROUTE
  * @details     See @ref l3_router for detailed explanation how to create conntracks.
@@ -702,6 +714,9 @@ typedef struct CAL_PACKED_ALIGNED(4) {
                                   If non-zero, then this VLAN tag is added to the routed
                                   packet. If the packet already has a VLAN tag, then its tag
                                   is replaced. */
+
+    fpp_conntrack_stats_t CAL_PACKED_ALIGNED(4) stats;        /*< 'orig'  statistics [ro] */
+    fpp_conntrack_stats_t CAL_PACKED_ALIGNED(4) stats_reply;  /*< 'reply' statistics [ro] */
 } fpp_ct_cmd_t;
 /* [fpp_ct_cmd_t] */
 
@@ -784,6 +799,9 @@ typedef struct CAL_PACKED_ALIGNED(4) {
                                   If non-zero, then this VLAN tag is added to the routed
                                   packet. If the packet already has a VLAN tag, then its tag
                                   is replaced. */
+
+    fpp_conntrack_stats_t CAL_PACKED_ALIGNED(4) stats;        /*< 'orig'  statistics [ro] */
+    fpp_conntrack_stats_t CAL_PACKED_ALIGNED(4) stats_reply;  /*< 'reply' statistics [ro] */
 } fpp_ct6_cmd_t;
 /* [fpp_ct6_cmd_t] */
 

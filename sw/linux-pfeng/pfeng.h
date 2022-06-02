@@ -20,10 +20,8 @@
 #include <linux/kfifo.h>
 #include <linux/mutex.h>
 #include <linux/clk.h>
-#if !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
 #include <linux/pcs/fsl-s32gen1-xpcs.h>
 #include <linux/phy/phy.h>
-#endif /* PFENG_CFG_LINUX_NO_SERDES_SUPPORT */
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "bpool.h"
@@ -39,7 +37,7 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"RTM 1.0.0 RC2"
+#define PFENG_DRIVER_VERSION		"RTM 1.0.0 RC3"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
@@ -224,7 +222,8 @@ struct pfeng_hif_chnl {
 static inline struct pfeng_netif *pfeng_phy_if_id_to_netif(struct pfeng_hif_chnl *chnl,
 							   pfe_ct_phy_if_id_t phy_if_id)
 {
-	if (likely(phy_if_id >= PFE_PHY_IF_ID_EMAC0 && phy_if_id <= PFE_PHY_IF_ID_EMAC2)) {
+	if (likely((phy_if_id >= PFE_PHY_IF_ID_EMAC0 && phy_if_id <= PFE_PHY_IF_ID_EMAC2) &&
+		chnl->netifs[phy_if_id - PFE_PHY_IF_ID_EMAC0])) {
 		return chnl->netifs[phy_if_id - PFE_PHY_IF_ID_EMAC0];
 	}
 
@@ -257,9 +256,9 @@ struct pfeng_emac {
 	u32				duplex;
 	bool				enabled;
 	bool				phyless;
+	bool				rx_clk_pending;
 	struct device_node		*dn_mdio;
 	struct mii_bus			*mii_bus;
-#if !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
 	/* XPCS */
 	struct phy			*serdes_phy;
 	struct s32gen1_xpcs		*xpcs;
@@ -267,7 +266,6 @@ struct pfeng_emac {
 	struct phylink_link_state 	xpcs_link;
 	u32				serdes_an_speed;
 	bool				sgmii_link;
-#endif /* PFENG_CFG_LINUX_NO_SERDES_SUPPORT */
 
 	pfe_phy_if_t			*phyif_emac;
 	pfe_log_if_t			*logif_emac;
@@ -303,6 +301,8 @@ struct pfeng_priv {
 	u8				local_drv_id;
 	bool				in_suspend;
 
+	struct notifier_block		upper_notifier;
+	struct net_device		*lower_ndev;
 	pfe_platform_t			*pfe_platform;
 	pfe_platform_config_t		*pfe_cfg;
 	const char			*fw_class_name;
@@ -310,6 +310,24 @@ struct pfeng_priv {
 	struct dentry			*dbgfs;
 	u32				msg_verbosity;
 };
+
+static inline bool pfeng_netif_is_aux(struct pfeng_netif *netif)
+{
+	return netif->cfg->aux;
+}
+
+static inline struct pfeng_emac *__pfeng_netif_get_emac(struct pfeng_netif *netif)
+{
+	return &netif->priv->emac[netif->cfg->emac_id];
+}
+
+static inline struct pfeng_emac *pfeng_netif_get_emac(struct pfeng_netif *netif)
+{
+	if (pfeng_netif_is_aux(netif))
+		return NULL;
+
+	return __pfeng_netif_get_emac(netif);
+}
 
 /* fw */
 int pfeng_fw_load(struct pfeng_priv *priv, const char *fw_class_name, const char *fw_util_name);

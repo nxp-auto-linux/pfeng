@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -28,6 +28,8 @@ typedef struct
 	void * ddr_base_va;				/*	DDR region base address (virtual) */
 	void * ddr_base_pa;				/*	DDR region base address (physical) */
 	uint32_t ddr_size;				/*	Size of the DDR region */
+	uint16_t lmem_header_size;
+	uint16_t ro_header_size;
 } pfe_class_cfg_t;
 
 pfe_class_t *pfe_class_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_class_cfg_t *cfg);

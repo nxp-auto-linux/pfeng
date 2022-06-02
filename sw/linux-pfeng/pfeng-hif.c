@@ -240,7 +240,7 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 			break;
 
 		hif_hdr = (pfe_ct_hif_rx_hdr_t *)skb->data;
-		hif_hdr->flags = (pfe_ct_hif_rx_flags_t)oal_ntohs(hif_hdr->flags);
+		hif_hdr->flags = (pfe_ct_hif_rx_flags_t)oal_ntohl(hif_hdr->flags);
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 		/* Check for IHC frame */
@@ -276,7 +276,7 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 			/* Accept all traffic */
 		} else if (likely(!chnl->netifs[PFENG_NETIFS_AUX_IDX])) {
 			/* No AUX */
-		} else if (unlikely(hif_hdr->flags & (HIF_RX_PTP | HIF_RX_PUNT | HIF_RX_ETS))) {
+		} else if (unlikely(hif_hdr->flags & (HIF_RX_PTP | HIF_RX_ETS))) {
 			/* Frame is "management" */
 		} else {
 			/* Frame is "non-management", route to AUX */

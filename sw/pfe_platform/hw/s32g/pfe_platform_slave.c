@@ -166,7 +166,20 @@ static void pfe_platform_destroy_hif(pfe_platform_t *platform)
  */
 static errno_t pfe_platform_create_hif_nocpy(pfe_platform_t *platform)
 {
-	platform->hif_nocpy = pfe_hif_nocpy_create(pfe.cbus_baseaddr + CBUS_HIF_NOCPY_BASE_ADDR, platform->bmu[1]);
+    uint16_t lmem_header_size;
+
+#if 0 /* AAVB-5037 */
+	if(PFE_S32G3_VERSION == platform->pfe_version)
+	{   /* S32G3 */
+		lmem_header_size = 48U;
+	}
+	else
+#endif
+	{   /* S32G2 */
+		lmem_header_size = 112U;
+	}
+    
+	platform->hif_nocpy = pfe_hif_nocpy_create(pfe.cbus_baseaddr + CBUS_HIF_NOCPY_BASE_ADDR, platform->bmu[1], lmem_header_size);
 
 	if (NULL == platform->hif_nocpy)
 	{
@@ -484,6 +497,9 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	{
 		NXP_LOG_INFO("PFE CBUS p0x%p mapped @ v0x%"PRINTADDR_T"\n", (void *)config->cbus_base, pfe.cbus_baseaddr);
 	}
+	
+    pfe.pfe_version = *(uint32_t*)(void*)((addr_t)pfe.cbus_baseaddr + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_VERSION);
+	NXP_LOG_INFO("HW version 0x%x\n", (uint_t)pfe.pfe_version);    
 
 	ret = pfe_platform_create_hif(&pfe, config);
 	if (EOK != ret)

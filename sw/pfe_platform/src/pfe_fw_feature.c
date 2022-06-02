@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -15,11 +15,11 @@
 
 struct pfe_fw_feature_tag
 {
-    pfe_ct_feature_desc_t *ll_data;
-    const char *string_base;
-    dmem_read_func_t dmem_read_func;
-    dmem_write_func_t dmem_write_func;
-    void *dmem_rw_func_data;  
+	pfe_ct_feature_desc_t *ll_data;
+	const char *string_base;
+	dmem_read_func_t dmem_read_func;
+	dmem_write_func_t dmem_write_func;
+	void *dmem_rw_func_data;
 };
 
 /**
@@ -28,17 +28,17 @@ struct pfe_fw_feature_tag
  */
 pfe_fw_feature_t *pfe_fw_feature_create(void)
 {
-    pfe_fw_feature_t *feature;
-    feature = oal_mm_malloc(sizeof(pfe_fw_feature_t));
-    if(NULL != feature)
-    {
-        (void)memset(feature, 0U, sizeof(pfe_fw_feature_t));
-    }
-    else
-    {
-        NXP_LOG_ERROR("Cannot allocate %u bytes of memory for feature\n", (uint_t)sizeof(pfe_fw_feature_t));
-    }
-    return feature;
+	pfe_fw_feature_t *feature;
+	feature = oal_mm_malloc(sizeof(pfe_fw_feature_t));
+	if (NULL != feature)
+	{
+		(void)memset(feature, 0U, sizeof(pfe_fw_feature_t));
+	}
+	else
+	{
+		NXP_LOG_ERROR("Cannot allocate %u bytes of memory for feature\n", (uint_t)sizeof(pfe_fw_feature_t));
+	}
+	return feature;
 }
 
 /**
@@ -51,10 +51,12 @@ void pfe_fw_feature_destroy(const pfe_fw_feature_t *feature)
 	if (unlikely(NULL == feature))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */     
-    oal_mm_free(feature);
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		oal_mm_free(feature);
+	}
 }
 
 /**
@@ -65,15 +67,20 @@ void pfe_fw_feature_destroy(const pfe_fw_feature_t *feature)
  */
 errno_t pfe_fw_feature_set_ll_data(pfe_fw_feature_t *feature, pfe_ct_feature_desc_t *ll_data)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL == ll_data)))
+	if (unlikely((NULL == feature) || (NULL == ll_data)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */      
-    feature->ll_data = ll_data;
-    return EOK;
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		feature->ll_data = ll_data;
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -87,15 +94,20 @@ errno_t pfe_fw_feature_set_ll_data(pfe_fw_feature_t *feature, pfe_ct_feature_des
  */
 errno_t pfe_fw_feature_set_string_base(pfe_fw_feature_t *feature, const char *string_base)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL == string_base)))
+	if (unlikely((NULL == feature) || (NULL == string_base)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */      
-    feature->string_base = string_base;
-    return EOK;
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		feature->string_base = string_base;
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -107,21 +119,23 @@ errno_t pfe_fw_feature_set_string_base(pfe_fw_feature_t *feature, const char *st
  * @return EOK or an error code.
  */
 errno_t pfe_fw_feature_set_dmem_funcs(pfe_fw_feature_t *feature, dmem_read_func_t read_func, dmem_write_func_t write_func, void *data)
-{    
+{
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||
-                 (NULL == read_func)||
-                 (NULL == write_func)||
-                 (NULL == data)))
+	if (unlikely((NULL == feature) || (NULL == read_func) || (NULL == write_func) || (NULL == data)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */  
-    feature->dmem_read_func = read_func;
-    feature->dmem_write_func = write_func;
-    feature->dmem_rw_func_data = data;
-    return EOK;
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		feature->dmem_read_func = read_func;
+		feature->dmem_write_func = write_func;
+		feature->dmem_rw_func_data = data;
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -132,16 +146,20 @@ errno_t pfe_fw_feature_set_dmem_funcs(pfe_fw_feature_t *feature, dmem_read_func_
  */
 errno_t pfe_fw_feature_get_name(const pfe_fw_feature_t *feature, const char **name)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL == name)))
+	if (unlikely((NULL == feature) || (NULL == name)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */  
-    *name = feature->string_base + oal_ntohl(feature->ll_data->name);
-    return EOK;
-    
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		*name = feature->string_base + oal_ntohl(feature->ll_data->name);
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -152,16 +170,20 @@ errno_t pfe_fw_feature_get_name(const pfe_fw_feature_t *feature, const char **na
  */
 errno_t pfe_fw_feature_get_desc(const pfe_fw_feature_t *feature, const char **desc)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL ==desc)))
+	if (unlikely((NULL == feature) || (NULL == desc)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */  
-    *desc = feature->string_base + oal_ntohl(feature->ll_data->description);
-    return EOK;
-    
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		*desc = feature->string_base + oal_ntohl(feature->ll_data->description);
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -172,16 +194,20 @@ errno_t pfe_fw_feature_get_desc(const pfe_fw_feature_t *feature, const char **de
  */
 errno_t pfe_fw_feature_get_flags(const pfe_fw_feature_t *feature, pfe_ct_feature_flags_t *flags)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL==flags)))
+	if (unlikely((NULL == feature) || (NULL == flags)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */  
-    *flags = feature->ll_data->flags;
-    return EOK;
-    
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		*flags = feature->ll_data->flags;
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -192,19 +218,24 @@ errno_t pfe_fw_feature_get_flags(const pfe_fw_feature_t *feature, pfe_ct_feature
  */
 bool_t pfe_fw_feature_is_in_class(const pfe_fw_feature_t *feature)
 {
-    pfe_ct_feature_flags_t flags;
-    flags = F_NONE;
+	pfe_ct_feature_flags_t flags;
+	bool_t ret;
+	flags = F_NONE;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == feature))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
+		ret = FALSE;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */     
-    
-    (void)pfe_fw_feature_get_flags(feature, &flags);
-    
-    return ((uint8_t)F_NONE == ((uint8_t)flags & (uint8_t)F_CLASS))? FALSE : TRUE;
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		(void)pfe_fw_feature_get_flags(feature, &flags);
+
+		ret = ((uint8_t)F_NONE == ((uint8_t)flags & (uint8_t)F_CLASS)) ? FALSE : TRUE;
+	}
+	return ret;
 }
 
 /**
@@ -215,21 +246,25 @@ bool_t pfe_fw_feature_is_in_class(const pfe_fw_feature_t *feature)
  */
 bool_t pfe_fw_feature_is_in_util(const pfe_fw_feature_t *feature)
 {
-    pfe_ct_feature_flags_t flags;
-    flags = F_NONE;
+	pfe_ct_feature_flags_t flags;
+	bool_t ret;
+	flags = F_NONE;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == feature))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
+		ret = FALSE;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */     
-    
-    (void)pfe_fw_feature_get_flags(feature, &flags);
-    
-    return ((uint8_t)F_NONE == ((uint8_t)flags & (uint8_t)F_UTIL))? FALSE : TRUE;
-}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		(void)pfe_fw_feature_get_flags(feature, &flags);
 
+		ret = ((uint8_t)F_NONE == ((uint8_t)flags & (uint8_t)F_UTIL)) ? FALSE : TRUE;
+	}
+	return ret;
+}
 
 /**
  * @brief Reads the default value of the feature i.e. initial value set by the FW
@@ -239,16 +274,20 @@ bool_t pfe_fw_feature_is_in_util(const pfe_fw_feature_t *feature)
  */
 errno_t pfe_fw_feature_get_def_val(const pfe_fw_feature_t *feature, uint8_t *def_val)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL == def_val)))
+	if (unlikely((NULL == feature) || (NULL == def_val)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */  
-    *def_val = feature->ll_data->def_val;
-    return EOK;
-    
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		*def_val = feature->ll_data->def_val;
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -259,17 +298,19 @@ errno_t pfe_fw_feature_get_def_val(const pfe_fw_feature_t *feature, uint8_t *def
  */
 errno_t pfe_fw_feature_get_val(const pfe_fw_feature_t *feature, uint8_t *val)
 {
-	 errno_t ret;
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL == val)))
+	if (unlikely((NULL == feature) || (NULL == val)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */  
-    ret = feature->dmem_read_func(feature->dmem_rw_func_data, 0U, val, (addr_t)oal_ntohl(feature->ll_data->position), sizeof(uint8_t));
-    return ret;
-    
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		ret = feature->dmem_read_func(feature->dmem_rw_func_data, 0U, val, (addr_t)oal_ntohl(feature->ll_data->position), sizeof(uint8_t));
+	}
+	return ret;
 }
 
 /**
@@ -282,24 +323,35 @@ bool_t pfe_fw_feature_enabled(const pfe_fw_feature_t *feature)
 {
 	uint8_t val;
 	errno_t ret;
+	bool_t feature_enabled;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == feature))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
+		feature_enabled = FALSE;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */  
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		ret = pfe_fw_feature_get_val(feature, &val);
 
-	ret = pfe_fw_feature_get_val(feature, &val);
-	if(EOK != ret) 
-	{
-		return FALSE;
+		if (EOK != ret)
+		{
+			feature_enabled = FALSE;
+		}
+		else
+		{
+			if (0U != val)
+			{
+				feature_enabled = TRUE;
+			}
+			else
+			{
+				feature_enabled = FALSE;
+			}
+		}
 	}
-	if(0U != val)
-	{
-		return TRUE;
-	}
-	return FALSE;
+	return feature_enabled;
 }
 
 /**
@@ -310,15 +362,18 @@ bool_t pfe_fw_feature_enabled(const pfe_fw_feature_t *feature)
  */
 errno_t pfe_fw_feature_set_val(const pfe_fw_feature_t *feature, uint8_t val)
 {
-	 errno_t ret;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == feature))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */  
-	ret = feature->dmem_write_func(feature->dmem_rw_func_data, -1, (addr_t)oal_ntohl(feature->ll_data->position), (void *)&val, sizeof(uint8_t));
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		ret = feature->dmem_write_func(feature->dmem_rw_func_data, -1, (addr_t)oal_ntohl(feature->ll_data->position), (void *)&val, sizeof(uint8_t));
+	}
 	return ret;
 }

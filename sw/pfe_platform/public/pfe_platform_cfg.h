@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -144,19 +144,18 @@
 #define PFE_CFG_UTIL_FIRMWARE_FILENAME		"/tmp/upe_s32g.elf"
 
 /* LMEM defines */
-#define PFE_CFG_LMEM_HDR_SIZE		0x0070U
 #define PFE_CFG_LMEM_BUF_SIZE_LN2	0x8U /* 256 */
 #define PFE_CFG_LMEM_BUF_SIZE		(1UL << PFE_CFG_LMEM_BUF_SIZE_LN2)
 
 /* DDR defines */
-#define PFE_CFG_DDR_HDR_SIZE		0x0200U 
+#define PFE_CFG_DDR_HDR_SIZE		0x0200U  /* Hardwired in HW */
 #define PFE_CFG_DDR_BUF_SIZE_LN2	0xbU /* 2048 */
 #define PFE_CFG_DDR_BUF_SIZE		(1UL << PFE_CFG_DDR_BUF_SIZE_LN2)
 
-/* RO defines */
-#define PFE_CFG_RO_HDR_SIZE			0x0010UL
-
 /* Maximal count of entries within hash area of routing table */
 #define PFE_CFG_RT_HASH_ENTRIES_MAX_CNT 1048576U
+
+/* Value read from version register on S32G3 */
+#define PFE_S32G3_VERSION 0x00000101U
 
 #endif /* SRC_PFE_PLATFORM_CFG_H_ */

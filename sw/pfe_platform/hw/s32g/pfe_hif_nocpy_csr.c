@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -343,17 +343,16 @@ void pfe_hif_nocpy_cfg_set_tx_bd_ring_addr(addr_t base_va, const void *tx_ring_p
 bool_t pfe_hif_nocpy_cfg_is_rx_dma_active(addr_t base_va)
 {
 	uint32_t reg;
+	bool_t ret = FALSE;
 
 	reg = hal_read32(base_va + HIF_NOCPY_RX_STATUS);
 
 	if (0U != (reg & (0xfUL << 18U)))
 	{
-		return TRUE;
+		ret = TRUE;
 	}
-	else
-	{
-		return FALSE;
-	}
+
+	return ret;
 }
 
 /**
@@ -365,17 +364,16 @@ bool_t pfe_hif_nocpy_cfg_is_rx_dma_active(addr_t base_va)
 bool_t pfe_hif_nocpy_cfg_is_tx_dma_active(addr_t base_va)
 {
 	uint32_t reg;
+	bool_t ret = FALSE;
 
 	reg = hal_read32(base_va + HIF_NOCPY_TX_STATUS);
 
 	if (0U != (reg & (0xfUL << 18U)))
 	{
-		return TRUE;
+		ret = TRUE;
 	}
-	else
-	{
-		return FALSE;
-	}
+
+	return ret;
 }
 
 /**
@@ -438,27 +436,29 @@ uint32_t pfe_hif_nocpy_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t s
 	if (unlikely(NULL_ADDR == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
+		len = 0U;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	Get version */
-	if(verb_level >= 9U)
 	{
-		reg = hal_read32(base_va + HIF_NOCPY_VERSION);
-		len += oal_util_snprintf(buf + len, size - len, "Revision             : 0x%x\n", (reg >> 24U) & 0xffU);
-		len += oal_util_snprintf(buf + len, size - len, "Version              : 0x%x\n", (reg >> 16U) & 0xffU);
-		len += oal_util_snprintf(buf + len, size - len, "ID                   : 0x%x\n", reg & 0xffffU);
-	}
+		/*	Get version */
+		if(verb_level >= 9U)
+		{
+			reg = hal_read32(base_va + HIF_NOCPY_VERSION);
+			len += oal_util_snprintf(buf + len, size - len, "Revision             : 0x%x\n", (reg >> 24U) & 0xffU);
+			len += oal_util_snprintf(buf + len, size - len, "Version              : 0x%x\n", (reg >> 16U) & 0xffU);
+			len += oal_util_snprintf(buf + len, size - len, "ID                   : 0x%x\n", reg & 0xffffU);
+		}
 
-	len += oal_util_snprintf(buf + len, size - len, "TX Current BD Addr   : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_TX_CURR_BD_ADDR));
-	len += oal_util_snprintf(buf + len, size - len, "TX Status            : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_TX_STATUS));
-	len += oal_util_snprintf(buf + len, size - len, "TX DMA Status        : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_TX_DMA_STATUS));
-	len += oal_util_snprintf(buf + len, size - len, "TX Ctrl              : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_TX_CTRL));
-	len += oal_util_snprintf(buf + len, size - len, "RX Current BD Addr   : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_RX_CURR_BD_ADDR));
-	len += oal_util_snprintf(buf + len, size - len, "RX Status            : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_RX_STATUS));
-	len += oal_util_snprintf(buf + len, size - len, "RX DMA Status        : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_RX_DMA_STATUS));
-	len += oal_util_snprintf(buf + len, size - len, "RX Ctrl              : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_RX_CTRL));
+		len += oal_util_snprintf(buf + len, size - len, "TX Current BD Addr   : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_TX_CURR_BD_ADDR));
+		len += oal_util_snprintf(buf + len, size - len, "TX Status            : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_TX_STATUS));
+		len += oal_util_snprintf(buf + len, size - len, "TX DMA Status        : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_TX_DMA_STATUS));
+		len += oal_util_snprintf(buf + len, size - len, "TX Ctrl              : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_TX_CTRL));
+		len += oal_util_snprintf(buf + len, size - len, "RX Current BD Addr   : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_RX_CURR_BD_ADDR));
+		len += oal_util_snprintf(buf + len, size - len, "RX Status            : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_RX_STATUS));
+		len += oal_util_snprintf(buf + len, size - len, "RX DMA Status        : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_RX_DMA_STATUS));
+		len += oal_util_snprintf(buf + len, size - len, "RX Ctrl              : 0x%08x\n", hal_read32(base_va + HIF_NOCPY_RX_CTRL));
+	}
 
 	return len;
 }

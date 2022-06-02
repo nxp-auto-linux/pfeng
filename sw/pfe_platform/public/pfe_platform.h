@@ -135,6 +135,7 @@ typedef struct
 	pfe_if_db_t *phy_if_db;
 	pfe_if_db_t *log_if_db;
 	bool_t fci_created;
+	uint32_t pfe_version;
 } pfe_platform_t;
 
 pfe_fw_t *pfe_fw_load(char_t *class_fw_name, char_t *util_fw_name);

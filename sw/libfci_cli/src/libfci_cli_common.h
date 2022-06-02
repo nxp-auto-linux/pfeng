@@ -43,8 +43,8 @@
 
 /* app version */
 #define CLI_VERSION_MAJOR  "2"
-#define CLI_VERSION_MINOR  "4"
-#define CLI_VERSION_PATCH  "1"
+#define CLI_VERSION_MINOR  "5"
+#define CLI_VERSION_PATCH  "0"
 
 
 /* drv version (default values for non-makefile compilation) */

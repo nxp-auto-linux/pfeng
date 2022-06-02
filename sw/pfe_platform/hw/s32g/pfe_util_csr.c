@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -31,22 +31,23 @@ uint32_t pfe_util_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, 
 	if (unlikely(NULL_ADDR == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
+		len = 0U;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	Get version */
-	if(verb_level >= 9U)
 	{
-		reg = hal_read32(base_va + UTIL_VERSION);
-		len += oal_util_snprintf(buf + len, size - len, "Revision             : 0x%x\n", (reg >> 24U) & 0xffU);
-		len += oal_util_snprintf(buf + len, size - len, "Version              : 0x%x\n", (reg >> 16U) & 0xffU);
-		len += oal_util_snprintf(buf + len, size - len, "ID                   : 0x%x\n", reg & 0xffffU);
+		/*	Get version */
+		if(verb_level >= 9U)
+		{
+			reg = hal_read32(base_va + UTIL_VERSION);
+			len += oal_util_snprintf(buf + len, size - len, "Revision             : 0x%x\n", (reg >> 24U) & 0xffU);
+			len += oal_util_snprintf(buf + len, size - len, "Version              : 0x%x\n", (reg >> 16U) & 0xffU);
+			len += oal_util_snprintf(buf + len, size - len, "ID                   : 0x%x\n", reg & 0xffffU);
+		}
+
+		len += oal_util_snprintf(buf + len, size - len, "Max buffer count\t0x%08x\n", hal_read32(base_va + UTIL_MAX_BUF_CNT));
+		len += oal_util_snprintf(buf + len, size - len, "TQS max count\t\t0x%08x\n", hal_read32(base_va + UTIL_TSQ_MAX_CNT));
 	}
-
-	len += oal_util_snprintf(buf + len, size - len, "Max buffer count\t0x%08x\n", hal_read32(base_va + UTIL_MAX_BUF_CNT));
-	len += oal_util_snprintf(buf + len, size - len, "TQS max count\t\t0x%08x\n", hal_read32(base_va + UTIL_TSQ_MAX_CNT));
-
 	return len;
 }
 

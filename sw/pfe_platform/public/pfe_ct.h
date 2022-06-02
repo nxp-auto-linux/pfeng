@@ -1038,6 +1038,8 @@ typedef struct __attribute__((packed, aligned(4)))
 	PFE_PTR(pfe_ct_buffer_t) get_buffer;
 	/*	HIF TMU Queue sizes information for errata ERR051211 workaround*/
 	PFE_PTR(pfe_ct_hif_tmu_queue_sizes_t) hif_tmu_queue_sizes;
+	/* HIF interface used for PTP traffic in bridge mode*/
+	PFE_PTR(pfe_ct_phy_if_id_t) ptp_common_hif;
 } pfe_ct_class_mmap_t;
 
 /**
@@ -1082,19 +1084,6 @@ typedef union __attribute__((packed, aligned(4)))
 
 typedef enum __attribute__((packed))
 {
-	/*	Invalid reason */
-	PUNT_INVALID = 0U,
-	/*	Punt by snooping feature */
-	PUNT_SNOOP = (1U << 0U),
-	/*	Ensure proper size */
-	PUNT_MAX = (1U << 15U)
-} pfe_ct_punt_reasons_t;
-
-/*	We expect given pfe_ct_punt_reasons_t size due to byte order compatibility. */
-ct_assert(sizeof(pfe_ct_punt_reasons_t) == sizeof(uint16_t));
-
-typedef enum __attribute__((packed))
-{
 	/*	No flag being set */
 	HIF_RX_NO_FLAG = 0U,
 	/*	IPv4 checksum valid */
@@ -1109,8 +1098,6 @@ typedef enum __attribute__((packed))
 	HIF_RX_UDPV6_CSUM = (1U << 4U),
 	/*	PTP packet */
 	HIF_RX_PTP = (1U << 5U),
-	/*	Punt flag. If set then punt reason is valid. */
-	HIF_RX_PUNT = (1U << 6U),
 	/*	Timestamp flag. When set, timestamp is valid. */
 	HIF_RX_TS = (1U << 7U),
 	/*	Inter - HIF communication frame */
@@ -1120,25 +1107,33 @@ typedef enum __attribute__((packed))
 	/*	IPv6 checksum valid */
 	HIF_RX_IPV6_CSUM = (1U << 10U),
 	/*	ICMP checksum valid */
-	HIF_RX_ICMP_CSUM = (1U << 11U)
+	HIF_RX_ICMP_CSUM = (1U << 11U),
+	/*      Frame send to HIF0 has vlan tag*/
+	HIF_RX_HIF0_VLAN = (1U << 12U),
+	/*      Frame send to HIF1 has vlan tag*/
+	HIF_RX_HIF1_VLAN = (1U << 13U),
+	/*      Frame send to HIF2 has vlan tag*/
+	HIF_RX_HIF2_VLAN = (1U << 14U),
+	/*      Frame send to HIF3 has vlan tag*/
+	HIF_RX_HIF3_VLAN = (1U << 15U),
+	/*	Ensure proper size */
+	HIF_RX_MAX = (int)(1U << 31U)
 } pfe_ct_hif_rx_flags_t;
 
 /*	We expect given pfe_ct_hif_rx_flags_t size due to byte order compatibility. */
-ct_assert(sizeof(pfe_ct_hif_rx_flags_t) == sizeof(uint16_t));
+ct_assert(sizeof(pfe_ct_hif_rx_flags_t) == sizeof(uint32_t));
 
 /**
  * @brief	HIF RX packet header
  */
 typedef struct __attribute__((packed))
 {
-	/*	Punt reason flags */
-	pfe_ct_punt_reasons_t punt_reasons;
+	/*	Rx frame flags */
+	pfe_ct_hif_rx_flags_t flags;
 	/*	Ingress physical interface ID */
 	pfe_ct_phy_if_id_t i_phy_if;
 	/*	Ingress logical interface ID */
 	uint8_t i_log_if;
-	/*	Rx frame flags */
-	pfe_ct_hif_rx_flags_t flags;
 	/*	Queue */
 	uint8_t queue;
 	/*	Reserved */

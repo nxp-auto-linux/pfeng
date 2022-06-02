@@ -70,7 +70,6 @@ int pfeng_dt_release_config(struct pfeng_priv *priv)
 	/* Free EMAC clocks */
 	for (id = 0; id < PFENG_PFE_EMACS; id++) {
 		struct pfeng_emac *emac = &priv->emac[id];
-#if !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0)
 		struct device *dev = &priv->pdev->dev;
 
@@ -78,7 +77,6 @@ int pfeng_dt_release_config(struct pfeng_priv *priv)
 		if (emac->intf_mode == PHY_INTERFACE_MODE_SGMII && emac->serdes_phy)
 			device_link_remove(dev, &emac->serdes_phy->dev);
 #endif
-#endif /* !PFENG_CFG_LINUX_NO_SERDES_SUPPORT */
 
 		/* EMAC RX clk */
 		if (emac->rx_clk) {
@@ -96,7 +94,7 @@ int pfeng_dt_release_config(struct pfeng_priv *priv)
 	return 0;
 }
 
-#if defined(PFE_CFG_PFE_MASTER) && !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
+#if defined(PFE_CFG_PFE_MASTER)
 static bool pfeng_manged_inband(struct device_node *node)
 {
 	const char *managed;
@@ -107,7 +105,7 @@ static bool pfeng_manged_inband(struct device_node *node)
 
 	return false;
 }
-#endif /* PFENG_CFG_LINUX_NO_SERDES_SUPPORT */
+#endif /* PFE_CFG_PFE_MASTER */
 
 int pfeng_dt_create_config(struct pfeng_priv *priv)
 {
@@ -346,7 +344,6 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 			if (of_phy_is_fixed_link(child))
 				emac->link_an = MLO_AN_FIXED;
 
-#if !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
 			if (pfeng_manged_inband(child)) {
 				emac->link_an = MLO_AN_INBAND;
 				dev_info(dev, "SGMII AN enabled on EMAC%d\n", netif_cfg->emac_id);
@@ -358,7 +355,6 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 				dev_info(dev, "EMAC%d PHY less SGMII\n", netif_cfg->emac_id);
 				emac->phyless = true;
 			}
-#endif /* PFENG_CFG_LINUX_NO_SERDES_SUPPORT */
 
 			/* Interface mode */
 			ret = pfeng_of_get_phy_mode(child, &intf_mode);
@@ -390,7 +386,7 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 					emac->max_speed = SPEED_2500;
 				else
 					emac->max_speed = SPEED_1000;
-#if !defined(PFENG_CFG_LINUX_NO_SERDES_SUPPORT)
+
 				/* Standard SGMII AN is at 1G */
 				emac->serdes_an_speed = SPEED_1000;
 			} else {
@@ -418,7 +414,6 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 			} else {
 				emac->serdes_phy = NULL;
 			}
-#endif /* PFENG_CFG_LINUX_NO_SERDES_SUPPORT */
 
 			/* optional: tx clock */
 			if (phy_interface_mode_is_rgmii(intf_mode))

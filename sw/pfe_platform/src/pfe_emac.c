@@ -74,42 +74,43 @@ static bool_t pfe_emac_flush_criterion_eval(const pfe_mac_addr_db_entry_t *entry
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
+		ret = FALSE;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (crit == EMAC_CRIT_BY_OWNER)
 	{
-		/* Return the first address where owner match */
-		if (entry->owner == owner)
+		if (crit == EMAC_CRIT_BY_OWNER)
 		{
-			/* Break if entry match with the rule */
-			ret = TRUE;
+			/* Return the first address where owner match */
+			if (entry->owner == owner)
+			{
+				/* Break if entry match with the rule */
+				ret = TRUE;
+			}
 		}
-	}
-	else if (crit == EMAC_CRIT_BY_TYPE)
-	{
-		/* Break if entry match with the rule */
-		ret = pfe_emac_check_crit_by_type(entry->addr, type);
-	}
-	else if (crit == EMAC_CRIT_BY_OWNER_AND_TYPE)
-	{
-		if (entry->owner == owner)
+		else if (crit == EMAC_CRIT_BY_TYPE)
 		{
 			/* Break if entry match with the rule */
 			ret = pfe_emac_check_crit_by_type(entry->addr, type);
 		}
+		else if (crit == EMAC_CRIT_BY_OWNER_AND_TYPE)
+		{
+			if (entry->owner == owner)
+			{
+				/* Break if entry match with the rule */
+				ret = pfe_emac_check_crit_by_type(entry->addr, type);
+			}
+		}
+		else if (crit == EMAC_CRIT_ALL)
+		{
+			/* Break if entry match with the rule */
+			ret = TRUE;
+		}
+		else
+		{
+			NXP_LOG_WARNING("Unknown criterion\n");
+		}
 	}
-	else if (crit == EMAC_CRIT_ALL)
-	{
-		/* Break if entry match with the rule */
-		ret = TRUE;
-	}
-	else
-	{
-		NXP_LOG_WARNING("Unknown criterion\n");
-	}
-
 	return ret;
 }
 
@@ -123,11 +124,12 @@ static void pfe_emac_addr_db_init(pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	LLIST_Init(&emac->mac_addr_list);
+	{
+		LLIST_Init(&emac->mac_addr_list);
+	}
 }
 
 /**
@@ -142,46 +144,53 @@ static void pfe_emac_addr_db_init(pfe_emac_t *emac)
 static errno_t pfe_emac_addr_db_add(pfe_emac_t *emac, const pfe_mac_addr_t addr, bool_t in_hash_grp, uint32_t data, pfe_drv_id_t owner)
 {
 	pfe_mac_addr_db_entry_t *entry;
+	errno_t                  ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	Create new list entry */
-#ifdef PFE_CFG_TARGET_OS_LINUX
-	entry = kzalloc(sizeof(pfe_mac_addr_db_entry_t), GFP_ATOMIC); /* temporary fix for AAVB-3946 */
-#else
-	entry = oal_mm_malloc(sizeof(pfe_mac_addr_db_entry_t));
-#endif
-	if (NULL == entry)
-	{
-		NXP_LOG_ERROR("oal_mm_malloc() failed\n");
-		return ENOMEM;
-	}
-
-	if (in_hash_grp)
-	{
-		entry->hash = data;
-		entry->in_hash_grp = TRUE;
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		entry->addr_slot_idx = (uint8_t)data;
-		entry->in_hash_grp = FALSE;
+		/*	Create new list entry */
+#ifdef PFE_CFG_TARGET_OS_LINUX
+		entry = kzalloc(sizeof(pfe_mac_addr_db_entry_t), GFP_ATOMIC); /* temporary fix for AAVB-3946 */
+#else
+		entry = oal_mm_malloc(sizeof(pfe_mac_addr_db_entry_t));
+#endif
+		if (NULL == entry)
+		{
+			NXP_LOG_ERROR("oal_mm_malloc() failed\n");
+			ret = ENOMEM;
+		}
+		else
+		{
+
+			if (in_hash_grp)
+			{
+				entry->hash = data;
+				entry->in_hash_grp = TRUE;
+			}
+			else
+			{
+				entry->addr_slot_idx = (uint8_t)data;
+				entry->in_hash_grp = FALSE;
+			}
+
+			entry->owner = owner;
+
+			/*	Add entry to the list */
+			(void)memcpy(entry->addr, addr, sizeof(pfe_mac_addr_t));
+
+			LLIST_AddAtEnd(&entry->iterator, &emac->mac_addr_list);
+			ret = EOK;
+		}
 	}
 
-	entry->owner = owner;
-
-	/*	Add entry to the list */
-	(void)memcpy(entry->addr, addr, sizeof(pfe_mac_addr_t));
-
-	LLIST_AddAtEnd(&entry->iterator, &emac->mac_addr_list);
-
-	return EOK;
+	return ret;
 }
 
 /**
@@ -194,18 +203,22 @@ static errno_t pfe_emac_addr_db_add(pfe_emac_t *emac, const pfe_mac_addr_t addr,
  */
 static errno_t pfe_emac_addr_db_del_entry(const pfe_emac_t *emac, pfe_mac_addr_db_entry_t *entry)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == emac) || (NULL == entry)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #else
 	(void)emac;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	LLIST_Remove(&entry->iterator);
-	return EOK;
+	{
+		LLIST_Remove(&entry->iterator);
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -222,16 +235,17 @@ static void pfe_emac_addr_db_drop_all(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	Release the MAC address DB */
-	LLIST_ForEachRemovable(curItem, tmp_item, &emac->mac_addr_list)
 	{
-		entry = LLIST_Data(curItem, pfe_mac_addr_db_entry_t, iterator);
-		LLIST_Remove(&entry->iterator);
-		oal_mm_free(entry);
+		/*	Release the MAC address DB */
+		LLIST_ForEachRemovable(curItem, tmp_item, &emac->mac_addr_list)
+		{
+			entry = LLIST_Data(curItem, pfe_mac_addr_db_entry_t, iterator);
+			LLIST_Remove(&entry->iterator);
+			oal_mm_free(entry);
+		}
 	}
 }
 
@@ -246,26 +260,35 @@ static void pfe_emac_addr_db_drop_all(const pfe_emac_t *emac)
 static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(const pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
 {
 	pfe_mac_addr_db_entry_t *entry = NULL;
-	LLIST_t *curItem;
+	LLIST_t *                curItem;
+	bool_t                   match = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
+		entry = NULL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	LLIST_ForEach(curItem, &emac->mac_addr_list)
 	{
-		entry = LLIST_Data(curItem, pfe_mac_addr_db_entry_t, iterator);
-		if ((entry->owner == owner) && (0 == memcmp(addr, entry->addr, sizeof(pfe_mac_addr_t))))
+		LLIST_ForEach(curItem, &emac->mac_addr_list)
 		{
-			return entry;
+			entry = LLIST_Data(curItem, pfe_mac_addr_db_entry_t, iterator);
+			if ((entry->owner == owner) && (0 == memcmp(addr, entry->addr, sizeof(pfe_mac_addr_t))))
+			{
+				match = TRUE;
+				break;
+			}
 		}
 	}
 
-	return NULL;
+	if (FALSE == match)
+	{
+		entry = NULL;
+	}
+
+	return entry;
 }
 
 /**
@@ -276,22 +299,27 @@ static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(const pfe_emac_t *
  */
 static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_get_first(const pfe_emac_t *emac)
 {
+	pfe_mac_addr_db_entry_t *db_entry;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (TRUE == LLIST_IsEmpty(&emac->mac_addr_list))
-	{
-		return NULL;
+		db_entry = NULL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return LLIST_Data(emac->mac_addr_list.prNext, pfe_mac_addr_db_entry_t, iterator);
+		if (TRUE == LLIST_IsEmpty(&emac->mac_addr_list))
+		{
+			db_entry = NULL;
+		}
+		else
+		{
+			db_entry = LLIST_Data(emac->mac_addr_list.prNext, pfe_mac_addr_db_entry_t, iterator);
+		}
 	}
+
+	return db_entry;
 }
 
 /**
@@ -304,26 +332,34 @@ static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_get_first(const pfe_emac_t *ema
 static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(const pfe_emac_t *emac, uint32_t hash)
 {
 	pfe_mac_addr_db_entry_t *entry = NULL;
-	LLIST_t *curItem;
+	LLIST_t *                curItem;
+	bool_t                   match = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
+		entry = NULL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	LLIST_ForEach(curItem, &emac->mac_addr_list)
 	{
-		entry = LLIST_Data(curItem, pfe_mac_addr_db_entry_t, iterator);
-		if (entry->hash == hash)
+		LLIST_ForEach(curItem, &emac->mac_addr_list)
 		{
-			return entry;
+			entry = LLIST_Data(curItem, pfe_mac_addr_db_entry_t, iterator);
+			if (entry->hash == hash)
+			{
+				match = TRUE;
+				break;
+			}
 		}
 	}
 
-	return NULL;
+	if (FALSE == match)
+	{
+		entry = NULL;
+	}
+	return entry;
 }
 
 /**
@@ -336,26 +372,34 @@ static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(const pfe_emac_t *
 static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_slot(const pfe_emac_t *emac, uint8_t slot)
 {
 	pfe_mac_addr_db_entry_t *entry = NULL;
+	bool_t                   match = FALSE;
 	LLIST_t *curItem;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
+		entry = NULL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	LLIST_ForEach(curItem, &emac->mac_addr_list)
 	{
-		entry = LLIST_Data(curItem, pfe_mac_addr_db_entry_t, iterator);
-		if (entry->addr_slot_idx == slot)
+		LLIST_ForEach(curItem, &emac->mac_addr_list)
 		{
-			return entry;
+			entry = LLIST_Data(curItem, pfe_mac_addr_db_entry_t, iterator);
+			if (entry->addr_slot_idx == slot)
+			{
+				match = TRUE;
+				break;
+			}
 		}
 	}
 
-	return NULL;
+	if (FALSE == match)
+	{
+		entry = NULL;
+	}
+	return entry;
 }
 
 /**
@@ -376,90 +420,92 @@ pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_
 	if (unlikely(NULL_ADDR == cbus_base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	emac = oal_mm_malloc(sizeof(pfe_emac_t));
-
-	if (NULL == emac)
-	{
-		return NULL;
+		emac = NULL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		(void)memset(emac, 0, sizeof(pfe_emac_t));
-		emac->cbus_base_va = cbus_base_va;
-		emac->emac_base_offset = emac_base;
-		emac->emac_base_va = (emac->cbus_base_va + emac->emac_base_offset);
-		emac->mode = EMAC_MODE_INVALID;
-		emac->speed = EMAC_SPEED_INVALID;
-		emac->duplex = EMAC_DUPLEX_INVALID;
+		emac = oal_mm_malloc(sizeof(pfe_emac_t));
 
-		if (EOK != oal_mutex_init(&emac->mutex))
+		if (NULL != emac)
 		{
-			NXP_LOG_ERROR("Mutex init failed\n");
-			oal_mm_free(emac);
-			return NULL;
-		}
+			(void)memset(emac, 0, sizeof(pfe_emac_t));
+			emac->cbus_base_va = cbus_base_va;
+			emac->emac_base_offset = emac_base;
+			emac->emac_base_va = (emac->cbus_base_va + emac->emac_base_offset);
+			emac->mode = EMAC_MODE_INVALID;
+			emac->speed = EMAC_SPEED_INVALID;
+			emac->duplex = EMAC_DUPLEX_INVALID;
 
-		if (EOK != oal_mutex_init(&emac->ts_mutex))
-		{
-			NXP_LOG_ERROR("TS mutex init failed\n");
-			(void)oal_mutex_destroy(&emac->mutex);
-			oal_mm_free(emac);
-			return NULL;
-		}
-
-		if (EOK != oal_mutex_lock(&emac->mutex))
-		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
-		}
-
-		/*	All slots are free */
-		emac->mac_addr_slots = 0U;
-
-		/*	Initialize the MAC address DB */
-		pfe_emac_addr_db_init(emac);
-
-		/*	Disable the HW */
-		pfe_emac_disable(emac);
-
-		/*	Initialize the HW */
-		if (EOK != pfe_emac_cfg_init(emac->emac_base_va, mode, speed, duplex))
-		{
-			if (EOK != oal_mutex_unlock(&emac->mutex))
+			if (EOK != oal_mutex_init(&emac->mutex))
 			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
+				NXP_LOG_ERROR("Mutex init failed\n");
+				oal_mm_free(emac);
+				emac = NULL;
 			}
+			else
+			{
 
-			/*	Invalid configuration */
-			NXP_LOG_ERROR("Invalid configuration requested\n");
-			(void)oal_mutex_destroy(&emac->mutex);
-			(void)oal_mutex_destroy(&emac->ts_mutex);
-			oal_mm_free(emac);
-			emac = NULL;
-			return NULL;
-		}
-		else
-		{
-			emac->mode = mode;
-			emac->speed = speed;
-			emac->duplex = duplex;
-		}
+				if (EOK != oal_mutex_init(&emac->ts_mutex))
+				{
+					NXP_LOG_ERROR("TS mutex init failed\n");
+					(void)oal_mutex_destroy(&emac->mutex);
+					oal_mm_free(emac);
+					emac = NULL;
+				}
+				else
+				{
+					if (EOK != oal_mutex_lock(&emac->mutex))
+					{
+						NXP_LOG_DEBUG("Mutex lock failed\n");
+					}
 
-		/*	Disable loop-back */
-		pfe_emac_disable_loopback(emac);
+					/*	All slots are free */
+					emac->mac_addr_slots = 0U;
 
-		/*	Disable promiscuous mode */
-		pfe_emac_disable_promisc_mode(emac);
+					/*	Initialize the MAC address DB */
+					pfe_emac_addr_db_init(emac);
 
-		/*	Disable broadcast */
-		pfe_emac_disable_broadcast(emac);
+					/*	Disable the HW */
+					pfe_emac_disable(emac);
 
-		if (EOK != oal_mutex_unlock(&emac->mutex))
-		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+					/*	Initialize the HW */
+					if (EOK != pfe_emac_cfg_init(emac->emac_base_va, mode, speed, duplex))
+					{
+						if (EOK != oal_mutex_unlock(&emac->mutex))
+						{
+							NXP_LOG_DEBUG("Mutex unlock failed\n");
+						}
+
+						/*	Invalid configuration */
+						NXP_LOG_ERROR("Invalid configuration requested\n");
+						(void)oal_mutex_destroy(&emac->mutex);
+						(void)oal_mutex_destroy(&emac->ts_mutex);
+						oal_mm_free(emac);
+						emac = NULL;
+					}
+					else
+					{
+						emac->mode = mode;
+						emac->speed = speed;
+						emac->duplex = duplex;
+
+						/*	Disable loop-back */
+						pfe_emac_disable_loopback(emac);
+
+						/*	Disable promiscuous mode */
+						pfe_emac_disable_promisc_mode(emac);
+
+						/*	Disable broadcast */
+						pfe_emac_disable_broadcast(emac);
+
+						if (EOK != oal_mutex_unlock(&emac->mutex))
+						{
+							NXP_LOG_DEBUG("Mutex unlock failed\n");
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -486,17 +532,21 @@ uint8_t pfe_emac_get_index(pfe_emac_t *emac)
 
 errno_t pfe_emac_bind_gpi(pfe_emac_t *emac, pfe_gpi_t *gpi)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == emac) || (NULL == gpi)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		emac->gpi = gpi;
+		ret = EOK;
+	}
 
-	emac->gpi = gpi;
-
-	return EOK;
+	return ret;
 }
 
 pfe_gpi_t *pfe_emac_get_gpi(const pfe_emac_t *emac)
@@ -515,11 +565,12 @@ void pfe_emac_enable(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_emac_cfg_set_enable(emac->emac_base_va, TRUE);
+	{
+		pfe_emac_cfg_set_enable(emac->emac_base_va, TRUE);
+	}
 }
 
 /**
@@ -533,11 +584,12 @@ void pfe_emac_disable(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_emac_cfg_set_enable(emac->emac_base_va, FALSE);
+	{
+		pfe_emac_cfg_set_enable(emac->emac_base_va, FALSE);
+	}
 }
 
 /**
@@ -559,24 +611,25 @@ errno_t pfe_emac_enable_ts(pfe_emac_t *emac, uint32_t i_clk_hz, uint32_t o_clk_h
 	if (!eclk && (i_clk_hz <= o_clk_hz))
 	{
 		NXP_LOG_ERROR("Invalid clock configuration\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-
-	emac->i_clk_hz = i_clk_hz;
-	emac->o_clk_hz = o_clk_hz;
-
-	if (EOK != oal_mutex_lock(&emac->ts_mutex))
+	else
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		emac->i_clk_hz = i_clk_hz;
+		emac->o_clk_hz = o_clk_hz;
+
+		if (EOK != oal_mutex_lock(&emac->ts_mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		ret = pfe_emac_cfg_enable_ts(emac->emac_base_va, eclk, i_clk_hz, o_clk_hz);
+
+		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
 	}
-
-	ret = pfe_emac_cfg_enable_ts(emac->emac_base_va, eclk, i_clk_hz, o_clk_hz);
-
-	if (EOK != oal_mutex_unlock(&emac->ts_mutex))
-	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-
 	return ret;
 }
 
@@ -618,9 +671,10 @@ errno_t pfe_emac_set_ts_freq_adjustment(pfe_emac_t *emac, uint32_t ppb, bool_t s
  */
 errno_t pfe_emac_get_ts_freq_adjustment(pfe_emac_t *emac, uint32_t *ppb, bool_t *sgn)
 {
+	errno_t ret;
 	if ((NULL == ppb) || (NULL == sgn))
 	{
-		return EINVAL;
+		ret = EINVAL;
 	}
 	else
 	{
@@ -636,9 +690,9 @@ errno_t pfe_emac_get_ts_freq_adjustment(pfe_emac_t *emac, uint32_t *ppb, bool_t 
 		{
 			NXP_LOG_DEBUG("Mutex lock failed\n");
 		}
-
-		return EOK;
+		ret = EOK;
 	}
+	return ret;
 }
 
 /**
@@ -657,27 +711,29 @@ errno_t pfe_emac_get_ts_time(pfe_emac_t *emac, uint32_t *sec, uint32_t *nsec, ui
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if ((NULL == sec) || (NULL == nsec) || (NULL == sec_hi))
-	{
 		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		if (EOK != oal_mutex_lock(&emac->ts_mutex))
+		if ((NULL == sec) || (NULL == nsec) || (NULL == sec_hi))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			ret = EINVAL;
 		}
-
-		pfe_emac_cfg_get_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
-		ret = EOK;
-
-		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+		else
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			if (EOK != oal_mutex_lock(&emac->ts_mutex))
+			{
+				NXP_LOG_DEBUG("Mutex lock failed\n");
+			}
+
+			pfe_emac_cfg_get_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
+
+			if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+			{
+				NXP_LOG_DEBUG("Mutex lock failed\n");
+			}
+			ret = EOK;
 		}
 	}
 
@@ -704,20 +760,22 @@ errno_t pfe_emac_adjust_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, b
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&emac->ts_mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
+		if (EOK != oal_mutex_lock(&emac->ts_mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
 
-	ret = pfe_emac_cfg_adjust_ts_time(emac->emac_base_va, sec, nsec, sgn);
+		ret = pfe_emac_cfg_adjust_ts_time(emac->emac_base_va, sec, nsec, sgn);
 
-	if (EOK != oal_mutex_unlock(&emac->ts_mutex))
-	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
 	}
 
 	return ret;
@@ -741,20 +799,22 @@ errno_t pfe_emac_set_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, uint
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&emac->ts_mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
+		if (EOK != oal_mutex_lock(&emac->ts_mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
 
-	ret = pfe_emac_cfg_set_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
+		ret = pfe_emac_cfg_set_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
 
-	if (EOK != oal_mutex_unlock(&emac->ts_mutex))
-	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
 	}
 
 	return ret;
@@ -771,11 +831,12 @@ void pfe_emac_enable_loopback(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_emac_cfg_set_loopback(emac->emac_base_va, TRUE);
+	{
+		pfe_emac_cfg_set_loopback(emac->emac_base_va, TRUE);
+	}
 }
 
 /**
@@ -788,11 +849,12 @@ void pfe_emac_disable_loopback(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_emac_cfg_set_loopback(emac->emac_base_va, FALSE);
+	{
+		pfe_emac_cfg_set_loopback(emac->emac_base_va, FALSE);
+	}
 }
 
 /**
@@ -805,11 +867,12 @@ void pfe_emac_enable_promisc_mode(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_emac_cfg_set_promisc_mode(emac->emac_base_va, TRUE);
+	{
+		pfe_emac_cfg_set_promisc_mode(emac->emac_base_va, TRUE);
+	}
 }
 
 /**
@@ -822,11 +885,12 @@ void pfe_emac_disable_promisc_mode(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_emac_cfg_set_promisc_mode(emac->emac_base_va, FALSE);
+	{
+		pfe_emac_cfg_set_promisc_mode(emac->emac_base_va, FALSE);
+	}
 }
 
 /**
@@ -839,11 +903,12 @@ void pfe_emac_enable_allmulti_mode(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_emac_cfg_set_allmulti_mode(emac->emac_base_va, TRUE);
+	{
+		pfe_emac_cfg_set_allmulti_mode(emac->emac_base_va, TRUE);
+	}
 }
 
 /**
@@ -856,11 +921,12 @@ void pfe_emac_disable_allmulti_mode(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_emac_cfg_set_allmulti_mode(emac->emac_base_va, FALSE);
+	{
+		pfe_emac_cfg_set_allmulti_mode(emac->emac_base_va, FALSE);
+	}
 }
 
 /**
@@ -873,11 +939,12 @@ void pfe_emac_enable_broadcast(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_emac_cfg_set_broadcast(emac->emac_base_va, TRUE);
+	{
+		pfe_emac_cfg_set_broadcast(emac->emac_base_va, TRUE);
+	}
 }
 
 /**
@@ -890,11 +957,12 @@ void pfe_emac_disable_broadcast(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_emac_cfg_set_broadcast(emac->emac_base_va, FALSE);
+	{
+		pfe_emac_cfg_set_broadcast(emac->emac_base_va, FALSE);
+	}
 }
 
 void pfe_emac_get_flow_control(const pfe_emac_t *emac, bool_t *tx_enable, bool_t *rx_enable)
@@ -904,11 +972,13 @@ void pfe_emac_get_flow_control(const pfe_emac_t *emac, bool_t *tx_enable, bool_t
 		unlikely(NULL == rx_enable))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	pfe_emac_cfg_get_tx_flow_control(emac->emac_base_va,tx_enable);
-	pfe_emac_cfg_get_rx_flow_control(emac->emac_base_va,rx_enable);
+	{
+		pfe_emac_cfg_get_tx_flow_control(emac->emac_base_va,tx_enable);
+		pfe_emac_cfg_get_rx_flow_control(emac->emac_base_va,rx_enable);
+	}
 }
 
 /**
@@ -922,11 +992,12 @@ void pfe_emac_enable_tx_flow_control(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_emac_cfg_set_tx_flow_control(emac->emac_base_va, TRUE);
+	{
+		pfe_emac_cfg_set_tx_flow_control(emac->emac_base_va, TRUE);
+	}
 }
 
 /**
@@ -940,11 +1011,12 @@ void pfe_emac_disable_tx_flow_control(const pfe_emac_t *emac)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+    else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_emac_cfg_set_tx_flow_control(emac->emac_base_va, FALSE);
+    {
+		pfe_emac_cfg_set_tx_flow_control (emac->emac_base_va, FALSE);
+    }
 }
 
 /**
@@ -955,14 +1027,15 @@ void pfe_emac_disable_tx_flow_control(const pfe_emac_t *emac)
 void pfe_emac_enable_rx_flow_control(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-        if (unlikely(NULL == emac))
-        {
-                NXP_LOG_ERROR("NULL argument received\n");
-                return;
-        }
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
+	{
         pfe_emac_cfg_set_rx_flow_control(emac->emac_base_va, TRUE);
+	}
 }
 
 /**
@@ -973,14 +1046,15 @@ void pfe_emac_enable_rx_flow_control(const pfe_emac_t *emac)
 void pfe_emac_disable_rx_flow_control(const pfe_emac_t *emac)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-        if (unlikely(NULL == emac))
-        {
-                NXP_LOG_ERROR("NULL argument received\n");
-                return;
-        }
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
+	{
         pfe_emac_cfg_set_rx_flow_control(emac->emac_base_va, FALSE);
+	}
 }
 
 
@@ -998,16 +1072,17 @@ errno_t pfe_emac_set_max_frame_length(const pfe_emac_t *emac, uint32_t len)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	ret = pfe_emac_cfg_set_max_frame_length(emac->emac_base_va, len);
-	if (EOK != ret)
 	{
-		NXP_LOG_ERROR("Attempt to set unsupported frame length value\n");
+		ret = pfe_emac_cfg_set_max_frame_length(emac->emac_base_va, len);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Attempt to set unsupported frame length value\n");
+		}
 	}
-
 	return ret;
 }
 
@@ -1018,15 +1093,19 @@ errno_t pfe_emac_set_max_frame_length(const pfe_emac_t *emac, uint32_t len)
  */
 pfe_emac_mii_mode_t pfe_emac_get_mii_mode(const pfe_emac_t *emac)
 {
+	pfe_emac_mii_mode_t mii_mode;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EMAC_MODE_INVALID;
+		mii_mode = EMAC_MODE_INVALID;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	return emac->mode;
+	{
+		mii_mode = emac->mode;
+	}
+	return mii_mode;
 }
 
 /**
@@ -1044,11 +1123,13 @@ errno_t pfe_emac_get_link_config(const pfe_emac_t *emac, pfe_emac_speed_t *speed
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	ret = pfe_emac_cfg_get_link_config(emac->emac_base_va, speed, duplex);
+	{
+		ret = pfe_emac_cfg_get_link_config(emac->emac_base_va, speed, duplex);
+	}
 
 	return ret;
 }
@@ -1069,12 +1150,13 @@ errno_t pfe_emac_get_link_status(const pfe_emac_t *emac, pfe_emac_link_speed_t *
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	ret = pfe_emac_cfg_get_link_status(emac->emac_base_va, link_speed, duplex, link);
-
+	{
+		ret = pfe_emac_cfg_get_link_status(emac->emac_base_va, link_speed, duplex, link);
+	}
 	return ret;
 }
 
@@ -1087,17 +1169,19 @@ errno_t pfe_emac_get_link_status(const pfe_emac_t *emac, pfe_emac_link_speed_t *
  */
 errno_t pfe_emac_set_link_speed(const pfe_emac_t *emac, pfe_emac_speed_t link_speed)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	ret = pfe_emac_cfg_set_speed(emac->emac_base_va, link_speed);
+	{
+		ret = pfe_emac_cfg_set_speed(emac->emac_base_va, link_speed);
+	}
 
 	return ret;
 }
@@ -1117,11 +1201,13 @@ errno_t pfe_emac_set_link_duplex(const pfe_emac_t *emac, pfe_emac_duplex_t duple
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	ret = pfe_emac_cfg_set_duplex(emac->emac_base_va, duplex);
+	{
+		ret = pfe_emac_cfg_set_duplex(emac->emac_base_va, duplex);
+	}
 
 	return ret;
 }
@@ -1140,57 +1226,56 @@ errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_emac_crit_t crit, pfe_mac
 {
 	const pfe_mac_addr_db_entry_t *entry = NULL;
 	LLIST_t *item, *tmp_item;
-	errno_t ret;
+	errno_t ret = EOK;
 	pfe_mac_addr_t addr;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	if (EOK != oal_mutex_lock(&emac->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-
-	LLIST_ForEachRemovable(item, tmp_item, &emac->mac_addr_list)
-	{
-		entry = LLIST_Data(item, pfe_mac_addr_db_entry_t, iterator);
-		if ((NULL != entry) && (entry->owner == owner))
+		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			(void)memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
-			if (TRUE == pfe_emac_flush_criterion_eval(entry, crit, type, owner))
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		LLIST_ForEachRemovable(item, tmp_item, &emac->mac_addr_list)
+		{
+			entry = LLIST_Data(item, pfe_mac_addr_db_entry_t, iterator);
+			if ((NULL != entry) && (entry->owner == owner))
 			{
-				ret = pfe_emac_del_addr_nolock(emac, entry->addr, entry->owner);
-				if (EOK != ret)
+				(void)memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
+				if (TRUE == pfe_emac_flush_criterion_eval(entry, crit, type, owner))
 				{
-					NXP_LOG_WARNING("Can't remove MAC address within the flush function\n");
-					if (EOK != oal_mutex_unlock(&emac->mutex))
+					ret = pfe_emac_del_addr_nolock(emac, entry->addr, entry->owner);
+					if (EOK != ret)
 					{
-						NXP_LOG_DEBUG("Mutex unlock failed\n");
+						NXP_LOG_WARNING("Can't remove MAC address within the flush function\n");
+						break;
 					}
-					return ret;
-				}
-				else
-				{
-					NXP_LOG_DEBUG("Address %02x:%02x:%02x:%02x:%02x:%02x removed from owner ID %d\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], owner);
+					else
+					{
+						NXP_LOG_DEBUG("Address %02x:%02x:%02x:%02x:%02x:%02x removed from owner ID %d\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], owner);
+					}
 				}
 			}
+			else
+			{
+				;
+			}
 		}
-		else
+
+		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
-			;
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
 		}
 	}
 
-	if (EOK != oal_mutex_unlock(&emac->mutex))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
-	}
-
-	return EOK;
+	return ret;
 }
 
 /**
@@ -1211,19 +1296,22 @@ errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_i
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	if (EOK != oal_mutex_lock(&emac->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
+		if (EOK != oal_mutex_lock(&emac->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
 
-	ret = pfe_emac_del_addr_nolock(emac, addr, owner);
+		ret = pfe_emac_del_addr_nolock(emac, addr, owner);
 
-	if (EOK != oal_mutex_unlock(&emac->mutex))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		if (EOK != oal_mutex_unlock(&emac->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
 	}
 
 	return ret;
@@ -1248,64 +1336,65 @@ static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, const pfe_mac_addr_t a
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	Get address entry from the internal DB */
-	entry = pfe_emac_addr_db_find_by_addr(emac, addr, owner);
-
-	if (NULL == entry)
-	{
-		return ENOENT;
-	}
-
-	/*	Remember the entry */
-	local_entry = *entry;
-
-	/*	Remove the entry form DB */
-	ret = pfe_emac_addr_db_del_entry(emac, entry);
-
-	if (EOK != ret)
-	{
-		return ret;
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		/*	Release the entry */
-		oal_mm_free(entry);
-		entry = NULL;
-	}
+		/*	Get address entry from the internal DB */
+		entry = pfe_emac_addr_db_find_by_addr(emac, addr, owner);
 
-	if (TRUE == local_entry.in_hash_grp)
-	{
-		/*	Check if the hash group the address belongs to contains another addresses */
-		if (NULL != pfe_emac_addr_db_find_by_hash(emac, local_entry.hash))
+		if (NULL == entry)
 		{
-			/*	Hash group contains more addresses. Keep the HW configured. */
-			;
+			ret = ENOENT;
 		}
 		else
 		{
-			/*	Configure the HW */
-			pfe_emac_cfg_set_hash_group(emac->emac_base_va, local_entry.hash, FALSE);
+			/*	Remember the entry */
+			local_entry = *entry;
+
+			/*	Remove the entry form DB */
+			ret = pfe_emac_addr_db_del_entry(emac, entry);
+
+			if (EOK == ret)
+			{
+				/*	Release the entry */
+				oal_mm_free(entry);
+				entry = NULL;
+
+				/* eventhought the entry pointer is freed the local_entry still store the value of the entry pointer */
+				if (TRUE == local_entry.in_hash_grp)
+				{
+					/*	Check if the hash group the address belongs to contains another addresses */
+					if (NULL != pfe_emac_addr_db_find_by_hash(emac, local_entry.hash))
+					{
+						/*	Hash group contains more addresses. Keep the HW configured. */
+						;
+					}
+					else
+					{
+						/*	Configure the HW */
+						pfe_emac_cfg_set_hash_group(emac->emac_base_va, local_entry.hash, FALSE);
+					}
+				}
+				else
+				{
+					pfe_mac_addr_t zero_addr;
+
+					/*	Prepare zero-filled address */
+					(void)memset(zero_addr, 0, sizeof(pfe_mac_addr_t));
+
+					/*	Clear the specific slot */
+					pfe_emac_cfg_write_addr_slot(emac->emac_base_va, zero_addr, local_entry.addr_slot_idx);
+
+					/*	Mark the slot as unused */
+					emac->mac_addr_slots &= ~(1U << local_entry.addr_slot_idx);
+				}
+			}
 		}
 	}
-	else
-	{
-		pfe_mac_addr_t zero_addr;
 
-		/*	Prepare zero-filled address */
-		(void)memset(zero_addr, 0, sizeof(pfe_mac_addr_t));
-
-		/*	Clear the specific slot */
-		pfe_emac_cfg_write_addr_slot(emac->emac_base_va, zero_addr, local_entry.addr_slot_idx);
-
-		/*	Mark the slot as unused */
-		emac->mac_addr_slots &= ~(1U << local_entry.addr_slot_idx);
-	}
-
-	return EOK;
+	return ret;
 }
 
 /**
@@ -1329,95 +1418,84 @@ errno_t pfe_emac_add_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_i
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	if (EOK != oal_mutex_lock(&emac->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
+		if (EOK != oal_mutex_lock(&emac->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
 
-	/*	Check if address is already registered */
-	entry = pfe_emac_addr_db_find_by_addr(emac, addr, owner);
+		/*	Check if address is already registered */
+		entry = pfe_emac_addr_db_find_by_addr(emac, addr, owner);
 
-	if (NULL != entry)
-	{
+		if (NULL != entry)
+		{
+			/*	Duplicates are not allowed */
+			ret = EEXIST;
+		}
+		else
+		{
+			/*	Try to get free individual address slot */
+			for (slot=0U; slot<EMAC_CFG_INDIVIDUAL_ADDR_SLOTS_COUNT; slot++)
+			{
+				if (0U == (emac->mac_addr_slots & (1U << slot)))
+				{
+					/*	Found */
+					break;
+				}
+			}
+
+			/* Slots are full, add hash of the address into the hash table */
+			if (EMAC_CFG_INDIVIDUAL_ADDR_SLOTS_COUNT == slot)
+			{
+				if (pfe_emac_is_broad(addr))
+				{
+					/*	Can't add broadcast address */
+					ret = EINVAL;
+				}
+				else
+				{
+
+					/*	Get the hash */
+					hash = pfe_emac_cfg_get_hash(emac->emac_base_va, addr);
+
+					/*	Store address into EMAC's internal DB together with 'in_hash_grp' flag and hash */
+					ret = pfe_emac_addr_db_add(emac, addr, TRUE, hash, owner);
+
+					if (EOK == ret)
+					{
+						/*	Configure the HW */
+						pfe_emac_cfg_set_hash_group(emac->emac_base_va, hash, TRUE);
+					}
+				}
+			}
+			/* There is free address slot, use it */
+			else
+			{
+				/*	Add address into the internal DB together with slot index */
+				ret = pfe_emac_addr_db_add(emac, addr, FALSE, slot, owner);
+
+				if (EOK == ret)
+				{
+					/*	Mark the slot as used */
+					emac->mac_addr_slots |= (1U << slot);
+
+					/*	Write the address to HW as individual address */
+					pfe_emac_cfg_write_addr_slot(emac->emac_base_va, addr, (uint8_t)slot);
+				}
+			}
+		}
+
 		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
 			NXP_LOG_DEBUG("Mutex unlock failed\n");
 		}
-		/*	Duplicates are not allowed */
-		return EEXIST;
 	}
 
-	/*	Try to get free individual address slot */
-	for (slot=0U; slot<EMAC_CFG_INDIVIDUAL_ADDR_SLOTS_COUNT; slot++)
-	{
-		if (0U == (emac->mac_addr_slots & (1U << slot)))
-		{
-			/*	Found */
-			break;
-		}
-	}
-
-	/* Slots are full, add hash of the address into the hash table */
-	if (EMAC_CFG_INDIVIDUAL_ADDR_SLOTS_COUNT == slot)
-	{
-		if (pfe_emac_is_broad(addr))
-		{
-			if (EOK != oal_mutex_unlock(&emac->mutex))
-			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
-			}
-
-			/*	Can't add broadcast address */
-			return EINVAL;
-		}
-
-		/*	Get the hash */
-		hash = pfe_emac_cfg_get_hash(emac->emac_base_va, addr);
-
-		/*	Store address into EMAC's internal DB together with 'in_hash_grp' flag and hash */
-		ret = pfe_emac_addr_db_add(emac, addr, TRUE, hash, owner);
-		if (EOK != ret)
-		{
-			if (EOK != oal_mutex_unlock(&emac->mutex))
-			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
-			}
-			return ret;
-		}
-
-		/*	Configure the HW */
-		pfe_emac_cfg_set_hash_group(emac->emac_base_va, hash, TRUE);
-	}
-	/* There is free address slot, use it */
-	else
-	{
-		/*	Add address into the internal DB together with slot index */
-		ret = pfe_emac_addr_db_add(emac, addr, FALSE, slot, owner);
-		if (EOK != ret)
-		{
-			if (EOK != oal_mutex_unlock(&emac->mutex))
-			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
-			}
-			return ret;
-		}
-
-		/*	Mark the slot as used */
-		emac->mac_addr_slots |= (1U << slot);
-
-		/*	Write the address to HW as individual address */
-		pfe_emac_cfg_write_addr_slot(emac->emac_base_va, addr, (uint8_t)slot);
-	}
-
-	if (EOK != oal_mutex_unlock(&emac->mutex))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
-	}
-
-	return EOK;
+	return ret;
 }
 
 /**
@@ -1430,43 +1508,46 @@ errno_t pfe_emac_add_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_i
 errno_t pfe_emac_get_addr(pfe_emac_t *emac, pfe_mac_addr_t addr)
 {
 	const pfe_mac_addr_db_entry_t *entry;
+	errno_t ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	if (EOK != oal_mutex_lock(&emac->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
+		if (EOK != oal_mutex_lock(&emac->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
 
-	/*	Return address from the 0th individual address slot */
-	entry = pfe_emac_addr_db_find_by_slot(emac, 0U);
-	if (NULL == entry)
-	{
-		/*	Individual slots are empty. Check if there is something in the hash table. */
-		entry = pfe_emac_addr_db_get_first(emac);
+		/*	Return address from the 0th individual address slot */
+		entry = pfe_emac_addr_db_find_by_slot(emac, 0U);
 		if (NULL == entry)
 		{
-			if (EOK != oal_mutex_unlock(&emac->mutex))
+			/*	Individual slots are empty. Check if there is something in the hash table. */
+			entry = pfe_emac_addr_db_get_first(emac);
+			if (NULL == entry)
 			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
+				ret = ENOENT;
 			}
-			return ENOENT;
+		}
+
+		if (EOK == ret)
+		{
+			(void)memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
+		}
+
+		if (EOK != oal_mutex_unlock(&emac->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
 		}
 	}
 
-	(void)memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
-
-	if (EOK != oal_mutex_unlock(&emac->mutex))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
-	}
-
-	return EOK;
+	return ret;
 }
 
 /**
@@ -1539,32 +1620,34 @@ errno_t pfe_emac_mdio_lock(pfe_emac_t *emac, uint32_t *key)
 	if (unlikely((NULL == emac) || (NULL == key)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&emac->mutex))
-	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-
-	if (TRUE == emac->mdio_locked)
-	{
-		ret = EPERM;
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		/*	Perform lock + generate and store access key */
-		emac->mdio_locked = TRUE;
-		emac->mdio_key = key_seed;
-		key_seed++;
-		*key = emac->mdio_key;
-		ret = EOK;
-	}
+		if (EOK != oal_mutex_lock(&emac->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
 
-	if (EOK != oal_mutex_unlock(&emac->mutex))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		if (TRUE == emac->mdio_locked)
+		{
+			ret = EPERM;
+		}
+		else
+		{
+			/*	Perform lock + generate and store access key */
+			emac->mdio_locked = TRUE;
+			emac->mdio_key = key_seed;
+			key_seed++;
+			*key = emac->mdio_key;
+			ret = EOK;
+		}
+
+		if (EOK != oal_mutex_unlock(&emac->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
 	}
 
 	return ret;
@@ -1585,35 +1668,37 @@ errno_t pfe_emac_mdio_unlock(pfe_emac_t *emac, uint32_t key)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&emac->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-
-	if (TRUE == emac->mdio_locked)
-	{
-		if (key == emac->mdio_key)
+		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			emac->mdio_locked = FALSE;
-			ret = EOK;
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		if (TRUE == emac->mdio_locked)
+		{
+			if (key == emac->mdio_key)
+			{
+				emac->mdio_locked = FALSE;
+				ret = EOK;
+			}
+			else
+			{
+				ret = EPERM;
+			}
 		}
 		else
 		{
-			ret = EPERM;
+			ret = ENOLCK;
 		}
-	}
-	else
-	{
-		ret = ENOLCK;
-	}
 
-	if (EOK != oal_mutex_unlock(&emac->mutex))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		if (EOK != oal_mutex_unlock(&emac->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
 	}
 
 	return ret;
@@ -1636,36 +1721,38 @@ errno_t pfe_emac_mdio_read22(pfe_emac_t *emac, uint8_t pa, uint8_t ra, uint16_t 
 	if (unlikely((NULL == emac) || (NULL == val)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&emac->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-
-	if (TRUE == emac->mdio_locked)
-	{
-		/*	Locked. Check key. */
-		if (key == emac->mdio_key)
+		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			ret = pfe_emac_cfg_mdio_read22(emac->emac_base_va, pa, ra, val);
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		if (TRUE == emac->mdio_locked)
+		{
+			/*	Locked. Check key. */
+			if (key == emac->mdio_key)
+			{
+				ret = pfe_emac_cfg_mdio_read22(emac->emac_base_va, pa, ra, val);
+			}
+			else
+			{
+				ret = EPERM;
+			}
 		}
 		else
 		{
-			ret = EPERM;
+			/*	Unlocked. No check required. */
+			ret = pfe_emac_cfg_mdio_read22(emac->emac_base_va, pa, ra, val);
 		}
-	}
-	else
-	{
-		/*	Unlocked. No check required. */
-		ret = pfe_emac_cfg_mdio_read22(emac->emac_base_va, pa, ra, val);
-	}
 
-	if (EOK != oal_mutex_unlock(&emac->mutex))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		if (EOK != oal_mutex_unlock(&emac->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
 	}
 
 	return ret;
@@ -1688,38 +1775,39 @@ errno_t pfe_emac_mdio_write22(pfe_emac_t *emac, uint8_t pa, uint8_t ra, uint16_t
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&emac->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-
-	if (TRUE == emac->mdio_locked)
-	{
-		/*	Locked. Check key. */
-		if (key == emac->mdio_key)
+		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			ret = pfe_emac_cfg_mdio_write22(emac->emac_base_va, pa, ra, val);
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		if (TRUE == emac->mdio_locked)
+		{
+			/*	Locked. Check key. */
+			if (key == emac->mdio_key)
+			{
+				ret = pfe_emac_cfg_mdio_write22(emac->emac_base_va, pa, ra, val);
+			}
+			else
+			{
+				ret = EPERM;
+			}
 		}
 		else
 		{
-			ret = EPERM;
+			/*	Unlocked. No check required. */
+			ret = pfe_emac_cfg_mdio_write22(emac->emac_base_va, pa, ra, val);
+		}
+
+		if (EOK != oal_mutex_unlock(&emac->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
 		}
 	}
-	else
-	{
-		/*	Unlocked. No check required. */
-		ret = pfe_emac_cfg_mdio_write22(emac->emac_base_va, pa, ra, val);
-	}
-
-	if (EOK != oal_mutex_unlock(&emac->mutex))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
-	}
-
 	return ret;
 }
 
@@ -1741,36 +1829,38 @@ errno_t pfe_emac_mdio_read45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_t
 	if (unlikely((NULL == emac) || (NULL == val)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&emac->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-
-	if (TRUE == emac->mdio_locked)
-	{
-		/*	Locked. Check key. */
-		if (key == emac->mdio_key)
+		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			ret = pfe_emac_cfg_mdio_read45(emac->emac_base_va, pa, dev, ra, val);
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		if (TRUE == emac->mdio_locked)
+		{
+			/*	Locked. Check key. */
+			if (key == emac->mdio_key)
+			{
+				ret = pfe_emac_cfg_mdio_read45(emac->emac_base_va, pa, dev, ra, val);
+			}
+			else
+			{
+				ret = EPERM;
+			}
 		}
 		else
 		{
-			ret = EPERM;
+			/*	Unlocked. No check required. */
+			ret = pfe_emac_cfg_mdio_read45(emac->emac_base_va, pa, dev, ra, val);
 		}
-	}
-	else
-	{
-		/*	Unlocked. No check required. */
-		ret = pfe_emac_cfg_mdio_read45(emac->emac_base_va, pa, dev, ra, val);
-	}
 
-	if (EOK != oal_mutex_unlock(&emac->mutex))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		if (EOK != oal_mutex_unlock(&emac->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
 	}
 
 	return ret;
@@ -1794,36 +1884,38 @@ errno_t pfe_emac_mdio_write45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK != oal_mutex_lock(&emac->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-
-	if (TRUE == emac->mdio_locked)
-	{
-		/*	Locked. Check key. */
-		if (key == emac->mdio_key)
+		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			ret = pfe_emac_cfg_mdio_write45(emac->emac_base_va, pa, dev, ra, val);
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+
+		if (TRUE == emac->mdio_locked)
+		{
+			/*	Locked. Check key. */
+			if (key == emac->mdio_key)
+			{
+				ret = pfe_emac_cfg_mdio_write45(emac->emac_base_va, pa, dev, ra, val);
+			}
+			else
+			{
+				ret = EPERM;
+			}
 		}
 		else
 		{
-			ret = EPERM;
+			/*	Unlocked. No check required. */
+			ret = pfe_emac_cfg_mdio_write45(emac->emac_base_va, pa, dev, ra, val);
 		}
-	}
-	else
-	{
-		/*	Unlocked. No check required. */
-		ret = pfe_emac_cfg_mdio_write45(emac->emac_base_va, pa, dev, ra, val);
-	}
 
-	if (EOK != oal_mutex_unlock(&emac->mutex))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		if (EOK != oal_mutex_unlock(&emac->mutex))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
 	}
 
 	return ret;
@@ -1836,15 +1928,19 @@ errno_t pfe_emac_mdio_write45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_
  */
 uint32_t pfe_emac_get_rx_cnt(const pfe_emac_t *emac)
 {
+	uint32_t rx_cnt;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0xffffffffU;
+		rx_cnt = 0xFFFFFFFFU;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	return pfe_emac_cfg_get_rx_cnt(emac->emac_base_va);
+	{
+		rx_cnt = pfe_emac_cfg_get_rx_cnt(emac->emac_base_va);
+	}
+	return rx_cnt;
 }
 
 /**
@@ -1854,15 +1950,19 @@ uint32_t pfe_emac_get_rx_cnt(const pfe_emac_t *emac)
  */
 uint32_t pfe_emac_get_tx_cnt(const pfe_emac_t *emac)
 {
+	uint32_t tx_cnt;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0xffffffffU;
+		tx_cnt = 0xFFFFFFFFU;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	return pfe_emac_cfg_get_tx_cnt(emac->emac_base_va);
+	{
+		tx_cnt = pfe_emac_cfg_get_tx_cnt(emac->emac_base_va);
+	}
+	return tx_cnt;
 }
 
 /**
@@ -1882,11 +1982,13 @@ uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, char_t *buf, uint3
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0;
+		len = 0U;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	len += pfe_emac_cfg_get_text_stat(emac->emac_base_va, buf + len, buf_len - len, verb_level);
-
+	{
+		len += pfe_emac_cfg_get_text_stat(emac->emac_base_va, buf + len, buf_len - len, verb_level);
+	}
 	return len;
 }
 
@@ -1900,13 +2002,17 @@ uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, char_t *buf, uint3
  */
 uint32_t pfe_emac_get_stat_value(const pfe_emac_t *emac, uint32_t stat_id)
 {
+	uint32_t stat_value;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0xFFFFFFFFU;
+		stat_value = 0xFFFFFFFFU;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	return pfe_emac_cfg_get_stat_value(emac->emac_base_va, stat_id);
+	{
+		stat_value = pfe_emac_cfg_get_stat_value(emac->emac_base_va, stat_id);
+	}
+	return stat_value;
 }

@@ -100,7 +100,7 @@ void pfe_gpi_cfg_init(addr_t base_va, const pfe_gpi_cfg_t *cfg)
 	}
 
 	hal_write32(((cfg->alloc_retry_cycles << 16) | GPI_DDR_BUF_EN | GPI_LMEM_BUF_EN), base_va + GPI_RX_CONFIG);
-	hal_write32((uint32_t)(PFE_CFG_DDR_HDR_SIZE << 16) | PFE_CFG_LMEM_HDR_SIZE, base_va + GPI_HDR_SIZE);
+	hal_write32((uint32_t)(PFE_CFG_DDR_HDR_SIZE << 16) | cfg->lmem_header_size, base_va + GPI_HDR_SIZE);
 	hal_write32((PFE_CFG_DDR_BUF_SIZE << 16) | PFE_CFG_LMEM_BUF_SIZE, base_va + GPI_BUF_SIZE);
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_BMU1_BASE_ADDR + BMU_ALLOC_CTRL, base_va + GPI_LMEM_ALLOC_ADDR);
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_BMU1_BASE_ADDR + BMU_FREE_CTRL, base_va + GPI_LMEM_FREE_ADDR);
@@ -109,7 +109,7 @@ void pfe_gpi_cfg_init(addr_t base_va, const pfe_gpi_cfg_t *cfg)
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CLASS_INQ_PKTPTR, base_va + GPI_CLASS_ADDR);
 	hal_write32(PFE_CFG_DDR_HDR_SIZE, base_va + GPI_DDR_DATA_OFFSET);
 	hal_write32(0x30U, base_va + GPI_LMEM_DATA_OFFSET);
-	hal_write32(PFE_CFG_LMEM_HDR_SIZE, base_va + GPI_LMEM_SEC_BUF_DATA_OFFSET);
+	hal_write32(cfg->lmem_header_size, base_va + GPI_LMEM_SEC_BUF_DATA_OFFSET);
 	hal_write32(cfg->gpi_tmlf_txthres, base_va + GPI_TMLF_TX);
 	hal_write32(cfg->gpi_dtx_aseq_len, base_va + GPI_DTX_ASEQ);
 	hal_write32(1, base_va + GPI_CSR_TOE_CHKSUM_EN);
@@ -228,12 +228,13 @@ void pfe_gpi_cfg_qos_write_flow_entry_req(addr_t base_va, uint32_t addr, const u
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	igqos_class_prepare_entry_data(base_va, entry);
-	igqos_class_write_flow_cmd(base_va, addr);
+	{
+		igqos_class_prepare_entry_data(base_va, entry);
+		igqos_class_write_flow_cmd(base_va, addr);
+	}
 }
 
 void pfe_gpi_cfg_qos_clear_flow_entry_req(addr_t base_va, uint32_t addr)
@@ -656,75 +657,77 @@ uint32_t pfe_gpi_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 	if (unlikely(NULL_ADDR == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
+		len = 0U;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/* Debug registers */
-	if(verb_level >= 10U)
 	{
-		len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
-		len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG1 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG1));
-		len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG2 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG2));
-		len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG3 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG3));
-		len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG4 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG4));
-		len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG5 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG5));
-		len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG6 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG6));
-		len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_RX_DBUG_REG1 : 0x%x\n", hal_read32(base_va + GPI_RX_DBUG_REG1));
-		len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_RX_DBUG_REG2 : 0x%x\n", hal_read32(base_va + GPI_RX_DBUG_REG2));
-		len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_FIFO_STATUS  : 0x%x\n", hal_read32(base_va + GPI_FIFO_STATUS));
+		/* Debug registers */
+		if(verb_level >= 10U)
+		{
+			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
+			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG1 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG1));
+			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG2 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG2));
+			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG3 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG3));
+			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG4 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG4));
+			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG5 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG5));
+			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG6 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG6));
+			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_RX_DBUG_REG1 : 0x%x\n", hal_read32(base_va + GPI_RX_DBUG_REG1));
+			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_RX_DBUG_REG2 : 0x%x\n", hal_read32(base_va + GPI_RX_DBUG_REG2));
+			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_FIFO_STATUS  : 0x%x\n", hal_read32(base_va + GPI_FIFO_STATUS));
+		}
+
+		/*	Get version */
+		if(verb_level >= 9U)
+		{
+			reg = hal_read32(base_va + GPI_VERSION);
+			len += oal_util_snprintf(buf + len, (size_t)size - len, "Revision             : 0x%x\n", (reg >> 24) & 0xffU);
+			len += oal_util_snprintf(buf + len, (size_t)size - len, "Version              : 0x%x\n", (reg >> 16) & 0xffU);
+			len += oal_util_snprintf(buf + len, (size_t)size - len, "ID                   : 0x%x\n", reg & 0xffffU);
+		}
+
+		/*	Ingress QoS counters */
+		reg = hal_read32(base_va + CSR_IGQOS_QUEUE_STATUS);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS queue status   : 0x%x\n", reg);
+		reg = hal_read32(base_va + CSR_IGQOS_STAT_CLASS_DROP_CNT);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS CLASS drop cnt : 0x%x\n", reg);
+		reg = hal_read32(base_va + CSR_IGQOS_STAT_LMEM_QUEUE_DROP_CNT);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS LMEM drop cnt  : 0x%x\n", reg);
+		reg = hal_read32(base_va + CSR_IGQOS_STAT_DMEM_QUEUE_DROP_CNT);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS DMEM drop cnt  : 0x%x\n", reg);
+		reg = hal_read32(base_va + CSR_IGQOS_STAT_RXF_QUEUE_DROP_CNT);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS RXF drop cnt   : 0x%x\n", reg);
+		reg = pfe_gpi_cfg_shp_get_drop_cnt(base_va, 0);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS SHP0 drop cnt  : 0x%x\n", reg);
+		reg = pfe_gpi_cfg_shp_get_drop_cnt(base_va, 1);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS SHP1 drop cnt  : 0x%x\n", reg);
+		reg = hal_read32(base_va + CSR_IGQOS_STAT_MANAGED_PACKET_CNT);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS managed pkts   : 0x%x\n", reg);
+		reg = hal_read32(base_va + CSR_IGQOS_STAT_UNMANAGED_PACKET_CNT);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS unmanaged pkts : 0x%x\n", reg);
+		reg = hal_read32(base_va + CSR_IGQOS_STAT_RESERVED_PACKET_CNT);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS reserved pkts  : 0x%x\n", reg);
+
+		reg = hal_read32(base_va + GPI_FIFO_STATUS);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "TX Underrun          : 0x%x\n", reg);
+		hal_write32(0, base_va + GPI_FIFO_STATUS);
+
+		reg = hal_read32(base_va + GPI_FIFO_DEBUG);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "TX FIFO Packets      : 0x%x\n", reg & 0x1fU);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "RX FIFO Packets      : 0x%x\n", (reg >> 6) & 0x1fU);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "TX FIFO Level        : 0x%x\n", (reg >> 12) & 0xffU);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "RX FIFO Level        : 0x%x\n", (reg >> 20) & 0xffU);
+
+		reg = hal_read32(base_va + GPI_DTX_ASEQ);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "ASEQ Length          : 0x%x\n", reg);
+
+		reg = hal_read32(base_va + GPI_EMAC_1588_TIMESTAMP_EN);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "1588 Enable register : 0x%x\n", reg);
+
+		reg = hal_read32(base_va + GPI_OVERRUN_DROPCNT);
+		len += oal_util_snprintf(buf + len, (size_t)size - len, "Overrun Drop Counter : 0x%x\n", reg);
+		hal_write32(0, base_va + GPI_OVERRUN_DROPCNT);
 	}
-
-	/*	Get version */
-	if(verb_level >= 9U)
-	{
-		reg = hal_read32(base_va + GPI_VERSION);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "Revision             : 0x%x\n", (reg >> 24) & 0xffU);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "Version              : 0x%x\n", (reg >> 16) & 0xffU);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "ID                   : 0x%x\n", reg & 0xffffU);
-	}
-
-	/*	Ingress QoS counters */
-	reg = hal_read32(base_va + CSR_IGQOS_QUEUE_STATUS);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS queue status   : 0x%x\n", reg);
-	reg = hal_read32(base_va + CSR_IGQOS_STAT_CLASS_DROP_CNT);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS CLASS drop cnt : 0x%x\n", reg);
-	reg = hal_read32(base_va + CSR_IGQOS_STAT_LMEM_QUEUE_DROP_CNT);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS LMEM drop cnt  : 0x%x\n", reg);
-	reg = hal_read32(base_va + CSR_IGQOS_STAT_DMEM_QUEUE_DROP_CNT);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS DMEM drop cnt  : 0x%x\n", reg);
-	reg = hal_read32(base_va + CSR_IGQOS_STAT_RXF_QUEUE_DROP_CNT);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS RXF drop cnt   : 0x%x\n", reg);
-	reg = pfe_gpi_cfg_shp_get_drop_cnt(base_va, 0);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS SHP0 drop cnt  : 0x%x\n", reg);
-	reg = pfe_gpi_cfg_shp_get_drop_cnt(base_va, 1);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS SHP1 drop cnt  : 0x%x\n", reg);
-	reg = hal_read32(base_va + CSR_IGQOS_STAT_MANAGED_PACKET_CNT);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS managed pkts   : 0x%x\n", reg);
-	reg = hal_read32(base_va + CSR_IGQOS_STAT_UNMANAGED_PACKET_CNT);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS unmanaged pkts : 0x%x\n", reg);
-	reg = hal_read32(base_va + CSR_IGQOS_STAT_RESERVED_PACKET_CNT);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS reserved pkts  : 0x%x\n", reg);
-
-	reg = hal_read32(base_va + GPI_FIFO_STATUS);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "TX Underrun          : 0x%x\n", reg);
-	hal_write32(0, base_va + GPI_FIFO_STATUS);
-
-	reg = hal_read32(base_va + GPI_FIFO_DEBUG);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "TX FIFO Packets      : 0x%x\n", reg & 0x1fU);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "RX FIFO Packets      : 0x%x\n", (reg >> 6) & 0x1fU);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "TX FIFO Level        : 0x%x\n", (reg >> 12) & 0xffU);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "RX FIFO Level        : 0x%x\n", (reg >> 20) & 0xffU);
-
-	reg = hal_read32(base_va + GPI_DTX_ASEQ);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "ASEQ Length          : 0x%x\n", reg);
-
-	reg = hal_read32(base_va + GPI_EMAC_1588_TIMESTAMP_EN);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "1588 Enable register : 0x%x\n", reg);
-
-	reg = hal_read32(base_va + GPI_OVERRUN_DROPCNT);
-	len += oal_util_snprintf(buf + len, (size_t)size - len, "Overrun Drop Counter : 0x%x\n", reg);
-	hal_write32(0, base_va + GPI_OVERRUN_DROPCNT);
 
 	return len;
 }

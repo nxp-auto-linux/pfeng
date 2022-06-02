@@ -12,6 +12,7 @@
 #include <linux/if_vlan.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#include <net/dsa.h>
 
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -30,24 +31,6 @@ typedef struct
 	struct list_head iterator;	/* List chain entry */
 	pfe_drv_id_t owner;		/* Identification of the driver that owns this entry */
 } pfeng_netif_mac_db_list_entry_t;
-
-static bool pfeng_netif_is_aux(struct pfeng_netif *netif)
-{
-	return netif->cfg->aux;
-}
-
-static struct pfeng_emac *__pfeng_netif_get_emac(struct pfeng_netif *netif)
-{
-	return &netif->priv->emac[netif->cfg->emac_id];
-}
-
-static struct pfeng_emac *pfeng_netif_get_emac(struct pfeng_netif *netif)
-{
-	if (pfeng_netif_is_aux(netif))
-		return NULL;
-
-	return __pfeng_netif_get_emac(netif);
-}
 
 static pfe_log_if_t *pfeng_netif_get_emac_logif(struct pfeng_netif *netif)
 {
@@ -434,26 +417,20 @@ static int pfeng_netif_logif_change_mtu(struct net_device *netdev, int mtu)
 static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, int cmd)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
-	int ret = -EOPNOTSUPP;
 
-	if (!netif_running(netdev))
-		return -EINVAL;
-
-	switch (cmd) {
-	case SIOCGMIIPHY:
-	case SIOCGMIIREG:
-	case SIOCSMIIREG:
-		ret = phylink_mii_ioctl(netif->phylink, rq, cmd);
-		break;
-	case SIOCSHWTSTAMP:
-		return pfeng_hwts_ioctl_set(netif, rq);
-	case SIOCGHWTSTAMP:
-		return pfeng_hwts_ioctl_get(netif, rq);
-	default:
-		break;
+	if (!phy_has_hwtstamp(netdev->phydev)) {
+		switch (cmd) {
+		case SIOCSHWTSTAMP:
+			return pfeng_hwts_ioctl_set(netif, rq);
+		case SIOCGHWTSTAMP:
+			return pfeng_hwts_ioctl_get(netif, rq);
+		}
 	}
 
-	return ret;
+	if (!netif->phylink)
+		return -EOPNOTSUPP;
+
+	return phylink_mii_ioctl(netif->phylink, rq, cmd);
 }
 
 #ifdef PFE_CFG_PFE_MASTER
@@ -739,6 +716,11 @@ static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 	if (!netif->netdev)
 		return;
 
+	if (netif->priv->lower_ndev) {
+		unregister_netdevice_notifier(&netif->priv->upper_notifier);
+		netif->priv->lower_ndev = NULL;
+	}
+
 	unregister_netdev(netif->netdev); /* calls ndo_stop */
 
 #ifdef PFE_CFG_PFE_SLAVE
@@ -1000,6 +982,77 @@ err:
 }
 #endif /* PFE_CFG_PFE_SLAVE */
 
+#ifdef PFE_CFG_PFE_MASTER
+static int pfeng_netif_event(struct notifier_block *nb,
+			     unsigned long event, void *ptr)
+{
+	struct net_device *ndev = netdev_notifier_info_to_dev(ptr);
+	struct netdev_notifier_changeupper_info *info = ptr;
+	struct pfeng_priv *priv;
+	int ret = 0;
+
+	priv = container_of(nb, struct pfeng_priv, upper_notifier);
+	if (priv->lower_ndev != ndev)
+		return NOTIFY_DONE;
+
+	switch (event) {
+	case NETDEV_CHANGEUPPER:
+		if (info->linking) {
+			struct pfeng_netif *netif = netdev_priv(ndev);
+			struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
+
+			if (!emac->rx_clk_pending)
+				goto out;
+
+			ret = clk_prepare_enable(emac->rx_clk);
+			if (ret) {
+				dev_err(netif->dev, "Failed to enable RX clock on EMAC%d for interface %s (err %d)\n",
+					netif->cfg->emac_id, phy_modes(emac->intf_mode), ret);
+				goto out;
+			}
+
+			emac->rx_clk_pending = false;
+
+			dev_info(netif->dev, "RX clock on EMAC%d for interface %s installed\n",
+				 netif->cfg->emac_id, phy_modes(emac->intf_mode));
+		}
+
+		break;
+	}
+
+out:
+	return notifier_from_errno(ret);
+}
+
+static int pfeng_netif_register_dsa_notifier(struct pfeng_netif *netif)
+{
+	struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
+	struct pfeng_priv *priv = netif->priv;
+	int ret;
+
+	if (emac && emac->rx_clk_pending) {
+		if (!priv->lower_ndev) {
+			priv->upper_notifier.notifier_call = pfeng_netif_event;
+
+			ret = register_netdevice_notifier(&priv->upper_notifier);
+			if (ret) {
+				dev_err(netif->dev, "Error registering the DSA notifier\n");
+				return ret;
+			}
+
+			priv->lower_ndev = netif->netdev;
+
+		} else {
+			dev_warn(netif->dev, "DSA master notifier already registered\n");
+		}
+	}
+
+	return 0;
+}
+#else
+#define pfeng_netif_register_dsa_notifier(netif) 0
+#endif
+
 static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, struct pfeng_netif_cfg *netif_cfg)
 {
 	struct device *dev = &priv->pdev->dev;
@@ -1065,6 +1118,12 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 #ifdef PFE_CFG_PFE_MASTER
 	netdev->priv_flags |= IFF_UNICAST_FLT;
 #endif
+
+	ret = pfeng_netif_register_dsa_notifier(netif);
+	if (ret) {
+		dev_err(dev, "Error registering the DSA notifier: %d\n", ret);
+		goto err_netdev_reg;
+	}
 
 	ret = register_netdev(netdev);
 	if (ret) {

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -42,32 +42,34 @@ struct pfe_bmu_tag
  */
 __attribute__((cold)) errno_t pfe_bmu_isr(const pfe_bmu_t *bmu)
 {
-	errno_t ret = ENOENT;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifdef PFE_CFG_PARANOID_IRQ
-	if (EOK != oal_mutex_lock(&bmu->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-#endif /* PFE_CFG_PARANOID_IRQ */
+	#ifdef PFE_CFG_PARANOID_IRQ
+		if (EOK != oal_mutex_lock(&bmu->lock))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+	#endif /* PFE_CFG_PARANOID_IRQ */
 
-	/*	Run the low-level ISR to identify and process the interrupt */
-	ret = pfe_bmu_cfg_isr(bmu->bmu_base_va, bmu->cbus_base_va);
+		/*	Run the low-level ISR to identify and process the interrupt */
+		ret = pfe_bmu_cfg_isr(bmu->bmu_base_va, bmu->cbus_base_va);
 
-#ifdef PFE_CFG_PARANOID_IRQ
-	if (EOK != oal_mutex_unlock(&bmu->lock))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	#ifdef PFE_CFG_PARANOID_IRQ
+		if (EOK != oal_mutex_unlock(&bmu->lock))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
+	#endif /* PFE_CFG_PARANOID_IRQ */
 	}
-#endif /* PFE_CFG_PARANOID_IRQ */
 
 	return ret;
 }
@@ -135,63 +137,62 @@ __attribute__((cold)) pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_
 	if (unlikely((NULL == cfg) || (NULL_ADDR == cbus_base_va)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
+		bmu = NULL;
 	}
-
-	if (unlikely(NULL_ADDR == cfg->pool_pa))
+	else if (unlikely(NULL_ADDR == cfg->pool_pa))
 	{
 		NXP_LOG_ERROR("Buffer pool base is NULL\n");
-		return NULL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	bmu = oal_mm_malloc(sizeof(pfe_bmu_t));
-
-	if (NULL == bmu)
-	{
-		return NULL;
+		bmu = NULL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		(void)memset(bmu, 0, sizeof(pfe_bmu_t));
-		bmu->cbus_base_va = cbus_base_va;
-		bmu->bmu_base_offset = bmu_base;
-		bmu->bmu_base_va = (bmu->cbus_base_va + bmu->bmu_base_offset);
-		bmu->pool_base_pa = cfg->pool_pa;
-		bmu->pool_base_va = cfg->pool_va;
-		bmu->pool_va_offset = bmu->pool_base_va - bmu->pool_base_pa;
-		bmu->pool_size = cfg->buf_size * cfg->max_buf_cnt;
-		bmu->buf_size = cfg->buf_size;
+		bmu = oal_mm_malloc(sizeof(pfe_bmu_t));
 
-#ifdef PFE_CFG_PARANOID_IRQ
-		/*	Resource protection */
-		if (EOK != oal_mutex_init(&bmu->lock))
+		if(NULL != bmu)
 		{
-			NXP_LOG_DEBUG("Mutex initialization failed\n");
-			oal_mm_free(bmu);
-			return NULL;
+			(void)memset(bmu, 0, sizeof(pfe_bmu_t));
+			bmu->cbus_base_va = cbus_base_va;
+			bmu->bmu_base_offset = bmu_base;
+			bmu->bmu_base_va = (bmu->cbus_base_va + bmu->bmu_base_offset);
+			bmu->pool_base_pa = cfg->pool_pa;
+			bmu->pool_base_va = cfg->pool_va;
+			bmu->pool_va_offset = bmu->pool_base_va - bmu->pool_base_pa;
+			bmu->pool_size = cfg->buf_size * cfg->max_buf_cnt;
+			bmu->buf_size = cfg->buf_size;
+
+	#ifdef PFE_CFG_PARANOID_IRQ
+			/*	Resource protection */
+			if (EOK != oal_mutex_init(&bmu->lock))
+			{
+				NXP_LOG_DEBUG("Mutex initialization failed\n");
+				oal_mm_free(bmu);
+				bmu = NULL;
+			}
+			else
+	#endif /* PFE_CFG_PARANOID_IRQ */
+			{
+				pfe_bmu_reset(bmu);
+
+			#ifdef PFE_CFG_PARANOID_IRQ
+				if (EOK != oal_mutex_lock(&bmu->lock))
+				{
+					NXP_LOG_DEBUG("Mutex lock failed\n");
+				}
+			#endif /* PFE_CFG_PARANOID_IRQ */
+
+				pfe_bmu_cfg_disable(bmu->bmu_base_va);
+				pfe_bmu_cfg_init(bmu->bmu_base_va, cfg);
+
+			#ifdef PFE_CFG_PARANOID_IRQ
+				if (EOK != oal_mutex_unlock(&bmu->lock))
+				{
+					NXP_LOG_DEBUG("Mutex unlock failed\n");
+				}
+			#endif /* PFE_CFG_PARANOID_IRQ */
+			}
 		}
-#endif /* PFE_CFG_PARANOID_IRQ */
 	}
-
-	pfe_bmu_reset(bmu);
-
-#ifdef PFE_CFG_PARANOID_IRQ
-	if (EOK != oal_mutex_lock(&bmu->lock))
-	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-#endif /* PFE_CFG_PARANOID_IRQ */
-
-	pfe_bmu_cfg_disable(bmu->bmu_base_va);
-	pfe_bmu_cfg_init(bmu->bmu_base_va, cfg);
-
-#ifdef PFE_CFG_PARANOID_IRQ
-	if (EOK != oal_mutex_unlock(&bmu->lock))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
-	}
-#endif /* PFE_CFG_PARANOID_IRQ */
 
 	return bmu;
 }
@@ -208,38 +209,40 @@ __attribute__((cold)) void pfe_bmu_reset(const pfe_bmu_t *bmu)
 	if (unlikely(NULL == bmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifdef PFE_CFG_PARANOID_IRQ
-	if (EOK != oal_mutex_lock(&bmu->lock))
-	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-#endif /* PFE_CFG_PARANOID_IRQ */
-
-	ret = pfe_bmu_cfg_reset(bmu->bmu_base_va);
-	if (ETIMEDOUT == ret)
-	{
-		NXP_LOG_WARNING("BMU reset timed-out\n");
-	}
-	else if (EOK != ret)
-	{
-		NXP_LOG_WARNING("BMU reset failed: 0x%x\n", ret);
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		/*Do Nothing*/
-		;
-	}
+	#ifdef PFE_CFG_PARANOID_IRQ
+		if (EOK != oal_mutex_lock(&bmu->lock))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+	#endif /* PFE_CFG_PARANOID_IRQ */
 
-#ifdef PFE_CFG_PARANOID_IRQ
-	if (EOK != oal_mutex_unlock(&bmu->lock))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		ret = pfe_bmu_cfg_reset(bmu->bmu_base_va);
+
+		if (ETIMEDOUT == ret)
+		{
+			NXP_LOG_WARNING("BMU reset timed-out\n");
+		}
+		else if (EOK != ret)
+		{
+			NXP_LOG_WARNING("BMU reset failed: 0x%x\n", ret);
+		}
+		else
+		{
+			/*Do Nothing*/
+			;
+		}
+
+	#ifdef PFE_CFG_PARANOID_IRQ
+		if (EOK != oal_mutex_unlock(&bmu->lock))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
+	#endif /* PFE_CFG_PARANOID_IRQ */
 	}
-#endif /* PFE_CFG_PARANOID_IRQ */
 }
 
 /**
@@ -252,25 +255,26 @@ __attribute__((cold)) void pfe_bmu_enable(const pfe_bmu_t *bmu)
 	if (unlikely(NULL == bmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifdef PFE_CFG_PARANOID_IRQ
-	if (EOK != oal_mutex_lock(&bmu->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-#endif /* PFE_CFG_PARANOID_IRQ */
+	#ifdef PFE_CFG_PARANOID_IRQ
+		if (EOK != oal_mutex_lock(&bmu->lock))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+	#endif /* PFE_CFG_PARANOID_IRQ */
 
-	pfe_bmu_cfg_enable(bmu->bmu_base_va);
+		pfe_bmu_cfg_enable(bmu->bmu_base_va);
 
-#ifdef PFE_CFG_PARANOID_IRQ
-	if (EOK != oal_mutex_unlock(&bmu->lock))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	#ifdef PFE_CFG_PARANOID_IRQ
+		if (EOK != oal_mutex_unlock(&bmu->lock))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
+	#endif /* PFE_CFG_PARANOID_IRQ */
 	}
-#endif /* PFE_CFG_PARANOID_IRQ */
 }
 
 /**
@@ -283,25 +287,26 @@ __attribute__((cold)) void pfe_bmu_disable(const pfe_bmu_t *bmu)
 	if (unlikely(NULL == bmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifdef PFE_CFG_PARANOID_IRQ
-	if (EOK != oal_mutex_lock(&bmu->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-#endif /* PFE_CFG_PARANOID_IRQ */
+	#ifdef PFE_CFG_PARANOID_IRQ
+		if (EOK != oal_mutex_lock(&bmu->lock))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+	#endif /* PFE_CFG_PARANOID_IRQ */
 
-	pfe_bmu_cfg_disable(bmu->bmu_base_va);
+		pfe_bmu_cfg_disable(bmu->bmu_base_va);
 
-#ifdef PFE_CFG_PARANOID_IRQ
-	if (EOK != oal_mutex_unlock(&bmu->lock))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	#ifdef PFE_CFG_PARANOID_IRQ
+		if (EOK != oal_mutex_unlock(&bmu->lock))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
+	#endif /* PFE_CFG_PARANOID_IRQ */
 	}
-#endif /* PFE_CFG_PARANOID_IRQ */
 }
 
 /**
@@ -312,16 +317,21 @@ __attribute__((cold)) void pfe_bmu_disable(const pfe_bmu_t *bmu)
  */
 __attribute__((hot)) void *pfe_bmu_alloc_buf(const pfe_bmu_t *bmu)
 {
+	void *ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
+		ret = NULL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		/*	No resource protection here since it is done by register read */
+		ret = (void *)pfe_bmu_cfg_alloc_buf(bmu->bmu_base_va);
+	}
 
-	/*	No resource protection here since it is done by register read */
-	return (void *)pfe_bmu_cfg_alloc_buf(bmu->bmu_base_va);
+	return ret;
 }
 
 /**
@@ -332,21 +342,25 @@ __attribute__((hot)) void *pfe_bmu_alloc_buf(const pfe_bmu_t *bmu)
  */
 __attribute__((hot, pure)) void *pfe_bmu_get_va(const pfe_bmu_t *bmu, addr_t pa)
 {
+	void * ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
+		ret = NULL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if ((bmu->pool_base_pa + bmu->pool_size) < pa)
 	{
-		/*	TODO: The condition is not sufficient and need to consider buffer size... */
-		NXP_LOG_DEBUG("PA out of range\n");
+		if ((bmu->pool_base_pa + bmu->pool_size) < pa)
+		{
+			/*	TODO: The condition is not sufficient and need to consider buffer size... */
+			NXP_LOG_DEBUG("PA out of range\n");
+		}
+		ret = (void *)(pa + bmu->pool_va_offset);
 	}
 
-	return (void *)(pa + bmu->pool_va_offset);
+	return ret;
 }
 
 /**
@@ -357,21 +371,25 @@ __attribute__((hot, pure)) void *pfe_bmu_get_va(const pfe_bmu_t *bmu, addr_t pa)
  */
 __attribute__((hot, pure)) void *pfe_bmu_get_pa(const pfe_bmu_t *bmu, addr_t va)
 {
+	void * ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
+		ret = NULL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if ((bmu->pool_base_va + bmu->pool_size) < va)
 	{
-		/*	TODO: The condition is not sufficient and need to consider buffer size... */
-		NXP_LOG_DEBUG("VA out of range\n");
+		if ((bmu->pool_base_va + bmu->pool_size) < va)
+		{
+			/*	TODO: The condition is not sufficient and need to consider buffer size... */
+			NXP_LOG_DEBUG("VA out of range\n");
+		}
+		ret = (void *)(va - bmu->pool_va_offset);
 	}
 
-	return (void *)(va - bmu->pool_va_offset);
+	return ret;
 }
 
 /**
@@ -381,15 +399,19 @@ __attribute__((hot, pure)) void *pfe_bmu_get_pa(const pfe_bmu_t *bmu, addr_t va)
  */
 __attribute__((cold, pure)) uint32_t pfe_bmu_get_buf_size(const pfe_bmu_t *bmu)
 {
+	uint32_t len;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
+		len = 0U;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	return bmu->buf_size;
+	{
+		len = bmu->buf_size;
+	}
+	return len;
 }
 
 /**
@@ -404,12 +426,13 @@ __attribute__((hot)) void pfe_bmu_free_buf(const pfe_bmu_t *bmu, addr_t buffer)
 	if (unlikely((NULL == bmu) || (NULL_ADDR == buffer)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	No resource protection here since it is done by register write */
-	pfe_bmu_cfg_free_buf(bmu->bmu_base_va, PFE_CFG_MEMORY_PHYS_TO_PFE(buffer));
+	{
+		/*	No resource protection here since it is done by register write */
+		pfe_bmu_cfg_free_buf(bmu->bmu_base_va, PFE_CFG_MEMORY_PHYS_TO_PFE(buffer));
+	}
 }
 
 /**
@@ -463,11 +486,12 @@ __attribute__((cold)) uint32_t pfe_bmu_get_text_statistics(const pfe_bmu_t *bmu,
 	if (unlikely(NULL == bmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
+		len = 0U;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
+	{
 		len += pfe_bmu_cfg_get_text_stat(bmu->bmu_base_va, buf, buf_len, verb_level);
-
+	}
 	return len;
 }

@@ -96,11 +96,7 @@
 #define DUMMY_TX_BUF_LEN		64U
 #define DUMMY_RX_BUF_LEN		2048U
 
-#if defined(PFE_CFG_TARGET_OS_AUTOSAR)
-	#define BUFFERS_CACHED FALSE
-#else
-	#define BUFFERS_CACHED TRUE
-#endif
+#define BUFFERS_CACHED TRUE
 
 typedef struct
 {
@@ -116,26 +112,18 @@ typedef struct
  */
 struct __attribute__((aligned(HAL_CACHE_LINE_SIZE))) __pfe_hif_chnl_tag
 {
-	addr_t cbus_base_va;				/*	CBUS base virtual address */
-	uint32_t id;					/*	Channel ID within HIF (0, 1, 2, ...) */
-	pfe_hif_ring_t *rx_ring;		/*	The RX ring instance */
-	pfe_hif_ring_t *tx_ring;		/*	The TX ring instance */
+	addr_t cbus_base_va;		/*	CBUS base virtual address */
+	uint32_t id;			/*	Channel ID within HIF (0, 1, 2, ...) */
+	pfe_hif_ring_t *rx_ring;	/*	The RX ring instance */
+	pfe_hif_ring_t *tx_ring;	/*	The TX ring instance */
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
-	bpool_t *rx_pool;				/*	Pool of available RX buffers */
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	const pfe_bmu_t *bmu;					/*	Associated BMU instance */
-	void *tx_ibuf_va;				/*	Intermediate TX buffer VA */
-	uint16_t tx_ibuf_len;			/*	Number of bytes in the ibuf */
-	uint32_t a_cnt;					/*	BMU allocations counter */
-	/*	Mutex protecting the allocations counter */
-	oal_spinlock_t a_lock __attribute__((aligned(HAL_CACHE_LINE_SIZE)));
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
+	bpool_t *rx_pool;		/*	Pool of available RX buffers */
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
-	oal_spinlock_t lock __attribute__((aligned(HAL_CACHE_LINE_SIZE)));				/*	Channel HW resources protection */
-	oal_spinlock_t rx_lock __attribute__((aligned(HAL_CACHE_LINE_SIZE)));			/*	RX resource protection */
-	pfe_hif_chnl_cbk_storage_t rx_cbk;		/*	RX callback */
-	pfe_hif_chnl_cbk_storage_t tx_cbk;		/*	TX callback */
-	pfe_hif_chnl_cbk_storage_t rx_tx_cbk;		/*	RX/TX callback */
+	oal_spinlock_t lock __attribute__((aligned(HAL_CACHE_LINE_SIZE)));	/*	Channel HW resources protection */
+	oal_spinlock_t rx_lock __attribute__((aligned(HAL_CACHE_LINE_SIZE)));	/*	RX resource protection */
+	pfe_hif_chnl_cbk_storage_t rx_cbk;	/*	RX callback */
+	pfe_hif_chnl_cbk_storage_t tx_cbk;	/*	TX callback */
+	pfe_hif_chnl_cbk_storage_t rx_tx_cbk;	/*	RX/TX callback */
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED)
 	pfe_hif_chnl_cbk_storage_t rx_oob_cbk;	/*	RX Out-Of-Buffers callback */
 #endif
@@ -149,74 +137,6 @@ static errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_t *chnl) __attribute__
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
 static void pfe_hif_chnl_refill_rx_buffers(const pfe_hif_chnl_t *chnl) __attribute__((hot));
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-/*
- * @brief	Increment buffer allocation counter
- * @details	To monitor how many BMU buffers have been allocated
- * 			by a channel instance we need to provide a SW counter.
- */
-static void pfe_hif_chnl_alloc_inc(pfe_hif_chnl_t *chnl)
-{
-	if (EOK != oal_spinlock_lock(&chnl->a_lock))
-	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-
-	chnl->a_cnt++;
-
-	if (EOK != oal_spinlock_unlock(&chnl->a_lock))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
-	}
-}
-
-/*
- * @brief	Decrement buffer allocation counter
- * @details	To monitor how many BMU buffers have been allocated
- * 			by a channel instance we need to provide a SW counter.
- */
-static void pfe_hif_chnl_alloc_dec(pfe_hif_chnl_t *chnl)
-{
-	if (EOK != oal_spinlock_lock(&chnl->a_lock))
-	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-
-	chnl->a_cnt--;
-
-	if (EOK != oal_spinlock_unlock(&chnl->a_lock))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
-	}
-}
-
-/*
- * @brief	Get state of allocation counter
- * @details	To monitor how many BMU buffers have been allocated
- * 			by a channel instance we need to provide a SW counter.
- * @return	Current number of allocated buffers.
- */
-static uint32_t pfe_hif_chnl_get_alloc_cnt(pfe_hif_chnl_t *chnl)
-{
-	uint32_t ret;
-
-	if (EOK != oal_spinlock_lock(&chnl->a_lock))
-	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
-	}
-
-	ret = chnl->a_cnt;
-
-	if (EOK != oal_spinlock_unlock(&chnl->a_lock))
-	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
-	}
-
-	return ret;
-}
-
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 /**
  * @brief		Channel master ISR
@@ -242,17 +162,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_isr(pfe_hif_chnl_t *chnl)
 	}
 
 	/*	Run the low-level ISR to identify and process the interrupt */
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		ret = pfe_hif_nocpy_cfg_isr(chnl->cbus_base_va, &events);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		ret = pfe_hif_chnl_cfg_isr(chnl->cbus_base_va, chnl->id, &events);
-	}
+	ret = pfe_hif_chnl_cfg_isr(chnl->cbus_base_va, chnl->id, &events);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
@@ -269,7 +179,6 @@ __attribute__((hot)) errno_t pfe_hif_chnl_isr(pfe_hif_chnl_t *chnl)
 	}
 	else
 	{
-
 		if (HIF_CHNL_EVT_RX_IRQ == (events & HIF_CHNL_EVT_RX_IRQ))
 		{
 			if (NULL != chnl->rx_cbk.cbk)
@@ -309,17 +218,7 @@ void pfe_hif_chnl_irq_mask(pfe_hif_chnl_t *chnl)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_irq_mask(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		pfe_hif_chnl_cfg_irq_mask(chnl->cbus_base_va, chnl->id);
-	}
+	pfe_hif_chnl_cfg_irq_mask(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
@@ -338,17 +237,7 @@ void pfe_hif_chnl_irq_unmask(pfe_hif_chnl_t *chnl)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_irq_unmask(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		pfe_hif_chnl_cfg_irq_unmask(chnl->cbus_base_va, chnl->id);
-	}
+	pfe_hif_chnl_cfg_irq_unmask(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
@@ -435,13 +324,11 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, u
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if !defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	if (id >= PFE_HIF_CHNL_NOCPY_ID)
 	{
-		NXP_LOG_ERROR("HIF NOCPY support is not enabled\n");
+		NXP_LOG_ERROR("HIF NOCPY is not supported\n");
 		return NULL;
 	}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 	chnl = oal_mm_malloc_contig_aligned_cache(sizeof(pfe_hif_chnl_t), HAL_CACHE_LINE_SIZE);
 
@@ -458,31 +345,11 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, u
 		chnl->rx_ring = NULL;
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
 		chnl->rx_pool = NULL;
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-		chnl->bmu = bmu;
-		chnl->tx_ibuf_va = NULL;
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-		if (EOK != oal_spinlock_init(&chnl->a_lock))
-		{
-			NXP_LOG_ERROR("Channel BMU allocation mutex initialization failed\n");
-			oal_mm_free_contig(chnl);
-			return NULL;
-		}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 		if (EOK != oal_spinlock_init(&chnl->lock))
 		{
 			NXP_LOG_ERROR("Channel mutex initialization failed\n");
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-			if (EOK != oal_spinlock_destroy(&chnl->a_lock))
-			{
-				NXP_LOG_WARNING("Could not properly destroy mutex\n");
-			}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 			oal_mm_free_contig(chnl);
 
@@ -493,57 +360,36 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, u
 		{
 			NXP_LOG_ERROR("Channel RX mutex initialization failed\n");
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-			(void)oal_spinlock_destroy(&chnl->a_lock);
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-
 			(void)oal_spinlock_destroy(&chnl->lock);
 			oal_mm_free_contig(chnl);
 
 			return NULL;
 		}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-		if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-		{
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
-			if (NULL == chnl->bmu)
-			{
-				NXP_LOG_ERROR("HIF NOCPY channel requires BMU instance\n");
-				goto free_and_fail;
-			}
-#endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
-			/*	HIF_NOCPY does not need per-channel initialization */
-			;
+		if (NULL != bmu)
+		{
+			/*	This is not supported. SW buffer pool will be used instead. */
+			NXP_LOG_WARNING("BMU-based RX buffer pool not supported for standard HIF channels. SW pool will be used instead.\n");
 		}
-		else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-		{
-#if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
-			if (NULL != bmu)
-			{
-				/*	This is not supported. SW buffer pool will be used instead. */
-				NXP_LOG_WARNING("BMU-based RX buffer pool not supported for standard HIF channels. SW pool will be used instead.\n");
-			}
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
-			if (EOK != oal_spinlock_lock(&chnl->lock))
-			{
-				NXP_LOG_DEBUG("Mutex lock failed\n");
-			}
+		if (EOK != oal_spinlock_lock(&chnl->lock))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
 
-			ret = pfe_hif_chnl_cfg_init(chnl->cbus_base_va, id);
+		ret = pfe_hif_chnl_cfg_init(chnl->cbus_base_va, id);
 
-			if (EOK != oal_spinlock_unlock(&chnl->lock))
-			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
-			}
+		if (EOK != oal_spinlock_unlock(&chnl->lock))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
 
-			if (EOK != ret)
-			{
-				NXP_LOG_ERROR("HIF channel init failed\n");
-				goto free_and_fail;
-			}
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("HIF channel init failed\n");
+			goto free_and_fail;
 		}
 
 		(void) pfe_hif_chnl_init(chnl);
@@ -552,9 +398,6 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, u
 	return chnl;
 
 free_and_fail:
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	(void)oal_spinlock_destroy(&chnl->a_lock);
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 	(void)oal_spinlock_destroy(&chnl->lock);
 	(void)oal_spinlock_destroy(&chnl->rx_lock);
@@ -609,18 +452,8 @@ __attribute__((cold)) errno_t pfe_hif_chnl_tx_enable(pfe_hif_chnl_t *chnl)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_tx_enable(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		/*	HIF */
-		pfe_hif_chnl_cfg_tx_enable(chnl->cbus_base_va, chnl->id);
-	}
+	/*	HIF */
+	pfe_hif_chnl_cfg_tx_enable(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
@@ -654,18 +487,7 @@ __attribute__((cold)) void pfe_hif_chnl_tx_disable(pfe_hif_chnl_t *chnl)
 	}
 
 	/*	Stop data transmission */
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_tx_disable(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		/*	HIF */
-		pfe_hif_chnl_cfg_tx_disable(chnl->cbus_base_va, chnl->id);
-	}
+	pfe_hif_chnl_cfg_tx_disable(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
@@ -707,18 +529,8 @@ __attribute__((cold)) errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_rx_enable(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		/*	HIF */
-		pfe_hif_chnl_cfg_rx_enable(chnl->cbus_base_va, chnl->id);
-	}
+	/*	HIF */
+	pfe_hif_chnl_cfg_rx_enable(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
@@ -750,18 +562,7 @@ __attribute__((cold)) void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl)
 	}
 
 	/*	Stop data reception */
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_rx_disable(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		/*	HIF */
-		pfe_hif_chnl_cfg_rx_disable(chnl->cbus_base_va, chnl->id);
-	}
+	pfe_hif_chnl_cfg_rx_disable(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
@@ -787,19 +588,7 @@ __attribute__((hot)) void pfe_hif_chnl_rx_dma_start(const pfe_hif_chnl_t *chnl)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	No resource protection here, DMA trigger is atomic. */
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_rx_dma_start(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		/*	HIF */
-		pfe_hif_chnl_cfg_rx_dma_start(chnl->cbus_base_va, chnl->id);
-	}
+	pfe_hif_chnl_cfg_rx_dma_start(chnl->cbus_base_va, chnl->id);
 }
 
 /**
@@ -819,19 +608,7 @@ __attribute__((hot)) void pfe_hif_chnl_tx_dma_start(const pfe_hif_chnl_t *chnl)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	No resource protection here. DMA trigger is atomic. */
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_tx_dma_start(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		/*	HIF */
-		pfe_hif_chnl_cfg_tx_dma_start(chnl->cbus_base_va, chnl->id);
-	}
+	pfe_hif_chnl_cfg_tx_dma_start(chnl->cbus_base_va, chnl->id);
 }
 
 /**
@@ -920,17 +697,7 @@ __attribute__((hot)) void pfe_hif_chnl_rx_irq_mask(pfe_hif_chnl_t *chnl)
 		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_rx_irq_mask(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		pfe_hif_chnl_cfg_rx_irq_mask(chnl->cbus_base_va, chnl->id);
-	}
+	pfe_hif_chnl_cfg_rx_irq_mask(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
@@ -958,17 +725,7 @@ __attribute__((hot)) void pfe_hif_chnl_rx_irq_unmask(pfe_hif_chnl_t *chnl)
 		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_rx_irq_unmask(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		pfe_hif_chnl_cfg_rx_irq_unmask(chnl->cbus_base_va, chnl->id);
-	}
+	pfe_hif_chnl_cfg_rx_irq_unmask(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
@@ -996,17 +753,7 @@ __attribute__((hot)) void pfe_hif_chnl_tx_irq_mask(pfe_hif_chnl_t *chnl)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_tx_irq_mask(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		pfe_hif_chnl_cfg_tx_irq_mask(chnl->cbus_base_va, chnl->id);
-	}
+	pfe_hif_chnl_cfg_tx_irq_mask(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
@@ -1034,17 +781,7 @@ __attribute__((hot)) void pfe_hif_chnl_tx_irq_unmask(pfe_hif_chnl_t *chnl)
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_tx_irq_unmask(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		pfe_hif_chnl_cfg_tx_irq_unmask(chnl->cbus_base_va, chnl->id);
-	}
+	pfe_hif_chnl_cfg_tx_irq_unmask(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
@@ -1132,13 +869,6 @@ __attribute__((pure, hot)) bool_t pfe_hif_chnl_can_accept_rx_buf(const pfe_hif_c
 		return FALSE;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-        return FALSE;
-    }
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 	/*	A single entry must remain unused within the ring
 	 	because HIF expects that. */
@@ -1240,10 +970,6 @@ __attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_tx_fifo_depth(const pfe_hi
 __attribute__((hot)) errno_t pfe_hif_chnl_tx(pfe_hif_chnl_t *chnl, const void *buf_pa, const void *buf_va, uint32_t len, bool_t lifm)
 {
 	errno_t err = EOK;
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	uint32_t u32tmp;
-	void *tx_ibuf_pa;
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == chnl) || (NULL == buf_pa)))
@@ -1258,111 +984,8 @@ __attribute__((hot)) errno_t pfe_hif_chnl_tx(pfe_hif_chnl_t *chnl, const void *b
 	oal_mm_cache_flush(buf_va, buf_pa, len);
 #endif /* HAL_HANDLE_CACHE */
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	TODO: What in case when caller is trying to re-transmit a buffer
-				  previously obtained via pfe_hif_chnl_rx() (io-pkt does this
-				  in case of forwarding use case)???
-
-			- first chunk to send will be the HIF TX header
-			- second chunk will be the BMU buffer
-			- how to handle that?
-
-			If no special action will be performed, new BMU buffer will be allocated
-			and the packet will be formed within it = not optimal approach...
-		*/
-
-		if (NULL == chnl->tx_ibuf_va)
-		{
-			/*	The intermediate buffer has not been allocated yet */
-			tx_ibuf_pa = pfe_bmu_alloc_buf(chnl->bmu);
-			if (unlikely(NULL == tx_ibuf_pa))
-			{
-				NXP_LOG_ERROR("BMU can't allocate TX buffer\n");
-				return ENOMEM;
-			}
-			else
-			{
-				/*	Increment BMU allocations counter */
-				pfe_hif_chnl_alloc_inc(chnl);
-
-				/*	Get VA */
-				chnl->tx_ibuf_va = pfe_bmu_get_va(chnl->bmu, (addr_t)tx_ibuf_pa);
-				chnl->tx_ibuf_len = 0U;
-			}
-		}
-
-		tx_ibuf_pa = pfe_bmu_get_pa(chnl->bmu, (addr_t)chnl->tx_ibuf_va);
-
-		/*	Copy payload into the intermediate buffer, leave 256 + PFE_CFG_LMEM_HDR_SIZE bytes empty like
-		    HIF and EMAC do. This space is then used. */
-		if (unlikely((chnl->tx_ibuf_len + len) > (pfe_bmu_get_buf_size(chnl->bmu) - (256U + PFE_CFG_LMEM_HDR_SIZE))))
-		{
-			NXP_LOG_ERROR("Payload exceeds BMU buffer length\n");
-
-			/*	Drop. Resource protection is embedded. */
-			pfe_bmu_free_buf(chnl->bmu, (addr_t)tx_ibuf_pa);
-			chnl->tx_ibuf_va = NULL;
-			chnl->tx_ibuf_len = 0U;
-
-			/*	Decrement BMU allocations counter */
-			pfe_hif_chnl_alloc_dec(chnl);
-
-			return ENOMEM;
-		}
-
-		memcpy((void *)((addr_t)chnl->tx_ibuf_va + (256U + PFE_CFG_LMEM_HDR_SIZE) + chnl->tx_ibuf_len), buf_va, len);
-		chnl->tx_ibuf_len = chnl->tx_ibuf_len + len;
-
-		if (TRUE == lifm)
-		{
-			/*	Enqueue the intermediate buffer */
-			/* Documentation says we need to build structure as described in
-			   Figure 5: GPI-RX- LMEM Buffer Structure & DDR Buffer Structure */
-			/* DDR buffer physical address */
-			u32tmp = oal_htonl((addr_t)tx_ibuf_pa);
-			memcpy(chnl->tx_ibuf_va, &u32tmp, sizeof(u32tmp));
-
-			/* Length and PHYNO */
-			u32tmp = oal_htons(chnl->tx_ibuf_len) | (PFE_PHY_IF_ID_HIF_NOCPY << 24U);
-			memcpy(chnl->tx_ibuf_va + sizeof(u32tmp), &u32tmp, sizeof(u32tmp));
-
-			/* EMAC statistics */
-			memset(chnl->tx_ibuf_va + (2U * sizeof(uint32_t)), 0U, sizeof(uint32_t));
-
-			/* Copy the portion of data to get into LMEM buffer */
-			/* AAVB-3403 shall remove this memcpy() call */
-			u32tmp = ((PFE_CFG_LMEM_BUF_SIZE - PFE_CFG_LMEM_HDR_SIZE) < chnl->tx_ibuf_len)
-							? (PFE_CFG_LMEM_BUF_SIZE - PFE_CFG_LMEM_HDR_SIZE) : chnl->tx_ibuf_len;
-			memcpy(chnl->tx_ibuf_va + PFE_CFG_LMEM_HDR_SIZE, chnl->tx_ibuf_va + (256U + PFE_CFG_LMEM_HDR_SIZE), u32tmp);
-
-			/*	Enqueue the buffer into TX ring */
-			tx_ibuf_pa = pfe_bmu_get_pa(chnl->bmu, (addr_t)chnl->tx_ibuf_va);
-			err = pfe_hif_ring_enqueue_buf(chnl->tx_ring, tx_ibuf_pa, chnl->tx_ibuf_len, TRUE);
-
-			if (unlikely(EOK != err))
-			{
-				/*	Drop. Resource protection is embedded. */
-				pfe_bmu_free_buf(chnl->bmu, (addr_t)tx_ibuf_pa);
-
-				/*	Decrement BMU allocations counter */
-				pfe_hif_chnl_alloc_dec(chnl);
-			}
-
-			/*	Reset the intermediate buffer. No release here since it will
-			 	(should) be done by the PFE HW. */
-			chnl->tx_ibuf_va = NULL;
-			chnl->tx_ibuf_len = 0U;
-		}
-	}
-	else
-#else
 	(void)buf_va;
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		err = pfe_hif_ring_enqueue_buf(chnl->tx_ring, buf_pa, len, lifm);
-	}
+	err = pfe_hif_ring_enqueue_buf(chnl->tx_ring, buf_pa, len, lifm);
 
 	if (TRUE == lifm)
 	{
@@ -1397,16 +1020,6 @@ __attribute__((hot)) errno_t pfe_hif_chnl_get_tx_conf(pfe_hif_chnl_t *chnl)
 		will be reported as TX confirmation. */
 	while (EOK == pfe_hif_ring_dequeue_plain(chnl->tx_ring, &lifm))
 	{
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-		if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-		{
-			/*	Decrement BMU allocations counter. It is here because we expect that
-				the PFE HW just released a TX buffer previously allocated from BMU
-				pool within the pfe_hif_chnl_tx(). */
-			pfe_hif_chnl_alloc_dec(chnl);
-		}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-
 		if (TRUE == lifm)
 		{
 			return EOK;
@@ -1446,17 +1059,6 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx(pfe_hif_chnl_t *chnl, void **buf_pa
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	err = pfe_hif_ring_dequeue_buf(chnl->rx_ring, buf_pa, len, lifm);
-	
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	Increment BMU allocations counter. We have not allocated a buffer from BMU
-			directly but the HW did that and then provided us the buffer. Therefore we
-			need to properly handle it (release it once it has been processed). So we
-			are counting it as allocated buffer here... */
-		pfe_hif_chnl_alloc_inc(chnl);
-	}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED)
 	/*	Check if ring has enough RX buffers */
@@ -1473,8 +1075,8 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx(pfe_hif_chnl_t *chnl, void **buf_pa
 	return err;
 }
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
-#if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
 
+#if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
 /**
  * @brief		Receive a buffer (virtual address)
  * @details		When channel has received some data into RX buffer then this
@@ -1499,6 +1101,9 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf
 {
 	errno_t err;
 	void *buf_pa;
+	pfe_ct_hif_rx_hdr_t *hif_hdr_ptr = NULL;
+	uint32_t vlan_header;
+	uint32_t flags_map[4] = {HIF_RX_HIF0_VLAN, HIF_RX_HIF1_VLAN, HIF_RX_HIF2_VLAN, HIF_RX_HIF3_VLAN};
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == chnl) || (NULL == buf_va) || (NULL == len) || (NULL == lifm) || (NULL == meta)))
@@ -1511,61 +1116,29 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf
 	err = pfe_hif_ring_dequeue_buf(chnl->rx_ring, &buf_pa, len, lifm);
 	if (EOK == err)
 	{
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-		if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
+		/*	Return virtual address */
+		*buf_va = bpool_get_va(chnl->rx_pool, buf_pa);
+
+		hif_hdr_ptr = (pfe_ct_hif_rx_hdr_t *) *buf_va;
+		/*      Check if pkt is tagged */
+		if ((oal_ntohl(hif_hdr_ptr->flags) & (flags_map[chnl->id])) != 0)
 		{
-			/*	HIF NOCPY */
-
-			/*	Addresses coming from the ring are physical addresses of buffers provided by BMU. The
-			 	buffer contains so called post-classification header the PFE classifier is internally
-			 	using as well as specific HIF header. Headers start from buffer offset 0x0 and we shall
-				strip-off the post-classification header here since upper layers do not know about such
-				thing. The space can be (and will be) used as the buffer-specific metadata storage. */
-			*buf_va = pfe_bmu_get_va(chnl->bmu, (addr_t)buf_pa);
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-			if (unlikely(NULL == *buf_va))
-			{
-				NXP_LOG_DEBUG("Fatal: BMU converted p0x%p to v0x0\n", buf_pa);
-			}
-			else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-			/*	Get metadata storage (misuse the buffer headers) */
-			*meta = *buf_va;
-
-			/*	Skip the post-classification header to gain space for metadata storage.
-			 	The pfe_hif_chnl_release_buf() must be aware of this adjustment before
-				it will attempt to release buffer back to BMU hardware pool. This will
-				ensure the caller will receive also the HIF TX header but can reuse it
-				for custom purposes (see the pfe_hif_chnl_get_meta_size()). */
-			*buf_va = (void *)((addr_t)*buf_va + sizeof(pfe_ct_post_cls_hdr_t));
+			/*	On HIF hw is adding the vlan tag at 12 byte offset from the beggining
+				of the buffer. Copy the vlan header to the right position at offset 12
+				of the pkt witch is after the hif rx header. */
+			vlan_header = hif_hdr_ptr->rx_timestamp_s;
+			memmove((uint8_t *)*buf_va + 2*MAC_ADDRESS_SIZE, (uint8_t *)*buf_va + sizeof(pfe_ct_hif_rx_hdr_t), 2*MAC_ADDRESS_SIZE + sizeof(vlan_header));
+			memcpy((uint8_t *)*buf_va + sizeof(pfe_ct_hif_rx_hdr_t) + 2*MAC_ADDRESS_SIZE, &vlan_header, sizeof(vlan_header));
+		}
 
 #if (TRUE == HAL_HANDLE_CACHE)
-			/*	Invalidate cache over the buffer */
-			oal_mm_cache_inval(*buf_va, buf_pa, *len);
+		/*	Invalidate cache over the received data area */
+		oal_mm_cache_inval(*buf_va, buf_pa, *len);
 #endif /* HAL_HANDLE_CACHE */
 
-			/*	Increment BMU allocations counter. We have not allocated a buffer from BMU
-				directly but the HW did that and then provided us the buffer. Therefore we
-				need to properly handle it (release it once it has been processed). So we
-				are counting this reception as allocated buffer here... */
-			pfe_hif_chnl_alloc_inc(chnl);
-		}
-		else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-		{
-			/*	Return virtual address */
-			*buf_va = bpool_get_va(chnl->rx_pool, buf_pa);
-
-#if (TRUE == HAL_HANDLE_CACHE)
-			/*	Invalidate cache over the received data area */
-			oal_mm_cache_inval(*buf_va, buf_pa, *len);
-#endif /* HAL_HANDLE_CACHE */
-
-			/*	Return pointer to the pre-allocated memory location where
-				a buffer-related metadata can be stored. */
-			*meta = bpool_get_meta_storage(chnl->rx_pool, *buf_va);
-		}
+		/*	Return pointer to the pre-allocated memory location where
+			a buffer-related metadata can be stored. */
+		*meta = bpool_get_meta_storage(chnl->rx_pool, *buf_va);
 	}
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED)
@@ -1596,32 +1169,8 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf
  */
 __attribute__((cold)) uint32_t pfe_hif_chnl_get_meta_size(const pfe_hif_chnl_t *chnl)
 {
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == chnl))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF NOCPY */
-
-		/*	In case of HIF NOCPY we're using whole RX packet header headroom
-		 	for metadata storage. The headroom includes post-classification
-		 	header and the HIF header. Both can be overwritten by custom
-		 	data. */
-		return sizeof(pfe_ct_post_cls_hdr_t) + sizeof(pfe_ct_hif_rx_hdr_t);
-	}
-	else
-#elif !defined(PFE_CFG_NULL_ARG_CHECK)
 	(void)chnl;
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		return bpool_get_meta_storage_size();
-	}
+	return bpool_get_meta_storage_size();
 }
 
 /**
@@ -1643,48 +1192,24 @@ __attribute__((hot)) errno_t pfe_hif_chnl_release_buf(pfe_hif_chnl_t *chnl, void
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
+	buf_pa = (addr_t)bpool_get_pa(chnl->rx_pool, buf_va);
+
+	if (unlikely(NULL == (void *)buf_pa))
 	{
-		/*	HIF NOCPY */
-
-		/*	Get physical address */
-		buf_pa = (addr_t)pfe_bmu_get_pa(chnl->bmu, (addr_t)buf_va);
-
-		/*	Apply the correction due to post-classification header skip done
-		 	during the buffer reception. */
-		buf_pa = buf_pa - sizeof(pfe_ct_post_cls_hdr_t);
-
-		/*	Release the buffer to BMU pool. Resource protection is embedded. */
-		pfe_bmu_free_buf(chnl->bmu, buf_pa);
-
-		/*	Decrement BMU allocations counter */
-		pfe_hif_chnl_alloc_dec(chnl);
-
-		ret = EOK;
+		NXP_LOG_ERROR("VA->PA conversion failed, origin buffer VA: v0x%p\n", buf_va);
 	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
+
+	if (unlikely(EOK != oal_spinlock_lock(&chnl->rx_lock)))
 	{
-		buf_pa = (addr_t)bpool_get_pa(chnl->rx_pool, buf_va);
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
 
-		if (unlikely(NULL == (void *)buf_pa))
-		{
-			NXP_LOG_ERROR("VA->PA conversion failed, origin buffer VA: v0x%p\n", buf_va);
-		}
+	/*	Release the buffer to ring */
+	ret = pfe_hif_ring_enqueue_buf(chnl->rx_ring, (void *)buf_pa, PFE_BUF_SIZE, TRUE);
 
-		if (unlikely(EOK != oal_spinlock_lock(&chnl->rx_lock)))
-		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
-		}
-
-		/*	Release the buffer to ring */
-		ret = pfe_hif_ring_enqueue_buf(chnl->rx_ring, (void *)buf_pa, PFE_BUF_SIZE, TRUE);
-
-		if (unlikely(EOK != oal_spinlock_unlock(&chnl->rx_lock)))
-		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
-		}
+	if (unlikely(EOK != oal_spinlock_unlock(&chnl->rx_lock)))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
 	}
 
 	return ret;
@@ -1712,20 +1237,10 @@ __attribute__((hot)) errno_t pfe_hif_chnl_supply_rx_buf(const pfe_hif_chnl_t *ch
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
+	err = pfe_hif_ring_enqueue_buf(chnl->rx_ring, buf_pa, size, TRUE);
+	if (unlikely(EOK != err))
 	{
-		/*	There is noting to supply to HIF NOCPY */
-		err = EINVAL;
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		err = pfe_hif_ring_enqueue_buf(chnl->rx_ring, buf_pa, size, TRUE);
-		if (unlikely(EOK != err))
-		{
-			NXP_LOG_WARNING("pfe_hif_ring_enqueue_buf() failed: %d\n", err);
-		}
+		NXP_LOG_WARNING("pfe_hif_ring_enqueue_buf() failed: %d\n", err);
 	}
 
 	return err;
@@ -1767,23 +1282,13 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *ch
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_set_rx_bd_ring_addr(chnl->cbus_base_va, rx_ring_pa);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		/*	HIF */
-		pfe_hif_chnl_cfg_set_rx_bd_ring_addr(chnl->cbus_base_va, chnl->id, rx_ring_pa);
+	/*	HIF */
+	pfe_hif_chnl_cfg_set_rx_bd_ring_addr(chnl->cbus_base_va, chnl->id, rx_ring_pa);
 
-		if (NULL != wb_tbl_pa)
-		{
-			wb_tbl_len = pfe_hif_ring_get_wb_tbl_len(ring);
-			pfe_hif_chnl_cfg_set_rx_wb_table(chnl->cbus_base_va, chnl->id, wb_tbl_pa, wb_tbl_len);
-		}
+	if (NULL != wb_tbl_pa)
+	{
+		wb_tbl_len = pfe_hif_ring_get_wb_tbl_len(ring);
+		pfe_hif_chnl_cfg_set_rx_wb_table(chnl->cbus_base_va, chnl->id, wb_tbl_pa, wb_tbl_len);
 	}
 
 	chnl->rx_ring = ring;
@@ -1832,23 +1337,13 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *ch
 		NXP_LOG_DEBUG("Mutex lock failed\n");
 	}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		pfe_hif_nocpy_cfg_set_tx_bd_ring_addr(chnl->cbus_base_va, tx_ring_pa);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		/*	HIF */
-		pfe_hif_chnl_cfg_set_tx_bd_ring_addr(chnl->cbus_base_va, chnl->id, tx_ring_pa);
+	/*	HIF */
+	pfe_hif_chnl_cfg_set_tx_bd_ring_addr(chnl->cbus_base_va, chnl->id, tx_ring_pa);
 
-		if (NULL != wb_tbl_pa)
-		{
-			wb_tbl_len = pfe_hif_ring_get_wb_tbl_len(ring);
-			pfe_hif_chnl_cfg_set_tx_wb_table(chnl->cbus_base_va, chnl->id, wb_tbl_pa, wb_tbl_len);
-		}
+	if (NULL != wb_tbl_pa)
+	{
+		wb_tbl_len = pfe_hif_ring_get_wb_tbl_len(ring);
+		pfe_hif_chnl_cfg_set_tx_wb_table(chnl->cbus_base_va, chnl->id, wb_tbl_pa, wb_tbl_len);
 	}
 
 	chnl->tx_ring = ring;
@@ -1882,13 +1377,6 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if ((chnl->id >= PFE_HIF_CHNL_NOCPY_ID) && (NULL == chnl->bmu))
-	{
-		NXP_LOG_ERROR("Channel requires BMU instance\n");
-		goto free_and_fail;
-	}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
 	if (NULL != chnl->rx_ring)
@@ -1936,29 +1424,19 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 	}
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF NOCPY does not need external RX buffers */
-		chnl->rx_pool = NULL;
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		/*	Initialize RX buffer pool. Resource protection is embedded. */
-		NXP_LOG_INFO("Initializing RX buffer pool. Depth: %d; Buffer Size: %d; Cache Line Size: %d\n",
-				pfe_hif_chnl_get_rx_fifo_depth(chnl), PFE_BUF_SIZE, HAL_CACHE_LINE_SIZE);
+	/*	Initialize RX buffer pool. Resource protection is embedded. */
+	NXP_LOG_INFO("Initializing RX buffer pool. Depth: %d; Buffer Size: %d; Cache Line Size: %d\n",
+		     pfe_hif_chnl_get_rx_fifo_depth(chnl), PFE_BUF_SIZE, HAL_CACHE_LINE_SIZE);
 
-		chnl->rx_pool = bpool_create(pfe_hif_chnl_get_rx_fifo_depth(chnl), PFE_BUF_SIZE, HAL_CACHE_LINE_SIZE, BUFFERS_CACHED);
-		if (unlikely(NULL == chnl->rx_pool))
-		{
-			NXP_LOG_ERROR("Could not allocate RX buffer pool\n");
-			goto free_and_fail;
-		}
-
-		/*	Populate the RX ring */
-		pfe_hif_chnl_refill_rx_buffers(chnl);
+	chnl->rx_pool = bpool_create(pfe_hif_chnl_get_rx_fifo_depth(chnl), PFE_BUF_SIZE, HAL_CACHE_LINE_SIZE, BUFFERS_CACHED);
+	if (unlikely(NULL == chnl->rx_pool))
+	{
+		NXP_LOG_ERROR("Could not allocate RX buffer pool\n");
+		goto free_and_fail;
 	}
+
+	/*	Populate the RX ring */
+	pfe_hif_chnl_refill_rx_buffers(chnl);
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
 	return EOK;
@@ -2003,19 +1481,7 @@ __attribute__((hot)) bool_t pfe_hif_chnl_is_rx_dma_active(const pfe_hif_chnl_t *
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	No protection here. Getting DMA status is atomic. */
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		return pfe_hif_nocpy_cfg_is_rx_dma_active(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		/*	HIF */
-		return pfe_hif_chnl_cfg_is_rx_dma_active(chnl->cbus_base_va, chnl->id);
-	}
+	return pfe_hif_chnl_cfg_is_rx_dma_active(chnl->cbus_base_va, chnl->id);
 }
 
 /**
@@ -2034,19 +1500,7 @@ __attribute__((hot)) bool_t pfe_hif_chnl_is_tx_dma_active(const pfe_hif_chnl_t *
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	No protection here. Getting DMA status is atomic. */
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		return pfe_hif_nocpy_cfg_is_tx_dma_active(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		/*	HIF */
-		return pfe_hif_chnl_cfg_is_tx_dma_active(chnl->cbus_base_va, chnl->id);
-	}
+	return pfe_hif_chnl_cfg_is_tx_dma_active(chnl->cbus_base_va, chnl->id);
 }
 
 /**
@@ -2103,16 +1557,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_
 
 	tx_hdr = (pfe_ct_hif_tx_hdr_t *)tx_buf_va;
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		tx_hdr->e_phy_ifs = oal_htonl(1U << PFE_PHY_IF_ID_HIF_NOCPY);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		tx_hdr->e_phy_ifs = oal_htonl(1U << (PFE_PHY_IF_ID_HIF0 + chnl->id));
-	}
+	tx_hdr->e_phy_ifs = oal_htonl(1U << (PFE_PHY_IF_ID_HIF0 + chnl->id));
 
 	tx_hdr->flags = (pfe_ct_hif_tx_flags_t)(HIF_TX_INJECT|HIF_TX_IHC);
 	tx_hdr->chid = chnl->id;
@@ -2204,9 +1649,6 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 	uint32_t level;
 	uint32_t total, available, used;
 	errno_t err;
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	void *tx_ibuf_pa;
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
 	if (NULL != chnl)
@@ -2234,72 +1676,33 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 			/*	Drain RX buffers (the ones enqueued in RX ring) */
 			while (EOK == pfe_hif_ring_drain_buf(chnl->rx_ring, &buf_pa))
 			{
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-				if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
+				/*	HIF buffers are provided by SW pool so return them to SW pool */
+				buf_va = bpool_get_va(chnl->rx_pool, buf_pa);
+				if (NULL == buf_va)
 				{
-                    if (NULL == buf_pa)
-                    {
-                        NXP_LOG_WARNING("Drained buffer PA is NULL\n");
-                    }
-                    else
-                    {
-					/*	Return buffer into BMU. Resource protection is embedded. */
-                        pfe_bmu_free_buf(chnl->bmu, (addr_t)buf_pa);
-                    }
-                }
-                else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-				{
-					/*	HIF buffers are provided by SW pool so return them to SW pool */
-					buf_va = bpool_get_va(chnl->rx_pool, buf_pa);
-                    if (NULL == buf_va)
-                    {
-                        NXP_LOG_WARNING("Drained buffer VA is NULL\n");
-                    }
-                    else
-                    {
-                        /*	Return buffer into pool. Resource protection is embedded. */
-                        bpool_put(chnl->rx_pool, buf_va);
-                    }
-                }
-            }
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-			if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-			{
-				/*	Sanity check to verify if the HIF RX ring and the upper SW layers
-					have properly returned all RX and TX buffers back to the BMU. We're
-					using the allocations counter here to determine delta between number
-					of allocated buffers (either TX buffers we have directly allocated
-					or received buffers which have been allocated by the PFE HW) and
-					number of released buffers. */
-				if (0U != pfe_hif_chnl_get_alloc_cnt(chnl))
-				{
-					NXP_LOG_WARNING("Some buffers not returned to the BMU\n");
+					NXP_LOG_WARNING("Drained buffer VA is NULL\n");
 				}
 				else
 				{
-					NXP_LOG_INFO("All buffers returned to the BMU\n");
+					/*	Return buffer into pool. Resource protection is embedded. */
+					bpool_put(chnl->rx_pool, buf_va);
 				}
 			}
-			else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-			{
-				/*	Sanity check to verify if the HIF RX ring and the upper SW layers
-					have properly returned all RX buffers back to the pool. */
-				if (EOK != bpool_get_fill_level(chnl->rx_pool, &level))
-				{
-					NXP_LOG_ERROR("Can't get buffer pool fill level\n ");
-				}
 
-				if (level < (pfe_hif_chnl_get_rx_fifo_depth(chnl)))
-				{
-					NXP_LOG_WARNING("Some RX buffers not returned to the pool\n");
-				}
-				else
-				{
-					NXP_LOG_INFO("All RX buffers returned to the pool\n");
-				}
+			/*	Sanity check to verify if the HIF RX ring and the upper SW layers
+				have properly returned all RX buffers back to the pool. */
+			if (EOK != bpool_get_fill_level(chnl->rx_pool, &level))
+			{
+				NXP_LOG_ERROR("Can't get buffer pool fill level\n ");
+			}
+
+			if (level < (pfe_hif_chnl_get_rx_fifo_depth(chnl)))
+			{
+				NXP_LOG_WARNING("Some RX buffers not returned to the pool\n");
+			}
+			else
+			{
+				NXP_LOG_INFO("All RX buffers returned to the pool\n");
 			}
 
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
@@ -2308,8 +1711,8 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 			pfe_hif_ring_invalidate(chnl->rx_ring);
 
 			/*
-			 	Here the ring should be empty. Execute HIF channel BDP shutdown
-			 	procedure to ensure that channel will not keep any content in
+				Here the ring should be empty. Execute HIF channel BDP shutdown
+				procedure to ensure that channel will not keep any content in
 				internal buffers.
 			*/
 			if (EOK != pfe_hif_chnl_flush_rx_bd_fifo(chnl))
@@ -2377,18 +1780,6 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 			chnl->rx_pool = NULL;
 		}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-		if (NULL != chnl->tx_ibuf_va)
-		{
-			/*	Release the intermediate TX buffer */
-			tx_ibuf_pa = pfe_bmu_get_pa(chnl->bmu, (addr_t)chnl->tx_ibuf_va);
-			pfe_bmu_free_buf(chnl->bmu, (addr_t)tx_ibuf_pa);
-			chnl->tx_ibuf_va = NULL;
-
-			/*	Decrement BMU allocations counter */
-			pfe_hif_chnl_alloc_dec(chnl);
-		}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
 		if (EOK != oal_spinlock_lock(&chnl->lock))
@@ -2397,13 +1788,6 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 		}
 
 		/*	Disable and finalize the channel */
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-		if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-		{
-			; /*	HIF NOCPY will do the finalization */
-		}
-		else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 		{
 			pfe_hif_chnl_cfg_fini(chnl->cbus_base_va, chnl->id);
 		}
@@ -2413,12 +1797,6 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 			NXP_LOG_DEBUG("Mutex unlock failed\n");
 		}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-		if (EOK != oal_spinlock_destroy(&chnl->a_lock))
-		{
-			NXP_LOG_WARNING("Could not properly destroy allocation counter mutex\n");
-		}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 		if (EOK != oal_spinlock_destroy(&chnl->lock))
 		{
@@ -2484,17 +1862,7 @@ uint32_t pfe_hif_chnl_get_tx_cnt(const pfe_hif_chnl_t *chnl)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		return pfe_hif_nocpy_cfg_get_tx_cnt(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		return pfe_hif_chnl_cfg_get_tx_cnt(chnl->cbus_base_va, chnl->id);
-	}
+	return pfe_hif_chnl_cfg_get_tx_cnt(chnl->cbus_base_va, chnl->id);
 }
 
 /**
@@ -2512,17 +1880,7 @@ uint32_t pfe_hif_chnl_get_rx_cnt(const pfe_hif_chnl_t *chnl)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		return pfe_hif_nocpy_cfg_get_rx_cnt(chnl->cbus_base_va);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		return pfe_hif_chnl_cfg_get_rx_cnt(chnl->cbus_base_va, chnl->id);
-	}
+	return pfe_hif_chnl_cfg_get_rx_cnt(chnl->cbus_base_va, chnl->id);
 }
 
 /**
@@ -2546,21 +1904,11 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_get_text_statistics(const pfe_hif_ch
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	if (chnl->id >= PFE_HIF_CHNL_NOCPY_ID)
-	{
-		/*	HIF_NOCPY */
-		len += pfe_hif_nocpy_chnl_cfg_get_text_stat(chnl->cbus_base_va, buf, buf_len, verb_level);
-	}
-	else
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-	{
-		/*	HIF */
-		len += pfe_hif_chnl_cfg_get_text_stat(chnl->cbus_base_va, chnl->id, buf, buf_len, verb_level);
+	/*	HIF */
+	len += pfe_hif_chnl_cfg_get_text_stat(chnl->cbus_base_va, chnl->id, buf, buf_len, verb_level);
 
-		if (verb_level >= 9)
-			len += pfe_hif_chnl_dump_ring(chnl, TRUE, TRUE, buf + len, buf_len - len, verb_level);
-	}
+	if (verb_level >= 9)
+		len += pfe_hif_chnl_dump_ring(chnl, TRUE, TRUE, buf + len, buf_len - len, verb_level);
 
 	return len;
 }

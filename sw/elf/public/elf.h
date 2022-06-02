@@ -63,6 +63,17 @@
 ==================================================================================================*/
 #define ELF_NIDENT                  16U
 #define ELF_NAMED_SECT_IDX_FLAG     0x80000000U
+
+/* Macros for change of endianness */
+#define ENDIAN_SW_2B(VAL) ( (((VAL)&0xFF00U)>>8U) | (((VAL)&0x00FFU)<<8U) )
+#define ENDIAN_SW_4B(VAL) ( (((VAL)&0xFF000000U)>>24U) | (((VAL)&0x000000FFU)<<24U) \
+                          | (((VAL)&0x00FF0000U)>>8U) | (((VAL)&0x0000FF00U)<<8U) \
+                          )
+#define ENDIAN_SW_8B(VAL) ( (((VAL)&0xFF00000000000000U)>>56U) | (((VAL)&0x00000000000000FFU)<<56U) \
+                          | (((VAL)&0x00FF000000000000U)>>40U) | (((VAL)&0x000000000000FF00U)<<40U) \
+                          | (((VAL)&0x0000FF0000000000U)>>24U) | (((VAL)&0x0000000000FF0000U)<<24U) \
+                          | (((VAL)&0x000000FF00000000U)>>8U ) | (((VAL)&0x00000000FF000000U)<<8U ) \
+                          )
 /*==================================================================================================
                                              ENUMS
 ==================================================================================================*/
@@ -244,7 +255,7 @@ typedef struct __attribute__((packed))
 /*==================================================================================================
                                      FUNCTION PROTOTYPES
 ==================================================================================================*/
-extern bool_t ELF_Open(ELF_File_t *pElfFile, void *pvFile, uint32_t u32FileSize);
+extern bool_t ELF_Open(ELF_File_t *pElfFile,void *pvFile, uint32_t u32FileSize);
 extern void ELF_Close(ELF_File_t *pElfFile);
 
 #if TRUE == ELF_CFG_PROGRAM_TABLE_USED

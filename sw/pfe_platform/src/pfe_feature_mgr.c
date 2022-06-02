@@ -35,15 +35,15 @@
 
 typedef struct
 {
-	uint32_t *cbus_base;
-	uint32_t current_hw_feature;	/* Index of the hw feature to return by pfe_hw_get_feature_next() */
-	pfe_hw_feature_t **hw_features;	/* List of all hw features*/
-	uint32_t hw_features_count;		/* Number of items in hw_features */
+	uint32_t *         cbus_base;
+	uint32_t           current_hw_feature; /* Index of the hw feature to return by pfe_hw_get_feature_next() */
+	pfe_hw_feature_t **hw_features;        /* List of all hw features*/
+	uint32_t           hw_features_count;  /* Number of items in hw_features */
 
-	bool_t rewind_flg;				/* Internal flag supporting transition walk from hw_feature set to fw_feature set */
+	bool_t rewind_flg; /* Internal flag supporting transition walk from hw_feature set to fw_feature set */
 	pfe_class_t *class;
 	pfe_util_t *util;
-	pfe_tmu_t *tmu;					/* Included because of err051211_workaround */
+	pfe_tmu_t * tmu; /* Included because of err051211_workaround */
 } pfe_feature_mgr_t;
 
 static errno_t pfe_hw_get_feature(const pfe_feature_mgr_t *fmgr, pfe_hw_feature_t **feature, const char *name);
@@ -64,34 +64,36 @@ static pfe_feature_mgr_t *feature_mgr = NULL;
  */
 errno_t pfe_feature_mgr_init(uint32_t *cbus_base)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if(NULL == cbus_base)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == cbus_base)
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-	#endif
-
-	if(NULL == feature_mgr)
+	else
+#endif
 	{
-		feature_mgr = oal_mm_malloc(sizeof(pfe_feature_mgr_t));
-		if(NULL != feature_mgr)
+		if (NULL == feature_mgr)
 		{
-			(void)memset(feature_mgr, 0, sizeof(pfe_feature_mgr_t));
-			feature_mgr->cbus_base = cbus_base;
-			feature_mgr->hw_features = oal_mm_malloc(1U * sizeof(pfe_hw_feature_t *));
-			ret = pfe_hw_feature_init_all(cbus_base, feature_mgr->hw_features, &feature_mgr->hw_features_count);
+			feature_mgr = oal_mm_malloc(sizeof(pfe_feature_mgr_t));
+			if (NULL != feature_mgr)
+			{
+				(void)memset(feature_mgr, 0, sizeof(pfe_feature_mgr_t));
+				feature_mgr->cbus_base = cbus_base;
+				feature_mgr->hw_features = oal_mm_malloc(2U * sizeof(pfe_hw_feature_t *));
+				ret = pfe_hw_feature_init_all(cbus_base, feature_mgr->hw_features, &feature_mgr->hw_features_count);
+			}
+			else
+			{
+				ret = ENOMEM;
+			}
 		}
 		else
 		{
-			ret = ENOMEM;
+			ret = EPERM;
 		}
-	}
-	else
-	{
-		ret = EPERM;
 	}
 
 	return ret;
@@ -106,26 +108,29 @@ errno_t pfe_feature_mgr_init(uint32_t *cbus_base)
  */
 errno_t pfe_feature_mgr_add_modules(pfe_class_t *class, pfe_util_t *util, pfe_tmu_t *tmu)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if((NULL == class) || (NULL == tmu))
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if ((NULL == class) || (NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-	/* Note it is OK for "util" to be NULL */
-	#endif
-
-	if(NULL != feature_mgr)
+	else
+/* Note it is OK for "util" to be NULL */
+#endif
 	{
+		if (NULL != feature_mgr)
+		{
 			feature_mgr->class = class;
 			feature_mgr->util = util;
 			feature_mgr->tmu = tmu;
-	}
-	else
-	{
-		ret = EPERM;
+			ret = EOK;
+		}
+		else
+		{
+			ret = EPERM;
+		}
 	}
 
 	return ret;
@@ -139,7 +144,7 @@ errno_t pfe_feature_mgr_fini(void)
 {
 	errno_t ret;
 
-	if(NULL == feature_mgr)
+	if (NULL == feature_mgr)
 	{
 		ret = EEXIST;
 	}
@@ -166,127 +171,156 @@ bool_t pfe_feature_mgr_is_available(const char *feature_name)
 	pfe_hw_feature_t *hw_feature;
 	pfe_fw_feature_t *fw_feature_class;
 	pfe_fw_feature_t *fw_feature_util;
-	errno_t ret_class, ret_util;
-	bool_t class_avail = FALSE;
-	bool_t util_avail = FALSE;
-	errno_t ret_hw;
+	errno_t           ret_class, ret_util;
+	bool_t            class_avail = FALSE;
+	bool_t            util_avail = FALSE;
+	bool_t            ret = FALSE;
+	errno_t           ret_hw;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if(NULL == feature_name)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name)
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
-	#endif
-
-	if(NULL == feature_mgr)
-	{
-		NXP_LOG_ERROR("Feature Mgr not initialized\n");
-		return FALSE;
-	}
-
-
-	ret_hw = pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name);
-	if(EOK == ret_hw)
-	{	/* Descriptor in platform is available */
-		if(pfe_hw_feature_enabled(hw_feature))
-		{	/* Feature is enabled thus it is available */
-			return TRUE;
-		}
-		else
-		{	/* Feature is disabled thus it is not available */
-			return FALSE;
-		}
-	}
-
-	if (NULL == feature_mgr->class)
-	{	/* Class block is not initialized */
-		return FALSE;
-	}
-
-	ret_class = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
-	/* Note if one of ret_class/ret_util is EOK and one is not then the data
-	   is inconsistent. In such case the one without EOK will block feature
-	   use. This situation should not happen. */
-
-	/* Analyze Class */
-	if(EOK == ret_class)
-	{	/* Descriptor in class is available */
-
-		if(TRUE == pfe_fw_feature_is_in_class(fw_feature_class))
-		{	/* This feature is applicable for class */
-
-			if(pfe_fw_feature_enabled(fw_feature_class))
-			{	/* Feature is enabled thus it is available */
-				class_avail = TRUE;
-			}
-			else
-			{	/* Feature is disabled thus it is not available */
-				class_avail = FALSE;
-			}
-		}
-		else
-		{	/* Not applicable for class */
-			/* Do not block availability of the feature which is not applicable */
-			class_avail = TRUE;
-		}
+		ret = FALSE;
 	}
 	else
-	{	/* Feature does not exist i.e. it is not available */
-		util_avail = FALSE;
-	}
+#endif
+	{
+		if (NULL == feature_mgr)
+		{
+			NXP_LOG_ERROR("Feature Mgr not initialized\n");
+			ret = FALSE;
+		}
+		else
+		{
 
-	if(NULL != feature_mgr->util)
-	{	/* Util is present */
-		ret_util = pfe_util_get_feature(feature_mgr->util, &fw_feature_util, feature_name);
-
-		/* Analyze Util */
-		if(EOK == ret_util)
-		{	/* Descriptor in util is available */
-			if(TRUE == pfe_fw_feature_is_in_util(fw_feature_util))
-			{	/* This feature is applicable for util */
-
-				if(pfe_fw_feature_enabled(fw_feature_util))
-				{	/* Feature is enabled thus it is available */
-					util_avail = TRUE;
+			ret_hw = pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name);
+			if (EOK == ret_hw)
+			{
+				/* Descriptor in platform is available */
+				if (pfe_hw_feature_enabled(hw_feature))
+				{
+					/* Feature is enabled thus it is available */
+					ret = TRUE;
 				}
 				else
-				{	/* Feature is disabled thus it is not available */
-					util_avail = FALSE;
+				{
+					/* Feature is disabled thus it is not available */
+					ret = FALSE;
 				}
 			}
 			else
-			{	/* Not applicable for util */
-				/* Do not block availability of the feature which is not applicable */
-				util_avail = TRUE;
+			{
+
+				if (NULL == feature_mgr->class)
+				{
+					/* Class block is not initialized */
+					ret = FALSE;
+				}
+				else
+				{
+
+					ret_class = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
+					/* Note if one of ret_class/ret_util is EOK and one is not then the data is inconsistent. In such case the one without EOK will block feature
+	   				use. This situation should not happen. */
+
+					/* Analyze Class */
+					if (EOK == ret_class)
+					{
+						/* Descriptor in class is available */
+
+						if (TRUE == pfe_fw_feature_is_in_class(fw_feature_class))
+						{
+							/* This feature is applicable for class */
+
+							if (pfe_fw_feature_enabled(fw_feature_class))
+							{
+								/* Feature is enabled thus it is available */
+								class_avail = TRUE;
+							}
+							else
+							{
+								/* Feature is disabled thus it is not available */
+								class_avail = FALSE;
+							}
+						}
+						else
+						{
+							/* Not applicable for class */
+							/* Do not block availability of the feature which is not applicable */
+							class_avail = TRUE;
+						}
+					}
+					else
+					{
+						/* Feature does not exist i.e. it is not available */
+						util_avail = FALSE;
+					}
+
+					if (NULL != feature_mgr->util)
+					{
+						/* Util is present */
+						ret_util = pfe_util_get_feature(feature_mgr->util, &fw_feature_util, feature_name);
+
+						/* Analyze Util */
+						if (EOK == ret_util)
+						{
+							/* Descriptor in util is available */
+							if (TRUE == pfe_fw_feature_is_in_util(fw_feature_util))
+							{
+								/* This feature is applicable for util */
+
+								if (pfe_fw_feature_enabled(fw_feature_util))
+								{
+									/* Feature is enabled thus it is available */
+									util_avail = TRUE;
+								}
+								else
+								{
+									/* Feature is disabled thus it is not available */
+									util_avail = FALSE;
+								}
+							}
+							else
+							{
+								/* Not applicable for util */
+								/* Do not block availability of the feature which is not applicable */
+								util_avail = TRUE;
+							}
+						}
+						else
+						{
+							/* Feature does not exist i.e. it is not available */
+							util_avail = FALSE;
+						}
+					}
+					else
+					{
+						/* Util not present */
+
+						if (EOK == ret_class)
+						{
+							/* Use class information to check whether the feature requires util to be present */
+							if (pfe_fw_feature_is_in_util(fw_feature_class))
+							{
+								/* No firmware = no feature */
+								util_avail = FALSE;
+							}
+							else
+							{
+								/* Feature does not need util to be present */
+								util_avail = TRUE;
+							}
+						}
+					}
+					/* Return TRUE if the feature availability is not blocked by any of class/util pair */
+					ret = ((FALSE != class_avail) && (FALSE != util_avail)) ? TRUE : FALSE;
+				}
 			}
-		}
-		else
-		{	/* Feature does not exist i.e. it is not available */
-			util_avail = FALSE;
 		}
 	}
-	else
-	{	/* Util not present */
 
-		if (EOK == ret_class)
-		{
-			/* Use class information to check whether the feature requires util to be present */
-			if(pfe_fw_feature_is_in_util(fw_feature_class))
-			{
-				/* No firmware = no feature */
-				util_avail = FALSE;
-			}
-			else
-			{
-				/* Feature does not need util to be present */
-				util_avail = TRUE;
-			}
-		}
-	}
-
-	/* Return TRUE if the feature availability is not blocked by any of class/util pair */
-	return ((FALSE != class_avail) && (FALSE != util_avail)) ? TRUE : FALSE;
+	return ret;
 }
 
 /**
@@ -300,84 +334,108 @@ errno_t pfe_feature_mgr_set_val(const char *feature_name, const uint8_t val)
 	pfe_hw_feature_t *hw_feature;
 	pfe_fw_feature_t *fw_feature_class;
 	pfe_fw_feature_t *fw_feature_util;
-	errno_t ret_class, ret_util;
-	uint8_t old_val;
-	errno_t ret = EOK;
+	pfe_ct_feature_flags_t flags;
+	errno_t           ret_class, ret_util;
+	errno_t           ret_feature;
+	uint8_t           old_val;
+	errno_t           ret = EOK;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if(NULL == feature_name)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name)
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-	#endif
-
-	if(NULL == feature_mgr)
+	else
+#endif
 	{
-		NXP_LOG_ERROR("Feature Mgr not initialized\n");
-		return EINVAL;
-	}
-
-	ret = pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name);
-	if(EOK == ret)
-	{	/* Feature exists */
-		ret = pfe_hw_feature_set_val(hw_feature, val);
-		return ret;
-	}
-
-	if (NULL == feature_mgr->class)
-	{	/* Class block is not initialized */
-		return EINVAL;
-	}
-
-	ret_class = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
-	if(EOK != ret_class)
-	{	/* Feature does not exist or data is inconsistent */
-		return EINVAL;
-	}
-
-	if(NULL != feature_mgr->util)
-	{
-		ret_util = pfe_util_get_feature(feature_mgr->util, &fw_feature_util, feature_name);
-		if(EOK != ret_util)
-		{	/* Feature does not exist or data is inconsistent */
-			ret = EINVAL;
-			return ret;
-		}
-	}
-
-	/* Handle the Class */
-	if(TRUE == pfe_fw_feature_is_in_class(fw_feature_class))
-	{
-		/* Backup the original value for the failure case */
-		(void )pfe_fw_feature_get_val(fw_feature_class, &old_val);
-		/* Set the new value */
-		ret = pfe_fw_feature_set_val(fw_feature_class, val);
-	}
-
-	/* Handle the Util */
-	if(NULL != feature_mgr->util)
-	{	/* Util is present */
-		/* Continue only if the previous code succeeded - we need to
-		   keep the class and util coherent */
-		if(EOK == ret)
+		if (NULL == feature_mgr)
 		{
-			if(TRUE == pfe_fw_feature_is_in_util(fw_feature_util))
+			NXP_LOG_ERROR("Feature Mgr not initialized\n");
+			ret = EINVAL;
+		}
+		else
+		{
+
+			ret_feature = pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name);
+			if (EOK == ret_feature)
+			{ /* Feature exists */
+				ret = pfe_hw_feature_get_flags(hw_feature, &flags);
+				if (flags & F_RUNTIME)
+				{
+					ret = pfe_hw_feature_set_val(hw_feature, val);
+				}
+				else
+				{
+					ret = EFAULT;
+				}
+			}
+			else
 			{
-				ret = pfe_fw_feature_set_val(fw_feature_util, val);
-				if(EOK != ret)
-				{	/* Failure */
-					/* Revert the changes already made */
-					(void)pfe_fw_feature_set_val(fw_feature_util, old_val);
+
+				if (NULL == feature_mgr->class)
+				{ /* Class block is not initialized */
+					ret = EINVAL;
+				}
+				else
+				{
+					ret_class = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
+					if (EOK != ret_class)
+					{ /* Feature does not exist or data is inconsistent */
+						ret = EINVAL;
+					}
+					else
+					{
+
+						if (NULL != feature_mgr->util)
+						{
+							ret_util = pfe_util_get_feature(feature_mgr->util, &fw_feature_util, feature_name);
+							if (EOK != ret_util)
+							{ /* Feature does not exist or data is inconsistent */
+								ret = EINVAL;
+							}
+						}
+
+						if (EOK == ret)
+						{
+							/* Handle the Class */
+							if (TRUE == pfe_fw_feature_is_in_class(fw_feature_class))
+							{
+								/* Backup the original value for the failure case */
+								(void)pfe_fw_feature_get_val(fw_feature_class, &old_val);
+								/* Set the new value */
+								ret = pfe_fw_feature_set_val(fw_feature_class, val);
+							}
+
+							/* Handle the Util */
+							if (NULL != feature_mgr->util)
+							{ /* Util is present */
+								/* Continue only if the previous code succeeded - we need to
+		   						keep the class and util coherent */
+								if (EOK == ret)
+								{
+									if (TRUE == pfe_fw_feature_is_in_util(fw_feature_util))
+									{
+										ret = pfe_fw_feature_set_val(fw_feature_util, val);
+										if (EOK != ret)
+										{ /* Failure */
+											/* Revert the changes already made */
+											(void)pfe_fw_feature_set_val(fw_feature_util, old_val);
+										}
+									}
+								}
+							}
+
+							/* Check/configure driver (if needed) */
+							if (EOK == ret)
+							{
+								ret = pfe_feature_mgr_configure_driver(feature_name, val);
+							}
+						}
+					}
 				}
 			}
 		}
-	}
-
-	/* Check/configure driver (if needed) */
-	if (EOK == ret)
-	{
-		ret = pfe_feature_mgr_configure_driver(feature_name, val);
 	}
 
 	return ret;
@@ -391,83 +449,95 @@ errno_t pfe_feature_mgr_set_val(const char *feature_name, const uint8_t val)
  */
 errno_t pfe_feature_mgr_enable(const char *feature_name)
 {
-	pfe_hw_feature_t *hw_feature;
-	pfe_fw_feature_t *fw_feature_class;
+	pfe_hw_feature_t *     hw_feature;
+	pfe_fw_feature_t *     fw_feature_class;
 	pfe_ct_feature_flags_t tmp;
-	errno_t ret;
+	errno_t                ret = EINVAL;
+	errno_t                ret_class;
+	errno_t                ret_flag;
+	errno_t                ret_hw_feature;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if(NULL == feature_name)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name)
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-	#endif
-
-	if(NULL == feature_mgr)
+	else
+#endif
 	{
-		NXP_LOG_ERROR("Feature Mgr not initialized\n");
-		return EINVAL;
-	}
-
-	/* HW feature first */
-	ret = pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name);
-	if(EOK == ret)
-	{
-		ret = pfe_hw_feature_get_flags(hw_feature, &tmp);
-		if(EOK == ret)
+		if (NULL == feature_mgr)
 		{
-			if(0U == ((uint8_t)tmp & (uint8_t)F_PRESENT))
-			{	/* Feature cannot be enabled */
-				NXP_LOG_WARNING("Cannot enable feature %s - not present in Platform\n", feature_name);
-				return EINVAL;
-			}
-			else if(0U == ((uint8_t)tmp & (uint8_t)F_RUNTIME))
-			{	/* Feature cannot be disabled */
-				NXP_LOG_INFO("Feature %s is always enabled in Platform\n", feature_name);
-				return EOK;
+			NXP_LOG_ERROR("Feature Mgr not initialized\n");
+			ret = EINVAL;
+		}
+		else
+		{
+
+			/* HW feature first */
+			ret_hw_feature = pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name);
+			if (EOK == ret_hw_feature)
+			{
+				ret_flag = pfe_hw_feature_get_flags(hw_feature, &tmp);
+				if (EOK == ret_flag)
+				{
+					if (0U == ((uint8_t)tmp & (uint8_t)F_PRESENT))
+					{ /* Feature cannot be enabled */
+						NXP_LOG_WARNING("Cannot enable feature %s - not present in Platform\n", feature_name);
+						ret = EINVAL;
+					}
+					else if (0U == ((uint8_t)tmp & (uint8_t)F_RUNTIME))
+					{ /* Feature cannot be disabled */
+						NXP_LOG_INFO("Feature %s is always enabled in Platform\n", feature_name);
+						ret = EOK;
+					}
+					else
+					{ /* Feature needs to be enabled */
+						ret = pfe_feature_mgr_set_val(feature_name, 1);
+					}
+				}
+
+				/* Don't continue with FW features */
 			}
 			else
-			{	/* Feature needs to be disabled */
-				return pfe_feature_mgr_set_val(feature_name, 1);
+			{
+
+				if (NULL == feature_mgr->class)
+				{ /* Class block is not initialized */
+					ret = EINVAL;
+				}
+				else
+				{
+
+					/* Class and util share the same information thus it is enough to use just the class to get it */
+					ret_class = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
+					if (EOK == ret_class)
+					{
+						ret_flag = pfe_fw_feature_get_flags(fw_feature_class, &tmp);
+						if (EOK == ret_flag)
+						{
+							if (0U == ((uint8_t)tmp & (uint8_t)F_PRESENT))
+							{ /* Feature cannot be enabled */
+								NXP_LOG_WARNING("Cannot enable feature %s - not present in FW\n", feature_name);
+								ret = EINVAL;
+							}
+							else if (0U == ((uint8_t)tmp & (uint8_t)F_RUNTIME))
+							{ /* Feature cannot be disabled */
+								NXP_LOG_INFO("Feature %s is always enabled in FW\n", feature_name);
+								ret = EOK;
+							}
+							else
+							{ /* Feature needs to be enabled */
+								ret = pfe_feature_mgr_set_val(feature_name, 1);
+							}
+						}
+					}
+				}
 			}
 		}
-
-		/* Don't continue with FW features */
-		return ret;
 	}
 
-	if (NULL == feature_mgr->class)
-	{	/* Class block is not initialized */
-		return EINVAL;
-	}
-
-	/* Class and util share the same information thus it is
-	   enough to use just the class to get it */
-	ret = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
-	if(EOK == ret)
-	{
-		ret = pfe_fw_feature_get_flags(fw_feature_class, &tmp);
-		if(EOK == ret)
-		{
-			if(0U == ((uint8_t)tmp & (uint8_t)F_PRESENT))
-			{	/* Feature cannot be enabled */
-				NXP_LOG_WARNING("Cannot enable feature %s - not present in FW\n", feature_name);
-				return EINVAL;
-			}
-			else if(0U == ((uint8_t)tmp & (uint8_t)F_RUNTIME))
-			{	/* Feature cannot be disabled */
-				NXP_LOG_INFO("Feature %s is always enabled in FW\n", feature_name);
-				return EOK;
-			}
-			else
-			{	/* Feature needs to be disabled */
-				return pfe_feature_mgr_set_val(feature_name, 1);
-			}
-		}
-	}
-
-	return EINVAL;
+	return ret;
 }
 
 /**
@@ -478,86 +548,96 @@ errno_t pfe_feature_mgr_enable(const char *feature_name)
  */
 errno_t pfe_feature_mgr_disable(const char *feature_name)
 {
-	pfe_hw_feature_t *hw_feature;
-	pfe_fw_feature_t *fw_feature_class;
+	pfe_hw_feature_t *     hw_feature;
+	pfe_fw_feature_t *     fw_feature_class;
 	pfe_ct_feature_flags_t tmp;
-	errno_t ret;
+	errno_t                ret = EINVAL;
+	errno_t                ret_class;
+	errno_t                ret_flag;
+	errno_t                ret_hw_feature;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if(NULL == feature_name)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name)
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-	#endif
-
-	if(NULL == feature_mgr)
+	else
+#endif
 	{
-		NXP_LOG_ERROR("Feature Mgr not initialized\n");
-		return EINVAL;
-	}
-
-	/* HW feature first */
-	ret = pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name);
-	if(EOK == ret)
-	{
-		ret = pfe_hw_feature_get_flags(hw_feature, &tmp);
-		if(EOK == ret)
+		if (NULL == feature_mgr)
 		{
-			if(0U == ((uint8_t)tmp & (uint8_t)F_PRESENT))
-			{	/* Feature cannot be enabled */
-				NXP_LOG_INFO("Feature %s is always disabled in Platform\n", feature_name);
-				return EOK;
-			}
-			else if(0U == ((uint8_t)tmp & (uint8_t)F_RUNTIME))
-			{	/* Feature cannot be disabled */
-				NXP_LOG_ERROR("Cannot disabled feature %s - always enabled in Platform\n", feature_name);
-				return EINVAL;
+			NXP_LOG_ERROR("Feature Mgr not initialized\n");
+			ret = EINVAL;
+		}
+		else
+		{
+
+			/* HW feature first */
+			ret_hw_feature = pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name);
+			if (EOK == ret_hw_feature)
+			{
+				ret_flag = pfe_hw_feature_get_flags(hw_feature, &tmp);
+				if (EOK == ret_flag)
+				{
+					if (0U == ((uint8_t)tmp & (uint8_t)F_PRESENT))
+					{ /* Feature cannot be enabled */
+						NXP_LOG_INFO("Feature %s is always disabled in Platform\n", feature_name);
+						ret = EOK;
+					}
+					else if (0U == ((uint8_t)tmp & (uint8_t)F_RUNTIME))
+					{ /* Feature cannot be disabled */
+						NXP_LOG_ERROR("Cannot disabled feature %s - always enabled in Platform\n", feature_name);
+						ret = EINVAL;
+					}
+					else
+					{ /* Feature needs to be disabled */
+						ret = pfe_feature_mgr_set_val(feature_name, 0);
+					}
+				}
+
+				/* Don't continue with FW features */
 			}
 			else
-			{	/* Feature needs to be disabled */
-				return pfe_feature_mgr_set_val(feature_name, 0);
+			{
+
+				if (NULL == feature_mgr->class)
+				{ /* Class block is not initialized */
+					ret = EINVAL;
+				}
+				else
+				{
+
+					/* Class and util share the same information thus it is enough to use just the class to get it */
+					ret_class = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
+					if (EOK == ret_class)
+					{
+						ret_flag = pfe_fw_feature_get_flags(fw_feature_class, &tmp);
+						if (EOK == ret_flag)
+						{
+							if (0U == ((uint8_t)tmp & (uint8_t)F_PRESENT))
+							{ /* Feature cannot be enabled */
+								NXP_LOG_INFO("Feature %s is always disabled in FW\n", feature_name);
+								ret = EOK;
+							}
+							else if (0U == ((uint8_t)tmp & (uint8_t)F_RUNTIME))
+							{ /* Feature cannot be disabled */
+								NXP_LOG_ERROR("Cannot disabled feature %s - always enabled in FW\n", feature_name);
+								ret = EINVAL;
+							}
+							else
+							{ /* Feature needs to be disabled */
+								ret = pfe_feature_mgr_set_val(feature_name, 0);
+							}
+						}
+					}
+				}
 			}
 		}
-
-		/* Don't continue with FW features */
-		return ret;
 	}
 
-	if (NULL == feature_mgr->class)
-	{	/* Class block is not initialized */
-		return EINVAL;
-	}
-
-	/* Class and util share the same information thus it is
-	   enough to use just the class to get it */
-	ret = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
-	if(EOK == ret)
-	{
-		ret = pfe_fw_feature_get_flags(fw_feature_class, &tmp);
-		if(EOK == ret)
-		{
-			if(0U == ((uint8_t)tmp & (uint8_t)F_PRESENT))
-			{	/* Feature cannot be enabled */
-				NXP_LOG_INFO("Feature %s is always disabled in FW\n", feature_name);
-				return EOK;
-			}
-			else if(0U == ((uint8_t)tmp & (uint8_t)F_RUNTIME))
-			{	/* Feature cannot be disabled */
-				NXP_LOG_ERROR("Cannot disabled feature %s - always enabled in FW\n", feature_name);
-				return EINVAL;
-			}
-			else
-			{	/* Feature needs to be disabled */
-				return pfe_feature_mgr_set_val(feature_name, 0);
-			}
-		}
-	}
-
-	return EINVAL;
+	return ret;
 }
-
-
 
 /**
  * @brief		Reads the feature value
@@ -570,72 +650,98 @@ errno_t pfe_feature_mgr_get_val(const char *feature_name, uint8_t *val)
 	pfe_hw_feature_t *hw_feature;
 	pfe_fw_feature_t *fw_feature_class;
 	pfe_fw_feature_t *fw_feature_util;
-	errno_t ret_class, ret_util;
-	errno_t ret = EOK;
+	errno_t           ret_class, ret_util;
+	errno_t           ret_feature;
+	errno_t           ret = EOK;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if((NULL == feature_name)||(NULL == val))
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if ((NULL == feature_name) || (NULL == val))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-	#endif
-
-	if(NULL == feature_mgr)
+	else
+#endif
 	{
-		NXP_LOG_ERROR("Feature Mgr not initialized\n");
-		return EINVAL;
-	}
-
-	ret = pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name);
-	if(EOK == ret)
-	{	/* Feature exist */
-		return pfe_hw_feature_get_val(hw_feature, val);
-	}
-
-	if (NULL == feature_mgr->class)
-	{	/* Class block is not initialized */
-		return EINVAL;
-	}
-
-	ret_class = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
-	if(EOK != ret_class)
-	{	/* Feature does not exist or data is inconsistent */
-		return EINVAL;
-	}
-
-	if(NULL != feature_mgr->util)
-	{
-		ret_util = pfe_util_get_feature(feature_mgr->util, &fw_feature_util, feature_name);
-		if(EOK != ret_util)
-		{	/* Data is inconsistent - feature found in class but not in util */
-			NXP_LOG_WARNING("Inconsistent feature data for %s\n", feature_name);
-			return EINVAL;
-		}
-	}
-
-	/* Check the value in class if relates to class */
-	if(TRUE == pfe_fw_feature_is_in_class(fw_feature_class))
-	{
-		ret = pfe_fw_feature_get_val(fw_feature_class, val);
-		/* We can stop here because data shall be consistent between class and util
-		   thus it does not matter which value is read */
-		return ret;
-	}
-
-	/* This is for features related to util only (code above will not read the value)*/
-	if(NULL != feature_mgr->util)
-	{	/* Util is available */
-		/* Check the value in util if relates to util */
-		if(TRUE == pfe_fw_feature_is_in_util(fw_feature_util))
+		if (NULL == feature_mgr)
 		{
-			return pfe_fw_feature_get_val(fw_feature_util, val);
+			NXP_LOG_ERROR("Feature Mgr not initialized\n");
+			ret = EINVAL;
+		}
+		else
+		{
+
+			ret_feature = pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name);
+			if (EOK == ret_feature)
+			{ /* Feature exist */
+				ret = pfe_hw_feature_get_val(hw_feature, val);
+			}
+			else
+			{
+
+				if (NULL == feature_mgr->class)
+				{ /* Class block is not initialized */
+					ret = EINVAL;
+				}
+				else
+				{
+
+					ret_class = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
+					if (EOK != ret_class)
+					{ /* Feature does not exist or data is inconsistent */
+						ret = EINVAL;
+					}
+					else
+					{
+
+						if (NULL != feature_mgr->util)
+						{
+							ret_util = pfe_util_get_feature(feature_mgr->util, &fw_feature_util, feature_name);
+							if (EOK != ret_util)
+							{ /* Data is inconsistent - feature found in class but not in util */
+								NXP_LOG_WARNING("Inconsistent feature data for %s\n", feature_name);
+								ret = EINVAL;
+							}
+						}
+						if (EOK == ret)
+						{
+							/* Check the value in class if relates to class */
+							if (TRUE == pfe_fw_feature_is_in_class(fw_feature_class))
+							{
+								ret = pfe_fw_feature_get_val(fw_feature_class, val);
+								/* We can stop here because data shall be consistent between class and util
+		   						thus it does not matter which value is read */
+							}
+							else
+							{
+
+								/* This is for features related to util only (code above will not read the value)*/
+								if (NULL != feature_mgr->util)
+								{ /* Util is available */
+									/* Check the value in util if relates to util */
+									if (TRUE == pfe_fw_feature_is_in_util(fw_feature_util))
+									{
+										ret = pfe_fw_feature_get_val(fw_feature_util, val);
+									}
+									else
+									{
+										/* We can get here only if feature is not present in class nor util */
+										NXP_LOG_WARNING("Wrong feature %s (not relevant to any FW)\n", feature_name);
+									}
+								}
+								else
+								{
+									/* We can get here only if feature is not present in class nor util */
+									NXP_LOG_WARNING("Wrong feature %s (not relevant to any FW)\n", feature_name);
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
-
-	/* We can get here only if feature is not present in class nor util */
-	NXP_LOG_WARNING("Wrong feature %s (not relevant to any FW)\n", feature_name);
-	return EINVAL;
+	return ret;
 }
 
 /**
@@ -647,46 +753,53 @@ errno_t pfe_feature_mgr_get_first(const char **feature_name)
 {
 	pfe_hw_feature_t *hw_feature;
 	pfe_fw_feature_t *fw_feature;
-	errno_t ret;
+	errno_t           ret;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if(NULL == feature_name)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name)
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-	#endif
-
-	if(NULL == feature_mgr)
-	{
-		NXP_LOG_ERROR("Feature Mgr not initialized\n");
-		return EINVAL;
-	}
-
-	/* HW feature first */
-	ret = pfe_hw_get_feature_first(feature_mgr, &hw_feature);
-	if(EOK == ret)
-	{
-		ret = pfe_hw_feature_get_name(hw_feature, feature_name);
-		/* Signal rewind_flg for class/util fw feature walk */
-		feature_mgr->rewind_flg = TRUE;
+		ret = EINVAL;
 	}
 	else
+#endif
 	{
-		/* We use the fact that class and util share same list of features and read
+		if (NULL == feature_mgr)
+		{
+			NXP_LOG_ERROR("Feature Mgr not initialized\n");
+			ret = EINVAL;
+		}
+		else
+		{
+
+			/* HW feature first */
+			ret = pfe_hw_get_feature_first(feature_mgr, &hw_feature);
+			if (EOK == ret)
+			{
+				ret = pfe_hw_feature_get_name(hw_feature, feature_name);
+				/* Signal rewind_flg for class/util fw feature walk */
+				feature_mgr->rewind_flg = TRUE;
+			}
+			else
+			{
+				/* We use the fact that class and util share same list of features and read
 		   from only one of them */
 
-		if (NULL == feature_mgr->class)
-		{	/* Class block is not initialized */
-			return EINVAL;
+				if (NULL == feature_mgr->class)
+				{ /* Class block is not initialized */
+					ret = EINVAL;
+				}
+				else
+				{
+					ret = pfe_class_get_feature_first(feature_mgr->class, &fw_feature);
+					if (EOK == ret)
+					{
+						ret = pfe_fw_feature_get_name(fw_feature, feature_name);
+					}
+					feature_mgr->rewind_flg = FALSE;
+				}
+			}
 		}
-
-		ret = pfe_class_get_feature_first(feature_mgr->class, &fw_feature);
-		if(EOK == ret)
-		{
-			ret = pfe_fw_feature_get_name(fw_feature, feature_name);
-		}
-		feature_mgr->rewind_flg = FALSE;
 	}
 
 	return ret;
@@ -701,57 +814,65 @@ errno_t pfe_feature_mgr_get_next(const char **feature_name)
 {
 	pfe_hw_feature_t *hw_feature;
 	pfe_fw_feature_t *fw_feature;
-	errno_t ret;
+	errno_t           ret;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if(NULL == feature_name)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name)
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-	#endif
-
-	if(NULL == feature_mgr)
+	else
+#endif
 	{
-		NXP_LOG_ERROR("Feature Mgr not initialized\n");
-		return EINVAL;
-	}
-
-	/* HW feature first */
-	ret = pfe_hw_get_feature_next(feature_mgr, &hw_feature);
-	if(EOK == ret)
-	{
-		ret = pfe_hw_feature_get_name(hw_feature, feature_name);
-	}
-	else if (ENOENT == ret)
-	{
-		/* We use the fact that class and util share same list of features and read
-		   from only one of them */
-
-		if (NULL == feature_mgr->class)
-		{	/* Class block is not initialized */
-			return EINVAL;
-		}
-
-		if (TRUE == feature_mgr->rewind_flg)
+		if (NULL == feature_mgr)
 		{
-			ret = pfe_class_get_feature_first(feature_mgr->class, &fw_feature);
-			/* Unset 'rewind_flg' to use real pfe_class_get_feature_next next time */
-			feature_mgr->rewind_flg = FALSE;
+			NXP_LOG_ERROR("Feature Mgr not initialized\n");
+			ret = EINVAL;
 		}
 		else
 		{
-			ret = pfe_class_get_feature_next(feature_mgr->class, &fw_feature);
-		}
 
-		if(EOK == ret)
-		{
-			ret = pfe_fw_feature_get_name(fw_feature, feature_name);
+			/* HW feature first */
+			ret = pfe_hw_get_feature_next(feature_mgr, &hw_feature);
+			if (EOK == ret)
+			{
+				ret = pfe_hw_feature_get_name(hw_feature, feature_name);
+			}
+			else if (ENOENT == ret)
+			{
+				/* We use the fact that class and util share same list of features and read
+		   from only one of them */
+
+				if (NULL == feature_mgr->class)
+				{ /* Class block is not initialized */
+					ret = EINVAL;
+				}
+				else
+				{
+
+					if (TRUE == feature_mgr->rewind_flg)
+					{
+						ret = pfe_class_get_feature_first(feature_mgr->class, &fw_feature);
+						/* Unset 'rewind_flg' to use real pfe_class_get_feature_next next time */
+						feature_mgr->rewind_flg = FALSE;
+					}
+					else
+					{
+						ret = pfe_class_get_feature_next(feature_mgr->class, &fw_feature);
+					}
+
+					if (EOK == ret)
+					{
+						ret = pfe_fw_feature_get_name(fw_feature, feature_name);
+					}
+				}
+			}
+			else
+			{
+				; /* No action required */
+			}
 		}
-	}
-	else
-	{
-		; /* No action required */
 	}
 
 	return ret;
@@ -767,44 +888,51 @@ errno_t pfe_feature_mgr_get_def_val(const char *feature_name, uint8_t *val)
 {
 	pfe_hw_feature_t *hw_feature;
 	pfe_fw_feature_t *fw_feature_class;
-	errno_t ret = EOK;
+	errno_t           ret;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if(NULL == feature_name)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name)
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-	#endif
-
-	if(NULL == feature_mgr)
+	else
+#endif
 	{
-		NXP_LOG_ERROR("Feature Mgr not initialized\n");
-		return EINVAL;
+		if (NULL == feature_mgr)
+		{
+			NXP_LOG_ERROR("Feature Mgr not initialized\n");
+			ret = EINVAL;
+		}
+		else
+		{
+			/* HW feature first */
+			if (EOK == pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name))
+			{
+				ret = pfe_hw_feature_get_def_val(hw_feature, val);
+			}
+			else
+			{
+
+				if (NULL == feature_mgr->class)
+				{ /* Class block is not initialized */
+					ret = EINVAL;
+				}
+				else
+				{
+					/* The data shall be consistent between util and class thus it is enough to read them from class */
+
+					ret = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
+					if (EOK == ret)
+					{
+						ret = pfe_fw_feature_get_def_val(fw_feature_class, val);
+					}
+				}
+			}
+		}
 	}
 
-	/* HW feature first */
-	if(EOK == pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name))
-	{
-		ret = pfe_hw_feature_get_def_val(hw_feature, val);
-		return ret;
-	}
-
-	if (NULL == feature_mgr->class)
-	{	/* Class block is not initialized */
-		return EINVAL;
-	}
-
-	/* The data shall be consistent between util and class thus it is enough to read
-	   them from class */
-	   
-	ret = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
-	if(EOK == ret)
-	{
-		ret = pfe_fw_feature_get_def_val(fw_feature_class, val);
-	}
-
-	return ret;   
+	return ret;
 }
 
 /**
@@ -817,43 +945,49 @@ errno_t pfe_feature_mgr_get_desc(const char *feature_name, const char **desc)
 {
 	pfe_hw_feature_t *hw_feature;
 	pfe_fw_feature_t *fw_feature_class;
-	errno_t ret = EOK;
+	errno_t           ret;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if((NULL == desc)||(NULL == feature_name))
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if ((NULL == desc) || (NULL == feature_name))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-	#endif
-
-	if(NULL == feature_mgr)
+	else
+#endif
 	{
-		NXP_LOG_ERROR("Feature Mgr not initialized\n");
-		return EINVAL;
+		if (NULL == feature_mgr)
+		{
+			NXP_LOG_ERROR("Feature Mgr not initialized\n");
+			ret = EINVAL;
+		}
+		else
+		{
+			/* Platfoorm feature first */
+			if (EOK == pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name))
+			{
+				ret = pfe_hw_feature_get_desc(hw_feature, desc);
+			}
+			else
+			{
+				if (NULL == feature_mgr->class)
+				{ /* Class block is not initialized */
+					ret = EINVAL;
+				}
+				else
+				{
+					/* The data shall be consistent between util and class thus it is enough to read
+	   				them from class */
+					ret = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
+					if (EOK == ret)
+					{
+						ret = pfe_fw_feature_get_desc(fw_feature_class, desc);
+					}
+				}
+			}
+		}
 	}
-
-	/* Platfoorm feature first */
-	if(EOK == pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name))
-	{
-		ret = pfe_hw_feature_get_desc(hw_feature, desc);
-		return ret;
-	}
-
-	if (NULL == feature_mgr->class)
-	{	/* Class block is not initialized */
-		return EINVAL;
-	}
-
-	/* The data shall be consistent between util and class thus it is enough to read
-	   them from class */
-	ret = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
-	if(EOK == ret)
-	{
-		ret = pfe_fw_feature_get_desc(fw_feature_class, desc);
-	}
-	
-	return ret; 
+	return ret;
 }
 
 /**
@@ -864,53 +998,59 @@ errno_t pfe_feature_mgr_get_desc(const char *feature_name, const char **desc)
  */
 errno_t pfe_feature_mgr_get_variant(const char *feature_name, uint8_t *val)
 {
-	pfe_hw_feature_t *hw_feature;
-	pfe_fw_feature_t *fw_feature_class;
-	errno_t ret = EOK;
+	pfe_hw_feature_t *     hw_feature;
+	pfe_fw_feature_t *     fw_feature_class;
+	errno_t                ret;
 	pfe_ct_feature_flags_t tmp;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if((NULL == feature_name)||(NULL == val))
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if ((NULL == feature_name) || (NULL == val))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-	#endif
-
-	if(NULL == feature_mgr)
+	else
+#endif
 	{
-		NXP_LOG_ERROR("Feature Mgr not initialized\n");
-		return EINVAL;
-	}
-
-	/* HW feature first */
-	if(EOK == pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name))
-	{
-		ret = pfe_hw_feature_get_flags(hw_feature, &tmp);
-		if(EOK == ret)
+		if (NULL == feature_mgr)
 		{
-			*val = (uint8_t)tmp & ((uint8_t)F_PRESENT | (uint8_t)F_RUNTIME);
+			NXP_LOG_ERROR("Feature Mgr not initialized\n");
+			ret = EINVAL;
 		}
-		return ret;
-	}
-
-	if (NULL == feature_mgr->class)
-	{	/* Class block is not initialized */
-		return EINVAL;
-	}
-
-	/* The data shall be consistent between util and class thus it is enough to read
-	   them from class */
-	ret = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
-	if(EOK == ret)
-	{
-		ret = pfe_fw_feature_get_flags(fw_feature_class, &tmp);
-		if(EOK == ret)
+		else
 		{
-			*val = (uint8_t)tmp & ((uint8_t)F_PRESENT | (uint8_t)F_RUNTIME);
+			/* HW feature first */
+			if (EOK == pfe_hw_get_feature(feature_mgr, &hw_feature, feature_name))
+			{
+				ret = pfe_hw_feature_get_flags(hw_feature, &tmp);
+				if (EOK == ret)
+				{
+					*val = (uint8_t)tmp & ((uint8_t)F_PRESENT | (uint8_t)F_RUNTIME);
+				}
+			}
+			else
+			{
+				if (NULL == feature_mgr->class)
+				{ /* Class block is not initialized */
+					ret = EINVAL;
+				}
+				else
+				{
+					/* The data shall be consistent between util and class thus it is enough to read
+	   				them from class */
+					ret = pfe_class_get_feature(feature_mgr->class, &fw_feature_class, feature_name);
+					if (EOK == ret)
+					{
+						ret = pfe_fw_feature_get_flags(fw_feature_class, &tmp);
+						if (EOK == ret)
+						{
+							*val = (uint8_t)tmp & ((uint8_t)F_PRESENT | (uint8_t)F_RUNTIME);
+						}
+					}
+				}
+			}
 		}
 	}
-	
 	return ret;
 }
 
@@ -923,29 +1063,35 @@ errno_t pfe_feature_mgr_get_variant(const char *feature_name, uint8_t *val)
  */
 static errno_t pfe_hw_get_feature(const pfe_feature_mgr_t *fmgr, pfe_hw_feature_t **feature, const char *name)
 {
-	uint32_t i;
+	uint32_t    i;
 	const char *fname;
-	errno_t ret;
+	errno_t     ret = ENOENT;
+	errno_t     ret_val = EOK;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == fmgr) || (NULL == feature) || (NULL == name)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	for(i = 0U; i < fmgr->hw_features_count; i++)
 	{
-		ret = pfe_hw_feature_get_name(fmgr->hw_features[i], &fname);
-		if(ret == EOK)
+		for (i = 0U; i < fmgr->hw_features_count; i++)
 		{
-			if(0 == strcmp(fname, name))
+			ret_val = pfe_hw_feature_get_name(fmgr->hw_features[i], &fname);
+			if (ret_val == EOK)
 			{
-				*feature = fmgr->hw_features[i];
-				return EOK;
+				if (0 == strcmp(fname, name))
+				{
+					*feature = fmgr->hw_features[i];
+					ret = EOK;
+					break;
+				}
 			}
 		}
 	}
-	return ENOENT;
+	return ret;
 }
 
 /**
@@ -956,21 +1102,29 @@ static errno_t pfe_hw_get_feature(const pfe_feature_mgr_t *fmgr, pfe_hw_feature_
  */
 static errno_t pfe_hw_get_feature_first(pfe_feature_mgr_t *fmgr, pfe_hw_feature_t **feature)
 {
- #if defined(PFE_CFG_NULL_ARG_CHECK)
+	errno_t ret;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == fmgr) || (NULL == feature)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	if(fmgr->hw_features_count > 0U)
 	{
-		fmgr->current_hw_feature = 0U;
-		*feature = fmgr->hw_features[fmgr->current_hw_feature];
-		return EOK;
+		if (fmgr->hw_features_count > 0U)
+		{
+			fmgr->current_hw_feature = 0U;
+			*feature = fmgr->hw_features[fmgr->current_hw_feature];
+			ret = EOK;
+		}
+		else
+		{
+			ret = ENOENT;
+		}
 	}
 
-	return ENOENT;
+	return ret;
 }
 
 /**
@@ -981,25 +1135,29 @@ static errno_t pfe_hw_get_feature_first(pfe_feature_mgr_t *fmgr, pfe_hw_feature_
  */
 static errno_t pfe_hw_get_feature_next(pfe_feature_mgr_t *fmgr, pfe_hw_feature_t **feature)
 {
- #if defined(PFE_CFG_NULL_ARG_CHECK)
+	errno_t ret = ENOENT;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == fmgr) || (NULL == feature)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	if(fmgr->hw_features_count > 0U)
 	{
-		/* Avoid going out of the array boundaries */
-		if((fmgr->current_hw_feature + 1U) < fmgr->hw_features_count)
+		if (fmgr->hw_features_count > 0U)
 		{
-			fmgr->current_hw_feature += 1U;
-			*feature = fmgr->hw_features[fmgr->current_hw_feature];
-			return EOK;
+			/* Avoid going out of the array boundaries */
+			if ((fmgr->current_hw_feature + 1U) < fmgr->hw_features_count)
+			{
+				fmgr->current_hw_feature += 1U;
+				*feature = fmgr->hw_features[fmgr->current_hw_feature];
+				ret = EOK;
+			}
 		}
 	}
 
-	return ENOENT;
+	return ret;
 }
 
 /**
@@ -1012,21 +1170,22 @@ static errno_t pfe_feature_mgr_configure_driver(const char *feature_name, const 
 {
 	errno_t ret = EOK;
 
-	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if(NULL == feature_name)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name)
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-	#endif
-
-	if(0 == strcmp(feature_name, "err051211_workaround"))
+	else
+#endif
 	{
-		if (0U != val) /* feature got enabled */
+		if (0 == strcmp(feature_name, "err051211_workaround"))
 		{
-			ret = pfe_tmu_queue_err051211_sync(feature_mgr->tmu);
+			if (0U != val) /* feature got enabled */
+			{
+				ret = pfe_tmu_queue_err051211_sync(feature_mgr->tmu);
+			}
 		}
 	}
-
 	return ret;
 }

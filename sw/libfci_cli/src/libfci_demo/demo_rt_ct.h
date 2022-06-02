@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -130,8 +130,12 @@ uint16_t demo_ct_ld_get_dport_reply(const fpp_ct_cmd_t* p_ct);
 uint16_t demo_ct_ld_get_vlan_reply(const fpp_ct_cmd_t* p_ct);
 uint32_t demo_ct_ld_get_route_id_reply(const fpp_ct_cmd_t* p_ct);
 uint16_t demo_ct_ld_get_flags(const fpp_ct_cmd_t* p_ct);
-
-
+uint32_t demo_ct_ld_get_stt_hit(const fpp_ct_cmd_t* p_ct);
+uint32_t demo_ct_ld_get_stt_hit_bytes(const fpp_ct_cmd_t* p_ct);
+uint32_t demo_ct_ld_get_stt_reply_hit(const fpp_ct_cmd_t* p_ct);
+uint32_t demo_ct_ld_get_stt_reply_hit_bytes(const fpp_ct_cmd_t* p_ct);
+ 
+ 
 bool demo_ct6_ld_is_nat(const fpp_ct6_cmd_t* p_ct6);
 bool demo_ct6_ld_is_pat(const fpp_ct6_cmd_t* p_ct6);
 bool demo_ct6_ld_is_vlan_tagging(const fpp_ct6_cmd_t* p_ct6);
@@ -153,6 +157,10 @@ uint16_t        demo_ct6_ld_get_dport_reply(const fpp_ct6_cmd_t* p_ct6);
 uint16_t        demo_ct6_ld_get_vlan_reply(const fpp_ct6_cmd_t* p_ct6);
 uint32_t        demo_ct6_ld_get_route_id_reply(const fpp_ct6_cmd_t* p_ct6);
 uint16_t        demo_ct6_ld_get_flags(const fpp_ct6_cmd_t* p_ct6);
+uint32_t        demo_ct6_ld_get_stt_hit(const fpp_ct6_cmd_t* p_ct6);
+uint32_t        demo_ct6_ld_get_stt_hit_bytes(const fpp_ct6_cmd_t* p_ct6);
+uint32_t        demo_ct6_ld_get_stt_reply_hit(const fpp_ct6_cmd_t* p_ct6);
+uint32_t        demo_ct6_ld_get_stt_reply_hit_bytes(const fpp_ct6_cmd_t* p_ct6);
 
 /* ==== PUBLIC FUNCTIONS : misc ============================================ */
 

@@ -180,34 +180,36 @@ uint32_t pfe_wdt_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 	if (unlikely(NULL_ADDR == base_va) || (NULL == buf))
 	{
 		NXP_LOG_ERROR("NULL argument received (pfe_wdt_cfg_get_text_stat)\n");
-		return 0U;
+		len = 0U;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if(verb_level >= 9U)
 	{
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "base_va              : 0x%x\n", (uint_t)base_va);
-		/*	Get version of wsp (wdt is part of wsp)*/
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WSP Version          : 0x%x\n", hal_read32(base_va + WSP_VERSION));
+		if(verb_level >= 9U)
+		{
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "base_va              : 0x%x\n", (uint_t)base_va);
+			/*	Get version of wsp (wdt is part of wsp)*/
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WSP Version          : 0x%x\n", hal_read32(base_va + WSP_VERSION));
+		}
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_INT_EN           : 0x%x\n", hal_read32(base_va + WDT_INT_EN));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + CLASS_WDT_INT_EN));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "UPE_WDT_INT_EN       : 0x%x\n", hal_read32(base_va + UPE_WDT_INT_EN));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HGPI_WDT_INT_EN      : 0x%x\n", hal_read32(base_va + HGPI_WDT_INT_EN));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_WDT_INT_EN       : 0x%x\n", hal_read32(base_va + HIF_WDT_INT_EN));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TLITE_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + TLITE_WDT_INT_EN));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HNCPY_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + HNCPY_WDT_INT_EN));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU1_WDT_INT_EN      : 0x%x\n", hal_read32(base_va + BMU1_WDT_INT_EN));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU2_WDT_INT_EN      : 0x%x\n", hal_read32(base_va + BMU2_WDT_INT_EN));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "EMAC0_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + EMAC0_WDT_INT_EN));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "EMAC1_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + EMAC1_WDT_INT_EN));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "EMAC2_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + EMAC2_WDT_INT_EN));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_INT_SRC          : 0x%x\n", hal_read32(base_va + WDT_INT_SRC));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_1      : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_1));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_2      : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_2));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_3      : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_3));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_4      : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_4));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WSP_DBUG_BUS1        : 0x%x\n", hal_read32(base_va + WSP_DBUG_BUS1));
 	}
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_INT_EN           : 0x%x\n", hal_read32(base_va + WDT_INT_EN));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "CLASS_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + CLASS_WDT_INT_EN));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "UPE_WDT_INT_EN       : 0x%x\n", hal_read32(base_va + UPE_WDT_INT_EN));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HGPI_WDT_INT_EN      : 0x%x\n", hal_read32(base_va + HGPI_WDT_INT_EN));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HIF_WDT_INT_EN       : 0x%x\n", hal_read32(base_va + HIF_WDT_INT_EN));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TLITE_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + TLITE_WDT_INT_EN));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "HNCPY_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + HNCPY_WDT_INT_EN));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU1_WDT_INT_EN      : 0x%x\n", hal_read32(base_va + BMU1_WDT_INT_EN));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU2_WDT_INT_EN      : 0x%x\n", hal_read32(base_va + BMU2_WDT_INT_EN));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "EMAC0_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + EMAC0_WDT_INT_EN));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "EMAC1_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + EMAC1_WDT_INT_EN));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "EMAC2_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + EMAC2_WDT_INT_EN));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_INT_SRC          : 0x%x\n", hal_read32(base_va + WDT_INT_SRC));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_1      : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_1));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_2      : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_2));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_3      : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_3));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_4      : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_4));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WSP_DBUG_BUS1        : 0x%x\n", hal_read32(base_va + WSP_DBUG_BUS1));
 
 	return len;
 }

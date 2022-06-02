@@ -32,7 +32,7 @@
 */
 static void fci_fp_construct_rule_reply(fpp_fp_rule_props_t *r, char *rule_name, char *next_rule,
                                    uint32_t data, uint32_t mask, uint16_t offset, pfe_ct_fp_flags_t flags)
-{
+{ 
     (void)strncpy((char_t *)r->rule_name, rule_name, 15);
     r->data = data;
     r->mask = mask;
@@ -99,130 +99,133 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-
-    if (unlikely(FALSE == fci_context->fci_initialized))
+    else if (unlikely(FALSE == fci_context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
-		return EPERM;
+		ret = EPERM;
 	}
+    else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-    /* Important to initialize to avoid buffer overflows */
-	if (*reply_len < sizeof(fpp_fp_table_cmd_t))
-	{
-		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fp_table_cmd_t)\n");
-		return EINVAL;
-	}
-	else
-	{
-		/*	No data written to reply buffer (yet) */
-		*reply_len = 0U;
-	}
-    fp_cmd = (fpp_fp_table_cmd_t *)(msg->msg_cmd.payload);
-    switch (fp_cmd->action)
-	{
-		case FPP_ACTION_REGISTER:
+    {
+        /* Important to initialize to avoid buffer overflows */
+        if (*reply_len < sizeof(fpp_fp_table_cmd_t))
         {
-            ret = fci_fp_db_create_table((char_t *)fp_cmd->table_info.t.table_name);
-            if(EOK == ret)
-            {
-                *fci_ret = FPP_ERR_OK;
-            }
-            else
-            {
-                *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
-            }
-            break;
+            NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fp_table_cmd_t)\n");
+            ret = EINVAL;
         }
-		case FPP_ACTION_DEREGISTER:
+        else
         {
-            ret = fci_fp_db_destroy_table((char_t *)fp_cmd->table_info.t.table_name, FALSE);
-            if(EOK == ret)
+            /*	No data written to reply buffer (yet) */
+            *reply_len = 0U;
+            fp_cmd = (fpp_fp_table_cmd_t *)(msg->msg_cmd.payload);
+            switch (fp_cmd->action)
             {
-                *fci_ret = FPP_ERR_OK;
-            }
-            else
-            {
-                *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
-            }
-            break;
-        }
-        case FPP_ACTION_USE_RULE:
-        {
-            ret = fci_fp_db_add_rule_to_table((char_t *)fp_cmd->table_info.t.table_name, (char_t *)fp_cmd->table_info.t.rule_name, oal_ntohs(fp_cmd->table_info.t.position));
-            if(EOK == ret)
-            {
-                *fci_ret = FPP_ERR_OK;
-            }
-            else
-            {
-                *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
-            }
-            break;
-        }
-        case FPP_ACTION_UNUSE_RULE:
-        {
-            ret = fci_fp_db_remove_rule_from_table((char_t *)fp_cmd->table_info.t.rule_name);
-            if(EOK == ret)
-            {
-                *fci_ret = FPP_ERR_OK;
-            }
-            else
-            {
-                *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
-            }
-            break;
-        }
-        case FPP_ACTION_QUERY:
-        {
-            char *rule_name = NULL;
-            char *next_rule = NULL;
-            uint32_t data, mask;
-            uint16_t offset;
-            pfe_ct_fp_flags_t flags;
+                case FPP_ACTION_REGISTER:
+                {
+                    ret = fci_fp_db_create_table((char_t *)fp_cmd->table_info.t.table_name);
+                    if(EOK == ret)
+                    {
+                        *fci_ret = FPP_ERR_OK;
+                    }
+                    else
+                    {
+                        *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+                    }
+                    break;
+                }
+                case FPP_ACTION_DEREGISTER:
+                {
+                    ret = fci_fp_db_destroy_table((char_t *)fp_cmd->table_info.t.table_name, FALSE);
+                    if(EOK == ret)
+                    {
+                        *fci_ret = FPP_ERR_OK;
+                    }
+                    else
+                    {
+                        *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+                    }
+                    break;
+                }
+                case FPP_ACTION_USE_RULE:
+                {
+                    ret = fci_fp_db_add_rule_to_table((char_t *)fp_cmd->table_info.t.table_name, (char_t *)fp_cmd->table_info.t.rule_name, oal_ntohs(fp_cmd->table_info.t.position));
+                    if(EOK == ret)
+                    {
+                        *fci_ret = FPP_ERR_OK;
+                    }
+                    else
+                    {
+                        *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+                    }
+                    break;
+                }
+                case FPP_ACTION_UNUSE_RULE:
+                {
+                    ret = fci_fp_db_remove_rule_from_table((char_t *)fp_cmd->table_info.t.rule_name);
+                    if(EOK == ret)
+                    {
+                        *fci_ret = FPP_ERR_OK;
+                    }
+                    else
+                    {
+                        *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+                    }
+                    break;
+                }
+                case FPP_ACTION_QUERY:
+                {
+                    char *rule_name = NULL;
+                    char *next_rule = NULL;
+                    uint32_t data, mask;
+                    uint16_t offset;
+                    pfe_ct_fp_flags_t flags;
 
-            ret = fci_fp_db_get_table_first_rule((char_t *)fp_cmd->table_info.t.table_name, &rule_name, &data, &mask, &offset, &flags, &next_rule);
-            if(EOK == ret)
-            {
-            	fci_fp_construct_rule_reply(&reply_buf->table_info.r, rule_name, next_rule, data, mask, offset, flags);
-                *fci_ret = FPP_ERR_OK;
-                *reply_len = sizeof(fpp_fp_table_cmd_t);
-            }
-            else
-            {
-                *fci_ret = FPP_ERR_FP_RULE_NOT_FOUND;
-            }
-            break;
-        }
-        case FPP_ACTION_QUERY_CONT:
-        {
-            char *rule_name;
-            char *next_rule;
-            uint32_t data, mask;
-            uint16_t offset;
-            pfe_ct_fp_flags_t flags;
+                    ret = fci_fp_db_get_table_first_rule((char_t *)fp_cmd->table_info.t.table_name, &rule_name, &data, &mask, &offset, &flags, &next_rule);
+                    if(EOK == ret)
+                    {
+                        fci_fp_construct_rule_reply(&reply_buf->table_info.r, rule_name, next_rule, data, mask, offset, flags);
+                        *fci_ret = FPP_ERR_OK;
+                        *reply_len = sizeof(fpp_fp_table_cmd_t);
+                    }
+                    else
+                    {
+                        *fci_ret = FPP_ERR_FP_RULE_NOT_FOUND;
+                    }
+                    break;
+                }
+                case FPP_ACTION_QUERY_CONT:
+                {
+                    char *rule_name;
+                    char *next_rule;
+                    uint32_t data, mask;
+                    uint16_t offset;
+                    pfe_ct_fp_flags_t flags;
 
-            ret = fci_fp_db_get_table_next_rule((char_t *)fp_cmd->table_info.t.table_name, &rule_name, &data, &mask, &offset, &flags, &next_rule);
-            if(EOK == ret)
-            {
-            	fci_fp_construct_rule_reply(&reply_buf->table_info.r, rule_name, next_rule, data, mask, offset, flags);
-                *fci_ret = FPP_ERR_OK;
-                *reply_len = sizeof(fpp_fp_table_cmd_t);
+                    ret = fci_fp_db_get_table_next_rule((char_t *)fp_cmd->table_info.t.table_name, &rule_name, &data, &mask, &offset, &flags, &next_rule);
+                    if(EOK == ret)
+                    {
+                        fci_fp_construct_rule_reply(&reply_buf->table_info.r, rule_name, next_rule, data, mask, offset, flags);
+                        *fci_ret = FPP_ERR_OK;
+                        *reply_len = sizeof(fpp_fp_table_cmd_t);
+                    }
+                    else
+                    {
+                        *fci_ret = FPP_ERR_FP_RULE_NOT_FOUND;
+                    }
+                    break;
+                }
+                default:
+                {
+                    NXP_LOG_ERROR("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", fp_cmd->action);
+                    *fci_ret = FPP_ERR_UNKNOWN_ACTION;
+                    break;
+                }
             }
-            else
-            {
-                *fci_ret = FPP_ERR_FP_RULE_NOT_FOUND;
-            }
-            break;
         }
-		default:
-		{
-			NXP_LOG_ERROR("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", fp_cmd->action);
-			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
-			break;
-		}
     }
+
     return ret;
 }
 
@@ -248,144 +251,152 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
-
-    if (unlikely(FALSE == fci_context->fci_initialized))
+    else if (unlikely(FALSE == fci_context->fci_initialized))
 	{
     	NXP_LOG_ERROR("Context not initialized\n");
-		return EPERM;
+		ret = EPERM;
 	}
+    else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-    if (*reply_len < sizeof(fpp_fp_rule_cmd_t))
-	{
-		NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fp_rule_cmd_t)\n");
-		return EINVAL;
-	}
-	else
-	{
-		/*	No data written to reply buffer (yet) */
-		*reply_len = 0U;
-	}
-
-    fp_cmd = (fpp_fp_rule_cmd_t *)(msg->msg_cmd.payload);
-    switch (fp_cmd->action)
-	{
-		case FPP_ACTION_REGISTER:
+    {
+        if (*reply_len < sizeof(fpp_fp_rule_cmd_t))
         {
-            pfe_ct_fp_flags_t flags = FP_FL_NONE;
-            switch(fp_cmd->r.match_action)
+            NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fp_rule_cmd_t)\n");
+            ret = EINVAL;
+        }
+        else
+        {
+            /*	No data written to reply buffer (yet) */
+            *reply_len = 0U;
+
+            fp_cmd = (fpp_fp_rule_cmd_t *)(msg->msg_cmd.payload);
+            switch (fp_cmd->action)
             {
-                case FP_ACCEPT:
-                    flags |= FP_FL_ACCEPT;
+                case FPP_ACTION_REGISTER:
+                {
+                    pfe_ct_fp_flags_t flags = FP_FL_NONE;
+                    switch(fp_cmd->r.match_action)
+                    {
+                        case FP_ACCEPT:
+                            flags |= FP_FL_ACCEPT;
+                            break;
+                        case FP_REJECT:
+                            flags |= FP_FL_REJECT;
+                            break;
+                        case FP_NEXT_RULE:
+                            break;
+                        default:
+                            NXP_LOG_ERROR("Impossible happened\n");
+                            *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+                            ret = EINVAL;
+                    }
+                    if(EOK == ret)
+                    {
+                        switch(fp_cmd->r.offset_from)
+                        {
+                            case FP_OFFSET_FROM_L2_HEADER:
+                                break;
+                            case FP_OFFSET_FROM_L3_HEADER:
+                                flags |= FP_FL_L3_OFFSET;
+                                break;
+                            case FP_OFFSET_FROM_L4_HEADER:
+                                flags |= FP_FL_L4_OFFSET;
+                                break;
+                            default:
+                                NXP_LOG_ERROR("Impossible happened\n");
+                                *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+                                ret = EINVAL;
+                        }
+                        if(EOK == ret)
+                        {
+                            if((uint8_t)TRUE == fp_cmd->r.invert)
+                            {
+                                flags |= FP_FL_INVERT;
+                            }
+
+                            ret = fci_fp_db_create_rule((char_t *)fp_cmd->r.rule_name, fp_cmd->r.data, fp_cmd->r.mask,
+                                                    fp_cmd->r.offset, flags,
+                                                    (char_t *)fp_cmd->r.next_rule_name);
+                            if(EOK == ret)
+                            {
+                                *fci_ret = FPP_ERR_OK;
+                            }
+                            else
+                            {
+                                *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+                            }
+                        }
+                    }
                     break;
-                case FP_REJECT:
-                    flags |= FP_FL_REJECT;
+                }
+                case FPP_ACTION_DEREGISTER:
+                {
+                    ret = fci_fp_db_destroy_rule((char_t*)fp_cmd->r.rule_name);
+                    if(EOK == ret)
+                    {
+                        *fci_ret = FPP_ERR_OK;
+                    }
+                    else
+                    {
+                        *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
+                    }
                     break;
-                case FP_NEXT_RULE:
+                }
+                case FPP_ACTION_QUERY:
+                {
+                    char *rule_name;
+                    char *next_rule;
+                    uint32_t data, mask;
+                    uint16_t offset;
+                    pfe_ct_fp_flags_t flags;
+
+                    ret = fci_fp_db_get_first_rule(&rule_name, &data, &mask, &offset, &flags, &next_rule);
+                    if(EOK == ret)
+                    {
+                        fci_fp_construct_rule_reply(&reply_buf->r, rule_name, next_rule, data, mask, offset, flags);
+                        *fci_ret = FPP_ERR_OK;
+                        *reply_len = sizeof(fpp_fp_rule_cmd_t);
+                    }
+                    else
+                    {
+                        *fci_ret = FPP_ERR_FP_RULE_NOT_FOUND;
+                    }
                     break;
+                }
+                case FPP_ACTION_QUERY_CONT:
+                {
+                    char *rule_name;
+                    char *next_rule;
+                    uint32_t data, mask;
+                    uint16_t offset;
+                    pfe_ct_fp_flags_t flags;
+
+                    ret = fci_fp_db_get_next_rule(&rule_name, &data, &mask, &offset, &flags, &next_rule);
+                    if(EOK == ret)
+                    {
+                        fci_fp_construct_rule_reply(&reply_buf->r, rule_name, next_rule, data, mask, offset, flags);
+                        *fci_ret = FPP_ERR_OK;
+                        *reply_len = sizeof(fpp_fp_rule_cmd_t);
+                    }
+                    else
+                    {
+                        *fci_ret = FPP_ERR_FP_RULE_NOT_FOUND;
+                    }
+                    break;
+                }
+
                 default:
-                    NXP_LOG_ERROR("Impossible happened\n");
-                    *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
-                    return EINVAL;
-            }
-            switch(fp_cmd->r.offset_from)
-            {
-                case FP_OFFSET_FROM_L2_HEADER:
+                {
+                    NXP_LOG_ERROR("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", fp_cmd->action);
+                    *fci_ret = FPP_ERR_UNKNOWN_ACTION;
                     break;
-                case FP_OFFSET_FROM_L3_HEADER:
-                    flags |= FP_FL_L3_OFFSET;
-                    break;
-                case FP_OFFSET_FROM_L4_HEADER:
-                    flags |= FP_FL_L4_OFFSET;
-                    break;
-                default:
-                    NXP_LOG_ERROR("Impossible happened\n");
-                    *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
-                    return EINVAL;
+                }
             }
-            if((uint8_t)TRUE == fp_cmd->r.invert)
-            {
-                flags |= FP_FL_INVERT;
-            }
-
-            ret = fci_fp_db_create_rule((char_t *)fp_cmd->r.rule_name, fp_cmd->r.data, fp_cmd->r.mask,
-                                     fp_cmd->r.offset, flags,
-                                     (char_t *)fp_cmd->r.next_rule_name);
-            if(EOK == ret)
-            {
-                *fci_ret = FPP_ERR_OK;
-            }
-            else
-            {
-                *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
-            }
-            break;
         }
-        case FPP_ACTION_DEREGISTER:
-        {
-            ret = fci_fp_db_destroy_rule((char_t*)fp_cmd->r.rule_name);
-            if(EOK == ret)
-            {
-                *fci_ret = FPP_ERR_OK;
-            }
-            else
-            {
-                *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
-            }
-            break;
-        }
-        case FPP_ACTION_QUERY:
-        {
-            char *rule_name;
-            char *next_rule;
-            uint32_t data, mask;
-            uint16_t offset;
-            pfe_ct_fp_flags_t flags;
-
-            ret = fci_fp_db_get_first_rule(&rule_name, &data, &mask, &offset, &flags, &next_rule);
-            if(EOK == ret)
-            {
-                fci_fp_construct_rule_reply(&reply_buf->r, rule_name, next_rule, data, mask, offset, flags);
-                *fci_ret = FPP_ERR_OK;
-                *reply_len = sizeof(fpp_fp_rule_cmd_t);
-            }
-            else
-            {
-                *fci_ret = FPP_ERR_FP_RULE_NOT_FOUND;
-            }
-            break;
-        }
-        case FPP_ACTION_QUERY_CONT:
-        {
-            char *rule_name;
-            char *next_rule;
-            uint32_t data, mask;
-            uint16_t offset;
-            pfe_ct_fp_flags_t flags;
-
-            ret = fci_fp_db_get_next_rule(&rule_name, &data, &mask, &offset, &flags, &next_rule);
-            if(EOK == ret)
-            {
-                fci_fp_construct_rule_reply(&reply_buf->r, rule_name, next_rule, data, mask, offset, flags);
-                *fci_ret = FPP_ERR_OK;
-                *reply_len = sizeof(fpp_fp_rule_cmd_t);
-            }
-            else
-            {
-                *fci_ret = FPP_ERR_FP_RULE_NOT_FOUND;
-            }
-            break;
-        }
-
-		default:
-		{
-			NXP_LOG_ERROR("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", fp_cmd->action);
-			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
-			break;
-		}
     }
+
     return ret;
 }
 

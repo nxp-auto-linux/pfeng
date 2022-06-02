@@ -181,7 +181,7 @@ static void __oal_mm_dma_free_htable(struct pfe_kmem *hnode)
 		dma_free_coherent(__dev, hnode->size, hnode->addr, hnode->dma_addr);
 }
 
-static void *__oal_mm_kmalloc_htable(const addr_t size)
+static void *__oal_mm_kmalloc_htable(const addr_t size, const uint32_t align)
 {
 	struct pfe_kmem *hnode;
 	void *vaddr;
@@ -189,6 +189,20 @@ static void *__oal_mm_kmalloc_htable(const addr_t size)
 	vaddr = kmalloc(size, GFP_KERNEL);
 	if (!vaddr)
 		return NULL;
+
+	/* Check that requested alignment matches what kmalloc provides.
+	 *
+	 * From kmalloc documentation:
+	 * The allocated object address is aligned to at least ARCH_KMALLOC_MINALIGN
+	 * bytes (128B on AMR64). For @size of power of two bytes, the alignment is also
+	 * guaranteed to be at least to the size.
+	 */
+	if (align && !IS_ALIGNED((unsigned long) vaddr, align)) {
+		NXP_LOG_ERROR("Requested allocation of size: 0x%llx not aligned to: 0x%x\n",
+			      size, align);
+		kfree(vaddr);
+		return NULL;
+	}
 
 	hnode = kzalloc(sizeof(struct pfe_kmem), GFP_KERNEL);
 	if (!hnode) {
@@ -271,7 +285,7 @@ static void *__oal_mm_reserved_nomap_mem_alloc_htable(struct pfe_reserved_mem *r
 {
 	struct pfe_kmem *hnode;
 
-	if (!IS_ALIGNED(res_mem->map_start_pa, align)) {
+	if (align && !IS_ALIGNED(res_mem->map_start_pa, align)) {
 		NXP_LOG_ERROR("%s reserved mem region addr not aligned\n", res_mem->name);
 		return NULL;
 	}
@@ -322,12 +336,7 @@ void *oal_mm_malloc_contig_aligned_nocache(const addr_t size, const uint32_t ali
  */
 void *oal_mm_malloc_contig_aligned_cache(const addr_t size, const uint32_t align)
 {
-	/* All kmalloc memory is automatically aligned to at least 128B(or higher power of two) on arm64. */
-	if (align && (ARCH_KMALLOC_MINALIGN % align)) {
-		NXP_LOG_ERROR("Alignment not supported\n");
-		return NULL;
-	}
-	return __oal_mm_kmalloc_htable(size);
+	return __oal_mm_kmalloc_htable(size, align);
 }
 
 /**
@@ -358,12 +367,7 @@ default_alloc:
  */
 void *oal_mm_malloc_contig_named_aligned_cache(const char_t *pool, const addr_t size, const uint32_t align)
 {
-	/* All kmalloc memory is automatically aligned to at least 128B(or higher power of two) on arm64. */
-	if (align && (ARCH_KMALLOC_MINALIGN % align)) {
-		NXP_LOG_ERROR("Alignment not supported\n");
-		return NULL;
-	}
-	return __oal_mm_kmalloc_htable(size);
+	return __oal_mm_kmalloc_htable(size, align);
 }
 
 void *oal_mm_virt_to_phys_contig(void *vaddr)
@@ -553,9 +557,7 @@ out:
 
 	return 0;
 }
-#endif /* PFE_CFG_PFE_MASTER */
 
-#if defined(PFE_CFG_PFE_MASTER) || defined(PFE_CFG_LINUX_RES_MEM_ENABLE)
 static int pfeng_reserved_bdr_pool_region_init(struct device *dev, struct gen_pool **pool_alloc, int rmem_idx)
 {
 	struct device_node *mem_node;
@@ -642,37 +644,14 @@ static int pfeng_reserved_dma_shared_pool_region_init(struct device *dev, int *r
 	return 0;
 }
 
-static void pfeng_reserved_dma_shared_pool_region_release(struct device *dev)
+static errno_t __oal_mm_init_master(struct device *dev)
 {
-	of_reserved_mem_device_release(dev);
-}
-#else
-static int pfeng_reserved_bdr_pool_region_init(struct device *dev, struct gen_pool **pool_alloc, int rmem_idx)
-{
-	dev_info(dev, "shared-dma-pool reserved region skipped\n");
-	return 0;
-}
-
-static int pfeng_reserved_dma_shared_pool_region_init(struct device *dev, int *rmem_idx)
-{
-	dev_info(dev, "pfe-bdr-pool reserved region skipped\n"); 
-	return 0;
-}
-
-#define pfeng_reserved_dma_shared_pool_region_release(dev) NULL
-
-#endif
-
-errno_t oal_mm_init(const void *devh)
-{
-	struct device *dev = (struct device *)devh;
 	struct pfe_reserved_mem *pfe_res_mem;
 	struct gen_pool *pool_alloc = NULL;
 	struct reserved_mem *rmem[PFE_REG_COUNT] = {NULL, NULL};
 	int rmem_idx = 0, i;
 	int ret;
 
-#ifdef PFE_CFG_PFE_MASTER
 	/* BMU2 and RT regions are required by MASTER only */
 	for (i = 0; i < PFE_REG_COUNT; i++) {
 		ret = pfeng_reserved_no_map_region_init(dev, &rmem[i], i, &rmem_idx);
@@ -682,7 +661,6 @@ errno_t oal_mm_init(const void *devh)
 			return ret;
 		}
 	}
-#endif /* PFE_CFG_PFE_MASTER */
 
 	ret = pfeng_reserved_dma_shared_pool_region_init(dev, &rmem_idx);
 	if (ret) {
@@ -727,29 +705,53 @@ errno_t oal_mm_init(const void *devh)
 		list_add(&pfe_res_mem->node, &pfe_reserved_mem_list);
 	}
 
+	return 0;
+
+err_bdr_pool_region_init:
+err_alloc:
+	of_reserved_mem_device_release(dev);
+
+	return ret;
+}
+
+static void __oal_mm_shutdown_master(struct device *dev)
+{
+	of_reserved_mem_device_release(dev);
+
+	/* reserved_mem list nodes will be released by devm_ */
+	INIT_LIST_HEAD(&pfe_reserved_mem_list);
+}
+
+#else
+#define __oal_mm_init_master(dev) 0
+#define __oal_mm_shutdown_master(dev) NULL
+#endif /* PFE_CFG_PFE_MASTER */
+
+errno_t oal_mm_init(const void *devh)
+{
+	struct device *dev = (struct device *)devh;
+	int ret;
+
+	ret = __oal_mm_init_master(dev);
+	if (ret)
+		return ret;
+
 	__dev = dev;
 
 	hash_init(pfe_addr_htable);
 
 	return EOK;
-
-err_bdr_pool_region_init:
-err_alloc:
-	pfeng_reserved_dma_shared_pool_region_release(dev);
-
-	return ret;
 }
 
 void oal_mm_shutdown(void)
 {
-	pfeng_reserved_dma_shared_pool_region_release(__dev);
-	/* reserved_mem list nodes will be released by devm_ */
-	INIT_LIST_HEAD(&pfe_reserved_mem_list);
+	__oal_mm_shutdown_master(__dev);
+
+	if (!hash_empty(pfe_addr_htable)) {
+		dev_warn(__dev, "Unfreed memory detected\n");
+	}
 
 	__dev = NULL;
-	if (!hash_empty(pfe_addr_htable)) {
-		NXP_LOG_ERROR("Unfreed memory detected\n");
-	}
 
 	return;
 }

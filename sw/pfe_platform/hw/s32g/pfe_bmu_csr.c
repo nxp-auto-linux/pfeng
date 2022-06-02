@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -169,40 +169,43 @@ void pfe_bmu_cfg_irq_unmask(addr_t base_va)
 void pfe_bmu_cfg_init(addr_t base_va, const pfe_bmu_cfg_t *cfg)
 {
 	uint32_t bmu_buf_size_exp;
+
 	if (unlikely(FALSE == IS_POWER_OF_2(cfg->buf_size)))
 	{
 		NXP_LOG_ERROR("BMU buffer size is not power of 2\n");
-		return;
 	}
-	hal_write32(0U, base_va + BMU_CTRL);
-	hal_write32(0x0U, base_va + BMU_INT_ENABLE);
-	hal_write32(0xffffffffU, base_va + BMU_INT_SRC);
-
-	hal_write32((uint32_t)(cfg->pool_pa & 0xffffffffU), base_va + BMU_UCAST_BASEADDR);
-	hal_write32(cfg->max_buf_cnt & 0xffffU, base_va + BMU_UCAST_CONFIG);
-
-	for(bmu_buf_size_exp = 0; bmu_buf_size_exp < (sizeof(cfg->buf_size) * 8U); bmu_buf_size_exp++)
+	else
 	{
-		if(cfg->buf_size == (1UL << bmu_buf_size_exp))
+		hal_write32(0U, base_va + BMU_CTRL);
+		hal_write32(0x0U, base_va + BMU_INT_ENABLE);
+		hal_write32(0xffffffffU, base_va + BMU_INT_SRC);
+
+		hal_write32((uint32_t)(cfg->pool_pa & 0xffffffffU), base_va + BMU_UCAST_BASEADDR);
+		hal_write32(cfg->max_buf_cnt & 0xffffU, base_va + BMU_UCAST_CONFIG);
+
+		for(bmu_buf_size_exp = 0; bmu_buf_size_exp < (sizeof(cfg->buf_size) * 8U); bmu_buf_size_exp++)
 		{
-			hal_write32(bmu_buf_size_exp & 0xffffU, base_va + BMU_BUF_SIZE);
-			break;
+			if(cfg->buf_size == (1UL << bmu_buf_size_exp))
+			{
+				hal_write32(bmu_buf_size_exp & 0xffffU, base_va + BMU_BUF_SIZE);
+				break;
+			}
 		}
+
+		/*	Thresholds. 75% of maximum number of available buffers. */
+		hal_write32((cfg->max_buf_cnt * 75U) / 100U, base_va + BMU_THRES);
+
+		/*	Low Watermark for pause frame generation start 5% of free buffers. */
+		hal_write32((cfg->max_buf_cnt * 5U) / 100U, base_va + BMU_LOW_WATERMARK);
+		/*	High Watermark for pause frame generation stop 10% of free buffers. */
+		hal_write32((cfg->max_buf_cnt * 10U) / 100U, base_va + BMU_HIGH_WATERMARK);
+
+		pfe_bmu_cfg_clear_internal_memory(base_va, cfg->int_mem_loc_cnt);
+		pfe_bmu_cfg_clear_buf_cnt_memory(base_va, cfg->buf_mem_loc_cnt);
+
+		/*	Enable BMU interrupts except the global enable bit */
+		hal_write32(0xffffffffU & ~(BMU_INT), base_va + BMU_INT_ENABLE);
 	}
-
-	/*	Thresholds. 75% of maximum number of available buffers. */
-	hal_write32((cfg->max_buf_cnt * 75U) / 100U, base_va + BMU_THRES);
-
-	/*	Low Watermark for pause frame generation start 5% of free buffers. */
-	hal_write32((cfg->max_buf_cnt * 5U) / 100U, base_va + BMU_LOW_WATERMARK);
-	/*	High Watermark for pause frame generation stop 10% of free buffers. */
-	hal_write32((cfg->max_buf_cnt * 10U) / 100U, base_va + BMU_HIGH_WATERMARK);
-
-	pfe_bmu_cfg_clear_internal_memory(base_va, cfg->int_mem_loc_cnt);
-	pfe_bmu_cfg_clear_buf_cnt_memory(base_va, cfg->buf_mem_loc_cnt);
-
-	/*	Enable BMU interrupts except the global enable bit */
-	hal_write32(0xffffffffU & ~(BMU_INT), base_va + BMU_INT_ENABLE);
 }
 
 /**
@@ -224,13 +227,15 @@ void pfe_bmu_cfg_fini(addr_t base_va)
 errno_t pfe_bmu_cfg_reset(addr_t base_va)
 {
 	uint32_t ii = 0U;
+	errno_t ret = EOK;
 
 	hal_write32(0x2U, base_va + BMU_CTRL);
 	while ((hal_read32(base_va + BMU_CTRL) & 0x2U) != 0U)
 	{
 		if (++ii > 1000U)
 		{
-			return ETIMEDOUT;
+			ret = ETIMEDOUT;
+			break;
 		}
 		else
 		{
@@ -238,7 +243,7 @@ errno_t pfe_bmu_cfg_reset(addr_t base_va)
 		}
 	}
 
-	return EOK;
+	return ret;
 }
 
 /**
@@ -298,26 +303,27 @@ uint32_t pfe_bmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 	if (unlikely(NULL_ADDR == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received (pfe_bmu_cfg_get_text_stat)\n");
-		return 0U;
+		len = 0U;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if(verb_level >= 10U)
 	{
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_REM_BUF_CNT     : 0x%x\n", hal_read32(base_va + BMU_REM_BUF_CNT));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_FREE_ERROR_ADDR : 0x%x\n", hal_read32(base_va + BMU_FREE_ERROR_ADDR));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_CURR_BUF_CNT    : 0x%x\n", hal_read32(base_va + BMU_CURR_BUF_CNT));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_DEBUG_BUS       : 0x%x\n", hal_read32(base_va + BMU_DEBUG_BUS));
-	}
+		if(verb_level >= 10U)
+		{
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_REM_BUF_CNT     : 0x%x\n", hal_read32(base_va + BMU_REM_BUF_CNT));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_FREE_ERROR_ADDR : 0x%x\n", hal_read32(base_va + BMU_FREE_ERROR_ADDR));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_CURR_BUF_CNT    : 0x%x\n", hal_read32(base_va + BMU_CURR_BUF_CNT));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_DEBUG_BUS       : 0x%x\n", hal_read32(base_va + BMU_DEBUG_BUS));
+		}
 
-	if(verb_level >= 9U)
-	{
-		/*	Get version */
-		reg = hal_read32(base_va + BMU_VERSION);
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Revision             : 0x%x\n", (reg >> 24) & 0xffU);
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Version              : 0x%x\n", (reg >> 16) & 0xffU);
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "ID                   : 0x%x\n", reg & 0xffffU);
-	}
+		if(verb_level >= 9U)
+		{
+			/*	Get version */
+			reg = hal_read32(base_va + BMU_VERSION);
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Revision             : 0x%x\n", (reg >> 24) & 0xffU);
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Version              : 0x%x\n", (reg >> 16) & 0xffU);
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "ID                   : 0x%x\n", reg & 0xffffU);
+		}
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Buffer Base (uc)     : p0x%x\n", (uint32_t)hal_read32(base_va + BMU_UCAST_BASEADDR));
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Buffer Size          : 0x%x\n", 1U << hal_read32(base_va + BMU_BUF_SIZE));
 		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Buffers Remaining    : 0x%x\n", hal_read32(base_va + BMU_REM_BUF_CNT));
@@ -341,5 +347,6 @@ uint32_t pfe_bmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "MASTER%02d Count       : 0x%x\n", ii, reg);
 			}
 		}
+	}
 	return len;
 }

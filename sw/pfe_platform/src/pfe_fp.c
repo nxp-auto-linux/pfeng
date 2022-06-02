@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -38,24 +38,26 @@ uint32_t pfe_fp_create_table(pfe_class_t *class, uint16_t rules_count)
     errno_t res;
 
     /* Calculate needed size */
-    size = (uint32_t)sizeof(pfe_ct_fp_table_t) + ((uint32_t)rules_count * sizeof(pfe_ct_fp_rule_t));
+    size = (uint32_t)sizeof (pfe_ct_fp_table_t) + ((uint32_t)rules_count * sizeof (pfe_ct_fp_rule_t));
     /* Allocate DMEM */
-    addr = pfe_class_dmem_heap_alloc(class, size);
-    if(0U == addr)
+    addr = pfe_class_dmem_heap_alloc (class, size);
+    if (0U == addr)
     {
-        NXP_LOG_ERROR("Not enough DMEM memory\n");
-        return 0U;
+        NXP_LOG_ERROR ("Not enough DMEM memory\n");
     }
-    /* Write the table header */
-    temp.count = rules_count;
-    temp.rules = oal_htonl(addr + sizeof(pfe_ct_fp_table_t));
-    (void)memset(&temp.fp_stats, 0, sizeof(pfe_ct_class_flexi_parser_stats_t));
-    res = pfe_class_write_dmem(class, -1, addr, (void *)&temp, sizeof(pfe_ct_fp_table_t));
-    if(EOK != res)
+    else
     {
-        NXP_LOG_ERROR("Cannot write to DMEM\n");
-        pfe_class_dmem_heap_free(class, addr);
-        addr = 0U;
+        /* Write the table header */
+        temp.count = rules_count;
+        temp.rules = oal_htonl (addr + sizeof (pfe_ct_fp_table_t));
+        (void)memset (&temp.fp_stats, 0, sizeof (pfe_ct_class_flexi_parser_stats_t));
+        res = pfe_class_write_dmem (class, -1, addr, (void *)&temp, sizeof (pfe_ct_fp_table_t));
+        if (EOK != res)
+        {
+            NXP_LOG_ERROR ("Cannot write to DMEM\n");
+            pfe_class_dmem_heap_free (class, addr);
+            addr = 0U;
+        }
     }
     /* Return the DMEM address */
     return addr;

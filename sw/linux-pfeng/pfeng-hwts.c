@@ -172,15 +172,12 @@ int pfeng_hwts_ioctl_set(struct pfeng_netif *netif, struct ifreq *rq)
 	if (copy_from_user(&cfg, rq->ifr_data, sizeof(cfg)))
 		return -EFAULT;
 
-#ifdef PFE_CFG_PFE_MASTER
-	if(!netif->priv->clk_ptp_reference)
-#endif
+	if(!IS_ENABLED(PFE_CFG_PFE_MASTER) || !netif->priv->clk_ptp_reference)
 	{
 		netif->tshw_cfg.rx_filter = HWTSTAMP_FILTER_NONE;
 		netif->tshw_cfg.tx_type = HWTSTAMP_TX_OFF;
 		return copy_to_user(rq->ifr_data, &netif->tshw_cfg, sizeof(struct hwtstamp_config)) ? -EFAULT : 0;
 	}
-#ifdef PFE_CFG_PFE_MASTER
 
 	switch (cfg.tx_type) {
 	case HWTSTAMP_TX_OFF:
@@ -205,9 +202,6 @@ int pfeng_hwts_ioctl_set(struct pfeng_netif *netif, struct ifreq *rq)
 	}
 
 	return copy_to_user(rq->ifr_data, &netif->tshw_cfg, sizeof(cfg)) ? -EFAULT : 0;
-#else
-	return -EFAULT;
-#endif /* PFE_CFG_PFE_MASTER */
 }
 
 int pfeng_hwts_ioctl_get(struct pfeng_netif *netif, struct ifreq *rq)
@@ -217,31 +211,24 @@ int pfeng_hwts_ioctl_get(struct pfeng_netif *netif, struct ifreq *rq)
 
 int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct ethtool_ts_info *info)
 {
-#ifdef PFE_CFG_PFE_MASTER
-	if(!netif->priv->clk_ptp_reference)
-#endif
-	{
-		info->so_timestamping |= (SOF_TIMESTAMPING_TX_SOFTWARE |
-					  SOF_TIMESTAMPING_RX_SOFTWARE |
-					  SOF_TIMESTAMPING_SOFTWARE);
-
+	if (!IS_ENABLED(PFE_CFG_PFE_MASTER) ||
+	    !netif->priv->clk_ptp_reference || netif->cfg->aux) {
+		info->so_timestamping |= SOF_TIMESTAMPING_TX_SOFTWARE |
+					 SOF_TIMESTAMPING_RX_SOFTWARE |
+					 SOF_TIMESTAMPING_SOFTWARE;
 		info->tx_types = BIT(HWTSTAMP_TX_OFF);
+	} else {
+		info->so_timestamping |= SOF_TIMESTAMPING_TX_HARDWARE |
+					 SOF_TIMESTAMPING_RX_HARDWARE |
+					 SOF_TIMESTAMPING_RAW_HARDWARE |
+					 SOF_TIMESTAMPING_TX_SOFTWARE |
+					 SOF_TIMESTAMPING_RX_SOFTWARE |
+					 SOF_TIMESTAMPING_SOFTWARE;
+		info->tx_types = BIT(HWTSTAMP_TX_ON) | BIT(HWTSTAMP_TX_OFF);
+		info->rx_filters = BIT(HWTSTAMP_FILTER_ALL) |
+				   BIT(HWTSTAMP_FILTER_NONE);
 	}
-#ifdef PFE_CFG_PFE_MASTER
-	else {
-	info->so_timestamping |= (SOF_TIMESTAMPING_TX_HARDWARE |
-				  SOF_TIMESTAMPING_RX_HARDWARE |
-				  SOF_TIMESTAMPING_RAW_HARDWARE|
-				  SOF_TIMESTAMPING_TX_SOFTWARE |
-				  SOF_TIMESTAMPING_RX_SOFTWARE |
-				  SOF_TIMESTAMPING_SOFTWARE);
 
-	info->tx_types = BIT(HWTSTAMP_TX_ON) | BIT(HWTSTAMP_TX_OFF);
-
-	info->rx_filters = BIT(HWTSTAMP_FILTER_ALL) |
-			   BIT(HWTSTAMP_FILTER_NONE);
-	}
-#endif
 	return 0;
 }
 

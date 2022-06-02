@@ -19,9 +19,7 @@ PFE_CFG_HIF_USE_BD_TRIGGER ?= 1
 PFE_CFG_BD_MEM ?= "pfe-bdr-pool"
 PFE_CFG_SYS_MEM ?= "pfe-bmu2-pool"
 PFE_CFG_RT_MEM ?= "pfe-rt-pool"
-PFE_CFG_LINUX_NO_SERDES_SUPPORT ?= 0
 PFE_CFG_BMU2_BUF_COUNT ?= 256
-PFE_CFG_LINUX_RES_MEM_ENABLE ?= 0
 
 # Warning for PFE_CFG_LINUX_TRACE=1:
 # The compile time checker doesn't work well with -Og
@@ -56,9 +54,6 @@ ccflags-y += -Og
 endif
 ccflags-y += -Wno-date-time
 ccflags-y += -Werror
-ifneq ($(PFE_CFG_LINUX_NO_SERDES_SUPPORT),0)
-ccflags-y += -DPFENG_CFG_LINUX_NO_SERDES_SUPPORT
-endif
 
 OBJ_LIBFCI_DIR = ../xfci/libfci
 OBJ_DIRS = ../oal ../bpool  ../elf  ../fifo  ../pfe_platform ../common

@@ -1,6 +1,6 @@
 /* =========================================================================
  *  Copyright (C) 2007 Mindspeed Technologies, Inc.
- *  Copyright 2017-2021 NXP
+ *  Copyright 2017-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -481,15 +481,20 @@ int fci_catch(FCI_CLIENT *client)
 }
 
 /*
- * @brief		fci_fd: Not supported yet
- * @param[in]	client FCI client instance to be used
- * @return		Always -1 (failure) because the function is not supported.
- * @warning		Function shall not be used.
+ * @brief		Return file descriptor of a socket for FCI events from driver.
+ * @param[in]	client The FCI client instance
+ * @return		File descriptor or -1 if some error.
  */
 int fci_fd(FCI_CLIENT *client)
 {
-	FCILIB_PRINTF(FCILIB_ERR, "LIBFCI: fci_fd() not implemented\n");
-	return -1;
+	if (NULL == client)
+	{
+		return -1;
+	}
+	else
+	{
+		return client->back_sock_fd;
+	}
 }
 
 

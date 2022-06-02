@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -1417,6 +1417,58 @@ uint16_t demo_ct_ld_get_flags(const fpp_ct_cmd_t* p_ct)
 }
  
  
+/*
+ * @brief      Query the statistics of an IPv4 conntrack (number of frames).
+ * @details    [localdata_ct]
+ * @param[in]  p_ct  Local data to be queried.
+ * @return     Number of frames that used the conntrack.
+ */
+uint32_t demo_ct_ld_get_stt_hit(const fpp_ct_cmd_t* p_ct)
+{
+    assert(NULL != p_ct);
+    return ntohl(p_ct->stats.hit);
+}
+ 
+ 
+/*
+ * @brief      Query the statistics of an IPv6 conntrack (number of bytes).
+ * @details    [localdata_ct]
+ * @param[in]  p_ct  Local data to be queried.
+ * @return     Sum of bytesizes of all frames that used the conntrack.
+ */
+uint32_t demo_ct_ld_get_stt_hit_bytes(const fpp_ct_cmd_t* p_ct)
+{
+    assert(NULL != p_ct);
+    return ntohl(p_ct->stats.hit_bytes);
+}
+ 
+ 
+/*
+ * @brief      Query the statistics of an IPv4 conntrack (number of frames).
+ * @details    [localdata_ct]
+ * @param[in]  p_ct  Local data to be queried.
+ * @return     Number of frames that used the conntrack (reply direction).
+ */
+uint32_t demo_ct_ld_get_stt_reply_hit(const fpp_ct_cmd_t* p_ct)
+{
+    assert(NULL != p_ct);
+    return ntohl(p_ct->stats_reply.hit);
+}
+ 
+ 
+/*
+ * @brief      Query the statistics of an IPv4 conntrack (number of bytes).
+ * @details    [localdata_ct]
+ * @param[in]  p_ct  Local data to be queried.
+ * @return     Sum of bytesizes of all frames that used the conntrack (reply direction).
+ */
+uint32_t demo_ct_ld_get_stt_reply_hit_bytes(const fpp_ct_cmd_t* p_ct)
+{
+    assert(NULL != p_ct);
+    return ntohl(p_ct->stats_reply.hit_bytes);
+}
+ 
+ 
  
  
 /*
@@ -1721,6 +1773,58 @@ uint16_t demo_ct6_ld_get_flags(const fpp_ct6_cmd_t* p_ct6)
 {
     assert(NULL != p_ct6);
     return ntohs(p_ct6->flags);
+}
+ 
+ 
+/*
+ * @brief      Query the statistics of an IPv6 conntrack (number of frames).
+ * @details    [localdata_ct6]
+ * @param[in]  p_ct6  Local data to be queried.
+ * @return     Number of frames that used the conntrack.
+ */
+uint32_t demo_ct6_ld_get_stt_hit(const fpp_ct6_cmd_t* p_ct6)
+{
+    assert(NULL != p_ct6);
+    return ntohl(p_ct6->stats.hit);
+}
+ 
+ 
+/*
+ * @brief      Query the statistics of an IPv6 conntrack (number of bytes).
+ * @details    [localdata_ct6]
+ * @param[in]  p_ct6  Local data to be queried.
+ * @return     Sum of bytesizes of all frames that used the conntrack.
+ */
+uint32_t demo_ct6_ld_get_stt_hit_bytes(const fpp_ct6_cmd_t* p_ct6)
+{
+    assert(NULL != p_ct6);
+    return ntohl(p_ct6->stats.hit_bytes);
+}
+ 
+ 
+/*
+ * @brief      Query the statistics of an IPv6 conntrack (number of frames).
+ * @details    [localdata_ct6]
+ * @param[in]  p_ct6  Local data to be queried.
+ * @return     Number of frames that used the conntrack (reply direction).
+ */
+uint32_t demo_ct6_ld_get_stt_reply_hit(const fpp_ct6_cmd_t* p_ct6)
+{
+    assert(NULL != p_ct6);
+    return ntohl(p_ct6->stats_reply.hit);
+}
+ 
+ 
+/*
+ * @brief      Query the statistics of an IPv6 conntrack (number of bytes).
+ * @details    [localdata_ct6]
+ * @param[in]  p_ct6  Local data to be queried.
+ * @return     Sum of bytesizes of all frames that used the conntrack (reply direction).
+ */
+uint32_t demo_ct6_ld_get_stt_reply_hit_bytes(const fpp_ct6_cmd_t* p_ct6)
+{
+    assert(NULL != p_ct6);
+    return ntohl(p_ct6->stats_reply.hit_bytes);
 }
  
  

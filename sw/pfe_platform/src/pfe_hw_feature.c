@@ -39,6 +39,7 @@ static pfe_hw_feature_t *pfe_hw_feature_create(const char *name, const char *des
 		feature->description = descr;
 		feature->flags = flags;
 		feature->def_val = def_val;
+		feature->val = def_val;
 	}
 	else
 	{
@@ -97,6 +98,17 @@ errno_t pfe_hw_feature_init_all(const uint32_t *cbus_base, pfe_hw_feature_t **hw
 	{
 		return ENOMEM;
 	}
+
+        feature = pfe_hw_feature_create("jumbo_frames", "Active if we handle jumbo frames", F_NONE, 0);
+        if (NULL != feature)
+        {
+                hw_features[1] = feature;
+                *hw_features_count = 2U;
+        }
+        else
+        {
+                return ENOMEM;
+        }
 
 	return EOK;
 }

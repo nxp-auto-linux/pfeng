@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -29,28 +29,30 @@ void pfe_flexible_filter_init(void)
  */
 errno_t pfe_flexible_filter_set(pfe_class_t *class, const uint32_t dmem_addr)
 {
-	pfe_ct_class_mmap_t mmap;
-	errno_t ret = EOK;
+    pfe_ct_class_mmap_t mmap;
+    errno_t ret;
     uint32_t ff_addr;
     uint32_t ff = dmem_addr;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == class))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
+    if (unlikely (NULL == class))
+    {
+        NXP_LOG_ERROR ("NULL argument received\n");
+        ret = EINVAL;
+    }
+    else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-    /* Get the memory map */
-	/* All PEs share the same memory map therefore we can read
+    {
+        /* Get the memory map */
+        /* All PEs share the same memory map therefore we can read
 	   arbitrary one (in this case 0U) */
-	ret = pfe_class_get_mmap(class, 0, &mmap);
-	if(EOK == ret)
-	{
-        /* Get the flexible filter address */
-        ff_addr = oal_ntohl(mmap.flexible_filter);
-        /* Write new address of flexible filter */
-        ret = pfe_class_write_dmem(class, -1, (addr_t)ff_addr, (void *)&ff, sizeof(pfe_ct_flexible_filter_t));
+        ret = pfe_class_get_mmap (class, 0, &mmap);
+        if (EOK == ret)
+        {
+            /* Get the flexible filter address */
+            ff_addr = oal_ntohl (mmap.flexible_filter);
+            /* Write new address of flexible filter */
+            ret = pfe_class_write_dmem (class, -1, (addr_t)ff_addr, (void *)&ff, sizeof (pfe_ct_flexible_filter_t));
+        }
     }
     return ret;
 }

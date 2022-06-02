@@ -104,7 +104,7 @@ static int pfeng_ethtool_get_ts_info(struct net_device *netdev, struct ethtool_t
 	if (netif->ptp_clock)
 		info->phc_index = ptp_clock_index(netif->ptp_clock);
 	else
-		netdev_info(netdev, "No PTP clock available\n");
+		info->phc_index = -1;
 
 	return 0;
 }

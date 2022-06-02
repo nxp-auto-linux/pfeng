@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -189,6 +189,19 @@ static int ct_print(const fpp_ct_cmd_t* p_ct)
         printf("\n");
     }
     
+    {
+        /* statistics */
+        printf("%-*sstats:  ", indent, "");
+        
+        printf(" orig_hit: %"PRIu32, demo_ct_ld_get_stt_hit(p_ct));
+        printf(" orig_hit_bytes: %"PRIu32, demo_ct_ld_get_stt_hit_bytes(p_ct));
+        printf("  ");
+        printf(" reply_hit: %"PRIu32, demo_ct_ld_get_stt_reply_hit(p_ct));
+        printf(" reply_hit_bytes: %"PRIu32, demo_ct_ld_get_stt_reply_hit_bytes(p_ct));
+        
+        printf("\n");
+    }
+    
     return (FPP_ERR_OK); 
 }
 
@@ -255,6 +268,19 @@ static int ct6_print(const fpp_ct6_cmd_t* p_ct6)
         printf("  r-dport=%-5"PRIu16,  demo_ct6_ld_get_dport_reply(p_ct6));
         printf("  r-vlan=%-5"PRIu16,   demo_ct6_ld_get_vlan_reply(p_ct6));
         printf("  r-route=%-10"PRIu32, demo_ct6_ld_get_route_id_reply(p_ct6));
+        
+        printf("\n");
+    }
+    
+    {
+        /* statistics */
+        printf("%-*sstats:   ", indent, "");
+        
+        printf(" orig_hit: %"PRIu32, demo_ct6_ld_get_stt_hit(p_ct6));
+        printf(" orig_hit_bytes: %"PRIu32, demo_ct6_ld_get_stt_hit_bytes(p_ct6));
+        printf("   ");
+        printf(" reply_hit: %"PRIu32, demo_ct6_ld_get_stt_reply_hit(p_ct6));
+        printf(" reply_hit_bytes: %"PRIu32, demo_ct6_ld_get_stt_reply_hit_bytes(p_ct6));
         
         printf("\n");
     }

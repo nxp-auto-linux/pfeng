@@ -147,13 +147,13 @@ static errno_t pfe_pe_upload_sections(pfe_pe_t **pe, uint32_t pe_num, const ELF_
 
 	for (ii = 0U; ii < elf_file->Header.r32.e_shnum; ii++)
 	{
-		if (0U == (elf_file->arSectHead32[ii].sh_flags & (uint32_t)(((uint32_t)SHF_WRITE) | ((uint32_t)SHF_ALLOC) | ((uint32_t)SHF_EXECINSTR))))
+		if (0U == (ENDIAN_SW_4B(elf_file->arSectHead32[ii].sh_flags) & (uint32_t)(((uint32_t)SHF_WRITE) | ((uint32_t)SHF_ALLOC) | ((uint32_t)SHF_EXECINSTR))))
 		{
 			/*	Skip the section */
 			continue;
 		}
 
-		buf = (void*)((addr_t)elf_file->pvData + elf_file->arSectHead32[ii].sh_offset);
+		buf = (void*)((addr_t)elf_file->pvData + ENDIAN_SW_4B(elf_file->arSectHead32[ii].sh_offset));
 		/* Translate elf virtual address to load address */
 		load_addr = pfe_pe_get_elf_sect_load_addr(elf_file, &elf_file->arSectHead32[ii]);
 		if(0U == load_addr)
@@ -166,13 +166,13 @@ static errno_t pfe_pe_upload_sections(pfe_pe_t **pe, uint32_t pe_num, const ELF_
 		for(pe_idx = 0; pe_idx < pfe_pe_fw_load_cycles(pe[0], (uint8_t)pe_num); ++pe_idx)
 		{
 		/*	Upload the section */
-			ret = pfe_pe_load_elf_section(pe[pe_idx], buf, load_addr, elf_file->arSectHead32[ii].sh_size, elf_file->arSectHead32[ii].sh_type);
+			ret = pfe_pe_load_elf_section(pe[pe_idx], buf, load_addr, ENDIAN_SW_4B(elf_file->arSectHead32[ii].sh_size), ENDIAN_SW_4B(elf_file->arSectHead32[ii].sh_type));
 			if (EOK != ret)
 			{
 				NXP_LOG_ERROR("Couldn't upload firmware section %s, %u bytes @ 0x%08x. Reason: %d\n",
-								elf_file->acSectNames+elf_file->arSectHead32[ii].sh_name,
-								(uint_t)elf_file->arSectHead32[ii].sh_size,
-								(uint_t)elf_file->arSectHead32[ii].sh_addr, ret);
+								elf_file->acSectNames+ENDIAN_SW_4B(elf_file->arSectHead32[ii].sh_name),
+								(uint_t)ENDIAN_SW_4B(elf_file->arSectHead32[ii].sh_size),
+								(uint_t)ENDIAN_SW_4B(elf_file->arSectHead32[ii].sh_addr), ret);
 				pfe_pe_free_mem(pe, pe_num);
 				return ret;
 			}
@@ -1585,7 +1585,7 @@ static errno_t pfe_pe_load_elf_section(pfe_pe_t *pe, const void *sdata, addr_t l
  */
 static addr_t pfe_pe_get_elf_sect_load_addr(const ELF_File_t *elf_file, const Elf32_Shdr *shdr)
 {
-	addr_t virt_addr = shdr->sh_addr;
+	addr_t virt_addr = ENDIAN_SW_4B(shdr->sh_addr);
 	addr_t load_addr;
 	addr_t offset;
 	const Elf32_Phdr *phdr;
@@ -1595,15 +1595,16 @@ static addr_t pfe_pe_get_elf_sect_load_addr(const ELF_File_t *elf_file, const El
 	for (ii=0U; ii<elf_file->Header.r32.e_phnum; ii++)
 	{
 		phdr = &elf_file->arProgHead32[ii];
-		if((virt_addr >= phdr->p_vaddr) &&
-		   (virt_addr <= (phdr->p_vaddr + phdr->p_memsz - shdr->sh_size)))
+		if((virt_addr >= ENDIAN_SW_4B(phdr->p_vaddr)) &&
+		(virt_addr <= (ENDIAN_SW_4B(phdr->p_vaddr) + ENDIAN_SW_4B(phdr->p_memsz) - ENDIAN_SW_4B(shdr->sh_size))))
 		{   /* Address belongs into this segment */
 			/* Calculate the offset between segment load and virtual address */
-			offset = phdr->p_vaddr - phdr->p_paddr;
+			offset = ENDIAN_SW_4B(phdr->p_vaddr) - ENDIAN_SW_4B(phdr->p_paddr);
 			/* Same offset applies also for sections in the segment */
 			load_addr = virt_addr - offset;
 			return load_addr;
 		}
+
 	}
 	/* No segment containing the section was found ! */
 	NXP_LOG_ERROR("Translation of 0x%"PRINTADDR_T"x failed, fallback used\n", virt_addr);
@@ -1835,7 +1836,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		/* Get the mmap size, used to load correct data from FW file*/
 		(void)memcpy(
 				(void*)&mmap_size,
-				(const void*)((addr_t)elf_file->pvData + shdr->sh_offset),
+				(const void*)((addr_t)elf_file->pvData + ENDIAN_SW_4B(shdr->sh_offset)),
 				sizeof(uint32_t));
 
 		/* Convert mmap size endian ! */
@@ -1856,7 +1857,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 
 			(void)memcpy(
 					(void*)tmp_mmap,
-					(const void*)((addr_t)elf_file->pvData + shdr->sh_offset),
+					(const void*)((addr_t)elf_file->pvData + ENDIAN_SW_4B(shdr->sh_offset)),
 					mmap_size);
 
 			if(0 != strcmp(mmap_version_str, tmp_mmap->common.version.cthdr))
@@ -1883,7 +1884,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 
 		/*	Load section to RAM */
 		shdr = &elf_file->arSectHead32[mask_sectIdx];
-		messages_mem = oal_mm_malloc(shdr->sh_size);
+		messages_mem = oal_mm_malloc(ENDIAN_SW_4B(shdr->sh_size));
 		if (NULL == messages_mem)
 		{
 			ret = ENOMEM;
@@ -1896,8 +1897,8 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		}
 		else
 		{
-			(void)memcpy(messages_mem, (const void *)((uint8_t *)elf_file->pvData + shdr->sh_offset), shdr->sh_size);
-			messages_size = shdr->sh_size;
+			(void)memcpy(messages_mem, (const void *)((uint8_t *)elf_file->pvData + ENDIAN_SW_4B(shdr->sh_offset)), ENDIAN_SW_4B(shdr->sh_size));
+			messages_size = ENDIAN_SW_4B(shdr->sh_size);
 		}
 	}
 	else
@@ -1913,7 +1914,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 
 		/*	Load section to RAM */
 		shdr = &elf_file->arSectHead32[mask_sectIdx];
-		features_mem = oal_mm_malloc(shdr->sh_size);
+		features_mem = oal_mm_malloc(ENDIAN_SW_4B(shdr->sh_size));
 		if (NULL == features_mem)
 		{
 			ret = ENOMEM;
@@ -1930,8 +1931,8 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		}
 		else
 		{
-			(void)memcpy(features_mem, (const void *)((addr_t)elf_file->pvData + shdr->sh_offset), shdr->sh_size);
-			features_size = shdr->sh_size;
+			(void)memcpy(features_mem, (const void *)((addr_t)elf_file->pvData + ENDIAN_SW_4B(shdr->sh_offset)), ENDIAN_SW_4B(shdr->sh_size));
+			features_size = ENDIAN_SW_4B(shdr->sh_size);
 		}
 	}
 	else

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -137,6 +137,7 @@
 #ifndef PUBLIC_PFE_HIF_CHNL_H_
 #define PUBLIC_PFE_HIF_CHNL_H_
 
+#include "pfe_bmu.h"
 #include "pfe_hif_ring_linux.h"
 
 /**
@@ -144,23 +145,14 @@
  * @details	When TRUE then RX buffer management is embedded so caller layer
  * 			does not need to care about it. FALSE disables the feature.
  */
-#if !defined(PFE_CFG_TARGET_OS_LINUX)
-#define PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED		TRUE
-#else
-#define PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED		FALSE
-#endif
+#define PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED	FALSE
 
 /**
  * @brief	RX OOB management
  * @details	When TRUE then RX OOB buffer management is embedded so caller layer
  * 			can process the RX_OOB_EVENT. FALSE removed the feature.
  */
-#if !defined(PFE_CFG_TARGET_OS_LINUX)
-#define PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED	TRUE
-#else
 #define PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED	FALSE
-#endif
-#include "pfe_bmu.h"
 
 /**
  * @brief	List of available HIF channel events
@@ -181,6 +173,7 @@ typedef void (* pfe_hif_chnl_cbk_t)(void *arg);
 /*	This is the channel ID used to identify HIF_NOCPY channel */
 #define PFE_HIF_CHNL_NOCPY_ID		1000U
 
+#define MAC_ADDRESS_SIZE		6U
 /*	RX */
 errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl) __attribute__((cold));
 void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl) __attribute__((cold));

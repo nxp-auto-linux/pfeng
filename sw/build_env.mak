@@ -90,8 +90,6 @@ export PFE_CFG_IEEE1588_I_CLK_HZ?=0
 export PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ?=0
 export PFE_CFG_IEEE1588_EMAC1_O_CLK_HZ?=0
 export PFE_CFG_IEEE1588_EMAC2_O_CLK_HZ?=0
-#enable reserved memory for the Slave driver
-export PFE_CFG_LINUX_RES_MEM_ENABLE?=0
 #PFE system buffers location
 export PFE_CFG_SYS_MEM?="pfe_ddr"
 #Buffer descriptors location
@@ -123,6 +121,8 @@ export PFE_CFG_HIF_RING_LENGTH?=256
 export PFE_CFG_SLAVE_HIF_MASTER_UP_TMOUT?=1000
 #Number of milisecs to wait by Slave until IP ready flag set by Master
 export PFE_CFG_IP_READY_MS_TMOUT?=5000
+#HIF used to process PTP traffic in bridge mode (see pfe_ct_phy_if_id_t, configuration is enabled when set to valid HIF id)
+export PFE_CFG_PTP_COMMON_HIF?=0
 
 ifeq ($(PFE_CFG_HIF_DRV_MODE),0)
   #Use multi-client HIF driver. Required when multiple logical interfaces need to
@@ -216,10 +216,6 @@ ifneq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_ERR051211_WORKAROUND_ENABLE
 endif
 
-ifneq ($(PFE_CFG_LINUX_RES_MEM_ENABLE),0)
-    GLOBAL_CCFLAGS+=-DPFE_CFG_LINUX_RES_MEM_ENABLE
-endif
-
 ifneq ($(PFE_CFG_PFE_MASTER),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_PFE_MASTER
 else
@@ -234,6 +230,7 @@ GLOBAL_CCFLAGS+=-DPFE_CFG_PFE2_IF=$(PFE_CFG_PFE2_IF)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE0_PROMISC=$(PFE_CFG_PFE0_PROMISC)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE1_PROMISC=$(PFE_CFG_PFE1_PROMISC)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE2_PROMISC=$(PFE_CFG_PFE2_PROMISC)
+GLOBAL_CCFLAGS+=-DPFE_CFG_PTP_COMMON_HIF=$(PFE_CFG_PTP_COMMON_HIF)
 
 ifneq ($(PFE_CFG_HIF_NOCPY_SUPPORT),0)
   ifeq ($(TARGET_OS),QNX)

@@ -204,7 +204,7 @@
 #define TLITE_HIF_MAX_ENTRIES	(2U * TLITE_HIF_MAX_Q_SIZE)
 
 #define TLITE_OPT_Q0_SIZE		150U /* optimal size for the default queue (q0) */
-#define TLITE_OPT_Q1_7_SIZE		((uint16_t)((uint16_t)TLITE_MAX_ENTRIES - TLITE_OPT_Q0_SIZE) / 8U)
+#define TLITE_OPT_Q1_7_SIZE		((uint16_t)((uint16_t)TLITE_MAX_ENTRIES - TLITE_OPT_Q0_SIZE) / 7U)
 
 /*	Implementation of the pfe_tmu_phy_cfg_t */
 struct pfe_tmu_phy_cfg_tag

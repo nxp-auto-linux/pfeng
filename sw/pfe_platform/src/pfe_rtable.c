@@ -1228,6 +1228,8 @@ void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan, boo
 
 	entry->phys_entry->args.vlan = oal_htons(vlan);
 
+	entry->phys_entry->actions &= ~oal_htonl(RT_ACT_MOD_VLAN_HDR|RT_ACT_ADD_VLAN_HDR);
+
 	if (replace)
 	{
 		entry->phys_entry->actions |= oal_htonl(RT_ACT_MOD_VLAN_HDR);
@@ -1574,6 +1576,24 @@ pfe_rtable_entry_t *pfe_rtable_entry_get_child(const pfe_rtable_entry_t *entry)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return entry->child;
+}
+
+/**
+ * @brief		Get index into statistics table
+ * @param[in]	entry The routing table entry instance
+ * @return		Index into statistics table.
+ */
+uint8_t pfe_rtable_entry_get_stats_index(const pfe_rtable_entry_t *entry)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0U;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return oal_ntohs(entry->phys_entry->conntrack_stats_index);
 }
 
 /***
