@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2021 NXP
+ *  Copyright 2017-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -336,6 +336,10 @@
 #define PE_IBUS_WREN(x)				((((uint32_t)(x)) & 0xfUL) << 24U)
 #define PE_IBUS_BYTES(x)			((1UL << (x)) - 1U) << (4U - (x)) /* 0x1 = LSB, 0x8 = MSB (BE) */
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 void pfe_class_cfg_set_config(addr_t base_va, const pfe_class_cfg_t *cfg);
 void pfe_class_cfg_reset(addr_t base_va);
@@ -346,5 +350,10 @@ errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtab
 void pfe_class_cfg_set_def_vlan(addr_t base_va, uint16_t vlan);
 void pfe_class_cfg_rtable_lookup_enable(const addr_t base_va);
 void pfe_class_cfg_rtable_lookup_disable(const addr_t base_va);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_CLASS_CSR_H_ */

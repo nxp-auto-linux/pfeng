@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018,2020 NXP
+ *  Copyright 2018,2020,2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -8,15 +8,15 @@
 /**
  * @addtogroup	dxgrOAL
  * @{
- * 
+ *
  * @defgroup    dxgr_OAL_THREAD THREAD
  * @brief		Threading abstraction
- * @details		TODO     
- * 				
- * 
+ * @details		TODO
+ *
+ *
  * @addtogroup  dxgr_OAL_THREAD
  * @{
- * 
+ *
  * @file		oal_thread.h
  * @brief		The oal_thread module header file.
  * @details		This file contains generic thread management-related API.
@@ -28,6 +28,11 @@
 
 typedef struct __oal_thread_tag oal_thread_t;
 typedef void * (* oal_thread_func)(void *arg);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /**
  * @brief		Create new thread
@@ -53,6 +58,11 @@ errno_t oal_thread_join(oal_thread_t *thread, void **retval);
  * @return		EOK if success, error code otherwise
  */
 errno_t oal_thread_cancel(oal_thread_t *thread);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PUBLIC_OAL_THREAD_H_ */
 

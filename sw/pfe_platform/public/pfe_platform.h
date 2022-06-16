@@ -138,6 +138,11 @@ typedef struct
 	uint32_t pfe_version;
 } pfe_platform_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 pfe_fw_t *pfe_fw_load(char_t *class_fw_name, char_t *util_fw_name);
 errno_t pfe_platform_init(const pfe_platform_config_t *config);
 errno_t pfe_platform_create_ifaces(pfe_platform_t *platform);
@@ -153,5 +158,10 @@ pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_
 void pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg);
 #endif
 errno_t pfe_platform_get_fw_versions(const pfe_platform_t *platform, pfe_ct_version_t *class_fw, pfe_ct_version_t *util_fw);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* SRC_PFE_PLATFORM_H_ */

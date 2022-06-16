@@ -11,6 +11,11 @@
 #include "pfe_class.h"
 #include "pfe_fp.h"
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
 * @brief Initializes the module
 */
@@ -127,3 +132,9 @@ errno_t pfe_fp_table_get_statistics(pfe_class_t *class, uint32_t pe_idx, uint32_
 
     return res;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

@@ -44,6 +44,11 @@
 
 #define FCI_CONNECTIONS_CFG_MAX_STR_LEN		128U
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static void fci_connections_ipv4_cmd_to_5t(const fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *tuple);
 static void fci_connections_ipv4_cmd_to_5t_rep(const fpp_ct_cmd_t *ct_cmd, pfe_5_tuple_t *tuple);
 static void fci_connections_ipv6_cmd_to_5t(const fpp_ct6_cmd_t *ct6_cmd, pfe_5_tuple_t *tuple);
@@ -62,11 +67,34 @@ static char_t * fci_connections_ipv6_cmd_to_str(fpp_ct6_cmd_t *ct6_cmd);
 static char_t * fci_connections_entry_to_str(pfe_rtable_entry_t *entry);
 static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *dip, uint16_t *sport, uint16_t *dport,
 									uint8_t *sip_out, uint8_t *dip_out, uint16_t *sport_out, uint16_t *dport_out, uint8_t *proto);
-#endif /* NXP_LOG_ENABLED */
-#endif /* PFE_CFG_VERBOSITY_LEVEL */
 
-#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
-#ifdef NXP_LOG_ENABLED
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#define ETH_43_PFE_START_SEC_VAR_CLEARED_8
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+/* usage scope: fci_connections_build_str */
+static char_t fci_connections_build_str_buf[FCI_CONNECTIONS_CFG_MAX_STR_LEN];
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_VAR_CLEARED_8
+#include "Eth_43_PFE_MemMap.h"
+#define ETH_43_PFE_START_SEC_CONST_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+/* usage scope: fci_connections_entry_to_str */
+static char_t * const fci_connections_entry_to_str_err_str = "Entry-to-string conversion failed";
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CONST_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief		Convert CT (IPv4) command to string representation
  * @param[in]	ct_cmd The command
@@ -93,11 +121,7 @@ static char_t * fci_connections_ipv4_cmd_to_str(fpp_ct_cmd_t *ct_cmd)
 										&ct_cmd->sport_reply,
 										(uint8_t *)&ct_cmd->protocol);
 }
-#endif /* NXP_LOG_ENABLED */
-#endif /* PFE_CFG_VERBOSITY_LEVEL */
 
-#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
-#ifdef NXP_LOG_ENABLED
 /**
  * @brief		Convert CT (IPv6) command to string representation
  * @param[in]	ct_cmd The command
@@ -124,11 +148,7 @@ static char_t * fci_connections_ipv6_cmd_to_str(fpp_ct6_cmd_t *ct6_cmd)
 											&ct6_cmd->sport_reply,
 											(uint8_t *)&ct6_cmd->protocol);
 }
-#endif /* NXP_LOG_ENABLED */
-#endif /* PFE_CFG_VERBOSITY_LEVEL */
 
-#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
-#ifdef NXP_LOG_ENABLED
 /**
  * @brief		Build string from given values
  * @param[in]	ipv6 TRUE if IPv6 values, FALSE for IPv4
@@ -146,7 +166,6 @@ static char_t * fci_connections_ipv6_cmd_to_str(fpp_ct6_cmd_t *ct6_cmd)
 static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *dip, uint16_t *sport, uint16_t *dport,
 									uint8_t *sip_out, uint8_t *dip_out, uint16_t *sport_out, uint16_t *dport_out, uint8_t *proto)
 {
-	static char_t buf[FCI_CONNECTIONS_CFG_MAX_STR_LEN];
 	uint32_t ipv_flag = (TRUE == ipv6) ? AF_INET6 : AF_INET;
 	uint8_t ip_addr_len = (TRUE == ipv6) ? 16U : 4U;
 	uint32_t len = 0U;
@@ -173,61 +192,57 @@ static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *di
 	if (0 != memcmp(sip, sip_out, ip_addr_len))
 	{
 		/*	SIP need to be changed to SIP_OUT */
-		len += snprintf(buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
+		len += snprintf(fci_connections_build_str_buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
 							"\t\tSIP: %s --> %s\n", sip_str, sip_out_str);
 	}
 	else
 	{
-		len += snprintf(buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
+		len += snprintf(fci_connections_build_str_buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
 							"\t\tSIP: %s\n", sip_str);
 	}
 
 	if (0 != memcmp(dip, dip_out, ip_addr_len))
 	{
 		/*	DIP need to be changed to DIP_OUT */
-		len += snprintf(buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
+		len += snprintf(fci_connections_build_str_buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
 							"\t\tDIP: %s --> %s\n", dip_str, dip_out_str);
 	}
 	else
 	{
-		len += snprintf(buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
+		len += snprintf(fci_connections_build_str_buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
 							"\t\tDIP: %s\n", dip_str);
 	}
 
 	if (*sport != *sport_out)
 	{
 		/*	SPORT need to be changed to DPORT_REPLY */
-		len += snprintf(buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
+		len += snprintf(fci_connections_build_str_buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
 							"\t\tSPORT: %d --> %d\n", oal_ntohs(*sport), oal_ntohs(*sport_out));
 	}
 	else
 	{
-		len += snprintf(buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
+		len += snprintf(fci_connections_build_str_buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
 							"\t\tSPORT: %d\n", oal_ntohs(*sport));
 	}
 
 	if (*dport != *dport_out)
 	{
 		/*	DPORT need to be changed to SPORT_REPLY */
-		len += snprintf(buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
+		len += snprintf(fci_connections_build_str_buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
 							"\t\tDPORT: %d --> %d\n", oal_ntohs(*dport), oal_ntohs(*dport_out));
 	}
 	else
 	{
-		len += snprintf(buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
+		len += snprintf(fci_connections_build_str_buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len,
 							"\t\tDPORT: %d\n", oal_ntohs(*dport));
 	}
 
 	/*	Last line. Shall not contain EOL character. */
-	len += snprintf(buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len, "\t\tPROTO: %d", *proto);
+	len += snprintf(fci_connections_build_str_buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len, "\t\tPROTO: %d", *proto);
 
-	return buf;
+	return fci_connections_build_str_buf;
 }
-#endif /* NXP_LOG_ENABLED */
-#endif /* PFE_CFG_VERBOSITY_LEVEL */
 
-#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
-#ifdef NXP_LOG_ENABLED
 /**
  * @brief		Convert routing table entry to a string representation
  * @param[in]	entry The entry
@@ -235,7 +250,6 @@ static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *di
  */
 static char_t * fci_connections_entry_to_str(pfe_rtable_entry_t *entry)
 {
-	static char_t *err_str = "Entry-to-string conversion failed";
 	pfe_5_tuple_t tuple;
 	pfe_5_tuple_t tuple_out;
 
@@ -249,12 +263,12 @@ static char_t * fci_connections_entry_to_str(pfe_rtable_entry_t *entry)
 
 	if (EOK != pfe_rtable_entry_to_5t(entry, &tuple))
 	{
-		return err_str;
+		return fci_connections_entry_to_str_err_str;
 	}
 
 	if (EOK != pfe_rtable_entry_to_5t_out(entry, &tuple_out))
 	{
-		return err_str;
+		return fci_connections_entry_to_str_err_str;
 	}
 
 	tuple.sport = oal_htons(tuple.sport);
@@ -1778,6 +1792,12 @@ uint32_t fci_connections_get_default_timeout(uint8_t ip_proto)
 	return ret;
 }
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #endif /* PFE_CFG_FCI_ENABLE */
 #endif /* PFE_CFG_PFE_MASTER */
+
 /** @}*/

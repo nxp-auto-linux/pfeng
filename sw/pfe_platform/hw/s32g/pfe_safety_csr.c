@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -23,6 +23,11 @@
 									LMEM_SLV_INT | TMU_SLV_INT | UPE_SLV_INT | WSP_GLOBAL_SLV_INT \
 								   )
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief		SAFETY ISR
  * @details		MASK, ACK, and process triggered interrupts.
@@ -36,7 +41,7 @@ errno_t pfe_safety_cfg_isr(addr_t base_va)
 	uint32_t trig_en_interrupts;
 #ifdef NXP_LOG_ENABLED
 	uint8_t index = 0U;
-	const char_t * const wsp_safety_int_src_text[WSP_SAFETY_INT_SRC_NUMBER] = 
+	const char_t * const wsp_safety_int_src_text[WSP_SAFETY_INT_SRC_NUMBER] =
 	{
 		"MASTER1_INT-Master1 Parity error",
 		"MASTER2_INT-Master2 Parity error",
@@ -93,7 +98,7 @@ errno_t pfe_safety_cfg_isr(addr_t base_va)
 			trig_en_interrupts >>= 1U;
 			index++;
 		}
-#endif /* NXP_LOG_ENABLED */    
+#endif /* NXP_LOG_ENABLED */
 		ret = EOK;
 	}
 
@@ -136,3 +141,9 @@ void pfe_safety_cfg_irq_unmask_all(addr_t base_va)
 {
 	hal_write32(SAFETY_INT_ENABLE_ALL, base_va + WSP_SAFETY_INT_EN);
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

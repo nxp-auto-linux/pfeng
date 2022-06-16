@@ -15,6 +15,9 @@
 #include "pfe_cbus.h"
 #include "pfe_pe.h"
 #include "pfe_util.h"
+#if defined(PFE_CFG_TARGET_OS_AUTOSAR)
+#include "autolibc.h"
+#endif /* defined(PFE_CFG_TARGET_OS_AUTOSAR) */
 
 /* Configuration check */
 #if ((PFE_CFG_PE_LMEM_BASE + PFE_CFG_PE_LMEM_SIZE) > CBUS_LMEM_SIZE)
@@ -33,6 +36,11 @@ struct pfe_util_tag
 	uint32_t fw_features_count;			/* Number of items in fw_features */
 };
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static errno_t pfe_util_read_dmem(void *util_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len);
 static errno_t pfe_util_write_dmem(void *util_p, int32_t pe_idx, addr_t dst_addr, const void *src_ptr, uint32_t len);
 
@@ -41,7 +49,7 @@ static errno_t pfe_util_load_fw_features(pfe_util_t *util)
 	pfe_ct_pe_mmap_t mmap;
 	errno_t ret = EOK;
 	pfe_ct_feature_desc_t *entry;
-	uint32_t i = 0U, j = 0U;
+	uint32_t i = 0U, j;
 	bool_t val_break = FALSE;
 
 	ret = pfe_pe_get_mmap(util->pe[0U], &mmap);
@@ -153,29 +161,36 @@ static void pfe_util_set_config(const pfe_util_t *util, const pfe_util_cfg_t *cf
 	if (unlikely((NULL == util) || (NULL == cfg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	hal_write32(cfg->pe_sys_clk_ratio, util->cbus_base_va + UTIL_PE_SYS_CLK_RATIO);
+	{
+		hal_write32(cfg->pe_sys_clk_ratio, util->cbus_base_va + UTIL_PE_SYS_CLK_RATIO);
+	}
 }
 
-/*
+/**
  * @brief		Create PEs
- *
+ * @param[in]	pe_num The number of pe
+ * @param[in]	cbus_base_va The cbus base address
+ * @param[in]	util The UTIL instance
+ * @return		The status of PEs creating task
  */
 static errno_t pfe_util_create_pe(uint32_t pe_num, addr_t cbus_base_va, pfe_util_t *util)
 {
 	pfe_pe_t *pe;
-	uint32_t ii;
+	uint8_t count;
+	errno_t ret = EOK;
+
 	/*	Create PEs */
-	for (ii=0U; ii<pe_num; ii++)
+	for (count = 0U; count < pe_num; count++)
 	{
-		pe = pfe_pe_create(cbus_base_va, PE_TYPE_UTIL, (uint8_t)ii);
+		pe = pfe_pe_create(cbus_base_va, PE_TYPE_UTIL, count);
 
 		if (NULL == pe)
 		{
-			return ECANCELED;
+			ret = ECANCELED;
+			break;
 		}
 		else
 		{
@@ -183,11 +198,12 @@ static errno_t pfe_util_create_pe(uint32_t pe_num, addr_t cbus_base_va, pfe_util
 			pfe_pe_set_dmem(pe, PFE_CFG_UTIL_ELF_DMEM_BASE, PFE_CFG_UTIL_DMEM_SIZE);
 			pfe_pe_set_imem(pe, PFE_CFG_UTIL_ELF_IMEM_BASE, PFE_CFG_UTIL_IMEM_SIZE);
 
-			util->pe[ii] = pe;
+			util->pe[count] = pe;
 			util->pe_num++;
 		}
 	}
-	return EOK;
+	
+	return ret;
 }
 
 /**
@@ -277,17 +293,19 @@ void pfe_util_reset(pfe_util_t *util)
 	if (unlikely(NULL == util))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	if (EOK != oal_mutex_lock(&util->mutex))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-	hal_write32(PFE_CORE_SW_RESET, util->cbus_base_va + UTIL_TX_CTRL);
-	if (EOK != oal_mutex_unlock(&util->mutex))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		if (EOK != oal_mutex_lock(&util->mutex))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+		hal_write32(PFE_CORE_SW_RESET, util->cbus_base_va + UTIL_TX_CTRL);
+		if (EOK != oal_mutex_unlock(&util->mutex))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 	}
 }
 
@@ -302,22 +320,23 @@ void pfe_util_enable(pfe_util_t *util)
 	if (unlikely(NULL == util))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (unlikely(FALSE == util->is_fw_loaded))
 	{
-		NXP_LOG_WARNING("Attempt to enable UTIL PE(s) without previous firmware upload\n");
-	}
-	if (EOK != oal_mutex_lock(&util->mutex))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-	hal_write32(PFE_CORE_ENABLE, util->cbus_base_va + UTIL_TX_CTRL);
-	if (EOK != oal_mutex_unlock(&util->mutex))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		if (unlikely(FALSE == util->is_fw_loaded))
+		{
+			NXP_LOG_WARNING("Attempt to enable UTIL PE(s) without previous firmware upload\n");
+		}
+		if (EOK != oal_mutex_lock(&util->mutex))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+		hal_write32(PFE_CORE_ENABLE, util->cbus_base_va + UTIL_TX_CTRL);
+		if (EOK != oal_mutex_unlock(&util->mutex))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 	}
 }
 
@@ -331,17 +350,19 @@ void pfe_util_disable(pfe_util_t *util)
 	if (unlikely(NULL == util))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	if (EOK != oal_mutex_lock(&util->mutex))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-	hal_write32(PFE_CORE_DISABLE, util->cbus_base_va + UTIL_TX_CTRL);
-	if (EOK != oal_mutex_unlock(&util->mutex))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		if (EOK != oal_mutex_lock(&util->mutex))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+		hal_write32(PFE_CORE_DISABLE, util->cbus_base_va + UTIL_TX_CTRL);
+		if (EOK != oal_mutex_unlock(&util->mutex))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 	}
 }
 
@@ -359,30 +380,32 @@ errno_t pfe_util_load_firmware(pfe_util_t *util, const void *elf)
 	if (unlikely((NULL == util) || (NULL == elf)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		if (EOK != oal_mutex_lock(&util->mutex))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 
-	if (EOK != oal_mutex_lock(&util->mutex))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+		ret = pfe_pe_load_firmware(util->pe, util->pe_num, elf);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("UTIL firmware loading failed: %d\n", ret);
+		}
 
-	ret = pfe_pe_load_firmware(util->pe, util->pe_num, elf);
-	if (EOK != ret)
-	{
-		NXP_LOG_ERROR("UTIL firmware loading failed: %d\n", ret);
-	}
-
-	util->is_fw_loaded = TRUE;
-	ret = pfe_util_load_fw_features(util);
-	if(EOK != ret)
-	{
-		NXP_LOG_ERROR("Failed to initialize FW features\n");
-	}
-	if (EOK != oal_mutex_unlock(&util->mutex))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		util->is_fw_loaded = TRUE;
+		ret = pfe_util_load_fw_features(util);
+		if(EOK != ret)
+		{
+			NXP_LOG_ERROR("Failed to initialize FW features\n");
+		}
+		if (EOK != oal_mutex_unlock(&util->mutex))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 	}
 	return ret;
 }
@@ -393,7 +416,7 @@ errno_t pfe_util_load_firmware(pfe_util_t *util, const void *elf)
  */
 void pfe_util_destroy(pfe_util_t *util)
 {
-    uint32_t ii;
+    uint32_t count;
 
 	if (NULL != util)
 	{
@@ -407,12 +430,12 @@ void pfe_util_destroy(pfe_util_t *util)
 
 		if(NULL != util->fw_features)
 		{
-			for(ii = 0U; ii < util->fw_features_count; ii++)
+			for(count = 0U; count < util->fw_features_count; count++)
 			{
-				if(NULL != util->fw_features[ii])
+				if(NULL != util->fw_features[count])
 				{
-					pfe_fw_feature_destroy(util->fw_features[ii]);
-					util->fw_features[ii] = NULL;
+					pfe_fw_feature_destroy(util->fw_features[count]);
+					util->fw_features[count] = NULL;
 				}
 			}
 			oal_mm_free(util->fw_features);
@@ -435,29 +458,38 @@ void pfe_util_destroy(pfe_util_t *util)
  */
 errno_t pfe_util_get_feature(const pfe_util_t *util, pfe_fw_feature_t **feature, const char *name)
 {
-	uint32_t i;
+	uint32_t count;
 	const char *fname;
-	errno_t ret;
+	errno_t ret = ENOENT;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == util)||(NULL == feature)||(NULL == name)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	for(i = 0U; i < util->fw_features_count; i++)
 	{
-		ret = pfe_fw_feature_get_name(util->fw_features[i], &fname);
-		if(ret == EOK)
+		for(count = 0U; count < util->fw_features_count; count++)
 		{
-			if(0 == strcmp(fname, name))
+			ret = pfe_fw_feature_get_name(util->fw_features[count], &fname);
+			if(EOK == ret)
 			{
-				*feature = util->fw_features[i];
-				return EOK;
-			}
-		}
+				if(0 == strcmp(fname, name))
+				{
+					*feature = util->fw_features[count];
+					ret = EOK;
+					break;
+				}
+				else
+				{
+					ret = ENOENT;
+				}
+			}			
+		}		
 	}
-	return ENOENT;
+	return ret;
 }
 
 /**
@@ -468,21 +500,29 @@ errno_t pfe_util_get_feature(const pfe_util_t *util, pfe_fw_feature_t **feature,
  */
 errno_t pfe_util_get_feature_first(pfe_util_t *util, pfe_fw_feature_t **feature)
 {
+	errno_t ret;
+
  #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == util)||(NULL == feature)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	if(util->fw_features_count > 0U)
 	{
-		util->current_feature = 0U;
-		*feature = util->fw_features[util->current_feature];
-		return EOK;
+		if(util->fw_features_count > 0U)
+		{
+			util->current_feature = 0U;
+			*feature = util->fw_features[util->current_feature];
+			ret = EOK;
+		}
+		else
+		{
+			ret = ENOENT;
+		}
 	}
-
-	return ENOENT;
+	return ret;
 }
 
 /**
@@ -493,25 +533,37 @@ errno_t pfe_util_get_feature_first(pfe_util_t *util, pfe_fw_feature_t **feature)
  */
 errno_t pfe_util_get_feature_next(pfe_util_t *util, pfe_fw_feature_t **feature)
 {
+	errno_t ret;
+
  #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == util)||(NULL == feature)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	if(util->fw_features_count > 0U)
 	{
-		/* Avoid going out of the array boundaries */
-		if((util->current_feature + 1U) < util->fw_features_count)
+		if(util->fw_features_count > 0U)
 		{
-			util->current_feature += 1U;
-			*feature = util->fw_features[util->current_feature];
-			return EOK;
+			/* Avoid going out of the array boundaries */
+			if((util->current_feature + 1U) < util->fw_features_count)
+			{
+				util->current_feature += 1U;
+				*feature = util->fw_features[util->current_feature];
+				ret = EOK;
+			}
+			else
+			{
+				ret = ENOENT;
+			}
+		}
+		else
+		{
+			ret = ENOENT;
 		}
 	}
-
-	return ENOENT;
+	return ret;
 }
 
 /**
@@ -525,47 +577,54 @@ errno_t pfe_util_get_feature_next(pfe_util_t *util, pfe_fw_feature_t **feature)
  */
 static errno_t pfe_util_write_dmem(void *util_p, int32_t pe_idx, addr_t dst_addr, const void *src_ptr, uint32_t len)
 {
-	uint32_t ii;
+	uint32_t count;
     pfe_util_t *util = (pfe_util_t *)util_p;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == util))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (pe_idx >= (int32_t)util->pe_num)
-	{
-		return EINVAL;
-	}
-
-	if (EOK != oal_mutex_lock(&util->mutex))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-
-	if (pe_idx >= 0)
-	{
-		/*	Single PE */
-		pfe_pe_memcpy_from_host_to_dmem_32(util->pe[pe_idx], dst_addr, src_ptr, len);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		/*	All PEs */
-		for (ii=0U; ii<util->pe_num; ii++)
+		if (pe_idx >= (int32_t)util->pe_num)
 		{
-			pfe_pe_memcpy_from_host_to_dmem_32(util->pe[ii], dst_addr, src_ptr, len);
+			ret = EINVAL;
+		}
+		else
+		{
+			if (EOK != oal_mutex_lock(&util->mutex))
+			{
+				NXP_LOG_DEBUG("mutex lock failed\n");
+			}
+
+			if (pe_idx >= 0)
+			{
+				/*	Single PE */
+				pfe_pe_memcpy_from_host_to_dmem_32(util->pe[pe_idx], dst_addr, src_ptr, len);
+			}
+			else
+			{
+				/*	All PEs */
+				for (count = 0U; count < util->pe_num; count++)
+				{
+					pfe_pe_memcpy_from_host_to_dmem_32(util->pe[count], dst_addr, src_ptr, len);
+				}
+			}
+
+			if (EOK != oal_mutex_unlock(&util->mutex))
+			{
+				NXP_LOG_DEBUG("mutex unlock failed\n");
+			}
+
+			ret = EOK;
 		}
 	}
 
-	if (EOK != oal_mutex_unlock(&util->mutex))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-
-	return EOK;
+	return ret;
 }
 
 /**
@@ -580,32 +639,39 @@ static errno_t pfe_util_write_dmem(void *util_p, int32_t pe_idx, addr_t dst_addr
 static errno_t pfe_util_read_dmem(void *util_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len)
 {
     pfe_util_t *util = (pfe_util_t *)util_p;
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == util) || (NULL == dst_ptr)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (pe_idx >= (int32_t)util->pe_num)
 	{
-		return EINVAL;
+		if (pe_idx >= (int32_t)util->pe_num)
+		{
+			ret = EINVAL;
+		}
+		else
+		{
+			if (EOK != oal_mutex_lock(&util->mutex))
+			{
+				NXP_LOG_DEBUG("mutex lock failed\n");
+			}
+
+			pfe_pe_memcpy_from_dmem_to_host_32(util->pe[pe_idx], dst_ptr, src_addr, len);
+
+			if (EOK != oal_mutex_unlock(&util->mutex))
+			{
+				NXP_LOG_DEBUG("mutex unlock failed\n");
+			}
+			
+			ret = EOK;
+		}
 	}
-
-	if (EOK != oal_mutex_lock(&util->mutex))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-
-	pfe_pe_memcpy_from_dmem_to_host_32(util->pe[pe_idx], dst_ptr, src_addr, len);
-
-	if (EOK != oal_mutex_unlock(&util->mutex))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-
-	return EOK;
+	return ret;
 }
 
 /**
@@ -615,38 +681,42 @@ static errno_t pfe_util_read_dmem(void *util_p, int32_t pe_idx, void *dst_ptr, a
  */
 errno_t pfe_util_isr(const pfe_util_t *util)
 {
-	uint32_t i;
+	uint32_t count;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (NULL == util)
 	{
 		NXP_LOG_ERROR("NULL argument\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/* Read the error record from each PE */
-	for (i = 0U; i < util->pe_num; i++)
 	{
-		/*	Allow safe use of _nolock() functions. We don't call the _mem_lock()
-			here as we don't need to have coherent accesses. */
-		if (EOK != pfe_pe_lock(util->pe[i]))
+		/* Read the error record from each PE */
+		for (count = 0U; count < util->pe_num; count++)
 		{
-			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+			/*	Allow safe use of _nolock() functions. We don't call the _mem_lock()
+				here as we don't need to have coherent accesses. */
+			if (EOK != pfe_pe_lock(util->pe[count]))
+			{
+				NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+			}
+
+			(void)pfe_pe_get_fw_messages_nolock(util->pe[count]);
+
+			if (EOK != pfe_pe_unlock(util->pe[count]))
+			{
+				NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
+			}
 		}
 
-		(void)pfe_pe_get_fw_messages_nolock(util->pe[i]);
+		/* Acknowledge interrupt */
+		(void) pfe_util_cfg_isr(util->cbus_base_va);
 
-		if (EOK != pfe_pe_unlock(util->pe[i]))
-		{
-			NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
-		}
+		ret = EOK;
 	}
-
-	/* Acknowledge interrupt */
-	(void) pfe_util_cfg_isr(util->cbus_base_va);
-
-	return EOK;
+	return ret;
 }
 /**
  * @brief		Mask UTIL interrupts
@@ -668,6 +738,8 @@ void pfe_util_irq_unmask(const pfe_util_t *util)
 	(void)util;
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Return UTIL runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
@@ -679,7 +751,8 @@ void pfe_util_irq_unmask(const pfe_util_t *util)
  */
 uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
-	uint32_t len = 0U, ii;
+	uint32_t len = 0U;
+	uint32_t ii;
 	pfe_ct_version_t fw_ver;
 	pfe_ct_pe_mmap_t mmap;
 
@@ -687,67 +760,69 @@ uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, char_t *buf, uint3
 	if (unlikely(NULL == buf))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (NULL == util)
-	{
-		/* NULL ptr to UTIL is allowed. Driver does not have to load UTIL FW. */
-		len += oal_util_snprintf(buf + len, buf_len - len, "UTIL Firmware not loaded.\n");
+		len = 0U;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		/* FW version */
-		if (EOK == pfe_util_get_fw_version(util, &fw_ver))
+		if (NULL == util)
 		{
-			len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION\t%u.%u.%u (api:%.32s)\n",
-				fw_ver.major, fw_ver.minor, fw_ver.patch, fw_ver.cthdr);
+			/* NULL ptr to UTIL is allowed. Driver does not have to load UTIL FW. */
+			len += oal_util_snprintf(buf + len, buf_len - len, "UTIL Firmware not loaded.\n");
 		}
 		else
 		{
-			len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION <unknown>\n");
-		}
-
-		len += pfe_util_cfg_get_text_stat(util->cbus_base_va, buf + len, buf_len - len, verb_level);
-
-		/*	Get PE info per PE */
-		for (ii=0U; ii<util->pe_num; ii++)
-		{
-			ipsec_state_t state = { 0 };
-			uint32_t text_stat_len = 0U;
-
-			if (EOK == pfe_pe_get_mmap(util->pe[ii], &mmap))
+			/* FW version */
+			if (EOK == pfe_util_get_fw_version(util, &fw_ver))
 			{
-				text_stat_len = pfe_pe_get_text_statistics(util->pe[ii], buf + len, buf_len - len, verb_level);
-				if (0U == text_stat_len)
+				len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION\t%u.%u.%u (api:%.32s)\n",
+					fw_ver.major, fw_ver.minor, fw_ver.patch, fw_ver.cthdr);
+			}
+			else
+			{
+				len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION <unknown>\n");
+			}
+
+			len += pfe_util_cfg_get_text_stat(util->cbus_base_va, buf + len, buf_len - len, verb_level);
+
+			/*	Get PE info per PE */
+			for (ii = 0U; ii < util->pe_num; ii++)
+			{
+				ipsec_state_t state = { 0 };
+				uint32_t text_stat_len = 0U;
+
+				if (EOK == pfe_pe_get_mmap(util->pe[ii], &mmap))
 				{
-					len = 0U;
-					break;
-				}
-				else
-				{
-					len += text_stat_len;
-					/* IPsec statistics */
-					pfe_pe_memcpy_from_dmem_to_host_32(util->pe[ii], &state, oal_ntohl(mmap.util_pe.ipsec_state), sizeof(state));
-					len += oal_util_snprintf(buf + len, buf_len - len, "\nIPsec\n");
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE MU            0x%x\n", oal_ntohl(state.hse_mu));
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE MU Channel    0x%x\n", oal_ntohl(state.hse_mu_chn));
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_OK                         0x%x\n", oal_ntohl(state.response_ok));
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_VERIFY_FAILED              0x%x\n", oal_ntohl(state.verify_failed));
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_INVALID_DATA         0x%x\n", oal_ntohl(state.ipsec_invalid_data));
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_REPLAY_DETECTED      0x%x\n", oal_ntohl(state.ipsec_replay_detected));
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_REPLAY_LATE          0x%x\n", oal_ntohl(state.ipsec_replay_late));
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_SEQNUM_OVERFLOW      0x%x\n", oal_ntohl(state.ipsec_seqnum_overflow));
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_CE_DROP              0x%x\n", oal_ntohl(state.ipsec_ce_drop));
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_TTL_EXCEEDED         0x%x\n", oal_ntohl(state.ipsec_ttl_exceeded));
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_VALID_DUMMY_PAYLOAD  0x%x\n", oal_ntohl(state.ipsec_valid_dummy_payload));
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_HEADER_LEN_OVERFLOW  0x%x\n", oal_ntohl(state.ipsec_header_overflow));
-					len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_PADDING_CHECK_FAIL   0x%x\n", oal_ntohl(state.ipsec_padding_check_fail));
-					len += oal_util_snprintf(buf + len, buf_len - len, "Code of handled error    0x%x\n", oal_ntohl(state.handled_error_code));
-					len += oal_util_snprintf(buf + len, buf_len - len, "SAId of handled error    0x%x\n", oal_ntohl(state.handled_error_said));
-					len += oal_util_snprintf(buf + len, buf_len - len, "Code of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_code));
-					len += oal_util_snprintf(buf + len, buf_len - len, "SAId of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_said));
+					text_stat_len = pfe_pe_get_text_statistics(util->pe[ii], buf + len, buf_len - len, verb_level);
+					if (0U == text_stat_len)
+					{
+						len = 0U;
+						break;
+					}
+					else
+					{
+						len += text_stat_len;
+						/* IPsec statistics */
+						pfe_pe_memcpy_from_dmem_to_host_32(util->pe[ii], &state, oal_ntohl(mmap.util_pe.ipsec_state), sizeof(state));
+						len += oal_util_snprintf(buf + len, buf_len - len, "\nIPsec\n");
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE MU            0x%x\n", oal_ntohl(state.hse_mu));
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE MU Channel    0x%x\n", oal_ntohl(state.hse_mu_chn));
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_OK                         0x%x\n", oal_ntohl(state.response_ok));
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_VERIFY_FAILED              0x%x\n", oal_ntohl(state.verify_failed));
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_INVALID_DATA         0x%x\n", oal_ntohl(state.ipsec_invalid_data));
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_REPLAY_DETECTED      0x%x\n", oal_ntohl(state.ipsec_replay_detected));
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_REPLAY_LATE          0x%x\n", oal_ntohl(state.ipsec_replay_late));
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_SEQNUM_OVERFLOW      0x%x\n", oal_ntohl(state.ipsec_seqnum_overflow));
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_CE_DROP              0x%x\n", oal_ntohl(state.ipsec_ce_drop));
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_TTL_EXCEEDED         0x%x\n", oal_ntohl(state.ipsec_ttl_exceeded));
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_VALID_DUMMY_PAYLOAD  0x%x\n", oal_ntohl(state.ipsec_valid_dummy_payload));
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_HEADER_LEN_OVERFLOW  0x%x\n", oal_ntohl(state.ipsec_header_overflow));
+						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_PADDING_CHECK_FAIL   0x%x\n", oal_ntohl(state.ipsec_padding_check_fail));
+						len += oal_util_snprintf(buf + len, buf_len - len, "Code of handled error    0x%x\n", oal_ntohl(state.handled_error_code));
+						len += oal_util_snprintf(buf + len, buf_len - len, "SAId of handled error    0x%x\n", oal_ntohl(state.handled_error_said));
+						len += oal_util_snprintf(buf + len, buf_len - len, "Code of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_code));
+						len += oal_util_snprintf(buf + len, buf_len - len, "SAId of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_said));
+					}
 				}
 			}
 		}
@@ -755,6 +830,8 @@ uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, char_t *buf, uint3
 
 	return len;
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		Returns firmware versions
@@ -764,14 +841,24 @@ uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, char_t *buf, uint3
 errno_t pfe_util_get_fw_version(const pfe_util_t *util, pfe_ct_version_t *ver)
 {
 	pfe_ct_pe_mmap_t pfe_pe_mmap;
+	errno_t ret;
 
 	/*	Get mmap base from PE[0] since all PEs have the same memory map */
 	if ((NULL == util->pe[0]) || (EOK != pfe_pe_get_mmap(util->pe[0], &pfe_pe_mmap)))
 	{
-		return EINVAL;
+		ret = EINVAL;
+	}
+	else
+	{
+		(void)memcpy(ver, &pfe_pe_mmap.util_pe.common.version, sizeof(pfe_ct_version_t));
+		ret = EOK;
 	}
 
-	(void)memcpy(ver, &pfe_pe_mmap.util_pe.common.version, sizeof(pfe_ct_version_t));
-
-	return EOK;
+	return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

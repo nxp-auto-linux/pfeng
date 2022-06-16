@@ -726,10 +726,8 @@ void pfe_hif_drv_client_unregister(pfe_hif_drv_client_t *client)
 
 pfe_hif_drv_client_t * pfe_hif_drv_ihc_client_register(pfe_hif_drv_t *hif_drv, pfe_hif_drv_client_event_handler handler, void *priv)
 {
-
 	struct pfeng_hif_chnl *chnl = container_of(hif_drv, struct pfeng_hif_chnl, hif_drv);
 	pfe_hif_drv_client_t *client = &chnl->ihc_client;
-	int ret;
 
 	if (client->hif_drv) {
 		dev_err(chnl->dev, "IHC client already registered\n");
@@ -740,12 +738,12 @@ pfe_hif_drv_client_t * pfe_hif_drv_ihc_client_register(pfe_hif_drv_t *hif_drv, p
 	memset(client, 0, sizeof(pfe_hif_drv_client_t));
 	client->ihc_rx_fifo = fifo_create(32);
 	if (!client->ihc_rx_fifo) {
-		dev_err(chnl->dev, "Can't create IHC RX fifo. Err %d\n", ret);
+		dev_err(chnl->dev, "Can't create IHC RX fifo.\n");
 		return NULL;
 	}
 	client->ihc_txconf_fifo = fifo_create(32);
 	if (!client->ihc_txconf_fifo) {
-		dev_err(chnl->dev, "Can't create IHC TXconf fifo. Err %d\n", ret);
+		dev_err(chnl->dev, "Can't create IHC TXconf fifo.\n");
 		return NULL;
 	}
 	client->hif_drv = hif_drv;

@@ -97,12 +97,19 @@ typedef enum __attribute__ ((packed)) {
 	EMAC_CRIT_INVALID,
 } pfe_emac_crit_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 static inline const char_t *
 pfe_emac_mii_mode_to_str(pfe_emac_mii_mode_t mode)
 {
 	static const char_t * names[] =
 		{"Invalid", "MII", "RMII", "RGMII", "SGMII"};
-	
+
 	if (mode <= EMAC_MODE_SGMII)
 	{
 		return names[mode];
@@ -112,6 +119,8 @@ pfe_emac_mii_mode_to_str(pfe_emac_mii_mode_t mode)
 		return "out-of-range";
 	}
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		Check if given MAC address is zero
@@ -230,5 +239,10 @@ uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, char_t *buf, uint3
 uint32_t pfe_emac_get_rx_cnt(const pfe_emac_t *emac);
 uint32_t pfe_emac_get_tx_cnt(const pfe_emac_t *emac);
 uint32_t pfe_emac_get_stat_value(const pfe_emac_t *emac, uint32_t stat_id);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PUBLIC_PFE_EMAC_H_ */

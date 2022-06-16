@@ -20,6 +20,14 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+static void pfe_bmu_cfg_clear_buf_cnt_memory(addr_t base_va, uint32_t cnt);
+static void pfe_bmu_cfg_clear_internal_memory(addr_t base_va, uint32_t cnt);
+
 static void pfe_bmu_cfg_clear_buf_cnt_memory(addr_t base_va, uint32_t cnt)
 {
 	uint32_t ii;
@@ -284,6 +292,8 @@ void pfe_bmu_cfg_free_buf(addr_t base_va, addr_t buffer)
 	hal_write32((uint32_t)(buffer & 0xffffffffU), base_va + BMU_FREE_CTRL);
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Get BMU statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
@@ -350,3 +360,11 @@ uint32_t pfe_bmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 	}
 	return len;
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

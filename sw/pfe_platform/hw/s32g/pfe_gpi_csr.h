@@ -274,6 +274,11 @@
 					  GPI_QOS_FLOW_##name##_WIDTH)
 #define entry_arg_get(name, entry)	entry_arg_get_lower(name, entry)
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 void pfe_gpi_cfg_init(addr_t base_va, const pfe_gpi_cfg_t *cfg);
 errno_t pfe_gpi_cfg_reset(addr_t base_va);
 void pfe_gpi_cfg_enable(addr_t base_va);
@@ -315,5 +320,10 @@ void pfe_gpi_cfg_shp_get_limits(addr_t base_va, uint8_t id, uint32_t *max_credit
 uint32_t pfe_gpi_cfg_shp_get_drop_cnt(addr_t base_va, uint8_t id);
 
 uint32_t pfe_gpi_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_GPI_CSR_H_ */

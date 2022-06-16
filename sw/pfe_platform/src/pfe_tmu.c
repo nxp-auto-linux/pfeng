@@ -24,6 +24,11 @@ struct pfe_tmu_tag
 	pfe_class_t *class;
 };
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief		Check whether the provided physical interface ID represents HIF-type interface or not.
  * @details		Optionally, for HIF-type interfaces the function can also provide index of the given HIF
@@ -35,7 +40,7 @@ struct pfe_tmu_tag
 static bool is_hif_by_id(pfe_ct_phy_if_id_t id, uint8_t *err051211_hif_idx)
 {
 	bool ret = FALSE;
-	uint8_t hif_idx = 0U;
+	uint8_t hif_idx;
 
 	/* Check that indexes 0 .. 3 can be assigned */
 	ct_assert((sizeof(pfe_ct_hif_tmu_queue_sizes_t) / sizeof(uint16_t)) == 4U);
@@ -60,6 +65,7 @@ static bool is_hif_by_id(pfe_ct_phy_if_id_t id, uint8_t *err051211_hif_idx)
 			break;
 		default:
 			ret = FALSE;
+			hif_idx = 0U;
 			break;
 	}
 
@@ -81,72 +87,75 @@ static bool is_hif_by_id(pfe_ct_phy_if_id_t id, uint8_t *err051211_hif_idx)
  * @param[out]	sum		Pointer to result of sum calculation (passback)
  * @return		EOK if computation and all applicable checks are OK.
  */
-static errno_t get_sum_of_queue_lengths(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, 
+static errno_t get_sum_of_queue_lengths(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t queue, uint32_t max, uint16_t* sum)
 {
 	errno_t ret_val = ENOSPC;
 	uint32_t tmp_sum = 0U;
 	uint32_t tmp_min = 0U;
 	uint32_t tmp_max = 0U;
-	uint8_t i = 0U;
+	uint8_t i;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == tmu) || (NULL == sum)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/* Compute new sum of queue lengths */
-	const uint8_t cnt = pfe_tmu_queue_get_cnt(tmu, phy);
-	for (i = 0U; (i < cnt); i++)
-	{
-		if (i == queue)
-		{
-			tmp_sum += max;	/* For the queue-to-be-changed, apply its new max threshhold */
-		}
-		else
-		{
-			(void)pfe_tmu_queue_get_mode(tmu, phy, i, &tmp_min, &tmp_max);
-			tmp_sum += tmp_max;
-		}
-	}
-
-	/* Check the new sum */
-	if (TRUE == is_hif_by_id(phy, NULL))
-	{	/* HIF */
-		if (TLITE_HIF_MAX_ENTRIES < tmp_sum)
-		{
-			NXP_LOG_ERROR("Sum of queue lengths (%u) exceeds max allowed sum (%u) for HIF interface.", (uint_t)tmp_sum, TLITE_HIF_MAX_ENTRIES);
-			ret_val = ENOSPC;
-		}
-		else if ((TRUE == pfe_feature_mgr_is_available("err051211_workaround")) && 
-				 (PFE_HIF_RX_RING_CFG_LENGTH < (tmp_sum + PFE_TMU_ERR051211_Q_OFFSET)))
-		{
-			NXP_LOG_ERROR("err051211_workaround is active and \"sum of queue lengths (%u) + Q_OFFSET (%u)\" exceeds HIF RX Ring length (%u).", (uint_t)tmp_sum, PFE_TMU_ERR051211_Q_OFFSET, PFE_HIF_RX_RING_CFG_LENGTH);
-			ret_val = ENOSPC;
-		}
-		else
-		{
-			ret_val = EOK;
-		}
+		ret_val = EINVAL;
 	}
 	else
-	{	/* EMAC and 'others' */
-		if (TLITE_MAX_ENTRIES < tmp_sum)
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		/* Compute new sum of queue lengths */
+		const uint8_t cnt = pfe_tmu_queue_get_cnt(tmu, phy);
+		for (i = 0U; (i < cnt); i++)
 		{
-			NXP_LOG_ERROR("Sum of queue lengths (%u) exceeds max allowed sum (%u) for EMAC/UTIL/HIF_NOCPY interface.", (uint_t)tmp_sum, TLITE_MAX_ENTRIES);
-			ret_val = ENOSPC;
+			if (i == queue)
+			{
+				tmp_sum += max;	/* For the queue-to-be-changed, apply its new max threshhold */
+			}
+			else
+			{
+				(void)pfe_tmu_queue_get_mode(tmu, phy, i, &tmp_min, &tmp_max);
+				tmp_sum += tmp_max;
+			}
+		}
+
+		/* Check the new sum */
+		if (TRUE == is_hif_by_id(phy, NULL))
+		{	/* HIF */
+			if (TLITE_HIF_MAX_ENTRIES < tmp_sum)
+			{
+				NXP_LOG_ERROR("Sum of queue lengths (%u) exceeds max allowed sum (%u) for HIF interface.", (uint_t)tmp_sum, TLITE_HIF_MAX_ENTRIES);
+				ret_val = ENOSPC;
+			}
+			else if ((TRUE == pfe_feature_mgr_is_available("err051211_workaround")) &&
+					 (PFE_HIF_RX_RING_CFG_LENGTH < (tmp_sum + PFE_TMU_ERR051211_Q_OFFSET)))
+			{
+				NXP_LOG_ERROR("err051211_workaround is active and \"sum of queue lengths (%u) + Q_OFFSET (%u)\" exceeds HIF RX Ring length (%u).", (uint_t)tmp_sum, PFE_TMU_ERR051211_Q_OFFSET, PFE_HIF_RX_RING_CFG_LENGTH);
+				ret_val = ENOSPC;
+			}
+			else
+			{
+				ret_val = EOK;
+			}
 		}
 		else
-		{
-			ret_val = EOK;
+		{	/* EMAC and 'others' */
+			if (TLITE_MAX_ENTRIES < tmp_sum)
+			{
+				NXP_LOG_ERROR("Sum of queue lengths (%u) exceeds max allowed sum (%u) for EMAC/UTIL/HIF_NOCPY interface.", (uint_t)tmp_sum, TLITE_MAX_ENTRIES);
+				ret_val = ENOSPC;
+			}
+			else
+			{
+				ret_val = EOK;
+			}
 		}
+
+		/* Set passback value */
+		*sum = (uint16_t)tmp_sum;
 	}
 
-	/* Set passback value */
-	*sum = (uint16_t)tmp_sum;
 	return ret_val;
 }
 
@@ -159,7 +168,7 @@ static errno_t get_sum_of_queue_lengths(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t
 static errno_t set_all_queues_to_min_length(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy)
 {
 	errno_t ret_val = EINVAL;
-	uint8_t queue = 0U;
+	uint8_t queue;
 	uint8_t queue_cnt = 0U;
 
 	pfe_tmu_queue_mode_t mode = TMU_Q_MODE_TAIL_DROP;
@@ -170,50 +179,51 @@ static errno_t set_all_queues_to_min_length(const pfe_tmu_t *tmu, pfe_ct_phy_if_
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret_val = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	queue_cnt = pfe_tmu_queue_get_cnt(tmu, phy);
-	for (queue = 0U; (queue_cnt > queue); queue++)
 	{
-		if (EOK != pfe_tmu_check_queue(tmu, phy, queue))
+		queue_cnt = pfe_tmu_queue_get_cnt(tmu, phy);
+		for (queue = 0U; (queue_cnt > queue); queue++)
 		{
-			ret_val = EINVAL;
-		}
-		else
-		{
-			mode = pfe_tmu_queue_get_mode(tmu, phy, queue, &min, &max);
-			switch (mode)
+			if (EOK != pfe_tmu_check_queue(tmu, phy, queue))
 			{
-				case TMU_Q_MODE_TAIL_DROP:
+				ret_val = EINVAL;
+			}
+			else
+			{
+				mode = pfe_tmu_queue_get_mode(tmu, phy, queue, &min, &max);
+				switch (mode)
 				{
-					ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, 1U);
-					break;
-				}
+					case TMU_Q_MODE_TAIL_DROP:	
+					{
+						ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, 1U);
+						break;
+					}
 
-				case TMU_Q_MODE_WRED:
-				{
-					ret_val = pfe_tmu_q_mode_set_wred(tmu->cbus_base_va, phy, queue, 0U, 1U);
-					break;
-				}
+					case TMU_Q_MODE_WRED:
+					{
+						ret_val = pfe_tmu_q_mode_set_wred(tmu->cbus_base_va, phy, queue, 0U, 1U);
+						break;
+					}
 
-				case TMU_Q_MODE_DEFAULT:
-				{
-					ret_val = pfe_tmu_q_mode_set_default(tmu->cbus_base_va, phy, queue);
-					break;
-				}
+					case TMU_Q_MODE_DEFAULT:
+					{
+						ret_val = pfe_tmu_q_mode_set_default(tmu->cbus_base_va, phy, queue);
+						break;
+					}
 
-				default:
-				{
-					NXP_LOG_ERROR("Unknown queue mode: %d\n", mode);
-					ret_val = EINVAL;
-					break;
+					default:
+					{
+						NXP_LOG_ERROR("Unknown queue mode: %d\n", mode);
+						ret_val = EINVAL;
+						break;
+					}
 				}
 			}
 		}
 	}
-
 	return ret_val;
 }
 
@@ -228,29 +238,29 @@ static void pfe_tmu_init(const pfe_tmu_t *tmu, const pfe_tmu_cfg_t *cfg)
 	if (unlikely((NULL == tmu) || (NULL == cfg)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_tmu_disable(tmu);
-
-	if (EOK != pfe_tmu_cfg_init(tmu->cbus_base_va, cfg))
 	{
-		NXP_LOG_ERROR("Couldn't initialize the TMU\n");
-		return;
+		pfe_tmu_disable(tmu);
+
+		if (EOK != pfe_tmu_cfg_init(tmu->cbus_base_va, cfg))
+		{
+			NXP_LOG_ERROR("Couldn't initialize the TMU\n");
+		}
 	}
 }
 
 /**
- * @brief		Create new TMU instance
- * @details		Creates and initializes TMU instance. After successful
- * 				call the TMU is configured and disabled.
- * @param[in]	cbus_base_va CBUS base virtual address
- * @param[in]	pe_num Number of PEs to be included
- * @param[in]	cfg The TMU block configuration
- * @param[in]	class Classifier instance
- * @return		The TMU instance or NULL if failed
- */
+* @brief Create new TMU instance
+* @details		Creates and initializes TMU instance. After successful
+* 				call the TMU is configured and disabled.
+* @param[in]	cbus_base_va CBUS base virtual address
+* @param[in]	pe_num Number of PEs to be included
+* @param[in]	cfg The TMU block configuration
+* @param[in]	class Classifier instance
+* @return		The TMU instance or NULL if failed
+*/
 pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cfg_t *cfg,
 						  pfe_class_t *class)
 {
@@ -261,34 +271,32 @@ pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cf
 	if (unlikely((NULL_ADDR == cbus_base_va) || (NULL == cfg) || (NULL == class)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	tmu = oal_mm_malloc(sizeof(pfe_tmu_t));
-
-	if (NULL == tmu)
-	{
-		return NULL;
+		tmu = NULL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		(void)memset(tmu, 0, sizeof(pfe_tmu_t));
-		tmu->cbus_base_va = cbus_base_va;
-		tmu->class = class;
+		tmu = oal_mm_malloc(sizeof(pfe_tmu_t));
+
+		if (NULL != tmu)
+		{
+			(void)memset(tmu, 0, sizeof(pfe_tmu_t));
+			tmu->cbus_base_va = cbus_base_va;
+			tmu->class = class;
+
+			/*	Issue block reset */
+			pfe_tmu_reset(tmu);
+
+			/* Initialize reclaim memory */
+			pfe_tmu_reclaim_init(cbus_base_va);
+
+			/*	Disable the TMU */
+			pfe_tmu_disable(tmu);
+
+			/*	Set new configuration */
+			pfe_tmu_init(tmu, cfg);
+		}	
 	}
-
-	/*	Issue block reset */
-	pfe_tmu_reset(tmu);
-
-	/* Initialize reclaim memory */
-	pfe_tmu_reclaim_init(cbus_base_va);
-
-	/*	Disable the TMU */
-	pfe_tmu_disable(tmu);
-
-	/*	Set new configuration */
-	pfe_tmu_init(tmu, cfg);
 
 	return tmu;
 }
@@ -303,11 +311,12 @@ void pfe_tmu_reset(const pfe_tmu_t *tmu)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_tmu_cfg_reset(tmu->cbus_base_va);
+	{
+		pfe_tmu_cfg_reset(tmu->cbus_base_va);
+	}
 }
 
 /**
@@ -321,11 +330,12 @@ void pfe_tmu_enable(const pfe_tmu_t *tmu)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_tmu_cfg_enable(tmu->cbus_base_va);
+	{
+		pfe_tmu_cfg_enable(tmu->cbus_base_va);
+	}
 }
 
 /**
@@ -339,11 +349,12 @@ void pfe_tmu_disable(const pfe_tmu_t *tmu)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	pfe_tmu_cfg_disable(tmu->cbus_base_va);
+	{
+		pfe_tmu_cfg_disable(tmu->cbus_base_va);
+	}
 }
 
 /**
@@ -369,6 +380,7 @@ void pfe_tmu_destroy(const pfe_tmu_t *tmu)
 errno_t pfe_tmu_check_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue)
 {
 	const pfe_tmu_phy_cfg_t *pcfg;
+	errno_t ret;
 
 	(void)tmu;
 
@@ -376,7 +388,7 @@ errno_t pfe_tmu_check_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_
 	if (NULL == pcfg)
 	{
 		NXP_LOG_ERROR("Invalid phy: %d\n", phy);
-		return EINVAL;
+		ret = EINVAL;
 	}
 	else
 	{
@@ -384,11 +396,15 @@ errno_t pfe_tmu_check_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_
 		{
 			NXP_LOG_ERROR("Invalid queue ID (%d). PHY %d implements %d queues\n",
 					queue, phy, pcfg->q_cnt);
-			return ENOENT;
+			ret = ENOENT;
+		}
+		else
+		{
+			ret = EOK;
 		}
 	}
 
-	return EOK;
+	return ret;
 }
 
 /*
@@ -401,6 +417,7 @@ errno_t pfe_tmu_check_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_
 errno_t pfe_tmu_check_scheduler(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
 {
 	const pfe_tmu_phy_cfg_t *pcfg;
+	errno_t ret;
 
 	(void)tmu;
 
@@ -408,7 +425,7 @@ errno_t pfe_tmu_check_scheduler(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, ui
 	if (NULL == pcfg)
 	{
 		NXP_LOG_ERROR("Invalid phy: %d\n", (int_t)phy);
-		return EINVAL;
+		ret = EINVAL;
 	}
 	else
 	{
@@ -416,11 +433,15 @@ errno_t pfe_tmu_check_scheduler(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, ui
 		{
 			NXP_LOG_ERROR("Invalid scheduler ID (%d). PHY %d implements %d schedulers\n",
 					sch, phy, pcfg->sch_cnt);
-			return ENOENT;
+			ret = ENOENT;
+		}
+		else
+		{
+			ret = EOK;
 		}
 	}
 
-	return EOK;
+	return ret;
 }
 
 /**
@@ -433,6 +454,7 @@ errno_t pfe_tmu_check_scheduler(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, ui
 errno_t pfe_tmu_check_shaper(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
 	const pfe_tmu_phy_cfg_t *pcfg;
+	errno_t ret;
 
 	(void)tmu;
 
@@ -440,7 +462,7 @@ errno_t pfe_tmu_check_shaper(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8
 	if (NULL == pcfg)
 	{
 		NXP_LOG_ERROR("Invalid phy: %d\n", (int_t)phy);
-		return EINVAL;
+		ret = EINVAL;
 	}
 	else
 	{
@@ -448,11 +470,15 @@ errno_t pfe_tmu_check_shaper(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8
 		{
 			NXP_LOG_ERROR("Invalid shaper ID (%d). PHY %d implements %d shapers\n",
 					shp, phy, pcfg->shp_cnt);
-			return ENOENT;
+			ret = ENOENT;
+		}
+		else
+		{
+			ret = EOK;
 		}
 	}
 
-	return EOK;
+	return ret;
 }
 
 /**
@@ -465,22 +491,28 @@ errno_t pfe_tmu_check_shaper(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8
  */
 errno_t pfe_tmu_queue_get_fill_level(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *level)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == tmu) || (NULL == level)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
-	{
-		return pfe_tmu_q_cfg_get_fill_level(tmu->cbus_base_va, phy, queue, level);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+		{
+			ret = pfe_tmu_q_cfg_get_fill_level(tmu->cbus_base_va, phy, queue, level);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -493,22 +525,28 @@ errno_t pfe_tmu_queue_get_fill_level(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t ph
  */
 errno_t pfe_tmu_queue_get_drop_count(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == tmu) || (NULL == cnt)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
-	{
-		return pfe_tmu_q_cfg_get_drop_count(tmu->cbus_base_va, phy, queue, cnt);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+		{
+			ret = pfe_tmu_q_cfg_get_drop_count(tmu->cbus_base_va, phy, queue, cnt);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -521,22 +559,28 @@ errno_t pfe_tmu_queue_get_drop_count(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t ph
  */
 errno_t pfe_tmu_queue_get_tx_count(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *cnt)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == tmu) || (NULL == cnt)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
-	{
-		return pfe_tmu_q_cfg_get_tx_count(tmu->cbus_base_va, phy, queue, cnt);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+		{
+			ret = pfe_tmu_q_cfg_get_tx_count(tmu->cbus_base_va, phy, queue, cnt);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -560,68 +604,70 @@ errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/* Check and set mode + lengths */
-	if (min > max)
-	{
-		NXP_LOG_ERROR("Wrong queue lengths: min queue length (%u) is larger than max queue length (%u)\n", (uint_t)min, (uint_t)max);
 		ret_val = EINVAL;
-	}
-	else if (EOK != pfe_tmu_check_queue(tmu, phy, queue))
-	{
-		ret_val = EINVAL;
-	}
-	else if (EOK != get_sum_of_queue_lengths(tmu, phy, queue, max, &sum))
-	{
-		ret_val = ENOSPC;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		/* If err051211_workaround is active and queue of some HIF was modified, then update sum of queue lengths in firmware. */
-		if ((TRUE == is_hif_by_id(phy, &err051211_hif_idx)) &&
-			(TRUE == pfe_feature_mgr_is_available("err051211_workaround")))
+		/* Check and set mode + lengths */
+		if (min > max)
 		{
-			pfe_ct_class_mmap_t mmap = {0};
-			ret_val = pfe_class_get_mmap(tmu->class, 0, &mmap);
+			NXP_LOG_ERROR("Wrong queue lengths: min queue length (%u) is larger than max queue length (%u)\n", (uint_t)min, (uint_t)max);
+			ret_val = EINVAL;
+		}
+		else if (EOK != pfe_tmu_check_queue(tmu, phy, queue))
+		{
+			ret_val = EINVAL;
+		}
+		else if (EOK != get_sum_of_queue_lengths(tmu, phy, queue, max, &sum))
+		{
+			ret_val = ENOSPC;
+		}
+		else
+		{
+			/* If err051211_workaround is active and queue of some HIF was modified, then update sum of queue lengths in firmware. */
+			if ((TRUE == is_hif_by_id(phy, &err051211_hif_idx)) &&
+				(TRUE == pfe_feature_mgr_is_available("err051211_workaround")))
+			{
+				pfe_ct_class_mmap_t mmap = {0};
+				ret_val = pfe_class_get_mmap(tmu->class, 0, &mmap);
+				if (EOK == ret_val)
+				{
+					const uint32_t addr = oal_ntohl(mmap.hif_tmu_queue_sizes) + (err051211_hif_idx * sizeof(uint16_t));
+					sum = oal_htons(sum);
+					ret_val = pfe_class_write_dmem(tmu->class, -1, addr, (void *)&sum, sizeof(uint16_t));
+				}
+			}
+
+			/* Set new tmu configuration */
 			if (EOK == ret_val)
 			{
-				const uint32_t addr = oal_ntohl(mmap.hif_tmu_queue_sizes) + (err051211_hif_idx * sizeof(uint16_t));
-				sum = oal_htons(sum);
-				ret_val = pfe_class_write_dmem(tmu->class, -1, addr, (void *)&sum, sizeof(uint16_t));
-			}
-		}
-
-		/* Set new tmu configuration */
-		if (EOK == ret_val)
-		{
-			switch (mode)
-			{
-				case TMU_Q_MODE_TAIL_DROP:
+				switch (mode)
 				{
-					ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, (uint16_t)max);
-					break;
-				}
+					case TMU_Q_MODE_TAIL_DROP:
+					{
+						ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, (uint16_t)max);
+						break;
+					}
 
-				case TMU_Q_MODE_WRED:
-				{
-					ret_val = pfe_tmu_q_mode_set_wred(tmu->cbus_base_va, phy, queue, (uint16_t)min, (uint16_t)max);
-					break;
-				}
+					case TMU_Q_MODE_WRED:
+					{
+						ret_val = pfe_tmu_q_mode_set_wred(tmu->cbus_base_va, phy, queue, (uint16_t)min, (uint16_t)max);
+						break;
+					}
 
-				case TMU_Q_MODE_DEFAULT:
-				{
-					ret_val = pfe_tmu_q_mode_set_default(tmu->cbus_base_va, phy, queue);
-					break;
-				}
+					case TMU_Q_MODE_DEFAULT:
+					{
+						ret_val = pfe_tmu_q_mode_set_default(tmu->cbus_base_va, phy, queue);
+						break;
+					}
 
-				default:
-				{
-					NXP_LOG_ERROR("Unknown queue mode: %d\n", mode);
-					ret_val = EINVAL;
-					break;
+					default:
+					{
+						NXP_LOG_ERROR("Unknown queue mode: %d\n", mode);
+						ret_val = EINVAL;
+						break;
+					}
 				}
 			}
 		}
@@ -643,22 +689,27 @@ errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
 pfe_tmu_queue_mode_t pfe_tmu_queue_get_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t queue, uint32_t *min, uint32_t *max)
 {
+	pfe_tmu_queue_mode_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return TMU_Q_MODE_INVALID;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
-	{
-		return pfe_tmu_q_get_mode(tmu->cbus_base_va, phy, queue, min, max);
+		ret = TMU_Q_MODE_INVALID;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return TMU_Q_MODE_INVALID;
+		if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+		{
+			ret = pfe_tmu_q_get_mode(tmu->cbus_base_va, phy, queue, min, max);
+		}
+		else
+		{
+			ret = TMU_Q_MODE_INVALID;
+		}
 	}
+	return ret;
 }
 
 /**
@@ -672,34 +723,41 @@ pfe_tmu_queue_mode_t pfe_tmu_queue_get_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_
  */
 errno_t pfe_tmu_queue_set_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t prob)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
-	{
-		if (zone >= pfe_tmu_queue_get_wred_zones(tmu, phy, queue))
-		{
-			NXP_LOG_DEBUG("Zone index out of range\n");
-			return EINVAL;
-		}
-
-		if (prob > 100U)
-		{
-			NXP_LOG_DEBUG("Probability out of range\n");
-			return EINVAL;
-		}
-
-		return pfe_tmu_q_set_wred_probability(tmu->cbus_base_va, phy, queue, zone, prob);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+		{
+			if (zone >= pfe_tmu_queue_get_wred_zones(tmu, phy, queue))
+			{
+				NXP_LOG_DEBUG("Zone index out of range\n");
+				ret = EINVAL;
+			}
+			else if (prob > 100U)
+			{
+				NXP_LOG_DEBUG("Probability out of range\n");
+				ret = EINVAL;
+			}
+			else
+			{
+				ret = pfe_tmu_q_set_wred_probability(tmu->cbus_base_va, phy, queue, zone, prob);
+			}
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -713,28 +771,36 @@ errno_t pfe_tmu_queue_set_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy
  */
 errno_t pfe_tmu_queue_get_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue, uint8_t zone, uint8_t *prob)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
-	{
-		if (zone >= pfe_tmu_queue_get_wred_zones(tmu, phy, queue))
-		{
-			NXP_LOG_DEBUG("Zone index out of range\n");
-			return EINVAL;
-		}
-
-		return pfe_tmu_q_get_wred_probability(tmu->cbus_base_va, phy, queue, zone, prob);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+		{
+			if (zone >= pfe_tmu_queue_get_wred_zones(tmu, phy, queue))
+			{
+				NXP_LOG_DEBUG("Zone index out of range\n");
+				ret = EINVAL;
+			}
+			else
+			{
+				ret = pfe_tmu_q_get_wred_probability(tmu->cbus_base_va, phy, queue, zone, prob);
+			}
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -746,39 +812,51 @@ errno_t pfe_tmu_queue_get_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy
  */
 uint8_t pfe_tmu_queue_get_wred_zones(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue)
 {
+	uint8_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
-	{
-		return pfe_tmu_q_get_wred_zones(tmu->cbus_base_va, phy, queue);
+		ret = 0U;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_queue(tmu, phy, queue))
+		{
+			ret = pfe_tmu_q_get_wred_zones(tmu->cbus_base_va, phy, queue);
+		}
+		else
+		{
+			ret = 0U;
+		}
 	}
+
+	return ret;
 }
 
 errno_t pfe_tmu_queue_reset_tail_drop_policy(const pfe_tmu_t *tmu)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return (errno_t)0;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		ret = pfe_tmu_q_reset_tail_drop_policy(tmu->cbus_base_va);
+	}
 
-	return pfe_tmu_q_reset_tail_drop_policy(tmu->cbus_base_va);
+	return ret;
 }
 
 /**
- * @brief		Enforce compliance of queue length sums of all HIF interfaces with 
+ * @brief		Enforce compliance of queue length sums of all HIF interfaces with
  * 				err051211_workaround constraints. Also update data in FW.
  * @param[in]	tmu The TMU instance
  * @return		EOK if success, error code otherwise
@@ -791,55 +869,60 @@ errno_t pfe_tmu_queue_err051211_sync(const pfe_tmu_t *tmu)
 	uint32_t max = 0UL;
 	uint32_t default_max = 0UL;
 	uint16_t sum = 0U;	/* Sum of queue lengths */
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	Pre-compute safe default HIF queue length (in case it is needed). Consider the following two limits:
-			--> Size of HIF RX Ring
-			--> Max allowed queue size for HIF */
-	default_max = (PFE_HIF_RX_RING_CFG_LENGTH >= PFE_TMU_ERR051211_MINIMAL_REQUIRED_RX_RING_LENGTH) ? (((uint32_t)PFE_HIF_RX_RING_CFG_LENGTH - PFE_TMU_ERR051211_Q_OFFSET) / 2U) : (1U);
-	default_max = (default_max >= TLITE_HIF_MAX_Q_SIZE) ? (TLITE_HIF_MAX_Q_SIZE) : (default_max);
-
-	/* Check all HIF interfaces and update data in FW. */
-	for (phy = PFE_PHY_IF_ID_HIF0; (PFE_PHY_IF_ID_HIF3 >= phy); phy = (pfe_ct_phy_if_id_t)((uint16_t)phy + 1U))
 	{
-		uint8_t queue = 0U;
-		const uint8_t queue_cnt = pfe_tmu_queue_get_cnt(tmu, phy);
+		/*	Pre-compute safe default HIF queue length (in case it is needed). Consider the following two limits:
+				--> Size of HIF RX Ring
+				--> Max allowed queue size for HIF */
+		default_max = (PFE_HIF_RX_RING_CFG_LENGTH >= PFE_TMU_ERR051211_MINIMAL_REQUIRED_RX_RING_LENGTH) ? (((uint32_t)PFE_HIF_RX_RING_CFG_LENGTH - PFE_TMU_ERR051211_Q_OFFSET) / 2U) : (1U);
+		default_max = (default_max >= TLITE_HIF_MAX_Q_SIZE) ? (TLITE_HIF_MAX_Q_SIZE) : (default_max);
 
-		/* Check sum of queue lengths for the given HIF ; 0xFF args ensure that real current sum is returned */
-		if (ENOSPC == get_sum_of_queue_lengths(tmu, phy, 0xFF, 0xFF, &sum))
+		/* Check all HIF interfaces and update data in FW. */
+		for (phy = PFE_PHY_IF_ID_HIF0; (PFE_PHY_IF_ID_HIF3 >= phy); phy = (pfe_ct_phy_if_id_t)((uint16_t)phy + 1U))
 		{
-			/* Reset queue lengths and then set them all to default_max length. This will update data in FW as well. */
-			(void)set_all_queues_to_min_length(tmu, phy);
-			for (queue = 0U; (queue_cnt > queue); queue++)
-			{
-				mode = pfe_tmu_queue_get_mode(tmu, phy, queue, &min, &max);
-				(void)pfe_tmu_queue_set_mode(tmu, phy, queue, mode, min, default_max);
-			}
+			uint8_t queue = 0U;
+			const uint8_t queue_cnt = pfe_tmu_queue_get_cnt(tmu, phy);
 
-			NXP_LOG_WARNING("Every TMU queue of physical interface id=%d was set to length %u, because err051211_workaround got activated.",
-							phy, (uint_t)default_max);
-			NXP_LOG_WARNING("\"Original sum of queue lengths (%u) + Q_OFFSET (%u)\" for the given interface was exceeding HIF RX Ring length (%u).",
-							(uint_t)sum, (uint_t)PFE_TMU_ERR051211_Q_OFFSET, (uint_t)PFE_HIF_RX_RING_CFG_LENGTH);
-		}
-		else
-		{
-			/* Sum is OK. Simply reapply parameters. This will update data in FW as well. */
-			for (queue = 0U; (queue_cnt > queue); queue++)
+			/* Check sum of queue lengths for the given HIF ; 0xFF args ensure that real current sum is returned */
+			if (ENOSPC == get_sum_of_queue_lengths(tmu, phy, 0xFF, 0xFF, &sum))
 			{
-				mode = pfe_tmu_queue_get_mode(tmu, phy, queue, &min, &max);
-				(void)pfe_tmu_queue_set_mode(tmu, phy, queue, mode, min, max);
+				/* Reset queue lengths and then set them all to default_max length. This will update data in FW as well. */
+				(void)set_all_queues_to_min_length(tmu, phy);
+				for (queue = 0U; (queue_cnt > queue); queue++)
+				{
+					mode = pfe_tmu_queue_get_mode(tmu, phy, queue, &min, &max);
+					(void)pfe_tmu_queue_set_mode(tmu, phy, queue, mode, min, default_max);
+				}
+
+				NXP_LOG_WARNING("Every TMU queue of physical interface id=%d was set to length %u, because err051211_workaround got activated.",
+								phy, (uint_t)default_max);
+				NXP_LOG_WARNING("\"Original sum of queue lengths (%u) + Q_OFFSET (%u)\" for the given interface was exceeding HIF RX Ring length (%u).",
+								(uint_t)sum, (uint_t)PFE_TMU_ERR051211_Q_OFFSET, (uint_t)PFE_HIF_RX_RING_CFG_LENGTH);
+			}
+			else
+			{
+				/* Sum is OK. Simply reapply parameters. This will update data in FW as well. */
+				for (queue = 0U; (queue_cnt > queue); queue++)
+				{
+					mode = pfe_tmu_queue_get_mode(tmu, phy, queue, &min, &max);
+					(void)pfe_tmu_queue_set_mode(tmu, phy, queue, mode, min, max);
+				}
 			}
 		}
+
+		ret = EOK;
 	}
 
-	return EOK;
+	return ret;
 }
 
 /**
@@ -851,6 +934,7 @@ errno_t pfe_tmu_queue_err051211_sync(const pfe_tmu_t *tmu)
 uint8_t pfe_tmu_queue_get_cnt(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy)
 {
 	const pfe_tmu_phy_cfg_t *pcfg;
+	uint8_t ret;
 
 	(void)tmu;
 
@@ -858,12 +942,14 @@ uint8_t pfe_tmu_queue_get_cnt(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy)
 	if (NULL == pcfg)
 	{
 		NXP_LOG_ERROR("Invalid phy: 0x%x\n", phy);
-		return 0U;
+		ret = 0U;
 	}
 	else
 	{
-		return pcfg->q_cnt;
+		ret = pcfg->q_cnt;
 	}
+
+	return ret;
 }
 
 /**
@@ -879,22 +965,28 @@ uint8_t pfe_tmu_queue_get_cnt(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy)
 errno_t pfe_tmu_shp_set_limits(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t shp, int32_t max_credit, int32_t min_credit)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
-	{
-		return pfe_tmu_shp_cfg_set_limits(tmu->cbus_base_va, phy, shp, max_credit, min_credit);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+		{
+			ret = pfe_tmu_shp_cfg_set_limits(tmu->cbus_base_va, phy, shp, max_credit, min_credit);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -909,22 +1001,28 @@ errno_t pfe_tmu_shp_set_limits(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
  */
 errno_t pfe_tmu_shp_get_limits(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, int32_t *max_credit, int32_t *min_credit)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu) || unlikely(NULL == max_credit) || unlikely(NULL == min_credit))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
-	{
-		return pfe_tmu_shp_cfg_get_limits(tmu->cbus_base_va, phy, shp, max_credit, min_credit);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+		{
+			ret = pfe_tmu_shp_cfg_get_limits(tmu->cbus_base_va, phy, shp, max_credit, min_credit);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -938,22 +1036,28 @@ errno_t pfe_tmu_shp_get_limits(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
  */
 errno_t pfe_tmu_shp_set_position(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint8_t pos)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
-	{
-		return pfe_tmu_shp_cfg_set_position(tmu->cbus_base_va, phy, shp, pos);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+		{
+			ret = pfe_tmu_shp_cfg_set_position(tmu->cbus_base_va, phy, shp, pos);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -967,22 +1071,28 @@ errno_t pfe_tmu_shp_set_position(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, u
  */
 uint8_t pfe_tmu_shp_get_position(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
+	uint8_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return PFE_TMU_INVALID_POSITION;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
-	{
-		return pfe_tmu_shp_cfg_get_position(tmu->cbus_base_va, phy, shp);
+		ret = PFE_TMU_INVALID_POSITION;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return PFE_TMU_INVALID_POSITION;
+		if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+		{
+			ret = pfe_tmu_shp_cfg_get_position(tmu->cbus_base_va, phy, shp);
+		}
+		else
+		{
+			ret = PFE_TMU_INVALID_POSITION;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -993,22 +1103,28 @@ uint8_t pfe_tmu_shp_get_position(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, u
  */
 errno_t pfe_tmu_shp_enable(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
-	{
-		return pfe_tmu_shp_cfg_enable(tmu->cbus_base_va, phy, shp);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+		{
+			ret = pfe_tmu_shp_cfg_enable(tmu->cbus_base_va, phy, shp);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1021,22 +1137,28 @@ errno_t pfe_tmu_shp_enable(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t
  */
 errno_t pfe_tmu_shp_set_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, pfe_tmu_rate_mode_t mode)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
-	{
-		return pfe_tmu_shp_cfg_set_rate_mode(tmu->cbus_base_va, phy, shp, mode);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+		{
+			ret = pfe_tmu_shp_cfg_set_rate_mode(tmu->cbus_base_va, phy, shp, mode);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1048,22 +1170,28 @@ errno_t pfe_tmu_shp_set_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, 
  */
 pfe_tmu_rate_mode_t pfe_tmu_shp_get_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
+	pfe_tmu_rate_mode_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return RATE_MODE_INVALID;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
-	{
-		return pfe_tmu_shp_cfg_get_rate_mode(tmu->cbus_base_va, phy, shp);
+		ret = RATE_MODE_INVALID;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return RATE_MODE_INVALID;
+		if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+		{
+			ret = pfe_tmu_shp_cfg_get_rate_mode(tmu->cbus_base_va, phy, shp);
+		}
+		else
+		{
+			ret = RATE_MODE_INVALID;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1076,22 +1204,28 @@ pfe_tmu_rate_mode_t pfe_tmu_shp_get_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_i
  */
 errno_t pfe_tmu_shp_set_idle_slope(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp, uint32_t isl)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
-	{
-		return pfe_tmu_shp_cfg_set_idle_slope(tmu->cbus_base_va, phy, shp, isl);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+		{
+			ret = pfe_tmu_shp_cfg_set_idle_slope(tmu->cbus_base_va, phy, shp, isl);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1103,22 +1237,28 @@ errno_t pfe_tmu_shp_set_idle_slope(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
  */
 uint32_t pfe_tmu_shp_get_idle_slope(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
+	uint32_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
-	{
-		return pfe_tmu_shp_cfg_get_idle_slope(tmu->cbus_base_va, phy, shp);
+		ret = 0U;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return 0U;
+		if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+		{
+			ret = pfe_tmu_shp_cfg_get_idle_slope(tmu->cbus_base_va, phy, shp);
+		}
+		else
+		{
+			ret = 0U;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1129,23 +1269,29 @@ uint32_t pfe_tmu_shp_get_idle_slope(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy
  */
 errno_t pfe_tmu_shp_disable(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t shp)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
-	{
-		pfe_tmu_shp_cfg_disable(tmu->cbus_base_va, phy, shp);
-		return EOK;
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_shaper(tmu, phy, shp))
+		{
+			pfe_tmu_shp_cfg_disable(tmu->cbus_base_va, phy, shp);
+			ret = EOK;
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1159,22 +1305,28 @@ errno_t pfe_tmu_shp_disable(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_
 errno_t pfe_tmu_sch_set_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t sch, pfe_tmu_rate_mode_t mode)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
-	{
-		return pfe_tmu_sch_cfg_set_rate_mode(tmu->cbus_base_va, phy, sch, mode);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+		{
+			ret = pfe_tmu_sch_cfg_set_rate_mode(tmu->cbus_base_va, phy, sch, mode);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1186,22 +1338,28 @@ errno_t pfe_tmu_sch_set_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
  */
 pfe_tmu_rate_mode_t pfe_tmu_sch_get_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
 {
+	pfe_tmu_rate_mode_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return RATE_MODE_INVALID;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
-	{
-		return pfe_tmu_sch_cfg_get_rate_mode(tmu->cbus_base_va, phy, sch);
+		ret = RATE_MODE_INVALID;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return RATE_MODE_INVALID;
+		if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+		{
+			ret = pfe_tmu_sch_cfg_get_rate_mode(tmu->cbus_base_va, phy, sch);
+		}
+		else
+		{
+			ret = RATE_MODE_INVALID;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1215,22 +1373,28 @@ pfe_tmu_rate_mode_t pfe_tmu_sch_get_rate_mode(const pfe_tmu_t *tmu, pfe_ct_phy_i
 errno_t pfe_tmu_sch_set_algo(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t sch, pfe_tmu_sched_algo_t algo)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
-	{
-		return pfe_tmu_sch_cfg_set_algo(tmu->cbus_base_va, phy, sch, algo);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+		{
+			ret = pfe_tmu_sch_cfg_set_algo(tmu->cbus_base_va, phy, sch, algo);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1243,22 +1407,28 @@ errno_t pfe_tmu_sch_set_algo(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 pfe_tmu_sched_algo_t pfe_tmu_sch_get_algo(const pfe_tmu_t *tmu,
 		pfe_ct_phy_if_id_t phy, uint8_t sch)
 {
+	pfe_tmu_sched_algo_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return SCHED_ALGO_INVALID;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
-	{
-		return pfe_tmu_sch_cfg_get_algo(tmu->cbus_base_va, phy, sch);
+		ret = SCHED_ALGO_INVALID;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return SCHED_ALGO_INVALID;
+		if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+		{
+			ret = pfe_tmu_sch_cfg_get_algo(tmu->cbus_base_va, phy, sch);
+		}
+		else
+		{
+			ret = SCHED_ALGO_INVALID;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1270,15 +1440,19 @@ pfe_tmu_sched_algo_t pfe_tmu_sch_get_algo(const pfe_tmu_t *tmu,
  */
 uint8_t pfe_tmu_sch_get_input_cnt(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch)
 {
+	uint8_t ret;
+
 	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
 	{
 		/*	Number of scheduler inputs is equal to number of available queues */
-		return pfe_tmu_queue_get_cnt(tmu, phy);
+		ret = pfe_tmu_queue_get_cnt(tmu, phy);
 	}
 	else
 	{
-		return 0U;
+		ret = 0U;
 	}
+
+	return ret;
 }
 
 /**
@@ -1293,23 +1467,29 @@ uint8_t pfe_tmu_sch_get_input_cnt(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, 
 errno_t pfe_tmu_sch_set_input_weight(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t sch, uint8_t input, uint32_t weight)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
-	{
-		return pfe_tmu_sch_cfg_set_input_weight(tmu->cbus_base_va,
-			phy, sch, input, weight);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+		{
+			ret = pfe_tmu_sch_cfg_set_input_weight(tmu->cbus_base_va,
+				phy, sch, input, weight);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1322,23 +1502,29 @@ errno_t pfe_tmu_sch_set_input_weight(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t ph
  */
 uint32_t pfe_tmu_sch_get_input_weight(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
 {
+	uint32_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
-	{
-		return pfe_tmu_sch_cfg_get_input_weight(tmu->cbus_base_va,
-				phy, sch, input);
+		ret = 0U;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return 0U;
+		if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+		{
+			ret = pfe_tmu_sch_cfg_get_input_weight(tmu->cbus_base_va,
+					phy, sch, input);
+		}
+		else
+		{
+			ret = 0U;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1352,23 +1538,29 @@ uint32_t pfe_tmu_sch_get_input_weight(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t p
  */
 errno_t pfe_tmu_sch_bind_sch_output(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t src_sch, uint8_t dst_sch, uint8_t input)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if ((EOK == pfe_tmu_check_scheduler(tmu, phy, src_sch))
-			&& (EOK == pfe_tmu_check_scheduler(tmu, phy, dst_sch)))
-	{
-		return pfe_tmu_sch_cfg_bind_sched_output(tmu->cbus_base_va, phy, src_sch, dst_sch, input);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if ((EOK == pfe_tmu_check_scheduler(tmu, phy, src_sch))
+				&& (EOK == pfe_tmu_check_scheduler(tmu, phy, dst_sch)))
+		{
+			ret = pfe_tmu_sch_cfg_bind_sched_output(tmu->cbus_base_va, phy, src_sch, dst_sch, input);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1381,22 +1573,28 @@ errno_t pfe_tmu_sch_bind_sch_output(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy
  */
 uint8_t pfe_tmu_sch_get_bound_sch_output(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
 {
+	uint8_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return PFE_TMU_INVALID_SCHEDULER;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
-	{
-		return pfe_tmu_sch_cfg_get_bound_sched_output(tmu->cbus_base_va, phy, sch, input);
+		ret = PFE_TMU_INVALID_SCHEDULER;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return PFE_TMU_INVALID_SCHEDULER;
+		if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+		{
+			ret = pfe_tmu_sch_cfg_get_bound_sched_output(tmu->cbus_base_va, phy, sch, input);
+		}
+		else
+		{
+			ret = PFE_TMU_INVALID_SCHEDULER;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1411,23 +1609,29 @@ uint8_t pfe_tmu_sch_get_bound_sch_output(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_
 errno_t pfe_tmu_sch_bind_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
 		uint8_t sch, uint8_t input, uint8_t queue)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if ((EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
-			&& (EOK == pfe_tmu_check_queue(tmu, phy, queue)))
-	{
-		return pfe_tmu_sch_cfg_bind_queue(tmu->cbus_base_va, phy, sch, input, queue);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return EINVAL;
+		if ((EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+				&& (EOK == pfe_tmu_check_queue(tmu, phy, queue)))
+		{
+			ret = pfe_tmu_sch_cfg_bind_queue(tmu->cbus_base_va, phy, sch, input, queue);
+		}
+		else
+		{
+			ret = EINVAL;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1440,23 +1644,31 @@ errno_t pfe_tmu_sch_bind_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy,
  */
 uint8_t pfe_tmu_sch_get_bound_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t sch, uint8_t input)
 {
+	uint8_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return PFE_TMU_INVALID_QUEUE;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
-	{
-		return pfe_tmu_sch_cfg_get_bound_queue(tmu->cbus_base_va, phy, sch, input);
+		ret = PFE_TMU_INVALID_QUEUE;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return PFE_TMU_INVALID_QUEUE;
+		if (EOK == pfe_tmu_check_scheduler(tmu, phy, sch))
+		{
+			ret = pfe_tmu_sch_cfg_get_bound_queue(tmu->cbus_base_va, phy, sch, input);
+		}
+		else
+		{
+			ret = PFE_TMU_INVALID_QUEUE;
+		}
 	}
+
+	return ret;
 }
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
 /**
  * @brief		Return TMU runtime statistics in text form
@@ -1475,11 +1687,21 @@ uint32_t pfe_tmu_get_text_statistics(const pfe_tmu_t *tmu, char_t *buf, uint32_t
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
+		len = 0U;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	len += pfe_tmu_cfg_get_text_stat(tmu->cbus_base_va, buf, buf_len, verb_level);
+	{
+		len += pfe_tmu_cfg_get_text_stat(tmu->cbus_base_va, buf, buf_len, verb_level);
+	}
 
 	return len;
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

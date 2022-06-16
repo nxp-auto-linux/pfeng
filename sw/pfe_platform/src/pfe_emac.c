@@ -49,6 +49,24 @@ typedef struct
 	pfe_drv_id_t owner;	/*	Identification of the driver that owns this entry */
 } pfe_mac_addr_db_entry_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_VAR_INIT_32
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+/* usage scope: pfe_emac_mdio_lock */
+static uint32_t key_seed = 123U;
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_VAR_INIT_32
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static bool_t pfe_emac_flush_criterion_eval(const pfe_mac_addr_db_entry_t *entry, pfe_emac_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
 static void pfe_emac_addr_db_init(pfe_emac_t *emac);
 static errno_t pfe_emac_addr_db_add(pfe_emac_t *emac, const pfe_mac_addr_t addr, bool_t in_hash_grp, uint32_t data, pfe_drv_id_t owner);
@@ -57,6 +75,8 @@ static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(const pfe_emac_t *
 static errno_t pfe_emac_addr_db_del_entry(const pfe_emac_t *emac, pfe_mac_addr_db_entry_t *entry);
 static void pfe_emac_addr_db_drop_all(const pfe_emac_t *emac);
 static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
+static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_get_first(const pfe_emac_t *emac);
+static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_slot(const pfe_emac_t *emac, uint8_t slot);
 
 /**
  * @brief		Evaluate given DB entry against specified criterion
@@ -526,7 +546,7 @@ uint8_t pfe_emac_get_index(pfe_emac_t *emac)
 		return 255U;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	
+
 	return pfe_emac_cfg_get_index(emac->emac_base_va, emac->cbus_base_va);
 }
 
@@ -1614,7 +1634,6 @@ void pfe_emac_destroy(pfe_emac_t *emac)
 errno_t pfe_emac_mdio_lock(pfe_emac_t *emac, uint32_t *key)
 {
 	errno_t ret;
-	static uint32_t key_seed = 123U;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == emac) || (NULL == key)))
@@ -1965,6 +1984,8 @@ uint32_t pfe_emac_get_tx_cnt(const pfe_emac_t *emac)
 	return tx_cnt;
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Return EMAC runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
@@ -1992,6 +2013,8 @@ uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, char_t *buf, uint3
 	return len;
 }
 
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 /**
  * @brief		Get EMAC statistic in numeric form
  * @details		This is a HW-specific function providing single statistic
@@ -2016,3 +2039,9 @@ uint32_t pfe_emac_get_stat_value(const pfe_emac_t *emac, uint32_t stat_id)
 	}
 	return stat_value;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

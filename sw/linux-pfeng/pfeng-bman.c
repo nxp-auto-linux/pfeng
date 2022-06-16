@@ -87,7 +87,7 @@ int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl)
 
 	/* TX pool */
 	tx_pool = kzalloc(sizeof(*tx_pool), GFP_KERNEL);
-	if (!rx_pool) {
+	if (!tx_pool) {
 		dev_err(chnl->dev, "chnl%d: No mem for bman tx_pool\n", pfe_hif_chnl_get_id(chnl->priv));
 		goto err;
 	}

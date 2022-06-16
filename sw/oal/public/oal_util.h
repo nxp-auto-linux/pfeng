@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -62,6 +62,11 @@ typedef struct __attribute__((packed))
 } oal_util_ptp_header_t;
 #endif /* PFE_CFG_IEEE1588_SUPPORT */
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief		Modified snprintf function
  * @details		Function return real number of written data into buffer
@@ -106,6 +111,11 @@ uint32_t oal_util_get_unique_seqnum32(void);
  * @return	The number
  */
 int32_t oal_util_rand(void);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* OAL_UTIL_H_ */
 

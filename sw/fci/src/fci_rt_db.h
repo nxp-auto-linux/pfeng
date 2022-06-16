@@ -70,6 +70,11 @@ typedef struct
 	} cur_crit_arg;						/*	Current criterion argument */
 } fci_rt_db_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 void fci_rt_db_init(fci_rt_db_t *db);
 errno_t fci_rt_db_add(fci_rt_db_t *db, pfe_ip_addr_t *dst_ip,
 					pfe_mac_addr_t *src_mac, pfe_mac_addr_t *dst_mac,
@@ -78,6 +83,11 @@ errno_t fci_rt_db_remove(fci_rt_db_t *db, fci_rt_db_entry_t *entry);
 errno_t fci_rt_db_drop_all(fci_rt_db_t *db);
 fci_rt_db_entry_t *fci_rt_db_get_first(fci_rt_db_t *db, fci_rt_db_get_criterion_t crit, const void *arg);
 fci_rt_db_entry_t *fci_rt_db_get_next(fci_rt_db_t *db);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* SRC_FCI_RT_DB_H_ */
 

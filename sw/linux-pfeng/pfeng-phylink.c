@@ -134,8 +134,10 @@ static void pfeng_phylink_validate(struct phylink_config *config, unsigned long 
 	}
 
 	if (max_speed > SPEED_1000 &&
-		/* Only PFE_EMAC_0 supports 2.5G over SGMII */
-		!netif->cfg->emac_id &&
+		/* G3: All PFE_EMACs support 2.5G over SGMII */
+		(netif->priv->on_g3 ||
+		/* G2: Only PFE_EMAC_0 supports 2.5G over SGMII */
+			!netif->cfg->emac_id) &&
 		(state->interface == PHY_INTERFACE_MODE_SGMII ||
 		state->interface == PHY_INTERFACE_MODE_NA)) {
 		phylink_set(mac_supported, 2500baseT_Full);

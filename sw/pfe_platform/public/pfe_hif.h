@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -32,6 +32,12 @@ typedef enum
 
 /*	Way to translate physical interface ID to HIF channel ID... */
 #include "pfe_ct.h"
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static inline pfe_hif_chnl_id_t pfe_hif_chnl_from_phy_id(pfe_ct_phy_if_id_t phy)
 {
 	if (phy == PFE_PHY_IF_ID_HIF0)
@@ -82,5 +88,10 @@ bool_t pfe_hif_get_master_up(const pfe_hif_t *hif);
 void pfe_hif_set_master_detect_cfg(pfe_hif_t *hif, bool_t on);
 bool_t pfe_hif_get_master_detect_cfg(const pfe_hif_t *hif);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PUBLIC_PFE_HIF_H_ */

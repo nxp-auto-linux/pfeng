@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -74,8 +74,15 @@
 /*==================================================================================================
 								   LOCAL FUNCTION PROTOTYPES
 ==================================================================================================*/
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static void set_bits(uint8_t *bytes, size_t offset, size_t count);
 static void clear_bits(uint8_t *bytes, size_t offset, size_t count);
+
 /*==================================================================================================
 									   LOCAL FUNCTIONS
 ==================================================================================================*/
@@ -430,7 +437,7 @@ void blalloc_free_offs(blalloc_t *ctx, addr_t offset)
 	uint8_t chunk;
 	uint_t i,j;
 
-	/* Check if chunk is free already or not */	
+	/* Check if chunk is free already or not */
 	byte = ctx->chunkinfo[first_byte];
 	chunk = (byte << (first_shift * CHUNK_BITS_COUNT)) & CHUNK_TEST_MASK;
 	if(chunk == 0x0U)
@@ -471,6 +478,7 @@ void blalloc_free_offs(blalloc_t *ctx, addr_t offset)
 
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
 /**
 * @brief Reads the memory usage statistics in a text form
@@ -543,4 +551,11 @@ uint32_t blalloc_get_text_statistics(const blalloc_t *ctx, char_t *buf, uint32_t
 	}
 	return len;
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 

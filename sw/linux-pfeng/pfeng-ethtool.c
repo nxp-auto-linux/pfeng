@@ -61,13 +61,18 @@ static int pfeng_ethtool_set_link_ksettings(struct net_device *netdev, const str
 static void pfeng_ethtool_get_pauseparam(struct net_device *netdev, struct ethtool_pauseparam *epauseparm)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
-	bool_t rx_pause, tx_pause;
+	bool_t rx_pause = false, tx_pause = false;
+	errno_t err;
 
-	pfe_phy_if_get_flow_control(netif->priv->emac[netif->cfg->emac_id].phyif_emac, &tx_pause, &rx_pause);
+	err = pfe_phy_if_get_flow_control(netif->priv->emac[netif->cfg->emac_id].phyif_emac, &tx_pause, &rx_pause);
+	if (err != EOK) {
+		tx_pause = false;
+		rx_pause = false;
+	}
+
 	epauseparm->rx_pause = rx_pause;
 	epauseparm->tx_pause = tx_pause;
 	epauseparm->autoneg = AUTONEG_DISABLE;
-
 }
 
 static int pfeng_ethtool_set_pauseparam(struct net_device *netdev, struct ethtool_pauseparam *epauseparm)

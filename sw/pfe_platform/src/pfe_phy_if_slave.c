@@ -38,6 +38,22 @@ struct pfe_phy_if_tag
 	bool_t is_enabled;
 };
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_VAR_INIT_32
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+/* usage scope: pfe_phy_if_get_name */
+static char_t *pfe_phy_if_get_name_unknown = "(unknown)";
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_VAR_INIT_32
+#include "Eth_43_PFE_MemMap.h"
+
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_log_if_t *log_if);
 
 static errno_t pfe_phy_if_db_lock(void)
@@ -90,51 +106,50 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 	if (EOK != ret)
 	{
 		NXP_LOG_DEBUG("Can't get remote instance: %d\n", ret);
-		return NULL;
-	}
-
-	iface = oal_mm_malloc(sizeof(pfe_phy_if_t));
-	if (NULL == iface)
-	{
-		return NULL;
-	}
-	else
-	{
-		memset(iface, 0, sizeof(pfe_phy_if_t));
-		iface->id = id;
-	}
-
-	iface->mac_db = pfe_mac_db_create();
-	if (NULL == iface->mac_db)
-	{
-		NXP_LOG_ERROR("Could not create MAC database\n");
-		oal_mm_free(iface);
-		return NULL;
-	}
-
-	if (NULL == name)
-	{
-		iface->name = NULL;
-	}
-	else
-	{
-		iface->name = oal_mm_malloc(strlen(name) + 1U);
-		if (NULL == iface->name)
-		{
-			NXP_LOG_ERROR("Memory allocation failed\n");
-			oal_mm_free(iface);
-			return NULL;
-		}
-
-		strcpy(iface->name, name);
-	}
-	
-	if (EOK != oal_mutex_init(&iface->lock))
-	{
-		NXP_LOG_ERROR("Could not initialize mutex\n");
-		oal_mm_free(iface);
 		iface = NULL;
-		return NULL;
+	}
+	else
+	{
+		iface = oal_mm_malloc(sizeof(pfe_phy_if_t));
+		if (NULL != iface)
+		{
+			memset(iface, 0, sizeof(pfe_phy_if_t));
+			iface->id = id;
+			iface->mac_db = pfe_mac_db_create();
+			if (NULL == iface->mac_db)
+			{
+				NXP_LOG_ERROR("Could not create MAC database\n");
+				oal_mm_free(iface);
+				iface = NULL;
+			}
+			else
+			{
+				if (NULL == name)
+				{
+					iface->name = NULL;
+				}
+				else
+				{
+					iface->name = oal_mm_malloc(strlen(name) + 1U);
+					if (NULL == iface->name)
+					{
+						NXP_LOG_ERROR("Memory allocation failed\n");
+						oal_mm_free(iface);
+						iface = NULL;
+					}
+					else
+					{
+						strcpy(iface->name, name);
+						if (EOK != oal_mutex_init(&iface->lock))
+						{
+							NXP_LOG_ERROR("Could not initialize mutex\n");
+							oal_mm_free(iface);
+							iface = NULL;
+						}
+					}
+				}
+			}
+		}
 	}
 
 	return iface;
@@ -147,7 +162,7 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 {
 	pfe_platform_rpc_pfe_phy_if_flush_mac_addrs_arg_t arg;
-	errno_t ret = EOK;
+	errno_t ret;
 
 	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_flush_mac_addrs_arg_t));
 
@@ -197,8 +212,6 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 
 		oal_mm_free(iface);
 	}
-	
-	return;
 }
 
 /**
@@ -229,26 +242,27 @@ __attribute__((pure)) pfe_class_t *pfe_phy_if_get_class(const pfe_phy_if_t *ifac
  * @param[in]	log_if The logical interface instance
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
- * @retval		ENOEXEC Command failed
- * @retval		EEXIST Entry exists
+ * @retval		ENOTSUP Not supported
  */
 errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #else
 	(void)iface;
 	(void)log_if;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	NXP_LOG_DEBUG("%s: Not supported in slave variant\n", __func__);
-	ret = ENOTSUP;
+	{
+		NXP_LOG_DEBUG("%s: Not supported in slave variant\n", __func__);
+		ret = ENOTSUP;
+	}
 
 	return ret;
 }
@@ -257,7 +271,7 @@ static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_
 {
 	pfe_platform_rpc_pfe_phy_if_has_log_if_arg_t arg;
 	errno_t ret;
-	bool_t val = TRUE;
+	bool_t val;
 
 	ct_assert(sizeof(arg.log_if_id) == sizeof(uint8_t));
 
@@ -267,34 +281,36 @@ static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_
 	if (unlikely((NULL == iface) || (NULL == log_if)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	Ask master driver if such logical interface is associated with the physical one */
-	arg.phy_if_id = iface->id;
-
-	arg.log_if_id = pfe_log_if_get_id(log_if);
-
-	(void)pfe_phy_if_db_lock();
-
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_HAS_LOG_IF, &arg, sizeof(arg), NULL, 0U);
-	if (EOK == ret)
-	{
-		val = TRUE;
-	}
-	else if (ENOENT == ret)
-	{
 		val = FALSE;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_HAS_LOG_IF failed: %d\n", ret);
-		val = FALSE;
-	}
+		/*	Ask master driver if such logical interface is associated with the physical one */
+		arg.phy_if_id = iface->id;
 
-	(void)pfe_phy_if_db_unlock();
-	(void)log_if;
+		arg.log_if_id = pfe_log_if_get_id(log_if);
+
+		(void)pfe_phy_if_db_lock();
+
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_HAS_LOG_IF, &arg, sizeof(arg), NULL, 0U);
+		if (EOK == ret)
+		{
+			val = TRUE;
+		}
+		else if (ENOENT == ret)
+		{
+			val = FALSE;
+		}
+		else
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_HAS_LOG_IF failed: %d\n", ret);
+			val = FALSE;
+		}
+
+		(void)pfe_phy_if_db_unlock();
+		(void)log_if;
+	}
 
 	return val;
 }
@@ -308,31 +324,33 @@ static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_
  */
 bool_t pfe_phy_if_has_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 {
-	bool_t match = FALSE;
+	bool_t match;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
+		match = FALSE;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	match = pfe_phy_if_has_log_if_nolock(iface, log_if);
+		match = pfe_phy_if_has_log_if_nolock(iface, log_if);
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return match;
 }
@@ -343,26 +361,27 @@ bool_t pfe_phy_if_has_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
  * @param[in]	log_if The logical interface instance to be deleted
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
- * @retval		ENOEXEC Command failed
- * @retval		ENOENT Entry not found
+ * @retval		ENOTSUP Not supported
  */
 errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #else
 	(void)iface;
 	(void)log_if;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	NXP_LOG_DEBUG("%s: Not supported in slave variant\n", __func__);
-	ret = ENOTSUP;
+	{
+		NXP_LOG_DEBUG("%s: Not supported in slave variant\n", __func__);
+		ret = ENOTSUP;
+	}
 
 	return ret;
 }
@@ -385,40 +404,42 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return IF_OP_DEFAULT;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-	(void)pfe_phy_if_db_lock();
-
-	/*	Ask the master driver to change the operation mode */
-	arg.phy_if_id = iface->id;
-
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE failed: %d\n", ret);
+		mode = IF_OP_DEFAULT;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		mode = rpc_ret.mode;
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_lock();
+
+		/*	Ask the master driver to change the operation mode */
+		arg.phy_if_id = iface->id;
+
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE failed: %d\n", ret);
+		}
+		else
+		{
+			mode = rpc_ret.mode;
+		}
+
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return mode;
 }
@@ -440,36 +461,38 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_lock();
+		(void)pfe_phy_if_db_lock();
 
-	/*	Ask the master driver to change the operation mode */
-	arg.phy_if_id = iface->id;
-	arg.op_mode = mode;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE failed: %d\n", ret);
-	}
+		/*	Ask the master driver to change the operation mode */
+		arg.phy_if_id = iface->id;
+		arg.op_mode = mode;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE failed: %d\n", ret);
+		}
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -491,36 +514,38 @@ errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t blo
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_lock();
+		(void)pfe_phy_if_db_lock();
 
-	/*	Ask the master driver to change the block state */
-	arg.phy_if_id = iface->id;
-	arg.block_state = block_state;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE failed: %d\n", ret);
-	}
+		/*	Ask the master driver to change the block state */
+		arg.phy_if_id = iface->id;
+		arg.block_state = block_state;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE failed: %d\n", ret);
+		}
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -533,7 +558,7 @@ errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t blo
  */
 errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *block_state)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_get_block_state_arg_t arg = {0};
 	pfe_platform_rpc_pfe_phy_if_get_block_state_ret_t rpc_ret;
 
@@ -543,40 +568,42 @@ errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *bl
 	if (unlikely((NULL == iface) || (NULL == block_state)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-	(void)pfe_phy_if_db_lock();
-
-	/*	Ask the master driver to get the block state */
-	arg.phy_if_id = iface->id;
-
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE failed: %d\n", ret);
+		ret = EINVAL;
 	}
 	else
+#endif /* GLOBAL_CFG_NULL_ARG_CHECK */
 	{
-		*block_state = rpc_ret.state;
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_lock();
+
+		/*	Ask the master driver to get the block state */
+		arg.phy_if_id = iface->id;
+
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE failed: %d\n", ret);
+		}
+		else
+		{
+			*block_state = rpc_ret.state;
+		}
+
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -586,26 +613,28 @@ errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *bl
  * @param[in]	emac The EMAC instance
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
- * @retval		EPERM Operation not permitted
+ * @retval		ENOTSUP Not supported
  */
 errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == emac) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #else
 	(void)iface;
 	(void)emac;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	We're not going to allow slave driver to do this */
-	NXP_LOG_ERROR("%s: Not supported\n", __func__);
-	ret = ENOTSUP;
+	{
+		/*	We're not going to allow slave driver to do this */
+		NXP_LOG_ERROR("%s: Not supported\n", __func__);
+		ret = ENOTSUP;
+	}
 
 	return ret;
 }
@@ -616,26 +645,28 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
  * @param[in]	hif The HIF channel instance
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
- * @retval		EPERM Operation not permitted
+ * @retval		ENOTSUP Not supported
  */
 errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == hif) || (NULL == iface)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #else
 	(void)iface;
 	(void)hif;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	We're not going to allow slave driver to do this */
-	NXP_LOG_ERROR("%s: Not supported\n", __func__);
-	ret = ENOTSUP;
+	{
+		/*	We're not going to allow slave driver to do this */
+		NXP_LOG_ERROR("%s: Not supported\n", __func__);
+		ret = ENOTSUP;
+	}
 
 	return ret;
 }
@@ -645,11 +676,11 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
  * @param[in]	iface The interface instance
  * @retval		EOK Success
  * @retval		EINVAL Invalid or missing argument
- * @retval		EPERM Operation not permitted
+ * @retval		ENOTSUP Not supported
  */
 errno_t pfe_phy_if_bind_util(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -657,13 +688,15 @@ errno_t pfe_phy_if_bind_util(pfe_phy_if_t *iface)
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
+	else
 #else
 	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	We're not going to allow slave driver to do this */
-	NXP_LOG_ERROR("%s: Not supported\n", __func__);
-	ret = ENOTSUP;
+	{
+		/*	We're not going to allow slave driver to do this */
+		NXP_LOG_ERROR("%s: Not supported\n", __func__);
+		ret = ENOTSUP;
+	}
 
 	return ret;
 }
@@ -685,39 +718,41 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-	(void)pfe_phy_if_db_lock();
-
-	/*	Ask the master driver to enable the interface */
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
+		status = FALSE;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		status = rpc_ret.status;
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_lock();
+
+		/*	Ask the master driver to enable the interface */
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
+		}
+		else
+		{
+			status = rpc_ret.status;
+		}
+
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return status;
 }
@@ -730,7 +765,7 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_enable_arg_t arg;
 
 	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_enable_arg_t));
@@ -739,42 +774,44 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_lock();
+		(void)pfe_phy_if_db_lock();
 
-	/*	Ask the master driver to enable the interface */
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE failed: %d\n", ret);
-	}
+		/*	Ask the master driver to enable the interface */
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE failed: %d\n", ret);
+		}
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
 
 errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_disable_arg_t arg;
 
 	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_disable_arg_t));
@@ -783,21 +820,23 @@ errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	(void)pfe_phy_if_db_lock();
-
-	/*	Ask the master driver to disable the interface */
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE failed: %d\n", ret);
-	}
+		(void)pfe_phy_if_db_lock();
 
-	(void)pfe_phy_if_db_unlock();
+		/*	Ask the master driver to disable the interface */
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE failed: %d\n", ret);
+		}
+
+		(void)pfe_phy_if_db_unlock();
+	}
 
 	return ret;
 }
@@ -816,25 +855,27 @@ errno_t pfe_phy_if_disable(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	ret = pfe_phy_if_disable_nolock(iface);
+		ret = pfe_phy_if_disable_nolock(iface);
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -853,17 +894,19 @@ errno_t pfe_phy_if_set_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #else
 	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		/*	We're not going to allow slave driver to do this */
+		NXP_LOG_ERROR("%s: Not supported\n", __func__);
+		ret = ENOTSUP;
 
-	/*	We're not going to allow slave driver to do this */
-	NXP_LOG_ERROR("%s: Not supported\n", __func__);
-	ret = ENOTSUP;
-
-	(void)flag;
+		(void)flag;
+	}
 
 	return ret;
 }
@@ -882,17 +925,19 @@ errno_t pfe_phy_if_clear_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #else
 	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		/*	We're not going to allow slave driver to do this */
+		NXP_LOG_ERROR("%s: Not supported\n", __func__);
+		ret = ENOTSUP;
 
-	/*	We're not going to allow slave driver to do this */
-	NXP_LOG_ERROR("%s: Not supported\n", __func__);
-	ret = ENOTSUP;
-
-	(void)flag;
+		(void)flag;
+	}
 
 	return ret;
 }
@@ -905,22 +950,26 @@ errno_t pfe_phy_if_clear_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag)
  */
 pfe_ct_if_flags_t pfe_phy_if_get_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag)
 {
+	pfe_ct_if_flags_t ret_flag;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return IF_FL_NONE;
+		ret_flag = IF_FL_NONE;
 	}
+	else
 #else
 	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		/*	We're not going to allow slave driver to do this */
+		NXP_LOG_ERROR("%s: Not supported\n", __func__);
+		(void)flag;
+		ret_flag = IF_FL_NONE;
+	}
 
-	/*	We're not going to allow slave driver to do this */
-	NXP_LOG_ERROR("%s: Not supported\n", __func__);
-
-	(void)flag;
-
-	return IF_FL_NONE;
+	return ret_flag;
 }
 
 /**
@@ -940,39 +989,41 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-	(void)pfe_phy_if_db_lock();
-
-	/*	Ask the master driver to enable the interface */
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_IS_PROMISC, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
+		status = FALSE;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		status = rpc_ret.status;
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_lock();
+
+		/*	Ask the master driver to enable the interface */
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_IS_PROMISC, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
+		}
+		else
+		{
+			status = rpc_ret.status;
+		}
+
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return status;
 }
@@ -985,7 +1036,7 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_promisc_enable_arg_t arg;
 
 	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_promisc_enable_arg_t));
@@ -994,35 +1045,37 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_lock();
+		(void)pfe_phy_if_db_lock();
 
-	/*	Ask the master driver to enable the promiscuous mode */
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_ENABLE, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_ENABLE failed: %d\n", ret);
-	}
+		/*	Ask the master driver to enable the promiscuous mode */
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_ENABLE, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_ENABLE failed: %d\n", ret);
+		}
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -1035,7 +1088,7 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_promisc_disable_arg_t arg;
 
 	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_promisc_disable_arg_t));
@@ -1044,35 +1097,37 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_lock();
+		(void)pfe_phy_if_db_lock();
 
-	/*	Ask the master driver to disable the promiscuous mode */
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_DISABLE, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
-	}
+		/*	Ask the master driver to disable the promiscuous mode */
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_DISABLE, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
+		}
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -1085,7 +1140,7 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_loopback_enable_arg_t arg;
 
 	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_loopback_enable_arg_t));
@@ -1094,35 +1149,37 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_lock();
+		(void)pfe_phy_if_db_lock();
 
-	/* Ask the master driver to enable the loopback mode */
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_ENABLE, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_ENABLE failed: %d\n", ret);
-	}
+		/* Ask the master driver to enable the loopback mode */
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_ENABLE, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_ENABLE failed: %d\n", ret);
+		}
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -1135,7 +1192,7 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_loopback_disable_arg_t arg;
 
 	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_loopback_disable_arg_t));
@@ -1144,35 +1201,37 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_lock();
+		(void)pfe_phy_if_db_lock();
 
-	/* Ask the master driver to disable the loopback mode */
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_DISABLE, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
-	}
+		/* Ask the master driver to disable the loopback mode */
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_DISABLE, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
+		}
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -1185,7 +1244,7 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_loadbalance_enable_arg_t arg;
 
 	(void)memset(&arg, 0, sizeof(pfe_platform_rpc_pfe_phy_if_loadbalance_enable_arg_t));
@@ -1194,35 +1253,37 @@ errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_lock();
+		(void)pfe_phy_if_db_lock();
 
-	/* Ask the master driver to enable the loadbalance mode */
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE failed: %d\n", ret);
-	}
+		/* Ask the master driver to enable the loadbalance mode */
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE failed: %d\n", ret);
+		}
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -1235,7 +1296,7 @@ errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_loadbalance_disable_arg_t arg;
 
 	(void)memset(&arg, 0, sizeof(pfe_platform_rpc_pfe_phy_if_loadbalance_disable_arg_t));
@@ -1244,35 +1305,37 @@ errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_lock();
+		(void)pfe_phy_if_db_lock();
 
-	/* Ask the master driver to disable the loadbalance mode */
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE failed: %d\n", ret);
-	}
+		/* Ask the master driver to disable the loadbalance mode */
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE failed: %d\n", ret);
+		}
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -1285,7 +1348,7 @@ errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_allmulti_enable(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_allmulti_enable_arg_t arg;
 
 	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_allmulti_enable_arg_t));
@@ -1294,21 +1357,23 @@ errno_t pfe_phy_if_allmulti_enable(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	(void)pfe_phy_if_db_lock();
-
-	/*	Ask the master driver to enable the allmulti mode */
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_ENABLE, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_ENABLE failed: %d\n", ret);
-	}
+		(void)pfe_phy_if_db_lock();
 
-	(void)pfe_phy_if_db_unlock();
+		/*	Ask the master driver to enable the allmulti mode */
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_ENABLE, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_ENABLE failed: %d\n", ret);
+		}
+
+		(void)pfe_phy_if_db_unlock();
+	}
 
 	return ret;
 }
@@ -1321,7 +1386,7 @@ errno_t pfe_phy_if_allmulti_enable(pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_allmulti_disable(pfe_phy_if_t *iface)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_allmulti_disable_arg_t arg;
 
 	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_allmulti_disable_arg_t));
@@ -1330,21 +1395,23 @@ errno_t pfe_phy_if_allmulti_disable(pfe_phy_if_t *iface)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	(void)pfe_phy_if_db_lock();
-
-	/*	Ask the master driver to disable the allmulti mode */
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_DISABLE, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_DISABLE failed: %d\n", ret);
-	}
+		(void)pfe_phy_if_db_lock();
 
-	(void)pfe_phy_if_db_unlock();
+		/*	Ask the master driver to disable the allmulti mode */
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_DISABLE, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_DISABLE failed: %d\n", ret);
+		}
+
+		(void)pfe_phy_if_db_unlock();
+	}
 
 	return ret;
 }
@@ -1358,20 +1425,25 @@ errno_t pfe_phy_if_allmulti_disable(pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_get_flow_control(pfe_phy_if_t *iface, bool_t* tx_ena, bool_t* rx_ena)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-        }
+		ret = EINVAL;
+	}
+	else
 #else
 	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		(void)tx_ena;
+		(void)rx_ena;
+		ret = ENOTSUP;
+	}
 
-	(void)tx_ena;
-	(void)rx_ena;
-
-	return ENOTSUP;
+	return ret;
 }
 
 /**
@@ -1382,19 +1454,24 @@ errno_t pfe_phy_if_get_flow_control(pfe_phy_if_t *iface, bool_t* tx_ena, bool_t*
  */
 errno_t pfe_phy_if_set_tx_flow_control(pfe_phy_if_t *iface, bool_t tx_ena)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #else
 	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		(void)tx_ena;
+		ret = ENOTSUP;
+	}
 
-	(void)tx_ena;
-
-	return ENOTSUP;
+	return ret;
 }
 
 /**
@@ -1405,19 +1482,24 @@ errno_t pfe_phy_if_set_tx_flow_control(pfe_phy_if_t *iface, bool_t tx_ena)
  */
 errno_t pfe_phy_if_set_rx_flow_control(pfe_phy_if_t *iface, bool_t rx_ena)
 {
+	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #else
 	(void)iface;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		(void)rx_ena;
+		ret = ENOTSUP;
+	}
 
-	(void)rx_ena;
-
-	return ENOTSUP;
+	return ret;
 }
 
 /**
@@ -1431,7 +1513,7 @@ errno_t pfe_phy_if_set_rx_flow_control(pfe_phy_if_t *iface, bool_t rx_ena)
  */
 errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, pfe_ct_phy_if_id_t owner)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_add_mac_addr_arg_t arg;
 
 	ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg.mac_addr));
@@ -1444,46 +1526,48 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_lock();
+		(void)pfe_phy_if_db_lock();
 
-	/*	Add address to local database */
-	ret = pfe_mac_db_add_addr(iface->mac_db, addr, owner);
-	if(EOK == ret)
-	{
-		/*	Ask the master driver to add the MAC address */
-		memcpy(&arg.mac_addr[0], addr, sizeof(arg.mac_addr));
-		arg.phy_if_id = iface->id;
-		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR, &arg, sizeof(arg), NULL, 0U);
-		if (EOK != ret)
+		/*	Add address to local database */
+		ret = pfe_mac_db_add_addr(iface->mac_db, addr, owner);
+		if(EOK == ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR failed: %d\n", ret);
-			ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
-			if(EOK != ret)
+			/*	Ask the master driver to add the MAC address */
+			memcpy(&arg.mac_addr[0], addr, sizeof(arg.mac_addr));
+			arg.phy_if_id = iface->id;
+			ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR, &arg, sizeof(arg), NULL, 0U);
+			if (EOK != ret)
 			{
-				NXP_LOG_WARNING("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
+				NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR failed: %d\n", ret);
+				ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
+				if(EOK != ret)
+				{
+					NXP_LOG_WARNING("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
+				}
 			}
 		}
-	}
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -1499,7 +1583,7 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
  */
 errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, pfe_ct_phy_if_id_t owner)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_del_mac_addr_arg_t arg;
 
 	ct_assert(sizeof(pfe_mac_addr_t) == sizeof(arg.mac_addr));
@@ -1510,51 +1594,53 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-	(void)pfe_phy_if_db_lock();
-
-	ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
-	if(EOK != ret)
-	{
-		NXP_LOG_WARNING("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		/*	Ask the master driver to delete the MAC address */
-		memcpy(&arg.mac_addr[0], addr, sizeof(arg.mac_addr));
-		arg.phy_if_id = iface->id;
-		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_DEL_MAC_ADDR, &arg, sizeof(arg), NULL, 0U);
-		if (EOK != ret)
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_DEL_MAC_ADDR failed: %d\n", ret);
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-			/* Removal of MAC address by master failed, put it back to DB */
-			ret = pfe_mac_db_add_addr(iface->mac_db, addr, owner);
+		(void)pfe_phy_if_db_lock();
+
+		ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
+		if(EOK != ret)
+		{
+			NXP_LOG_WARNING("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
+		}
+		else
+		{
+			/*	Ask the master driver to delete the MAC address */
+			memcpy(&arg.mac_addr[0], addr, sizeof(arg.mac_addr));
+			arg.phy_if_id = iface->id;
+			ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_DEL_MAC_ADDR, &arg, sizeof(arg), NULL, 0U);
 			if (EOK != ret)
 			{
-				NXP_LOG_ERROR("Unable to put back the MAC address into phy_if MAC database: %d\n", ret);
+				NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_DEL_MAC_ADDR failed: %d\n", ret);
+
+				/* Removal of MAC address by master failed, put it back to DB */
+				ret = pfe_mac_db_add_addr(iface->mac_db, addr, owner);
+				if (EOK != ret)
+				{
+					NXP_LOG_ERROR("Unable to put back the MAC address into phy_if MAC database: %d\n", ret);
+				}
 			}
 		}
-	}
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -1566,15 +1652,21 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
  */
 pfe_mac_db_t *pfe_phy_if_get_mac_db(const pfe_phy_if_t *iface)
 {
+	pfe_mac_db_t *mac_db;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
+		mac_db = NULL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		mac_db = iface->mac_db;
+	}
 
-	return iface->mac_db;
+	return mac_db;
 }
 
 /**
@@ -1590,35 +1682,37 @@ pfe_mac_db_t *pfe_phy_if_get_mac_db(const pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_get_mac_addr_first(pfe_phy_if_t *iface, pfe_mac_addr_t addr, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	ret = pfe_mac_db_get_first_addr(iface->mac_db, crit, type, owner, addr);
-	if(EOK != ret)
-	{
-		NXP_LOG_WARNING("%s: Unable to get MAC address: %d\n", iface->name, ret);
-	}
+		ret = pfe_mac_db_get_first_addr(iface->mac_db, crit, type, owner, addr);
+		if(EOK != ret)
+		{
+			NXP_LOG_WARNING("%s: Unable to get MAC address: %d\n", iface->name, ret);
+		}
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -1635,7 +1729,7 @@ errno_t pfe_phy_if_get_mac_addr_first(pfe_phy_if_t *iface, pfe_mac_addr_t addr, 
  */
 errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_ct_phy_if_id_t owner)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_flush_mac_addrs_arg_t arg;
 	(void)owner; /* Owner will be added directly to the RPC */
 
@@ -1645,46 +1739,48 @@ errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, 
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-	(void)pfe_phy_if_db_lock();
-
-	/*	Ask the master driver to flush owner's MAC addresses due to flush mode */
-	arg.phy_if_id = iface->id;
-	arg.crit = crit;
-	arg.type = type;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS, &arg, sizeof(arg), NULL, 0U);
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS failed: %d\n", ret);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		/*	Remove MAC addresses also from local database */
-		ret = pfe_mac_db_flush(iface->mac_db, crit, type, owner);
-		if(EOK != ret)
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Unable to flush MAC address from phy_if MAC database: %d\n", ret);
-		}	
-	}
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-	(void)pfe_phy_if_db_unlock();
+		(void)pfe_phy_if_db_lock();
+
+		/*	Ask the master driver to flush owner's MAC addresses due to flush mode */
+		arg.phy_if_id = iface->id;
+		arg.crit = crit;
+		arg.type = type;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS, &arg, sizeof(arg), NULL, 0U);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS failed: %d\n", ret);
+		}
+		else
+		{
+			/*	Remove MAC addresses also from local database */
+			ret = pfe_mac_db_flush(iface->mac_db, crit, type, owner);
+			if(EOK != ret)
+			{
+				NXP_LOG_DEBUG("Unable to flush MAC address from phy_if MAC database: %d\n", ret);
+			}
+		}
+
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
@@ -1696,15 +1792,21 @@ errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, 
  */
 __attribute__((pure)) pfe_ct_phy_if_id_t pfe_phy_if_get_id(const pfe_phy_if_t *iface)
 {
+	pfe_ct_phy_if_id_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return PFE_PHY_IF_ID_INVALID;
+		ret = PFE_PHY_IF_ID_INVALID;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		ret = iface->id;
+	}
 
-	return iface->id;
+	return ret;
 }
 
 /**
@@ -1714,24 +1816,22 @@ __attribute__((pure)) pfe_ct_phy_if_id_t pfe_phy_if_get_id(const pfe_phy_if_t *i
  */
 __attribute__((pure)) char_t *pfe_phy_if_get_name(const pfe_phy_if_t *iface)
 {
-	static char_t *unknown = "(unknown)";
-
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (NULL == iface)
-	{
-		return unknown;
+		pfe_phy_if_get_name_unknown = NULL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		return iface->name;
+		if (NULL != iface)
+		{
+			pfe_phy_if_get_name_unknown = iface->name;
+		}
 	}
+
+	return pfe_phy_if_get_name_unknown;
 }
 
 /**
@@ -1743,7 +1843,7 @@ __attribute__((pure)) char_t *pfe_phy_if_get_name(const pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_platform_rpc_pfe_phy_if_stats_arg_t arg = {0};
 	pfe_platform_rpc_pfe_phy_if_stats_ret_t rpc_ret = {0};
 
@@ -1751,41 +1851,45 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 	if (unlikely((NULL == iface) || (NULL == stat)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_lock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
-	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-	
-	(void)pfe_phy_if_db_lock();
-
-	arg.phy_if_id = iface->id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_STATS, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
-	if (EOK != ret)
-	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_STATS failed: %d\n", ret);
+		ret = EINVAL;
 	}
 	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		memcpy(stat,&rpc_ret.stats,sizeof(rpc_ret.stats));
-	}
-	
-	(void)pfe_phy_if_db_unlock();
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+		(void)pfe_phy_if_db_lock();
+
+		arg.phy_if_id = iface->id;
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_STATS, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_STATS failed: %d\n", ret);
+		}
+		else
+		{
+			memcpy(stat,&rpc_ret.stats,sizeof(rpc_ret.stats));
+		}
+
+		(void)pfe_phy_if_db_unlock();
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	}
 
 	return ret;
 }
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
 /**
  * @brief		Return physical interface runtime statistics in text form
@@ -1806,13 +1910,23 @@ uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, 
 	if (unlikely(NULL == iface))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
+		len = 0U;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		len += oal_util_snprintf(buf + len, buf_len - len, "[PhyIF 0x%x]: Unable to read DMEM (not implemented)\n", iface->id);
+	}
 
-	len += oal_util_snprintf(buf + len, buf_len - len, "[PhyIF 0x%x]: Unable to read DMEM (not implemented)\n", iface->id);
-	
 	return len;
 }
 
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #endif /* PFE_CFG_PFE_SLAVE */
+

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -45,7 +45,7 @@ typedef struct
  * @brief   Static block allocator instance constructor
  * @details Intended to be used to create static block allocator instances. Static instances
  *          shall be initialized and finalized using blalloc_init() and blalloc_fini() calls
- *          instead of dynamic blalloc_create() and blalloc_destroy(). 
+ *          instead of dynamic blalloc_create() and blalloc_destroy().
  */
 #define BLALLOC_STATIC_INST(__name, __size, __chunk_size) \
 static uint8_t blalloc_buf_##__name[(((__size) >> (__chunk_size)) + BLALLOC_CFG_CHUNKS_IN_BYTE - 1U) / BLALLOC_CFG_CHUNKS_IN_BYTE] = {0U}; \
@@ -56,6 +56,11 @@ static blalloc_t __name = \
         .chunk_size = (__chunk_size) \
     }
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 blalloc_t *blalloc_create(size_t size, size_t chunk_size);
 void blalloc_destroy(blalloc_t *ctx);
 errno_t blalloc_init(blalloc_t *ctx);
@@ -64,6 +69,11 @@ errno_t blalloc_alloc_offs(blalloc_t *ctx, size_t size, size_t align, addr_t *ad
 void blalloc_free_offs_size(blalloc_t *ctx, addr_t offset, size_t size);
 void blalloc_free_offs(blalloc_t *ctx, addr_t offset);
 uint32_t blalloc_get_text_statistics(const blalloc_t *ctx, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* SRC_BLALLOC_H_ */
 

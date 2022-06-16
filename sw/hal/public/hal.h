@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -8,12 +8,12 @@
 /**
  * @defgroup	dxgrHAL HAL
  * @brief		The HW Abstraction Layer
- * @details		
- * 				
- * 
+ * @details
+ *
+ *
  * @addtogroup	dxgrHAL
  * @{
- * 
+ *
  * @file		hal.h
  * @brief		The main HAL header file
  * @details		Use this header to include all the HAL-provided functionality
@@ -132,6 +132,12 @@
 #define	HAL_CACHE_LINE_SIZE	64U
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief Control register
  * @note The register which is used for Master-detect signalization
@@ -188,6 +194,12 @@ __attribute__((unused)) static bool_t hal_ip_ready_get(void)
 
 	return (0U != val);
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 #endif /* HAL_H_ */

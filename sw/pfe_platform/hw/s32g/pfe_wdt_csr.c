@@ -15,6 +15,11 @@
 
 #define WDT_INT_SRC_NUMBER 11U
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief		WDT ISR
  * @details		MASK, ACK, and process triggered interrupts.
@@ -30,23 +35,23 @@ errno_t pfe_wdt_cfg_isr(addr_t base_va, addr_t cbus_base_va)
 	uint8_t index = 0U;
 	uint32_t reg_en, reg_src, reg_reen = 0U;
 	errno_t ret = ENOENT;
-	const uint32_t wdt_int_src_arr[WDT_INT_SRC_NUMBER] = 
+	const uint32_t wdt_int_src_arr[WDT_INT_SRC_NUMBER] =
 	{
-		WDT_BMU1_WDT_INT, WDT_BMU2_WDT_INT, WDT_CLASS_WDT_INT, WDT_EMAC0_GPI_WDT_INT, 
+		WDT_BMU1_WDT_INT, WDT_BMU2_WDT_INT, WDT_CLASS_WDT_INT, WDT_EMAC0_GPI_WDT_INT,
 		WDT_EMAC1_GPI_WDT_INT, WDT_EMAC2_GPI_WDT_INT, WDT_HIF_GPI_WDT_INT,
 		WDT_HIF_NOCPY_WDT_INT, WDT_HIF_WDT_INT, WDT_TLITE_WDT_INT, WDT_UTIL_WDT_INT
 	};
-	const uint32_t wdt_int_en_arr[WDT_INT_SRC_NUMBER]  = 
+	const uint32_t wdt_int_en_arr[WDT_INT_SRC_NUMBER]  =
 	{
-		WDT_BMU1_WDT_INT_EN_BIT, WDT_BMU2_WDT_INT_EN_BIT, WDT_CLASS_WDT_INT_EN_BIT, 
-		WDT_EMAC0_GPI_WDT_INT_EN_BIT, WDT_EMAC1_GPI_WDT_INT_EN_BIT, WDT_EMAC2_GPI_WDT_INT_EN_BIT, 
-		WDT_HIF_GPI_WDT_INT_EN_BIT, WDT_HIF_NOCPY_WDT_INT_EN_BIT, WDT_HIF_WDT_INT_EN_BIT, 
+		WDT_BMU1_WDT_INT_EN_BIT, WDT_BMU2_WDT_INT_EN_BIT, WDT_CLASS_WDT_INT_EN_BIT,
+		WDT_EMAC0_GPI_WDT_INT_EN_BIT, WDT_EMAC1_GPI_WDT_INT_EN_BIT, WDT_EMAC2_GPI_WDT_INT_EN_BIT,
+		WDT_HIF_GPI_WDT_INT_EN_BIT, WDT_HIF_NOCPY_WDT_INT_EN_BIT, WDT_HIF_WDT_INT_EN_BIT,
 		WDT_TLITE_WDT_INT_EN_BIT, WDT_UTIL_PE_WDT_INT_EN_BIT
 	};
 #ifdef NXP_LOG_ENABLED
-	const char_t * const wdt_int_src_text[WDT_INT_SRC_NUMBER] = 
+	const char_t * const wdt_int_src_text[WDT_INT_SRC_NUMBER] =
 	{
-		"WDT_BMU1_WDT_INT", "WDT_BMU2_WDT_INT", "WDT_CLASS_WDT_INT", "WDT_EMAC0_GPI_WDT_INT", 
+		"WDT_BMU1_WDT_INT", "WDT_BMU2_WDT_INT", "WDT_CLASS_WDT_INT", "WDT_EMAC0_GPI_WDT_INT",
 		"WDT_EMAC1_GPI_WDT_INT", "WDT_EMAC2_GPI_WDT_INT", "WDT_HIF_GPI_WDT_INT",
 		"WDT_HIF_NOCPY_WDT_INT", "WDT_HIF_WDT_INT", "WDT_TLITE_WDT_INT", "WDT_UTIL_WDT_INT"
 	};
@@ -162,6 +167,8 @@ void pfe_wdt_cfg_fini(addr_t base_va)
 	hal_write32(reg, base_va + WDT_INT_SRC);
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Get WDT statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
@@ -213,3 +220,11 @@ uint32_t pfe_wdt_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 
 	return len;
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

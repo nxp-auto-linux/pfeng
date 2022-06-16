@@ -35,7 +35,39 @@
 #include "fci.h"
 #endif /* PFE_CFG_FCI_ENABLE */
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_VAR_INIT_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static pfe_platform_t pfe = {.probed = FALSE};
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_VAR_INIT_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_VAR_CLEARED_8
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+/* usage scope: pfe_platform_idex_rpc_cbk case PFE_PLATFORM_RPC_PFE_LOG_IF_CREATE */
+static char_t namebuf[16];
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_VAR_CLEARED_8
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /**
  * @brief		BMU interrupt service routine
@@ -270,7 +302,6 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 				pfe_platform_rpc_pfe_log_if_create_arg_t *arg_p = (pfe_platform_rpc_pfe_log_if_create_arg_t *)buf;
 				pfe_platform_rpc_pfe_log_if_create_ret_t rpc_ret = {0};
 				pfe_log_if_t *log_if = NULL;
-				static char_t namebuf[16];
 
 				NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_LOG_IF_CREATE\n");
 
@@ -1303,7 +1334,7 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 			{
 				pfe_platform_rpc_pfe_phy_if_get_block_state_ret_t rpc_ret = {IF_BS_FORWARDING};
 				pfe_ct_block_state_t block_state = IF_BS_FORWARDING;
-				
+
 				NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE\n");
 
 				if (EOK == ret)
@@ -2143,7 +2174,7 @@ static errno_t pfe_platform_create_l2_bridge(pfe_platform_t *platform, const pfe
 			ret = ENODEV;
 		}
 		else
-		{			
+		{
 			if((vlan_id == 0U) || (vlan_id >= 4095U))
 			{
 				NXP_LOG_WARNING("VLAN ID incorrect or not set. Using default VLAN ID = 0x01.\n");
@@ -2395,7 +2426,7 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform, const pfe_plat
 	{
 
 		/*	EMAC1 */
-		platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC1_BASE_ADDR, 
+		platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC1_BASE_ADDR,
 								config->emac_mode[0], EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
 		if (NULL == platform->emac[0])
 		{
@@ -2409,7 +2440,7 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform, const pfe_plat
 			pfe_emac_enable_broadcast(platform->emac[0]);
 
 #ifdef PFE_CFG_IEEE1588_SUPPORT
-			if (EOK != pfe_emac_enable_ts(platform->emac[0], 
+			if (EOK != pfe_emac_enable_ts(platform->emac[0],
 					PFE_CFG_IEEE1588_I_CLK_HZ, PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ))
 			{
 				NXP_LOG_WARNING("EMAC0: Could not configure the timestamping unit\n");
@@ -2422,7 +2453,7 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform, const pfe_plat
 		/*	EMAC2 */
 		if (EOK == ret)
 		{
-			platform->emac[1] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC2_BASE_ADDR, 
+			platform->emac[1] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC2_BASE_ADDR,
 									config->emac_mode[1], EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
 			if (NULL == platform->emac[1])
 			{
@@ -2436,7 +2467,7 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform, const pfe_plat
 				pfe_emac_enable_broadcast(platform->emac[1]);
 
 #ifdef PFE_CFG_IEEE1588_SUPPORT
-				if (EOK != pfe_emac_enable_ts(platform->emac[1], 
+				if (EOK != pfe_emac_enable_ts(platform->emac[1],
 						PFE_CFG_IEEE1588_I_CLK_HZ, PFE_CFG_IEEE1588_EMAC1_O_CLK_HZ))
 				{
 					NXP_LOG_WARNING("EMAC1: Could not configure the timestamping unit\n");
@@ -2450,7 +2481,7 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform, const pfe_plat
 		if (EOK == ret)
 		{
 			/*	EMAC3 */
-			platform->emac[2] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC3_BASE_ADDR, 
+			platform->emac[2] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC3_BASE_ADDR,
 									config->emac_mode[2], EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
 			if (NULL == platform->emac[2])
 			{
@@ -2464,7 +2495,7 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform, const pfe_plat
 				pfe_emac_enable_broadcast(platform->emac[2]);
 
 #ifdef PFE_CFG_IEEE1588_SUPPORT
-				if (EOK != pfe_emac_enable_ts(platform->emac[2], 
+				if (EOK != pfe_emac_enable_ts(platform->emac[2],
 						PFE_CFG_IEEE1588_I_CLK_HZ, PFE_CFG_IEEE1588_EMAC2_O_CLK_HZ))
 				{
 					NXP_LOG_WARNING("EMAC2: Could not configure the timestamping unit\n");
@@ -3638,4 +3669,10 @@ errno_t pfe_platform_get_fw_versions(const pfe_platform_t *platform, pfe_ct_vers
 	return EOK;
 }
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #endif /*PFE_CFG_PFE_MASTER*/
+

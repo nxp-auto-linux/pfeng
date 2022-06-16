@@ -31,6 +31,13 @@
 #define	PFE_HIF_CFG_USE_BD_POLLING		TRUE
 #endif
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 static inline void dump_hif_channel(addr_t base_va, uint32_t channel_id)
 {
 #ifdef NXP_LOG_ENABLED
@@ -119,6 +126,9 @@ static inline void dump_hif_channel(addr_t base_va, uint32_t channel_id)
     (void) channel_id;
 #endif /* NXP_LOG_ENABLED */
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 
 /**
  * @brief		HIF ISR
@@ -1046,6 +1056,8 @@ uint32_t pfe_hif_chnl_cfg_ltc_get(addr_t base_va, uint32_t channel_id)
 	return hal_read32(base_va + HIF_LTC_MAX_PKT_CHn_ADDR(channel_id));
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Get HIF channel statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
@@ -1208,3 +1220,11 @@ uint32_t pfe_hif_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 
 	return len;
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

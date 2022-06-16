@@ -11,6 +11,11 @@
 #include "pfe_ct.h"
 #include "pfe_flexible_filter.h"
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
 * @brief Initializes the module
 */
@@ -56,3 +61,9 @@ errno_t pfe_flexible_filter_set(pfe_class_t *class, const uint32_t dmem_addr)
     }
     return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

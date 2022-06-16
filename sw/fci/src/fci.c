@@ -10,7 +10,6 @@
 #include "fci_rt_db.h" /* The 'routes' database */
 #include "fci_fp.h"
 #include "fci_fp_db.h"
-#include "fci_flexible_filter.h"
 #include "fci_fw_features.h"
 #include "fci_mirror.h"
 #include "fci_spd.h"
@@ -22,8 +21,29 @@
 
 #ifdef PFE_CFG_FCI_ENABLE
 
- /* Global variable used across all fci files */
+/*==================================================================================================
+*                                     GLOBAL VARIABLES
+==================================================================================================*/
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+/* Global variable used across all fci files */
 fci_t __context = {0};
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+/*==================================================================================================
+*                                       GLOBAL FUNCTIONS
+==================================================================================================*/
 
 /**
  * @brief		Process FCI IPC message
@@ -254,13 +274,6 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					case FPP_CMD_FP_RULE:
 					{
 						ret = fci_fp_rule_cmd(msg, &fci_ret, (fpp_fp_rule_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
-						break;
-					}
-
-					case FPP_CMD_FP_FLEXIBLE_FILTER:
-					{
-						/* Configure Flexible filter */
-						ret = fci_flexible_filter_cmd(msg, &fci_ret, (fpp_flexible_filter_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
 						break;
 					}
 
@@ -523,6 +536,20 @@ void fci_fini(void)
 	}
 	else
 	{
+
+#ifdef PFE_CFG_PFE_MASTER
+		/*	Drop all content of RT DB (needs operational endpoint; may send FCI events) */
+		if (TRUE == fci_context->rt_db_initialized)
+		{
+			if (TRUE == fci_context->db_mutex_initialized)
+			{
+				(void)oal_mutex_lock(&fci_context->db_mutex);
+				fci_routes_drop_all();
+				(void)oal_mutex_unlock(&fci_context->db_mutex);
+			}
+		}
+#endif /* PFE_CFG_PFE_MASTER */
+
 		/*	Shut down the endpoint */
 		if (NULL != fci_context->core)
 		{
@@ -549,7 +576,7 @@ void fci_fini(void)
 		}
 		(void)pfe_if_db_unlock(session_id);
 
-		/*	Shutdown the RT DB */
+		/*	Shutdown the RT DB (paranoia clean) */
 		if (TRUE == fci_context->rt_db_initialized)
 		{
 			if (TRUE == fci_context->db_mutex_initialized)
@@ -576,5 +603,10 @@ void fci_fini(void)
 		fci_context->fci_initialized = FALSE;
 	}
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_CFG_FCI_ENABLE */

@@ -42,6 +42,11 @@ typedef enum
 	L2SENT_CRIT_BY_MAC_VLAN		/*!< Match static entry by mac+vlan (arg1 is VLAN and arg2 is MAC) */
 } pfe_l2br_static_ent_get_crit_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 errno_t pfe_l2br_domain_create(pfe_l2br_t *bridge, uint16_t vlan);
 errno_t pfe_l2br_domain_destroy(pfe_l2br_domain_t *domain);
 errno_t pfe_l2br_domain_set_ucast_action(pfe_l2br_domain_t *domain, pfe_ct_l2br_action_t hit, pfe_ct_l2br_action_t miss);
@@ -90,4 +95,10 @@ errno_t pfe_l2br_flush_learned(pfe_l2br_t *bridge);
 errno_t pfe_l2br_flush_static(pfe_l2br_t *bridge);
 errno_t pfe_l2br_flush_all(pfe_l2br_t *bridge);
 pfe_l2br_table_entry_t *pfe_l2br_static_entry_get_entry(const pfe_l2br_static_entry_t *static_ent);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #endif /* PUBLIC_PFE_L2BR_H_ */

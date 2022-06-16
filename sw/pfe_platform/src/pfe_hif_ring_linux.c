@@ -344,7 +344,7 @@ static inline errno_t pfe_hif_ring_enqueue_buf_std(pfe_hif_ring_t *ring, const v
 		return EAGAIN;
 	}
 #endif /* 0 */
-	
+
 	/*	BD must be DISABLED. This indicates that BD is not going to be used by HW = is empty/unused. */
 	tmp_ctrl_seq_w0 = ring->wr_bd->ctrl_seqnum_w0;
 	if (unlikely(0U != (tmp_ctrl_seq_w0 & HIF_RING_BD_W0_DESC_EN)))
@@ -381,10 +381,10 @@ static inline errno_t pfe_hif_ring_enqueue_buf_std(pfe_hif_ring_t *ring, const v
 
 		/* Wait until wr_wb_bd is written */
 		hal_wmb();
-		
+
 		/*	2.) Set the BD enable flag. */
 		ring->wr_bd->ctrl_seqnum_w0 = (tmp_ctrl_seq_w0 | HIF_RING_BD_W0_DESC_EN);
-		
+
 		/*	3.) Increment the write pointer. This will indicate fill level increase. */
 		inc_write_index_std(ring);
 	}
@@ -462,15 +462,15 @@ static inline errno_t pfe_hif_ring_dequeue_buf_std(pfe_hif_ring_t *ring, void **
 
 		*length = HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_GET(tmp_wb_bd_seq_buf_w1);
 		*lifm = (0 != (tmp_wb_bd_ctrl_w0 & HIF_RING_WB_BD_W0_LIFM));
-		
+
 		/*	2.) Clear the BD ENABLE flag. This step invalidates the BD so HW can't use it again. */
 		ring->rd_bd->ctrl_seqnum_w0 = (tmp_bd_ctrl_seq_w0 & ~HIF_RING_BD_W0_DESC_EN);
-		
+
 		/*	3.) Set the WB BD ENABLE flag. This is indication that the BD is DISABLED and can be reused by SW. */
 		ring->rd_wb_bd->rsvd_ctrl_w0 = (tmp_wb_bd_ctrl_w0 | HIF_RING_WB_BD_W0_DESC_EN);
-		
+
 		/*	After steps 2.) and 3.) the BD can be reused by SW again (enqueue). */
-		
+
 		/*	4.) Increment the read pointer to next BD in the ring. */
 		inc_read_index_std(ring);
 	}
@@ -535,12 +535,12 @@ static inline errno_t pfe_hif_ring_dequeue_plain_std(pfe_hif_ring_t *ring, bool_
 
 		/*	2.) Clear the BD ENABLE flag. This step invalidates the BD so HW can't use it again. */
 		ring->rd_bd->ctrl_seqnum_w0 = (tmp_bd_ctrl_seq_w0 & ~HIF_RING_BD_W0_DESC_EN);
-		
+
 		/*	3.) Set the WB BD ENABLE flag. This is indication that the BD is DISABLED and can be reused by SW. */
 		ring->rd_wb_bd->rsvd_ctrl_w0 = (tmp_wb_bd_ctrl_w0 | HIF_RING_WB_BD_W0_DESC_EN);
-		
+
 		/*	After steps 2.) and 3.) the BD can be reused by SW again (enqueue). */
-		
+
 		/*	4.) Increment the read pointer to next BD in the ring. */
 		inc_read_index_std(ring);
 	}
@@ -940,3 +940,4 @@ __attribute__((cold)) errno_t pfe_hif_ring_destroy(pfe_hif_ring_t *ring)
 
 	return EOK;
 }
+

@@ -15,6 +15,11 @@
 
 typedef struct pfe_pe_tag pfe_pe_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 pfe_pe_t * pfe_pe_create(addr_t cbus_base_va, pfe_ct_pe_type_t type, uint8_t id);
 void pfe_pe_set_dmem(pfe_pe_t *pe, addr_t elf_base, addr_t len);
 void pfe_pe_set_imem(pfe_pe_t *pe, addr_t elf_base, addr_t len);
@@ -43,5 +48,9 @@ errno_t pfe_pe_lock(pfe_pe_t *pe);
 errno_t pfe_pe_unlock(pfe_pe_t *pe);
 char *pfe_pe_get_fw_feature_str_base(const pfe_pe_t *pe);
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_PE_H_ */

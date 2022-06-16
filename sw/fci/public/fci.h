@@ -37,6 +37,16 @@ typedef struct
  */
 typedef struct fci_tag fci_t;
 
+typedef struct
+{
+	uint32_t stats;
+} pfe_fp_t;
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief		Send message to all FCI clients
  * @param[in]	msg Pointer to the buffer containing payload to be sent
@@ -48,13 +58,13 @@ errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep);
 errno_t fci_init(fci_init_info_t *info, const char_t *const identifier);
 void fci_fini(void);
 
-typedef struct 
-{
-	uint32_t stats;
-} pfe_fp_t;
-
 uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 
 errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg);	/* This is here because FCI proxy RPC calls need it. */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* FCI_H_ */

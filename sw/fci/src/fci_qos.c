@@ -26,13 +26,60 @@
 #ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+static pfe_phy_if_t *fci_get_phy_if_by_name(char_t *name);
+static pfe_gpi_t *fci_qos_get_gpi(const pfe_phy_if_t *phy_if);
+static errno_t fci_validate_cmd_params(const fci_msg_t *msg, uint16_t *fci_ret, void *reply_buf, uint32_t *reply_len, uint32_t cmd_len);
+static errno_t fci_qos_flow_entry_validate_and_fixup_masks(pfe_iqos_flow_spec_t *flow);
+static void fci_qos_flow_entry_convert_to_gpi(const fpp_iqos_flow_spec_t *flow, pfe_iqos_flow_spec_t *gpi_flow);
+static void fci_qos_flow_entry_convert_from_gpi(const pfe_iqos_flow_spec_t *gpi_flow, fpp_iqos_flow_spec_t *flow);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+#ifdef NXP_LOG_ENABLED
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CONST_32
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /*
  * 	This is storage of scheduler algorithms ordered in way
  *	as defined by the FCI (see fpp_ext.h::fpp_qos_scheduler_cmd_t)
  */
-#ifdef NXP_LOG_ENABLED
-static const char_t *sch_algos_str[] = {"SCHED_ALGO_PQ", "SCHED_ALGO_DWRR", "SCHED_ALGO_RR", "SCHED_ALGO_WRR"};
+static const char_t * const sch_algos_str[] = {"SCHED_ALGO_PQ", "SCHED_ALGO_DWRR", "SCHED_ALGO_RR", "SCHED_ALGO_WRR"};
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CONST_32
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 #endif /* NXP_LOG_ENABLED */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CONST_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+/* usage scope: fci_qos_queue_cmd*/
+static const pfe_tmu_queue_mode_t fci_qmode_to_qmode[] =
+    {TMU_Q_MODE_INVALID, TMU_Q_MODE_DEFAULT, TMU_Q_MODE_TAIL_DROP, TMU_Q_MODE_WRED};
+
+/* usage scope: fci_qos_scheduler_cmd */
+static const pfe_tmu_sched_algo_t sch_algos[] = {SCHED_ALGO_PQ, SCHED_ALGO_DWRR, SCHED_ALGO_RR, SCHED_ALGO_WRR};
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CONST_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 static pfe_phy_if_t *fci_get_phy_if_by_name(char_t *name)
 {
@@ -86,8 +133,6 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 	pfe_phy_if_t *phy_if = NULL;
 	const fci_t *fci = (fci_t *)&__context;
 	uint8_t cnt, ii;
-	static const pfe_tmu_queue_mode_t fci_qmode_to_qmode[] =
-		{TMU_Q_MODE_INVALID, TMU_Q_MODE_DEFAULT, TMU_Q_MODE_TAIL_DROP, TMU_Q_MODE_WRED};
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -130,6 +175,17 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 						*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 						ret = EOK;
 						break;
+					}
+					else if (PFE_PHY_IF_ID_UTIL == pfe_phy_if_get_id(phy_if))
+					{
+						/* FCI command requested unfulfillable action. Respond with FCI error code. */
+						*fci_ret = FPP_ERR_IF_NOT_SUPPORTED;
+						ret = EOK;
+						break;
+					}
+					else
+					{
+						; /*	required by MISRA */
 					}
 
 					/*	Check queue ID */
@@ -359,7 +415,6 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 	const fci_t *fci = (fci_t *)&__context;
 	uint8_t ii, cnt, queue;
 	uint32_t weight;
-	static const pfe_tmu_sched_algo_t sch_algos[] = {SCHED_ALGO_PQ, SCHED_ALGO_DWRR, SCHED_ALGO_RR, SCHED_ALGO_WRR};
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -412,6 +467,17 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 						*fci_ret = FPP_ERR_QOS_SCHEDULER_NOT_FOUND;
 						ret = EOK;
 						break;
+					}
+					else if (PFE_PHY_IF_ID_UTIL == pfe_phy_if_get_id(phy_if))
+					{
+						/* FCI command requested unfulfillable action. Respond with FCI error code. */
+						*fci_ret = FPP_ERR_IF_NOT_SUPPORTED;
+						ret = EOK;
+						break;
+					}
+					else
+					{
+						; /*	required by MISRA */
 					}
 
 					/*	Set scheduler mode */
@@ -712,7 +778,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 		{
 			/*	No data written to reply buffer (yet) */
 			*reply_len = 0U;
-			
+
 			/*	Initialize the reply buffer */
 			(void)memset(reply_buf, 0, sizeof(fpp_qos_shaper_cmd_t));
 			shp = (fpp_qos_shaper_cmd_t *)msg->msg_cmd.payload;
@@ -731,6 +797,17 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 						*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 						ret = EOK;
 						break;
+					}
+					else if (PFE_PHY_IF_ID_UTIL == pfe_phy_if_get_id(phy_if))
+					{
+						/* FCI command requested unfulfillable action. Respond with FCI error code. */
+						*fci_ret = FPP_ERR_IF_NOT_SUPPORTED;
+						ret = EOK;
+						break;
+					}
+					else
+					{
+						; /*	required by MISRA */
 					}
 
 					/*	Check shaper */
@@ -954,7 +1031,7 @@ static pfe_gpi_t *fci_qos_get_gpi(const pfe_phy_if_t *phy_if)
 	{
 		  gpi = pfe_emac_get_gpi(emac);
 	}
-	   
+
 	return gpi;
 }
 
@@ -974,7 +1051,7 @@ static errno_t fci_validate_cmd_params(const fci_msg_t *msg, uint16_t *fci_ret, 
 	}
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	{		
+	{
 		(void)msg;
 		(void)fci_ret;
 		(void)reply_buf;
@@ -1076,7 +1153,7 @@ errno_t fci_qos_policer_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_c
 			}
 		}
 	}
-	
+
 	return ret;
 }
 
@@ -1110,7 +1187,7 @@ static errno_t fci_qos_flow_entry_validate_and_fixup_masks(pfe_iqos_flow_spec_t 
 				}
 			}
 		}
-	
+
 		if (EOK == ret)
 		{
 			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_TOS) != 0U)
@@ -1132,7 +1209,7 @@ static errno_t fci_qos_flow_entry_validate_and_fixup_masks(pfe_iqos_flow_spec_t 
 					args->l4proto_m = PFE_IQOS_L4PROTO_MASK;
 				}
 			}
-		
+
 			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_SIP) != 0U)
 			{
 				if (args->sip_m > PFE_IQOS_SDIP_MASK)
@@ -1270,7 +1347,7 @@ errno_t fci_qos_policer_flow_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 				ret = ENOENT;
 			}
 			else
-			{				
+			{
 				*fci_ret = FPP_ERR_OK;
 
 				switch(flow_cmd->action)
@@ -1555,7 +1632,7 @@ errno_t fci_qos_policer_wred_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 			}
 		}
 	}
-	
+
 	return ret;
 }
 
@@ -1737,11 +1814,16 @@ errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_polic
 					}
 				}
 			}
-		}	
+		}
 	}
-	
+
 	return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_CFG_FCI_ENABLE */
 #endif /* PFE_CFG_PFE_MASTER */

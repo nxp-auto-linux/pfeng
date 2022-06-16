@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -33,6 +33,11 @@
 
 #include "libfci_cli_common.h"
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
 int mirror_print_in_phyif(const fpp_mirror_cmd_t* p_mirror, bool is_verbose);
@@ -43,5 +48,10 @@ int cli_cmd_mirror_add(const cli_cmdargs_t *p_cmdargs);
 int cli_cmd_mirror_del(const cli_cmdargs_t *p_cmdargs);
 
 /* ========================================================================= */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif

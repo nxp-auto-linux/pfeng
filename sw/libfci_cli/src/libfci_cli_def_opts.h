@@ -33,32 +33,32 @@
 
 /* ==== DEFINITIONS : INCOMPATIBILITY GROUPS =============================== */
 
-/* 
+/*
     There are mutually incompatible cli opts (e.g.: --enable/--disable).
     Such incompatible opts can be viewed as "group members" of an incompatibility group.
     Within the group, only one "group member" opt can be legally detected and parsed within the apps's cli input.
-    
-    If one "group member" opt was already detected/parsed and later another "group member" opt from the same group 
+
+    If one "group member" opt was already detected/parsed and later another "group member" opt from the same group
     is detected during the given cli input parsing session, then an error shoud be raised (incompatible opts detected).
-    
+
     Handling of incompatibility groups is implemented locally in the parser function.
     To allow easier group management, IDs of incompatibility groups are declared here (and not in the parse fnc).
     Each incompatibility group is represented by:
       --> an ID key in the enum
       --> a bitflag macro (to be used in CLI OPT definitions)
-      
+
     Bitflag macros are used in cli opt definitions (see below).
     Bitflag macros are expected to be at least 32bit wide.
-*/ 
+*/
 typedef enum cli_opt_incompat_grp_tt {
     OPT_GRP_NONE = 0uL,
-    
+
     OPT_GRP_IP4IP6_ID,
     OPT_GRP_ENDIS_ID,
     OPT_GRP_NOREPLY_NOORIG_ID,
     OPT_GRP_ARN_ID,
     OPT_GRP_STATDYN_ID,
-    
+
     OPT_GRP_LN
 } cli_opt_incompat_grp_t;
 #define OPT_GRP_IP4IP6          (1uL << OPT_GRP_IP4IP6_ID)
@@ -69,39 +69,39 @@ typedef enum cli_opt_incompat_grp_tt {
 
 
 /* ==== DEFINITIONS : CLI OPTS ============================================= */
-/* 
+/*
     For each cli option, fill the necessary info here.
     Do NOT include any *.h files here. It should not be needed.
-    
+
     Opts have to be parsed via getopt_long() fnc.
     Opts usually (not always) correspond to some member of the 'cmdargs_t' superstructure.
-    
+
     OPT_00_NO_OPTION is hardcoded.
-    
+
     Search for keyword 'OPT_LAST' to get to the bottom of the cli option definition list.
-    
-    
+
+
     Description of a cli opt definition (xx is a number from 01 to 99)
     ------------------------------------------------------------------
     OPT_xx_ENUM_NAME        OPT_MY_TEST         This enum key is automatically created and associated
                                                 with the given cli opt.
-                                                
+
     OPT_xx_OPT_PARSE        opt_parse_my_test   Name of a static function which is invoked when this cli opt
                                                 (and optionally its argument) is to be parsed from the input txt vector.
                                                 The function is expected to be in the 'cli_parser.c' file.
                                                 The function is expected to conform to the following prototype:
                                                 static int opt_parse_my_test(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg);
-                                                
+
     OPT_xx_HAS_ARG          y                   Does this cli opt expect an argument?
                                                   y : yes
                                                   n : no
-                                                
+
     OPT_xx_INCOMPAT_GRPS    OPT_GRP_NONE        Incompatibility groups this cli opt belongs to.
                                                 Example:
                                                   OPT_GRP_NONE
                                                   OPT_GRP_IP4IP6
                                                  (OPT_GRP_IP4IP6 | OPT_GRP_ENDIS)
-                                                
+
     OPT_xx_CLI_SHORT_CODE   m                   Command-line text which represents a given cli opt.
                                                 This is a "short opt" representation;
                                                 a single letter/digit with one leading dash (-m).
@@ -115,20 +115,20 @@ typedef enum cli_opt_incompat_grp_tt {
                                                                    a single-letter longopt version as well (--m).
                                                                    To do so automatically via C preprocessor,
                                                                    the letter/digit must NOT be enclosed in any quotation marks.
-                                                
+
     OPT_xx_CLI_LONG_TXT_A   "my-test"           Command-line text which represents a given cli opt.
                                                 This is a "long opt"; a text with two leading dashes (--my-test).
                                                 See documentation of a getopt() fnc family.
                                                 Up to 4 different longopt texts for the given cli opt are supported,
                                                 labled by suffixes _A,_B,_C,_D.
-                                                
+
     OPT_xx_TXT_HELP         "-m|--m|--my-test"  A help text, documenting all text representations of the given cli opt.
                                                 NOTE: This text is created manually, but is expected to contain all
                                                       command-line text representations of the given cli opt.
                                                       PAY ATTENTION AND FILL PROPERLY!
                                                       Failure to do so results in incorrect help texts and
                                                       (very probably) some tedious support E-mail conversations.
-                                                
+
     ...............     TXT_HELP__MY_TEST \     Named (not numbered) help text symbol.
     OPT_xx_TXT_HELP                             Tied with the corresponding numbered help text symbol.
                                                 Intended to be used in "def_help.c" source, to prevent
@@ -3383,7 +3383,7 @@ typedef enum cli_opt_incompat_grp_tt {
 typedef enum cli_opt_tt {
     OPT_00_NO_OPTION = 0,
     OPT_NONE = 0,
-    
+
 #ifdef OPT_01_ENUM_NAME
   #if (OPT_01_CLI_SHORT_CODE_CHR == OPT_AUTO_CODE)
        OPT_01_ENUM_NAME = 1001,
@@ -4807,13 +4807,13 @@ typedef enum cli_opt_tt {
 
 /* ==== TYPEDEFS & DATA : MANDOPT ========================================== */
 /*
-    This feature is meant to be used within cli cmd callbacks, to provide a unified method for 
+    This feature is meant to be used within cli cmd callbacks, to provide a unified method for
     checking if user provided all those cli opts which are considered mandatory for the given cli cmd.
-    
+
     How to use this feature in cmd callbacks:
         [1] Locally define an array of mandopt_t elements (a map of mandatory cli opts and associated conditions).
         [2] Pass it to the mandopt_check() fnc.
-        
+
     Example 1 - each mandopt element is tied with one cli opt
         const mandopt_t mandopts[] =
         {
@@ -4821,13 +4821,13 @@ typedef enum cli_opt_tt {
             {OPT_PARENT   , NULL, (p_args.if_name_parent.is_valid)},
         };
         rtn = cli_mandopt_check(mandopts, MANDOPTS_CALC_LN(mandopts));
-        
+
     Example 2 - some mandopt element is tied with multiple cli opts
         const mandopt_optbuf_t multiple_opts = {{OPT_ACCEPT, OPT_REJECT, OPT_NEXT_RULE}};
         const mandopt_t mandopts[] =
         {
             {OPT_RULE, NULL,            (p_args.ruleA0_name.is_valid)},
-            {OPT_NONE, &multiple_opts, ((p_args.accept.is_valid) || 
+            {OPT_NONE, &multiple_opts, ((p_args.accept.is_valid) ||
                                         (p_args.reject.is_valid) ||
                                         (p_args.ruleB0_name.is_valid))},
         };
@@ -4847,6 +4847,11 @@ typedef struct mandopt_tt {
 
 #define MANDOPTS_CALC_LN(MANDOPTS)  (uint8_t)(sizeof(MANDOPTS)/sizeof(mandopt_t))
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
 const struct option* cli_get_longopts(void);
@@ -4855,13 +4860,15 @@ const char* cli_get_txt_shortopts(void);
 const char* cli_opt_get_txt_help(cli_opt_t opt);
 uint32_t cli_opt_get_incompat_grps(cli_opt_t opt);
 
-
-
-
 void cli_mandopt_print(const char* p_txt_indent, const char* p_txt_delim);
 void cli_mandopt_clear(void);
 int cli_mandopt_check(const mandopt_t* p_mandopts, const uint8_t mandopts_ln);
 
 /* ========================================================================= */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif

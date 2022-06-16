@@ -17,6 +17,11 @@
 #ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /* HW acceleration of the SPD entry search must be supported by a proper configuration
    which we do here */
 
@@ -350,5 +355,11 @@ errno_t pfe_spd_acc_get_rule(const pfe_phy_if_t *phy_if, uint16_t position, pfe_
     return pfe_spd_get_rule(phy_if, position, entry);
 }
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #endif /* PFE_CFG_FCI_ENABLE */
 #endif /* PFE_CFG_PFE_MASTER */
+

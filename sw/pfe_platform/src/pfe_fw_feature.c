@@ -22,6 +22,11 @@ struct pfe_fw_feature_tag
 	void *dmem_rw_func_data;
 };
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief Creates a feature instance
  * @return The created feature instance or NULL in case of failure
@@ -88,9 +93,9 @@ errno_t pfe_fw_feature_set_ll_data(pfe_fw_feature_t *feature, pfe_ct_feature_des
  * @param[in] feature Feature which string base address shall be set
  * @param[in] string_base String base address to be set
  * @return EOK or an error code.
- * @details All features use the same base address which is actually pointer to copy of elf-section 
+ * @details All features use the same base address which is actually pointer to copy of elf-section
  *          .features loaded by PE. All strings are stored there and their addresses are stored in
- *          the low level data set by pfe_fw_feature_set_ll_data(). 
+ *          the low level data set by pfe_fw_feature_set_ll_data().
  */
 errno_t pfe_fw_feature_set_string_base(pfe_fw_feature_t *feature, const char *string_base)
 {
@@ -113,7 +118,7 @@ errno_t pfe_fw_feature_set_string_base(pfe_fw_feature_t *feature, const char *st
 /**
  * @brief Sets the functions to access PEs DMEM
  * @param[in] feature Feature to set the functions
- * @param[in] read_func Function to read the PE DMEM data 
+ * @param[in] read_func Function to read the PE DMEM data
  * @param[in] write_func Function to write PE DMEM data
  * @param[in] data Class/Util reference used by read_func/write_func.
  * @return EOK or an error code.
@@ -121,6 +126,7 @@ errno_t pfe_fw_feature_set_string_base(pfe_fw_feature_t *feature, const char *st
 errno_t pfe_fw_feature_set_dmem_funcs(pfe_fw_feature_t *feature, dmem_read_func_t read_func, dmem_write_func_t write_func, void *data)
 {
 	errno_t ret;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == feature) || (NULL == read_func) || (NULL == write_func) || (NULL == data)))
 	{
@@ -142,7 +148,7 @@ errno_t pfe_fw_feature_set_dmem_funcs(pfe_fw_feature_t *feature, dmem_read_func_
  * @brief Returns name of the feature
  * @param[in] feature Feature to be read.
  * @param[out] name The feature name to be read.
- * @return EOK or an error code. 
+ * @return EOK or an error code.
  */
 errno_t pfe_fw_feature_get_name(const pfe_fw_feature_t *feature, const char **name)
 {
@@ -166,7 +172,7 @@ errno_t pfe_fw_feature_get_name(const pfe_fw_feature_t *feature, const char **na
  * @brief Returns the feature description provide by the firmware.
  * @param[in] feature Feature to be read.
  * @param[out] desc Descripton of the feature
- * @return EOK or an error code. 
+ * @return EOK or an error code.
  */
 errno_t pfe_fw_feature_get_desc(const pfe_fw_feature_t *feature, const char **desc)
 {
@@ -190,7 +196,7 @@ errno_t pfe_fw_feature_get_desc(const pfe_fw_feature_t *feature, const char **de
  * @brief Reads the flags of the feature
  * @param[in] feature Feature to be read
  * @param[out] flags Value of the feature flags
- * @return EOK or an error code. 
+ * @return EOK or an error code.
  */
 errno_t pfe_fw_feature_get_flags(const pfe_fw_feature_t *feature, pfe_ct_feature_flags_t *flags)
 {
@@ -294,7 +300,7 @@ errno_t pfe_fw_feature_get_def_val(const pfe_fw_feature_t *feature, uint8_t *def
  * @brief Reads value of the feature enable variable
  * @param[in] Feature to read the value
  * @param[out] val Value read from the DMEM
- * @return EOK or an error code. 
+ * @return EOK or an error code.
  */
 errno_t pfe_fw_feature_get_val(const pfe_fw_feature_t *feature, uint8_t *val)
 {
@@ -355,7 +361,7 @@ bool_t pfe_fw_feature_enabled(const pfe_fw_feature_t *feature)
 }
 
 /**
- * @brief Sets value of the feature enable variable in the DMEM 
+ * @brief Sets value of the feature enable variable in the DMEM
  * @param[in] feature Feature to set the value
  * @param[in] val Value to be set
  * @return EOK or an error code.
@@ -377,3 +383,9 @@ errno_t pfe_fw_feature_set_val(const pfe_fw_feature_t *feature, uint8_t val)
 	}
 	return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

@@ -24,6 +24,11 @@ struct pfe_hw_feature_tag
 	uint8_t	val;
 };
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief Creates a feature instance
  * @return The created feature instance or NULL in case of failure
@@ -58,34 +63,37 @@ void pfe_hw_feature_destroy(const pfe_hw_feature_t *feature)
 	if (unlikely(NULL == feature))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	oal_mm_free(feature);
+	{
+		oal_mm_free(feature);
+	}
 }
 
 errno_t pfe_hw_feature_init_all(const uint32_t *cbus_base, pfe_hw_feature_t **hw_features, uint32_t *hw_features_count)
 {
-	uint32_t val;
+	errno_t           ret;
+	uint32_t          val;
 	pfe_hw_feature_t *feature;
-	uint8_t on_g3 = 0U;
+	uint8_t           on_g3 = 0U;
 
 	feature = pfe_hw_feature_create(PFE_HW_FEATURE_RUN_ON_G3, "Active if running on S32G3", F_PRESENT, 0);
 	if (NULL != feature)
 	{
 		/*      Detect S32G silicon version */
 		val = hal_read32((addr_t)CBUS_GLOBAL_CSR_BASE_ADDR + (addr_t)WSP_VERSION + (addr_t)cbus_base);
-		if(0x00050300U == val)
-		{       /* S32G2 */
+		if (0x00050300U == val)
+		{ /* S32G2 */
 			NXP_LOG_INFO("Silicon S32G2\n");
 		}
-		else if(0x00000101U == val)
-		{       /* S32G3 */
+		else if (0x00000101U == val)
+		{ /* S32G3 */
 			on_g3 = 1U;
 			NXP_LOG_INFO("Silicon S32G3\n");
 		}
 		else
-		{       /* Unknown */
+		{ /* Unknown */
 			NXP_LOG_ERROR("Silicon HW version is unknown: 0x%x\n", (uint_t)val);
 		}
 
@@ -93,24 +101,28 @@ errno_t pfe_hw_feature_init_all(const uint32_t *cbus_base, pfe_hw_feature_t **hw
 
 		hw_features[0] = feature;
 		*hw_features_count = 1U;
+		ret = EOK;
 	}
 	else
 	{
-		return ENOMEM;
+		ret = ENOMEM;
 	}
 
-        feature = pfe_hw_feature_create("jumbo_frames", "Active if we handle jumbo frames", F_NONE, 0);
-        if (NULL != feature)
-        {
-                hw_features[1] = feature;
-                *hw_features_count = 2U;
-        }
-        else
-        {
-                return ENOMEM;
-        }
+	if (EOK == ret)
+	{
+		feature = pfe_hw_feature_create("jumbo_frames", "Active if we handle jumbo frames", F_NONE, 0);
+		if (NULL != feature)
+		{
+			hw_features[1] = feature;
+			*hw_features_count = 2U;
+		}
+		else
+		{
+			ret = ENOMEM;
+		}
+	}
 
-	return EOK;
+	return ret;
 }
 
 /**
@@ -121,15 +133,20 @@ errno_t pfe_hw_feature_init_all(const uint32_t *cbus_base, pfe_hw_feature_t **hw
  */
 errno_t pfe_hw_feature_get_name(const pfe_hw_feature_t *feature, const char **name)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL == name)))
+	if (unlikely((NULL == feature) || (NULL == name)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	*name = feature->name;
-	return EOK;
+	{
+		*name = feature->name;
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -140,15 +157,20 @@ errno_t pfe_hw_feature_get_name(const pfe_hw_feature_t *feature, const char **na
  */
 errno_t pfe_hw_feature_get_desc(const pfe_hw_feature_t *feature, const char **desc)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL ==desc)))
+	if (unlikely((NULL == feature) || (NULL == desc)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	*desc = feature->description;
-	return EOK;
+	{
+		*desc = feature->description;
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -159,15 +181,20 @@ errno_t pfe_hw_feature_get_desc(const pfe_hw_feature_t *feature, const char **de
  */
 errno_t pfe_hw_feature_get_flags(const pfe_hw_feature_t *feature, pfe_ct_feature_flags_t *flags)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL==flags)))
+	if (unlikely((NULL == feature) || (NULL == flags)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	*flags = feature->flags;
-	return EOK;
+	{
+		*flags = feature->flags;
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -178,15 +205,20 @@ errno_t pfe_hw_feature_get_flags(const pfe_hw_feature_t *feature, pfe_ct_feature
  */
 errno_t pfe_hw_feature_get_def_val(const pfe_hw_feature_t *feature, uint8_t *def_val)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL == def_val)))
+	if (unlikely((NULL == feature) || (NULL == def_val)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	*def_val = feature->def_val;
-	return EOK;
+	{
+		*def_val = feature->def_val;
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -197,16 +229,20 @@ errno_t pfe_hw_feature_get_def_val(const pfe_hw_feature_t *feature, uint8_t *def
  */
 errno_t pfe_hw_feature_get_val(const pfe_hw_feature_t *feature, uint8_t *val)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == feature)||(NULL == val)))
+	if (unlikely((NULL == feature) || (NULL == val)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	*val = feature->val;
-	return EOK;
+	{
+		*val = feature->val;
+		ret = EOK;
+	}
+	return ret;
 }
 
 /**
@@ -219,24 +255,31 @@ bool_t pfe_hw_feature_enabled(const pfe_hw_feature_t *feature)
 {
 	uint8_t val;
 	errno_t ret;
+	bool_t  is_enable;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == feature))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
+		is_enable = FALSE;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	ret = pfe_hw_feature_get_val(feature, &val);
-	if(EOK != ret)
 	{
-		return FALSE;
+		ret = pfe_hw_feature_get_val(feature, &val);
+		if (EOK != ret)
+		{
+			is_enable = FALSE;
+		}
+		else if (0U != val)
+		{
+			is_enable = TRUE;
+		}
+		else
+		{
+			is_enable = FALSE;
+		}
 	}
-	if(0U != val)
-	{
-		return TRUE;
-	}
-	return FALSE;
+	return is_enable;
 }
 
 /**
@@ -247,13 +290,24 @@ bool_t pfe_hw_feature_enabled(const pfe_hw_feature_t *feature)
  */
 errno_t pfe_hw_feature_set_val(pfe_hw_feature_t *feature, uint8_t val)
 {
+	errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == feature))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	feature->val = val;
-	return EOK;
+	{
+		feature->val = val;
+		ret = EOK;
+	}
+	return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

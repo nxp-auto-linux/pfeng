@@ -97,8 +97,8 @@ static LIST_HEAD(pfe_reserved_mem_list);
 
 #ifdef PFE_CFG_PFE_MASTER
 static const char pfeng_res_no_map_name[PFE_REG_COUNT][16] = {
-	"bmu2-pool",
-	"rt-pool",
+	"pfe-bmu2-pool",
+	"pfe-rt-pool",
 };
 #endif
 
@@ -517,7 +517,7 @@ static int pfeng_reserved_no_map_region_init(struct device *dev, struct reserved
 		goto out;
 	}
 
-	scnprintf(compatible, sizeof(compatible), "nxp,s32g-pfe-%s", pfeng_res_no_map_name[rmem_id]);
+	scnprintf(compatible, sizeof(compatible), "nxp,s32g-%s", pfeng_res_no_map_name[rmem_id]);
 	if (!of_device_is_compatible(mem_node, compatible)) {
 		/* don't fail probing if node not found */
 		dev_warn(dev, "memory-region: %s node missing\n", compatible);
@@ -722,10 +722,36 @@ static void __oal_mm_shutdown_master(struct device *dev)
 	INIT_LIST_HEAD(&pfe_reserved_mem_list);
 }
 
+int __oal_mm_wakeup_reinit(void)
+{
+	struct pfe_reserved_mem *res_mem = NULL;
+
+	if (list_empty(&pfe_reserved_mem_list))
+		return 0;
+
+	list_for_each_entry(res_mem, &pfe_reserved_mem_list, node) {
+		/* PFE_CFG_RT_MEM and PFE_CFG_SYS_MEM regions could be mapped to SRAM
+		 * Reinit is required when returning from SUSPEND mode
+		 */
+		if (!strcmp(res_mem->name, PFE_CFG_SYS_MEM) || !strcmp(res_mem->name, PFE_CFG_RT_MEM)) {
+			NXP_LOG_DEBUG("Reserved memory re-inited: %s\n", res_mem->name);
+			memset_io(res_mem->map_start_va, 0, res_mem->map_size);
+		}
+	}
+
+	return 0;
+}
+
 #else
 #define __oal_mm_init_master(dev) 0
 #define __oal_mm_shutdown_master(dev) NULL
+#define __oal_mm_wakeup_reinit() 0
 #endif /* PFE_CFG_PFE_MASTER */
+
+errno_t oal_mm_wakeup_reinit(void)
+{
+	return __oal_mm_wakeup_reinit();
+}
 
 errno_t oal_mm_init(const void *devh)
 {

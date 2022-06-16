@@ -156,7 +156,7 @@ pfe_hif_t *pfe_hif_create(addr_t cbus_base_va, pfe_hif_chnl_id_t channels)
 	}
 
 	hif = oal_mm_malloc(sizeof(pfe_hif_t));
-		
+
 	if (NULL == hif)
 	{
 		return NULL;
@@ -166,7 +166,7 @@ pfe_hif_t *pfe_hif_create(addr_t cbus_base_va, pfe_hif_chnl_id_t channels)
 		memset(hif, 0, sizeof(pfe_hif_t));
 		hif->cbus_base_va = cbus_base_va;
 	}
-	
+
 #ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_init(&hif->lock))
@@ -271,12 +271,12 @@ pfe_hif_chnl_t *pfe_hif_get_channel(const pfe_hif_t *hif, pfe_hif_chnl_id_t chan
 			break;
 		}
 	}
-	
+
 	if (ii < HIF_CFG_MAX_CHANNELS)
 	{
 		return hif->channels[ii];
 	}
-	
+
 	return NULL;
 }
 
@@ -287,7 +287,7 @@ pfe_hif_chnl_t *pfe_hif_get_channel(const pfe_hif_t *hif, pfe_hif_chnl_id_t chan
 void pfe_hif_destroy(pfe_hif_t *hif)
 {
 	uint32_t ii;
-	
+
 	if (NULL != hif)
 	{
 
@@ -306,16 +306,16 @@ void pfe_hif_destroy(pfe_hif_t *hif)
 				{
 					pfe_hif_chnl_rx_disable(hif->channels[ii]);
 					pfe_hif_chnl_tx_disable(hif->channels[ii]);
-					
+
 					pfe_hif_chnl_destroy(hif->channels[ii]);
 					hif->channels[ii] = NULL;
 				}
 			}
-			
+
 			oal_mm_free(hif->channels);
 			hif->channels = NULL;
 		}
-		
+
 #ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_lock(&hif->lock))
 		{
@@ -439,7 +439,7 @@ void pfe_hif_set_master_up(const pfe_hif_t *hif)
 uint32_t pfe_hif_get_text_statistics(const pfe_hif_t *hif, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
-	
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == hif))
 	{
@@ -447,9 +447,10 @@ uint32_t pfe_hif_get_text_statistics(const pfe_hif_t *hif, char_t *buf, uint32_t
 		return 0U;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	
+
 	len += pfe_hif_cfg_get_text_stat(hif->cbus_base_va, buf, buf_len, verb_level);
 
 	return len;
 }
 #endif /* PFE_CFG_PFE_MASTER */
+

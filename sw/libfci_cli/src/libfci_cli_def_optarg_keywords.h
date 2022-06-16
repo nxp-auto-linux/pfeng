@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -390,6 +390,11 @@ extern const uint8_t SPD_ACTIONS__MAX;
 #define TXT_POL_FLOW_TYPE2__SPORT       TXT_MATCH_RULE__SPORT
 #define TXT_POL_FLOW_TYPE2__DPORT       TXT_MATCH_RULE__DPORT
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
@@ -478,5 +483,11 @@ const char* cli_value2txt_pol_flow_type32(uint8_t value);
 int         cli_txt2value_pol_flow_type32(uint8_t* p_rtn_value, const char* p_txt);
 
 /* ========================================================================= */
+
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif

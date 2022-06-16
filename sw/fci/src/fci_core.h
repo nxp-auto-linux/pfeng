@@ -47,6 +47,11 @@ typedef struct __fci_core_tag fci_core_t;
  */
 typedef struct __fci_core_client_tag fci_core_client_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief		Create FCI core instance
  * @details		The FCI core is OS-specific part of the FCI endpoint. It is responsible
@@ -81,6 +86,11 @@ errno_t fci_core_send(fci_msg_t *msg, fci_msg_t *rep);
  * @return		EOK if success, error code otherwise
  */
 errno_t fci_core_client_send(fci_core_client_t *client, fci_msg_t *msg, fci_msg_t *rep);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* SRC_FCI_CORE_H_ */
 

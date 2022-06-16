@@ -22,7 +22,43 @@
 #include "fci.h"
 #endif /* PFE_CFG_FCI_ENABLE */
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_VAR_INIT_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static pfe_platform_t pfe = {.probed = FALSE};
+/* usage scope: pfe_platform_create_hif*/
+static pfe_hif_chnl_id_t ids[HIF_CFG_MAX_CHANNELS] = {HIF_CHNL_0, HIF_CHNL_1, HIF_CHNL_2, HIF_CHNL_3};
+/* usage scope: pfe_platform_create_ifaces*/
+static struct
+{
+    char_t *name;
+    pfe_ct_phy_if_id_t id;
+    pfe_mac_addr_t mac;
+}
+phy_ifs[] =
+{
+        {.name = "emac0", .id = PFE_PHY_IF_ID_EMAC0, .mac = GEMAC0_MAC},
+        {.name = "emac1", .id = PFE_PHY_IF_ID_EMAC1, .mac = GEMAC1_MAC},
+        {.name = "emac2", .id = PFE_PHY_IF_ID_EMAC2, .mac = GEMAC2_MAC},
+        {.name = "hif0", .id = PFE_PHY_IF_ID_HIF0, .mac = {0},},
+        {.name = "hif1", .id = PFE_PHY_IF_ID_HIF1, .mac = {0},},
+        {.name = "hif2", .id = PFE_PHY_IF_ID_HIF2, .mac = {0},},
+        {.name = "hif3", .id = PFE_PHY_IF_ID_HIF3, .mac = {0},},
+#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
+        {.name = "hifncpy", .id = PFE_PHY_IF_ID_HIF_NOCPY, .mac = {0}},
+#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
+        {.name = NULL, .id = PFE_PHY_IF_ID_INVALID, .mac = {0}}
+};
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_VAR_INIT_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /**
  * @brief		IDEX RPC callback
@@ -63,7 +99,6 @@ void pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf
 static errno_t pfe_platform_create_hif(pfe_platform_t *platform, const pfe_platform_config_t *config)
 {
 	uint32_t ii;
-	static pfe_hif_chnl_id_t ids[HIF_CFG_MAX_CHANNELS] = {HIF_CHNL_0, HIF_CHNL_1, HIF_CHNL_2, HIF_CHNL_3};
 	pfe_hif_chnl_t *chnl;
 	pfe_hif_chnl_id_t channel_mask;
 	addr_t hif_cbus_base_va = platform->cbus_baseaddr + CBUS_HIF_BASE_ADDR;
@@ -178,7 +213,7 @@ static errno_t pfe_platform_create_hif_nocpy(pfe_platform_t *platform)
 	{   /* S32G2 */
 		lmem_header_size = 112U;
 	}
-    
+
 	platform->hif_nocpy = pfe_hif_nocpy_create(pfe.cbus_baseaddr + CBUS_HIF_NOCPY_BASE_ADDR, platform->bmu[1], lmem_header_size);
 
 	if (NULL == platform->hif_nocpy)
@@ -230,7 +265,7 @@ errno_t pfe_platform_register_log_if(const pfe_platform_t *platform, pfe_log_if_
 		NXP_LOG_DEBUG("DB lock failed: %d\n", ret);
 		return ret;
 	}
-	
+
 	/*	Register in platform to db */
 	ret = pfe_if_db_add(platform->log_if_db, session_id, log_if, PFE_CFG_LOCAL_IF);
 	if (EOK != ret)
@@ -238,7 +273,7 @@ errno_t pfe_platform_register_log_if(const pfe_platform_t *platform, pfe_log_if_
 		NXP_LOG_ERROR("Could not register %s: %d\n", pfe_log_if_get_name(log_if), ret);
 		pfe_log_if_destroy(log_if);
 	}
-	
+
 	if (EOK != pfe_if_db_unlock(session_id))
 	{
 		NXP_LOG_DEBUG("DB unlock failed\n");
@@ -361,27 +396,7 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 	pfe_phy_if_t *phy_if = NULL;
 	errno_t ret = EOK;
 	uint32_t session_id;
-	static struct
-	{
-		char_t *name;
-		pfe_ct_phy_if_id_t id;
-		pfe_mac_addr_t mac;
-	}
-	phy_ifs[] =
-	{
-			{.name = "emac0", .id = PFE_PHY_IF_ID_EMAC0, .mac = GEMAC0_MAC},
-			{.name = "emac1", .id = PFE_PHY_IF_ID_EMAC1, .mac = GEMAC1_MAC},
-			{.name = "emac2", .id = PFE_PHY_IF_ID_EMAC2, .mac = GEMAC2_MAC},
-			{.name = "hif0", .id = PFE_PHY_IF_ID_HIF0, .mac = {0},},
-			{.name = "hif1", .id = PFE_PHY_IF_ID_HIF1, .mac = {0},},
-			{.name = "hif2", .id = PFE_PHY_IF_ID_HIF2, .mac = {0},},
-			{.name = "hif3", .id = PFE_PHY_IF_ID_HIF3, .mac = {0},},
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-			{.name = "hifncpy", .id = PFE_PHY_IF_ID_HIF_NOCPY, .mac = {0}},
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-			{.name = NULL, .id = PFE_PHY_IF_ID_INVALID, .mac = {0}}
-	};
-	
+
 	if (NULL == platform->phy_if_db)
 	{
 		/*	Create database */
@@ -447,6 +462,7 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 }
 
 #if defined(PFE_CFG_FCI_ENABLE)
+
 /**
  * @brief		Start the FCI endpoint
  *
@@ -474,6 +490,7 @@ static void pfe_platform_destroy_fci(pfe_platform_t *platform)
 	fci_fini();
 	platform->fci_created = FALSE;
 }
+
 #endif /* PFE_CFG_FCI_ENABLE */
 
 /**
@@ -497,9 +514,9 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	{
 		NXP_LOG_INFO("PFE CBUS p0x%p mapped @ v0x%"PRINTADDR_T"\n", (void *)config->cbus_base, pfe.cbus_baseaddr);
 	}
-	
+
     pfe.pfe_version = *(uint32_t*)(void*)((addr_t)pfe.cbus_baseaddr + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_VERSION);
-	NXP_LOG_INFO("HW version 0x%x\n", (uint_t)pfe.pfe_version);    
+	NXP_LOG_INFO("HW version 0x%x\n", (uint_t)pfe.pfe_version);
 
 	ret = pfe_platform_create_hif(&pfe, config);
 	if (EOK != ret)
@@ -577,4 +594,10 @@ pfe_platform_t * pfe_platform_get_instance(void)
 	}
 }
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #endif /*PFE_CFG_PFE_SLAVE*/
+

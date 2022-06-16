@@ -14,6 +14,50 @@
 #include "pfe_emac_csr.h"
 #include "pfe_feature_mgr.h"
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CONST_32
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+/* Mode conversion table */
+/* usage scope: phy_mode_to_str */
+static const char_t * const phy_mode[] =
+{
+        "GMII_MII",
+        "RGMII",
+        "SGMII",
+        "TBI",
+        "RMII",
+        "RTBI",
+        "SMII",
+        "RevMII",
+        "INVALID",
+};
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CONST_32
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+static inline uint32_t reverse_bits_32(uint32_t u32Data);
+static inline uint32_t crc32_reversed(const uint8_t *const data, const uint32_t len);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
+static inline const char_t* phy_mode_to_str(uint32_t mode);
+static const char *emac_speed_to_str(pfe_emac_speed_t speed);
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 static inline uint32_t reverse_bits_32(uint32_t u32Data)
 {
     uint8_t u8Index;
@@ -56,6 +100,8 @@ static inline uint32_t crc32_reversed(const uint8_t *const data, const uint32_t 
 	return reverse_bits_32(~res);
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Convert EMAC mode to string
  * @details		Helper function for statistics to convert phy mode to string.
@@ -64,19 +110,6 @@ static inline uint32_t crc32_reversed(const uint8_t *const data, const uint32_t 
  */
 static inline const char_t* phy_mode_to_str(uint32_t mode)
 {
-	/* Mode conversion table */
-	static const char_t * const phy_mode[] =
-	{
-			"GMII_MII",
-			"RGMII",
-			"SGMII",
-			"TBI",
-			"RMII",
-			"RTBI",
-			"SMII",
-			"RevMII",
-			"INVALID",
-	};
 	/* Initialize to invalid */
 	uint32_t index  = ((uint32_t)(sizeof(phy_mode))/(uint32_t)(sizeof(phy_mode[0]))) - 1UL;
 
@@ -118,6 +151,8 @@ static const char *emac_speed_to_str(pfe_emac_speed_t speed)
 	}
 	return ret;
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		HW-specific initialization function
@@ -253,7 +288,7 @@ errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,
 uint8_t pfe_emac_cfg_get_index(addr_t emac_base, addr_t cbus_base)
 {
 	uint8_t idx;
-	
+
 	switch ((addr_t)emac_base - (addr_t)cbus_base)
 	{
 		case CBUS_EMAC1_BASE_ADDR:
@@ -261,26 +296,26 @@ uint8_t pfe_emac_cfg_get_index(addr_t emac_base, addr_t cbus_base)
 			idx = 0U;
 			break;
 		}
-		
+
 		case CBUS_EMAC2_BASE_ADDR:
 		{
 			idx = 1U;
 			break;
 		}
-		
+
 		case CBUS_EMAC3_BASE_ADDR:
 		{
 			idx = 2U;
 			break;
 		}
-		
+
 		default:
 		{
 			idx = 255U;
 			break;
 		}
 	}
-	
+
 	return idx;
 }
 
@@ -696,7 +731,7 @@ errno_t pfe_emac_cfg_set_mii_mode(addr_t base_va, pfe_emac_mii_mode_t mode)
 	*/
 	(void)base_va;
 	(void)mode;
-	
+
 	return EOK;
 }
 
@@ -753,7 +788,7 @@ errno_t pfe_emac_cfg_set_speed(addr_t base_va, pfe_emac_speed_t speed)
 		/*	Configure speed in EMAC registers */
 		hal_write32(reg, base_va + MAC_CONFIGURATION);
 	}
-	
+
 	return ret;
 }
 
@@ -1335,6 +1370,8 @@ uint32_t pfe_emac_cfg_get_rx_cnt(addr_t base_va)
 	return hal_read32(base_va + RX_PACKETS_COUNT_GOOD_BAD);
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Get EMAC statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
@@ -1514,6 +1551,8 @@ uint32_t pfe_emac_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, 
 	return len;
 }
 
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 /**
  * @brief		Get EMAC statistic in numeric form
  * @details		This is a HW-specific function providing single statistic
@@ -1538,3 +1577,9 @@ uint32_t pfe_emac_cfg_get_stat_value(addr_t base_va, uint32_t stat_id)
 	}
 	return stat_value;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

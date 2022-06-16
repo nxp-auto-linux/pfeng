@@ -29,6 +29,11 @@
  */
 #define	PFE_HIF_NOCPY_CFG_USE_BD_POLLING	TRUE
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief		HIF NOCPY ISR
  * @details		Handles all HIF NOCPY interrupts
@@ -417,6 +422,9 @@ uint32_t pfe_hif_nocpy_cfg_get_rx_cnt(addr_t base_va)
 	return 0xffffffffU;
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
+
 /**
  * @brief		Get HIF statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
@@ -462,3 +470,11 @@ uint32_t pfe_hif_nocpy_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t s
 
 	return len;
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

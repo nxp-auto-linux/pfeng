@@ -28,6 +28,11 @@
 #ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, const fci_rt_db_entry_t *entry);
 
 /**
@@ -304,7 +309,7 @@ fci_rt_db_entry_t *fci_rt_db_get_first(fci_rt_db_t *db, fci_rt_db_get_criterion_
 				break;
 			}
 		}
-		
+
 		if(TRUE != is_unknown_crit)
 		{
 			if (false == LLIST_IsEmpty(&db->theList))
@@ -425,6 +430,11 @@ errno_t fci_rt_db_drop_all(fci_rt_db_t *db)
 
 	return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_CFG_FCI_ENABLE */
 #endif /* PFE_CFG_PFE_MASTER */

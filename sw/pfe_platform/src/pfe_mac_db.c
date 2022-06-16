@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2021 NXP
+ *  Copyright 2021-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -23,6 +23,11 @@ struct pfe_mac_db_tag
 	} crit;
 };
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static bool_t pfe_mac_db_criterion_eval(const pfe_mac_db_list_entry_t *entry, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
 static pfe_mac_db_list_entry_t *pfe_mac_db_find_by_addr(const pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 
@@ -42,40 +47,42 @@ static bool_t pfe_mac_db_criterion_eval(const pfe_mac_db_list_entry_t *entry, pf
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
+		ret = FALSE;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (crit == MAC_DB_CRIT_BY_OWNER)
 	{
-		/* Return the first address where owner match */
-		if (entry->owner == owner)
+		if (crit == MAC_DB_CRIT_BY_OWNER)
 		{
-			/* Break if entry match with the rule */
-			ret = TRUE;
+			/* Return the first address where owner match */
+			if (entry->owner == owner)
+			{
+				/* Break if entry match with the rule */
+				ret = TRUE;
+			}
 		}
-	}
-	else if (crit == MAC_DB_CRIT_BY_TYPE)
-	{
-		/* Break if entry match with the rule */
-		ret = pfe_emac_check_crit_by_type(entry->addr, type);
-	}
-	else if (crit == MAC_DB_CRIT_BY_OWNER_AND_TYPE)
-	{
-		if (entry->owner == owner)
+		else if (crit == MAC_DB_CRIT_BY_TYPE)
 		{
 			/* Break if entry match with the rule */
 			ret = pfe_emac_check_crit_by_type(entry->addr, type);
 		}
-	}
-	else if (crit == MAC_DB_CRIT_ALL)
-	{
-		/* Break if entry match with the rule */
-		ret = TRUE;
-	}
-	else
-	{
-		NXP_LOG_WARNING("Unknown criterion\n");
+		else if (crit == MAC_DB_CRIT_BY_OWNER_AND_TYPE)
+		{
+			if (entry->owner == owner)
+			{
+				/* Break if entry match with the rule */
+				ret = pfe_emac_check_crit_by_type(entry->addr, type);
+			}
+		}
+		else if (crit == MAC_DB_CRIT_ALL)
+		{
+			/* Break if entry match with the rule */
+			ret = TRUE;
+		}
+		else
+		{
+			NXP_LOG_WARNING("Unknown criterion\n");
+		}
 	}
 
 	return ret;
@@ -90,11 +97,7 @@ pfe_mac_db_t *pfe_mac_db_create(void)
 	pfe_mac_db_t *db;
 
 	db = oal_mm_malloc(sizeof(pfe_mac_db_t));
-	if (NULL == db)
-	{
-		return NULL;
-	}
-	else
+	if (NULL != db)
 	{
 		(void)memset(db, 0, sizeof(pfe_mac_db_t));
 		LLIST_Init(&db->mac_list);
@@ -108,6 +111,7 @@ pfe_mac_db_t *pfe_mac_db_create(void)
 			db = NULL;
 		}
 	}
+
 	return db;
 }
 
@@ -165,7 +169,7 @@ errno_t pfe_mac_db_destroy(pfe_mac_db_t *db)
 static pfe_mac_db_list_entry_t *pfe_mac_db_find_by_addr(const pfe_mac_db_t *db, const pfe_mac_addr_t addr,
 							pfe_drv_id_t owner)
 {
-	pfe_mac_db_list_entry_t *entry = NULL;
+	pfe_mac_db_list_entry_t *entry;
 	LLIST_t *item;
 	bool_t found = FALSE;
 
@@ -196,7 +200,7 @@ static pfe_mac_db_list_entry_t *pfe_mac_db_find_by_addr(const pfe_mac_db_t *db, 
  */
 errno_t pfe_mac_db_add_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_mac_db_list_entry_t *entry;
 
 	if (EOK != oal_mutex_lock(&db->lock))
@@ -259,7 +263,7 @@ errno_t pfe_mac_db_add_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv
  */
 errno_t pfe_mac_db_del_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
 {
-	errno_t ret = EOK;
+	errno_t ret;
 	pfe_mac_db_list_entry_t *entry;
 
 	if (EOK != oal_mutex_lock(&db->lock))
@@ -289,6 +293,7 @@ errno_t pfe_mac_db_del_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv
 		LLIST_Remove(&entry->iterator);
 		oal_mm_free(entry);
 		entry = NULL;
+		ret = EOK;
 	}
 
 	if (EOK != oal_mutex_unlock(&db->lock))
@@ -455,4 +460,9 @@ errno_t pfe_mac_db_get_next_addr(pfe_mac_db_t *db, pfe_mac_addr_t addr)
 
 	return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 

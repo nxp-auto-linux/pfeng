@@ -110,7 +110,7 @@ void pfe_hif_nocpy_destroy(pfe_hif_nocpy_t *hif)
 			pfe_hif_chnl_destroy(hif->channel);
 			hif->channel = NULL;
 		}
-		
+
 		pfe_hif_nocpy_cfg_fini(hif->base_va);
 		oal_mm_free(hif);
 	}
@@ -141,3 +141,4 @@ uint32_t pfe_hif_nocpy_get_text_statistics(const pfe_hif_nocpy_t *hif, char_t *b
 
 	return len;
 }
+

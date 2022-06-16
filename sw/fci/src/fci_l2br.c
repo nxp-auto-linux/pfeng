@@ -28,6 +28,11 @@
 #ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief			Process FPP_CMD_L2_FLUSH_* commands
  * @param[in]		msg FCI cmd code
@@ -99,6 +104,11 @@ errno_t fci_l2br_flush_cmd(uint32_t code, uint16_t *fci_ret)
 
 	return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_CFG_FCI_ENABLE */
 #endif /* PFE_CFG_PFE_MASTER */

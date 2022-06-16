@@ -46,7 +46,13 @@
 #ifndef PUBLIC_OAL_MM_H_
 #define PUBLIC_OAL_MM_H_
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #if !defined(PFE_CFG_DETACHED_MINIHIF)
+
 /**
  * @brief		Initialize the memory management library
  * @details		The oal_mm must be initialized by this call before it can be used.
@@ -54,6 +60,13 @@
  * @return		EOK if success
  */
 errno_t oal_mm_init(const void *dev);
+
+/**
+ * @brief		Re-initialize the memory management library
+ * @details		The oal_mm can be re-initalized when returned from WAKEUP event. Optional
+ * @return		EOK if success
+ */
+errno_t oal_mm_wakeup_reinit(void);
 
 /**
  * @brief		Shut the memory management library down
@@ -197,8 +210,12 @@ void oal_mm_cache_flush(const void *vaddr, const void *paddr, const addr_t len);
  */
 uint32_t oal_mm_cache_get_line_size(void);
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PUBLIC_OAL_MM_H_ */
 
 /** @}*/
-/** @}*/
+

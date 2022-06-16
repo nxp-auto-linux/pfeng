@@ -27,8 +27,23 @@ struct pfe_mirror_tag
     pfe_ct_mirror_t phys; /* Physical representation */
 };
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_VAR_INIT_32
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static pfe_mirror_db_t *pfe_mirror_db = NULL;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_VAR_INIT_32
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /**
  * @brief Creates a database for mirrors management
@@ -39,21 +54,25 @@ static pfe_mirror_db_t *pfe_mirror_db = NULL;
 static pfe_mirror_db_t *pfe_mirror_create_db(pfe_class_t *class)
 {
     pfe_mirror_db_t *db;
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == class))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return NULL;
+        db = NULL;
     }
-    #endif
-
-    db = oal_mm_malloc(sizeof(pfe_mirror_db_t));
-    if(NULL != db)
+    else
+#endif
     {
-        (void)memset(db, 0, sizeof(pfe_mirror_db_t));
-        db->class = class;
-        LLIST_Init(&db->mirrors);
+        db = oal_mm_malloc(sizeof(pfe_mirror_db_t));
+        if(NULL != db)
+        {
+            (void)memset(db, 0, sizeof(pfe_mirror_db_t));
+            db->class = class;
+            LLIST_Init(&db->mirrors);
+        }
     }
+
     return db;
 }
 
@@ -85,51 +104,65 @@ static pfe_mirror_t *pfe_mirror_db_get_by_crit(pfe_mirror_db_t *db, pfe_mirror_d
 {
     LLIST_t *curr;
     pfe_mirror_t *mirror;
+    bool_t match = FALSE;
 
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == db))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return NULL;
+        mirror = NULL;
     }
-    #endif
-
-    /* Is there something to search */
-    if(LLIST_IsEmpty(&db->mirrors))
-    {   /* Nothing to search */
-        return NULL;
-    }
-    /* Special criterion - return the 1st in the database */
-    if(MIRROR_ANY == crit)
+    else
+#endif
     {
-        db->curr = db->mirrors.prNext->prNext;  /* HEAD.prNext --> Item0.prNext --> Item1. --> ... */
-        return LLIST_DataFirst(&db->mirrors, pfe_mirror_t, this);
-    }
-    /* Real search */
-    LLIST_ForEach(curr, &db->mirrors)
-    {
-        mirror = LLIST_Data(curr, pfe_mirror_t, this);
-        switch(crit)
+        /* Is there something to search */
+        if(LLIST_IsEmpty(&db->mirrors))
+        {   /* Nothing to search */
+            mirror = NULL;
+        }
+        /* Special criterion - return the 1st in the database */
+        else if(MIRROR_ANY == crit)
         {
-            case MIRROR_BY_NAME:
-                if(0 == strcmp(mirror->name, (const char *)arg))
-                {   /* Match */
-                    return mirror;
+            db->curr = db->mirrors.prNext->prNext;  /* HEAD.prNext --> Item0.prNext --> Item1. --> ... */
+            mirror = LLIST_DataFirst(&db->mirrors, pfe_mirror_t, this);
+        }
+        else
+        {
+            /* Real search */
+            LLIST_ForEach(curr, &db->mirrors)
+            {
+                mirror = LLIST_Data(curr, pfe_mirror_t, this);
+                switch(crit)
+                {
+                    case MIRROR_BY_NAME:
+                        if(0 == strcmp(mirror->name, (const char *)arg))
+                        {   /* Match */
+                            match = TRUE;
+                        }
+                        break;
+                    case MIRROR_BY_PHYS_ADDR:
+                        if(mirror->phys_addr == (addr_t) arg)
+                        {   /* Match */
+                            match = TRUE;
+                        }
+                        break;
+                    default :
+                        NXP_LOG_ERROR("Wrong criterion %u\n", crit);
+                        break;
                 }
-                break;
-            case MIRROR_BY_PHYS_ADDR:
-                if(mirror->phys_addr == (addr_t) arg)
-                {   /* Match */
-                    return mirror;
+                if(TRUE == match)
+                {
+                    break;
                 }
-                break;
-            default :
-                NXP_LOG_ERROR("Wrong criterion %u\n", crit);
-				break;
+                else
+                {
+                    mirror = NULL;
+                }
+            }
         }
     }
-    /* Not found */
-    return NULL;
+
+    return mirror;
 }
 
 /**
@@ -149,24 +182,30 @@ static pfe_mirror_t *pfe_mirror_db_get_next(pfe_mirror_db_t *db)
 {
     pfe_mirror_t *mirror = NULL;
 
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == db))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return NULL;
+        mirror = NULL;
     }
-    #endif
+    else
+#endif
+    {
+        /* Is there something to search */
+        if(LLIST_IsEmpty(&db->mirrors))
+        {   /* Nothing to search */
+            mirror = NULL;
+        }
+        else
+        {
+            if(db->curr != &db->mirrors)
+            {   /* Not the last item */
+                mirror = LLIST_Data(db->curr, pfe_mirror_t, this);
+                db->curr = db->curr->prNext;
+            }
+        }
+    }
 
-    /* Is there something to search */
-    if(LLIST_IsEmpty(&db->mirrors))
-    {   /* Nothing to search */
-        return NULL;
-    }
-    if(db->curr != &db->mirrors)
-    {   /* Not the last item */
-        mirror = LLIST_Data(db->curr, pfe_mirror_t, this);
-        db->curr = db->curr->prNext;
-    }
     return mirror;
 }
 
@@ -181,25 +220,34 @@ static pfe_mirror_t *pfe_mirror_db_get_next(pfe_mirror_db_t *db)
  */
 errno_t pfe_mirror_init(pfe_class_t *class)
 {
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+    errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == class))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
+        ret = EINVAL;
     }
-    #endif
+    else
+#endif
+    {
+        ret = EOK;
+        if(NULL != pfe_mirror_db)
+        {
+            NXP_LOG_ERROR("Already initialized\n");
+            ret = EPERM;
+        }
+        else
+        {
+            pfe_mirror_db = pfe_mirror_create_db(class);
+            if(NULL == pfe_mirror_db)
+            {
+                ret = ENOMEM;
+            }
+        }
+    }
 
-    if(NULL != pfe_mirror_db)
-    {
-        NXP_LOG_ERROR("Already initialized\n");
-        return EPERM;
-    }
-    pfe_mirror_db = pfe_mirror_create_db(class);
-    if(NULL == pfe_mirror_db)
-    {
-        return ENOMEM;
-    }
-    return EOK;
+    return ret;
 }
 
 /**
@@ -259,43 +307,47 @@ pfe_mirror_t *pfe_mirror_get_next(void)
 pfe_mirror_t *pfe_mirror_create(const char *name)
 {
     pfe_mirror_t *mirror = NULL;
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == name))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return NULL;
+        mirror = NULL;
     }
-    #endif
-
-    if(NULL != pfe_mirror_db)
+    else
+#endif
     {
-        /* Do not allow duplicates */
-        if(NULL == pfe_mirror_db_get_by_crit(pfe_mirror_db, MIRROR_BY_NAME, (void *)name))
-        {   /* No such entry in the database, we may add a new one */
-            mirror = oal_mm_malloc(sizeof(pfe_mirror_t) + strlen(name));
-            if(NULL != mirror)
-            {   /* Memory available */
-                (void)memset(mirror, 0, sizeof(pfe_mirror_t));
-                /* Remember input data */
-                mirror->db = pfe_mirror_db;
-                mirror->name = (char *)&mirror[1];
-                (void)strcpy(mirror->name, name);
-                /* Allocate DMEM */
-                mirror->phys_addr = pfe_class_dmem_heap_alloc(mirror->db->class, sizeof(pfe_ct_mirror_t));
-                if(0U == mirror->phys_addr)
-                {   /* No DMEM */
-                    NXP_LOG_ERROR("Not enough DMEM for mirror\n");
-                    oal_mm_free(mirror);
-                    mirror = NULL;
-                }
-                else
-                {
-                    /* Add the new mirror into the internal database */
-                    LLIST_AddAtEnd(&mirror->this, &pfe_mirror_db->mirrors);
+        if(NULL != pfe_mirror_db)
+        {
+            /* Do not allow duplicates */
+            if(NULL == pfe_mirror_db_get_by_crit(pfe_mirror_db, MIRROR_BY_NAME, (void *)name))
+            {   /* No such entry in the database, we may add a new one */
+                mirror = oal_mm_malloc(sizeof(pfe_mirror_t) + strlen(name));
+                if(NULL != mirror)
+                {   /* Memory available */
+                    (void)memset(mirror, 0, sizeof(pfe_mirror_t));
+                    /* Remember input data */
+                    mirror->db = pfe_mirror_db;
+                    mirror->name = (char *)&mirror[1];
+                    (void)strcpy(mirror->name, name);
+                    /* Allocate DMEM */
+                    mirror->phys_addr = pfe_class_dmem_heap_alloc(mirror->db->class, sizeof(pfe_ct_mirror_t));
+                    if(0U == mirror->phys_addr)
+                    {   /* No DMEM */
+                        NXP_LOG_ERROR("Not enough DMEM for mirror\n");
+                        oal_mm_free(mirror);
+                        mirror = NULL;
+                    }
+                    else
+                    {
+                        /* Add the new mirror into the internal database */
+                        LLIST_AddAtEnd(&mirror->this, &pfe_mirror_db->mirrors);
+                    }
                 }
             }
         }
     }
+
     return mirror;
 }
 
@@ -321,15 +373,20 @@ void pfe_mirror_destroy(pfe_mirror_t *mirror)
  */
 uint32_t pfe_mirror_get_address(const pfe_mirror_t *mirror)
 {
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+    uint32_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mirror))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return 0;
+        ret = 0U;
     }
-    #endif
-
-    return mirror->phys_addr;
+    else
+#endif
+    {
+        ret = mirror->phys_addr;
+    }
+    return ret;
 }
 
 /**
@@ -339,15 +396,20 @@ uint32_t pfe_mirror_get_address(const pfe_mirror_t *mirror)
  */
 const char *pfe_mirror_get_name(const pfe_mirror_t *mirror)
 {
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+    const char *str;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mirror))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return NULL;
+        str = NULL;
     }
-    #endif
-
-    return mirror->name;
+    else
+#endif
+    {
+        str = mirror->name;
+    }
+    return str;
 }
 
 /**
@@ -358,17 +420,23 @@ const char *pfe_mirror_get_name(const pfe_mirror_t *mirror)
  */
 errno_t pfe_mirror_set_egress_port(pfe_mirror_t *mirror, pfe_ct_phy_if_id_t egress)
 {
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+    errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mirror))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
+        ret = EINVAL;
     }
-    #endif
+    else
+#endif
+    {
+        /* No endian conversion is needed since the size is 8-bits */
+        mirror->phys.e_phy_if = egress;
+        ret = pfe_class_write_dmem(mirror->db->class, -1, mirror->phys_addr, &mirror->phys, sizeof(pfe_ct_mirror_t));
+    }
 
-    /* No endian conversion is needed since the size is 8-bits */
-    mirror->phys.e_phy_if = egress;
-    return pfe_class_write_dmem(mirror->db->class, -1, mirror->phys_addr, &mirror->phys, sizeof(pfe_ct_mirror_t));
+    return ret;
 }
 
 /**
@@ -378,16 +446,22 @@ errno_t pfe_mirror_set_egress_port(pfe_mirror_t *mirror, pfe_ct_phy_if_id_t egre
  */
 pfe_ct_phy_if_id_t pfe_mirror_get_egress_port(const pfe_mirror_t *mirror)
 {
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+    pfe_ct_phy_if_id_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mirror))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return PFE_PHY_IF_ID_INVALID;
+        ret = PFE_PHY_IF_ID_INVALID;
     }
-    #endif
+    else
+#endif
+    {
+        /* No endian conversion is needed since the size is 8-bits */
+        ret = mirror->phys.e_phy_if;
+    }
 
-    /* No endian conversion is needed since the size is 8-bits */
-    return mirror->phys.e_phy_if;
+    return ret;
 }
 
 /**
@@ -398,17 +472,23 @@ pfe_ct_phy_if_id_t pfe_mirror_get_egress_port(const pfe_mirror_t *mirror)
  */
 errno_t pfe_mirror_set_filter(pfe_mirror_t *mirror, uint32_t filter_address)
 {
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+    errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mirror))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
+        ret = EINVAL;
     }
-    #endif
+    else
+#endif
+    {
+        /* Set the address of the filter table (convert endian) */
+        mirror->phys.flexible_filter = oal_htonl(filter_address);
+        ret = pfe_class_write_dmem(mirror->db->class, -1, mirror->phys_addr, &mirror->phys, sizeof(pfe_ct_mirror_t));
+    }
 
-    /* Set the address of the filter table (convert endian) */
-    mirror->phys.flexible_filter = oal_htonl(filter_address);
-    return pfe_class_write_dmem(mirror->db->class, -1, mirror->phys_addr, &mirror->phys, sizeof(pfe_ct_mirror_t));
+    return ret;
 }
 
 /**
@@ -418,16 +498,22 @@ errno_t pfe_mirror_set_filter(pfe_mirror_t *mirror, uint32_t filter_address)
  */
 uint32_t pfe_mirror_get_filter(const pfe_mirror_t *mirror)
 {
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+    uint32_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mirror))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return 0U;
+        ret = 0U;
     }
-    #endif
-
+    else
+#endif
+    {
+        ret = oal_ntohl(mirror->phys.flexible_filter);
+    }
     /* Set the address of the filter table (convert endian) */
-    return oal_ntohl(mirror->phys.flexible_filter);
+
+    return ret;
 }
 
 /**
@@ -439,20 +525,26 @@ uint32_t pfe_mirror_get_filter(const pfe_mirror_t *mirror)
  */
 errno_t pfe_mirror_set_actions(pfe_mirror_t *mirror, pfe_ct_route_actions_t actions, const pfe_ct_route_actions_args_t *args)
 {
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+    errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == mirror))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
+        ret = EINVAL;
     }
-    #endif
-
-    mirror->phys.actions = actions;
-    if(RT_ACT_NONE != actions)
+    else
+#endif
     {
-        (void)memcpy(&mirror->phys.args, args, sizeof(pfe_ct_route_actions_args_t));
+        mirror->phys.actions = actions;
+        if(RT_ACT_NONE != actions)
+        {
+            (void)memcpy(&mirror->phys.args, args, sizeof(pfe_ct_route_actions_args_t));
+        }
+        ret = pfe_class_write_dmem(mirror->db->class, -1, mirror->phys_addr, &mirror->phys, sizeof(pfe_ct_mirror_t));
     }
-    return pfe_class_write_dmem(mirror->db->class, -1, mirror->phys_addr, &mirror->phys, sizeof(pfe_ct_mirror_t));
+
+    return ret;
 }
 
 /**
@@ -464,18 +556,29 @@ errno_t pfe_mirror_set_actions(pfe_mirror_t *mirror, pfe_ct_route_actions_t acti
  */
 errno_t pfe_mirror_get_actions(const pfe_mirror_t *mirror, pfe_ct_route_actions_t *actions, pfe_ct_route_actions_args_t *args)
 {
-    #if defined(PFE_CFG_NULL_ARG_CHECK)
+    errno_t ret;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == mirror)||(NULL == args)))
 	{
         NXP_LOG_ERROR("NULL argument received\n");
-        return EINVAL;
+        ret = EINVAL;
     }
-    #endif
+    else
+#endif
+    {
+        ret = EOK;
+        *actions = mirror->phys.actions;
+        if(RT_ACT_NONE != mirror->phys.actions)
+        {   /* Arguments are needed */
+            (void)memcpy(args, &mirror->phys.args, sizeof(pfe_ct_route_actions_args_t));
+        }
+    }
 
-    *actions = mirror->phys.actions;
-    if(RT_ACT_NONE != mirror->phys.actions)
-    {   /* Arguments are needed */
-        (void)memcpy(args, &mirror->phys.args, sizeof(pfe_ct_route_actions_args_t));
-    }
-    return EOK;
+    return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

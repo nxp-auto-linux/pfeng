@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -8,15 +8,15 @@
 /**
  * @addtogroup	dxgrOAL
  * @{
- * 
+ *
  * @defgroup    dxgr_OAL_JOB JOB
  * @brief		Deferred job abstraction
- * @details		TODO     
- * 				
- * 
+ * @details		TODO
+ *
+ *
  * @addtogroup  dxgr_OAL_JOB
  * @{
- * 
+ *
  * @file		oal_job.h
  * @brief		The oal_job module header file.
  * @details		This file contains generic deferred job management-related API.
@@ -39,6 +39,11 @@ typedef enum
 	OAL_PRIO_HIGH,
 	OAL_PRIO_TOP
 } oal_prio_t;
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /**
  * @brief		Create new job
@@ -73,6 +78,11 @@ errno_t oal_job_run(oal_job_t *job);
  * @return		EOK if success, error code otherwise
  */
 errno_t oal_job_drain(const oal_job_t *job);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PUBLIC_OAL_JOB_H_ */
 

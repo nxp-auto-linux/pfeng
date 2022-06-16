@@ -1795,64 +1795,6 @@ typedef struct CAL_PACKED_ALIGNED(2)
 /* [fpp_fp_table_cmd_t] */
 
 /**
- * @cond DOXYGEN__EXCLUDE_THIS_FROM_REFERENCE_MANUAL
- *
- * @def FPP_CMD_FP_FLEXIBLE_FILTER
- * @brief Uses flexible parser to filter out frames from further processing.
- * @details Allows registration of a Flexible Parser table (see @ref FPP_CMD_FP_TABLE) as a
- *          filter which:
- *           - @c FPP_ACTION_REGISTER: Use the specified table as a Flexible Filter (replace old table by a new one if already configured).
- *           - @c FPP_ACTION_DEREGISTER: Disable Flexible Filter, no table will be used as Flexible Filter.
- *
- * The Flexible Filter examines received frames before any other processing and discards those which have
- * REJECT result from the configured Flexible Parser.
- *
- * See the @ref FPP_CMD_FP_TABLE for flexible parser behavior description.
- *
- * Action FPP_ACTION_REGISTER
- * --------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_flexible_filter_cmd_t cmd_data =
- *   {
- *      // Set the specified table as Flexible Filter
- *      .action = FPP_ACTION_REGISTER,
- *      // Name of the Flexible Parser table to be used to filter the frames
- *      .table_name = "table_name"
- *   }
- * @endcode
- *
- * Action FPP_ACTION_DEREGISTER
- * ----------------------------
- * Items to be set in command argument structure:
- * @code{.c}
- *   fpp_flexible_filter_cmd_t cmd_data =
- *   {
- *      // Disable the Flexible Filter
- *      .action = FPP_ACTION_DEREGISTER,
- *   }
- * @endcode
- *
- * @hideinitializer
- *
- * @endcond
- */
-#define FPP_CMD_FP_FLEXIBLE_FILTER 0xf225
-
-/**
- * @cond DOXYGEN__EXCLUDE_THIS_FROM_REFERENCE_MANUAL
- *
- * @brief Arguments for the FPP_CMD_FP_FLEXIBLE_FILTER command
- *
- * @endcond
- */
-typedef struct CAL_PACKED
-{
-    uint16_t action;         /**< Action to be done on Flexible Filter */
-    uint8_t table_name[16];  /**< Name of the Flexible Parser table to be used */
-} fpp_flexible_filter_cmd_t;
-
-/**
  * @def FPP_CMD_DATA_BUF_PUT
  * @brief FCI command to send an arbitrary data to the accelerator
  * @details Command is intended to be used to send custom data to the accelerator.
@@ -2176,6 +2118,8 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        First shorten some other queues of the interface, then lengthen the queue of interest.
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Unexpected value of some property.
+ * - @c FPP_ERR_IF_NOT_SUPPORTED <br>
+ *        Requested interface does not support Egress QoS queue management.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -2309,6 +2253,8 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Unknown (nonexistent) Egress QoS scheduler was requested.
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Unexpected value of some property.
+ * - @c FPP_ERR_IF_NOT_SUPPORTED <br>
+ *        Requested interface does not support Egress QoS scheduler management.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -2432,6 +2378,8 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Unknown (nonexistent) Egress QoS shaper was requested.
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Unexpected value of some property.
+ * - @c FPP_ERR_IF_NOT_SUPPORTED <br>
+ *        Requested interface does not support Egress QoS shaper management.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *

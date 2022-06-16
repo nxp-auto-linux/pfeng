@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -52,6 +52,11 @@
 #define BDP_CSR_TX_CBD_INT			(1U << 3)
 #define BDP_CSR_TX_PKT_INT			(1U << 4)
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 errno_t pfe_hif_nocpy_cfg_isr(addr_t base_va, pfe_hif_chnl_event_t *events);
 void pfe_hif_nocpy_cfg_irq_mask(addr_t base_va);
 void pfe_hif_nocpy_cfg_irq_unmask(addr_t base_va);
@@ -75,5 +80,10 @@ uint32_t pfe_hif_nocpy_chnl_cfg_get_text_stat(addr_t base_va, const char_t *buf,
 uint32_t pfe_hif_nocpy_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 uint32_t pfe_hif_nocpy_cfg_get_tx_cnt(addr_t base_va);
 uint32_t pfe_hif_nocpy_cfg_get_rx_cnt(addr_t base_va);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_HIF_NOCPY_CSR_H_ */

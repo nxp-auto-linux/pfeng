@@ -59,13 +59,19 @@
         "    "  TXT_PHYIF__HIF0   "\n"  \
         "    "  TXT_PHYIF__HIF1   "\n"  \
         "    "  TXT_PHYIF__HIF2   "\n"  \
-        "    "  TXT_PHYIF__HIF3   "\n"
+        "    "  TXT_PHYIF__HIF3   "\n"  \
 
 #define TXT_PHYIF_KEYWORDS_EMAC  \
         "  Only the following hardcoded PHYIF names are accepted:\n"  \
         "    "  TXT_PHYIF__EMAC0  "\n"  \
         "    "  TXT_PHYIF__EMAC1  "\n"  \
         "    "  TXT_PHYIF__EMAC2  "\n"  \
+
+#define TXT_PHYIF_KEYWORDS_HIF  \
+        "    "  TXT_PHYIF__HIF0  "\n"  \
+        "    "  TXT_PHYIF__HIF1  "\n"  \
+        "    "  TXT_PHYIF__HIF2  "\n"  \
+        "    "  TXT_PHYIF__HIF2  "\n"  \
 
 #define TXT_EQOS_QUEUE_RANGES  \
         "    "   TXT_PHYIF__HIF0 "," TXT_PHYIF__HIF1 "," TXT_PHYIF__HIF2 "," TXT_PHYIF__HIF3 ": 0-31  \n"  \
@@ -146,6 +152,13 @@
 #define TXT_OPTDESCR__INTERFACE_PHYIF_EMAC  TXT_HELP__INTERFACE  "=<"  TXT_OPTARGS__PHYIF  ">"  "\n"  \
                                             "  Name of the target physical interface.\n"  \
                                             TXT_PHYIF_KEYWORDS_EMAC
+
+#define TXT_OPT__INTERFACE_PHYIF_EQOS       TXT_HELP__INTERFACE  "=<phyif_name>"
+#define TXT_OPTDESCR__INTERFACE_PHYIF_EQOS  TXT_HELP__INTERFACE  "=<"  TXT_OPTARGS__PHYIF  ">"  "\n"  \
+                                            "  Name of the target physical interface.\n"  \
+                                            TXT_PHYIF_KEYWORDS_EMAC  \
+                                            "    "  TXT_PHYIF__HIF_NOCPY  "  (valid only if supported by a driver)"  "\n"  \
+                                            TXT_PHYIF_KEYWORDS_HIF
 
 #define TXT_OPT__PARENT                 TXT_HELP__PARENT  "=<phyif_name>"
 #define TXT_OPTDESCR__PARENT            TXT_HELP__PARENT  "=<"  TXT_OPTARGS__PHYIF  ">"  "\n"  \
@@ -1972,19 +1985,19 @@ static const char* txt_help_qos_que_print[] =
 static const char* txt_help_qos_que_update[] =
 {
     TXT_DECOR_CMD,
-    ""    "qos-que-update"          "   ",
-    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
-    "<"   TXT_OPT__QUE              ">  ",
-    "["   TXT_OPT__QUE_MODE         "]  ",
-    "["   TXT_OPT__THMIN_EQOS       "]  ",
-    "["   TXT_OPT__THMAX_EQOS       "]  ",
-    "["   TXT_OPT__ZPROB            "]  ",
+    ""    "qos-que-update"               "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EQOS  ">  ",
+    "<"   TXT_OPT__QUE                   ">  ",
+    "["   TXT_OPT__QUE_MODE              "]  ",
+    "["   TXT_OPT__THMIN_EQOS            "]  ",
+    "["   TXT_OPT__THMAX_EQOS            "]  ",
+    "["   TXT_OPT__ZPROB                 "]  ",
     "\n",
     TXT_DECOR_DESCR,
     ""    "Update parameters of a QoS queue.",
     "\n",
     TXT_DECOR_OPT,
-    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EQOS,
     TXT_OPTDESCR__QUE,
     TXT_OPTDESCR__QUE_MODE,
     TXT_OPTDESCR__THMIN_EQOS,
@@ -2021,18 +2034,18 @@ static const char* txt_help_qos_sch_print[] =
 static const char* txt_help_qos_sch_update[] =
 {
     TXT_DECOR_CMD,
-    ""    "qos-sch-update"          "   ",
-    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
-    "<"   TXT_OPT__SCH              ">  ",
-    "["   TXT_OPT__SCH_MODE         "]  ",
-    "["   TXT_OPT__SCH_ALGO         "]  ",
-    "["   TXT_OPT__SCH_IN           "]  ",
+    ""    "qos-sch-update"               "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EQOS  ">  ",
+    "<"   TXT_OPT__SCH                   ">  ",
+    "["   TXT_OPT__SCH_MODE              "]  ",
+    "["   TXT_OPT__SCH_ALGO              "]  ",
+    "["   TXT_OPT__SCH_IN                "]  ",
     "\n",
     TXT_DECOR_DESCR,
     ""    "Update parameters of a QoS scheduler.",
     "\n",
     TXT_DECOR_OPT,
-    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EQOS,
     TXT_OPTDESCR__SCH,
     TXT_OPTDESCR__SCH_MODE,
     TXT_OPTDESCR__SCH_ALGO,
@@ -2068,20 +2081,20 @@ static const char* txt_help_qos_shp_print[] =
 static const char* txt_help_qos_shp_update[] =
 {
     TXT_DECOR_CMD,
-    ""    "qos-shp-update"          "   ",
-    "<"   TXT_OPT__INTERFACE_PHYIF  ">  ",
-    "<"   TXT_OPT__SHP              ">  ",
-    "["   TXT_OPT__SHP_MODE         "]  ",
-    "["   TXT_OPT__SHP_POS          "]  ",
-    "["   TXT_OPT__ISL              "]  ",
-    "["   TXT_OPT__CRMIN            "]  ",
-    "["   TXT_OPT__CRMAX            "]  ",
+    ""    "qos-shp-update"               "   ",
+    "<"   TXT_OPT__INTERFACE_PHYIF_EQOS  ">  ",
+    "<"   TXT_OPT__SHP                   ">  ",
+    "["   TXT_OPT__SHP_MODE              "]  ",
+    "["   TXT_OPT__SHP_POS               "]  ",
+    "["   TXT_OPT__ISL                   "]  ",
+    "["   TXT_OPT__CRMIN                 "]  ",
+    "["   TXT_OPT__CRMAX                 "]  ",
     "\n",
     TXT_DECOR_DESCR,
     ""    "Update parameters of a QoS shaper.",
     "\n",
     TXT_DECOR_OPT,
-    TXT_OPTDESCR__INTERFACE_PHYIF,
+    TXT_OPTDESCR__INTERFACE_PHYIF_EQOS,
     TXT_OPTDESCR__SHP,
     TXT_OPTDESCR__SHP_MODE,
     TXT_OPTDESCR__SHP_POS,

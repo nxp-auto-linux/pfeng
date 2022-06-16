@@ -14,11 +14,18 @@
 #include "fci.h"
 #include "fci_internal.h"
 #include "pfe_class.h"
-#include "fci_flexible_filter.h"
 #include "fci_fp.h"
 
 #ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+static void fci_fp_construct_rule_reply(fpp_fp_rule_props_t *r, char *rule_name, char *next_rule,
+                                   uint32_t data, uint32_t mask, uint16_t offset, pfe_ct_fp_flags_t flags);
 
 /**
 * @brief Constructs a query reply with specified rule parameters in the specified buffer
@@ -32,7 +39,7 @@
 */
 static void fci_fp_construct_rule_reply(fpp_fp_rule_props_t *r, char *rule_name, char *next_rule,
                                    uint32_t data, uint32_t mask, uint16_t offset, pfe_ct_fp_flags_t flags)
-{ 
+{
     (void)strncpy((char_t *)r->rule_name, rule_name, 15);
     r->data = data;
     r->mask = mask;
@@ -400,5 +407,11 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
     return ret;
 }
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #endif /* PFE_CFG_FCI_ENABLE */
 #endif /* PFE_CFG_PFE_MASTER */
+

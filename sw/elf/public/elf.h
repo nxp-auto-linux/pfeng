@@ -8,11 +8,11 @@
 /**
  * @defgroup	dxgr_ELF ELF Parser
  * @brief		The ELF parser
- * @details     
- * 
+ * @details
+ *
  * @addtogroup dxgr_ELF
  * @{
- * 
+ *
  * @file			elf.h
  * @version			0.0.0.0
  *
@@ -30,8 +30,8 @@
 * @page misra_violations MISRA-C:2004 violations
 *
 * @section elf_h_REF_1
-* Violates MISRA 2004 TODO Rule TODO, 
-* 
+* Violates MISRA 2004 TODO Rule TODO,
+*
 *
 */
 
@@ -43,7 +43,7 @@
  1) system and project includes
  2) needed interfaces from external units
  3) internal and external interfaces from this unit
-==================================================================================================*/  
+==================================================================================================*/
 #include "oal.h"
 
 /*==================================================================================================
@@ -255,6 +255,12 @@ typedef struct __attribute__((packed))
 /*==================================================================================================
                                      FUNCTION PROTOTYPES
 ==================================================================================================*/
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 extern bool_t ELF_Open(ELF_File_t *pElfFile,void *pvFile, uint32_t u32FileSize);
 extern void ELF_Close(ELF_File_t *pElfFile);
 
@@ -372,6 +378,11 @@ static inline bool_t ELF_IsArchitecture(const ELF_File_t *pElfFile, ELF_Arch_t e
     }
     return bRetVal;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* ELF_H */
 

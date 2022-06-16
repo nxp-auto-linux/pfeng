@@ -57,6 +57,11 @@
 #error "PFE_CFG_TARGET_OS_xx was not set!"
 #endif /* PFE_CFG_TARGET_OS_xx */
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief		Convert a numeric network address to a string
  * @details		Function return the pointer to the buffer containing
@@ -69,6 +74,11 @@
  * @return		The pointer the to buffer, NULL if error occured
  */
 char_t *oal_util_net_inet_ntop(int32_t af, const void *src, char_t *dst, uint32_t size);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* OAL_UTIL_NET_H_ */
 

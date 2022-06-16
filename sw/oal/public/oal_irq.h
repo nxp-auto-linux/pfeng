@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -47,8 +47,12 @@
 #define OAL_IRQ_H_
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
+
 #include "oal_irq_autosar.h"
-#endif
+
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 typedef struct oal_irq_tag oal_irq_t;
 
@@ -136,6 +140,11 @@ errno_t oal_irq_unmask(oal_irq_t *irq);
 int32_t oal_irq_get_id(const oal_irq_t *irq);
 
 bool_t oal_irq_in_atomic(void);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* OAL_IRQ_H_ */
 

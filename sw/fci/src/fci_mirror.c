@@ -21,6 +21,11 @@
 #ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief			Processes FPP_CMD_MIRROR commands
  * @param[in]		msg FCI message containing the FPP_CMD_MIRROR command
@@ -72,7 +77,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 		{
 			/* No data written to reply buffer (yet) */
 			*reply_len = 0U;
-			
+
 			(void)memset(reply_buf, 0, sizeof(fpp_mirror_cmd_t));
 			mirror_cmd = (fpp_mirror_cmd_t *)(msg->msg_cmd.payload);
 
@@ -451,6 +456,11 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 	}
 	return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_CFG_FCI_ENABLE */
 #endif /* PFE_CFG_PFE_MASTER */

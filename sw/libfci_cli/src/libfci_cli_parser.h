@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -31,6 +31,11 @@
 #ifndef LIBFCI_CLI_PARSER_H_
 #define LIBFCI_CLI_PARSER_H_
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
 void cli_print_app_version(void);
@@ -38,5 +43,10 @@ void cli_print_app_version(void);
 int cli_parse_and_execute(char* pp_txtarr[], int arrln);
 
 /* ========================================================================= */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif

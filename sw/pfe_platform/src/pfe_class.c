@@ -43,14 +43,25 @@ struct pfe_classifier_tag
 	uint32_t           fw_features_count; /* Number of items in fw_features */
 };
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static errno_t  pfe_class_dmem_heap_init(pfe_class_t *class);
 static errno_t  pfe_class_load_fw_features(pfe_class_t *class);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 static void     pfe_class_alg_stats_endian(pfe_ct_class_algo_stats_t *stat);
 static void     pfe_class_ihc_stats_endian(pfe_ct_class_ihc_stats_t *stat);
 static void     pfe_class_pe_stats_endian(pfe_ct_pe_stats_t *stat);
 static void     pfe_class_sum_pe_algo_stats(pfe_ct_class_algo_stats_t *sum, const pfe_ct_class_algo_stats_t *val);
 static void     pfe_class_sum_pe_ihc_stats(pfe_ct_class_ihc_stats_t *sum, const pfe_ct_class_ihc_stats_t *val);
 static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
+static uint32_t pfe_class_ihc_stat_to_str(const pfe_ct_class_ihc_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief CLASS ISR
@@ -161,7 +172,7 @@ if ((PFE_CFG_PTP_COMMON_HIF >= PFE_PHY_IF_ID_HIF0 && PFE_CFG_PTP_COMMON_HIF <= P
 		{
 			/* Get the ptp_common_hif offset in DMEM */
 			dmem_addr = oal_ntohl(pfe_pe_mmap.class_pe.ptp_common_hif);
-			common_hif = (uint8_t)PFE_CFG_PTP_COMMON_HIF;				
+			common_hif = (uint8_t)PFE_CFG_PTP_COMMON_HIF;
 			for (pe_idx = 0U; pe_idx < class->pe_num; ++pe_idx)
 			{
 				pfe_pe_memcpy_from_host_to_dmem_32(class->pe[pe_idx], dmem_addr, &common_hif, sizeof(common_hif));
@@ -506,7 +517,7 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
 			{
 				NXP_LOG_ERROR("Failed to initialize FW features\n");
 			}
-			else 
+			else
 			{
 				ret = pfe_class_load_ptp_config(class);
 				if(EOK != ret)
@@ -1137,6 +1148,8 @@ void pfe_class_sum_flexi_parser_stats(pfe_ct_class_flexi_parser_stats_t *sum, co
 	}
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
 * @brief Converts endiannes of the whole structure containing statistics
 * @param[in,out] stat Statistics which endiannes shall be converted
@@ -1161,6 +1174,8 @@ static void pfe_class_pe_stats_endian(pfe_ct_pe_stats_t *stat)
 		}
 	}
 }
+
+#endif /* #if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
 * @brief Function adds statistics value to sum
@@ -1204,6 +1219,8 @@ static void pfe_class_sum_pe_ihc_stats(pfe_ct_class_ihc_stats_t *sum, const pfe_
 		sum->discarded += val->discarded;
 	}
 }
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
 /**
  * @brief                  Converts statistics of a logical interface or classification algorithm into a text form
@@ -1291,6 +1308,8 @@ uint32_t pfe_class_fp_stat_to_str(const pfe_ct_class_flexi_parser_stats_t *stat,
 	}
 	return len;
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		Send data buffer
@@ -1428,6 +1447,8 @@ errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
 						  |((uint32_t)1U << (uint32_t)PFE_PHY_IF_ID_HIF2)\
 						  |((uint32_t)1U << (uint32_t)PFE_PHY_IF_ID_HIF3)\
 						  |((uint32_t)1U << (uint32_t)PFE_PHY_IF_ID_HIF_NOCPY))
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
 /**
  * @brief		Return CLASS runtime statistics in text form
@@ -1633,6 +1654,8 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	return len;
 }
 
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 /**
  * @brief		Returns firmware versions
  * @param[in]	class The classifier instance
@@ -1674,3 +1697,9 @@ void pfe_class_rtable_lookup_disable(const pfe_class_t *class)
 {
 	pfe_class_cfg_rtable_lookup_disable(class->cbus_base_va);
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

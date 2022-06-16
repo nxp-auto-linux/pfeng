@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2021 NXP
+ *  Copyright 2017-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -55,7 +55,17 @@
 #define UTIL_PE_IBUS_DMEM_BASE(i)	((((i) & 0x3) << 20U) | UTIL_PE_IBUS_ACCESS_DMEM)
 #define UTIL_PE_IBUS_PMEM_BASE(i)	((((i) & 0x3) << 20U) | UTIL_PE_IBUS_ACCESS_PMEM)
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 uint32_t pfe_util_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 errno_t pfe_util_cfg_isr(addr_t base_va);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* UTIL_CSR_H_ */

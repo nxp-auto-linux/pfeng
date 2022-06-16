@@ -198,7 +198,7 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 		ret = of_property_read_u32_index(np, "nxp,pfeng-hif-channels", i, &propval);
 		if (ret)
 			continue;
-		if (propval > PFENG_PFE_HIF_CHANNELS) {
+		if (propval >= PFENG_PFE_HIF_CHANNELS) {
 			dev_err(dev, "HIF channel id=%u is invalid, aborting\n", propval);
 			return -EIO;
 		}
@@ -378,15 +378,10 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 
 			emac->intf_mode = intf_mode;
 			emac->enabled = true;
+			emac->max_speed = 0;
 
 			 /* Get max speed */
 			if (of_property_read_u32(child, "max-speed", &emac->max_speed)) {
-				if (id == 0)
-					/* S32G2: Only PFE_EMAC_0 supports 2.5G speed */
-					emac->max_speed = SPEED_2500;
-				else
-					emac->max_speed = SPEED_1000;
-
 				/* Standard SGMII AN is at 1G */
 				emac->serdes_an_speed = SPEED_1000;
 			} else {

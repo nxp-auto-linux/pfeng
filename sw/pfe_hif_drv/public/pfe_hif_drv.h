@@ -245,6 +245,11 @@ typedef struct pfe_hif_drv_tag pfe_hif_drv_t;
 typedef struct pfe_hif_pkt_tag pfe_hif_pkt_t;
 typedef errno_t (* pfe_hif_drv_client_event_handler)(pfe_hif_drv_client_t *client, void *arg, uint32_t event, uint32_t qno);
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 pfe_hif_drv_t *pfe_hif_drv_create(pfe_hif_chnl_t *channel);
 void pfe_hif_drv_destroy(pfe_hif_drv_t *hif_drv);
 errno_t pfe_hif_drv_init(pfe_hif_drv_t *hif_drv);
@@ -517,6 +522,11 @@ static inline pfe_ct_phy_if_id_t pfe_hif_pkt_get_ingress_phy_id(const pfe_hif_pk
 
 	return pkt->i_phy_if;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_HIF_DRV_H_ */
 

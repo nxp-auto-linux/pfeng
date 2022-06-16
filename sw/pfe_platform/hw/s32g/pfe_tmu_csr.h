@@ -215,6 +215,11 @@ struct pfe_tmu_phy_cfg_tag
 	uint8_t shp_cnt;
 };
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 const pfe_tmu_phy_cfg_t* pfe_tmu_cfg_get_phy_config(pfe_ct_phy_if_id_t phy);
 
 errno_t pfe_tmu_q_cfg_get_fill_level(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue, uint32_t *level);
@@ -259,5 +264,10 @@ void pfe_tmu_cfg_reset(addr_t cbus_base_va);
 void pfe_tmu_cfg_enable(addr_t cbus_base_va);
 void pfe_tmu_cfg_disable(addr_t cbus_base_va);
 uint32_t pfe_tmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* TMU_CSR_H_ */

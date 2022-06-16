@@ -29,6 +29,11 @@
 #ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static void fci_routes_remove_related_connections(fci_rt_db_entry_t *route);
 
 /*
@@ -108,7 +113,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	{		
+	{
 		if (*reply_len < sizeof(fpp_rt_cmd_t))
 		{
 			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_rt_cmd_t)\n");
@@ -499,6 +504,11 @@ void fci_routes_drop_all_ipv6(void)
 		}
 	}
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_CFG_FCI_ENABLE */
 #endif /* PFE_CFG_PFE_MASTER */

@@ -18,6 +18,11 @@ typedef enum
     MIRROR_BY_PHYS_ADDR /* Retrieve the entry with matching DMEM address, arg is addr_t (the address) */
 } pfe_mirror_db_crit_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 errno_t pfe_mirror_init(pfe_class_t *class);
 void pfe_mirror_deinit(void);
 pfe_mirror_t *pfe_mirror_get_first(pfe_mirror_db_crit_t crit, const void *arg);
@@ -32,5 +37,10 @@ errno_t pfe_mirror_set_filter(pfe_mirror_t *mirror, uint32_t filter_address);
 uint32_t pfe_mirror_get_filter(const pfe_mirror_t *mirror);
 errno_t pfe_mirror_set_actions(pfe_mirror_t *mirror, pfe_ct_route_actions_t actions, const pfe_ct_route_actions_args_t *args);
 errno_t pfe_mirror_get_actions(const pfe_mirror_t *mirror, pfe_ct_route_actions_t *actions, pfe_ct_route_actions_args_t *args);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_MIRROR_H */

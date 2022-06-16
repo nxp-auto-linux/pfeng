@@ -20,6 +20,20 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+static void igqos_class_read_entry_data(addr_t base_va, uint32_t entry[]);
+static void igqos_class_prepare_entry_data(addr_t base_va, const uint32_t entry[]);
+static void igqos_class_clear_entry_data(addr_t base_va);
+static void igqos_class_request_entry_cmd(addr_t base_va, bool_t write, bool_t is_lru, uint32_t addr);
+static void igqos_class_write_flow_cmd(addr_t base_va, uint32_t addr);
+static void igqos_class_read_flow_cmd(addr_t base_va, uint32_t addr);
+static void igqos_class_write_lru_cmd(addr_t base_va, uint32_t addr);
+static uint32_t igqos_wred_queue_enable_bit(pfe_iqos_queue_t queue);
+
 static void igqos_class_read_entry_data(addr_t base_va, uint32_t entry[])
 {
 	uint32_t ii;
@@ -638,6 +652,8 @@ uint32_t pfe_gpi_cfg_shp_get_drop_cnt(addr_t base_va, uint8_t id)
 	return hal_read32(base_va + CSR_IGQOS_STAT_SHAPER_DROP_CNT(id));
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Get GPI statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
@@ -731,3 +747,11 @@ uint32_t pfe_gpi_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 
 	return len;
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

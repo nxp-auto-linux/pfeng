@@ -132,8 +132,8 @@ typedef struct cli_cmdargs_tt
     {
         bool is_valid;
     } version;
-    
-    
+
+
     struct
     {
         bool is_valid;
@@ -159,8 +159,8 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         fpp_phy_if_block_state_t value;
     } if_block_state;
-    
-    
+
+
     struct
     {
         bool is_valid;
@@ -234,8 +234,8 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         fpp_if_m_rules_t bitset;
     } match_rules;
-    
-    
+
+
     struct
     {
         bool is_valid;
@@ -266,8 +266,8 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         uint8_t arr[MAC_BYTES_LN];
     } dmac;
-    
-    
+
+
     struct
     {
         bool is_valid;
@@ -292,8 +292,8 @@ typedef struct cli_cmdargs_tt
         bool is6;
         uint32_t arr[IP6_U32S_LN];
     } dip2;                  /* NOTE: 'OPT_R_DIP' and 'OPT_DIP6' share the same storage */
-    
-    
+
+
     struct
     {
         bool is_valid;
@@ -314,8 +314,8 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         uint16_t value;
     } dport2;                  /* NOTE: 'OPT_R_DPORT' and 'OPT_DPORT_MAX' share the same storage */
-    
-    
+
+
     struct
     {
         bool is_valid;
@@ -349,8 +349,8 @@ typedef struct cli_cmdargs_tt
     {
         bool is_valid;
     } fallback_4o6;          /* NOTE: 'OPT_FALLBACK' and 'OPT_4o6' share the same storage */
-    
-    
+
+
     struct
     {
         bool is_valid;
@@ -361,8 +361,8 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         uint32_t value;
     } route2;
-    
-    
+
+
     struct
     {
         bool is_valid;
@@ -393,8 +393,8 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         char txt[TABLE_NAME_TXT_LN];
     } table1_name;
-    
-    
+
+
     struct
     {
         bool is_valid;
@@ -437,22 +437,22 @@ typedef struct cli_cmdargs_tt
     {
         bool is_valid;
     } reject;
-    
-    
+
+
     struct
     {
         bool is_valid;
         fpp_spd_action_t value;
     } spd_action;
-    
-    
+
+
     struct
     {
         bool is_valid;
         char txt[FEATURE_NAME_TXT_LN];
     } feature_name;
-    
-    
+
+
     struct
     {
         bool is_valid;
@@ -461,8 +461,8 @@ typedef struct cli_cmdargs_tt
     {
         bool is_valid;
     } dynamic0;
-    
-    
+
+
     struct
     {
         bool is_valid;
@@ -473,7 +473,7 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         uint8_t value;
     } que_sch_shp_mode;      /* NOTE: 'OPT_QUE_MODE', 'OPT_SCH_MODE' and 'OPT_SHP_MODE' share the same storage */
-    
+
     struct
     {
         bool is_valid;
@@ -494,7 +494,7 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         uint8_t arr[ZPROBS_LN];
     } zprob;
-    
+
     struct
     {
         bool is_valid;
@@ -506,7 +506,7 @@ typedef struct cli_cmdargs_tt
         uint8_t  arr_src[SCH_INS_LN];
         uint32_t arr_w[SCH_INS_LN];
     } sch_in;
-    
+
     struct
     {
         bool is_valid;
@@ -527,14 +527,14 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         int32_t value;
     } crmax;
-    
-    
+
+
     struct
     {
         bool is_valid;
         fpp_modify_actions_t bitset;
     } modify_actions;
-    
+
     struct
     {
         bool is_valid;
@@ -561,7 +561,7 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         uint8_t value;
     } tos;
-    
+
     struct
     {
         bool is_valid;
@@ -587,18 +587,28 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         uint8_t value;
     } dip_pfx;  /* dip subnet prefix */
-    
+
 } cli_cmdargs_t;
 
 #define TXT_ERR_INDENT     ""
 #define TXT_ERR_NONAME     ""
 #define TXT_ERR_NAME(ERR)  ": " #ERR
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
 extern void cli_print_error(int errcode, const char* p_txt_errname, const char* p_txt_errmsg, ...);
 
 /* ========================================================================= */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif
 

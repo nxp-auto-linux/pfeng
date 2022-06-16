@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -134,6 +134,11 @@ typedef struct
 	} metadata;
 } oal_mbox_msg_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief	Create new mbox
  * @return	The mbox instance or NULL if failed
@@ -192,6 +197,11 @@ errno_t oal_mbox_send_signal(oal_mbox_t *mbox, int32_t code);
  * @param[in]	msg The message to be acknowledged
  */
 void oal_mbox_ack_msg(oal_mbox_msg_t *msg);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* OAL_MBOX_H_ */
 

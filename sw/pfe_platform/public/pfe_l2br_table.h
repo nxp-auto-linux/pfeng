@@ -32,6 +32,11 @@ typedef struct __pfe_l2br_table_tag pfe_l2br_table_t;
 typedef struct __pfe_l2br_table_iterator_tag pfe_l2br_table_iterator_t;
 typedef struct __pfe_l2br_table_entry_tag pfe_l2br_table_entry_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 pfe_l2br_table_t *pfe_l2br_table_create(addr_t cbus_base_va, pfe_l2br_table_type_t type);
 void pfe_l2br_table_destroy(pfe_l2br_table_t *l2br);
 errno_t pfe_l2br_table_init(pfe_l2br_table_t *l2br);
@@ -58,4 +63,10 @@ bool_t pfe_l2br_table_entry_is_fresh(const pfe_l2br_table_entry_t *entry) __attr
 errno_t pfe_l2br_table_entry_set_static(const pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry, bool_t is_static);
 bool_t pfe_l2br_table_entry_is_static(const pfe_l2br_table_entry_t *entry) __attribute__((pure));
 uint32_t pfe_l2br_table_entry_to_str(const pfe_l2br_table_entry_t *entry, char_t *buf, uint32_t buf_len);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #endif /* PUBLIC_PFE_L2BR_TABLE_H_ */

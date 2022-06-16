@@ -28,6 +28,22 @@
 #ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CONST_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+/* usage scope: fci_l2br_domain_cmd */
+static const pfe_ct_l2br_action_t fci_to_l2br_action[4] = {L2BR_ACT_FORWARD, L2BR_ACT_FLOOD, L2BR_ACT_PUNT, L2BR_ACT_DISCARD};
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CONST_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static errno_t fci_l2br_domain_remove(pfe_l2br_domain_t *domain);
 static errno_t fci_l2br_domain_remove_if(pfe_l2br_domain_t *domain, const pfe_phy_if_t *phy_if);
 uint32_t fci_l2br_static_entry_get_valid_fw_list(void);
@@ -48,7 +64,6 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 	fpp_l2_bd_cmd_t *bd_cmd;
 	errno_t ret = EOK;
 	pfe_l2br_domain_t *domain = NULL;
-	static const pfe_ct_l2br_action_t fci_to_l2br_action[4] = {L2BR_ACT_FORWARD, L2BR_ACT_FLOOD, L2BR_ACT_PUNT, L2BR_ACT_DISCARD};
 	uint32_t ii;
 	pfe_if_db_entry_t *if_db_entry = NULL;
 	bool_t tag;
@@ -607,7 +622,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 					break;
 				}
 			}
-	
+
 		}
 	}
 	return ret;
@@ -742,6 +757,11 @@ static errno_t fci_l2br_domain_remove(pfe_l2br_domain_t *domain)
 
 	return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_CFG_FCI_ENABLE */
 #endif /* PFE_CFG_PFE_MASTER */

@@ -22,6 +22,11 @@
 #ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief			Processes FPP_CMD_FW_FEATURES commands
  * @param[in]		msg FCI message containing the FPP_CMD_FP_FEATURES command
@@ -39,7 +44,7 @@ errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_c
 	const char *feature_name;
 	errno_t ret;
 
-#if defined(PFE_CFG_NULL_ARG_CHECK)	
+#if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
@@ -53,9 +58,9 @@ errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_c
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		
+
 		*fci_ret = FPP_ERR_OK;
-		
+
 		/* Important to initialize to avoid buffer overflows */
 		if (*reply_len < sizeof(fpp_fw_features_cmd_t))
 		{
@@ -193,6 +198,11 @@ errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_c
 
 	return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_CFG_FCI_ENABLE */
 #endif /* PFE_CFG_PFE_MASTER */

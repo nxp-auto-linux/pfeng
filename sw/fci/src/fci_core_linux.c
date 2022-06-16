@@ -479,12 +479,6 @@ errno_t fci_core_client_send(fci_core_client_t *client, fci_msg_t *msg, fci_msg_
 	errno_t ret = ENOENT;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == GET_FCI_CORE()))
-	{
-		NXP_LOG_ERROR("FCI context is missing\n");
-		return EINVAL;
-	}
-
 	if (unlikely(FALSE == __context.fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
@@ -497,6 +491,13 @@ errno_t fci_core_client_send(fci_core_client_t *client, fci_msg_t *msg, fci_msg_
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/*	this function could be called from a callback even after the FCI module was destroyed */
+	if (NULL == GET_FCI_CORE())
+	{
+		NXP_LOG_WARNING("Cannot send FCI message (FCI core is NULL)\n");
+		return EINVAL;
+	}
 
 	if(mutex_lock_interruptible(&GET_FCI_CORE()->lock))
 	{
@@ -527,12 +528,6 @@ errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep)
 	errno_t ret = ENOENT;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == GET_FCI_CORE()))
-	{
-		NXP_LOG_ERROR("FCI context is missing\n");
-		return EINVAL;
-	}
-
 	if (unlikely(FALSE == __context.fci_initialized))
 	{
 		NXP_LOG_ERROR("Context not initialized\n");
@@ -545,6 +540,13 @@ errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep)
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/*	this function could be called from a callback even after the FCI module was destroyed */
+	if (NULL == GET_FCI_CORE())
+	{
+		NXP_LOG_WARNING("Cannot send FCI message (FCI core is NULL)\n");
+		return EINVAL;
+	}
 
 	if(mutex_lock_interruptible(&core->lock))
 	{

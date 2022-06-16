@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -64,6 +64,11 @@
 
 #include "ct_assert.h"
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief		Swap byte order in a buffer
  * @detail		Convert byte order of each 4-byte word within given buffer
@@ -85,6 +90,11 @@ static inline void oal_swap_endian_long(void *data, uint32_t size)
 		word[ii] = oal_htonl(word[ii]);
 	}
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* OAL_TYPES_H_ */
 

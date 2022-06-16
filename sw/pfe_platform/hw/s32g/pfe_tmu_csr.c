@@ -22,10 +22,49 @@
 #define CLK_DIV_LOG2 (8U - 1U) /* Value of CLK_DIV_LOG2 log2(clk_div/2) */
 #define CLK_DIV ((uint64_t)1U << (CLK_DIV_LOG2 + 1U)) /* 256 */
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CONST_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+/* usage scope: pfe_tmu_cfg_get_phy_config */
+/*	List of QoS configuration for each physical interface terminated with invalid entry */
+static const pfe_tmu_phy_cfg_t phys[] = {
+    {.id = PFE_PHY_IF_ID_EMAC0, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
+    {.id = PFE_PHY_IF_ID_EMAC1, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
+    {.id = PFE_PHY_IF_ID_EMAC2, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
+    {.id = PFE_PHY_IF_ID_HIF0, .q_cnt = 2U, .sch_cnt = 0U, .shp_cnt = 0U},
+    {.id = PFE_PHY_IF_ID_HIF1, .q_cnt = 2U, .sch_cnt = 0U, .shp_cnt = 0U},
+    {.id = PFE_PHY_IF_ID_HIF2, .q_cnt = 2U, .sch_cnt = 0U, .shp_cnt = 0U},
+    {.id = PFE_PHY_IF_ID_HIF3, .q_cnt = 2U, .sch_cnt = 0U, .shp_cnt = 0U},
+    {.id = PFE_PHY_IF_ID_HIF, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
+    {.id = PFE_PHY_IF_ID_HIF_NOCPY, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
+    {.id = PFE_PHY_IF_ID_UTIL, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
+    {.id = PFE_PHY_IF_ID_INVALID}
+};
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CONST_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static errno_t pfe_tmu_cntx_mem_write(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t loc, uint32_t data);
 static errno_t pfe_tmu_cntx_mem_read(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t loc, uint32_t *data);
 static errno_t pfe_tmu_context_memory(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue_temp, uint16_t min, uint16_t max);
 static uint8_t pfe_tmu_hif_q_to_tmu_q(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy, uint8_t queue);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CONST_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /* PHY lookup table */
 static const pfe_ct_phy_if_id_t phy_if_id_temp[TLITE_PHYS_CNT] =
@@ -33,6 +72,16 @@ static const pfe_ct_phy_if_id_t phy_if_id_temp[TLITE_PHYS_CNT] =
 	PFE_PHY_IF_ID_EMAC0, PFE_PHY_IF_ID_EMAC1, PFE_PHY_IF_ID_EMAC2,
 	PFE_PHY_IF_ID_HIF, PFE_PHY_IF_ID_HIF_NOCPY, PFE_PHY_IF_ID_UTIL
 };
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CONST_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /**
  * @brief		Return QoS configuration of given physical interface
@@ -42,21 +91,8 @@ static const pfe_ct_phy_if_id_t phy_if_id_temp[TLITE_PHYS_CNT] =
 const pfe_tmu_phy_cfg_t *pfe_tmu_cfg_get_phy_config(pfe_ct_phy_if_id_t phy)
 {
 	uint32_t ii;
+
 	const pfe_tmu_phy_cfg_t *phy_config = NULL;
-	/*	List of QoS configuration for each physical interface terminated with invalid entry */
-	static const pfe_tmu_phy_cfg_t phys[] = {
-		{.id = PFE_PHY_IF_ID_EMAC0, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
-		{.id = PFE_PHY_IF_ID_EMAC1, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
-		{.id = PFE_PHY_IF_ID_EMAC2, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
-		{.id = PFE_PHY_IF_ID_HIF0, .q_cnt = 2U, .sch_cnt = 0U, .shp_cnt = 0U},
-		{.id = PFE_PHY_IF_ID_HIF1, .q_cnt = 2U, .sch_cnt = 0U, .shp_cnt = 0U},
-		{.id = PFE_PHY_IF_ID_HIF2, .q_cnt = 2U, .sch_cnt = 0U, .shp_cnt = 0U},
-		{.id = PFE_PHY_IF_ID_HIF3, .q_cnt = 2U, .sch_cnt = 0U, .shp_cnt = 0U},
-		{.id = PFE_PHY_IF_ID_HIF, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
-		{.id = PFE_PHY_IF_ID_HIF_NOCPY, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
-		{.id = PFE_PHY_IF_ID_UTIL, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
-		{.id = PFE_PHY_IF_ID_INVALID}
-	};
 
 	for (ii=0U; phys[ii].id != PFE_PHY_IF_ID_INVALID; ii++)
 	{
@@ -831,7 +867,7 @@ errno_t pfe_tmu_q_mode_set_tail_drop(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy
 				ret = EINVAL;
 			}
 		}
-		
+
 		if (EOK == ret)
 		{
 			/*	curQ_Qmax[8:0], curQ_Qmin[8:0], curQ_cfg[1:0] are @ position 4 per queue */
@@ -1778,6 +1814,8 @@ uint8_t pfe_tmu_sch_cfg_get_bound_sched_output(addr_t cbus_base_va, pfe_ct_phy_i
 	return sched_id;
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Get TMU statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
@@ -1907,4 +1945,12 @@ uint32_t pfe_tmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 	return len;
 }
 
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /** @}*/
+

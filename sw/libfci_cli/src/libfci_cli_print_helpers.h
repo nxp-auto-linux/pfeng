@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -34,6 +34,11 @@
 #include <stdint.h>
 #include "libfci_cli_common.h"
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
 void cli_print_bitset32(uint32_t bitset, const char* p_txt_delim, const char* (*p_value2txt)(uint8_t value),
@@ -45,5 +50,10 @@ void cli_print_ip4(uint32_t ip4, bool is_fixed_width);
 void cli_print_ip6(const uint32_t* p_ip6);
 
 /* ========================================================================= */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif

@@ -154,6 +154,11 @@ struct __pfe_l2br_table_entry_tag
 	bool_t vlan_set;
 };
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static errno_t pfe_l2br_table_init_cmd(pfe_l2br_table_t *l2br);
 static errno_t pfe_l2br_table_write_cmd(pfe_l2br_table_t *l2br, uint32_t addr, pfe_l2br_table_entry_t *entry);
 static errno_t pfe_l2br_table_read_cmd(pfe_l2br_table_t *l2br, uint32_t addr, pfe_l2br_table_entry_t *entry);
@@ -162,6 +167,11 @@ static errno_t pfe_l2br_entry_to_cmd_args(const pfe_l2br_table_t *l2br, pfe_l2br
 static uint32_t pfe_l2br_table_get_col_ptr(const pfe_l2br_table_entry_t *entry);
 static void pfe_l2br_get_data(const pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry);
 static bool_t pfe_l2br_table_entry_match_criterion(const pfe_l2br_table_t *l2br, const pfe_l2br_table_iterator_t *l2t_iter, const pfe_l2br_table_entry_t *entry);
+static errno_t pfe_l2br_table_do_update_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry);
+static errno_t pfe_l2br_table_do_del_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry);
+static errno_t pfe_l2br_table_do_add_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry);
+static errno_t pfe_l2br_table_do_search_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry);
+static errno_t pfe_l2br_table_flush_cmd(pfe_l2br_table_t *l2br);
 
 /**
  * @brief		Match entry with latest criterion provided via pfe_l2br_table_get_first()
@@ -1726,6 +1736,8 @@ __attribute__((pure)) bool_t pfe_l2br_table_entry_is_static(const pfe_l2br_table
 	}
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Convert entry to string representation
  * @param[in]	entry The entry
@@ -1782,3 +1794,11 @@ uint32_t pfe_l2br_table_entry_to_str(const pfe_l2br_table_entry_t *entry, char_t
 	}
 	return len;
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

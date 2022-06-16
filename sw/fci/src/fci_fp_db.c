@@ -100,15 +100,37 @@ typedef enum
     TABLE
 } dbase_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static fci_fp_rule_db_t fci_fp_rule_db;
 static fci_fp_table_db_t fci_fp_table_db;
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 static bool_t fci_fp_match_rule_by_criterion(fci_fp_rule_criterion_t crit, const fci_fp_rule_criterion_arg_t *arg, const fci_fp_rule_t *rule);
 static fci_fp_rule_t *fci_fp_rule_get_first(fci_fp_rule_db_t *db, fci_fp_rule_criterion_t crit, void *arg, dbase_t dbase);
 static fci_fp_rule_t *fci_fp_rule_get_next(fci_fp_rule_db_t *db, dbase_t dbase);
 static bool_t fci_fp_match_table_by_criterion(fci_fp_table_criterion_t crit, const fci_fp_table_criterion_arg_t *arg, const fci_fp_table_t *fp_table);
 static fci_fp_table_t *fci_fp_table_get_first(fci_fp_table_db_t *db, fci_fp_table_criterion_t crit, void *arg);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 static uint32_t fci_fp_print_table(const fci_fp_table_t *fp_table, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+static errno_t fci_fp_get_rule_pos_in_table(const fci_fp_table_t *fp_table, fci_fp_rule_t *rule, uint8_t *pos);
+static uint32_t fci_fp_print_rule(fci_fp_rule_t *rule, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #if 0
 static fci_fp_table_t *fci_fp_table_get_next(fci_fp_table_db_t *db);
@@ -279,7 +301,7 @@ static fci_fp_rule_t *fci_fp_rule_get_first(fci_fp_rule_db_t *db, fci_fp_rule_cr
  */
 static fci_fp_rule_t *fci_fp_rule_get_next(fci_fp_rule_db_t *db, dbase_t dbase)
 {
-    fci_fp_rule_t *rule;
+    fci_fp_rule_t *rule = NULL;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
     if (unlikely(NULL == db))
@@ -1436,6 +1458,8 @@ errno_t fci_fp_db_get_table_next_rule(char_t *table_name, char_t **rule_name, ui
     return ret;
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
 * @brief Prints a rule in a human readable form
 * @param[in] rule Rule to be printed
@@ -1579,5 +1603,13 @@ uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_le
     return len;
 }
 
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #endif /* PFE_CFG_FCI_ENABLE */
 #endif /* PFE_CFG_PFE_MASTER */
+

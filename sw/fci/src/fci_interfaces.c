@@ -31,8 +31,13 @@
 #ifdef PFE_CFG_PFE_MASTER
 #ifdef PFE_CFG_FCI_ENABLE
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 static errno_t fci_interfaces_get_arg_info(fpp_if_m_args_t *m_arg, pfe_ct_if_m_rules_t rule, void **offset, size_t *size, uint32_t *fp_table_addr);
+static errno_t fci_interfaces_destroy_fptables(const fpp_if_m_rules_t match, const pfe_ct_if_m_args_t* args);
 
 /*
  * @brief			Get offset and size of the rule
@@ -301,7 +306,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 	uint32_t fp_table_addr;
 	uint32_t fp_table_destroy[2];
 	char_t *table_name;
-	pfe_ct_class_algo_stats_t stats = {0};
+	pfe_ct_class_algo_stats_t stats = { 0 };
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -901,7 +906,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 	pfe_if_db_entry_t *entry = NULL;
 	pfe_phy_if_t *phy_if = NULL;
 	pfe_ct_block_state_t block_state;
-	pfe_ct_phy_if_stats_t stats = {0};
+	pfe_ct_phy_if_stats_t stats = { 0 };
 	pfe_mirror_t *mirror = NULL;
 	uint32_t addr = 0U;
 	uint32_t i;
@@ -1630,6 +1635,11 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 
 	return ret;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_CFG_FCI_ENABLE */
 #endif /* PFE_CFG_PFE_MASTER */

@@ -26,6 +26,7 @@
 #include "pfe_cfg.h"
 #include "hal.h"
 #include "pfeng.h"
+#include "pfe_feature_mgr.h"
 
 /*
  * S32G soc specific addresses
@@ -358,20 +359,43 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static void pfeng_soc_version_check(struct device *dev)
+static int pfeng_validate_emac_speeds(struct pfeng_priv *priv)
 {
-	struct s32_soc_rev soc_rev;
-	int ret;
+	int id;
 
-	ret = s32_siul2_nvmem_get_soc_revision(dev, "soc_revision", &soc_rev);
-	if (ret) {
-		dev_warn(dev, "Failed to read SoC version (err: %d)\n", ret);
-		return;
+	for (id = 0; id < PFENG_PFE_EMACS; id++) {
+		struct pfeng_emac *emac = &priv->emac[id];
+
+		if (!emac->enabled)
+			continue;
+
+		/* retrieve max rate */
+		switch (emac->max_speed) {
+		case 0:
+			/* It signalises no explicit max_speed */
+			if (!id || priv->on_g3)
+				emac->max_speed = SPEED_2500;
+			else
+				emac->max_speed = SPEED_1000;
+			break;
+		case SPEED_10:
+		case SPEED_100:
+		case SPEED_1000:
+			break;
+		case SPEED_2500:
+			/* On G2 only EMAC0 can use 2500 */
+			if (id && !priv->on_g3) {
+				dev_warn(&priv->pdev->dev, "Unsupported max speed on EMAC%d: %d\n", id, emac->max_speed);
+				return -EINVAL;
+			}
+			break;
+		default:
+			dev_warn(&priv->pdev->dev, "Invalid max speed on EMAC%d: %d\n", id, emac->max_speed);
+			return -EINVAL;
+		}
 	}
 
-	if (soc_rev.major < PFE_IP_MAJOR_VERSION_CUT2)
-		dev_warn(dev, "Running cut 2.0 driver on SoC version %d.%d!\n",
-			 soc_rev.major, soc_rev.minor);
+	return 0;
 }
 
 /**
@@ -414,8 +438,6 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	hal_ip_ready_set(false);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
-	pfeng_soc_version_check(dev);
 
 	if (!of_dma_is_coherent(dev->of_node))
 		dev_warn(dev, "DMA coherency disabled - consider impact on device performance\n");
@@ -627,6 +649,14 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		goto err_drv;
 	}
 
+	/* Check for silicon version */
+	priv->on_g3 = pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3);
+
+	/* Verify the max_speed values on EMACs */
+	ret = pfeng_validate_emac_speeds(priv);
+	if (ret)
+		goto err_drv;
+
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	hal_ip_ready_set(true);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
@@ -803,6 +833,12 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	if (ret) {
 		dev_err(dev, "Failed to reset PFE controller\n");
 		goto err_pfe_init;
+	}
+
+	/* Reinit memory */
+	ret = oal_mm_wakeup_reinit();
+	if (ret) {
+		dev_warn(dev, "Failed to re-init PFE memory\n");
 	}
 
 	/* Start PFE Platform */

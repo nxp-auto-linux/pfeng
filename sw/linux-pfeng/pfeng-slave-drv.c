@@ -117,17 +117,17 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
 	int ret;
 
+	if (!priv) {
+		dev_err(dev, "Removal failed. No priv data.\n");
+		return -ENOMEM;
+	}
+
 	if (priv->deferred_probe_task)
 		kthread_stop(priv->deferred_probe_task);
 
 	ret = pm_runtime_resume_and_get(dev);
 	if (ret < 0) {
 		dev_info(dev, "PM runtime resume returned: %d\n", ret);
-	}
-
-	if (!priv) {
-		dev_err(dev, "Removal failed. No priv data.\n");
-		return -ENOMEM;
 	}
 
 	if (priv->ihc_slave_wq)

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -8,16 +8,16 @@
 /**
  * @addtogroup	dxgrOAL
  * @{
- * 
+ *
  * @defgroup    dxgr_OAL_SYNC SYNC
  * @brief		Thread synchronization
  * @details		Package provides OS-independent thread synchronization primitives. All API should
  * 				be implemented with performance taken into account.
- * 	
- * 	
+ *
+ *
  * @addtogroup	dxgr_OAL_SYNC
  * @{
- * 
+ *
  * @file		oal_sync.h
  * @brief		The thread synchronization header file
  * @details		Use this header to include all the OS-independent thread synchronization functionality
@@ -53,7 +53,7 @@
 
 /*
  * BARE METAL
- * 
+ *
  */
 #elif defined(PFE_CFG_TARGET_OS_BARE)
 #include "oal_spinlock_bare.h"
@@ -66,6 +66,11 @@
 #else
 #error "PFE_CFG_TARGET_OS_xx was not set!"
 #endif /* PFE_CFG_TARGET_OS_xx */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /**
  * @typedef oal_spinlock_t
@@ -138,6 +143,11 @@ static inline errno_t oal_mutex_lock(oal_mutex_t *mutex);
  * @return		EOK if success, error code otherwise
  */
 static inline errno_t oal_mutex_unlock(oal_mutex_t *mutex);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /** @}*/
 /** @}*/

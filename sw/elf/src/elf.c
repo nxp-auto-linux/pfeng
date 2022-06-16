@@ -90,7 +90,14 @@ enum
 ==================================================================================================*/
 #if TRUE == ELF_CFG_SECTION_PRINT_ENABLED
   #ifdef NXP_LOG_ENABLED /*  Debug message support */
+
     #if TRUE == ELF_CFG_SECTION_TABLE_USED
+
+    #ifdef PFE_CFG_TARGET_OS_AUTOSAR
+    #define ETH_43_PFE_START_SEC_CONST_8
+    #include "Eth_43_PFE_MemMap.h"
+    #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
     static const int8_t aacSTypes[17][9] =
     {
         "NULL    ",
@@ -111,6 +118,14 @@ enum
         "HIUSER  ",
         "UNDEFINE",
     };
+
+    #ifdef PFE_CFG_TARGET_OS_AUTOSAR
+    #define ETH_43_PFE_STOP_SEC_CONST_8
+    #include "Eth_43_PFE_MemMap.h"
+    #define ETH_43_PFE_START_SEC_CONST_UNSPECIFIED
+    #include "Eth_43_PFE_MemMap.h"
+    #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
     static const struct shf_flags_strings
     {
         uint32_t u32Flag;
@@ -132,9 +147,29 @@ enum
         {0x4000000U, "ORDERED"},
         {0x8000000U, "EXCLUDE"},
     };
+
+    #ifdef PFE_CFG_TARGET_OS_AUTOSAR
+    #define ETH_43_PFE_STOP_SEC_CONST_UNSPECIFIED
+    #include "Eth_43_PFE_MemMap.h"
+    #define ETH_43_PFE_START_SEC_CONST_32
+    #include "Eth_43_PFE_MemMap.h"
+    #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
     static const uint32_t u32ShT_Flags_Strings_Count = sizeof(ShT_Flags_Strings) / sizeof(struct shf_flags_strings);
+
+    #ifdef PFE_CFG_TARGET_OS_AUTOSAR
+    #define ETH_43_PFE_STOP_SEC_CONST_32
+    #include "Eth_43_PFE_MemMap.h"
+    #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
     #endif /* ELF_CFG_SECTION_TABLE_USED */
     #if TRUE == ELF_CFG_PROGRAM_TABLE_USED
+
+    #ifdef PFE_CFG_TARGET_OS_AUTOSAR
+    #define ETH_43_PFE_START_SEC_CONST_8
+    #include "Eth_43_PFE_MemMap.h"
+    #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
     static const int8_t aacPTypes[11][10] =
     {
         "NULL     ",
@@ -149,6 +184,12 @@ enum
         "GNU_STACK",
         "UNDEFINED",
     };
+
+    #ifdef PFE_CFG_TARGET_OS_AUTOSAR
+    #define ETH_43_PFE_STOP_SEC_CONST_8
+    #include "Eth_43_PFE_MemMap.h"
+    #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
     #endif /* ELF_CFG_PROGRAM_TABLE_USED */
   #endif /* NXP_LOG_ENABLED */
 #endif /* ELF_CFG_SECTION_PRINT_ENABLED */
@@ -168,6 +209,12 @@ enum
 /*==================================================================================================
                                    LOCAL FUNCTION PROTOTYPES
 ==================================================================================================*/
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /* GENERAL */
 static bool_t LoadFileData(const ELF_File_t *pElfFile, uint32_t u32Offset, uint32_t u32Size, void *pvDestMem);
 /* ELF64 */
@@ -325,7 +372,7 @@ static bool_t ELF32_LoadTables(ELF_File_t *pElfFile)
         NXP_LOG_ERROR("ELF32_LoadTables: Unexpected section header entry size\n");
     }
     /* Check the size */
-    else if ((pElfFile->Header.r32.e_shoff + ((uint32_t)pElfFile->Header.r32.e_shentsize * (uint32_t)pElfFile->Header.r32.e_shnum)) > pElfFile->u32FileSize) 
+    else if ((pElfFile->Header.r32.e_shoff + ((uint32_t)pElfFile->Header.r32.e_shentsize * (uint32_t)pElfFile->Header.r32.e_shnum)) > pElfFile->u32FileSize)
     {
         NXP_LOG_ERROR("ELF32_LoadTables: Requested data block exceeds size of the file\n");
     }
@@ -828,7 +875,7 @@ static bool_t ELF64_Load(ELF_File_t *pElfFile,uint32_t *u32NamesSectionOffset,ui
     bool_t    bRetVal = FALSE;
 
     ELF64_HeaderSwitchEndianness(&(pElfFile->Header.r64));
-    
+
     if ((uint16_t)ELF_Type_Executable != pElfFile->Header.r64.e_type)
     {
         NXP_LOG_ERROR("ELF_Open: Only executable ELFs are supported\n");
@@ -1379,7 +1426,7 @@ void ELF_Close(ELF_File_t *pElfFile)
         return;
     }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-    
+
     ELF_FreePtr(pElfFile);
 }
 
@@ -1595,5 +1642,10 @@ void ELF_PrintSections(const ELF_File_t *pElfFile)
     }
 }
 #endif /* ELF_CFG_SECTION_PRINT_ENABLED */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /** @}*/

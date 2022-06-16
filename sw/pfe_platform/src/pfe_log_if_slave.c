@@ -39,6 +39,22 @@ struct pfe_log_if_tag
 	oal_mutex_t lock;
 };
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_VAR_INIT_32
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+/* usage scope: pfe_log_if_get_name */
+static const char_t *pfe_log_if_get_name_unknown = "(unknown)";
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_VAR_INIT_32
+#include "Eth_43_PFE_MemMap.h"
+
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 static errno_t pfe_log_if_db_lock(void)
 {
 	errno_t ret;
@@ -1496,8 +1512,6 @@ errno_t pfe_log_if_allmulti_disable(const pfe_log_if_t *iface)
  */
 __attribute__((pure)) const char_t *pfe_log_if_get_name(const pfe_log_if_t *iface)
 {
-    static const char_t *unknown = "(unknown)";
-
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
 	{
@@ -1506,7 +1520,7 @@ __attribute__((pure)) const char_t *pfe_log_if_get_name(const pfe_log_if_t *ifac
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-    return ((NULL != iface)? iface->name : unknown);
+    return ((NULL != iface)? iface->name : pfe_log_if_get_name_unknown);
 }
 
 /**
@@ -1549,6 +1563,8 @@ errno_t pfe_log_if_get_stats(const pfe_log_if_t *iface, pfe_ct_class_algo_stats_
 	return ret;
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Return logical interface runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
@@ -1579,4 +1595,12 @@ uint32_t pfe_log_if_get_text_statistics(const pfe_log_if_t *iface, char_t *buf, 
 	return len;
 }
 
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #endif /* PFE_CFG_PFE_SLAVE */
+

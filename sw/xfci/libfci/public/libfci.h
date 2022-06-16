@@ -1243,6 +1243,11 @@ typedef enum
     FCI_CB_CONTINUE  /**< Continue waiting for next events */
 } fci_cb_retval_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief       Creates new FCI client and opens a connection to FCI endpoint
  * @details     Binds the FCI client with FCI endpoint. This enables sending/receiving data
@@ -1367,5 +1372,10 @@ int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned sho
  * @brief       Obsolete function, shall not be used
  */
 int fci_fd(FCI_CLIENT *client);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* LIBFCI_H */

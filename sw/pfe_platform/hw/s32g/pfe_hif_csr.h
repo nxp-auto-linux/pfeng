@@ -248,6 +248,11 @@
 #define DXR_CSR_RX_BVALID_FIFO_UNDERRUN_INT			(1UL << 19U)
 #define HIF_AXI_DXR_CSR_RX_BVALID_FIFO_UNDERRUN_INT	(1UL << 20U)
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 errno_t pfe_hif_cfg_isr(addr_t base_va);
 void pfe_hif_cfg_irq_mask(addr_t base_va);
 void pfe_hif_cfg_irq_unmask(addr_t base_va);
@@ -285,5 +290,10 @@ uint32_t pfe_hif_chnl_cfg_get_rx_cnt(addr_t base_va, uint32_t channel_id);
 uint32_t pfe_hif_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 errno_t pfe_hif_chnl_cfg_ltc_set(addr_t base_va, uint32_t channel_id, uint8_t val);
 uint32_t pfe_hif_chnl_cfg_ltc_get(addr_t base_va, uint32_t channel_id);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_HIF_CSR_H_ */

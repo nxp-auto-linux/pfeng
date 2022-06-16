@@ -37,6 +37,34 @@ struct pfe_gpi_tag
 };
 ct_assert(PFE_IQOS_FLOW_TABLE_SIZE <= (BITMAP_BITS_U32 * IGQOS_BITMAP_ARR_SZ));
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+static errno_t pfe_gpi_null_arg_check_return(const pfe_gpi_t *gpi, errno_t err);
+static errno_t pfe_gpi_null_arg_check_return(const pfe_gpi_t *gpi, errno_t err);
+static void igqos_class_clear_active_all(pfe_gpi_t *gpi);
+static errno_t igqos_entry_ready_timeout(const pfe_gpi_t *gpi);
+static errno_t igqos_class_clear_flow_entry_table(const pfe_gpi_t *gpi);
+static errno_t igqos_class_clear_lru_entry_table(const pfe_gpi_t *gpi);
+static void igqos_class_set_active(pfe_gpi_t *gpi, uint8_t id);
+static void igqos_class_clear_active(pfe_gpi_t *gpi, uint8_t id);
+static bool_t igqos_class_is_active(const pfe_gpi_t *gpi, uint8_t id);
+static uint8_t igqos_class_find_entry(const pfe_gpi_t *gpi, uint8_t start, bool_t is_active);
+static uint8_t igqos_class_find_first_free(const pfe_gpi_t *gpi);
+static uint8_t igqos_class_get_first_active(pfe_gpi_t *gpi);
+static uint8_t igqos_class_get_next_active(pfe_gpi_t *gpi);
+static uint8_t igqos_ip_mask_hw_encode(uint8_t ip_m);
+static uint8_t igqos_ip_mask_hw_decode(uint8_t ip_m);
+static void igqos_convert_entry_to_flow(const uint32_t entry[], pfe_iqos_flow_spec_t *flow);
+static void igqos_convert_flow_to_entry(const pfe_iqos_flow_spec_t *flow, uint32_t entry[]);
+static errno_t pfe_gpi_shp_args_checks(const pfe_gpi_t *gpi, uint8_t id);
+static uint32_t igqos_clk_div(uint32_t clk_div_log2);
+static uint32_t igqos_convert_isl_to_weight(uint32_t isl, uint32_t clk_div_log2, uint32_t sys_clk_mhz, bool_t is_bps);
+static uint32_t igqos_convert_weight_to_isl(uint32_t wgt, uint32_t clk_div_log2, uint32_t sys_clk_mhz, bool_t is_bps);
+static uint32_t igqos_find_optimal_weight(uint32_t isl, uint32_t sys_clk_mhz, bool_t is_bps, uint32_t *wgt);
+
 /**
  * @brief		Create new GPI instance
  * @details		Creates and initializes GPI instance. The new instance is disabled and needs
@@ -1281,6 +1309,8 @@ errno_t pfe_gpi_shp_get_drop_cnt(const pfe_gpi_t *gpi, uint8_t id, uint32_t *cnt
 	return ret;
 }
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Return GPI runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
@@ -1305,3 +1335,11 @@ uint32_t pfe_gpi_get_text_statistics(const pfe_gpi_t *gpi, char_t *buf, uint32_t
 
 	return len;
 }
+
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

@@ -32,6 +32,11 @@ typedef struct
 	uint16_t ro_header_size;
 } pfe_class_cfg_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 pfe_class_t *pfe_class_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_class_cfg_t *cfg);
 errno_t pfe_class_isr(const pfe_class_t *class);
 void pfe_class_irq_mask(const pfe_class_t *class);
@@ -64,5 +69,10 @@ uint32_t pfe_class_fp_stat_to_str(const pfe_ct_class_flexi_parser_stats_t *stat,
 errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat);
 void pfe_class_rtable_lookup_enable(const pfe_class_t *class);
 void pfe_class_rtable_lookup_disable(const pfe_class_t *class);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_CLASS_H_ */

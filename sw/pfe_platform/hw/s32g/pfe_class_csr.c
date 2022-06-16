@@ -18,6 +18,11 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 /**
  * @brief		Initialize and configure the CLASS block
  * @param[in]	base_va Base address of CLASS register space (virtual)
@@ -190,6 +195,8 @@ void pfe_class_cfg_set_def_vlan(addr_t base_va, uint16_t vlan)
 			| DEF_VLANID((uint32_t)vlan & (uint32_t)0xfffU)
 			, base_va + CLASS_VLAN_ID);
 }
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
 /**
  * @brief		Get CLASS statistics in text form
@@ -410,6 +417,8 @@ uint32_t pfe_class_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size,
 	return len;
 }
 
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 /**
  * @brief		Enable HW lookup of routing table
  * @param[in]	base_va Base address of CLASS register space (virtual)
@@ -433,3 +442,9 @@ void pfe_class_cfg_rtable_lookup_disable(const addr_t base_va)
 
 	NXP_LOG_INFO("Disabling RTable lookup PARSE_ROUTE_EN\n");
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

@@ -13,6 +13,13 @@
 #include "pfe_cbus.h"
 #include "pfe_util_csr.h"
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
+
 /**
  * @brief		Get UTIL statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
@@ -51,6 +58,8 @@ uint32_t pfe_util_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, 
 	return len;
 }
 
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 /**
  * @brief		Dispatch interrupt from util.
  * @details		ACK and process triggered interrupts.
@@ -71,3 +80,9 @@ errno_t pfe_util_cfg_isr(addr_t base_va)
 
 	return EOK;
 }
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+

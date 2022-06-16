@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -35,27 +35,27 @@
 #include <stdbool.h>
 
 /* ==== DEFINITIONS ======================================================== */
-/* 
+/*
     For each cli command, fill the necessary info here.
     Do NOT include any *.h files. It should not be needed.
-    
+
     CMD_00_NO_COMMAND is hardcoded.
-    
+
     Search for keyword 'CMD_LAST' to get to the bottom of the cli command definition list.
-    
-    
+
+
     Description of a cli cmd definition (xx is a number from 01 to 99)
     ------------------------------------------------------------------
     CMD_xx_ENUM_NAME    CMD_MY_TEST        This enum key is automatically created and associated
                                            with the given cli command.
-                                           
+
     CMD_xx_CLI_TXT      "my-test"          Command-line text which represents the given cli command.
-                                           
+
     CMD_xx_CMDEXEC      my_test            Name of a global function which is called when this command is invoked.
                                            The global function itself can be defined in any source file.
                                            The global function must conform to the prototype:
                                            int my_test(const cli_cmdargs_t* p_cmdargs);
-                                           
+
     CMD_xx_HELP         txt_help_mytest    Name of a text array which represents a help text for this cli command.
                                            The array needs to be defined in the source file 'libfci_cli_def_help.c'.
 */
@@ -419,7 +419,7 @@
 /* cmd IDs */
 typedef enum cli_cmd_tt {
     CMD_00_NO_COMMAND = 0u,
-    
+
 #ifdef CMD_01_ENUM_NAME
        CMD_01_ENUM_NAME,
 #endif
@@ -540,7 +540,7 @@ typedef enum cli_cmd_tt {
 #ifdef CMD_39_ENUM_NAME
        CMD_39_ENUM_NAME,
 #endif
-    
+
 #ifdef CMD_40_ENUM_NAME
        CMD_40_ENUM_NAME,
 #endif
@@ -571,7 +571,7 @@ typedef enum cli_cmd_tt {
 #ifdef CMD_49_ENUM_NAME
        CMD_49_ENUM_NAME,
 #endif
-    
+
 #ifdef CMD_50_ENUM_NAME
        CMD_50_ENUM_NAME,
 #endif
@@ -730,6 +730,12 @@ typedef enum cli_cmd_tt {
     CMD_LN  /* length of the ID enum list */
 } cli_cmd_t;
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_START_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
 bool cli_cmd_is_valid(uint16_t value);
@@ -741,5 +747,10 @@ int cli_cmd_txt2cmd(cli_cmd_t* p_rtn_cmd, const char* p_txt);
 const char* cli_cmd_cmd2txt(cli_cmd_t cmd);
 
 /* ========================================================================= */
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#define ETH_43_PFE_STOP_SEC_CODE
+#include "Eth_43_PFE_MemMap.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif
