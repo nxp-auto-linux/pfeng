@@ -13,10 +13,8 @@ What is new in this release
 This release has ORTM quality status in terms of testing and quality documentation.
 
 The main goals of this release are:
-1) FCI proxy support
-2) Enhanced AUX interface
-3) Enhanced statistics
-4) PFE Linux Driver verification on RDB3 Boards
+1) ORTM for S32G2, BETA for S32G3
+2) Simplified Device Tree configuration
 
 The release includes also other features and many improvements,
 as well as an important number of bug fixes (see detailed list below).
@@ -48,7 +46,7 @@ Release Specifics:
 - This release was developed and tested with:
     - Geany IDE version 1.38
     - editor VIM - Vi IMproved 8.2
-    - NXP Auto Linux BSP 32
+    - NXP Auto Linux BSP 33
     - GCC 10.2/10.3/8.3
 - This release was developed and tested using:
     - Evaluation board: S32G-VNP-EVB
@@ -69,7 +67,7 @@ Supported Features:
 Supported Derivatives:
 ========================================================
 
-- PS32G274ABVUC 0P77B Rev. 2.0
+- PS32G274ABVUC 0P77B Rev. 2.1
 - P32G399AACVUC 0P72B Rev. 1.0
 
 ========================================================
@@ -106,16 +104,32 @@ Assumptions:
 ========================================================
 
 Compatible firmware: BLN_PFE-FW_S32G_RTM_1.3.0
-Compatible MCAL Master driver: PFE MCAL BETA 0.9.8 (for Master-Slave Scenarios)
-- FCI-Proxy configuration - FCI configuration from Linux Slave driver
-- ERR051211 Workaround
 Compatible Linux BSP: Linux BSP 33
 
 ========================================================
 Known Issues
 ========================================================
 
-.TBD.
+[AAVB-3751] - [PFE_DRV_LINUX] Rare FW errors on unload
+[AAVB-3970] - [PFE_DRV_LINUX] IDEX: remove use of in_atomic()
+[AAVB-4031] - [PFE_DRV_LINUX] Driver crash: rcu_preempt self-detected stall on CPU (~ 1 in a 1000 times)
+[AAVB-4103] - [PFE_DRV_LINUX] Autoneg from 2.5 to 1G on PFE0 - Error from Aquantia PHY
+[AAVB-4505] - [PFE_DRV_LINUX] Slave AUX only scenario: Not able to access PHY registers over MDIO
+[AAVB-4508] - [PFE_DRV_LINUX] Aquantia PHY driver allows to connect on unsupported speeds (speed higher than 2.5G)
+[AAVB-4755] - [PFE_DRV_LINUX] Coverity: CID 10134: Logically dead code
+[AAVB-4867] - [PFE_DRV_LINUX] Coverity: CID 21531074: 'Constant' variable guards dead code
+[AAVB-4870] - [PFE_DRV_LINUX] Coverity: CID 21531071: Structurally dead code
+[AAVB-5086] - [PFE_DRV_LINUX] The counter of conntrack does not work properly
+[AAVB-5091] - [PFE_DRV_LINUX] Warning info - Unable to get MAC address - when PFE master on A53 and slave on M7
+[AAVB-5117] - [PFE_DRV_LINUX] RPC transport failed after repeated load & unload of pfeng-slave driver
+
+[AAVB-3527] - [PFE_PLATFORM] Platform doesn't clear all states on destroy (issue for suspend)
+[AAVB-3701] - [PFE_PLATFORM] HIF and HIF_NOCPY channels still receive data even if Rx path is disabled
+[AAVB-3768] - [PFE_PLATFORM] Multi-Instance: RPC will not work after many logical interfaces were created
+[AAVB-3776] - [PFE_PLATFORM] HIF channel DMA is active even when there is no traffic
+[AAVB-4102] - [PFE_PLATFORM] Include file recursion pfe_log_if.h/pfe_phy_if.h
+[AAVB-4863] - [PFE_PLATFORM] Coverity: CID 21531078: Logically dead code
+[AAVB-4940] - [PFE_PLATFORM] HIF NOCPY doesn't return buffer to their originating pools after destroy
 
 ========================================================
 3rd Party Issues
@@ -126,18 +140,84 @@ What's Modified in BETA_1.0.0
 ========================================================
 
 # New Feature
+[AAVB-4524] - [PFE_DRV_LINUX] libFCI: Add fci_fd()
+[AAVB-4726] - [PFE_DRV_LINUX] Enable placement of BMU2 buffers and routing table in SRAM
 
 # Improvement
+[AAVB-2412] - [PFE_DRV_LINUX] Make routing table configurable
+[AAVB-3202] - [PFE_DRV_LINUX] finalize pinctrl for EVB, RDB & RDB devboards
+[AAVB-3295] - [PFE_DRV_LINUX] pfe driver should report phy timestamping support
+[AAVB-3829] - [PFE_DRV_LINUX] Retry to request(clk_prepare_enable) RX clock
+[AAVB-3874] - [PFE_DRV_LINUX] S32G3: allows 2500 Mbps over SGMII
+[AAVB-4028] - [PFE_DRV_LINUX] Simplify DT: hide HIF config
+[AAVB-4112] - [PFE_DRV_LINUX] Remove HIF NOCPY from driver
+[AAVB-4880] - [PFE_DRV_LINUX] Clean-up: remove PFENG_CFG_LINUX_NO_SERDES_SUPPORT
+[AAVB-5016] - [PFE_DRV_LINUX] Defeature reserved-memory support from the Slave driver
+[AAVB-5207] - [PFE_DRV_LINUX] pfeng: remove silicon check
 
 # Bug
+[AAVB-3197] - [PFE_DRV_LINUX] pinctrl-0/pinctrl-names properties are ignored
+[AAVB-4466] - [PFE_DRV_LINUX] eth0 logical interface can not work after perform suspend on ram
+[AAVB-4607] - [PFE_DRV_LINUX] Failed to disable logical interface during driver unload
+[AAVB-4674] - [PFE_DRV_LINUX] Napi schedule customer bug report
+[AAVB-4675] - [PFE_DRV_LINUX] Preemption counter shouldn't be modified by drv
+[AAVB-4677] - [PFE_DRV_LINUX] Can not ping from/to PFE0 after suspend on RAM
+[AAVB-4721] - [PFE_DRV_LINUX] BUG: use-after-free Read in pfeng_netif_logif_xmit
+[AAVB-4742] - [PFE_DRV_LINUX] Coverity: CID 21530842: Operands don't affect result
+[AAVB-4743] - [PFE_DRV_LINUX] Coverity: CID 21530841: Uninitialized scalar variable 
+[AAVB-4744] - [PFE_DRV_LINUX] Coverity: CID 21530840: Resource leak 
+[AAVB-4745] - [PFE_DRV_LINUX] Coverity: CID 21530839: Uninitialized scalar variable 
+[AAVB-4746] - [PFE_DRV_LINUX] Coverity: CID 21530838: Resource leak 
+[AAVB-4747] - [PFE_DRV_LINUX] Coverity: CID 21530837: Dereference before null check
+[AAVB-4748] - [PFE_DRV_LINUX] Coverity: CID 21530836: Unused value
+[AAVB-4749] - [PFE_DRV_LINUX] Coverity: CID 21530835: Unused value
+[AAVB-4750] - [PFE_DRV_LINUX] Coverity: CID 21530834: Unchecked return value
+[AAVB-4751] - [PFE_DRV_LINUX] Coverity: CID 21530833: Explicit null dereferenced 
+[AAVB-4752] - [PFE_DRV_LINUX] Coverity: CID 21530832: Dereference null return value 
+[AAVB-4753] - [PFE_DRV_LINUX] Coverity: CID 21272112: Out-of-bounds access
+[AAVB-4754] - [PFE_DRV_LINUX] Coverity: CID 21099164: Logically dead code
+[AAVB-4762] - [PFE_DRV_LINUX] OAL mem management init error causes seg fault
+[AAVB-4763] - [PFE_DRV_LINUX] Slave driver: PFE_CFG_LINUX_RES_MEM_ENABLE cannot be enabled
+[AAVB-4779] - [PFE_DRV_LINUX] driver doesn't receive traffic in AUX only mode
+[AAVB-4864] - [PFE_DRV_LINUX] Coverity: CID 21531077: Uninitialized scalar variable
+[AAVB-4865] - [PFE_DRV_LINUX] Coverity: CID 21531076: Dereference before null check
+[AAVB-4866] - [PFE_DRV_LINUX] Coverity: CID 21531075: 'Constant' variable guards dead code
+[AAVB-4868] - [PFE_DRV_LINUX] Coverity: CID 21531073: Uninitialized scalar variable
+[AAVB-4869] - [PFE_DRV_LINUX] Coverity: CID 21531072: Uninitialized scalar variable
+[AAVB-4993] - [PFE_DRV_LINUX] Fix kmalloc alignment checks for oal_mm_malloc_contig_*_aligned_cache
+[AAVB-5035] - [PFE_DRV_LINUX] PFE2 SGMII mode doesn't up to speed 2.5 Gb
+[AAVB-5039] - [PFE_DRV_LINUX] Master detect feature should not access registers during soft reset
+[AAVB-5072] - [PFE_DRV_LINUX] Segmentation fault triggered by mii-tool aux0
+[AAVB-5073] - [PFE_DRV_LINUX] Kernel panic when running ptp4l with aux0
+[AAVB-5205] - [PFE_DRV_LINUX] Coverity: CID 21764888,21764889: Out-of-bounds write
+[AAVB-5206] - [PFE_DRV_LINUX] Coverity: CID 21764890: Dereference null return value
+[AAVB-5212] - [PFE_DRV_LINUX] oal_mm reserved-memory nodes parsing fixes
+[AAVB-5236] - [PFE_DRV_LINUX] PFE stops working along with HIF channel timeout
 
 ## PFE Platform changes (Common code among multiple drivers)
 
 # PFE Platform - New Feature
+[AAVB-4117] - [PFE_PLATFORM] Implement soft_reset_done bit on G3
+[AAVB-4673] - [PFE_PLATFORM] Routing table statistics FCI API
 
 # PFE Platform - Improvement
+[AAVB-3027] - [PFE_PLATFORM] Flush MAC table when interface is removed from bridge domain
+[AAVB-3523] - [PFE_PLATFORM] Avoid modifying elf binary buffer when it is being loaded
+[AAVB-3969] - [PFE_PLATFORM] Remove global flexible filter: FCI part
+[AAVB-4680] - [PFE_PLATFORM] ERR051211: Driver shall update queue data in firmware before setting new queue sizes in TMU
+[AAVB-4890] - [PFE_PLATFORM] Disable dynamic TMU configuration for UTIL interface
 
 # PFE Platform - Bug
+[AAVB-3968] - [PFE_PLATFORM] FCI: isl value of QoS shaper is decremented with each shaper update
+[AAVB-4218] - [PFE_PLATFORM] MMC interrupt may be triggered without being handled
+[AAVB-4273] - [PFE_PLATFORM] pfe_phy_if_create() will cause a segmentation fault if mac db not created successfully
+[AAVB-4308] - [PFE_PLATFORM] 'Unmanaged' packets are not dropped if DMEM queue level above WRED MAX threshold
+[AAVB-4492] - [PFE_PLATFORM] Dynamic activation of the Ingress QoS policer block not reliable
+[AAVB-4713] - [PFE_PLATFORM] FCI: cannot set conntrack timeout for TCP and UDP traffic via FPP_CMD_IPV4_SET_TIMEOUT
+[AAVB-4740] - [PFE_PLATFORM] Driver crash during unload if conntrack FCI events are issued
+[AAVB-4808] - [PFE_PLATFORM] pfe_l2br_domain_create() does not return failure code when malloc 'domain' fails
+[AAVB-4828] - [PFE_PLATFORM] Logical interface name requested by slave driver is null string
+[AAVB-5082] - [PFE_PLATFORM] ERR051211 - Wrong default optimal queue size for TMU Q1-7
 
 ========================================================
 What's Modified in BETA_0.9.7
