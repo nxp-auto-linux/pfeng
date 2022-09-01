@@ -602,6 +602,11 @@ typedef struct CAL_PACKED_ALIGNED(4)
                             as a Flexible Filter of this physical interface.
                             Empty string == Flexible filter is disabled.
                             See Flexible Parser for more info. */
+
+    char ptp_mgmt_if[IFNAMSIZ];  /*< Name of a physical interface which serves as
+                                     a PTP management interface.
+                                     Empty string == disabled */
+
 } fpp_phy_if_cmd_t;
 /* [fpp_phy_if_cmd_t] */
 
@@ -1092,6 +1097,23 @@ typedef enum CAL_PACKED
 } fpp_l2_bd_flags_t;
 
 /**
+ * @brief       Domain statistics.
+ * @details     Related data types: @ref fpp_l2_bd_cmd_t
+ * @note        @b All values are in a network byte order [@b NBO].
+ *
+ * @snippet     fpp_ext.h  fpp_l2_bd_stats_t
+ */
+/* [fpp_l2_bd_stats_t] */
+typedef struct CAL_PACKED_ALIGNED(4)
+{
+    uint32_t ingress;       /*< Count of ingress frames for the given domain. */
+    uint32_t egress;        /*< Count of egress frames for the given domain. */
+    uint32_t ingress_bytes; /*< Count of ingress bytes. */
+    uint32_t egress_bytes;  /*< Count of egress bytes. */
+} fpp_l2_bd_stats_t;
+/* [fpp_l2_bd_stats_t] */
+
+/**
  * @brief       Data structure for L2 bridge domain.
  * @details     Related FCI commands: @ref FPP_CMD_L2_BD
  * @details     Bridge domain actions (what to do with a frame):
@@ -1108,7 +1130,7 @@ typedef enum CAL_PACKED
  * @snippet     fpp_ext.h  fpp_l2_bd_cmd_t
  */
 /* [fpp_l2_bd_cmd_t] */
-typedef struct CAL_PACKED_ALIGNED(2)
+typedef struct CAL_PACKED_ALIGNED(4)
 {
     uint16_t action;    /*< Action */
     uint16_t vlan;      /*< Bridge domain VLAN ID. [NBO,ro] */
@@ -1143,6 +1165,8 @@ typedef struct CAL_PACKED_ALIGNED(2)
                                 considered tagged. */
 
     fpp_l2_bd_flags_t flags;  /*< Bridge domain flags [NBO,ro] */
+
+    fpp_l2_bd_stats_t CAL_PACKED_ALIGNED(4) stats; /*< Domain traffic statistics. [ro] */
 } fpp_l2_bd_cmd_t;
 /* [fpp_l2_bd_cmd_t] */
 

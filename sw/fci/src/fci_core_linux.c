@@ -56,6 +56,7 @@ struct __fci_core_tag
 	fci_t *context;				/*	Associated FCI instance */
 	struct sock *handle;
 	struct mutex lock;
+	struct mutex clients_lock;
 	fci_core_client_t clients[FCI_CFG_MAX_CLIENTS];
 };
 
@@ -128,6 +129,7 @@ errno_t fci_core_init(const char_t *const id)
 
 	memset(core, 0, sizeof(fci_core_t));
 	mutex_init(&core->lock);
+	mutex_init(&core->clients_lock);
 
 	PUT_FCI_CORE(core);
 
@@ -178,6 +180,11 @@ void fci_core_fini(void)
 			NXP_LOG_WARNING("FCI lock failed\n");
 			return;
 		}
+		if(mutex_lock_interruptible(&GET_FCI_CORE()->clients_lock))
+		{
+			NXP_LOG_WARNING("FCI clients lock failed\n");
+			return;
+		}
 		for(ii = 0; ii < FCI_CFG_MAX_CLIENTS; ii++)
 		{
 			
@@ -197,6 +204,9 @@ void fci_core_fini(void)
 			sock_release(GET_FCI_CORE()->handle->sk_socket);
 			GET_FCI_CORE()->handle = NULL;
 		}
+
+		mutex_unlock(&GET_FCI_CORE()->clients_lock);
+		mutex_destroy(&GET_FCI_CORE()->clients_lock);
 
 		mutex_unlock(&GET_FCI_CORE()->lock);
 		mutex_destroy(&GET_FCI_CORE()->lock);
@@ -298,6 +308,12 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 	{
 		case FCI_MSG_CLIENT_REGISTER:
 		{
+			if(mutex_lock_interruptible(&core->clients_lock))
+			{
+				NXP_LOG_ERROR("FCI clients lock failed\n");
+				return EAGAIN;
+			}
+
 			/*	Add FCI client */
 			for (ii=0; ii<FCI_CFG_MAX_CLIENTS; ii++)
 			{
@@ -320,26 +336,32 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 				}
 			}
 
-			if (EOK != ret)
+			if (EOK == ret)
 			{
-				break;
+				if (FCI_CFG_MAX_CLIENTS == ii)
+				{
+					NXP_LOG_ERROR("Can't register new event listener, storage is full\n");
+					ret = ENOSPC;
+				}
+				else
+				{
+					NXP_LOG_INFO("Listener with port id cmd 0x%x, back 0x%x registered to pos %d\n", core->clients[ii].cmd_port_id,core->clients[ii].back_port_id,ii);
+					ret = EOK;
+				}
 			}
 
-			if (FCI_CFG_MAX_CLIENTS == ii)
-			{
-				NXP_LOG_ERROR("Can't register new event listener, storage is full\n");
-				ret = ENOSPC;
-			}
-			else
-			{
-				NXP_LOG_INFO("Listener with port id cmd 0x%x, back 0x%x registered to pos %d\n", core->clients[ii].cmd_port_id,core->clients[ii].back_port_id,ii);
-				ret = EOK;
-			}
+			mutex_unlock(&GET_FCI_CORE()->clients_lock);
 			break;
 		}
 
 		case FCI_MSG_CLIENT_UNREGISTER:
 		{
+			if(mutex_lock_interruptible(&core->clients_lock))
+			{
+				NXP_LOG_ERROR("FCI clients lock failed\n");
+				return EAGAIN;
+			}
+
 			/*	Remove FCI client */
 			for (ii=0; ii<FCI_CFG_MAX_CLIENTS; ii++)
 			{
@@ -366,6 +388,7 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 				ret = EOK;
 			}
 
+			mutex_unlock(&GET_FCI_CORE()->clients_lock);
 			break;
 		}
 
@@ -373,8 +396,14 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 		{
 			/*	Get and bind client instance with the message */
 			/*	We need to find the client based on cmd port id to be able to pass the client to the lower layers */
+			if(mutex_lock_interruptible(&core->clients_lock))
+			{
+				NXP_LOG_ERROR("FCI clients lock failed\n");
+				return EAGAIN;
+			}
 			client = fci_core_get_client(core, port_id);
 			msg->client = (void *)client;
+			mutex_unlock(&GET_FCI_CORE()->clients_lock);
 
 			memset(rep_msg, 0, sizeof(fci_msg_t));
 
@@ -499,9 +528,9 @@ errno_t fci_core_client_send(fci_core_client_t *client, fci_msg_t *msg, fci_msg_
 		return EINVAL;
 	}
 
-	if(mutex_lock_interruptible(&GET_FCI_CORE()->lock))
+	if(mutex_lock_interruptible(&GET_FCI_CORE()->clients_lock))
 	{
-		NXP_LOG_WARNING("FCI lock failed\n");
+		NXP_LOG_WARNING("FCI clients lock failed\n");
 		return EAGAIN;
 	}
 	
@@ -513,8 +542,7 @@ errno_t fci_core_client_send(fci_core_client_t *client, fci_msg_t *msg, fci_msg_
 		}
 	}
 
-	(void)mutex_unlock(&GET_FCI_CORE()->lock);
-
+	(void)mutex_unlock(&GET_FCI_CORE()->clients_lock);
 	return ret;
 }
 
@@ -548,9 +576,9 @@ errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep)
 		return EINVAL;
 	}
 
-	if(mutex_lock_interruptible(&core->lock))
+	if(mutex_lock_interruptible(&core->clients_lock))
 	{
-		NXP_LOG_WARNING("FCI lock failed\n");
+		NXP_LOG_WARNING("FCI clients lock failed\n");
 		return EAGAIN;
 	}
 
@@ -565,7 +593,7 @@ errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep)
 		}
 	}
 
-	(void)mutex_unlock(&core->lock);
+	(void)mutex_unlock(&core->clients_lock);
 	return ret;
 }
 

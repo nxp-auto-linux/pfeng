@@ -60,7 +60,8 @@ ifeq ($(TARGET_OS),LINUX)
 	GLOBAL_CCFLAGS := $(shell echo $(GLOBAL_CCFLAGS))
 	
 	CLI_TARGET_OS = "LNX"
-	CLI_DRV_VERSION = "RTM 1.0.0"
+	CLI_DRV_VERSION = "RTM 1.1.0 RC1"
+	CLI_DRV_COMMIT_HASH = "M4_DRIVER_COMMIT_HASH"
 else
 #This branch by defaut means QNX.
 	LIBS += -L../xfci/libfci/build/$(PLATFORM)-$(BUILD_PROFILE) -l:libfci.a
@@ -103,6 +104,7 @@ PFE_CT_H_MD5 = $(word 1, $(shell cat ../pfe_platform/public/pfe_ct.h | sed -n '$
 CCFLAGS += -DPFE_CT_H_MD5=\"$(PFE_CT_H_MD5)\"
 CCFLAGS += -DCLI_DRV_VERSION=\"$(CLI_DRV_VERSION)\"
 CCFLAGS += -DCLI_TARGET_OS=\"$(CLI_TARGET_OS)\"
+CCFLAGS += -DCLI_DRV_COMMIT_HASH=\"$(CLI_DRV_COMMIT_HASH)\"
 
 #Macro to expand files recursively: parameters $1 -  directory, $2 - extension, i.e. cpp
 rwildcard = $(wildcard $(addprefix $1/*.,$2)) $(foreach d,$(wildcard $1/*),$(call rwildcard,$d,$2))

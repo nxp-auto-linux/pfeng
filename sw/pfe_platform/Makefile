@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2021 NXP
+#  Copyright 2018-2022 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -68,6 +68,7 @@ rwildcard = $(wildcard $(addprefix $1/*.,$2)) $(foreach d,$(wildcard $1/*),$(cal
 #Source list
 ifeq ($(PFE_CFG_PFE_MASTER),0)
 SRCS =		src/pfe_hif_chnl.c \
+		hw/$(TARGET_HW)/pfe_hif_csr.c \
 		src/pfe_hif_ring.c \
 		src/pfe_hif.c \
 		src/pfe_idex.c \
@@ -75,7 +76,8 @@ SRCS =		src/pfe_hif_chnl.c \
 		src/pfe_if_db.c \
 		src/pfe_pe.c \
 		src/pfe_phy_if_slave.c \
-		src/pfe_mac_db.c
+		src/pfe_mac_db.c \
+		src/pfe_hm.c
 else
 SRCS =	src/pfe_bmu.c \
 		src/pfe_class.c \
@@ -93,23 +95,23 @@ SRCS =	src/pfe_bmu.c \
 		src/pfe_pe.c \
 		src/pfe_phy_if.c \
 		src/pfe_rtable.c \
-		src/pfe_safety.c \
+		src/pfe_parity.c \
 		src/pfe_wdt.c \
+		src/pfe_bus_err.c \
+		src/pfe_fw_fail_stop.c \
+		src/pfe_host_fail_stop.c \
+		src/pfe_fail_stop.c \
+		src/pfe_ecc_err.c \
 		src/pfe_tmu.c \
 		src/pfe_util.c \
 		src/pfe_fp.c \
-		src/pfe_flexible_filter.c \
 		src/pfe_feature_mgr.c \
 		src/pfe_fw_feature.c \
 		src/pfe_hw_feature.c \
 		src/pfe_spd.c \
 		src/pfe_spd_acc.c \
-		src/pfe_mac_db.c
-
-ifeq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),1)
-SRCS += src/pfe_idex.c
-endif
-endif
+		src/pfe_mac_db.c \
+		src/pfe_hm.c
 
 SRCS += hw/$(TARGET_HW)/pfe_bmu_csr.c \
 		hw/$(TARGET_HW)/pfe_emac_csr.c \
@@ -119,8 +121,18 @@ SRCS += hw/$(TARGET_HW)/pfe_bmu_csr.c \
 		hw/$(TARGET_HW)/pfe_gpi_csr.c \
 		hw/$(TARGET_HW)/pfe_hif_nocpy_csr.c \
 		hw/$(TARGET_HW)/pfe_tmu_csr.c \
-		hw/$(TARGET_HW)/pfe_safety_csr.c \
-		hw/$(TARGET_HW)/pfe_wdt_csr.c
+		hw/$(TARGET_HW)/pfe_parity_csr.c \
+		hw/$(TARGET_HW)/pfe_wdt_csr.c \
+		hw/$(TARGET_HW)/pfe_bus_err_csr.c \
+		hw/$(TARGET_HW)/pfe_fw_fail_stop_csr.c \
+		hw/$(TARGET_HW)/pfe_host_fail_stop_csr.c \
+		hw/$(TARGET_HW)/pfe_fail_stop_csr.c \
+		hw/$(TARGET_HW)/pfe_ecc_err_csr.c
+ifeq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),1)
+SRCS += src/pfe_idex.c
+endif
+endif
+
 ifeq ($(PFE_CFG_PFE_MASTER),0)
   SRCS += hw/$(TARGET_HW)/pfe_platform_slave.c
 else
@@ -181,12 +193,12 @@ pfe_platform-y := src/pfe_hif_chnl_linux.o \
 		src/pfe_if_db.o \
 		src/pfe_pe.o \
 		src/pfe_phy_if_slave.o \
-		src/pfe_mac_db.o
+		src/pfe_mac_db.o \
+		src/pfe_hm.o
 else
 pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_class.o \
 	src/pfe_mirror.o \
-	src/pfe_flexible_filter.o \
 	src/pfe_feature_mgr.o \
 	src/pfe_fw_feature.o \
 	src/pfe_hw_feature.o \
@@ -203,10 +215,16 @@ pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_log_if.o \
 	src/pfe_if_db.o \
 	src/pfe_wdt.o \
-	src/pfe_safety.o \
+	src/pfe_parity.o \
+	src/pfe_bus_err.o \
+	src/pfe_fw_fail_stop.o \
+	src/pfe_host_fail_stop.o \
+	src/pfe_fail_stop.o \
+	src/pfe_ecc_err.o \
 	src/pfe_spd.o \
 	src/pfe_spd_acc.o \
-	src/pfe_mac_db.o
+	src/pfe_mac_db.o \
+	src/pfe_hm.o
 
 ifeq ($(PFE_CFG_RTABLE_ENABLE),1)
     pfe_platform-y += src/pfe_rtable.o
@@ -229,7 +247,12 @@ pfe_platform-y += src/pfe_bmu.o \
 	hw/$(TARGET_HW)/pfe_gpi_csr.o \
 	hw/$(TARGET_HW)/pfe_tmu_csr.o \
 	hw/$(TARGET_HW)/pfe_wdt_csr.o \
-	hw/$(TARGET_HW)/pfe_safety_csr.o
+	hw/$(TARGET_HW)/pfe_parity_csr.o \
+	hw/$(TARGET_HW)/pfe_bus_err_csr.o \
+	hw/$(TARGET_HW)/pfe_fw_fail_stop_csr.o \
+	hw/$(TARGET_HW)/pfe_host_fail_stop_csr.o \
+	hw/$(TARGET_HW)/pfe_fail_stop_csr.o \
+	hw/$(TARGET_HW)/pfe_ecc_err_csr.o
 endif
 
 ifeq ($(PFE_CFG_PFE_MASTER),0)

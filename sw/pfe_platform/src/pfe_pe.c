@@ -16,6 +16,7 @@
 #include "elf.h"
 #include "pfe_cbus.h"
 #include "pfe_pe.h"
+#include "pfe_hm.h"
 
 #define BYTES_TO_4B_ALIGNMENT(x)	(4U - ((x) & 0x3U))
 #define INVALID_FEATURES_BASE 		0xFFFFFFFFU
@@ -120,6 +121,11 @@ struct pfe_pe_tag
 	/* Mutex */
 	oal_mutex_t lock_mutex;				/* Locking PE API mutex */
 	bool_t miflock;						/* When TRUE then PFE memory interface is locked */
+
+	/* Stall detection */
+	uint32_t counter;					/* Latest PE counter value */
+	pfe_ct_pe_sw_state_t prev_state;	/* Recently read PE state */
+	bool_t stalled;						/* Flag for current stall state */
 };
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
@@ -127,6 +133,7 @@ struct pfe_pe_tag
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
+static errno_t pfe_pe_get_state_monitor_nolock(pfe_pe_t *pe, pfe_ct_pe_sw_state_monitor_t *state_monitor);
 static bool_t pfe_pe_is_active_nolock(pfe_pe_t *pe);
 #if defined(FW_WRITE_CHECK_EN)
 static void pfe_pe_memcpy_from_imem_to_host_32_nolock(
@@ -154,6 +161,7 @@ static errno_t pfe_pe_load_dmem_section_nolock(pfe_pe_t *pe, const void *sdata, 
 static errno_t pfe_pe_load_imem_section_nolock(pfe_pe_t *pe, const void *data, addr_t addr, addr_t size, uint32_t type);
 static bool_t pfe_pe_is_dmem(const pfe_pe_t *pe, addr_t addr, uint32_t size);
 static bool_t pfe_pe_is_imem(const pfe_pe_t *pe, addr_t addr, uint32_t size);
+static errno_t pfe_pe_mem_process_lock(pfe_pe_t *pe, PFE_PTR(pfe_ct_pe_misc_control_t) misc_dmem);
 
 #if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
@@ -201,6 +209,13 @@ static const fw_load_ops_t fw_load_ops[] =
 #define ETH_43_PFE_START_SEC_CODE
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+static const pfe_hm_src_t hm_types[] = {
+	HM_SRC_UNKNOWN,
+	HM_SRC_PE_CLASS,
+	HM_SRC_PE_TMU,
+	HM_SRC_PE_UTIL
+};
 
 /**
  * @brief		Try to upload all sections of the .elf
@@ -250,7 +265,7 @@ static errno_t pfe_pe_upload_sections(pfe_pe_t **pe, uint32_t pe_num, const ELF_
 		}
 		if (EOK != ret)
 		{
-			break;
+			return ret;
 		}
 	}
 
@@ -300,6 +315,31 @@ static void pfe_pe_free_mem(pfe_pe_t **pe, uint32_t pe_num)
 }
 
 /**
+ * @brief		Get state monitor of the PE
+ * @param[in]	pe The PE instance
+ * @param[out]	state_monitor Address to write the state monitor data to
+ * @return		EOK if succeeded
+ */
+static errno_t pfe_pe_get_state_monitor_nolock(pfe_pe_t *pe, pfe_ct_pe_sw_state_monitor_t *state_monitor)
+{
+
+	if(NULL == pe->mmap_data)
+	{
+		NXP_LOG_WARNING("PE %u: Firmware not loaded\n", pe->id);
+		return EIO;
+	}
+
+	/*	Get state */
+	pfe_pe_memcpy_from_dmem_to_host_32_nolock(
+			pe,
+			state_monitor,
+			oal_ntohl(pe->mmap_data->common.state_monitor),
+			sizeof(pfe_ct_pe_sw_state_monitor_t));
+
+	return EOK;
+}
+
+/**
  * @brief		Query if PE is active
  * @details		PE is active if it is running (executing firmware code) and is not gracefully stopped
  * @param[in]	pe The PE instance
@@ -307,34 +347,22 @@ static void pfe_pe_free_mem(pfe_pe_t **pe, uint32_t pe_num)
  */
 static bool_t pfe_pe_is_active_nolock(pfe_pe_t *pe)
 {
-	pfe_ct_pe_sw_state_monitor_t state_monitor;
-    bool_t ret;
+	pfe_ct_pe_sw_state_monitor_t state_monitor = {0};
+	bool_t ret = FALSE;
 
-	if(NULL == pe->mmap_data)
+	if (pfe_pe_get_state_monitor_nolock(pe, &state_monitor) == EOK)
 	{
-		NXP_LOG_WARNING("PE %u: Firmware not loaded\n", pe->id);
-		ret = FALSE;
-	}
-    else
-    {
-        ret = TRUE;
-        /*	Get state */
-        pfe_pe_memcpy_from_dmem_to_host_32_nolock(
-                pe,
-                &state_monitor,
-                oal_ntohl(pe->mmap_data->common.state_monitor),
-                sizeof(pfe_ct_pe_sw_state_monitor_t));
-
-        if ((PFE_FW_STATE_STOPPED == state_monitor.state) || (PFE_FW_STATE_UNINIT == state_monitor.state))
-        {
-            ret = FALSE;
-        }
-        /*	PFE_FW_STATE_INIT == state_monitor.state is considered as running because
+		if ((PFE_FW_STATE_STOPPED != state_monitor.state) && (PFE_FW_STATE_UNINIT != state_monitor.state))
+		{
+			ret = TRUE;
+		}
+		/*	PFE_FW_STATE_INIT == state_monitor.state is considered as running because
 		the transition to next state is short */
-    }
+	}
 
 	return ret;
 }
+
 
 /**
 * @brief Lock PE access
@@ -373,6 +401,102 @@ errno_t pfe_pe_unlock(pfe_pe_t *pe)
 }
 
 /**
+ * @brief		Process to lock PE memory 
+ * @param[in]	pe The PE instance
+ * @param[in]	misc_dmem The miscellaneous control command structure
+ * @return		EOK if success, error code otherwise
+ */
+static errno_t pfe_pe_mem_process_lock(pfe_pe_t *pe, PFE_PTR(pfe_ct_pe_misc_control_t) misc_dmem)
+{
+	errno_t ret;
+	pfe_ct_pe_misc_control_t misc_ctrl = {0};
+	uint32_t timeout = 10;
+
+	if (EOK != pfe_pe_lock(pe))
+	{
+		NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+		ret = EPERM;
+	}
+	else
+	{
+			/*	Read the misc control structure from DMEM */
+		pfe_pe_memcpy_from_dmem_to_host_32_nolock(
+				pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
+
+		if (0U != misc_ctrl.graceful_stop_request)
+		{
+			if (0U != misc_ctrl.graceful_stop_confirmation)
+			{
+				NXP_LOG_ERROR("Locking locked memory\n");
+			}
+			else
+			{
+				NXP_LOG_ERROR("Duplicate stop request\n");
+			}
+
+			if (EOK != pfe_pe_unlock(pe))
+			{
+				NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
+			}
+
+			ret = EPERM;
+		}
+		else
+		{
+			/*	Writing the non-zero value triggers the request */
+			misc_ctrl.graceful_stop_request = 0xffU;
+			/*	PE will respond with setting this to non-zero value */
+			misc_ctrl.graceful_stop_confirmation = 0x0U;
+			/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
+			pfe_pe_memcpy_from_host_to_dmem_32_nolock(
+					pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
+
+			if (FALSE == pfe_pe_is_active_nolock(pe))
+			{
+				/*	Access to PE memories is considered to be safe. PE memory
+					interface is locked. */
+				ret = EOK;
+			}
+			else
+			{
+				ret = EOK;
+				/*	Wait for response */
+				do
+				{
+					if (0U == timeout)
+					{
+						NXP_LOG_ERROR("Timed-out\n");
+
+						/*	Cancel the request */
+						misc_ctrl.graceful_stop_request = 0U;
+
+						/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
+						pfe_pe_memcpy_from_host_to_dmem_32_nolock(
+								pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
+
+						if (EOK != pfe_pe_unlock(pe))
+						{
+							NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
+						}
+
+						ret = ETIME;
+						break;
+					}
+
+					oal_time_usleep(10U);
+					timeout--;
+					pfe_pe_memcpy_from_dmem_to_host_32_nolock(
+							pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
+
+				} while (0U == misc_ctrl.graceful_stop_confirmation);
+				/*	Access to PE memory interface is locked */
+			}
+		}
+	}
+	return ret;
+}
+
+/**
  * @brief		Lock PE memory
  * @details		While locked, the PE can't access internal memory. Invoke the PE graceful
  *				stop request and wait for confirmation. Also lock the PE memory interface.
@@ -383,8 +507,6 @@ errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 {
 	errno_t ret;
 	PFE_PTR(pfe_ct_pe_misc_control_t) misc_dmem;
-	pfe_ct_pe_misc_control_t misc_ctrl = {0};
-	uint32_t timeout = 10;
 
 	if (NULL == pe->mmap_data)
 	{
@@ -398,85 +520,9 @@ errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 		{
 			ret = EINVAL;
 		}
-		else if (EOK != pfe_pe_lock(pe))
-		{
-			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
-			ret = EPERM;
-		}
 		else
 		{
-			/*	Read the misc control structure from DMEM */
-			pfe_pe_memcpy_from_dmem_to_host_32_nolock(
-					pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
-
-			if (0U != misc_ctrl.graceful_stop_request)
-			{
-				if (0U != misc_ctrl.graceful_stop_confirmation)
-				{
-					NXP_LOG_ERROR("Locking locked memory\n");
-				}
-				else
-				{
-					NXP_LOG_ERROR("Duplicate stop request\n");
-				}
-
-				if (EOK != pfe_pe_unlock(pe))
-				{
-					NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
-				}
-
-				ret = EPERM;
-			}
-			else
-			{
-				/*	Writing the non-zero value triggers the request */
-				misc_ctrl.graceful_stop_request = 0xffU;
-				/*	PE will respond with setting this to non-zero value */
-				misc_ctrl.graceful_stop_confirmation = 0x0U;
-				/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
-				pfe_pe_memcpy_from_host_to_dmem_32_nolock(
-						pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
-
-				if (FALSE == pfe_pe_is_active_nolock(pe))
-				{
-					/*	Access to PE memories is considered to be safe. PE memory
-						interface is locked. */
-					ret = EOK;
-				}
-				else
-				{
-					/*	Wait for response */
-					do
-					{
-						if (0U == timeout)
-						{
-							NXP_LOG_ERROR("Timed-out\n");
-
-							/*	Cancel the request */
-							misc_ctrl.graceful_stop_request = 0U;
-
-							/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
-							pfe_pe_memcpy_from_host_to_dmem_32_nolock(
-									pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
-
-							if (EOK != pfe_pe_unlock(pe))
-							{
-								NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
-							}
-
-							ret = ETIME;
-							break;
-						}
-
-						oal_time_usleep(10U);
-						timeout--;
-						pfe_pe_memcpy_from_dmem_to_host_32_nolock(
-								pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
-
-					} while (0U == misc_ctrl.graceful_stop_confirmation);
-					/*	Access to PE memory interface is locked */
-				}
-			}
+			ret = pfe_pe_mem_process_lock(pe, misc_dmem);
 		}
 	}
 
@@ -2407,18 +2453,17 @@ errno_t pfe_pe_get_fw_messages_nolock(pfe_pe_t *pe)
 			{
 				case PFE_MESSAGE_EXCEPTION:
 				case PFE_MESSAGE_ERROR:
-					NXP_LOG_ERROR("PE%d: %s line %u: %s (0x%x)\n",
+					pfe_hm_report_error(hm_types[pe->type], HM_EVT_PE_ERROR,
+							"PE%d: %s line %u: %s (0x%x)\n",
 							pe->id, message_file, (uint_t)message_line, message_str, (uint_t)message_val);
 					break;
 				case PFE_MESSAGE_WARNING:
 					NXP_LOG_WARNING("PE%d: %s line %u: %s (0x%x)\n",
 							pe->id, message_file, (uint_t)message_line, message_str, (uint_t)message_val);
-
 					break;
 				case PFE_MESSAGE_INFO:
 					NXP_LOG_INFO("PE%d: %s line %u: %s (0x%x)\n",
 						pe->id, message_file, (uint_t)message_line, message_str, (uint_t)message_val);
-
 					break;
 				case PFE_MESSAGE_DEBUG:
 					NXP_LOG_DEBUG("PE%d: %s line %u: %s (0x%x)\n",
@@ -2500,6 +2545,58 @@ errno_t pfe_pe_get_pe_stats_nolock(pfe_pe_t *pe, uint32_t addr, pfe_ct_pe_stats_
 
 	return ret;
 }
+
+/**
+ * @brief		Check if PE is stalled
+ * @details		PE is stalled when the firmware is running and the firmware state counter is not
+ * 				updated periodically. This function shouldn't be called very often so the
+ * 				PE can change state between calls.
+ * @param[in]	pe The PE instance
+ * @return		TRUE if PE is stalled, FALSE if not
+ */
+bool_t pfe_pe_check_stalled_nolock(pfe_pe_t *pe)
+{
+	pfe_ct_pe_sw_state_monitor_t state_monitor;
+	bool_t ret = FALSE;
+	static const char *states[] = {
+		"UNINIT",
+		"INIT",
+		"FRAMEWAIT",
+		"FRAMEPARSE",
+		"FRAMECLASSIFY",
+		"FRAMEDISCARD",
+		"FRAMEMODIFY",
+		"FRAMESEND",
+		"STOPPED",
+		"EXCEPTION",
+		"FAIL_STOP"
+	};
+
+	if (pfe_pe_get_state_monitor_nolock(pe, &state_monitor) != EOK)
+	{
+		return FALSE;
+	}
+
+	if ((PFE_FW_STATE_EXCEPTION == state_monitor.state) && (state_monitor.state != pe->prev_state))
+	{
+		pfe_hm_report_error(hm_types[pe->type], HM_EVT_PE_EXCEPTION,
+				"Core %d raised exception in state %s", pe->id, states[state_monitor.state]);
+		ret = TRUE;
+	}
+	if ((FALSE == pe->stalled) && (state_monitor.state != PFE_FW_STATE_UNINIT) &&
+			(state_monitor.counter == pe->counter))
+	{
+		pfe_hm_report_error(hm_types[pe->type], HM_EVT_PE_STALL,
+				"Core %d stalled in state %s", pe->id, states[state_monitor.state]);
+		pe->stalled = TRUE;
+		ret = TRUE;
+	}
+
+	pe->counter = state_monitor.counter;
+	pe->prev_state = state_monitor.state;
+	return ret;
+}
+
 
 /**
  * @brief		Copies PE classification algorithms statistics into a prepared buffer
@@ -2709,30 +2806,23 @@ static uint32_t pfe_pe_get_measurements_nolock(pfe_pe_t *pe, uint32_t count, uin
  */
 pfe_ct_pe_sw_state_t pfe_pe_get_fw_state(pfe_pe_t *pe)
 {
-	pfe_ct_pe_sw_state_monitor_t state_monitor;
+	pfe_ct_pe_sw_state_monitor_t state_monitor = {0};
 
-	/* Get the pfe_ct_pe_mmap_t structure from PE */
-	if (NULL == pe->mmap_data)
+	/*	We don't need coherent data here so only lock the
+	 memory interface without locking the PE memory. */
+	if (EOK != pfe_pe_lock(pe))
+	{
+		NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+	}
+
+	if (pfe_pe_get_state_monitor_nolock(pe, &state_monitor) != EOK)
 	{
 		state_monitor.state = PFE_FW_STATE_UNINIT;
 	}
-	else
+
+	if (EOK != pfe_pe_unlock(pe))
 	{
-		/*	We don't need coherent data here so only lock the
-	 	memory interface without locking the PE memory. */
-		if (EOK != pfe_pe_lock(pe))
-		{
-			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
-		}
-
-		pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &state_monitor,
-						oal_ntohl(pe->mmap_data->common.state_monitor),
-						sizeof(pfe_ct_pe_sw_state_monitor_t));
-
-		if (EOK != pfe_pe_unlock(pe))
-		{
-			NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
-		}
+		NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
 	}
 
 	return state_monitor.state;
@@ -2748,7 +2838,7 @@ pfe_ct_pe_sw_state_t pfe_pe_get_fw_state(pfe_pe_t *pe)
  */
 errno_t pfe_pe_get_data_nolock(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
 {
-	uint8_t flags;
+	uint8_t flags = 0U;
 	errno_t ret = ENOENT;
 	pfe_ct_pe_mmap_t mmap_data;
 	const pfe_ct_class_mmap_t *class_mmap_data;
@@ -2804,7 +2894,7 @@ errno_t pfe_pe_get_data_nolock(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
  */
 errno_t pfe_pe_put_data_nolock(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
 {
-	uint8_t flags;
+	uint8_t flags = 0U;
 	errno_t ret = ENOENT;
 	pfe_ct_pe_mmap_t mmap_data;
 	const pfe_ct_class_mmap_t *class_mmap_data;
@@ -2858,7 +2948,7 @@ errno_t pfe_pe_put_data_nolock(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
 uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
 	uint32_t len = 0U;
-	pfe_ct_pe_sw_state_monitor_t state_monitor;
+	pfe_ct_pe_sw_state_monitor_t state_monitor = {0};
 	errno_t ret;
 
 	if (NULL == pe->mmap_data)

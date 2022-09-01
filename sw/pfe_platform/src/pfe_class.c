@@ -50,6 +50,7 @@ struct pfe_classifier_tag
 
 static errno_t  pfe_class_dmem_heap_init(pfe_class_t *class);
 static errno_t  pfe_class_load_fw_features(pfe_class_t *class);
+static errno_t  pfe_class_load_fw_process(pfe_class_t *class);
 
 #if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
@@ -60,6 +61,8 @@ static void     pfe_class_sum_pe_algo_stats(pfe_ct_class_algo_stats_t *sum, cons
 static void     pfe_class_sum_pe_ihc_stats(pfe_ct_class_ihc_stats_t *sum, const pfe_ct_class_ihc_stats_t *val);
 static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
 static uint32_t pfe_class_ihc_stat_to_str(const pfe_ct_class_ihc_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
+static void pfe_class_cal_total_stats(pfe_class_t *class, pfe_ct_classify_stats_t *total_stat, pfe_ct_classify_stats_t *stats);
+static errno_t pfe_class_create_pe(pfe_class_t *class, addr_t cbus_base_va, uint32_t pe_num);
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
@@ -97,6 +100,8 @@ errno_t pfe_class_isr(const pfe_class_t *class)
 
 			/*	Read and print the error record from each PE */
 			(void)pfe_pe_get_fw_messages_nolock(class->pe[i]);
+			/* Check the PE core for stalled state */
+			(void)pfe_pe_check_stalled_nolock(class->pe[i]);
 
 #ifdef PFE_CFG_FCI_ENABLE
 			/*	Check if there is new message */
@@ -153,30 +158,37 @@ void pfe_class_irq_unmask(const pfe_class_t *class)
 	(void)class;
 }
 
-/*
- * @brief Load PTP related configuration to class cores
+/**
+ * @brief		Create all PEs instance for new classifier
+ * @param[in]	class The class instance
+ * @param[in]	cbus_base_va CBUS base virtual address
+ * @param[in]	pe_num Number of PEs to be included
  */
-static errno_t pfe_class_load_ptp_config(pfe_class_t *class)
+static errno_t pfe_class_create_pe(pfe_class_t *class, addr_t cbus_base_va, uint32_t pe_num)
 {
+	pfe_pe_t *pe;
+	uint32_t  ii;
 	errno_t ret = EOK;
-	uint8_t common_hif;
-	uint32_t pe_idx;
-	addr_t dmem_addr;
-	pfe_ct_pe_mmap_t pfe_pe_mmap;
 
-if ((PFE_CFG_PTP_COMMON_HIF >= PFE_PHY_IF_ID_HIF0 && PFE_CFG_PTP_COMMON_HIF <= PFE_PHY_IF_ID_HIF3) ||
-	PFE_CFG_PTP_COMMON_HIF == PFE_PHY_IF_ID_HIF_NOCPY)
+	/*	Create PEs */
+	for (ii = 0U; ii < pe_num; ii++)
 	{
-		ret = pfe_pe_get_mmap(class->pe[0U], &pfe_pe_mmap);
-		if (EOK == ret)
+		pe = pfe_pe_create(cbus_base_va, PE_TYPE_CLASS, (uint8_t)ii);
+
+		if (NULL == pe)
 		{
-			/* Get the ptp_common_hif offset in DMEM */
-			dmem_addr = oal_ntohl(pfe_pe_mmap.class_pe.ptp_common_hif);
-			common_hif = (uint8_t)PFE_CFG_PTP_COMMON_HIF;
-			for (pe_idx = 0U; pe_idx < class->pe_num; ++pe_idx)
-			{
-				pfe_pe_memcpy_from_host_to_dmem_32(class->pe[pe_idx], dmem_addr, &common_hif, sizeof(common_hif));
-			}
+			ret = ENOENT;
+			break;
+		}
+		else
+		{
+			pfe_pe_set_iaccess(pe, CLASS_MEM_ACCESS_WDATA, CLASS_MEM_ACCESS_RDATA, CLASS_MEM_ACCESS_ADDR);
+			pfe_pe_set_dmem(pe, PFE_CFG_CLASS_ELF_DMEM_BASE, PFE_CFG_CLASS_DMEM_SIZE);
+			pfe_pe_set_imem(pe, PFE_CFG_CLASS_ELF_IMEM_BASE, PFE_CFG_CLASS_IMEM_SIZE);
+			pfe_pe_set_lmem(pe, (PFE_CFG_CBUS_PHYS_BASE_ADDR + PFE_CFG_PE_LMEM_BASE), PFE_CFG_PE_LMEM_SIZE);
+			class->pe[ii] = pe;
+			class->pe_num++;
+			ret = EOK;
 		}
 	}
 
@@ -193,8 +205,7 @@ if ((PFE_CFG_PTP_COMMON_HIF >= PFE_PHY_IF_ID_HIF0 && PFE_CFG_PTP_COMMON_HIF <= P
 pfe_class_t *pfe_class_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_class_cfg_t *cfg)
 {
 	pfe_class_t *class;
-	pfe_pe_t *pe;
-	uint32_t  ii;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL_ADDR == cbus_base_va) || (NULL == cfg)))
@@ -231,26 +242,12 @@ pfe_class_t *pfe_class_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_cl
 					}
 					else
 					{
-						/*	Create PEs */
-						for (ii = 0U; ii < pe_num; ii++)
-						{
-							pe = pfe_pe_create(cbus_base_va, PE_TYPE_CLASS, (uint8_t)ii);
+						ret = pfe_class_create_pe(class, cbus_base_va, pe_num);
 
-							if (NULL == pe)
-							{
-								pfe_class_destroy(class);
-								class = NULL;
-								break;
-							}
-							else
-							{
-								pfe_pe_set_iaccess(pe, CLASS_MEM_ACCESS_WDATA, CLASS_MEM_ACCESS_RDATA, CLASS_MEM_ACCESS_ADDR);
-								pfe_pe_set_dmem(pe, PFE_CFG_CLASS_ELF_DMEM_BASE, PFE_CFG_CLASS_DMEM_SIZE);
-								pfe_pe_set_imem(pe, PFE_CFG_CLASS_ELF_IMEM_BASE, PFE_CFG_CLASS_IMEM_SIZE);
-								pfe_pe_set_lmem(pe, (PFE_CFG_CBUS_PHYS_BASE_ADDR + PFE_CFG_PE_LMEM_BASE), PFE_CFG_PE_LMEM_SIZE);
-								class->pe[ii] = pe;
-								class->pe_num++;
-							}
+						if(EOK != ret)
+						{
+							pfe_class_destroy(class);
+							class = NULL;
 						}
 
 						if (NULL != class)
@@ -517,14 +514,6 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
 			{
 				NXP_LOG_ERROR("Failed to initialize FW features\n");
 			}
-			else
-			{
-				ret = pfe_class_load_ptp_config(class);
-				if(EOK != ret)
-				{
-					NXP_LOG_ERROR("Failed to set PTP common HIF\n");
-				}
-			}
 		}
 
 		if (EOK != oal_mutex_unlock(&class->mutex))
@@ -536,13 +525,93 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
 	return ret;
 }
 
+static errno_t pfe_class_load_fw_process(pfe_class_t *class)
+{
+	errno_t                ret = EINVAL;
+	uint32_t               i, j;
+	pfe_ct_feature_desc_t *entry;
+	bool_t                 val_break = FALSE;
+
+	/* Initialize current_feature */
+	class->current_feature = 0U;
+	for (i = 0U; i < class->fw_features_count; i++)
+	{
+		class->fw_features[i] = pfe_fw_feature_create();
+		if (NULL == class->fw_features[i])
+		{
+			NXP_LOG_ERROR("Failed to create feature %u\n", (uint_t)i);
+			/* Destroy previously created and return failure */
+			for (j = 0U; j < i; j++)
+			{
+				pfe_fw_feature_destroy(class->fw_features[j]);
+				class->fw_features[j] = NULL;
+			}
+			oal_mm_free(class->fw_features);
+			ret       = ENOMEM;
+			val_break = TRUE;
+		}
+		else
+		{
+			/* Get feature low level data */
+			ret = pfe_pe_get_fw_feature_entry(class->pe[0U], i, &entry);
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Failed get ll data for feature %u\n", (uint_t)i);
+				/* Destroy previously created and return failure */
+				for (j = 0U; j < i; j++)
+				{
+					pfe_fw_feature_destroy(class->fw_features[j]);
+					class->fw_features[j] = NULL;
+				}
+				oal_mm_free(class->fw_features);
+				ret       = EINVAL;
+				val_break = TRUE;
+			}
+			else
+			{
+				/* Set the low level data in the feature */
+				(void)pfe_fw_feature_set_ll_data(class->fw_features[i], entry);
+				/* Set the feature string base */
+				ret = pfe_fw_feature_set_string_base(class->fw_features[i], pfe_pe_get_fw_feature_str_base(class->pe[0U]));
+				if (EOK != ret)
+				{
+					NXP_LOG_ERROR("Failed to set string base for feature %u\n", (uint_t)i);
+					/* Destroy previously created and return failure */
+					for (j = 0U; j < i; j++)
+					{
+						pfe_fw_feature_destroy(class->fw_features[j]);
+						class->fw_features[j] = NULL;
+					}
+					oal_mm_free(class->fw_features);
+					ret       = EINVAL;
+					val_break = TRUE;
+				}
+				else
+				{
+					/* Set functions to read/write DMEM and their data */
+					(void)pfe_fw_feature_set_dmem_funcs(class->fw_features[i], pfe_class_read_dmem, pfe_class_write_dmem, (void *)class);
+				}
+			}
+		}
+		if (TRUE == val_break)
+		{
+			break;
+		}
+	}
+
+	if (EOK != ret)
+	{
+		class->fw_features       = NULL;
+		class->fw_features_count = 0U;
+	}	
+
+	return ret;
+}
+
 static errno_t pfe_class_load_fw_features(pfe_class_t *class)
 {
 	pfe_ct_pe_mmap_t       mmap;
 	errno_t                ret;
-	pfe_ct_feature_desc_t *entry;
-	uint32_t               i, j;
-	bool_t                 val_break = FALSE;
 
 	ret = pfe_pe_get_mmap(class->pe[0U], &mmap);
 	if (EOK == ret)
@@ -560,77 +629,10 @@ static errno_t pfe_class_load_fw_features(pfe_class_t *class)
 			}
 			else
 			{
-				/* Initialize current_feature */
-				class->current_feature = 0U;
-				for (i = 0U; i < class->fw_features_count; i++)
+				ret = pfe_class_load_fw_process(class);
+				if (EOK != ret)
 				{
-					class->fw_features[i] = pfe_fw_feature_create();
-					if (NULL == class->fw_features[i])
-					{
-						NXP_LOG_ERROR("Failed to create feature %u\n", (uint_t)i);
-						/* Destroy previously created and return failure */
-						for (j = 0U; j < i; j++)
-						{
-							pfe_fw_feature_destroy(class->fw_features[j]);
-							class->fw_features[j] = NULL;
-						}
-						oal_mm_free(class->fw_features);
-						class->fw_features       = NULL;
-						class->fw_features_count = 0U;
-						ret                      = ENOMEM;
-						val_break                = TRUE;
-					}
-					else
-					{
-						/* Get feature low level data */
-						ret = pfe_pe_get_fw_feature_entry(class->pe[0U], i, &entry);
-						if (EOK != ret)
-						{
-							NXP_LOG_ERROR("Failed get ll data for feature %u\n", (uint_t)i);
-							/* Destroy previously created and return failure */
-							for (j = 0U; j < i; j++)
-							{
-								pfe_fw_feature_destroy(class->fw_features[j]);
-								class->fw_features[j] = NULL;
-							}
-							oal_mm_free(class->fw_features);
-							class->fw_features       = NULL;
-							class->fw_features_count = 0U;
-							ret                      = EINVAL;
-							val_break                = TRUE;
-						}
-						else
-						{
-							/* Set the low level data in the feature */
-							(void)pfe_fw_feature_set_ll_data(class->fw_features[i], entry);
-							/* Set the feature string base */
-							ret = pfe_fw_feature_set_string_base(class->fw_features[i], pfe_pe_get_fw_feature_str_base(class->pe[0U]));
-							if (EOK != ret)
-							{
-								NXP_LOG_ERROR("Failed to set string base for feature %u\n", (uint_t)i);
-								/* Destroy previously created and return failure */
-								for (j = 0U; j < i; j++)
-								{
-									pfe_fw_feature_destroy(class->fw_features[j]);
-									class->fw_features[j] = NULL;
-								}
-								oal_mm_free(class->fw_features);
-								class->fw_features       = NULL;
-								class->fw_features_count = 0U;
-								ret                      = EINVAL;
-								val_break                = TRUE;
-							}
-							else
-							{
-								/* Set functions to read/write DMEM and their data */
-								(void)pfe_fw_feature_set_dmem_funcs(class->fw_features[i], pfe_class_read_dmem, pfe_class_write_dmem, (void *)class);
-							}
-						}
-					}
-					if (TRUE == val_break)
-					{
-						break;
-					}
+					NXP_LOG_ERROR("Errors during load FW features\n");
 				}
 			}
 		} /* Else is OK too */
@@ -649,7 +651,7 @@ static errno_t pfe_class_load_fw_features(pfe_class_t *class)
 errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_class_mmap_t *mmap)
 {
 	errno_t          ret;
-	pfe_ct_pe_mmap_t mmap_tmp;
+	pfe_ct_pe_mmap_t mmap_tmp = {0};
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == class) || (NULL == mmap)))
@@ -1359,6 +1361,42 @@ errno_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
 }
 
 /**
+ * @brief			Calculate total statistics
+ * @param[in]		class The CLASS instance
+ * @param[out]		total_stat Total statistics
+ * @param[in,out]	stats Statistic structure
+ */
+static void pfe_class_cal_total_stats(pfe_class_t *class, pfe_ct_classify_stats_t *total_stat, pfe_ct_classify_stats_t *stats)
+{
+	uint32_t                 i = 0U, j = 0U;
+	
+	/* Calculate total statistics */
+	while (i < pfe_class_get_num_of_pes(class))
+	{
+		pfe_class_alg_stats_endian(&stats[i].flexible_router);
+		pfe_class_alg_stats_endian(&stats[i].ip_router);
+		pfe_class_alg_stats_endian(&stats[i].vlan_bridge);
+		pfe_class_alg_stats_endian(&stats[i].log_if);
+
+		for (j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)
+		{
+			pfe_class_ihc_stats_endian(&stats[i].hif_to_hif[j]);
+		}
+		pfe_class_sum_pe_algo_stats(&total_stat->flexible_router, &stats[i].flexible_router);
+		pfe_class_sum_pe_algo_stats(&total_stat->ip_router, &stats[i].ip_router);
+		pfe_class_sum_pe_algo_stats(&total_stat->vlan_bridge, &stats[i].vlan_bridge);
+		pfe_class_sum_pe_algo_stats(&total_stat->log_if, &stats[i].log_if);
+
+		for (j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)
+		{
+			pfe_class_sum_pe_ihc_stats(&total_stat->hif_to_hif[j], &stats[i].hif_to_hif[j]);
+		}
+		 
+		++i;
+	}
+}
+
+/**
  * @brief		Get class algo statistics
  * @param[in]	class
  * @param[out]	stat Statistic structure
@@ -1368,7 +1406,6 @@ errno_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
 errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
 {
 	pfe_ct_pe_mmap_t         mmap;
-	uint32_t                 i = 0U, j = 0U;
 	errno_t                  ret      = EOK;
 	uint32_t                 buff_len = 0U;
 	pfe_ct_classify_stats_t *stats    = NULL;
@@ -1407,33 +1444,7 @@ errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
                 /* Gather memory from all PEs*/
                 ret = pfe_class_gather_read_dmem(class, stats, oal_ntohl(mmap.class_pe.classification_stats), buff_len, sizeof(pfe_ct_classify_stats_t));
 
-                /* Calculate total statistics */
-                while (i < pfe_class_get_num_of_pes(class))
-                {
-                    pfe_class_alg_stats_endian(&stats[i].flexible_router);
-                    pfe_class_alg_stats_endian(&stats[i].ip_router);
-                    pfe_class_alg_stats_endian(&stats[i].vlan_bridge);
-                    pfe_class_alg_stats_endian(&stats[i].log_if);
-
-                    for (j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)
-                    {
-                        pfe_class_ihc_stats_endian(&stats[i].hif_to_hif[j]);
-                    }
-                    pfe_class_flexi_parser_stats_endian(&stats[i].flexible_filter);
-
-                    pfe_class_sum_pe_algo_stats(&stat->flexible_router, &stats[i].flexible_router);
-                    pfe_class_sum_pe_algo_stats(&stat->ip_router, &stats[i].ip_router);
-                    pfe_class_sum_pe_algo_stats(&stat->vlan_bridge, &stats[i].vlan_bridge);
-                    pfe_class_sum_pe_algo_stats(&stat->log_if, &stats[i].log_if);
-
-                    for (j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)
-                    {
-                        pfe_class_sum_pe_ihc_stats(&stat->hif_to_hif[j], &stats[i].hif_to_hif[j]);
-                    }
-                    pfe_class_sum_flexi_parser_stats(&stat->flexible_filter, &stats[i].flexible_filter);
-                    ++i;
-                }
-
+                pfe_class_cal_total_stats(class, stat, stats);
                 oal_mm_free(stats);
             }
         }
@@ -1629,8 +1640,6 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 				len += pfe_class_stat_to_str(&c_alg_stats.vlan_bridge, buf + len, buf_len - len, verb_level);
 				len += oal_util_snprintf(buf + len, buf_len - len, "- Logical Interfaces -\n");
 				len += pfe_class_stat_to_str(&c_alg_stats.log_if, buf + len, buf_len - len, verb_level);
-				len += oal_util_snprintf(buf + len, buf_len - len, "- Global Flexible filter -\n");
-				len += pfe_class_fp_stat_to_str(&c_alg_stats.flexible_filter, buf + len, buf_len - len, verb_level);
 				len += oal_util_snprintf(buf + len, buf_len - len, "- InterHIF -\n");
 
 				for (j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)

@@ -10,6 +10,7 @@
 #ifndef SRC_BLALLOC_H_
 #define SRC_BLALLOC_H_
 
+
 /**
  * @brief   Number of chunks encoded within single byte. Not intended to be modified.
  */
@@ -48,7 +49,7 @@ typedef struct
  *          instead of dynamic blalloc_create() and blalloc_destroy().
  */
 #define BLALLOC_STATIC_INST(__name, __size, __chunk_size) \
-static uint8_t blalloc_buf_##__name[(((__size) >> (__chunk_size)) + BLALLOC_CFG_CHUNKS_IN_BYTE - 1U) / BLALLOC_CFG_CHUNKS_IN_BYTE] = {0U}; \
+static uint8_t blalloc_buf_##__name[((((__size) >> (__chunk_size)) + BLALLOC_CFG_CHUNKS_IN_BYTE - 1U) / BLALLOC_CFG_CHUNKS_IN_BYTE)] = {0U}; \
 static blalloc_t __name = \
     { \
         .chunkinfo = blalloc_buf_##__name, \
@@ -68,7 +69,10 @@ void blalloc_fini(blalloc_t *ctx);
 errno_t blalloc_alloc_offs(blalloc_t *ctx, size_t size, size_t align, addr_t *addr);
 void blalloc_free_offs_size(blalloc_t *ctx, addr_t offset, size_t size);
 void blalloc_free_offs(blalloc_t *ctx, addr_t offset);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t blalloc_get_text_statistics(const blalloc_t *ctx, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

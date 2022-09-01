@@ -7,25 +7,25 @@
  *
  * ========================================================================= */
 
-#ifndef PUBLIC_PFE_SAFETY_H_
-#define PUBLIC_PFE_SAFETY_H_
+#ifndef PFE_PARITY_CSR_H_
+#define PFE_PARITY_CSR_H_
 
-typedef struct pfe_safety_tag pfe_safety_t;
+
+#include "pfe_parity.h"
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_START_SEC_CODE
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-pfe_safety_t *pfe_safety_create(addr_t cbus_base_va, addr_t safety_base);
-void pfe_safety_destroy(pfe_safety_t *safety);
-errno_t pfe_safety_isr(const pfe_safety_t *safety);
-void pfe_safety_irq_mask(const pfe_safety_t *safety);
-void pfe_safety_irq_unmask(const pfe_safety_t *safety);
+errno_t pfe_parity_cfg_isr(addr_t base_va);
+void pfe_parity_cfg_irq_mask(addr_t base_va);
+void pfe_parity_cfg_irq_unmask(addr_t base_va);
+void pfe_parity_cfg_irq_unmask_all(addr_t base_va);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-#endif /* PUBLIC_PFE_SAFETY_H_ */
+#endif /* PFE_PARITY_CSR_H_ */

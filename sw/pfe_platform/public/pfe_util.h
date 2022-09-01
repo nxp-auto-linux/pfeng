@@ -15,6 +15,7 @@ typedef struct pfe_util_tag pfe_util_t;
 typedef struct
 {
 	uint32_t pe_sys_clk_ratio;		/*	Clock mode ratio for sys_clk and pe_clk */
+	bool_t on_g3;
 } pfe_util_cfg_t;
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
@@ -27,7 +28,11 @@ void pfe_util_enable(pfe_util_t *util);
 void pfe_util_reset(pfe_util_t *util);
 void pfe_util_disable(pfe_util_t *util);
 errno_t pfe_util_load_firmware(pfe_util_t *util, const void *elf);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 void pfe_util_destroy(pfe_util_t *util);
 errno_t pfe_util_isr(const pfe_util_t *util);
 void pfe_util_irq_mask(const pfe_util_t *util);

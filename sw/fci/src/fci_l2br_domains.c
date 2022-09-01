@@ -69,6 +69,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 	bool_t tag;
 	pfe_phy_if_t *phy_if;
 	uint32_t session_id;
+	pfe_ct_vlan_stats_t stats = {0};
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -392,6 +393,15 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 							break;
 						}
+
+						if (EOK != pfe_l2br_get_domain_stats(fci_context->l2_bridge, &stats, pfe_l2br_get_vlan_stats_index(domain)))
+						{
+							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+							break;
+						}
+
+						/* Copy the domain statistics to reply */
+						(void)memcpy(&bd_cmd->stats, &stats, sizeof(bd_cmd->stats));
 
 						if (TRUE == pfe_l2br_domain_is_default(domain))
 						{

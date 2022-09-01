@@ -6,6 +6,7 @@
  *  SPDX-License-Identifier: GPL-2.0
  *
  * ========================================================================= */
+
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
@@ -186,7 +187,7 @@ bool_t pfe_feature_mgr_is_available(const char *feature_name)
 {
 	pfe_hw_feature_t *hw_feature;
 	pfe_fw_feature_t *fw_feature_class;
-	pfe_fw_feature_t *fw_feature_util;
+	pfe_fw_feature_t *fw_feature_util = NULL;
 	errno_t           ret_class, ret_util;
 	bool_t            class_avail = FALSE;
 	bool_t            util_avail = FALSE;
@@ -349,8 +350,8 @@ errno_t pfe_feature_mgr_set_val(const char *feature_name, const uint8_t val)
 {
 	pfe_hw_feature_t *hw_feature;
 	pfe_fw_feature_t *fw_feature_class;
-	pfe_fw_feature_t *fw_feature_util;
-	pfe_ct_feature_flags_t flags;
+	pfe_fw_feature_t *fw_feature_util = NULL;
+	pfe_ct_feature_flags_t flags = F_NONE;
 	errno_t           ret_class, ret_util;
 	errno_t           ret_feature;
 	uint8_t           old_val;
@@ -377,7 +378,7 @@ errno_t pfe_feature_mgr_set_val(const char *feature_name, const uint8_t val)
 			if (EOK == ret_feature)
 			{ /* Feature exists */
 				ret = pfe_hw_feature_get_flags(hw_feature, &flags);
-				if (flags & F_RUNTIME)
+				if (0U != ((uint8_t)flags & (uint8_t)F_RUNTIME))
 				{
 					ret = pfe_hw_feature_set_val(hw_feature, val);
 				}
@@ -665,7 +666,7 @@ errno_t pfe_feature_mgr_get_val(const char *feature_name, uint8_t *val)
 {
 	pfe_hw_feature_t *hw_feature;
 	pfe_fw_feature_t *fw_feature_class;
-	pfe_fw_feature_t *fw_feature_util;
+	pfe_fw_feature_t *fw_feature_util = NULL;
 	errno_t           ret_class, ret_util;
 	errno_t           ret_feature;
 	errno_t           ret = EOK;

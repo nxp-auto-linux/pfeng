@@ -43,13 +43,96 @@ struct pfe_util_tag
 
 static errno_t pfe_util_read_dmem(void *util_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len);
 static errno_t pfe_util_write_dmem(void *util_p, int32_t pe_idx, addr_t dst_addr, const void *src_ptr, uint32_t len);
+static bool_t pfe_util_check_new_fw_features(pfe_util_t *util, errno_t *ret, uint32_t features_idx);
 
+/**
+ * @brief		Get the features of the util PE block.
+ * @param[in]	util The UTIL instance
+ * @param[in]	features_idx The features indexs
+ * @return		The status of PEs get features
+ */
+static bool_t pfe_util_check_new_fw_features(pfe_util_t *util, errno_t *ret, uint32_t features_idx)
+{
+	bool_t val_break = FALSE;
+	pfe_ct_feature_desc_t *entry;
+	uint32_t j;
+
+	if(NULL == util->fw_features[features_idx])
+	{
+		NXP_LOG_ERROR("Failed to create feature %u\n", (uint_t)features_idx);
+		/* Destroy previously created and return failure */
+		for(j = 0U; j < features_idx; j++)
+		{
+			pfe_fw_feature_destroy(util->fw_features[j]);
+			util->fw_features[j] = NULL;
+		}
+		oal_mm_free(util->fw_features);
+		util->fw_features = NULL;
+		util->fw_features_count = 0U;
+		*ret = ENOMEM;
+		val_break = TRUE;
+	}
+	else
+	{
+		/* Get feature low level data */
+		*ret = pfe_pe_get_fw_feature_entry(util->pe[0U], features_idx, &entry);
+		if(EOK != *ret)
+		{
+			NXP_LOG_ERROR("Failed get ll data for feature %u\n", (uint_t)features_idx);
+			/* Destroy previously created and return failure */
+			for(j = 0U; j < features_idx; j++)
+			{
+				pfe_fw_feature_destroy(util->fw_features[j]);
+				util->fw_features[j] = NULL;
+			}
+			oal_mm_free(util->fw_features);
+			util->fw_features = NULL;
+			util->fw_features_count = 0U;
+			*ret = EINVAL;
+			val_break = TRUE;
+		}
+		else
+		{
+			/* Set the low level data in the feature */
+			(void)pfe_fw_feature_set_ll_data(util->fw_features[features_idx], entry);
+			/* Set the feature string base */
+			*ret = pfe_fw_feature_set_string_base(util->fw_features[features_idx], pfe_pe_get_fw_feature_str_base(util->pe[0U]));
+			if(EOK != *ret)
+			{
+				NXP_LOG_ERROR("Failed to set string base for feature %u\n", (uint_t)features_idx);
+				/* Destroy previously created and return failure */
+				for(j = 0U; j < features_idx; j++)
+				{
+					pfe_fw_feature_destroy(util->fw_features[j]);
+					util->fw_features[j] = NULL;
+				}
+				oal_mm_free(util->fw_features);
+				util->fw_features = NULL;
+				util->fw_features_count = 0U;
+				*ret = EINVAL;
+				val_break = TRUE;
+			}
+			else
+			{
+				/* Set functions to read/write DMEM and their data */
+				(void)pfe_fw_feature_set_dmem_funcs(util->fw_features[features_idx], pfe_util_read_dmem, pfe_util_write_dmem, (void *)util);
+			}
+		}
+	}
+
+	return val_break;
+}
+
+/**
+ * @brief		Get the features of the util PE block.
+ * @param[in]	util The UTIL instance
+ * @return		The status of PEs get features
+ */
 static errno_t pfe_util_load_fw_features(pfe_util_t *util)
 {
 	pfe_ct_pe_mmap_t mmap;
 	errno_t ret = EOK;
-	pfe_ct_feature_desc_t *entry;
-	uint32_t i = 0U, j;
+	uint32_t fw_features_idx = 0U;
 	bool_t val_break = FALSE;
 
 	ret = pfe_pe_get_mmap(util->pe[0U], &mmap);
@@ -70,77 +153,15 @@ static errno_t pfe_util_load_fw_features(pfe_util_t *util)
 			{
 				/* Initialize current_feature */
 				util->current_feature = 0U;
-				while(i < util->fw_features_count)
+				while(fw_features_idx < util->fw_features_count)
 				{
-					util->fw_features[i] = pfe_fw_feature_create();
-					if(NULL == util->fw_features[i])
-					{
-						NXP_LOG_ERROR("Failed to create feature %u\n", (uint_t)i);
-						/* Destroy previously created and return failure */
-						for(j = 0U; j < i; j++)
-						{
-							pfe_fw_feature_destroy(util->fw_features[j]);
-							util->fw_features[j] = NULL;
-						}
-						oal_mm_free(util->fw_features);
-						util->fw_features = NULL;
-						util->fw_features_count = 0U;
-						ret = ENOMEM;
-						val_break = TRUE;
-					}
-					else
-					{
-						/* Get feature low level data */
-						ret = pfe_pe_get_fw_feature_entry(util->pe[0U], i, &entry);
-						if(EOK != ret)
-						{
-							 NXP_LOG_ERROR("Failed get ll data for feature %u\n", (uint_t)i);
-							/* Destroy previously created and return failure */
-							for(j = 0U; j < i; j++)
-							{
-								pfe_fw_feature_destroy(util->fw_features[j]);
-								util->fw_features[j] = NULL;
-							}
-							oal_mm_free(util->fw_features);
-							util->fw_features = NULL;
-							util->fw_features_count = 0U;
-							ret = EINVAL;
-							val_break = TRUE;
-						}
-						else
-						{
-							/* Set the low level data in the feature */
-							(void)pfe_fw_feature_set_ll_data(util->fw_features[i], entry);
-							/* Set the feature string base */
-							ret = pfe_fw_feature_set_string_base(util->fw_features[i], pfe_pe_get_fw_feature_str_base(util->pe[0U]));
-							if(EOK != ret)
-							{
-								NXP_LOG_ERROR("Failed to set string base for feature %u\n", (uint_t)i);
-								/* Destroy previously created and return failure */
-								for(j = 0U; j < i; j++)
-								{
-									pfe_fw_feature_destroy(util->fw_features[j]);
-									util->fw_features[j] = NULL;
-								}
-								oal_mm_free(util->fw_features);
-								util->fw_features = NULL;
-								util->fw_features_count = 0U;
-								ret = EINVAL;
-								val_break = TRUE;
-							}
-							else
-							{
-								/* Set functions to read/write DMEM and their data */
-								(void)pfe_fw_feature_set_dmem_funcs(util->fw_features[i], pfe_util_read_dmem, pfe_util_write_dmem, (void *)util);
-							}
-						}
-					}
+					util->fw_features[fw_features_idx] = pfe_fw_feature_create();
+					val_break = pfe_util_check_new_fw_features(util, &ret, fw_features_idx);
 					if (TRUE == val_break)
 					{
 						break;
 					}
-
-					++i;
+					++fw_features_idx;
 				}
 			}
 		} /* Else is OK too */
@@ -157,6 +178,8 @@ static errno_t pfe_util_load_fw_features(pfe_util_t *util)
  */
 static void pfe_util_set_config(const pfe_util_t *util, const pfe_util_cfg_t *cfg)
 {
+	uint32_t regval;
+
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == util) || (NULL == cfg)))
 	{
@@ -166,6 +189,12 @@ static void pfe_util_set_config(const pfe_util_t *util, const pfe_util_cfg_t *cf
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
 		hal_write32(cfg->pe_sys_clk_ratio, util->cbus_base_va + UTIL_PE_SYS_CLK_RATIO);
+		if (TRUE == cfg->on_g3)
+		{
+			regval = hal_read32(util->cbus_base_va + UTIL_MISC_REG_ADDR);
+			regval |= 0x3U;
+			hal_write32(regval, util->cbus_base_va + UTIL_MISC_REG_ADDR);
+		}
 	}
 }
 
@@ -202,7 +231,7 @@ static errno_t pfe_util_create_pe(uint32_t pe_num, addr_t cbus_base_va, pfe_util
 			util->pe_num++;
 		}
 	}
-	
+
 	return ret;
 }
 
@@ -262,7 +291,9 @@ pfe_util_t *pfe_util_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_util
 		ret = pfe_util_create_pe(pe_num, cbus_base_va, util);
 		if(EOK != ret)
 		{
-			goto free_and_fail;
+			pfe_util_destroy(util);
+			util = NULL;
+			return NULL;
 		}
 		/*	Issue block reset */
 		pfe_util_reset(util);
@@ -275,12 +306,6 @@ pfe_util_t *pfe_util_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_util
 	}
 
 	return util;
-
-free_and_fail:
-	pfe_util_destroy(util);
-	util = NULL;
-
-	return NULL;
 }
 
 /**
@@ -486,8 +511,8 @@ errno_t pfe_util_get_feature(const pfe_util_t *util, pfe_fw_feature_t **feature,
 				{
 					ret = ENOENT;
 				}
-			}			
-		}		
+			}
+		}
 	}
 	return ret;
 }
@@ -667,7 +692,7 @@ static errno_t pfe_util_read_dmem(void *util_p, int32_t pe_idx, void *dst_ptr, a
 			{
 				NXP_LOG_DEBUG("mutex unlock failed\n");
 			}
-			
+
 			ret = EOK;
 		}
 	}
@@ -704,6 +729,7 @@ errno_t pfe_util_isr(const pfe_util_t *util)
 			}
 
 			(void)pfe_pe_get_fw_messages_nolock(util->pe[count]);
+			(void)pfe_pe_check_stalled_nolock(util->pe[count]);
 
 			if (EOK != pfe_pe_unlock(util->pe[count]))
 			{

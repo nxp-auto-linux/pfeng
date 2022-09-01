@@ -554,10 +554,10 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 					/* Update each rule one by one */
 					for(index = 0U; (8U * sizeof(if_cmd->match)) > index;  ++index)
 					{
-						if(0U != (oal_ntohl(if_cmd->match) & (1U << index)))
+						if(0U != (oal_ntohl(if_cmd->match) & (1UL << index)))
 						{
 							/* Resolve position of data and size */
-							ret = fci_interfaces_get_arg_info(&if_cmd->arguments, (pfe_ct_if_m_rules_t)(oal_ntohl(if_cmd->match) & (1U << index)), &offset, &size, &fp_table_addr);
+							ret = fci_interfaces_get_arg_info(&if_cmd->arguments, (pfe_ct_if_m_rules_t)(oal_ntohl(if_cmd->match) & (1UL << index)), &offset, &size, &fp_table_addr);
 							if(EOK != ret)
 							{
 								NXP_LOG_ERROR("Failed to get update argument\n");
@@ -565,7 +565,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 							}
 
 							/* Add match rule and arguments */
-							ret = pfe_log_if_add_match_rule(log_if, (pfe_ct_if_m_rules_t)(oal_ntohl(if_cmd->match) & (1U << index)), offset, size);
+							ret = pfe_log_if_add_match_rule(log_if, (pfe_ct_if_m_rules_t)(oal_ntohl(if_cmd->match) & (1UL << index)), offset, size);
 
 							if(EOK != ret)
 							{
@@ -616,7 +616,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 
 								/* Check whether the phy if shall be added
 								We are getting inputs in network order thus conversion is needed */
-								if(0U != (oal_ntohl(if_cmd->egress) & (1U << index)))
+								if(0U != (oal_ntohl(if_cmd->egress) & (1UL << index)))
 								{   /* Add */
 									/* If the ID exits add corresponding phy_if as egress to log_if*/
 									if (EOK != pfe_log_if_add_egress_if(log_if, phy_if))
@@ -914,6 +914,9 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 	char_t *name;
 	bool flag_in_cmd;
 	bool flag_in_drv;
+	pfe_if_db_entry_t *mgmt_entry = NULL;
+	pfe_phy_if_t *mgmt_if = NULL;
+	pfe_ct_phy_if_id_t mgmt_if_id = PFE_PHY_IF_ID_INVALID;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -1266,6 +1269,56 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 						}
 					}
 
+					/* PTP mgmt interface */
+					if ('\0' == if_cmd->ptp_mgmt_if[0])
+					{
+						/* Disable mgmt interface */
+						ret = pfe_phy_if_set_mgmt_interface(phy_if, PFE_PHY_IF_ID_INVALID);
+						if (EOK != ret)
+						{
+							/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
+							NXP_LOG_ERROR("%s: Could not disable mgmt interface\n", pfe_phy_if_get_name(phy_if));
+							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+							break;
+						}
+					}
+					else
+					{
+						ret = pfe_if_db_get_single(fci_context->phy_if_db, fci_context->if_session_id, IF_DB_CRIT_BY_NAME, if_cmd->ptp_mgmt_if, &mgmt_entry);
+						if (EOK != ret)
+						{
+							/* FCI command requested unfulfillable action. Respond with FCI error code. */
+							NXP_LOG_ERROR("Incorrect session ID detected\n");
+							*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
+							ret = EOK;
+							break;
+						}
+
+						/* Check if entry is not NULL and get physical interface */
+						if (NULL != mgmt_entry)
+						{
+							mgmt_if = pfe_if_db_entry_get_phy_if(mgmt_entry);
+						}
+						/* Check if the entry exists */
+						if ((NULL == mgmt_entry) || (NULL == mgmt_if))
+						{
+							/* FCI command requested nonexistent entity. Respond with FCI error code. */
+							*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
+							ret = EOK;
+							break;
+						}
+
+						/* Enable mgmt interface and set its target physical interface */
+						ret = pfe_phy_if_set_mgmt_interface(phy_if, pfe_phy_if_get_id(mgmt_if));
+						if (EOK != ret)
+						{
+							/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
+							NXP_LOG_ERROR("%s: Could not set new mgmt interface %s\n", pfe_phy_if_get_name(phy_if), pfe_phy_if_get_name(mgmt_if));
+							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+							break;
+						}
+					}
+
 					break;
 				}
 
@@ -1403,6 +1456,40 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 						(void)memset(reply_buf->ftable, 0, sizeof(reply_buf->ftable));
 					}
 
+					/* Get PTP mgmt interface */
+					mgmt_if_id = pfe_phy_if_get_mgmt_interface(phy_if);
+					if (PFE_PHY_IF_ID_INVALID <= mgmt_if_id)
+					{
+						(void)memset(reply_buf->ptp_mgmt_if, 0, sizeof(reply_buf->ptp_mgmt_if));
+					}
+					else
+					{
+						ret = pfe_if_db_get_single(fci_context->phy_if_db, fci_context->if_session_id, IF_DB_CRIT_BY_ID, (void*)mgmt_if_id, &mgmt_entry);
+						if (EOK != ret)
+						{
+							/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
+							NXP_LOG_ERROR("Incorrect session ID detected\n");
+							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+							break;
+						}
+
+						/* Check if entry is not NULL and get physical interface */
+						if (NULL != mgmt_entry)
+						{
+							mgmt_if = pfe_if_db_entry_get_phy_if(mgmt_entry);
+						}
+						/* Check if the entry exists */
+						if ((NULL == mgmt_entry) || (NULL == mgmt_if))
+						{
+							/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
+							NXP_LOG_ERROR("Unexpected NULL mgmt_if\n");
+							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+							break;
+						}
+
+						(void)strncpy(reply_buf->ptp_mgmt_if, pfe_phy_if_get_name(mgmt_if), (uint32_t)IFNAMSIZ-1U);
+					}
+
 					/* Set reply length end return OK */
 					*reply_len = sizeof(fpp_phy_if_cmd_t);
 					*fci_ret = FPP_ERR_OK;
@@ -1506,7 +1593,7 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 				}
 			}
 
-			if (FPP_ERR_OK == *fci_ret)
+			if ((uint16_t)FPP_ERR_OK == *fci_ret)
 			{
 				/* Process the command */
 				switch (if_mac_cmd->action)
@@ -1576,7 +1663,7 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 							}
 						}
 
-						if (FPP_ERR_OK == *fci_ret)
+						if ((uint16_t)FPP_ERR_OK == *fci_ret)
 						{
 							/* Store phy_if name into reply message */
 							(void)strncpy(reply_buf->name, pfe_phy_if_get_name(phy_if), (uint32_t)IFNAMSIZ - 1U);
@@ -1608,7 +1695,7 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 							}
 						}
 
-						if (FPP_ERR_OK == *fci_ret)
+						if ((uint16_t)FPP_ERR_OK == *fci_ret)
 						{ /* Store phy_if name into reply message */
 							(void)strncpy(reply_buf->name, pfe_phy_if_get_name(phy_if), (uint32_t)IFNAMSIZ - 1U);
 

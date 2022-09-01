@@ -12,8 +12,11 @@
 #include "hal.h"
 #include "pfe_cbus.h"
 #include "pfe_wdt_csr.h"
+#include "pfe_feature_mgr.h"
+#include "pfe_hm.h"
 
-#define WDT_INT_SRC_NUMBER 11U
+#define WDT_INT_SRC_NUMBER_G2 11U
+#define WDT_INT_SRC_NUMBER_G3 18U
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_START_SEC_CODE
@@ -35,29 +38,73 @@ errno_t pfe_wdt_cfg_isr(addr_t base_va, addr_t cbus_base_va)
 	uint8_t index = 0U;
 	uint32_t reg_en, reg_src, reg_reen = 0U;
 	errno_t ret = ENOENT;
-	const uint32_t wdt_int_src_arr[WDT_INT_SRC_NUMBER] =
+
+	/* G2 WDT bits */
+	static const uint32_t wdt_int_src_arr_g2[WDT_INT_SRC_NUMBER_G2] =
+	{
+		WDT_BMU1_WDT_INT_G2, WDT_BMU2_WDT_INT_G2, WDT_CLASS_WDT_INT_G2, WDT_EMAC0_GPI_WDT_INT_G2,
+		WDT_EMAC1_GPI_WDT_INT_G2, WDT_EMAC2_GPI_WDT_INT_G2, WDT_HIF_GPI_WDT_INT_G2,
+		WDT_HIF_NOCPY_WDT_INT_G2, WDT_HIF_WDT_INT_G2, WDT_TLITE_WDT_INT_G2, WDT_UTIL_WDT_INT_G2
+	};
+	static const uint32_t wdt_int_en_arr_g2[WDT_INT_SRC_NUMBER_G2] =
+	{
+		WDT_BMU1_WDT_INT_EN_BIT_G2, WDT_BMU2_WDT_INT_EN_BIT_G2, WDT_CLASS_WDT_INT_EN_BIT_G2,
+		WDT_EMAC0_GPI_WDT_INT_EN_BIT_G2, WDT_EMAC1_GPI_WDT_INT_EN_BIT_G2, WDT_EMAC2_GPI_WDT_INT_EN_BIT_G2,
+		WDT_HIF_GPI_WDT_INT_EN_BIT_G2, WDT_HIF_NOCPY_WDT_INT_EN_BIT_G2, WDT_HIF_WDT_INT_EN_BIT_G2,
+		WDT_TLITE_WDT_INT_EN_BIT_G2, WDT_UTIL_PE_WDT_INT_EN_BIT_G2
+	};
+
+	static const pfe_hm_evt_t wdt_int_event_id_g2[WDT_INT_SRC_NUMBER_G2] =
+	{
+		HM_EVT_WDT_BMU1, HM_EVT_WDT_BMU2, HM_EVT_WDT_CLASS, HM_EVT_WDT_EMAC0_GPI,
+		HM_EVT_WDT_EMAC1_GPI, HM_EVT_WDT_EMAC2_GPI, HM_EVT_WDT_HIF_GPI, HM_EVT_WDT_HIF_NOCPY,
+		HM_EVT_WDT_HIF, HM_EVT_WDT_TLITE, HM_EVT_WDT_UTIL_PE
+	};
+
+	/* G3 WDT bits */
+	static const uint32_t wdt_int_src_arr_g3[WDT_INT_SRC_NUMBER_G3] =
 	{
 		WDT_BMU1_WDT_INT, WDT_BMU2_WDT_INT, WDT_CLASS_WDT_INT, WDT_EMAC0_GPI_WDT_INT,
 		WDT_EMAC1_GPI_WDT_INT, WDT_EMAC2_GPI_WDT_INT, WDT_HIF_GPI_WDT_INT,
-		WDT_HIF_NOCPY_WDT_INT, WDT_HIF_WDT_INT, WDT_TLITE_WDT_INT, WDT_UTIL_WDT_INT
+		WDT_HIF_NOCPY_WDT_INT, WDT_HIF_WDT_INT, WDT_TLITE_WDT_INT, WDT_UTIL_PE_WDT_INT,
+		WDT_EMAC0_ETGPI_WDT_INT, WDT_EMAC1_ETGPI_WDT_INT, WDT_EMAC2_ETGPI_WDT_INT,
+		WDT_EXT_GPT1_WDT_INT, WDT_EXT_GPT2_WDT_INT, WDT_LMEM_WDT_INT, WDT_ROUTE_LMEM_WDT_INT
 	};
-	const uint32_t wdt_int_en_arr[WDT_INT_SRC_NUMBER]  =
+	static const uint32_t wdt_int_en_arr_g3[WDT_INT_SRC_NUMBER_G3] =
 	{
-		WDT_BMU1_WDT_INT_EN_BIT, WDT_BMU2_WDT_INT_EN_BIT, WDT_CLASS_WDT_INT_EN_BIT,
-		WDT_EMAC0_GPI_WDT_INT_EN_BIT, WDT_EMAC1_GPI_WDT_INT_EN_BIT, WDT_EMAC2_GPI_WDT_INT_EN_BIT,
-		WDT_HIF_GPI_WDT_INT_EN_BIT, WDT_HIF_NOCPY_WDT_INT_EN_BIT, WDT_HIF_WDT_INT_EN_BIT,
-		WDT_TLITE_WDT_INT_EN_BIT, WDT_UTIL_PE_WDT_INT_EN_BIT
+		WDT_BMU1_WDT_INT_EN_BIT, WDT_BMU2_WDT_INT_EN_BIT, WDT_CLASS_WDT_INT_EN_BIT, WDT_EMAC0_GPI_WDT_INT_EN_BIT,
+		WDT_EMAC1_GPI_WDT_INT_EN_BIT, WDT_EMAC2_GPI_WDT_INT_EN_BIT, WDT_HIF_GPI_WDT_INT_EN_BIT,
+		WDT_HIF_NOCPY_WDT_INT_EN_BIT, WDT_HIF_WDT_INT_EN_BIT, WDT_TLITE_WDT_INT_EN_BIT, WDT_UTIL_PE_WDT_INT_EN_BIT,
+		WDT_EMAC0_ETGPI_WDT_INT_EN_BIT, WDT_EMAC1_ETGPI_WDT_INT_EN_BIT, WDT_EMAC2_ETGPI_WDT_INT_EN_BIT,
+		WDT_EXT_GPT1_WDT_INT_EN_BIT, WDT_EXT_GPT2_WDT_INT_EN_BIT, WDT_LMEM_WDT_INT_EN_BIT, WDT_ROUTE_LMEM_WDT_INT_EN_BIT
 	};
-#ifdef NXP_LOG_ENABLED
-	const char_t * const wdt_int_src_text[WDT_INT_SRC_NUMBER] =
+
+	static const pfe_hm_evt_t wdt_int_event_id_g3[WDT_INT_SRC_NUMBER_G3] =
 	{
-		"WDT_BMU1_WDT_INT", "WDT_BMU2_WDT_INT", "WDT_CLASS_WDT_INT", "WDT_EMAC0_GPI_WDT_INT",
-		"WDT_EMAC1_GPI_WDT_INT", "WDT_EMAC2_GPI_WDT_INT", "WDT_HIF_GPI_WDT_INT",
-		"WDT_HIF_NOCPY_WDT_INT", "WDT_HIF_WDT_INT", "WDT_TLITE_WDT_INT", "WDT_UTIL_WDT_INT"
+		HM_EVT_WDT_BMU1, HM_EVT_WDT_BMU2, HM_EVT_WDT_CLASS, HM_EVT_WDT_EMAC0_GPI,
+		HM_EVT_WDT_EMAC1_GPI, HM_EVT_WDT_EMAC2_GPI, HM_EVT_WDT_HIF_GPI, HM_EVT_WDT_HIF_NOCPY,
+		HM_EVT_WDT_HIF, HM_EVT_WDT_TLITE, HM_EVT_WDT_UTIL_PE, HM_EVT_WDT_EMAC0_ETGPI,
+		HM_EVT_WDT_EMAC1_ETGPI, HM_EVT_WDT_EMAC2_ETGPI, HM_EVT_WDT_EXT_GPT1,
+		HM_EVT_WDT_EXT_GPT2, HM_EVT_WDT_LMEM, HM_EVT_WDT_ROUTE_LMEM
 	};
-#endif /* NXP_LOG_ENABLED */
+
+	uint32_t *int_src_arr, *int_en_arr;
+	const pfe_hm_evt_t *int_event_arr;
 
 	(void)cbus_base_va;
+
+	if (FALSE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+	{
+		int_src_arr = (uint32_t *)wdt_int_src_arr_g2;
+		int_en_arr = (uint32_t *)wdt_int_en_arr_g2;
+		int_event_arr = wdt_int_event_id_g2;
+	}
+	else
+	{
+		int_src_arr = (uint32_t *)wdt_int_src_arr_g3;
+		int_en_arr = (uint32_t *)wdt_int_en_arr_g3;
+		int_event_arr = wdt_int_event_id_g3;
+	}
 
 	/*	Get enabled interrupts */
 	reg_en = hal_read32(base_va + WDT_INT_EN);
@@ -69,14 +116,12 @@ errno_t pfe_wdt_cfg_isr(addr_t base_va, addr_t cbus_base_va)
 	hal_write32(reg_src, base_va + WDT_INT_SRC);
 
 	/*	Process interrupts which are triggered AND enabled */
-	for(index = 0U; index < WDT_INT_SRC_NUMBER; index++)
+	for(index = 0U; index < WDT_INT_SRC_NUMBER_G2; index++)
 	{
-		if (((reg_src & wdt_int_src_arr[index]) != 0U) && ((reg_en & wdt_int_en_arr[index]) != 0U))
+		if (((reg_src & int_src_arr[index]) != 0U) && ((reg_en & int_en_arr[index]) != 0U))
 		{
-#ifdef NXP_LOG_ENABLED
-			NXP_LOG_INFO("%s\n", wdt_int_src_text[index]);
-#endif /* NXP_LOG_ENABLED */
-			reg_reen |= wdt_int_en_arr[index];
+			pfe_hm_report_error(HM_SRC_WDT, int_event_arr[index], "");
+			reg_reen |= int_en_arr[index];
 			ret = EOK;
 		}
 	}
@@ -131,10 +176,21 @@ void pfe_wdt_cfg_init(addr_t base_va)
 
 	/*	Set default watchdog timer values. */
 	/*	TODO: What are real values able to precisely reveal runtime stall? */
-	hal_write32(0xFFFFFFFFU, base_va + WDT_TIMER_VAL_1);
-	hal_write32(0xFFFFFFFFU, base_va + WDT_TIMER_VAL_2);
-	hal_write32(0xFFFFFFFFU, base_va + WDT_TIMER_VAL_3);
-	hal_write32(0xFFFFFFU, base_va + WDT_TIMER_VAL_4);
+	hal_write32(0xFFFFFFFFU, base_va + WDT_TIMER_VAL_UPE);
+	hal_write32(0xFFFFFFFFU, base_va + WDT_TIMER_VAL_BMU);
+	hal_write32(0xFFFFFFFFU, base_va + WDT_TIMER_VAL_HIF);
+	hal_write32(0xFFFFFFU, base_va + WDT_TIMER_VAL_TLITE);
+
+	if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+	{
+		/*	G3 watchdog default values */
+		hal_write32(0xFFFFFFU, base_va + WDT_TIMER_VAL_HIF_NCPY);
+		hal_write32(0xFFFFFFU, base_va + WDT_TIMER_VAL_CLASS);
+		hal_write32(0xFFFFFFU, base_va + WDT_TIMER_VAL_GPI);
+		hal_write32(0xFFFFFFU, base_va + WDT_TIMER_VAL_GPT);
+		hal_write32(0xFFFFFFU, base_va + WDT_TIMER_VAL_LMEM);
+		hal_write32(0xFFFFFFU, base_va + WDT_TIMER_VAL_ROUTE_LMEM);
+	}
 
 	/*	Enable ALL particular watchdogs */
 	hal_write32(0xFFFFFFU, base_va + CLASS_WDT_INT_EN);
@@ -148,6 +204,13 @@ void pfe_wdt_cfg_init(addr_t base_va)
 	hal_write32(0x1FFU, base_va + EMAC0_WDT_INT_EN);
 	hal_write32(0x1FFU, base_va + EMAC1_WDT_INT_EN);
 	hal_write32(0x1FFU, base_va + EMAC2_WDT_INT_EN);
+
+	if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+	{
+		/*	G3 watchdogs */
+		hal_write32(0x3U, base_va + EXT_GPT_WDT_INT_EN);
+		hal_write32(0x3U, base_va + LMEM_WDT_INT_EN);
+	}
 
 	/*	Enable WDT interrupts except of the global enable bit */
 	hal_write32((0xffffffffU & ~(WDT_INT_EN_BIT)), base_va + WDT_INT_EN);
@@ -210,12 +273,30 @@ uint32_t pfe_wdt_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "EMAC0_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + EMAC0_WDT_INT_EN));
 			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "EMAC1_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + EMAC1_WDT_INT_EN));
 			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "EMAC2_WDT_INT_EN     : 0x%x\n", hal_read32(base_va + EMAC2_WDT_INT_EN));
+			if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+			{
+				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "EXT_GPT_WDT_INT_EN   : 0x%x\n", hal_read32(base_va + EXT_GPT_WDT_INT_EN));
+				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "LMEM_WDT_INT_EN      : 0x%x\n", hal_read32(base_va + LMEM_WDT_INT_EN));
+			}
 			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_INT_SRC          : 0x%x\n", hal_read32(base_va + WDT_INT_SRC));
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_1      : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_1));
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_2      : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_2));
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_3      : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_3));
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_4      : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_4));
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WSP_DBUG_BUS1        : 0x%x\n", hal_read32(base_va + WSP_DBUG_BUS1));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_UPE    : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_UPE));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_BMU    : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_BMU));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_HIF    : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_HIF));
+			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_TLITE  : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_TLITE));
+			if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+			{
+				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_HIF_NCPY 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_HIF_NCPY));
+				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_CLASS  : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_CLASS));
+				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_GPI    : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_GPI));
+				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_GPT    : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_GPT));
+				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_LMEM   : 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_LMEM));
+				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WDT_TIMER_VAL_RT_LMEM: 0x%x\n", hal_read32(base_va + WDT_TIMER_VAL_ROUTE_LMEM));
+				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WSP_DBUG_BUS1_G3     : 0x%x\n", hal_read32(base_va + WSP_DBUG_BUS1_G3));
+			}
+			else
+			{
+				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "WSP_DBUG_BUS1        : 0x%x\n", hal_read32(base_va + WSP_DBUG_BUS1));
+			}
 	}
 
 	return len;

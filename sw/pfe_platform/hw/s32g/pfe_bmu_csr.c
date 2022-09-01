@@ -10,6 +10,7 @@
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
+#include "pfe_hm.h"
 #include "pfe_cbus.h"
 #include "pfe_bmu_csr.h"
 
@@ -98,7 +99,7 @@ errno_t pfe_bmu_cfg_isr(addr_t base_va, addr_t cbus_base_va)
 	if ((reg_src & reg_en & BMU_FULL_INT) != 0U)
 	{
 		/*	All BMU buffers are allocated, i.e. no new buffer can be allocated. */
-		NXP_LOG_INFO("BMU_FULL_INT (BMU @ p0x%p). Pool depleted.\n", (void *)bmu_offset);
+		pfe_hm_report_error(HM_SRC_BMU, HM_EVT_BMU_FULL, "(BMU @ p0x%p)", (void *)bmu_offset);
 
 		/*	Stay disabled but re-enable the "empty" interrupt */
 		reg_reen |= BMU_EMPTY_INT;
@@ -120,14 +121,14 @@ errno_t pfe_bmu_cfg_isr(addr_t base_va, addr_t cbus_base_va)
 	if ((reg_src & reg_en & BMU_FREE_ERR_INT) != 0U)
 	{
 		/*	Free error interrupt. Keep this one always enabled */
-		NXP_LOG_INFO("BMU_FREE_ERR_INT (BMU @ p0x%p) address 0x%x\n", (void *)bmu_offset, (uint_t)hal_read32(base_va + BMU_FREE_ERROR_ADDR));
+		pfe_hm_report_error(HM_SRC_BMU, HM_EVT_BMU_FREE_ERR, "(BMU @ p0x%p) address 0x%x", (void *)bmu_offset, (uint_t)hal_read32(base_va + BMU_FREE_ERROR_ADDR));
 		ret = EOK;
 	}
 
 	if ((reg_src & reg_en & (BMU_MCAST_EMPTY_INT|BMU_MCAST_FULL_INT|BMU_MCAST_THRES_INT|BMU_MCAST_FREE_ERR_INT)) != 0U)
 	{
 		/*	This should never happen. TRM says that all BMU_MCAST_* flags are reserved and always 0 */
-		NXP_LOG_INFO("BMU_MCAST_EMTPY_INT or BMU_MCAST_FULL_INT or BMU_MCAST_THRES_INT or BMU_MCAST_FREE_ERR_INT (BMU @ p0x%p)\n", (void *)bmu_offset);
+		pfe_hm_report_error(HM_SRC_BMU, HM_EVT_BMU_MCAST, "(BMU @ p0x%p)", (void *)bmu_offset);
 		ret = EOK;
 	}
 
@@ -362,6 +363,31 @@ uint32_t pfe_bmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 }
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+/**
+ * @brief		BMU error detect in polling
+ * @details		check and return the interrupt source in polling mode
+ * @param[in]	base_va Base address of BMU register space (virtual)
+ * @return		return BMU error interrupt source
+ * @note		This is polling function and will be called to check the error status of BMU
+ * 				Make sure the call is protected by some per-BMU mutex
+ */
+uint32_t pfe_bmu_cfg_get_err_poll(addr_t base_va)
+{
+	uint32_t int_src;
+
+	int_src = hal_read32(base_va + BMU_INT_SRC);
+
+	if(0U != int_src)
+	{
+		/*	Write 1 to clear */
+		hal_write32(int_src, base_va + BMU_INT_SRC);
+
+		NXP_LOG_INFO("BMU_ERR_INT_SRC (0x%x)\n", (uint_t)int_src);
+	}
+
+	return int_src;
+}
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

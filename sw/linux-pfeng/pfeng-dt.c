@@ -157,8 +157,10 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 		dev_err(dev, "Cannot find irq resource 'bmu', aborting\n");
 		return -EIO;
 	}
+#if (TRUE == PFE_CFG_BMU_IRQ_ENABLED)
 	pfe_cfg->irq_vector_bmu = irq;
 	dev_dbg(dev, "irq 'bmu' : %u\n", irq);
+#endif /* PFE_CFG_BMU_IRQ_ENABLED */
 
 	/* IRQ upe/gpt */
 	irq = platform_get_irq_byname(priv->pdev, "upegpt");

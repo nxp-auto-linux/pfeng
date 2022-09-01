@@ -335,6 +335,7 @@
 #define PE_IBUS_PE_ID(x)			((((uint32_t)(x)) & 0xfUL) << 20U)
 #define PE_IBUS_WREN(x)				((((uint32_t)(x)) & 0xfUL) << 24U)
 #define PE_IBUS_BYTES(x)			((1UL << (x)) - 1U) << (4U - (x)) /* 0x1 = LSB, 0x8 = MSB (BE) */
+#define AXI_DBUS_BURST_SIZE(x)		((((uint16_t)(x)) & 0x3ffU) << 4U)
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_START_SEC_CODE
@@ -345,7 +346,11 @@ void pfe_class_cfg_set_config(addr_t base_va, const pfe_class_cfg_t *cfg);
 void pfe_class_cfg_reset(addr_t base_va);
 void pfe_class_cfg_enable(addr_t base_va);
 void pfe_class_cfg_disable(addr_t base_va);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_class_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtable_len, uint32_t entry_size);
 void pfe_class_cfg_set_def_vlan(addr_t base_va, uint16_t vlan);
 void pfe_class_cfg_rtable_lookup_enable(const addr_t base_va);

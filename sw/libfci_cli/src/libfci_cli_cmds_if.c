@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -264,6 +264,15 @@ static int phyif_print_aux(const fpp_phy_if_cmd_t* p_phyif, bool is_verbose)
            demo_phy_if_ld_get_stt_malformed(p_phyif));
     
     {
+        const char* p_txt = demo_phy_if_ld_get_ptp_mgmt_if(p_phyif);
+        if ('\0' == p_txt[0])
+        {
+            p_txt = "---";
+        }
+        printf("%-*sptp-mgmt-if: %s \n", indent, "", p_txt);
+    }
+    
+    {
         uint32_t mac_count = 0uL;
         rtn = demo_if_mac_get_count_by_name(cli_p_cl, &mac_count, demo_phy_if_ld_get_name(p_phyif));
         if (FPP_ERR_OK == rtn)
@@ -502,6 +511,10 @@ static int stt_cmd_phyif_update(const cli_cmdargs_t* p_cmdargs)
         if (p_cmdargs->table0_name.is_valid)  /* OPT_FLEXIBLE_FILTER */
         {
             demo_phy_if_ld_set_flexifilter(&phyif, (p_cmdargs->table0_name.txt));
+        }
+        if (p_cmdargs->ptp_mgmt_if_name.is_valid)
+        {
+            demo_phy_if_ld_set_ptp_mgmt_if(&phyif, p_cmdargs->ptp_mgmt_if_name.txt);
         }
     }
     

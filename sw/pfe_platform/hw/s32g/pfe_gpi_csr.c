@@ -107,6 +107,7 @@ static void igqos_class_write_lru_cmd(addr_t base_va, uint32_t addr)
  */
 void pfe_gpi_cfg_init(addr_t base_va, const pfe_gpi_cfg_t *cfg)
 {
+	uint32_t regval;
 	hal_write32(0x0U, base_va + GPI_EMAC_1588_TIMESTAMP_EN);
 	if (cfg->emac_1588_ts_en)
 	{
@@ -127,6 +128,9 @@ void pfe_gpi_cfg_init(addr_t base_va, const pfe_gpi_cfg_t *cfg)
 	hal_write32(cfg->gpi_tmlf_txthres, base_va + GPI_TMLF_TX);
 	hal_write32(cfg->gpi_dtx_aseq_len, base_va + GPI_DTX_ASEQ);
 	hal_write32(1, base_va + GPI_CSR_TOE_CHKSUM_EN);
+	regval = hal_read32(base_va + GPI_CSR_AXI_WRITE_DONE_ADDR);
+	regval |= 0x3U;
+	hal_write32(regval, base_va + GPI_CSR_AXI_WRITE_DONE_ADDR);
 }
 
 /**

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -140,14 +140,28 @@ static int bd_print_aux(const fpp_l2_bd_cmd_t* p_bd, bool is_verbose)
         const uint8_t ucast_miss = demo_l2_bd_ld_get_ucast_miss(p_bd);
         const uint8_t mcast_hit  = demo_l2_bd_ld_get_mcast_hit(p_bd);
         const uint8_t mcast_miss = demo_l2_bd_ld_get_mcast_miss(p_bd);
+        const uint32_t ingress = demo_l2_bd_ld_get_stt_ingress(p_bd);
+        const uint32_t egress = demo_l2_bd_ld_get_stt_egress(p_bd);
+        const uint32_t ingress_bytes = demo_l2_bd_ld_get_stt_ingress_bytes(p_bd);
+        const uint32_t egress_bytes = demo_l2_bd_ld_get_stt_egress_bytes(p_bd);
+
         printf("%-*sucast-hit  action : %"PRIu8" (%s)\n"
                "%-*sucast-miss action : %"PRIu8" (%s)\n"
                "%-*smcast-hit  action : %"PRIu8" (%s)\n"
-               "%-*smcast-miss action : %"PRIu8" (%s)\n",
+               "%-*smcast-miss action : %"PRIu8" (%s)\n"
+               "%-*singress           : %"PRIu32"\n"
+               "%-*singress bytes     : %"PRIu32"\n"
+               "%-*segress            : %"PRIu32"\n"
+               "%-*segress bytes      : %"PRIu32"\n",
+
                indent, "", (ucast_hit),  cli_value2txt_bd_action(ucast_hit),
                indent, "", (ucast_miss), cli_value2txt_bd_action(ucast_miss),
                indent, "", (mcast_hit),  cli_value2txt_bd_action(mcast_hit),
-               indent, "", (mcast_miss), cli_value2txt_bd_action(mcast_miss));
+               indent, "", (mcast_miss), cli_value2txt_bd_action(mcast_miss),
+               indent, "", (ingress),
+               indent, "", (ingress_bytes),
+               indent, "", (egress),
+               indent, "", (egress_bytes));
     }
     
     if (is_verbose)

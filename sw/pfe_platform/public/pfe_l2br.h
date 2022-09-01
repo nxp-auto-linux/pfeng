@@ -64,7 +64,7 @@ bool_t pfe_l2br_domain_is_fallback(const pfe_l2br_domain_t *domain) __attribute_
 uint32_t pfe_l2br_domain_get_if_list(const pfe_l2br_domain_t *domain); __attribute__((pure))
 uint32_t pfe_l2br_domain_get_untag_if_list(const pfe_l2br_domain_t *domain) __attribute__((pure));
 
-errno_t pfe_l2br_static_entry_create(pfe_l2br_t *bridge, uint16_t vlan, pfe_mac_addr_t mac, uint32_t new_fw_list);
+errno_t pfe_l2br_static_entry_create(pfe_l2br_t *bridge, uint16_t vlan, const pfe_mac_addr_t mac, uint32_t new_fw_list);
 errno_t pfe_l2br_static_entry_destroy(pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent);
 errno_t pfe_l2br_static_entry_replace_fw_list(const pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent, uint32_t new_fw_list);
 __attribute__((pure)) uint32_t pfe_l2br_static_entry_get_fw_list(const pfe_l2br_static_entry_t* static_ent);
@@ -85,8 +85,12 @@ pfe_l2br_domain_t *pfe_l2br_get_default_domain(const pfe_l2br_t *bridge) __attri
 pfe_l2br_domain_t *pfe_l2br_get_fallback_domain(const pfe_l2br_t *bridge) __attribute__((pure));
 pfe_l2br_domain_t *pfe_l2br_get_first_domain(pfe_l2br_t *bridge, pfe_l2br_domain_get_crit_t crit, void *arg);
 pfe_l2br_domain_t *pfe_l2br_get_next_domain(pfe_l2br_t *bridge);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_l2br_get_text_statistics(const pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level);
 uint32_t pfe_l2br_domain_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 errno_t pfe_l2br_clear_domain_stats(const pfe_l2br_t *bridge, uint8_t vlan_index);
 errno_t pfe_l2br_get_domain_stats(const pfe_l2br_t *bridge, pfe_ct_vlan_stats_t *stat, uint8_t vlan_index);
 uint8_t pfe_l2br_get_vlan_stats_index(const pfe_l2br_domain_t *domain);

@@ -540,6 +540,8 @@ typedef struct __attribute__((packed, aligned(4)))
 	PFE_PTR(pfe_ct_ipsec_spd_t) ipsec_spd;
 	/*	Flexible Filter */
 	PFE_PTR(pfe_ct_fp_table_t) filter;
+	/* management interface */
+	pfe_ct_phy_if_id_t mgmt_interface;
 	/*	Gathered statistics */
 	pfe_ct_phy_if_stats_t phy_stats __attribute__((aligned(4))); /* Must be aligned to 4 bytes */
 } pfe_ct_phy_if_t;
@@ -843,8 +845,6 @@ typedef struct __attribute__((packed, aligned(4)))
 	pfe_ct_class_algo_stats_t log_if;
 	/* Statistics gathered when hif-to-hif classification is done */
 	pfe_ct_class_ihc_stats_t hif_to_hif[PFE_PHY_IF_ID_MAX + 1];
-	/* Statisctics gathered by Flexible Filter */
-	pfe_ct_class_flexi_parser_stats_t flexible_filter;
 } pfe_ct_classify_stats_t;
 
 /**
@@ -942,16 +942,6 @@ typedef struct __attribute__((packed, aligned(4)))
 	uint32_t cnt;	/* Count of measurements */
 } pfe_ct_measurement_t;
 
-
-/**
- * @brief Configuration of flexible filter
- * @details Value 0 (NULL) means disabled filter, any other value is a pointer to the
- *          flexible parser table to be used as filter. Frames rejected by the filter
- *          are discarded.
- */
-typedef PFE_PTR(pfe_ct_fp_table_t) pfe_ct_flexible_filter_t;
-ct_assert(sizeof(pfe_ct_flexible_filter_t) == sizeof(uint32_t));
-
 /**
  * @brief	Size of buffer defined by pfe_ct_buffer_t in number of bytes
  */
@@ -1030,16 +1020,12 @@ typedef struct __attribute__((packed, aligned(4)))
 	PFE_PTR(pfe_ct_vlan_statistics_t) vlan_statistics;
 	/*	Statistics provided for each conntrack */
 	PFE_PTR(pfe_ct_conntrack_statistics_t) conntrack_statistics;
-	/*	Flexible Filter */
-	PFE_PTR(pfe_ct_flexible_filter_t) flexible_filter;
 	/*	Put buffer: FW-to-SW data transfers */
 	PFE_PTR(pfe_ct_buffer_t) put_buffer;
 	/*	Get buffer: SW-to-FW data transfers */
 	PFE_PTR(pfe_ct_buffer_t) get_buffer;
 	/*	HIF TMU Queue sizes information for errata ERR051211 workaround*/
 	PFE_PTR(pfe_ct_hif_tmu_queue_sizes_t) hif_tmu_queue_sizes;
-	/* HIF interface used for PTP traffic in bridge mode*/
-	PFE_PTR(pfe_ct_phy_if_id_t) ptp_common_hif;
 } pfe_ct_class_mmap_t;
 
 /**

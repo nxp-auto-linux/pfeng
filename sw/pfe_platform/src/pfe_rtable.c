@@ -1,14 +1,14 @@
 /* =========================================================================
- *  
- *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *	
+ *	Copyright (c) 2019 Imagination Technologies Limited
+ *	Copyright 2018-2022 NXP
  *
- *  SPDX-License-Identifier: GPL-2.0
+ *	SPDX-License-Identifier: GPL-2.0
  *
  * ========================================================================= */
 
 /**
- * @addtogroup  dxgr_PFE_RTABLE
+ * @addtogroup	dxgr_PFE_RTABLE
  * @{
  *
  * @file		pfe_rtable.c
@@ -82,7 +82,7 @@ struct pfe_rtable_tag
 	pfe_rtable_criterion_arg_t cur_crit_arg;/*	Current criterion argument */
 	pfe_l2br_t *bridge; /* Bridge pointer */
 	pfe_class_t *class;						/*	Classifier */
-	uint32_t active_entries_count;			/*  Counter of active RTable entries, needed for enabling/disabling of RTable lookup */
+	uint32_t active_entries_count;			/*	Counter of active RTable entries, needed for enabling/disabling of RTable lookup */
 	uint32_t conntrack_stats_table_addr;
 	uint16_t conntrack_stats_table_size;
 };
@@ -90,7 +90,7 @@ struct pfe_rtable_tag
 /**
  * @brief	Routing table entry at API level
  * @details	Since routing table entries (pfe_ct_rtable_entry_t) are shared between
- * 			firmware and the driver we're extending them using custom entries. Every
+ *			firmware and the driver we're extending them using custom entries. Every
  *			physical entry has assigned an API entry to keep additional, driver-related
  *			information.
  */
@@ -113,28 +113,13 @@ struct pfe_rtable_entry_tag
 	LLIST_t list_to_remove_entry;				/*	!< Linked list element */
 };
 
-/**
- * @brief	Hash types
- * @details	PFE offers possibility to calculate various hash types to be used
- * 			for routing table lookups.
- *
- *			Standard 5-tuple hash (IPV4_5T/IPV6_5T) is equal to:
- *
- * 				SIP + DIP + SPORT + DPORT + PROTO
- *
- * 			Another types can be added (OR-ed) as modifications of the standard
- *			algorithm.
- * @note	It must be ensured that firmware is configured the same way as the
- * 			driver, i.e. firmware works with the same hash type as the driver.
- */
-typedef enum
+typedef struct
 {
-	IPV4_5T = 0x1,			/*	!< Standard 5-tuple hash (IPv4) */
-	IPV6_5T = 0x2,			/*	!< Standard 5-tuple hash (IPv6) */
-	ADD_SIP_CRC = 0x4,		/*	!< Use CRC(SIP) instead of SIP */
-	ADD_SPORT_CRC = 0x8,	/*	!< Use CRC(SPORT) instead of SPORT */
-	ADD_SRC_PHY = 0x10		/*	!< Add PHY ID to the hash */
-} pfe_rtable_hash_type_t;
+	pfe_ct_rtable_entry_t *new_phys_entry_va;
+	pfe_ct_rtable_entry_t *new_phys_entry_pa;
+	pfe_ct_rtable_entry_t *last_phys_entry_va;
+	uint32_t hash;
+} pfe_rtable_phys_entry_infor_t;
 
 /**
  * @brief	IP version type
@@ -150,7 +135,7 @@ typedef enum
 /**
  * @brief	Worker thread signals
  * @details	Driver is sending signals to the worker thread to request specific
- * 			operations.
+ *			operations.
  */
 enum pfe_rtable_worker_signals
 {
@@ -187,7 +172,7 @@ static const pfe_ct_conntrack_stats_t pfe_rtable_clear_stats_stat = {0};
 
 static uint32_t pfe_get_crc32_be(uint32_t crc, uint8_t *data, uint16_t len);
 static void pfe_rtable_invalidate(pfe_rtable_t *rtable);
-static uint32_t pfe_rtable_entry_get_hash(pfe_rtable_entry_t *entry, pfe_rtable_hash_type_t htype, uint32_t hash_mask);
+static uint32_t pfe_rtable_entry_get_hash(pfe_rtable_entry_t *entry, pfe_ipv_type_t iptype, uint32_t hash_mask);
 static bool_t pfe_rtable_phys_entry_is_htable(const pfe_rtable_t *rtable, const pfe_ct_rtable_entry_t *phys_entry);
 static bool_t pfe_rtable_phys_entry_is_pool(const pfe_rtable_t *rtable, const pfe_ct_rtable_entry_t *phys_entry);
 static pfe_ct_rtable_entry_t *pfe_rtable_phys_entry_get_pa(pfe_rtable_t *rtable, pfe_ct_rtable_entry_t *phys_entry_va);
@@ -201,6 +186,11 @@ static uint8_t pfe_rtable_get_free_stats_index(const pfe_rtable_t *rtable);
 static void pfe_rtable_free_stats_index(uint8_t index);
 static errno_t pfe_rtable_destroy_stats_table(pfe_class_t *class, uint32_t table_address);
 static bool_t pfe_rtable_entry_is_duplicate(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
+static errno_t pfe_rtable_add_entry_get_phys_pa(pfe_rtable_t *rtable, pfe_rtable_phys_entry_infor_t *phys_entry_temp);
+static errno_t pfe_rtable_add_entry_link(pfe_rtable_t *rtable, pfe_rtable_phys_entry_infor_t *phys_entry_temp);
+static void pfe_rtable_add_entry_validate(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry, pfe_rtable_phys_entry_infor_t *phys_entry_temp);
+static errno_t pfe_rtable_add_entry_id(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry, pfe_rtable_phys_entry_infor_t *phys_entry_temp);
+
 errno_t pfe_rtable_clear_stats(const pfe_rtable_t *rtable, uint8_t conntrack_index);
 #if !defined(PFE_CFG_TARGET_OS_AUTOSAR)
 	static void *rtable_worker_func(void *arg);
@@ -292,21 +282,21 @@ static pfe_rtable_entry_t *pfe_rtable_get_by_phys_entry_va(const pfe_rtable_t *r
 static uint32_t pfe_get_crc32_be(uint32_t crc, uint8_t *data, uint16_t len)
 {
 	uint8_t i;
-    uint16_t length = len;
-    uint32_t tempcrc = crc;
-    const uint8_t *tempdata = data;
+	uint16_t length = len;
+	uint32_t tempcrc = crc;
+	const uint8_t *tempdata = data;
 
 	while (length > 0U)
 	{
 		tempcrc ^= ((uint32_t)(*tempdata) << 24U);
-        tempdata++;
+		tempdata++;
 
 		for (i = 0U; i < 8U; i++)
 		{
 			tempcrc = (tempcrc << 1U) ^ ((0U != (tempcrc & 0x80000000U)) ? CRCPOLY_BE : 0U);
 		}
 
-        length--;
+		length--;
 	}
 
 	return tempcrc;
@@ -332,9 +322,9 @@ static void pfe_rtable_invalidate(pfe_rtable_t *rtable)
 	table = (pfe_ct_rtable_entry_t *)rtable->htable_base_va;
 
 	if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
-    {
-        NXP_LOG_DEBUG("Mutex lock failed\n");
-    }
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
 
 	for (ii=0U; ii<rtable->htable_size; ii++)
 	{
@@ -350,155 +340,67 @@ static void pfe_rtable_invalidate(pfe_rtable_t *rtable)
 		table[ii].next = oal_ntohl(0);
 	}
 
-    if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
-    {
-        NXP_LOG_DEBUG("Mutex unlock failed\n");
-    }
+	if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
 }
 
 /**
  * @brief		Get hash for a routing table entry
  * @param[in]	entry The entry
- * @param[in]	htype Bitfield representing desired hash type (see pfe_rtable_hash_type_t)
+ * @param[in]	ipv_type Frame Ip type
  * @param[in]	hash_mask Mask to be applied on the resulting hash (bitwise AND)
  * @note		IPv4 addresses within entry are in network order due to way how the type is defined
  */
-static uint32_t pfe_rtable_entry_get_hash(pfe_rtable_entry_t *entry, pfe_rtable_hash_type_t htype, uint32_t hash_mask)
+static uint32_t pfe_rtable_entry_get_hash(pfe_rtable_entry_t *entry, pfe_ipv_type_t ipv_type, uint32_t hash_mask)
 {
 	uint32_t temp = 0U;
 	uint32_t crc = 0xffffffffU;
 	uint32_t sport = 0U;
-	uint32_t ip_addr;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-        return 0;
+		return 0;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-    if (0U != ((uint8_t)htype & (uint8_t)IPV4_5T))
-    {
-        if ((0U != ((uint8_t)htype & (uint8_t)ADD_SIP_CRC)) && (0U != ((uint8_t)htype & (uint8_t)ADD_SPORT_CRC)))
-        {
-            /*	CRC(SIP) + DIP + CRC(SPORT) + DPORT + PROTO */
-            sport = oal_ntohl(entry->phys_entry->ipv.v4.sip) ^ (uint32_t)oal_ntohs(entry->phys_entry->sport);
-            temp = pfe_get_crc32_be(crc, (uint8_t *)&sport, 4);
-            temp += oal_ntohl(entry->phys_entry->ipv.v4.dip);
-            temp += entry->phys_entry->proto;
-            temp += oal_ntohs(entry->phys_entry->dport);
-        }
-        else if (0U != ((uint8_t)htype & (uint8_t)ADD_SIP_CRC))
-        {
-            /*	CRC(SIP) + DIP + SPORT + DPORT + PROTO */
-            ip_addr = oal_ntohl(entry->phys_entry->ipv.v4.sip);
-            temp = pfe_get_crc32_be(crc, (uint8_t *)&ip_addr, 4);
-            temp += oal_ntohl(entry->phys_entry->ipv.v4.dip);
-            temp += entry->phys_entry->proto;
-            temp += oal_ntohs(entry->phys_entry->sport);
-            temp += oal_ntohs(entry->phys_entry->dport);
-        }
-        else if (0U != ((uint8_t)htype & (uint8_t)ADD_SPORT_CRC))
-        {
-            /*	SIP + DIP + CRC(SPORT) + DPORT + PROTO */
-            sport = (uint32_t)oal_ntohs(entry->phys_entry->sport);
-            temp = pfe_get_crc32_be(crc, (uint8_t *)&sport, 4);
-            temp += oal_ntohl(entry->phys_entry->ipv.v4.sip);
-            temp += oal_ntohl(entry->phys_entry->ipv.v4.dip);
-            temp += entry->phys_entry->proto;
-            temp += oal_ntohs(entry->phys_entry->dport);
-        }
-        else
-        {
-            /*	SIP + DIP + SPORT + DPORT + PROTO */
-            temp = oal_ntohl(entry->phys_entry->ipv.v4.sip);
-            temp += oal_ntohl(entry->phys_entry->ipv.v4.dip);
-            temp += entry->phys_entry->proto;
-            temp += oal_ntohs(entry->phys_entry->sport);
-            temp += oal_ntohs(entry->phys_entry->dport);
-        }
-    }
-    else if (0U != ((uint32_t)htype & (uint32_t)IPV6_5T))
-    {
-        uint32_t crc_ipv6 = 0;
-        int32_t jj;
+	if (IPV4 == ipv_type)
+	{
+		/*	CRC(SIP) + DIP + CRC(SPORT) + DPORT + PROTO */
+		sport = entry->phys_entry->ipv.v4.sip ^ oal_ntohl((uint32_t)oal_ntohs(entry->phys_entry->sport));
+		temp = pfe_get_crc32_be(crc, (uint8_t *)&sport, 4);
+		temp += oal_ntohl(entry->phys_entry->ipv.v4.dip);
+		temp += entry->phys_entry->proto;
+		temp += oal_ntohs(entry->phys_entry->dport);
 
-        for(jj=0; jj<4 ; jj++)
-        {
-            crc_ipv6 += (oal_ntohl(entry->phys_entry->ipv.v6.sip[jj]));
-        }
+	}
+	else if (IPV6 == ipv_type)
+	{
+		uint32_t crc_ipv6 = 0;
+		int32_t jj;
 
-        if ((0U != ((uint8_t)htype & (uint8_t)ADD_SIP_CRC)) && (0U != ((uint8_t)htype & (uint8_t)ADD_SPORT_CRC)))
-        {
-            /*	CRC(SIP) + DIP + CRC(SPORT) + DPORT + PROTO */
-            sport = crc_ipv6 ^ (uint32_t)oal_ntohs(entry->phys_entry->sport);
-            temp = pfe_get_crc32_be(crc,(uint8_t *)&sport, 4);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[0]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[1]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[2]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[3]);
-            temp += entry->phys_entry->proto;
-            temp += oal_ntohs(entry->phys_entry->dport);
-        }
-        else if (0U != ((uint8_t)htype & (uint8_t)ADD_SIP_CRC))
-        {
-            /*	CRC(SIP) + DIP + SPORT + DPORT + PROTO */
-            temp = pfe_get_crc32_be(crc, (uint8_t *)&crc_ipv6, 4);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[0]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[1]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[2]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[3]);
-            temp += entry->phys_entry->proto;
-            temp += oal_ntohs(entry->phys_entry->sport);
-            temp += oal_ntohs(entry->phys_entry->dport);
-        }
-        else if (0U != ((uint8_t)htype & (uint8_t)ADD_SPORT_CRC))
-        {
-            /*	SIP + DIP + CRC(SPORT) + DPORT + PROTO */
-            sport = (uint32_t)oal_ntohs(entry->phys_entry->sport);
-            temp = pfe_get_crc32_be(crc,(uint8_t *)&sport, 4);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.sip[0]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.sip[1]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.sip[2]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.sip[3]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[0]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[1]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[2]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[3]);
-            temp += entry->phys_entry->proto;
-            temp += oal_ntohs(entry->phys_entry->dport);
-        }
-        else
-        {
-            /*	SIP + DIP + SPORT + DPORT + PROTO */
-            temp = oal_ntohl(entry->phys_entry->ipv.v6.sip[0]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.sip[1]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.sip[2]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.sip[3]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[0]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[1]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[2]);
-            temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[3]);
-            temp += entry->phys_entry->proto;
-            temp += oal_ntohs(entry->phys_entry->sport);
-            temp += oal_ntohs(entry->phys_entry->dport);
-        }
-    }
-    else
-    {
-        NXP_LOG_ERROR("Unknown hash type requested\n");
-        return 0U;
-    }
+		for(jj=0; jj<4 ; jj++)
+		{
+			crc_ipv6 += entry->phys_entry->ipv.v6.sip[jj];
+		}
 
-    if (0U != ((uint8_t)htype & (uint8_t)ADD_SRC_PHY))
-    {
-        /*	+ PHY_ID */
-#if 0
-        temp += entry->phys_entry->inPhyPortNum;
-#else
-        NXP_LOG_ERROR("Unsupported hash algorithm\n");
-#endif /* 0 */
-    }
+		/*	CRC(SIP) + DIP + CRC(SPORT) + DPORT + PROTO */
+		sport = crc_ipv6 ^ oal_ntohl((uint32_t)oal_ntohs(entry->phys_entry->sport));
+		temp = pfe_get_crc32_be(crc,(uint8_t *)&sport, 4);
+		temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[0]);
+		temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[1]);
+		temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[2]);
+		temp += oal_ntohl(entry->phys_entry->ipv.v6.dip[3]);
+		temp += entry->phys_entry->proto;
+		temp += oal_ntohs(entry->phys_entry->dport);
+	}
+	else
+	{
+		NXP_LOG_ERROR("Unknown ip type requested\n");
+		return 0U;
+	}
 
 	return (temp & hash_mask);
 }
@@ -705,8 +607,8 @@ pfe_rtable_entry_t *pfe_rtable_entry_create(void)
 /**
  * @brief		Release routing table entry instance
  * @details		Once the previously created routing table entry instance is not needed
- * 				anymore (inserted into the routing table), allocated resources shall
- * 				be released using this call.
+ *				anymore (inserted into the routing table), allocated resources shall
+ *				be released using this call.
  * @param[in]	entry Entry instance previously created by pfe_rtable_entry_create()
  */
 void pfe_rtable_entry_free(pfe_rtable_entry_t *entry)
@@ -1060,7 +962,7 @@ errno_t pfe_rtable_entry_set_dstif_id(pfe_rtable_entry_t *entry, pfe_ct_phy_if_i
  * @brief		Set destination interface
  * @param[in]	entry The routing table entry instance
  * @param[in]	emac The destination interface to be used to forward traffic matching
- * 					  the entry.
+ *					  the entry.
  * @retval		EOK Success
  * @retval		EINVAL Invalid argument
  */
@@ -1082,14 +984,14 @@ errno_t pfe_rtable_entry_set_dstif(pfe_rtable_entry_t *entry, const pfe_phy_if_t
 		ret = pfe_rtable_entry_set_dstif_id(entry, if_id);
 	}
 
-    return ret;
+	return ret;
 }
 
 
 /**
  * @brief		Set output source IP address
  * @details		IP address set using this call will be used to replace the original address
- * 				if the RT_ACT_CHANGE_SIP_ADDR action is set.
+ *				if the RT_ACT_CHANGE_SIP_ADDR action is set.
  * @param[in]	entry The routing table entry instance
  * @param[in]	output_sip The desired output source IP address
  * @retval		EOK Success
@@ -1138,7 +1040,7 @@ errno_t pfe_rtable_entry_set_out_sip(pfe_rtable_entry_t *entry, const pfe_ip_add
 /**
  * @brief		Set output destination IP address
  * @details		IP address set using this call will be used to replace the original address
- * 				if the RT_ACT_CHANGE_DIP_ADDR action is set.
+ *				if the RT_ACT_CHANGE_DIP_ADDR action is set.
  * @param[in]	entry The routing table entry instance
  * @param[in]	output_dip The desired output destination IP address
  * @retval		EOK Success
@@ -1187,7 +1089,7 @@ errno_t pfe_rtable_entry_set_out_dip(pfe_rtable_entry_t *entry, const pfe_ip_add
 /**
  * @brief		Set output source port number
  * @details		Port number set using this call will be used to replace the original source port
- * 				if the RT_ACT_CHANGE_SPORT action is set.
+ *				if the RT_ACT_CHANGE_SPORT action is set.
  * @param[in]	entry The routing table entry instance
  * @param[in]	output_sport The desired output source port number
  * @retval		EOK Success
@@ -1211,7 +1113,7 @@ void pfe_rtable_entry_set_out_sport(const pfe_rtable_entry_t *entry, uint16_t ou
 /**
  * @brief		Set output destination port number
  * @details		Port number set using this call will be used to replace the original destination port
- * 				if the RT_ACT_CHANGE_DPORT action is set.
+ *				if the RT_ACT_CHANGE_DPORT action is set.
  * @param[in]	entry The routing table entry instance
  * @param[in]	output_sport The desired output destination port number
  * @retval		EOK Success
@@ -1277,7 +1179,7 @@ void pfe_rtable_entry_remove_ttl_decrement(pfe_rtable_entry_t *entry)
 /**
  * @brief		Set output source and destination MAC address
  * @details		MAC address set using this call will be used to add/replace the original MAC
- * 				address if the RT_ACT_ADD_ETH_HDR action is set.
+ *				address if the RT_ACT_ADD_ETH_HDR action is set.
  * @param[in]	entry The routing table entry instance
  * @param[in]	smac The desired output source MAC address
  * @param[in]	dmac The desired output destination MAC address
@@ -1301,11 +1203,11 @@ void pfe_rtable_entry_set_out_mac_addrs(pfe_rtable_entry_t *entry, const pfe_mac
 /**
  * @brief		Set output VLAN tag
  * @details		VLAN tag set using this call will be used to add/replace the original VLAN tag
- * 				if the RT_ACT_ADD_VLAN_HDR/RT_ACT_MOD_VLAN_HDR action is set.
+ *				if the RT_ACT_ADD_VLAN_HDR/RT_ACT_MOD_VLAN_HDR action is set.
  * @param[in]	entry The routing table entry instance
  * @param[in]	vlan The desired output VLAN tag
  * @param[in]	replace When TRUE the VLAN tag will be replaced or added based on ingress
- * 					frame vlan tag presence. When FALSE	then VLAN tag will be always added.
+ *					frame vlan tag presence. When FALSE	then VLAN tag will be always added.
  */
 void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan, bool_t replace)
 {
@@ -1335,35 +1237,35 @@ void pfe_rtable_entry_set_out_vlan(pfe_rtable_entry_t *entry, uint16_t vlan, boo
 /**
  * @brief		Get output VLAN tag
  * @details		If VLAN addition/replacement for the entry is requested via
- * 				pfe_rtable_entry_set_out_vlan() then this function will return
- * 				the VLAN tag. If no VLAN manipulation for the entry was has
- * 				been requested then the return value is 0.
+ *				pfe_rtable_entry_set_out_vlan() then this function will return
+ *				the VLAN tag. If no VLAN manipulation for the entry was has
+ *				been requested then the return value is 0.
  * @param[in]	entry The routing table entry instance
  * return		Non-zero VLAN ID (host endian) if VLAN manipulation has been
  *				requested, zero otherwise
  */
 uint16_t pfe_rtable_entry_get_out_vlan(const pfe_rtable_entry_t *entry)
 {
-    uint16_t ret = 0U;
+	uint16_t ret = 0U;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 	}
-    else
-    {
+	else
+	{
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-        if (0U != (oal_ntohl(entry->phys_entry->actions) & ((uint32_t)RT_ACT_ADD_VLAN_HDR | (uint32_t)RT_ACT_MOD_VLAN_HDR)))
-        {
-            ret = oal_ntohs(entry->phys_entry->args.vlan);
-        }
+		if (0U != (oal_ntohl(entry->phys_entry->actions) & ((uint32_t)RT_ACT_ADD_VLAN_HDR | (uint32_t)RT_ACT_MOD_VLAN_HDR)))
+		{
+			ret = oal_ntohs(entry->phys_entry->args.vlan);
+		}
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    }
+	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-    return ret;
+	return ret;
 }
 
 /**
@@ -1391,7 +1293,7 @@ void pfe_rtable_entry_set_out_inner_vlan(pfe_rtable_entry_t *entry, uint16_t vla
 /**
  * @brief		Set output PPPoE session ID
  * @details		Session ID set using this call will be used to add/replace the original ID
- * 				if the RT_ACT_ADD_PPPOE_HDR action is set.
+ *				if the RT_ACT_ADD_PPPOE_HDR action is set.
  * @param[in]	entry The routing table entry instance
  * @param[in]	vlan The desired output PPPoE session ID
  */
@@ -1459,7 +1361,7 @@ errno_t pfe_rtable_entry_get_id5t(const pfe_rtable_entry_t *entry, uint32_t *id5
 		ret = EOK;
 	}
 
-    return ret;
+	return ret;
 }
 
 /**
@@ -1601,7 +1503,7 @@ errno_t pfe_rtable_entry_get_route_id(const pfe_rtable_entry_t *entry, uint32_t 
  * @brief		Set callback
  * @param[in]	entry The routing table entry instance
  * @param[in]	cbk Callback associated with the entry. Will be called in rtable worker thread
- * 				context. In the callback user must not call any routing table modification API
+ *				context. In the callback user must not call any routing table modification API
  *				functions (add/delete).
  * @param[in]	arg Argument passed to the callback when called
  * @param[in]	route_id Custom route identifier value
@@ -1668,8 +1570,8 @@ void *pfe_rtable_entry_get_refptr(pfe_rtable_entry_t *entry)
 /**
  * @brief		Associate with another entry
  * @details		If there is a bi-directional connection, it consists of two routing table entries:
- * 				one for original direction and one for reply direction. This function enables
- * 				user to bind the associated entries together and simplify handling.
+ *				one for original direction and one for reply direction. This function enables
+ *				user to bind the associated entries together and simplify handling.
  * @param[in]	entry The routing table entry instance
  * @param[in]	child The routing table entry instance to be linked with the 'entry'. Can be NULL.
  */
@@ -1729,7 +1631,7 @@ uint8_t pfe_rtable_entry_get_stats_index(const pfe_rtable_entry_t *entry)
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		ret = oal_ntohs(entry->phys_entry->conntrack_stats_index);
+		ret = (uint8_t)oal_ntohs(entry->phys_entry->conntrack_stats_index);
 	}
 	return ret;
 }
@@ -1774,7 +1676,7 @@ static bool_t pfe_rtable_entry_is_in_table(const pfe_rtable_entry_t *entry)
  * @retval		TRUE Entry already added
  * @retval		FALSE Entry not found
  * @warning		Function is accessing routing table without protection from concurrent accesses.
- * 				Caller shall ensure proper protection.
+ *				Caller shall ensure proper protection.
  */
 static bool_t pfe_rtable_entry_is_duplicate(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 {
@@ -1823,6 +1725,214 @@ static bool_t pfe_rtable_entry_is_duplicate(pfe_rtable_t *rtable, pfe_rtable_ent
 }
 
 /**
+ * @brief		Get physical address of entry
+ * @param[in]	rtable The routing table instance
+ * @param[in]	phys_entry_temp Temporary saved entry to be added
+ * @retval		EOK Success, error code otherwise
+ */
+static errno_t pfe_rtable_add_entry_get_phys_pa(pfe_rtable_t *rtable, pfe_rtable_phys_entry_infor_t *phys_entry_temp)
+{
+	errno_t ret = EOK;
+
+	/*	Get physical address */
+	phys_entry_temp->new_phys_entry_pa = pfe_rtable_phys_entry_get_pa(rtable, phys_entry_temp->new_phys_entry_va);
+	if (NULL == phys_entry_temp->new_phys_entry_pa)
+	{
+		NXP_LOG_ERROR("Couldn't get PA (entry @ v0x%p)\n", (void *)phys_entry_temp->new_phys_entry_va);
+		if (pfe_rtable_phys_entry_is_pool(rtable, phys_entry_temp->new_phys_entry_va))
+		{
+			/*	Entry from the pool. Return it. */
+			ret = fifo_put(rtable->pool_va, phys_entry_temp->new_phys_entry_va);
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Couldn't return routing table entry to the pool\n");
+			}
+		}
+
+		if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
+
+		ret = EFAULT;
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Link entry in the table
+ * @param[in]	rtable The routing table instance
+ * @param[in]	phys_entry_temp Temporary saved entry to be added
+ * @retval		EOK Success, error code otherwise
+ */
+static errno_t pfe_rtable_add_entry_link(pfe_rtable_t *rtable, pfe_rtable_phys_entry_infor_t *phys_entry_temp)
+{
+	errno_t ret = EOK;
+
+#if (TRUE == PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE)
+	pfe_ct_rtable_flags_t valid_tmp;
+#endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
+
+	/*	Make sure the new entry is invalid */
+	phys_entry_temp->new_phys_entry_va->flags = RT_FL_NONE;
+
+	ret = pfe_rtable_add_entry_get_phys_pa(rtable, phys_entry_temp);
+
+	if(EOK == ret)
+	{
+		/*	Set link */
+		if (TRUE == pfe_rtable_phys_entry_is_htable(rtable, phys_entry_temp->new_phys_entry_va))
+		{
+			/*	This is very first entry in a hash bucket */
+			phys_entry_temp->new_phys_entry_va->next = 0U;
+		}
+		else
+		{
+			/*	Find last entry in the chain */
+			while (NULL != (void *)(addr_t)phys_entry_temp->last_phys_entry_va->next)
+			{
+				phys_entry_temp->last_phys_entry_va = pfe_rtable_phys_entry_get_va(rtable, (pfe_ct_rtable_entry_t *)(addr_t)oal_ntohl(phys_entry_temp->last_phys_entry_va->next));
+			}
+
+			/*	Link last entry with the new one. Both are in network byte order. */
+#if (TRUE == PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE)
+			/*	Invalidate the last entry first */
+			valid_tmp = phys_entry_temp->last_phys_entry_va->flags;
+			phys_entry_temp->last_phys_entry_va->flags = RT_FL_NONE;
+
+			/*	Wait some time due to sync with firmware */
+			oal_time_usleep(10U);
+#endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
+
+			/*	Update the next pointer */
+			phys_entry_temp->last_phys_entry_va->next = oal_htonl((uint32_t)((addr_t)phys_entry_temp->new_phys_entry_pa & 0xffffffffU));
+
+#if (TRUE == PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE)
+			/*	Ensure that all previous writes has been done */
+			hal_wmb();
+
+			/*	Re-enable the entry. Next (new last) entry remains invalid. */
+			phys_entry_temp->last_phys_entry_va->flags = valid_tmp;
+#endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Add entry in the table
+ * @param[in]	rtable The routing table instance
+ * @param[in]	entry The entry to be added
+ * @param[in]	phys_entry_temp Temporary saved entry to be added
+ * @retval		EOK Success
+ * @retval		ENOENT Routing table is full
+ */
+static errno_t pfe_rtable_add_entry_id(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry, pfe_rtable_phys_entry_infor_t *phys_entry_temp)
+{
+	pfe_l2br_domain_t *domain;
+	pfe_ipv_type_t ipv_type = ((uint8_t)IPV4 == entry->phys_entry->flag_ipv6) ? IPV4: IPV6;
+	pfe_ct_rtable_entry_t *hash_table_va = (pfe_ct_rtable_entry_t *)rtable->htable_base_va;
+	errno_t ret = EOK;
+	uint8_t index;
+
+	phys_entry_temp->hash = pfe_rtable_entry_get_hash(entry, ipv_type, (rtable->htable_size - 1U));
+	entry->temp_phys_entry->flags = RT_FL_NONE;
+	entry->temp_phys_entry->status &= ~(uint8_t)RT_STATUS_ACTIVE;
+	index = pfe_rtable_get_free_stats_index(rtable);
+	entry->temp_phys_entry->conntrack_stats_index = oal_htons((uint16_t)index);
+
+	/* Add vlan stats index into the phy_entry structure */
+	if (0U != (oal_ntohl(entry->temp_phys_entry->actions) & ((uint32_t)RT_ACT_ADD_VLAN_HDR | (uint32_t)RT_ACT_MOD_VLAN_HDR)))
+	{
+		if (NULL != rtable->bridge)
+		{
+			domain = pfe_l2br_get_first_domain(rtable->bridge, L2BD_CRIT_BY_VLAN, (void *)(addr_t)oal_ntohs(entry->temp_phys_entry->args.vlan));
+			if (domain != NULL)
+			{
+				entry->temp_phys_entry->args.vlan_stats_index = oal_htons((uint16_t)pfe_l2br_get_vlan_stats_index(domain));
+			}
+			else
+			{
+				/* Index 0 is the fallback domain */
+				entry->temp_phys_entry->args.vlan_stats_index = 0;
+			}
+		}
+	}
+
+	/*	Allocate 'real' entry from hash heads or pool */
+	if (0U == (oal_ntohl(hash_table_va[phys_entry_temp->hash].flags) & (uint32_t)RT_FL_VALID))
+	{
+		phys_entry_temp->new_phys_entry_va = &hash_table_va[phys_entry_temp->hash];
+	}
+	else
+	{
+		/*	First-level entry is already occupied. Create entry within the pool. Get
+			some free entry from the pool first. */
+		phys_entry_temp->new_phys_entry_va = fifo_get(rtable->pool_va);
+		if (NULL == phys_entry_temp->new_phys_entry_va)
+		{
+			if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+			{
+				NXP_LOG_DEBUG("Mutex unlock failed\n");
+			}
+
+			ret = ENOENT;
+		}
+		NXP_LOG_WARNING("Routing table hash [%u] collision detected. New entry will be added to linked list leading to performance penalty during lookup.\n", (uint_t)(phys_entry_temp->hash));
+	}
+
+	if(EOK == ret)
+	{
+		/*	Find last entry in the chain */
+        phys_entry_temp->last_phys_entry_va = &hash_table_va[phys_entry_temp->hash];
+		ret = pfe_rtable_add_entry_link(rtable, phys_entry_temp);
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Validate entry in the table
+ * @param[in]	rtable The routing table instance
+ * @param[in]	entry The entry to be added
+ * @param[in]	phys_entry_temp Temporary saved hash to be used
+ */
+static void pfe_rtable_add_entry_validate(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry, pfe_rtable_phys_entry_infor_t *phys_entry_temp)
+{
+	/*	Validate the new entry */
+	entry->phys_entry->flags = (pfe_ct_rtable_flags_t)oal_htonl((uint32_t)RT_FL_VALID | (((uint8_t)IPV4 == entry->phys_entry->flag_ipv6) ? 0U : (uint32_t)RT_FL_IPV6));
+	entry->prev = (NULL == phys_entry_temp->last_phys_entry_va) ? NULL : pfe_rtable_get_by_phys_entry_va(rtable, phys_entry_temp->last_phys_entry_va);
+	entry->next = NULL;
+	if (NULL != entry->prev)
+	{
+		/*	Store pointer to the new entry */
+		entry->prev->next = entry;
+	}
+
+	LLIST_AddAtEnd(&entry->list_entry, &rtable->active_entries);
+
+	NXP_LOG_INFO("RTable entry added, hash: 0x%x\n", (uint_t)(phys_entry_temp->hash));
+
+	entry->rtable = rtable;
+
+	if (0U == rtable->active_entries_count)
+	{
+		NXP_LOG_INFO("RTable first entry added, enable hardware RTable lookup\n");
+		pfe_class_rtable_lookup_enable(rtable->class);
+	}
+
+	rtable->active_entries_count++;
+	NXP_LOG_INFO("RTable active_entries_count: %u\n", (uint_t)(rtable->active_entries_count));
+
+	if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+}
+
+/**
  * @brief		Add entry to the table
  * @param[in]	rtable The routing table instance
  * @param[in]	entry The entry to be added
@@ -1834,17 +1944,8 @@ static bool_t pfe_rtable_entry_is_duplicate(pfe_rtable_t *rtable, pfe_rtable_ent
  */
 errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 {
-	pfe_rtable_hash_type_t hash_type = ((uint8_t)IPV4 == entry->phys_entry->flag_ipv6) ? IPV4_5T : IPV6_5T;
-	uint32_t hash;
-	pfe_ct_rtable_entry_t *hash_table_va = (pfe_ct_rtable_entry_t *)rtable->htable_base_va;
-	pfe_ct_rtable_entry_t *new_phys_entry_va = NULL, *new_phys_entry_pa = NULL, *last_phys_entry_va = NULL;
-    errno_t ret;
-    pfe_l2br_domain_t *domain;
-	uint8_t index;
-
-#if (TRUE == PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE)
-	pfe_ct_rtable_flags_t valid_tmp;
-#endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
+	pfe_rtable_phys_entry_infor_t *phys_entry_temp;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == entry)))
@@ -1873,165 +1974,32 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 		return EEXIST;
 	}
 
-	hash = pfe_rtable_entry_get_hash(entry, hash_type, (rtable->htable_size - 1U));
-	entry->temp_phys_entry->flags = RT_FL_NONE;
-	entry->temp_phys_entry->status &= ~(uint8_t)RT_STATUS_ACTIVE;
-	index = pfe_rtable_get_free_stats_index(rtable);
-	entry->temp_phys_entry->conntrack_stats_index = oal_htons((uint16_t)index);
+	phys_entry_temp = oal_mm_malloc(sizeof(pfe_rtable_phys_entry_infor_t));
+	(void)memset(phys_entry_temp, 0, sizeof(pfe_rtable_phys_entry_infor_t));
 
-	/* Add vlan stats index into the phy_entry structure */
-	if (0U != (oal_ntohl(entry->temp_phys_entry->actions) & ((uint32_t)RT_ACT_ADD_VLAN_HDR | (uint32_t)RT_ACT_MOD_VLAN_HDR)))
+	ret = pfe_rtable_add_entry_id(rtable, entry, phys_entry_temp);
+
+	if(EOK == ret)
 	{
-		if (NULL != rtable->bridge)
-		{
-			domain = pfe_l2br_get_first_domain(rtable->bridge, L2BD_CRIT_BY_VLAN, (void *)(addr_t)oal_ntohs(entry->temp_phys_entry->args.vlan));
-			if (domain != NULL)
-			{
-				entry->temp_phys_entry->args.vlan_stats_index = oal_htons((uint16_t)pfe_l2br_get_vlan_stats_index(domain));
-			}
-			else
-			{
-				/* Index 0 is the fallback domain */
-				entry->temp_phys_entry->args.vlan_stats_index = 0;
-			}
-		}
-	}
+		/*	Copy temporary entry into its destination (pool/hash entry) */
+		(void)memcpy(phys_entry_temp->new_phys_entry_va, entry->temp_phys_entry, sizeof(pfe_ct_rtable_entry_t));
 
-	/*	Allocate 'real' entry from hash heads or pool */
-	if (0U == (oal_ntohl(hash_table_va[hash].flags) & (uint32_t)RT_FL_VALID))
-	{
-		new_phys_entry_va = &hash_table_va[hash];
-	}
-	else
-	{
-		/*	First-level entry is already occupied. Create entry within the pool. Get
-			some free entry from the pool first. */
-		new_phys_entry_va = fifo_get(rtable->pool_va);
-		if (NULL == new_phys_entry_va)
-		{
-            if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
-            {
-                NXP_LOG_DEBUG("Mutex unlock failed\n");
-            }
+		/*	Remember the real pointer */
+		entry->phys_entry = phys_entry_temp->new_phys_entry_va;
 
-			return ENOENT;
-		}
-		NXP_LOG_WARNING("Routing table hash [%u] collision detected. New entry will be added to linked list leading to performance penalty during lookup.\n", (uint_t)hash);
-	}
+		/*	Remember (physical) location of the new entry within the DDR. */
+		entry->phys_entry->rt_orig = oal_htonl((uint32_t)((addr_t)phys_entry_temp->new_phys_entry_pa));
 
-	/*	Make sure the new entry is invalid */
-	new_phys_entry_va->flags = RT_FL_NONE;
+		/*	Just invalidate the ingress interface here to not confuse the firmware code */
+		entry->phys_entry->i_phy_if = PFE_PHY_IF_ID_INVALID;
 
-	/*	Get physical address */
-	new_phys_entry_pa = pfe_rtable_phys_entry_get_pa(rtable, new_phys_entry_va);
-	if (NULL == new_phys_entry_pa)
-	{
-		NXP_LOG_ERROR("Couldn't get PA (entry @ v0x%p)\n", (void *)new_phys_entry_va);
-		goto free_and_fail;
-	}
-
-	/*	Set link */
-	if (TRUE == pfe_rtable_phys_entry_is_htable(rtable, new_phys_entry_va))
-	{
-		/*	This is very first entry in a hash bucket */
-		new_phys_entry_va->next = 0U;
-	}
-	else
-	{
-		/*	Find last entry in the chain */
-		last_phys_entry_va = &hash_table_va[hash];
-		while (NULL != (void *)(addr_t)last_phys_entry_va->next)
-		{
-			last_phys_entry_va = pfe_rtable_phys_entry_get_va(rtable, (pfe_ct_rtable_entry_t *)(addr_t)oal_ntohl(last_phys_entry_va->next));
-		}
-
-		/*	Link last entry with the new one. Both are in network byte order. */
-
-#if (TRUE == PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE)
-		/*	Invalidate the last entry first */
-		valid_tmp = last_phys_entry_va->flags;
-		last_phys_entry_va->flags = RT_FL_NONE;
-
-		/*	Wait some time due to sync with firmware */
-		oal_time_usleep(10U);
-#endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
-
-		/*	Update the next pointer */
-		last_phys_entry_va->next = oal_htonl((uint32_t)((addr_t)new_phys_entry_pa & 0xffffffffU));
-
-#if (TRUE == PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE)
 		/*	Ensure that all previous writes has been done */
 		hal_wmb();
 
-		/*	Re-enable the entry. Next (new last) entry remains invalid. */
-		last_phys_entry_va->flags = valid_tmp;
-#endif /* PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE */
+		pfe_rtable_add_entry_validate(rtable, entry, phys_entry_temp);
 	}
 
-	/*	Copy temporary entry into its destination (pool/hash entry) */
-	(void)memcpy(new_phys_entry_va, entry->temp_phys_entry, sizeof(pfe_ct_rtable_entry_t));
-
-	/*	Remember the real pointer */
-	entry->phys_entry = new_phys_entry_va;
-
-	/*	Remember (physical) location of the new entry within the DDR. */
-	entry->phys_entry->rt_orig = oal_htonl((uint32_t)((addr_t)new_phys_entry_pa));
-
-	/*	Just invalidate the ingress interface here to not confuse the firmware code */
-	entry->phys_entry->i_phy_if = PFE_PHY_IF_ID_INVALID;
-
-	/*	Ensure that all previous writes has been done */
-	hal_wmb();
-
-	/*	Validate the new entry */
-	entry->phys_entry->flags = (pfe_ct_rtable_flags_t)oal_htonl((uint32_t)RT_FL_VALID | (((uint8_t)IPV4 == entry->phys_entry->flag_ipv6) ? 0U : (uint32_t)RT_FL_IPV6));
-	entry->prev = (NULL == last_phys_entry_va) ? NULL : pfe_rtable_get_by_phys_entry_va(rtable, last_phys_entry_va);
-	entry->next = NULL;
-	if (NULL != entry->prev)
-	{
-		/*	Store pointer to the new entry */
-		entry->prev->next = entry;
-	}
-
-	LLIST_AddAtEnd(&entry->list_entry, &rtable->active_entries);
-
-	NXP_LOG_INFO("RTable entry added, hash: 0x%x\n", (uint_t)hash);
-
-	entry->rtable = rtable;
-
-    if (0U == rtable->active_entries_count)
-    {
-        NXP_LOG_INFO("RTable first entry added, enable hardware RTable lookup\n");
-        pfe_class_rtable_lookup_enable(rtable->class);
-    }
-
-    rtable->active_entries_count++;
-    NXP_LOG_INFO("RTable active_entries_count: %u\n", (uint_t)(rtable->active_entries_count));
-
-    if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
-    {
-        NXP_LOG_DEBUG("Mutex unlock failed\n");
-    }
-
-	return EOK;
-
-free_and_fail:
-    if (pfe_rtable_phys_entry_is_pool(rtable, new_phys_entry_va))
-    {
-        /*	Entry from the pool. Return it. */
-        ret = fifo_put(rtable->pool_va, new_phys_entry_va);
-        if (EOK != ret)
-        {
-            NXP_LOG_ERROR("Couldn't return routing table entry to the pool\n");
-        }
-    }
-
-    if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
-    {
-        NXP_LOG_DEBUG("Mutex unlock failed\n");
-    }
-
-	return EFAULT;
+	return ret;
 }
 
 /**
@@ -2087,9 +2055,11 @@ errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
  */
 static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 {
-    pfe_ct_rtable_entry_t *next_phys_entry_pa = NULL;
-    errno_t ret;
+	pfe_ct_rtable_entry_t *next_phys_entry_pa = NULL;
+	errno_t ret;
+#if (TRUE == PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE)
 	pfe_ct_rtable_flags_t valid_tmp;
+#endif
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == entry)))
@@ -2153,7 +2123,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 			entry->next->phys_entry->rt_orig = oal_htonl((uint32_t)((addr_t)next_phys_entry_pa & 0xffffffffU));
 
 			/*	Remove entry from the list of active entries and ensure consistency
-			 	of get_first() and get_next() calls */
+				of get_first() and get_next() calls */
 			if (&entry->list_entry == rtable->cur_item)
 			{
 				rtable->cur_item = entry->list_entry.prNext;
@@ -2397,9 +2367,9 @@ static void *rtable_worker_func(void *arg)
 			{
 				case (int32_t)SIG_WORKER_STOP:
 				{
-                    /* Exit the thread */
-                    oal_mbox_ack_msg(&msg);
-                    return NULL;
+					/* Exit the thread */
+					oal_mbox_ack_msg(&msg);
+					return NULL;
 				}
 
 				case (int32_t)SIG_TIMER_TICK:
@@ -2410,8 +2380,8 @@ static void *rtable_worker_func(void *arg)
 
 				default:
 				{
-                    /*Do Nothing*/
-                    break;
+					/*Do Nothing*/
+					break;
 				}
 			}
 		}
@@ -2426,8 +2396,8 @@ static void *rtable_worker_func(void *arg)
 /**
  * @brief		Create the conntrack stats table
  * @details		Create and allocate in dmem the space for stats table that
- * 				include all configured conntracks
- * @param[in]   Class instance
+ *				include all configured conntracks
+ * @param[in]	Class instance
  * @param[in]	conntrack_count Number of configured vlan
  * @return		DMEM address of the table
  */
@@ -2481,7 +2451,7 @@ static uint32_t pfe_rtable_create_stats_table(pfe_class_t *class, uint16_t connt
  * @brief		Destroy the conntrack stats table
  * @details		Free from dmem the space filled by the table
  * @param[in]	table_address Conntrack stats table address
- * @param[in]   class instance
+ * @param[in]	class instance
  */
 static errno_t pfe_rtable_destroy_stats_table(pfe_class_t *class, uint32_t table_address)
 {
@@ -2535,7 +2505,7 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 	pfe_rtable_t *rtable;
 	pfe_ct_rtable_entry_t *table_va;
 	uint32_t ii;
-    errno_t ret;
+	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL_ADDR == htable_base_va) || (NULL_ADDR == pool_base_va) || (NULL == class)))
@@ -2562,7 +2532,8 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 		if (NULL == rtable->lock)
 		{
 			NXP_LOG_ERROR("Couldn't allocate mutex object\n");
-			goto free_and_fail;
+			pfe_rtable_destroy(rtable);
+			return NULL;
 		}
 		else
 		{
@@ -2593,7 +2564,8 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 				if ((NULL_ADDR == rtable->htable_base_va) || (NULL_ADDR == rtable->pool_base_va))
 				{
 					NXP_LOG_ERROR("Can't map the table memory\n");
-					goto free_and_fail;
+					pfe_rtable_destroy(rtable);
+					return NULL;
 				}
 				else
 				{
@@ -2606,7 +2578,8 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 				if (EOK != pfe_class_set_rtable(class, rtable->htable_base_pa, rtable->htable_size, sizeof(pfe_ct_rtable_entry_t)))
 				{
 					NXP_LOG_ERROR("Unable to set routing table address\n");
-					goto free_and_fail;
+					pfe_rtable_destroy(rtable);
+					return NULL;
 				}
 
 				/* Initialize the table */
@@ -2618,10 +2591,11 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 				if (NULL == rtable->pool_va)
 				{
 					NXP_LOG_ERROR("Can't create pool\n");
-					goto free_and_fail;
+					pfe_rtable_destroy(rtable);
+					return NULL;
 				}
 
-				/*  Fill the pool */
+				/*	Fill the pool */
 				table_va = (pfe_ct_rtable_entry_t *)rtable->pool_base_va;
 
 				for (ii=0U; ii<rtable->pool_size; ii++)
@@ -2630,7 +2604,8 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 					if (EOK != ret)
 					{
 						NXP_LOG_ERROR("Pool filling failed (VA pool)\n");
-						goto free_and_fail;
+						pfe_rtable_destroy(rtable);
+						return NULL;
 					}
 				}
 
@@ -2643,7 +2618,8 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 				if (NULL == rtable->mbox)
 				{
 					NXP_LOG_ERROR("Mbox creation failed\n");
-					goto free_and_fail;
+					pfe_rtable_destroy(rtable);
+					return NULL;
 				}
 
 				/* Create worker thread */
@@ -2651,14 +2627,16 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 				if (NULL == rtable->worker)
 				{
 					NXP_LOG_ERROR("Couldn't start worker thread\n");
-					goto free_and_fail;
+					pfe_rtable_destroy(rtable);
+					return NULL;
 				}
 				else
 				{
 					if (EOK != oal_mbox_attach_timer(rtable->mbox, (uint32_t)PFE_RTABLE_CFG_TICK_PERIOD_SEC * 1000U, SIG_TIMER_TICK))
 					{
 						NXP_LOG_ERROR("Unable to attach timer\n");
-						goto free_and_fail;
+						pfe_rtable_destroy(rtable);
+						return NULL;
 					}
 				}
 				#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) */
@@ -2667,11 +2645,6 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint3
 	}
 
 	return rtable;
-
-free_and_fail:
-
-	pfe_rtable_destroy(rtable);
-	return NULL;
 }
 
 /**
@@ -2852,7 +2825,7 @@ errno_t pfe_rtable_entry_to_5t(const pfe_rtable_entry_t *entry, pfe_5_tuple_t *t
 /**
  * @brief		Convert entry into 5-tuple representation (output values)
  * @details		Returns entry values as it will behave after header fields
- * 				are changed. See pfe_rtable_entry_set_out_xxx().
+ *				are changed. See pfe_rtable_entry_set_out_xxx().
  * @param[in]	entry The entry to be converted
  * @param[out]	tuple Pointer where the 5-tuple will be written
  * @return		EOK if success, error code otherwise
@@ -2977,14 +2950,14 @@ static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, const 
  * @param[in]	art Pointer to criterion argument. Every value shall to be in HOST endian format.
  * @return		The entry or NULL if not found
  * @warning		The routing table must be locked for the time the function and its returned entry
- * 				is being used since the entry might become asynchronously invalid (timed-out).
+ *				is being used since the entry might become asynchronously invalid (timed-out).
  */
 pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_criterion_t crit, void *arg)
 {
 	LLIST_t *item;
 	pfe_rtable_entry_t *entry = NULL;
 	bool_t match = FALSE;
-    bool_t known_crit = TRUE;
+	bool_t known_crit = TRUE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == rtable) || (NULL == arg)))
@@ -3076,7 +3049,7 @@ pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_cr
  * @param[in]	rtable The routing table instance
  * @return		The entry or NULL if not found
  * @warning		The routing table must be locked for the time the function and its returned entry
- * 				is being used since the entry might become asynchronously invalid (timed-out).
+ *				is being used since the entry might become asynchronously invalid (timed-out).
  */
 pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 {
@@ -3141,10 +3114,10 @@ pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 /**
  * @brief		Get conntrack statistics
  * @param[in]	rtable		The routing table instance
- * @param[in]	conntrack_index 	Index in conntrack statistics table
- * @param[out]	stat        Statistic structure
- * @retval		EOK         Success
- * @retval		ENOMEM       Not possible to allocate memory for read
+ * @param[in]	conntrack_index		Index in conntrack statistics table
+ * @param[out]	stat		Statistic structure
+ * @retval		EOK			Success
+ * @retval		ENOMEM		 Not possible to allocate memory for read
  */
 errno_t pfe_rtable_get_stats(const pfe_rtable_t *rtable, pfe_ct_conntrack_stats_t *stat, uint8_t conntrack_index)
 {
@@ -3180,7 +3153,7 @@ errno_t pfe_rtable_get_stats(const pfe_rtable_t *rtable, pfe_ct_conntrack_stats_
 		{
 			(void)memset(stats, 0, sizeof(pfe_ct_conntrack_stats_t));
 
-			offset = sizeof(pfe_ct_conntrack_stats_t) * (uint16_t)conntrack_index;
+			offset = (uint16_t)sizeof(pfe_ct_conntrack_stats_t) * (uint16_t)conntrack_index;
 
 			while(i < pfe_class_get_num_of_pes(rtable->class))
 			{
@@ -3233,7 +3206,7 @@ errno_t pfe_rtable_clear_stats(const pfe_rtable_t *rtable, uint8_t conntrack_ind
 		}
 		else
 		{
-			offset = sizeof(pfe_ct_conntrack_stats_t) * (uint16_t)conntrack_index;
+			offset = (uint16_t)sizeof(pfe_ct_conntrack_stats_t) * (uint16_t)conntrack_index;
 			ret = pfe_class_write_dmem((void *)rtable->class, -1, rtable->conntrack_stats_table_addr + offset, &pfe_rtable_clear_stats_stat, sizeof(pfe_ct_conntrack_stats_t));
 		}
 	}
@@ -3246,9 +3219,9 @@ errno_t pfe_rtable_clear_stats(const pfe_rtable_t *rtable, uint8_t conntrack_ind
  * @brief		Return conntrack statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	rtable		The routing table instance
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	buf_len 	Buffer length
- * @param[in]	verb_level 	Verbosity level
+ * @param[in]	buf			Pointer to the buffer to write to
+ * @param[in]	buf_len		Buffer length
+ * @param[in]	verb_level	Verbosity level
  * @return		Number of bytes written to the buffer
  */
 uint32_t pfe_rtable_get_text_statistics(const pfe_rtable_t *rtable, char_t *buf, uint32_t buf_len, uint8_t verb_level)
@@ -3270,7 +3243,7 @@ uint32_t pfe_rtable_get_text_statistics(const pfe_rtable_t *rtable, char_t *buf,
 	}
 	else
 	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "Default               hit: %12d hit_bytes: %12d\n", stats.hit, stats.hit_bytes);
+		len += oal_util_snprintf(buf + len, buf_len - len, "Default				  hit: %12d hit_bytes: %12d\n", stats.hit, stats.hit_bytes);
 
 		/*	Protect table accesses */
 		if (unlikely(EOK != oal_mutex_lock(rtable->lock)))

@@ -319,7 +319,9 @@ void pfe_gpi_cfg_shp_set_limits(addr_t base_va, uint8_t id, uint32_t max_credit,
 void pfe_gpi_cfg_shp_get_limits(addr_t base_va, uint8_t id, uint32_t *max_credit, uint32_t *min_credit);
 uint32_t pfe_gpi_cfg_shp_get_drop_cnt(addr_t base_va, uint8_t id);
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_gpi_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

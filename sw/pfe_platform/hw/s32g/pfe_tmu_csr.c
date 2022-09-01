@@ -29,7 +29,7 @@
 
 /* usage scope: pfe_tmu_cfg_get_phy_config */
 /*	List of QoS configuration for each physical interface terminated with invalid entry */
-static const pfe_tmu_phy_cfg_t phys[] = {
+static const pfe_tmu_phy_cfg_t tmu_phys[] = {
     {.id = PFE_PHY_IF_ID_EMAC0, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
     {.id = PFE_PHY_IF_ID_EMAC1, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
     {.id = PFE_PHY_IF_ID_EMAC2, .q_cnt = 8U, .sch_cnt = 2U, .shp_cnt = 4U},
@@ -94,11 +94,11 @@ const pfe_tmu_phy_cfg_t *pfe_tmu_cfg_get_phy_config(pfe_ct_phy_if_id_t phy)
 
 	const pfe_tmu_phy_cfg_t *phy_config = NULL;
 
-	for (ii=0U; phys[ii].id != PFE_PHY_IF_ID_INVALID; ii++)
+	for (ii=0U; tmu_phys[ii].id != PFE_PHY_IF_ID_INVALID; ii++)
 	{
-		if (phys[ii].id == phy)
+		if (tmu_phys[ii].id == phy)
 		{
-			phy_config = &phys[ii];
+			phy_config = &tmu_phys[ii];
 			break;
 		}
 	}
@@ -235,7 +235,7 @@ errno_t pfe_tmu_q_reset_tail_drop_policy(addr_t cbus_base_va)
 		}
 		if (EOK != ret)
 		{
-			break;
+			return ret;
 		}
 	}
 
@@ -253,8 +253,16 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 	uint8_t queue;
 	uint32_t ii;
 	errno_t ret = EOK;
+	uint32_t regval;
 
 	(void)cfg;
+
+	if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+	{
+		regval = hal_read32(cbus_base_va + TMU_TEQ_CTRL);
+		regval |= 0x4U;
+		hal_write32(regval, cbus_base_va + TMU_TEQ_CTRL);
+	}
 
 	hal_write32(0x0U, cbus_base_va + TMU_PHY0_TDQ_CTRL);
 	hal_write32(0x0U, cbus_base_va + TMU_PHY1_TDQ_CTRL);

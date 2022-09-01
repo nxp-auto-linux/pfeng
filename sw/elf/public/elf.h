@@ -26,15 +26,6 @@
                                          MISRA VIOLATIONS
 ==================================================================================================*/
 
-/**
-* @page misra_violations MISRA-C:2004 violations
-*
-* @section elf_h_REF_1
-* Violates MISRA 2004 TODO Rule TODO,
-*
-*
-*/
-
 #ifndef ELF_H
     #define ELF_H
 
@@ -243,9 +234,8 @@ typedef struct __attribute__((packed))
     Elf32_Shdr *arSectHead32;
     int8_t     *acSectNames;
     uint32_t   u32ProgScanIdx;
-    uint32_t   u32FileSize;
     bool_t     bIs64Bit;
-    void __attribute__((aligned(4))) *pvData; /* Raw file */
+    const void __attribute__((aligned(4))) *pvData; /* Raw file */
 } ELF_File_t;
 
 /*==================================================================================================
@@ -261,7 +251,7 @@ typedef struct __attribute__((packed))
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-extern bool_t ELF_Open(ELF_File_t *pElfFile,void *pvFile, uint32_t u32FileSize);
+extern bool_t ELF_Open(ELF_File_t *pElfFile, const void *pvFile);
 extern void ELF_Close(ELF_File_t *pElfFile);
 
 #if TRUE == ELF_CFG_PROGRAM_TABLE_USED

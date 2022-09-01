@@ -27,6 +27,7 @@
  *				  request (fpp_ct_cmd_t/fpp_ct6_cmd_t).
  *
  */
+
 #include "pfe_cfg.h"
 #include "libfci.h"
 #include "fpp.h"
@@ -468,56 +469,48 @@ static pfe_rtable_entry_t *fci_connections_create_entry(const fci_rt_db_entry_t 
 				/*	Change MAC addresses */
 				pfe_rtable_entry_set_out_mac_addrs(new_entry, route->src_mac, route->dst_mac);
 
-				if (NULL != tuple_rep)
+				/*	Check if SRC IP NAT is requested */
+				if (0 != memcmp(&tuple->src_ip, &tuple_rep->dst_ip, sizeof(pfe_ip_addr_t)))
 				{
-					/*	Check if SRC IP NAT is requested */
-					if (0 != memcmp(&tuple->src_ip, &tuple_rep->dst_ip, sizeof(pfe_ip_addr_t)))
+					/*	SADDR need to be changed to DADDR_REPLY */
+					if (EOK != pfe_rtable_entry_set_out_sip(new_entry, &tuple_rep->dst_ip))
 					{
-						/*	SADDR need to be changed to DADDR_REPLY */
-						if (EOK != pfe_rtable_entry_set_out_sip(new_entry, &tuple_rep->dst_ip))
+						NXP_LOG_ERROR("Couldn't set output SIP\n");
+						pfe_rtable_entry_free(new_entry);
+						new_entry = NULL;
+					}
+				}
+
+				if (NULL != new_entry)
+				{
+					/*	Check if DST IP NAT is requested */
+					if (0 != memcmp(&tuple->dst_ip, &tuple_rep->src_ip, sizeof(pfe_ip_addr_t)))
+					{
+						/*	DADDR need to be changed to SADDR_REPLY */
+						if (EOK != pfe_rtable_entry_set_out_dip(new_entry, &tuple_rep->src_ip))
 						{
-							NXP_LOG_ERROR("Couldn't set output SIP\n");
+							NXP_LOG_ERROR("Couldn't set output DIP\n");
 							pfe_rtable_entry_free(new_entry);
 							new_entry = NULL;
 						}
 					}
 
-					if(NULL != new_entry)
+					if (NULL != new_entry)
 					{
-						/*	Check if DST IP NAT is requested */
-						if (0 != memcmp(&tuple->dst_ip, &tuple_rep->src_ip, sizeof(pfe_ip_addr_t)))
+						/*	Check if SRC PORT translation is requested */
+						if (tuple->sport != tuple_rep->dport)
 						{
-							/*	DADDR need to be changed to SADDR_REPLY */
-							if (EOK != pfe_rtable_entry_set_out_dip(new_entry, &tuple_rep->src_ip))
-							{
-								NXP_LOG_ERROR("Couldn't set output DIP\n");
-								pfe_rtable_entry_free(new_entry);
-								new_entry = NULL;
-							}
+							/*	SPORT need to be changed to DPORT_REPLY */
+							pfe_rtable_entry_set_out_sport(new_entry, tuple_rep->dport);
 						}
 
-						if(NULL != new_entry)
+						/*	Check if DST PORT translation is requested */
+						if (tuple->dport != tuple_rep->sport)
 						{
-							/*	Check if SRC PORT translation is requested */
-							if (tuple->sport != tuple_rep->dport)
-							{
-								/*	SPORT need to be changed to DPORT_REPLY */
-								pfe_rtable_entry_set_out_sport(new_entry, tuple_rep->dport);
-							}
-
-							/*	Check if DST PORT translation is requested */
-							if (tuple->dport != tuple_rep->sport)
-							{
-								/*	DPORT need to be changed to SPORT_REPLY */
-								pfe_rtable_entry_set_out_dport(new_entry, tuple_rep->sport);
-							}
+							/*	DPORT need to be changed to SPORT_REPLY */
+							pfe_rtable_entry_set_out_dport(new_entry, tuple_rep->sport);
 						}
 					}
-				}
-				else
-				{
-					/*	No reply direction defined = no NAT */
-					;
 				}
 			}
 		}
@@ -979,13 +972,47 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 						{
 							NXP_LOG_WARNING("FPP_CMD_IPVx_CONNTRACK: Entry already added\n");
 							*fci_ret = FPP_ERR_RT_ENTRY_ALREADY_REGISTERED;
-							goto free_and_fail;
+							if (EOK != pfe_rtable_del_entry(fci_context->rtable, entry))
+							{
+								NXP_LOG_ERROR("Can't remove route entry\n");
+							}
+
+							pfe_rtable_entry_free(entry);
+							entry = NULL;
+
+							if (NULL != rep_entry)
+							{
+								if (EOK != pfe_rtable_del_entry(fci_context->rtable, rep_entry))
+								{
+									NXP_LOG_ERROR("Can't remove route entry\n");
+								}
+
+								pfe_rtable_entry_free(rep_entry);
+								rep_entry = NULL;
+							}
 						}
 						else if (EOK != ret)
 						{
 							NXP_LOG_ERROR("FPP_CMD_IPVx_CONNTRACK: Can't add entry: %d\n", ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
-							goto free_and_fail;
+							if (EOK != pfe_rtable_del_entry(fci_context->rtable, entry))
+							{
+								NXP_LOG_ERROR("Can't remove route entry\n");
+							}
+
+							pfe_rtable_entry_free(entry);
+							entry = NULL;
+
+							if (NULL != rep_entry)
+							{
+								if (EOK != pfe_rtable_del_entry(fci_context->rtable, rep_entry))
+								{
+									NXP_LOG_ERROR("Can't remove route entry\n");
+								}
+
+								pfe_rtable_entry_free(rep_entry);
+								rep_entry = NULL;
+							}
 						}
 						else
 						{
@@ -1006,40 +1033,30 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 						{
 							NXP_LOG_ERROR("FPP_CMD_IPVx_CONNTRACK: Can't add reply entry: %d\n", ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
-							goto free_and_fail;
+							if (NULL != entry)
+							{
+								if (EOK != pfe_rtable_del_entry(fci_context->rtable, entry))
+								{
+									NXP_LOG_ERROR("Can't remove route entry\n");
+								}
+
+								pfe_rtable_entry_free(entry);
+								entry = NULL;
+							}
+
+							if (EOK != pfe_rtable_del_entry(fci_context->rtable, rep_entry))
+							{
+								NXP_LOG_ERROR("Can't remove route entry\n");
+							}
+
+							pfe_rtable_entry_free(rep_entry);
+							rep_entry = NULL;
 						}
 						else
 						{
 							NXP_LOG_DEBUG("FPP_CMD_IPVx_CONNTRACK: Entry added (reply direction)\n");
 							*fci_ret = FPP_ERR_OK;
 						}
-					}
-
-					break;
-
-		free_and_fail:
-					/*	The 'ret' and '*fci_ret' values are already set */
-
-					if (NULL != entry)
-					{
-						if (EOK != pfe_rtable_del_entry(fci_context->rtable, entry))
-						{
-							NXP_LOG_ERROR("Can't remove route entry\n");
-						}
-
-						pfe_rtable_entry_free(entry);
-						entry = NULL;
-					}
-
-					if (NULL != rep_entry)
-					{
-						if (EOK != pfe_rtable_del_entry(fci_context->rtable, rep_entry))
-						{
-							NXP_LOG_ERROR("Can't remove route entry\n");
-						}
-
-						pfe_rtable_entry_free(rep_entry);
-						rep_entry = NULL;
 					}
 
 					break;

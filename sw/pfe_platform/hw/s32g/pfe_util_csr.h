@@ -49,6 +49,7 @@
 #define UTIL_INQ_AFULL_THRES		(CBUS_UTIL_CSR_BASE_ADDR + 0x234U)
 #define UTIL_UPE_GP_REG_ADDR		(CBUS_UTIL_CSR_BASE_ADDR + 0x238U)
 #define UTIL_HOST_GP_REG_ADDR		(CBUS_UTIL_CSR_BASE_ADDR + 0x23CU)
+#define UTIL_MISC_REG_ADDR			(CBUS_UTIL_CSR_BASE_ADDR + 0x240U)
 
 #define UTIL_PE_IBUS_ACCESS_PMEM	(1UL << 17U)
 #define UTIL_PE_IBUS_ACCESS_DMEM	(1UL << 18U)
@@ -60,7 +61,10 @@
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_util_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 errno_t pfe_util_cfg_isr(addr_t base_va);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR

@@ -125,17 +125,14 @@ static errno_t pfe_platform_create_hif(pfe_platform_t *platform, const pfe_platf
 						break;
 					}
 				}
-
-				if (TRUE == master_up)
-				{
-					break;
-				}
 			}
 
-			if (FALSE == master_up)
+			if (TRUE == master_up)
 			{
-				oal_time_usleep(1000);
+				break;
 			}
+
+			oal_time_usleep(1000);
 
 			/*	Decrement only for slave_tmout > 0 */
 			if (0U != slave_tmout)
@@ -203,13 +200,11 @@ static errno_t pfe_platform_create_hif_nocpy(pfe_platform_t *platform)
 {
     uint16_t lmem_header_size;
 
-#if 0 /* AAVB-5037 */
 	if(PFE_S32G3_VERSION == platform->pfe_version)
 	{   /* S32G3 */
 		lmem_header_size = 48U;
 	}
 	else
-#endif
 	{   /* S32G2 */
 		lmem_header_size = 112U;
 	}

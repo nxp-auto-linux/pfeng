@@ -38,7 +38,7 @@
 
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
-void cli_print_app_version(void);
+void cli_print_app_version(bool is_verbose);
 
 int cli_parse_and_execute(char* pp_txtarr[], int arrln);
 

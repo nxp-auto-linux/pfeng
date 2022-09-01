@@ -43,7 +43,7 @@
 
 /* app version */
 #define CLI_VERSION_MAJOR  "2"
-#define CLI_VERSION_MINOR  "5"
+#define CLI_VERSION_MINOR  "7"
 #define CLI_VERSION_PATCH  "0"
 
 
@@ -56,6 +56,9 @@
 #endif
 #ifndef PFE_CT_H_MD5
 #define PFE_CT_H_MD5  "????????????????????????????????"
+#endif
+#ifndef CLI_DRV_COMMIT_HASH
+#define CLI_DRV_COMMIT_HASH  "????????????????????????????????"
 #endif
 
 
@@ -587,6 +590,12 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         uint8_t value;
     } dip_pfx;  /* dip subnet prefix */
+
+    struct
+    {
+        bool is_valid;
+        char txt[IF_NAME_TXT_LN];
+    } ptp_mgmt_if_name;
 
 } cli_cmdargs_t;
 

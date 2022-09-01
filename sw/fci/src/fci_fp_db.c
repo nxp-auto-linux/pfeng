@@ -4,6 +4,7 @@
  *  SPDX-License-Identifier: GPL-2.0
  *
  * ========================================================================= */
+
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "linked_list.h"
@@ -1140,7 +1141,7 @@ errno_t fci_fp_db_push_table_to_hw(pfe_class_t *class, char_t *table_name)
                             pfe_fp_destroy_table(class, fp_table->dmem_addr);
                             fp_table->dmem_addr = 0U;
                             ret = ENOENT;
-                            break;
+							break;
                         }
                         if(EOK != fci_fp_get_rule_pos_in_table(fp_table, next_rule, &pos))
                         {   /* Failed - cannot proceed */
@@ -1148,7 +1149,7 @@ errno_t fci_fp_db_push_table_to_hw(pfe_class_t *class, char_t *table_name)
                             pfe_fp_destroy_table(class, fp_table->dmem_addr);
                             fp_table->dmem_addr = 0U;
                             ret = ENOENT;
-                            break;
+							break;
                         }
                         rule_buf.next_idx = pos;
                     }
@@ -1159,6 +1160,7 @@ errno_t fci_fp_db_push_table_to_hw(pfe_class_t *class, char_t *table_name)
                     (void)pfe_fp_table_write_rule(class, fp_table->dmem_addr, &rule_buf, i);
 
                     i++;
+					
                 }
             }
         }
@@ -1263,20 +1265,16 @@ fci_fp_table_t *fci_fp_db_get_first(fci_fp_table_criterion_t crit, void *arg)
 /**
 * @brief Returns parameters of the first rule in the database
 * @details Function is intended to start query of all rules in the database (by FCI).
-* @param[out] rule_name Name of the rule
-* @param[out] data Rule data
-* @param[out] mask Rule mask
-* @param[out] offset Rule offset
-* @param[out] flags Rule flags
+* @param[out] rule_info the First rule data got from database
 * @param[out] next_rule Name of the next rule (if any)
 * @return EOK or an error code.
 */
-errno_t fci_fp_db_get_first_rule(char_t **rule_name, uint32_t *data, uint32_t *mask, uint16_t *offset, pfe_ct_fp_flags_t *flags, char_t **next_rule)
+errno_t fci_fp_db_get_first_rule(fci_fp_rule_info_t *rule_info, char_t **next_rule)
 {
     fci_fp_rule_t *rule;
     errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    if((NULL == rule_name) || (NULL == data) || (NULL == mask) || (NULL == offset) || (NULL == flags) || (NULL == next_rule))
+    if((NULL == rule_info) || (NULL == next_rule))
     {
         NXP_LOG_ERROR("NULL argument received\n");
         ret = EINVAL;
@@ -1291,11 +1289,11 @@ errno_t fci_fp_db_get_first_rule(char_t **rule_name, uint32_t *data, uint32_t *m
         }
         else
         {
-            *rule_name = rule->name;
-            *data = rule->data;
-            *mask = rule->mask;
-            *offset = rule->offset;
-            *flags = rule->flags;
+            rule_info->rule_name = rule->name;
+            rule_info->data = rule->data;
+            rule_info->mask = rule->mask;
+            rule_info->offset = rule->offset;
+            rule_info->flags = rule->flags;
             *next_rule = rule->next_rule;
             ret = EOK;
         }
@@ -1306,20 +1304,16 @@ errno_t fci_fp_db_get_first_rule(char_t **rule_name, uint32_t *data, uint32_t *m
 /**
 * @brief Returns parameters of the next rule in the database
 * @details Function is intended to continue query of all rules in the database (by FCI).
-* @param[out] rule_name Name of the rule
-* @param[out] data Rule data
-* @param[out] mask Rule mask
-* @param[out] offset Rule offset
-* @param[out] flags Rule flags
+* @param[out] rule_info the Next rule data got from database
 * @param[out] next_rule Name of the next rule (if any)
 * @return EOK or an error code.
 */
-errno_t fci_fp_db_get_next_rule(char_t **rule_name, uint32_t *data, uint32_t *mask, uint16_t *offset, pfe_ct_fp_flags_t *flags, char_t **next_rule)
+errno_t fci_fp_db_get_next_rule(fci_fp_rule_info_t *rule_info, char_t **next_rule)
 {
     fci_fp_rule_t *rule;
     errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    if((NULL == rule_name) || (NULL == data) || (NULL == mask) || (NULL == offset) || (NULL == flags) || (NULL == next_rule))
+    if((NULL == rule_info) || (NULL == next_rule))
     {
         NXP_LOG_ERROR("NULL argument received\n");
         ret = EINVAL;
@@ -1334,11 +1328,11 @@ errno_t fci_fp_db_get_next_rule(char_t **rule_name, uint32_t *data, uint32_t *ma
         }
         else
         {
-            *rule_name = rule->name;
-            *data = rule->data;
-            *mask = rule->mask;
-            *offset = rule->offset;
-            *flags = rule->flags;
+            rule_info->rule_name = rule->name;
+            rule_info->data = rule->data;
+            rule_info->mask = rule->mask;
+            rule_info->offset = rule->offset;
+            rule_info->flags = rule->flags;
             *next_rule = rule->next_rule;
             ret = EOK;
         }
@@ -1350,21 +1344,17 @@ errno_t fci_fp_db_get_next_rule(char_t **rule_name, uint32_t *data, uint32_t *ma
 * @brief Returns parameters of the first rule in the table
 * @details Function is intended to start query of all rules in the table (by FCI).
 * @param[in]  table_name Name of the table to query
-* @param[out] rule_name Name of the rule
-* @param[out] data Rule data (network endian)
-* @param[out] mask Rule mask (network endian)
-* @param[out] offset Rule offset (network endian)
-* @param[out] flags Rule flags
+* @param[out] rule_info the First rule data got from table
 * @param[out] next_rule Name of the next rule (if any)
 * @return EOK or an error code.
 */
-errno_t fci_fp_db_get_table_first_rule(char_t *table_name, char_t **rule_name, uint32_t *data, uint32_t *mask, uint16_t *offset, pfe_ct_fp_flags_t *flags, char_t **next_rule)
+errno_t fci_fp_db_get_table_first_rule(char_t *table_name, fci_fp_rule_info_t *rule_info, char_t **next_rule)
 {
     fci_fp_table_t *fp_table;
     fci_fp_rule_t *rule;
     errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    if((NULL == table_name) || (NULL == rule_name) || (NULL == data) || (NULL == mask) || (NULL == offset) || (NULL == flags) || (NULL == next_rule))
+    if((NULL == table_name) || (NULL == rule_info) || (NULL == next_rule))
     {
         NXP_LOG_ERROR("NULL argument received\n");
         ret = EINVAL;
@@ -1389,11 +1379,11 @@ errno_t fci_fp_db_get_table_first_rule(char_t *table_name, char_t **rule_name, u
             }
             else
             {
-                *rule_name = rule->name;
-                *data = rule->data;
-                *mask = rule->mask;
-                *offset = rule->offset;
-                *flags = rule->flags;
+                rule_info->rule_name = rule->name;
+                rule_info->data = rule->data;
+                rule_info->mask = rule->mask;
+                rule_info->offset = rule->offset;
+                rule_info->flags = rule->flags;
                 *next_rule = rule->next_rule;
                 ret = EOK;
             }
@@ -1406,21 +1396,17 @@ errno_t fci_fp_db_get_table_first_rule(char_t *table_name, char_t **rule_name, u
 * @brief Returns parameters of the next rule in the table
 * @details Function is intended to start query of all rules in the table (by FCI).
 * @param[in]  table_name Name of the table to query
-* @param[out] rule_name Name of the rule
-* @param[out] data Rule data
-* @param[out] mask Rule mask
-* @param[out] offset Rule offset
-* @param[out] flags Rule flags
+* @param[out] rule_info the Next rule data got from table
 * @param[out] next_rule Name of the next rule (if any)
 * @return EOK or an error code.
 */
-errno_t fci_fp_db_get_table_next_rule(char_t *table_name, char_t **rule_name, uint32_t *data, uint32_t *mask, uint16_t *offset, pfe_ct_fp_flags_t *flags, char_t **next_rule)
+errno_t fci_fp_db_get_table_next_rule(char_t *table_name, fci_fp_rule_info_t *rule_info, char_t **next_rule)
 {
     fci_fp_table_t *fp_table;
     fci_fp_rule_t *rule;
     errno_t ret;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    if((NULL == table_name) || (NULL == rule_name) || (NULL == data) || (NULL == mask) || (NULL == offset) || (NULL == flags) || (NULL == next_rule))
+    if((NULL == table_name) || (NULL == rule_info) || (NULL == next_rule))
     {
         NXP_LOG_ERROR("NULL argument received\n");
         ret = EINVAL;
@@ -1445,11 +1431,11 @@ errno_t fci_fp_db_get_table_next_rule(char_t *table_name, char_t **rule_name, ui
             }
             else
             {
-                *rule_name = rule->name;
-                *data = rule->data;
-                *mask = rule->mask;
-                *offset = rule->offset;
-                *flags = rule->flags;
+                rule_info->rule_name = rule->name;
+                rule_info->data = rule->data;
+                rule_info->mask = rule->mask;
+                rule_info->offset = rule->offset;
+                rule_info->flags = rule->flags;
                 *next_rule = rule->next_rule;
                 ret = EOK;
             }

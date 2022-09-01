@@ -42,9 +42,9 @@ extern int msg_verbosity;
 	struct device *dev = oal_mm_get_dev(); \
 	if (dev) { \
 		if (msg_verbosity >= 7) { \
-			dev_err(dev, "[%s:"__STR(__LINE__)"] " format, __FILENAME__, ##__VA_ARGS__); \
+			dev_err(dev, "ERR: [%s:"__STR(__LINE__)"] " format, __FILENAME__, ##__VA_ARGS__); \
 		} else { \
-			dev_err(dev, format, ##__VA_ARGS__); \
+			dev_err(dev, "ERR: " format, ##__VA_ARGS__); \
 		} \
 	} \
 }

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -21,15 +21,6 @@
 /*==================================================================================================
                                          MISRA VIOLATIONS
 ==================================================================================================*/
-
-/**
-* @page misra_violations MISRA-C:2004 violations
-*
-* @section elg_cfg_h_REF_1
-* Violates MISRA 2004 TODO Rule TODO, 
-* 
-*
-*/
 
 #ifndef ELF_CFG_H
     #define ELF_CFG_H

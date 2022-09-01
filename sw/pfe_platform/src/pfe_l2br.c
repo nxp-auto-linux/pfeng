@@ -170,6 +170,17 @@ static bool_t pfe_l2br_domain_match_criterion(const pfe_l2br_t *bridge, pfe_l2br
 static bool_t pfe_l2br_static_entry_match_criterion(const pfe_l2br_t *bridge, pfe_l2br_static_entry_t *static_ent);
 static errno_t pfe_l2br_set_mac_aging_timeout(pfe_class_t *class, const uint16_t timeout);
 static errno_t pfe_l2br_static_entry_destroy_nolock(const pfe_l2br_t *bridge, pfe_l2br_static_entry_t* static_ent);
+static errno_t pfe_l2br_config_domain(const pfe_l2br_t *bridge, pfe_l2br_domain_t *domain);
+static errno_t pfe_l2br_check_duplicate_configed_domain(pfe_l2br_t *bridge, pfe_l2br_domain_t *domain, uint16_t vlan);
+static errno_t pfe_l2br_set_static_entry(const pfe_l2br_t *bridge, uint16_t vlan, const pfe_mac_addr_t mac, uint32_t new_fw_list, pfe_l2br_static_entry_t **static_entry);
+static void pfe_l2br_create_domain(const pfe_class_t *class, pfe_l2br_t **bridge, uint16_t def_vlan, uint16_t def_aging_time);
+static errno_t pfe_l2br_flush_static_mac_table(pfe_l2br_t *bridge);
+static errno_t pfe_l2br_flush_all_mac_table(const pfe_l2br_t *bridge);
+static errno_t pfe_l2br_flush_learned_mac_table(const pfe_l2br_t *bridge, pfe_l2br_table_entry_t *entry, pfe_l2br_table_iterator_t *l2t_iter);
+static errno_t pfe_l2br_static_add_entry(pfe_l2br_t *bridge, uint16_t vlan, const pfe_mac_addr_t mac, uint32_t new_fw_list, pfe_l2br_static_entry_t *static_entry);
+static errno_t pfe_l2br_domain_destroy_instance(pfe_l2br_domain_t *domain);
+static errno_t pfe_l2br_domain_flush_by_if_static(const pfe_l2br_domain_t *domain, const pfe_l2br_t *bridge, uint32_t iface_bitflag);
+static errno_t pfe_l2br_domain_flush_by_if_dynamic_static(const pfe_l2br_domain_t *domain, const pfe_l2br_t *bridge, pfe_l2br_table_iterator_t *l2t_iter, pfe_l2br_table_entry_t *entry, uint32_t iface_bitflag);
 
 /**
  * @brief		Write bridge domain structure to classifier memory
@@ -434,6 +445,133 @@ static errno_t pfe_l2br_destroy_vlan_stats_table(pfe_class_t *class, uint32_t ta
 }
 
 /**
+ * @brief		Config for bridge domain
+ * @param[in]	bridge The L2 bridge instance
+ * @param[in]	domain the bridge domain
+ * @retval		EOK Success
+ * @retval		ENOEXEC Command failed
+ */
+static errno_t pfe_l2br_config_domain(const pfe_l2br_t *bridge, pfe_l2br_domain_t *domain)
+{
+	errno_t ret = EOK;
+
+	/*	Prepare VLAN table entry. At the beginning the bridge entry does not contain
+		any ports. */
+	domain->vlan_entry = pfe_l2br_table_entry_create(bridge->vlan_table);
+	if (NULL == domain->vlan_entry)
+	{
+		NXP_LOG_DEBUG("Can't create vlan table entry\n");
+		if (EOK != pfe_l2br_domain_destroy(domain))
+		{
+			NXP_LOG_ERROR("Unable to destroy bridge domain\n");
+		}
+		ret = ENOEXEC;
+	}
+	else
+	{
+		/*	Set VLAN */
+		ret = pfe_l2br_table_entry_set_vlan(domain->vlan_entry, domain->vlan);
+		if (EOK != ret)
+		{
+			NXP_LOG_DEBUG("Can't set vlan: %d\n", ret);
+			if (EOK != pfe_l2br_domain_destroy(domain))
+			{
+				NXP_LOG_ERROR("Unable to destroy bridge domain\n");
+			}
+		}
+		else
+		{
+			domain->u.action_data.item.forward_list = 0U;
+			domain->u.action_data.item.untag_list = 0U;
+			domain->u.action_data.item.ucast_hit_action = (uint64_t)L2BR_ACT_DISCARD;
+			domain->u.action_data.item.ucast_miss_action = (uint64_t)L2BR_ACT_DISCARD;
+			domain->u.action_data.item.mcast_hit_action = (uint64_t)L2BR_ACT_DISCARD;
+			domain->u.action_data.item.mcast_miss_action = (uint64_t)L2BR_ACT_DISCARD;
+			domain->u.action_data.item.stats_index = pfe_l2br_domain_get_free_stats_index(bridge);
+
+			if (domain->u.action_data.item.stats_index == 0U)
+			{
+				NXP_LOG_ERROR("No more space for vlan statistics.The stats will be added to vlan 0 fallback\n");
+			}
+
+			domain->stats_index = (uint8_t)domain->u.action_data.item.stats_index;
+
+			/*	Set action data */
+			ret = pfe_l2br_table_entry_set_action_data(domain->vlan_entry, domain->u.action_data_u64val);
+			if (EOK != ret)
+			{
+				NXP_LOG_DEBUG("Can't set action data: %d\n", ret);
+				if (EOK != pfe_l2br_domain_destroy(domain))
+				{
+					NXP_LOG_ERROR("Unable to destroy bridge domain\n");
+				}
+			}
+			else
+			{
+				/*	Add new VLAN table entry */
+				ret = pfe_l2br_table_add_entry(domain->bridge->vlan_table, domain->vlan_entry);
+				if (EOK != ret)
+				{
+					NXP_LOG_DEBUG("Could not add VLAN table entry: %d\n", ret);
+					if (EOK != pfe_l2br_domain_destroy(domain))
+					{
+						NXP_LOG_ERROR("Unable to destroy bridge domain\n");
+					}
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Check duplicate for configed bridge domain
+ * @param[in]	bridge The L2 bridge instance
+ * @param[in]	domain the bridge domain
+ * @param[in]	vlan VLAN ID to identify the bridge domain
+ * @retval		EOK Success
+ * @retval		EPERM Operation not permitted (domain already created)
+ */
+static errno_t pfe_l2br_check_duplicate_configed_domain(pfe_l2br_t *bridge, pfe_l2br_domain_t *domain, uint16_t vlan)
+{
+	errno_t ret = EOK;
+
+	/*	Check if the domain is not duplicate */
+	if (NULL != pfe_l2br_get_first_domain(bridge, L2BD_CRIT_BY_VLAN, (void *)(addr_t)vlan))
+	{
+		NXP_LOG_ERROR("Domain with vlan %d does already exist\n", domain->vlan);
+		if (EOK != pfe_l2br_domain_destroy(domain))
+		{
+			NXP_LOG_ERROR("Unable to destroy bridge domain\n");
+		}
+		ret = EPERM;
+	}
+	else
+	{
+		ret = pfe_l2br_config_domain(bridge, domain);
+
+		if(EOK == ret)
+		{
+			/*	Remember the domain instance in global list */
+			if (EOK != oal_mutex_lock(bridge->mutex))
+			{
+				NXP_LOG_DEBUG("Mutex lock failed\n");
+			}
+
+			LLIST_AddAtEnd(&domain->list_entry, &bridge->domains);
+
+			if (EOK != oal_mutex_unlock(bridge->mutex))
+			{
+				NXP_LOG_DEBUG("Mutex unlock failed\n");
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
  * @brief		Create L2 bridge domain instance
  * @details		By default, new domain is configured to drop all matching packets. Use the
  *				pfe_l2br_domain_set_[ucast/mcast]_action() to finish the configuration. The
@@ -450,7 +588,7 @@ static errno_t pfe_l2br_destroy_vlan_stats_table(pfe_class_t *class, uint32_t ta
 errno_t pfe_l2br_domain_create(pfe_l2br_t *bridge, uint16_t vlan)
 {
 	pfe_l2br_domain_t *domain;
-	errno_t            ret;
+	errno_t            ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
@@ -504,107 +642,61 @@ errno_t pfe_l2br_domain_create(pfe_l2br_t *bridge, uint16_t vlan)
 				}
 				else
 				{
-					/*	Check if the domain is not duplicate */
-					if (NULL != pfe_l2br_get_first_domain(bridge, L2BD_CRIT_BY_VLAN, (void *)(addr_t)vlan))
-					{
-						NXP_LOG_ERROR("Domain with vlan %d does already exist\n", domain->vlan);
-						ret = EPERM;
-						if (EOK != pfe_l2br_domain_destroy(domain))
-						{
-							NXP_LOG_ERROR("Unable to destroy bridge domain\n");
-						}
-					}
-					else
-					{
-						/*	Prepare VLAN table entry. At the beginning the bridge entry does not contain
-				any ports. */
-						domain->vlan_entry = pfe_l2br_table_entry_create(bridge->vlan_table);
-						if (NULL == domain->vlan_entry)
-						{
-							NXP_LOG_DEBUG("Can't create vlan table entry\n");
-							ret = ENOEXEC;
-							if (EOK != pfe_l2br_domain_destroy(domain))
-							{
-								NXP_LOG_ERROR("Unable to destroy bridge domain\n");
-							}
-						}
-						else
-						{
-
-							/*	Set VLAN */
-							ret = pfe_l2br_table_entry_set_vlan(domain->vlan_entry, domain->vlan);
-							if (EOK != ret)
-							{
-								NXP_LOG_DEBUG("Can't set vlan: %d\n", ret);
-								if (EOK != pfe_l2br_domain_destroy(domain))
-								{
-									NXP_LOG_ERROR("Unable to destroy bridge domain\n");
-								}
-							}
-							else
-							{
-
-								domain->u.action_data.item.forward_list = 0U;
-								domain->u.action_data.item.untag_list = 0U;
-								domain->u.action_data.item.ucast_hit_action = (uint64_t)L2BR_ACT_DISCARD;
-								domain->u.action_data.item.ucast_miss_action = (uint64_t)L2BR_ACT_DISCARD;
-								domain->u.action_data.item.mcast_hit_action = (uint64_t)L2BR_ACT_DISCARD;
-								domain->u.action_data.item.mcast_miss_action = (uint64_t)L2BR_ACT_DISCARD;
-								domain->u.action_data.item.stats_index = pfe_l2br_domain_get_free_stats_index(bridge);
-
-								if (domain->u.action_data.item.stats_index == 0U)
-								{
-									NXP_LOG_ERROR("No more space for vlan statistics.The stats will be added to vlan 0 fallback\n");
-								}
-
-								domain->stats_index = (uint8_t)domain->u.action_data.item.stats_index;
-
-								/*	Set action data */
-								ret = pfe_l2br_table_entry_set_action_data(domain->vlan_entry, domain->u.action_data_u64val);
-								if (EOK != ret)
-								{
-									NXP_LOG_DEBUG("Can't set action data: %d\n", ret);
-									if (EOK != pfe_l2br_domain_destroy(domain))
-									{
-										NXP_LOG_ERROR("Unable to destroy bridge domain\n");
-									}
-								}
-								else
-								{
-
-									/*	Add new VLAN table entry */
-									ret = pfe_l2br_table_add_entry(domain->bridge->vlan_table, domain->vlan_entry);
-									if (EOK != ret)
-									{
-										NXP_LOG_DEBUG("Could not add VLAN table entry: %d\n", ret);
-										if (EOK != pfe_l2br_domain_destroy(domain))
-										{
-											NXP_LOG_ERROR("Unable to destroy bridge domain\n");
-										}
-									}
-									else
-									{
-
-										/*	Remember the domain instance in global list */
-										if (EOK != oal_mutex_lock(bridge->mutex))
-										{
-											NXP_LOG_DEBUG("Mutex lock failed\n");
-										}
-
-										LLIST_AddAtEnd(&domain->list_entry, &bridge->domains);
-
-										if (EOK != oal_mutex_unlock(bridge->mutex))
-										{
-											NXP_LOG_DEBUG("Mutex unlock failed\n");
-										}
-									}
-								}
-							}
-						}
-					}
+					ret = pfe_l2br_check_duplicate_configed_domain(bridge, domain, vlan);
 				}
 			}
 		}
+	}
+
+	return ret;
+}
+
+static errno_t pfe_l2br_domain_destroy_instance(pfe_l2br_domain_t *domain)
+{
+	errno_t ret = EOK;
+
+	if (TRUE == domain->is_fallback)
+	{
+		/*	Disable the fall-back domain traffic */
+		ret = pfe_l2br_domain_set_ucast_action(domain, L2BR_ACT_DISCARD, L2BR_ACT_DISCARD);
+		if (EOK == ret)
+		{
+			ret = pfe_l2br_domain_set_mcast_action(domain, L2BR_ACT_DISCARD, L2BR_ACT_DISCARD);
+		}
+	}
+
+	/*	Remove the domain instance from global list if it has been added there */
+	if (EOK != oal_mutex_lock(domain->bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	/*	If instance has not been added to the list of domains yet (mainly due to
+		pfe_l2br_domain_create() failure, just skip this step */
+	if ((NULL != domain->list_entry.prPrev) && (NULL != domain->list_entry.prNext))
+	{
+		if (&domain->list_entry == domain->bridge->curr_domain)
+		{
+			/*	Remember the change so we can call destroy() between get_first()
+				and get_next() calls. */
+			domain->bridge->curr_domain = domain->bridge->curr_domain->prNext;
+		}
+
+		LLIST_Remove(&domain->list_entry);
+	}
+
+	pfe_l2br_domain_free_stats_index(domain->stats_index);
+
+	if (EOK != oal_mutex_unlock(domain->bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+	if (NULL != domain->mutex)
+	{
+		(void)oal_mutex_destroy(domain->mutex);
+		oal_mm_free(domain->mutex);
+		domain->mutex = NULL;
 	}
 	return ret;
 }
@@ -629,9 +721,8 @@ errno_t pfe_l2br_domain_destroy(pfe_l2br_domain_t *domain)
 		ret = EINVAL;
 	}
 	else
-	{
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
+	{
 		/*	Remove all associated interfaces */
 		if (FALSE == LLIST_IsEmpty(&domain->ifaces))
 		{
@@ -663,55 +754,10 @@ errno_t pfe_l2br_domain_destroy(pfe_l2br_domain_t *domain)
 
 		if (EOK == ret)
 		{
-			if (TRUE == domain->is_fallback)
-			{
-				/*	Disable the fall-back domain traffic */
-				ret = pfe_l2br_domain_set_ucast_action(domain, L2BR_ACT_DISCARD, L2BR_ACT_DISCARD);
-				if (EOK == ret)
-				{
-					ret = pfe_l2br_domain_set_mcast_action(domain, L2BR_ACT_DISCARD, L2BR_ACT_DISCARD);
-				}
-			}
-
-			/*	Remove the domain instance from global list if it has been added there */
-			if (EOK != oal_mutex_lock(domain->bridge->mutex))
-			{
-				NXP_LOG_DEBUG("Mutex lock failed\n");
-			}
-
-			/*	If instance has not been added to the list of domains yet (mainly due to
-            pfe_l2br_domain_create() failure, just skip this step */
-			if ((NULL != domain->list_entry.prPrev) && (NULL != domain->list_entry.prNext))
-			{
-				if (&domain->list_entry == domain->bridge->curr_domain)
-				{
-					/*	Remember the change so we can call destroy() between get_first()
-                    and get_next() calls. */
-					domain->bridge->curr_domain = domain->bridge->curr_domain->prNext;
-				}
-
-				LLIST_Remove(&domain->list_entry);
-			}
-
-			pfe_l2br_domain_free_stats_index(domain->stats_index);
-
-			if (EOK != oal_mutex_unlock(domain->bridge->mutex))
-			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
-			}
-
-			if (NULL != domain->mutex)
-			{
-				(void)oal_mutex_destroy(domain->mutex);
-				oal_mm_free(domain->mutex);
-				domain->mutex = NULL;
-			}
-
+			ret = pfe_l2br_domain_destroy_instance(domain);
 			oal_mm_free(domain);
 		}
-#if defined(PFE_CFG_NULL_ARG_CHECK)
 	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return ret;
 }
@@ -1163,6 +1209,84 @@ errno_t pfe_l2br_domain_del_if(pfe_l2br_domain_t *domain, const pfe_phy_if_t *if
 	return ret;
 }
 
+static errno_t pfe_l2br_domain_flush_by_if_static(const pfe_l2br_domain_t *domain, const pfe_l2br_t *bridge, uint32_t iface_bitflag)
+{
+	errno_t ret = EOK;
+	LLIST_t *item, *dummy = NULL;
+	pfe_l2br_static_entry_t *sentry = NULL;
+
+	/*	Flush interface-related static entries */
+	if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
+	{
+		LLIST_ForEachRemovable(item, dummy, &bridge->static_entries)
+		{
+			/*	Get static entry */
+			sentry = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
+			if (sentry == NULL)
+			{
+				NXP_LOG_ERROR("NULL static entry detected!\n");
+			}
+			else
+			{
+				/*	Check static entry */
+				if ((sentry->vlan == domain->vlan) && (0U != (sentry->u.action_data.item.forward_list & iface_bitflag)))
+				{
+					/*	Remove static entry. LLIST_Remove() is inside... */
+					ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
+					if (EOK != ret)
+					{
+						NXP_LOG_ERROR("Unable to remove static entry: %d\n", ret);
+					}
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+static errno_t pfe_l2br_domain_flush_by_if_dynamic_static(const pfe_l2br_domain_t *domain, const pfe_l2br_t *bridge, pfe_l2br_table_iterator_t *l2t_iter, pfe_l2br_table_entry_t *entry, uint32_t iface_bitflag)
+{
+	errno_t ret = EOK;
+    errno_t ret_query = EOK;
+	uint16_t entry_vlan = 0U;
+	pfe_ct_mac_table_result_t entry_action_data = {.val = 0U};
+
+	ret = pfe_l2br_domain_flush_by_if_static(domain, bridge, iface_bitflag);
+	if (EOK == ret)
+	{
+		/*	Flush interface-related dynamic entries */
+		ret_query = pfe_l2br_table_get_first(bridge->mac_table, l2t_iter, L2BR_TABLE_CRIT_VALID, entry);
+		while (EOK == ret_query)
+		{
+			entry_vlan = (uint16_t)pfe_l2br_table_entry_get_vlan(entry);
+			entry_action_data.val = (uint32_t)pfe_l2br_table_entry_get_action_data(entry);
+
+			/*	Check entry */
+			if ((entry_vlan == domain->vlan) && (0U != (entry_action_data.item.forward_list & iface_bitflag)))
+			{
+				/*	Remove entry */
+				ret = pfe_l2br_table_del_entry(bridge->mac_table, entry);
+				if (EOK != ret)
+				{
+					NXP_LOG_ERROR("Could not delete MAC table entry: %d\n", ret);
+				}
+			}
+
+			/* Get the next entry */
+			ret_query = pfe_l2br_table_get_next(bridge->mac_table, l2t_iter, entry);
+		}
+
+		if (EOK != oal_mutex_unlock(bridge->mutex))
+		{
+			NXP_LOG_ERROR("Mutex unlock failed\n");
+		}
+
+	}
+
+	return ret;
+}
+
 /**
  * @brief		Flush all MAC table entries of given bridge domain which are related to target interface.
  * @param[in]	domain The L2 bridge domain instance
@@ -1172,15 +1296,10 @@ errno_t pfe_l2br_domain_del_if(pfe_l2br_domain_t *domain, const pfe_phy_if_t *if
 errno_t pfe_l2br_domain_flush_by_if(const pfe_l2br_domain_t *domain, const pfe_phy_if_t *iface)
 {
 	errno_t                    ret = EOK;
-	errno_t                    ret_query = EOK;
 	pfe_l2br_table_entry_t *   entry = NULL;
-	pfe_l2br_static_entry_t *  sentry = NULL;
 	pfe_l2br_table_iterator_t *l2t_iter = NULL;
-	LLIST_t *                  item, *dummy = NULL;
 	uint32_t                   iface_bitflag = 0U;
 	const pfe_l2br_t *         bridge = NULL;
-	uint16_t                   entry_vlan = 0U;
-	pfe_ct_mac_table_result_t  entry_action_data = { .val = 0U };
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == domain) || (NULL == domain->bridge) || (NULL == iface)))
@@ -1205,63 +1324,7 @@ errno_t pfe_l2br_domain_flush_by_if(const pfe_l2br_domain_t *domain, const pfe_p
 			entry = pfe_l2br_table_entry_create(bridge->mac_table);
 			l2t_iter = pfe_l2br_iterator_create();
 
-			/*	Flush interface-related static entries */
-			if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
-			{
-				LLIST_ForEachRemovable(item, dummy, &bridge->static_entries)
-				{
-					/*	Get static entry */
-					sentry = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
-					if (sentry == NULL)
-					{
-						NXP_LOG_ERROR("NULL static entry detected!\n");
-					}
-					else
-					{
-						/*	Check static entry */
-						if ((sentry->vlan == domain->vlan) && (0U != (sentry->u.action_data.item.forward_list & iface_bitflag)))
-						{
-							/*	Remove static entry. LLIST_Remove() is inside... */
-							ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
-							if (EOK != ret)
-							{
-								NXP_LOG_ERROR("Unable to remove static entry: %d\n", ret);
-							}
-						}
-					}
-				}
-			}
-
-			/*	Flush interface-related dynamic entries */
-			if (EOK == ret)
-			{
-				ret_query = pfe_l2br_table_get_first(bridge->mac_table, l2t_iter, L2BR_TABLE_CRIT_VALID, entry);
-				while (EOK == ret_query)
-				{
-					entry_vlan = (uint16_t)pfe_l2br_table_entry_get_vlan(entry);
-					entry_action_data.val = (uint32_t)pfe_l2br_table_entry_get_action_data(entry);
-
-					/*	Check entry */
-					if ((entry_vlan == domain->vlan) && (0U != (entry_action_data.item.forward_list & iface_bitflag)))
-					{
-						/*	Remove entry */
-						ret = pfe_l2br_table_del_entry(bridge->mac_table, entry);
-						if (EOK != ret)
-						{
-							NXP_LOG_ERROR("Could not delete MAC table entry: %d\n", ret);
-						}
-					}
-
-					/* Get the next entry */
-					ret_query = pfe_l2br_table_get_next(bridge->mac_table, l2t_iter, entry);
-				}
-			}
-
-			if (EOK != oal_mutex_unlock(bridge->mutex))
-			{
-				NXP_LOG_ERROR("Mutex unlock failed\n");
-			}
-
+			ret = pfe_l2br_domain_flush_by_if_dynamic_static(domain, bridge, l2t_iter, entry, iface_bitflag);
 			/*	Release entry storage */
 			(void)pfe_l2br_table_entry_destroy(entry);
 
@@ -1584,6 +1647,142 @@ __attribute__((pure)) bool_t pfe_l2br_domain_is_fallback(const pfe_l2br_domain_t
 }
 
 /**
+ * @brief		Add L2 bridge static entry
+ * @param[in]	vlan VLAN ID to identify the bridge domain
+ * @param[in]	mac Static entry MAC address
+ * @param[in]	new_fw_list forward list of static entry
+ * @param[in]	static_entry pointer store config static entry
+ * @retval		EOK Success
+ * @retval		EPERM Operation not permitted (static entry already created)
+ */
+static errno_t pfe_l2br_set_static_entry(const pfe_l2br_t *bridge, uint16_t vlan, const pfe_mac_addr_t mac, uint32_t new_fw_list, pfe_l2br_static_entry_t **static_entry)
+{
+	errno_t ret;
+
+	(*static_entry)->entry = pfe_l2br_table_entry_create(bridge->mac_table);
+
+	if (NULL == (*static_entry)->entry)
+	{
+		NXP_LOG_ERROR("malloc() failed\n");
+		oal_mm_free(*static_entry);
+		ret = ENOMEM;
+	}
+	else
+	{
+		/* Configure action data */
+		(*static_entry)->u.action_data.val = 0;
+		(*static_entry)->u.action_data.item.static_flag = 1;
+		(*static_entry)->u.action_data.item.fresh_flag = 0U;
+		(*static_entry)->u.action_data.item.local_l3 = 0U;
+		(*static_entry)->u.action_data.item.forward_list = new_fw_list;
+
+		if (EOK != pfe_l2br_table_entry_set_vlan((*static_entry)->entry, vlan))
+		{
+			NXP_LOG_ERROR("Couldn't set vlan\n");
+			oal_mm_free(*static_entry);
+			ret = EINVAL;
+		}
+		else if (EOK != pfe_l2br_table_entry_set_mac_addr((*static_entry)->entry, mac))
+		{
+			NXP_LOG_ERROR("Couldn't set mac address\n");
+			oal_mm_free(*static_entry);
+			ret = EINVAL;
+		}
+		else if (EOK != pfe_l2br_table_entry_set_action_data((*static_entry)->entry, (*static_entry)->u.action_data_u64val))
+		{
+			NXP_LOG_ERROR("Couldn't set action data\n");
+			oal_mm_free(*static_entry);
+			ret = EINVAL;
+		}
+		else if (EOK != pfe_l2br_table_add_entry(bridge->mac_table, (*static_entry)->entry))
+		{
+			NXP_LOG_ERROR("Couldn't set action data\n");
+			oal_mm_free(*static_entry);
+			ret	 = EINVAL;
+		}
+		else
+		{
+			ret = EOK;
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Add L2 bridge static entry
+ * @param[in]	vlan VLAN ID to identify the bridge domain
+ * @param[in]	mac Static entry MAC address
+ * @param[in]	new_fw_list forward list of static entry
+ * @param[in]	static_entry store static entry
+ * @retval		EOK Success
+ * @retval		EPERM Operation not permitted (static entry already created)
+ */
+static errno_t pfe_l2br_static_add_entry(pfe_l2br_t *bridge, uint16_t vlan, const pfe_mac_addr_t mac, uint32_t new_fw_list, pfe_l2br_static_entry_t *static_entry)
+{
+	bool_t match = FALSE;
+	LLIST_t *item;
+	errno_t ret = EOK;
+	pfe_l2br_static_entry_t *static_ent_tmp;
+
+	if (EOK != oal_mutex_lock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex lock failed\n");
+	}
+
+	if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
+	{
+		/*	Get first matching entry */
+		LLIST_ForEach(item, &bridge->static_entries)
+		{
+			/*	Get data */
+			static_ent_tmp = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
+
+			/*	Remember current item to know where to start later */
+			bridge->curr_static_ent = item->prNext;
+			if ((static_ent_tmp->vlan == vlan) && (0 == memcmp(static_ent_tmp->mac, mac, sizeof(pfe_mac_addr_t))))
+			{
+				match = TRUE;
+				break;
+			}
+		}
+	}
+
+	if (EOK != oal_mutex_unlock(bridge->mutex))
+	{
+		NXP_LOG_DEBUG("Mutex unlock failed\n");
+	}
+
+	if (TRUE == match)
+	{
+		NXP_LOG_ERROR("Duplicit entry\n");
+		/* Entry is duplicit */
+		oal_mm_free(static_entry);
+		ret = EPERM;
+	}
+	else
+	{
+		ret = pfe_l2br_set_static_entry(bridge, vlan, mac, new_fw_list, &static_entry);
+		if(EOK == ret)
+		{
+			if (EOK != oal_mutex_lock(bridge->mutex))
+			{
+				NXP_LOG_DEBUG("Mutex lock failed\n");
+			}
+
+			LLIST_AddAtEnd(&static_entry->list_entry, &bridge->static_entries);
+
+			if (EOK != oal_mutex_unlock(bridge->mutex))
+			{
+				NXP_LOG_DEBUG("Mutex unlock failed\n");
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
  * @brief		Create L2 bridge static entry
  * @param[in]	vlan VLAN ID to identify the bridge domain
  * @param[in]	mac Static entry MAC address
@@ -1594,11 +1793,9 @@ __attribute__((pure)) bool_t pfe_l2br_domain_is_fallback(const pfe_l2br_domain_t
  * @retval		ETIMEDOUT Timed out
  * @retval		EPERM Operation not permitted (static entry already created)
  */
-errno_t pfe_l2br_static_entry_create(pfe_l2br_t *bridge, uint16_t vlan, pfe_mac_addr_t mac, uint32_t new_fw_list)
+errno_t pfe_l2br_static_entry_create(pfe_l2br_t *bridge, uint16_t vlan, const pfe_mac_addr_t mac, uint32_t new_fw_list)
 {
-	pfe_l2br_static_entry_t *static_entry, *static_ent_tmp;
-	bool_t                   match = FALSE;
-	LLIST_t *                item;
+	pfe_l2br_static_entry_t *static_entry;
 	errno_t                  ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1623,117 +1820,10 @@ errno_t pfe_l2br_static_entry_create(pfe_l2br_t *bridge, uint16_t vlan, pfe_mac_
 			static_entry->vlan = vlan;
 			(void)memcpy(static_entry->mac, mac, sizeof(pfe_mac_addr_t));
 
-			if (EOK != oal_mutex_lock(bridge->mutex))
+			ret = pfe_l2br_static_add_entry(bridge, vlan, mac, new_fw_list, static_entry);
+			if (EOK != ret)
 			{
-				NXP_LOG_DEBUG("Mutex lock failed\n");
-			}
-
-			if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
-			{
-				/*	Get first matching entry */
-				LLIST_ForEach(item, &bridge->static_entries)
-				{
-					/*	Get data */
-					static_ent_tmp = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
-
-					/*	Remember current item to know where to start later */
-					bridge->curr_static_ent = item->prNext;
-					if ((static_ent_tmp->vlan == vlan) && (0 == memcmp(static_ent_tmp->mac, mac, sizeof(pfe_mac_addr_t))))
-					{
-						match = TRUE;
-						break;
-					}
-				}
-			}
-
-			if (EOK != oal_mutex_unlock(bridge->mutex))
-			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
-			}
-
-			if (TRUE == match)
-			{
-				NXP_LOG_ERROR("Duplicit entry\n");
-				/* Entry is duplicit */
-				oal_mm_free(static_entry);
-				ret = EPERM;
-			}
-			else
-			{
-				static_entry->entry = pfe_l2br_table_entry_create(bridge->mac_table);
-
-				if (NULL == static_entry->entry)
-				{
-					NXP_LOG_ERROR("malloc() failed\n");
-					oal_mm_free(static_entry);
-					static_entry = NULL;
-					ret = ENOMEM;
-				}
-				else
-				{
-					/* Configure action data */
-					static_entry->u.action_data.val = 0;
-					static_entry->u.action_data.item.static_flag = 1;
-					static_entry->u.action_data.item.fresh_flag = 0U;
-					static_entry->u.action_data.item.local_l3 = 0U;
-					static_entry->u.action_data.item.forward_list = new_fw_list;
-
-					if (EOK != pfe_l2br_table_entry_set_vlan(static_entry->entry, vlan))
-					{
-						NXP_LOG_ERROR("Couldn't set vlan\n");
-						oal_mm_free(static_entry);
-						static_entry = NULL;
-						ret = EINVAL;
-					}
-					else
-					{
-						if (EOK != pfe_l2br_table_entry_set_mac_addr(static_entry->entry, mac))
-						{
-							NXP_LOG_ERROR("Couldn't set mac address\n");
-							oal_mm_free(static_entry);
-							static_entry = NULL;
-							ret = EINVAL;
-						}
-						else
-						{
-
-							if (EOK != pfe_l2br_table_entry_set_action_data(static_entry->entry, static_entry->u.action_data_u64val))
-							{
-								NXP_LOG_ERROR("Couldn't set action data\n");
-								oal_mm_free(static_entry);
-								static_entry = NULL;
-								ret = EINVAL;
-							}
-							else
-							{
-
-								if (EOK != pfe_l2br_table_add_entry(bridge->mac_table, static_entry->entry))
-								{
-									NXP_LOG_ERROR("Couldn't set action data\n");
-									oal_mm_free(static_entry);
-									static_entry = NULL;
-									ret = EINVAL;
-								}
-								else
-								{
-
-									if (EOK != oal_mutex_lock(bridge->mutex))
-									{
-										NXP_LOG_DEBUG("Mutex lock failed\n");
-									}
-
-									LLIST_AddAtEnd(&static_entry->list_entry, &bridge->static_entries);
-
-									if (EOK != oal_mutex_unlock(bridge->mutex))
-									{
-										NXP_LOG_DEBUG("Mutex unlock failed\n");
-									}
-									ret = EOK;
-								}
-							}
-						}
-					}
-				}
+				static_entry = NULL;
 			}
 		}
 	}
@@ -1965,8 +2055,8 @@ errno_t pfe_l2br_static_entry_set_dst_discard_flag(const pfe_l2br_t *bridge, pfe
 		ret = EINVAL;
 	}
     else
-    {
 #endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
         /* Make changes */
         tmp = static_ent->u.action_data.item.dst_discard;
         static_ent->u.action_data.item.dst_discard = ((FALSE != dst_discard)? 1U : 0U);
@@ -1988,9 +2078,7 @@ errno_t pfe_l2br_static_entry_set_dst_discard_flag(const pfe_l2br_t *bridge, pfe
                 ret = ENOENT;
             }
         }
-#if defined(PFE_CFG_NULL_ARG_CHECK)
     }
-#endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return ret;
 }
@@ -2331,6 +2419,119 @@ static bool_t pfe_l2br_static_entry_match_criterion(const pfe_l2br_t *bridge, pf
 }
 
 /*
+ * @brief		Flush static MAC table entries
+ * @param[in]	bridge The bridge instance
+ * @return		EOK if success, error code otherwise
+ */
+static errno_t pfe_l2br_flush_static_mac_table(pfe_l2br_t *bridge)
+{
+	errno_t ret = EOK;
+	LLIST_t *item;
+	LLIST_t *aux;
+	pfe_l2br_static_entry_t *sentry;
+
+	/*	Remove all static entries from local DB */
+	if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
+	{
+		/*	Get first matching entry */
+		LLIST_ForEachRemovable(item, aux, &bridge->static_entries)
+		{
+			/*	Get data */
+			sentry = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
+
+			/*	Destroy entry. LLIST_Remove() is inside... */
+			ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
+			if (EOK != ret)
+			{
+				NXP_LOG_DEBUG("Unable to remove static entry: %d\n", ret);
+			}
+		}
+	}
+
+	return ret;
+}
+
+/*
+ * @brief		Flush all MAC table entries
+ * @param[in]	bridge The bridge instance
+ * @return		EOK if success, error code otherwise
+ */
+static errno_t pfe_l2br_flush_all_mac_table(const pfe_l2br_t *bridge)
+{
+	errno_t ret = EOK;
+	LLIST_t *item;
+	LLIST_t *aux;
+	pfe_l2br_static_entry_t *sentry;
+
+	/*	Remove all static entries from local DB. This must be done before
+	the pfe_l2br_table_flush() because otherwise would report "entry
+	not found" messages. */
+	if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
+	{
+		/*	Get first matching entry */
+		LLIST_ForEachRemovable(item, aux, &bridge->static_entries)
+		{
+			/*	Get data */
+			sentry = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
+
+			/*	Destroy entry. LLIST_Remove() is inside... */
+			ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
+			if (EOK != ret)
+			{
+				NXP_LOG_DEBUG("Unable to remove static entry: %d\n", ret);
+			}
+		}
+	}
+
+	/*	Flush MAC table */
+#if 0 /* AAVB-3136: THIS DOES NOT WORK. PFE GETS STUCK. */
+	ret = pfe_l2br_table_flush(bridge->mac_table);
+#else
+	ret = pfe_l2br_table_init(bridge->mac_table);
+#endif /* AAVB-3136 */
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("MAC table flush failed: %d\n", ret);
+	}
+	else
+	{
+		NXP_LOG_INFO("MAC table flushed\n");
+	}
+	return ret;
+}
+
+/*
+ * @brief		Flush learned MAC table entries
+ * @param[in]	bridge The bridge instance
+ * @param[in]	entry Entry will be written at this location
+ * @return		EOK if success, error code otherwise
+ */
+static errno_t pfe_l2br_flush_learned_mac_table(const pfe_l2br_t *bridge, pfe_l2br_table_entry_t *entry, pfe_l2br_table_iterator_t *l2t_iter)
+{
+	errno_t ret = EOK;
+	errno_t query_ret;
+
+	/*	Go through all entries */
+	query_ret = pfe_l2br_table_get_first(bridge->mac_table, l2t_iter, L2BR_TABLE_CRIT_VALID, entry);
+	while (EOK == query_ret)
+	{
+		if (FALSE == pfe_l2br_table_entry_is_static(entry))
+		{
+			/*	Remove non-static entry from table */
+			ret = pfe_l2br_table_del_entry(bridge->mac_table, entry);
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Could not delete MAC table entry: %d\n", ret);
+			}
+		}
+
+		query_ret = pfe_l2br_table_get_next(bridge->mac_table, l2t_iter, entry);
+	}
+
+	return ret;
+}
+
+/*
  * @brief		Flush MAC table entries
  * @param[in]	bridge The bridge instance
  * @param[in]	type Type of the flush
@@ -2338,11 +2539,9 @@ static bool_t pfe_l2br_static_entry_match_criterion(const pfe_l2br_t *bridge, pf
  */
 static errno_t pfe_l2br_flush(pfe_l2br_t *bridge, pfe_l2br_flush_types type)
 {
-	errno_t                    ret = EOK, query_ret;
+	errno_t                    ret = EOK;
 	pfe_l2br_table_entry_t *   entry;
-	pfe_l2br_static_entry_t *  sentry;
 	pfe_l2br_table_iterator_t *l2t_iter;
-	LLIST_t *                  item, *aux;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
@@ -2368,24 +2567,7 @@ static errno_t pfe_l2br_flush(pfe_l2br_t *bridge, pfe_l2br_flush_types type)
 		{
 			case PFE_L2BR_FLUSH_STATIC_MAC:
 			{
-				/*	Remove all static entries from local DB */
-				if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
-				{
-					/*	Get first matching entry */
-					LLIST_ForEachRemovable(item, aux, &bridge->static_entries)
-					{
-						/*	Get data */
-						sentry = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
-
-						/*	Destroy entry. LLIST_Remove() is inside... */
-						ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
-						if (EOK != ret)
-						{
-							NXP_LOG_DEBUG("Unable to remove static entry: %d\n", ret);
-						}
-					}
-				}
-
+				ret = pfe_l2br_flush_static_mac_table(bridge);
 				break;
 			}
 
@@ -2394,61 +2576,13 @@ static errno_t pfe_l2br_flush(pfe_l2br_t *bridge, pfe_l2br_flush_types type)
 				/*	Remove all static entries from local DB. This must be done before
 				the pfe_l2br_table_flush() because otherwise would report "entry
 				not found" messages. */
-				if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
-				{
-					/*	Get first matching entry */
-					LLIST_ForEachRemovable(item, aux, &bridge->static_entries)
-					{
-						/*	Get data */
-						sentry = LLIST_Data(item, pfe_l2br_static_entry_t, list_entry);
-
-						/*	Destroy entry. LLIST_Remove() is inside... */
-						ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
-						if (EOK != ret)
-						{
-							NXP_LOG_DEBUG("Unable to remove static entry: %d\n", ret);
-						}
-					}
-				}
-
-				/*	Flush MAC table */
-
-#if 0 /* AAVB-3136: THIS DOES NOT WORK. PFE GETS STUCK. */
-			ret = pfe_l2br_table_flush(bridge->mac_table);
-#else
-				ret = pfe_l2br_table_init(bridge->mac_table);
-#endif /* AAVB-3136 */
-				if (EOK != ret)
-				{
-					NXP_LOG_ERROR("MAC table flush failed: %d\n", ret);
-				}
-				else
-				{
-					NXP_LOG_INFO("MAC table flushed\n");
-				}
-
+				ret = pfe_l2br_flush_all_mac_table(bridge);
 				break;
 			}
 
 			case PFE_L2BR_FLUSH_LEARNED_MAC:
 			{
-				/*	Go through all entries */
-				query_ret = pfe_l2br_table_get_first(bridge->mac_table, l2t_iter, L2BR_TABLE_CRIT_VALID, entry);
-				while (EOK == query_ret)
-				{
-					if (FALSE == pfe_l2br_table_entry_is_static(entry))
-					{
-						/*	Remove non-static entry from table */
-						ret = pfe_l2br_table_del_entry(bridge->mac_table, entry);
-						if (EOK != ret)
-						{
-							NXP_LOG_ERROR("Could not delete MAC table entry: %d\n", ret);
-						}
-					}
-
-					query_ret = pfe_l2br_table_get_next(bridge->mac_table, l2t_iter, entry);
-				}
-
+				ret = pfe_l2br_flush_learned_mac_table(bridge, entry, l2t_iter);
 				break;
 			}
 
@@ -2540,6 +2674,64 @@ errno_t pfe_l2br_flush_all(pfe_l2br_t *bridge)
 	return ret;
 }
 /**
+ * @brief		Create L2 bridge domain instance
+ * @param[in]	class The classifier instance
+ * @param[in]	bridge The bridge instance
+ * @param[in]	def_vlan Default VLAN
+ * @param[in]	def_aging_time Default aging timeout in seconds.
+ * @return		The instance or NULL if failed
+ */
+static void pfe_l2br_create_domain(const pfe_class_t *class, pfe_l2br_t **bridge, uint16_t def_vlan, uint16_t def_aging_time)
+{
+	/*	Create default domain */
+	(*bridge)->default_domain = pfe_l2br_create_default_domain(*bridge, def_vlan);
+	if (NULL == (*bridge)->default_domain)
+	{
+		NXP_LOG_DEBUG("Could not create default domain\n");
+		(void)pfe_l2br_destroy(*bridge);
+		*bridge = NULL;
+	}
+	else
+	{
+		/*	Create fallback domain */
+		(*bridge)->fallback_domain = pfe_l2br_create_fallback_domain(*bridge);
+		if (NULL == (*bridge)->fallback_domain)
+		{
+			NXP_LOG_DEBUG("Could not create fallback domain\n");
+			(void)pfe_l2br_destroy(*bridge);
+			*bridge = NULL;
+		}
+		else
+		{
+			/*	Configure classifier */
+			(void)pfe_class_set_default_vlan(class, def_vlan);
+
+			if (EOK != pfe_l2br_set_mac_aging_timeout((*bridge)->class, def_aging_time))
+			{
+				NXP_LOG_DEBUG("Could not set mac aging timeout\n");
+				(void)pfe_l2br_destroy(*bridge);
+				*bridge = NULL;
+			}
+
+			/*	If the FW aging is off, turn it on */
+			else if (FALSE == pfe_feature_mgr_is_available("l2_bridge_aging"))
+			{
+				if (EOK != pfe_feature_mgr_enable("l2_bridge_aging"))
+				{
+					NXP_LOG_ERROR("Could not enable L2 bridge aging in FW\n");
+					(void)pfe_l2br_destroy(*bridge);
+					*bridge = NULL;
+				}
+			}
+			else
+			{
+				/* Required by MISRA */
+			}
+		}
+	}
+}
+
+/**
  * @brief		Create L2 bridge instance
  * @param[in]	class The classifier instance
  * @param[in]	def_vlan Default VLAN
@@ -2584,71 +2776,24 @@ pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, uint16_t def_
 				(void)pfe_l2br_destroy(bridge);
 				bridge = NULL;
 			}
+			else if (EOK != oal_mutex_init(bridge->mutex))
+			{
+				NXP_LOG_ERROR("Could not initialize mutex\n");
+				oal_mm_free(bridge->mutex);
+				bridge->mutex = NULL;
+				(void)pfe_l2br_destroy(bridge);
+				bridge = NULL;
+			}
 			else
 			{
-				if (EOK != oal_mutex_init(bridge->mutex))
-				{
-					NXP_LOG_ERROR("Could not initialize mutex\n");
-					oal_mm_free(bridge->mutex);
-					bridge->mutex = NULL;
-					(void)pfe_l2br_destroy(bridge);
-					bridge = NULL;
-				}
-				else
-				{
 
-					bridge->domain_stats_table_size = vlan_stats_size;
+				bridge->domain_stats_table_size = vlan_stats_size;
 
-					(void)memset(&stats_index, 0, sizeof(stats_index));
+				(void)memset(&stats_index, 0, sizeof(stats_index));
 
-					bridge->domain_stats_table_addr = pfe_l2br_create_vlan_stats_table(class, vlan_stats_size);
+				bridge->domain_stats_table_addr = pfe_l2br_create_vlan_stats_table(class, vlan_stats_size);
 
-					/*	Create default domain */
-					bridge->default_domain = pfe_l2br_create_default_domain(bridge, def_vlan);
-					if (NULL == bridge->default_domain)
-					{
-						NXP_LOG_DEBUG("Could not create default domain\n");
-						(void)pfe_l2br_destroy(bridge);
-						bridge = NULL;
-					}
-					else
-					{
-						/*	Create fallback domain */
-						bridge->fallback_domain = pfe_l2br_create_fallback_domain(bridge);
-						if (NULL == bridge->fallback_domain)
-						{
-							NXP_LOG_DEBUG("Could not create fallback domain\n");
-							(void)pfe_l2br_destroy(bridge);
-							bridge = NULL;
-						}
-						else
-						{
-							/*	Configure classifier */
-							(void)pfe_class_set_default_vlan(class, def_vlan);
-
-							if (EOK != pfe_l2br_set_mac_aging_timeout(bridge->class, def_aging_time))
-							{
-								NXP_LOG_DEBUG("Could not set mac aging timeout\n");
-								(void)pfe_l2br_destroy(bridge);
-								bridge = NULL;
-							}
-							else
-							{
-
-								/*	If the FW aging is off, turn it on */
-								if (FALSE == pfe_feature_mgr_is_available("l2_bridge_aging"))
-								{
-									if (EOK != pfe_feature_mgr_enable("l2_bridge_aging"))
-									{
-										NXP_LOG_ERROR("Could not enable L2 bridge aging in FW\n");
-										(void)pfe_l2br_destroy(bridge);
-										bridge = NULL;
-									}
-								}
-							}
-						}
-					}
-				}
+				pfe_l2br_create_domain(class, &bridge, def_vlan, def_aging_time);
 			}
 		}
 	}
@@ -2670,25 +2815,25 @@ errno_t pfe_l2br_destroy(pfe_l2br_t *bridge)
 		if (NULL != bridge->default_domain)
 		{
 			if (EOK == pfe_l2br_domain_destroy(bridge->default_domain))
-            {
-                bridge->default_domain = NULL;
-            }
+			{
+				bridge->default_domain = NULL;
+			}
 			else
-            {
-                NXP_LOG_DEBUG("Could not destroy default domain\n");
-            }
+			{
+				NXP_LOG_DEBUG("Could not destroy default domain\n");
+			}
 		}
 
 		if (NULL != bridge->fallback_domain)
 		{
 			if (EOK == pfe_l2br_domain_destroy(bridge->fallback_domain))
-            {
-                bridge->fallback_domain = NULL;
-            }
+			{
+				bridge->fallback_domain = NULL;
+			}
 			else
-            {
-                NXP_LOG_DEBUG("Could not destroy fallback domain\n");
-            }
+			{
+				NXP_LOG_DEBUG("Could not destroy fallback domain\n");
+			}
 		}
 
 		if (FALSE == LLIST_IsEmpty(&bridge->domains))
@@ -2975,8 +3120,8 @@ static errno_t pfe_l2br_set_mac_aging_timeout(pfe_class_t *class, const uint16_t
 
 		/* Get the memory map */
 		/* All PEs share the same memory map therefore we can read
-	   arbitrary one (in this case 0U)
-	   Also mac aging algorithm will work only on core 0*/
+		arbitrary one (in this case 0U)
+		Also mac aging algorithm will work only on core 0*/
 		ret = pfe_class_get_mmap(class, 0, &mmap);
 		if (EOK == ret)
 		{
@@ -3070,6 +3215,7 @@ errno_t pfe_l2br_get_domain_stats(const pfe_l2br_t *bridge, pfe_ct_vlan_stats_t 
 	errno_t              ret = EOK;
 	pfe_ct_vlan_stats_t *stats = NULL;
 	uint16_t             offset = 0;
+	size_t               stats_size;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == bridge) || (NULL == stat)))
@@ -3082,7 +3228,8 @@ errno_t pfe_l2br_get_domain_stats(const pfe_l2br_t *bridge, pfe_ct_vlan_stats_t 
 	{
 		(void)memset(stat, 0, sizeof(pfe_ct_vlan_stats_t));
 
-		stats = oal_mm_malloc(sizeof(pfe_ct_vlan_stats_t) * pfe_class_get_num_of_pes(bridge->class));
+		stats_size = sizeof(pfe_ct_vlan_stats_t) * pfe_class_get_num_of_pes(bridge->class);
+		stats = oal_mm_malloc(stats_size);
 
 		if (NULL == stats)
 		{
@@ -3091,9 +3238,12 @@ errno_t pfe_l2br_get_domain_stats(const pfe_l2br_t *bridge, pfe_ct_vlan_stats_t 
 		}
 		else
 		{
-			(void)memset(stats, 0, sizeof(pfe_ct_vlan_stats_t) * pfe_class_get_num_of_pes(bridge->class));
+			if (0U < stats_size)
+			{
+				(void)memset(stats, 0, stats_size);
+			}
 
-			offset = sizeof(pfe_ct_vlan_stats_t) * (uint16_t)vlan_index;
+			offset = (uint16_t)sizeof(pfe_ct_vlan_stats_t) * (uint16_t)vlan_index;
 
 			while (i < pfe_class_get_num_of_pes(bridge->class))
 			{
@@ -3109,6 +3259,12 @@ errno_t pfe_l2br_get_domain_stats(const pfe_l2br_t *bridge, pfe_ct_vlan_stats_t 
 			}
 
 			oal_mm_free(stats);
+
+			/* Convert statistics back to network endian */
+			stat->ingress		= oal_htonl(stat->ingress);
+			stat->egress		= oal_htonl(stat->egress);
+			stat->ingress_bytes	= oal_htonl(stat->ingress_bytes);
+			stat->egress_bytes	= oal_htonl(stat->egress_bytes);
 		}
 	}
 	return ret;
@@ -3136,7 +3292,7 @@ errno_t pfe_l2br_clear_domain_stats(const pfe_l2br_t *bridge, uint8_t vlan_index
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		offset = sizeof(pfe_ct_vlan_stats_t) * (uint16_t)vlan_index;
+		offset = (uint16_t)sizeof(pfe_ct_vlan_stats_t) * (uint16_t)vlan_index;
 
 		if (EOK != oal_mutex_lock(bridge->mutex))
 		{
@@ -3166,8 +3322,8 @@ errno_t pfe_l2br_clear_domain_stats(const pfe_l2br_t *bridge, uint8_t vlan_index
  */
 uint32_t pfe_l2br_domain_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level)
 {
-    uint32_t len = 0U;
-    errno_t ret;
+	uint32_t len = 0U;
+	errno_t ret;
 	pfe_ct_vlan_stats_t stats = {0};
 	pfe_l2br_domain_t *domain = NULL;
 
@@ -3179,17 +3335,17 @@ uint32_t pfe_l2br_domain_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, ui
 	while (domain != NULL)
 	{
 		ret = pfe_l2br_get_domain_stats (bridge, &stats, domain->stats_index);
-        if(EOK != ret)
-        {
-            NXP_LOG_ERROR("Get domain statistics failed\n");
-            break;
-        }
-		len += oal_util_snprintf(buf + len, buf_len - len, "Vlan [%4d] ingress: %12d       egress: %12d\n", domain->vlan, stats.ingress, stats.egress);
-		len += oal_util_snprintf(buf + len, buf_len - len, "      ingress_bytes: %12d egress_bytes: %12d\n", stats.ingress_bytes, stats.egress_bytes);
+		if(EOK != ret)
+		{
+			NXP_LOG_ERROR("Get domain statistics failed\n");
+			break;
+		}
+		len += oal_util_snprintf(buf + len, buf_len - len, "Vlan [%4d] ingress: %12d       egress: %12d\n", domain->vlan, oal_ntohl(stats.ingress), oal_ntohl(stats.egress));
+		len += oal_util_snprintf(buf + len, buf_len - len, "      ingress_bytes: %12d egress_bytes: %12d\n", oal_ntohl(stats.ingress_bytes), oal_ntohl(stats.egress_bytes));
 		domain = pfe_l2br_get_next_domain(bridge);
 	}
 
-    return len;
+	return len;
 }
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */

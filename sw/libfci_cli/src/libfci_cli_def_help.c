@@ -873,13 +873,20 @@
 #define TXT_OPTDESCR__DIP_PFX           TXT_HELP__DIP_PFX  "=<0-32>"  "\n"  \
                                         "  Network prefix for DIP field.\n"
 
+#define TXT_OPT__PTP_MGMT_IF            TXT_HELP__PTP_MGMT_IF  "=<phyif_name>"
+#define TXT_OPTDESCR__PTP_MGMT_IF       TXT_HELP__PTP_MGMT_IF  "=<"  TXT_OPTARGS__PHYIF  ">"  "\n"   \
+                                        "  Name of the target physical interface for PTP trafic.\n"  \
+                                        "  If not used, then PTP traffic is processed the same way as any other traffic.\n"  \
+                                        "  Use empty string (\"\") to disable (clear).\n"
+
+
 
 
 /*
     Sanity check for opt help texts. When new opt is added, create a help text for the opt and remove its symbol from here.
     And don't forget to check the pairing! ^_^
 */
-#if (defined(OPT_118_TXT_HELP) || defined(OPT_119_TXT_HELP) || \
+#if (defined(OPT_119_TXT_HELP) || \
      defined(OPT_120_TXT_HELP) || defined(OPT_121_TXT_HELP) || defined(OPT_122_TXT_HELP) || defined(OPT_123_TXT_HELP) || defined(OPT_124_TXT_HELP) || \
      defined(OPT_125_TXT_HELP) || defined(OPT_126_TXT_HELP) || defined(OPT_127_TXT_HELP) || defined(OPT_128_TXT_HELP) || defined(OPT_129_TXT_HELP) || \
      defined(OPT_130_TXT_HELP) || defined(OPT_131_TXT_HELP) || defined(OPT_132_TXT_HELP) || defined(OPT_133_TXT_HELP) || defined(OPT_134_TXT_HELP) || \
@@ -945,6 +952,7 @@ static const char *const txt_help_phyif_update[] =
     "["   TXT_OPT__PTP_PROMISC             "]  ",
     "["   TXT_OPT__QINQ                    "]  ",
     "["   TXT_OPT__DISCARD_IF_TTL_BELOW_2  "]  ",
+    "["   TXT_OPT__PTP_MGMT_IF             "]  ",
     "\n",
     TXT_DECOR_DESCR,
     ""    "Update parameters of a physical interface.",
@@ -966,6 +974,7 @@ static const char *const txt_help_phyif_update[] =
     TXT_OPTDESCR__PTP_PROMISC,
     TXT_OPTDESCR__QINQ,
     TXT_OPTDESCR__DISCARD_IF_TTL_BELOW_2,
+    TXT_OPTDESCR__PTP_MGMT_IF,
     "\n",
     
     NULL

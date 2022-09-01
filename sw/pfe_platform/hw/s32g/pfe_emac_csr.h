@@ -12,6 +12,10 @@
 
 #include "pfe_emac.h"
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#include "Eth_43_PFE_Cfg.h"
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 #define MAC_CONFIGURATION						0x0000U
 #define MAC_EXT_CONFIGURATION					0x0004U
 #define MAC_PACKET_FILTER						0x0008U
@@ -150,9 +154,16 @@
 #define MAC_TIMESTAMP_ADDEND					0x0b18U
 #define MAC_STS_HIGHER_WORD                     0x0b1cU
 #define MTL_OPERATION_MODE						0x0c00U
+#define MTL_ECC_ERR_ADDR_STATUS					0x0cd4U
 #define MTL_DPP_CONTROL							0x0ce0U
+#define MTL_ECC_CONTROL							0x0cc0U
+#define MTL_ECC_INTERRUPT_STATUS				0x0cccU
+#define MTL_ECC_ERR_ADDR_STATUS					0x0cd4U
+#define MTL_ECC_ERR_CNTR_STATUS					0x0cd8U
 #define MTL_TXQ0_OPERATION_MODE					0x0d00U
 #define MTL_RXQ0_OPERATION_MODE					0x0d30U
+
+#define DMA_ECC_INTERRUPT_STATUS				0x1088U
 
 #define RECEIVE_ALL(x)                  ((!!(x)) ? (1UL << 31U) : 0U)	/* RA */
 #define DROP_NON_TCP_UDP(x)				((!!(x)) ? (1UL << 21U) : 0U)	/* DNTU */
@@ -269,6 +280,21 @@
 #define LNKSPEED(x)						(((x) >> 17U) & 0x3U)
 #define LNKMOD(x)						(((x) >> 16U) & 0x1U)
 #define ADDSUB(x)						((!!(x)) ? (1UL << 31U) : 0U)
+#define ECC_TX(x)						((!!(x)) ? (1UL << 0U) : 0U)	/* MTXEE     */
+#define ECC_RX(x)						((!!(x)) ? (1UL << 1U) : 0U)	/* MRXEE     */
+#define ECC_EST(x)						((!!(x)) ? (1UL << 2U) : 0U)	/* MESTEE    */
+#define ECC_RXP(x)						((!!(x)) ? (1UL << 3U) : 0U)	/* MRXPEE    */
+#define ECC_TSO(x)						((!!(x)) ? (1UL << 4U) : 0U)	/* TSOEE     */
+#define DATA_PARITY_PROTECTION(x)		((!!(x)) ? (1UL << 0U) : 0U)	/* EDPP     */
+#define SLAVE_PARITY_CHECK(x)			((!!(x)) ? (1UL << 2U) : 0U)	/* EPSI     */
+#define FSM_TIMEOUT_ENABLE(x)			((!!(x)) ? (1UL << 0U) : 0U)	/* TMOUTEN	*/
+#define FSM_PARITY_ENABLE(x)			((!!(x)) ? (1UL << 1U) : 0U)	/* PRTYEN	*/
+#define LARGE_MODE_TIMEOUT(x)			((x) << 20U)	/* LTMRMD	*/
+#define NORMAL_MODE_TIMEOUT(x)			((x) << 16U)	/* NTMRMD	*/
+
+
+
+
 /**
  * @brief	Number of HW slots able to hold individual MAC addresses
  * @details	The HW can have multiple individual MAC addresses assigned at
@@ -317,10 +343,22 @@ errno_t pfe_emac_cfg_mdio_read22(addr_t base_va, uint8_t pa, uint8_t ra, uint16_
 errno_t pfe_emac_cfg_mdio_read45(addr_t base_va, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t *val);
 errno_t pfe_emac_cfg_mdio_write22(addr_t base_va, uint8_t pa, uint8_t ra, uint16_t val);
 errno_t pfe_emac_cfg_mdio_write45(addr_t base_va, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t val);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_emac_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 uint32_t pfe_emac_cfg_get_tx_cnt(addr_t base_va);
 uint32_t pfe_emac_cfg_get_rx_cnt(addr_t base_va);
 uint32_t pfe_emac_cfg_get_stat_value(addr_t base_va, uint32_t stat_id);
+errno_t pfe_emac_cfg_isr(addr_t base_va, addr_t cbus_base);
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#if (STD_ON == ETH_43_PFE_USER_ACCESS_ALLOWED_AVAILABLE)
+	void pfe_emac_csr_set_user_mode_allowed (const uint32_t * base_va);
+	void pfe_emac_csr_clr_user_mode_allowed(const uint32_t * base_va);
+#endif /*STD_ON == ETH_43_PFE_USER_ACCESS_ALLOWED_AVAILABLE*/
+#endif /*PFE_CFG_TARGET_OS_AUTOSAR*/
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

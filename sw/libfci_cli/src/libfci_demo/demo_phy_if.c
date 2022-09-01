@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -442,6 +442,23 @@ void demo_phy_if_ld_set_flexifilter(fpp_phy_if_cmd_t* p_phyif, const char* p_tab
     
     set_text(p_phyif->ftable, p_table_name, IFNAMSIZ);
 }
+
+/*
+ * @brief          Set physical interface which shall be used as an egress for PTP traffic.
+ * @details        [localdata_phyif]
+ * @param[in,out]  p_phyif  Local data to be modified.
+ * @param[in]      p_name   Name of a physical interface.
+ *                          Can be NULL. If NULL or "" (empty string), then
+ *                          this feature is disabled and PTP traffic is processed the same
+ *                          way as any other traffic.
+ */
+void demo_phy_if_ld_set_ptp_mgmt_if(fpp_phy_if_cmd_t* p_phyif, const char* p_name)
+{
+    assert(NULL != p_phyif);
+    /* 'p_name' is allowed to be NULL */
+    
+    set_text(p_phyif->ptp_mgmt_if, p_name, IFNAMSIZ);
+}
  
  
 /* ==== PUBLIC FUNCTIONS : query local data (no FCI calls) ================= */
@@ -723,6 +740,18 @@ const char* demo_phy_if_ld_get_flexifilter(const fpp_phy_if_cmd_t* p_phyif)
 }
  
  
+/*
+ * @brief      Query the physical interface which is being used as a PTP management interface.
+ * @details    [localdata_phyif]
+ * @param[in]  p_phyif  Local data to be queried.
+ * @return     Name of the physical interface which is being used as the PTP management 
+ *             interface.
+ */
+const char* demo_phy_if_ld_get_ptp_mgmt_if(const fpp_phy_if_cmd_t* p_phyif)
+{
+    assert(NULL != p_phyif);
+    return (p_phyif->ptp_mgmt_if);
+}
  
  
 /*

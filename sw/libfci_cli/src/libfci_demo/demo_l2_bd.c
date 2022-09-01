@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -862,6 +862,58 @@ fpp_l2_bd_flags_t demo_l2_bd_ld_get_flags(const fpp_l2_bd_cmd_t* p_bd)
     ntoh_enum(&tmp_flags, sizeof(fpp_l2_bd_flags_t));
     
     return (tmp_flags);
+}
+
+
+/*
+ * @brief      Query the domain traffic statistics - ingress
+ * @details    [localdata_bd]
+ * @param[in]  p_bd  Local data to be queried.
+ * @return     Count of ingress packets at the time when the data was obtained from PFE.
+ */
+uint32_t demo_l2_bd_ld_get_stt_ingress(const fpp_l2_bd_cmd_t* p_bd)
+{
+    assert(NULL != p_bd);
+    return ntohl(p_bd->stats.ingress);
+}
+
+
+/*
+ * @brief      Query the domain traffic statistics - ingress in bytes
+ * @details    [localdata_bd]
+ * @param[in]  p_bd  Local data to be queried.
+ * @return     Number of ingress bytes at the time when the data was obtained from PFE.
+ */
+uint32_t demo_l2_bd_ld_get_stt_ingress_bytes(const fpp_l2_bd_cmd_t* p_bd)
+{
+    assert(NULL != p_bd);
+    return ntohl(p_bd->stats.ingress_bytes);
+}
+
+
+/*
+ * @brief      Query the domain traffic statistics - egress
+ * @details    [localdata_bd]
+ * @param[in]  p_bd  Local data to be queried.
+ * @return     Count of egress packets at the time when the data was obtained from PFE.
+ */
+uint32_t demo_l2_bd_ld_get_stt_egress(const fpp_l2_bd_cmd_t* p_bd)
+{
+    assert(NULL != p_bd);
+    return ntohl(p_bd->stats.egress);
+}
+
+
+/*
+ * @brief      Query the domain traffic statistics - egress in bytes
+ * @details    [localdata_bd]
+ * @param[in]  p_bd  Local data to be queried.
+ * @return     Number of egress bytes at the time when the data was obtained from PFE.
+ */
+uint32_t demo_l2_bd_ld_get_stt_egress_bytes(const fpp_l2_bd_cmd_t* p_bd)
+{
+    assert(NULL != p_bd);
+    return ntohl(p_bd->stats.egress_bytes);
 }
  
  

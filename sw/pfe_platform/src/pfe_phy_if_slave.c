@@ -1923,6 +1923,63 @@ uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, 
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
+/**
+ * @brief		Get statistic values in numeric form
+ * @details		This function providing single statistic value
+ * 				from the EMAC block.
+ * @param[in]	iface The interface instance
+ * @param[in]	stat_id	ID of required statistic (offset of register)
+ * @return		Value of requested statistic
+ */
+uint32_t pfe_phy_if_get_stat_value(pfe_phy_if_t *iface, uint32_t stat_id)
+{
+	errno_t ret;
+	uint32_t stat_val = 0U;
+	pfe_platform_rpc_pfe_phy_if_get_stat_value_arg_t arg = {.phy_if_id = PFE_PHY_IF_ID_EMAC0, .stat_id = 0U};
+	pfe_platform_rpc_pfe_phy_if_get_stat_value_ret_t rpc_ret = {0U};
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return 0xFFFFFFFFU;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_lock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex lock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+	(void)pfe_phy_if_db_lock();
+
+	/*	Ask the master driver to get statistic values */
+	arg.phy_if_id = iface->id;
+	arg.stat_id = stat_id;
+	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
+	if (EOK != ret)
+	{
+		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE failed: %d\n", ret);
+	}
+	else
+	{
+		stat_val = rpc_ret.stat_val;
+	}
+
+	(void)pfe_phy_if_db_unlock();
+
+#ifndef PFE_CFG_TARGET_OS_AUTOSAR
+	if (EOK != oal_mutex_unlock(&iface->lock))
+	{
+		NXP_LOG_DEBUG("mutex unlock failed\n");
+	}
+#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+	return stat_val;
+}
+
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE
 #include "Eth_43_PFE_MemMap.h"

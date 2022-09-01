@@ -74,6 +74,7 @@ static errno_t pfe_log_if_match_rule1(pfe_log_if_t *iface, pfe_ct_if_m_rules_t r
 static errno_t pfe_log_if_match_rule2(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len);
 static errno_t pfe_log_if_match_rule3(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len);
 static errno_t pfe_log_if_match_rule4(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len);
+static errno_t pfe_log_if_add_match_rule_validate_arg(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len);
 
 /**
  * @brief			Add match rule
@@ -967,6 +968,50 @@ errno_t pfe_log_if_set_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule
 }
 
 /**
+ * @brief		Validate and copy argument
+ * @param[in]	iface The interface instance
+ * @param[in]	rule Rule to be added. See pfe_ct_if_m_rules_t. Function accepts
+ * 					 only single rule per call.
+ * @param[in]	arg Pointer to buffer containing rule argument data. The argument
+ * 					data shall be in network byte order. Type of the argument can
+ * 					be retrieved from the pfe_ct_if_m_args_t.
+ * @param[in]	arg_len Length of the rule argument. Due to sanity check.
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+static errno_t pfe_log_if_add_match_rule_validate_arg(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len)
+{
+	errno_t ret;
+
+	ret = pfe_log_if_match_rule1(iface, rule, arg, arg_len);
+	if (EINVAL == ret)
+	{
+		ret = pfe_log_if_match_rule2(iface, rule, arg, arg_len);
+		if (EINVAL == ret)
+		{
+			ret = pfe_log_if_match_rule3(iface, rule, arg, arg_len);
+			if (EINVAL == ret)
+			{
+				ret = pfe_log_if_match_rule4(iface, rule, arg, arg_len);
+				if (EINVAL == ret)
+				{
+					if (arg_len != 0U)
+					{
+						NXP_LOG_DEBUG("Unexpected argument\n");
+					}
+					else
+					{
+						ret = EOK;
+					}
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
  * @brief		Add match rule
  * @param[in]	iface The interface instance
  * @param[in]	rule Rule to be added. See pfe_ct_if_m_rules_t. Function accepts
@@ -1009,31 +1054,7 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 				NXP_LOG_DEBUG("mutex lock failed\n");
 			}
 
-			/*	Validate and copy argument */
-			ret = pfe_log_if_match_rule1(iface, rule, arg, arg_len);
-			if (EINVAL == ret)
-			{
-				ret = pfe_log_if_match_rule2(iface, rule, arg, arg_len);
-				if (EINVAL == ret)
-				{
-					ret = pfe_log_if_match_rule3(iface, rule, arg, arg_len);
-					if (EINVAL == ret)
-					{
-						ret = pfe_log_if_match_rule4(iface, rule, arg, arg_len);
-						if (EINVAL == ret)
-						{
-							if (arg_len != 0U)
-							{
-								NXP_LOG_DEBUG("Unexpected argument\n");
-							}
-							else
-							{
-								ret = EOK;
-							}
-						}
-					}
-				}
-			}
+			ret = pfe_log_if_add_match_rule_validate_arg(iface, rule, arg, arg_len);
 
 			if (EOK != ret)
 			{

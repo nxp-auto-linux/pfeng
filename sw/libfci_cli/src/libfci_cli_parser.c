@@ -1998,6 +1998,21 @@ static int opt_parse_dip_pfx(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_opt
     return (rtn);
 }
 
+static int opt_parse_ptp_mgmt_if(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->ptp_mgmt_if_name.is_valid);
+    char* p_txt      =  (p_rtn_cmdargs->ptp_mgmt_if_name.txt);
+    
+    rtn = cli_txtcpy_if_name(p_txt, p_txt_optarg);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
 
 
 
@@ -3888,7 +3903,7 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
     /*       That is intentional. It allows this fnc to handle session mode if needed (no input == do nothing) */
     if ((CMD_00_NO_COMMAND == cmd) && (p_cmdargs->version.is_valid))
     {
-        cli_print_app_version();
+        cli_print_app_version(p_cmdargs->verbose.is_valid);
         rtn = CLI_OK;
     }
     else if (p_cmdargs->help.is_valid)
@@ -3897,7 +3912,7 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
         if ((CMD_00_NO_COMMAND == cmd) && (p_cmdargs->verbose.is_valid))
         {
             /* print all help texts (Great Wall of text ^_^) */
-            cli_print_app_version();
+            cli_print_app_version(true);
             for (uint16_t i = 0u; (CMD_LN > i); (++i))
             {
                 cli_print_help(i);
@@ -3979,9 +3994,9 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
             
             case FPP_ERR_IF_ENTRY_NOT_FOUND:
                 p_txt_errname = TXT_ERR_NAME(FPP_ERR_IF_ENTRY_NOT_FOUND);
-                p_txt_errmsg  = TXT_ERR_INDENT "Requested target/parent/mirror interface not found.\n"
-                                TXT_ERR_INDENT "Is the target/parent/mirror name correct?\n"
-                                TXT_ERR_INDENT "Does the target/parent/mirror interface exist?\n";
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested target/parent/mgmt interface not found.\n"
+                                TXT_ERR_INDENT "Is the target/parent/mgmt name correct?\n"
+                                TXT_ERR_INDENT "Does the target/parent/mgmt interface exist?\n";
             break;
             
             case FPP_ERR_IF_MATCH_UPDATE_FAILED:
@@ -4169,12 +4184,18 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
 
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
-void cli_print_app_version(void)
+void cli_print_app_version(bool is_verbose)
 {
     /* the following printf() is a one long string, spanning over multiple lines */
-    printf("app version: "  CLI_VERSION_MAJOR  "."  CLI_VERSION_MINOR  "."  CLI_VERSION_PATCH
+    printf("App version: "  CLI_VERSION_MAJOR  "."  CLI_VERSION_MINOR  "."  CLI_VERSION_PATCH
            " ("  __DATE__  " "  __TIME__  ") "
            " ("  CLI_TARGET_OS  " ; "  CLI_DRV_VERSION  " ; "  PFE_CT_H_MD5  ")\n");
+    
+    if (is_verbose)
+    {
+        printf("Driver version: " CLI_DRV_VERSION "\n"
+               "Driver commit hash: " CLI_DRV_COMMIT_HASH "\n");
+    }
 }
 
 /* NOTE: argument 'p_txt_vec' is expected to follow the argv convention (element [0] exists, but fnc ignores it) */

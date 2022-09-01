@@ -686,7 +686,7 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
 #endif /* IDEX_CFG_VERBOSE */
 
 		/*	Send it out within IDEX frame */
-		ret = pfe_idex_send_frame(dst_phy, IDEX_FRAME_CTRL_RESPONSE, resp, (sizeof(pfe_idex_response_t) + data_len));
+		ret = pfe_idex_send_frame(dst_phy, IDEX_FRAME_CTRL_RESPONSE, resp, ((uint16_t)sizeof(pfe_idex_response_t) + data_len));
 		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("IDEX response TX failed\n");
@@ -777,7 +777,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			NXP_LOG_WARNING("Transition to IDEX_REQ_STATE_COMMITTED failed\n");
 		}
 
-		ret = pfe_idex_send_frame(dst_phy, IDEX_FRAME_CTRL_REQUEST, req, (sizeof(pfe_idex_request_t) + data_len));
+		ret = pfe_idex_send_frame(dst_phy, IDEX_FRAME_CTRL_REQUEST, req, ((uint16_t)sizeof(pfe_idex_request_t) + data_len));
 		if (EOK != ret)
 		{
 			NXP_LOG_ERROR("IDEX request TX failed\n");
@@ -833,8 +833,8 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 
 			if (0U == timeout_us)
 			{
+				NXP_LOG_ERROR("IDEX request %u timed-out\n", (uint_t)oal_ntohl(req->seqnum));
 #ifdef IDEX_CFG_VERY_VERBOSE
-				NXP_LOG_DEBUG("IDEX request %u timed-out\n", (uint_t)oal_ntohl(req->seqnum));
 
 				if (IDEX_REQ_STATE_COMMITTED == req->state)
 				{
@@ -1202,7 +1202,7 @@ errno_t pfe_idex_master_rpc(uint32_t id, const void *buf, uint16_t buf_len, void
 errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, const void *buf, uint16_t buf_len, void *resp, uint16_t resp_len)
 {
 	errno_t ret;
-	const uint16_t resp_buf_size = sizeof(pfe_idex_msg_rpc_t) + resp_len;
+	const uint16_t resp_buf_size = (uint16_t)sizeof(pfe_idex_msg_rpc_t) + resp_len;
 	uint8_t *alloc_buf = oal_mm_malloc((addr_t)resp_buf_size + sizeof(pfe_idex_msg_rpc_t) + (addr_t)buf_len);
 	uint8_t *local_resp_buf = alloc_buf;
 	pfe_idex_msg_rpc_t *msg = (pfe_idex_msg_rpc_t *)&(alloc_buf[resp_buf_size]);
@@ -1223,12 +1223,12 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, const void *buf, u
 		(void)memcpy(payload, buf, buf_len);
 
 		/*	This one is blocking */
-		ret = pfe_idex_request_send(dst_phy, IDEX_RPC, msg, sizeof(pfe_idex_msg_rpc_t) + buf_len, local_resp_buf, resp_buf_size);
+		ret = pfe_idex_request_send(dst_phy, IDEX_RPC, msg, (uint16_t)sizeof(pfe_idex_msg_rpc_t) + buf_len, local_resp_buf, resp_buf_size);
 
 		if (EOK != ret)
 		{
 			/*	Transport error */
-			NXP_LOG_INFO("RPC transport failed: %d\n", ret);
+			NXP_LOG_ERROR("RPC transport failed: %d\n", ret);
 		}
 		else
 		{
@@ -1317,7 +1317,7 @@ errno_t pfe_idex_set_rpc_ret_val(errno_t retval, void *resp, uint16_t resp_len)
 										idex->cur_req->type,	/* Response type */
 										idex->cur_req->seqnum,	/* Response sequence number */
 										rpc_resp,				/* Response payload */
-										(sizeof(pfe_idex_msg_rpc_t) + resp_len) /* Response payload length */
+										((uint16_t)sizeof(pfe_idex_msg_rpc_t) + resp_len) /* Response payload length */
 									);
 		if (EOK != ret)
 		{

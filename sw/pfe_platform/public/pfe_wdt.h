@@ -28,7 +28,10 @@ void pfe_wdt_destroy(pfe_wdt_t *wdt);
 errno_t pfe_wdt_isr(pfe_wdt_t *wdt);
 void pfe_wdt_irq_mask(pfe_wdt_t *wdt);
 void pfe_wdt_irq_unmask(pfe_wdt_t *wdt);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_wdt_get_text_statistics(const pfe_wdt_t *wdt, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

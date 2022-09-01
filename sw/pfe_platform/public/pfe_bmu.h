@@ -30,19 +30,26 @@ typedef struct
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_base, const pfe_bmu_cfg_t *cfg) __attribute__((cold));
-errno_t pfe_bmu_isr(const pfe_bmu_t *bmu) __attribute__((cold));
-void pfe_bmu_irq_mask(const pfe_bmu_t *bmu);
-void pfe_bmu_irq_unmask(const pfe_bmu_t *bmu);
-void pfe_bmu_enable(const pfe_bmu_t *bmu) __attribute__((cold));
-void pfe_bmu_reset(const pfe_bmu_t *bmu) __attribute__((cold));
-void pfe_bmu_disable(const pfe_bmu_t *bmu) __attribute__((cold));
+errno_t pfe_bmu_isr(pfe_bmu_t *bmu) __attribute__((cold));
+void pfe_bmu_irq_mask(pfe_bmu_t *bmu);
+void pfe_bmu_irq_unmask(pfe_bmu_t *bmu);
+void pfe_bmu_enable(pfe_bmu_t *bmu) __attribute__((cold));
+void pfe_bmu_reset(pfe_bmu_t *bmu) __attribute__((cold));
+void pfe_bmu_disable(pfe_bmu_t *bmu) __attribute__((cold));
 void *pfe_bmu_alloc_buf(const pfe_bmu_t *bmu) __attribute__((hot));
 void *pfe_bmu_get_va(const pfe_bmu_t *bmu, addr_t pa) __attribute__((hot, pure));
 void *pfe_bmu_get_pa(const pfe_bmu_t *bmu, addr_t va) __attribute__((hot, pure));
 uint32_t pfe_bmu_get_buf_size(const pfe_bmu_t *bmu) __attribute__((cold, pure));
 void pfe_bmu_free_buf(const pfe_bmu_t *bmu, addr_t buffer) __attribute__((hot));
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_bmu_get_text_statistics(const pfe_bmu_t *bmu, char_t *buf, uint32_t buf_len, uint8_t verb_level) __attribute__((cold));
-void pfe_bmu_destroy(const pfe_bmu_t *bmu) __attribute__((cold));
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+void pfe_bmu_destroy(pfe_bmu_t *bmu) __attribute__((cold));
+#ifdef PFE_CFG_PFE_MASTER
+uint32_t pfe_bmu_get_err_poll(pfe_bmu_t *bmu) __attribute__((hot));
+#endif /* #ifdef PFE_CFG_PFE_MASTER */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

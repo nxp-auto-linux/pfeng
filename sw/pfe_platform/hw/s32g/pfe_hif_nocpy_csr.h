@@ -77,7 +77,11 @@ void pfe_hif_nocpy_cfg_set_tx_bd_ring_addr(addr_t base_va, const  void *tx_ring_
 bool_t pfe_hif_nocpy_cfg_is_rx_dma_active(addr_t base_va);
 bool_t pfe_hif_nocpy_cfg_is_tx_dma_active(addr_t base_va);
 uint32_t pfe_hif_nocpy_chnl_cfg_get_text_stat(addr_t base_va, const char_t *buf, uint32_t size, uint8_t verb_level);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_hif_nocpy_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 uint32_t pfe_hif_nocpy_cfg_get_tx_cnt(addr_t base_va);
 uint32_t pfe_hif_nocpy_cfg_get_rx_cnt(addr_t base_va);
 

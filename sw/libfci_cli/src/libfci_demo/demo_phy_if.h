@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -84,6 +84,7 @@ void demo_phy_if_ld_set_block_state(fpp_phy_if_cmd_t* p_phyif, fpp_phy_if_block_
 void demo_phy_if_ld_set_rx_mirror(fpp_phy_if_cmd_t* p_phyif, uint8_t idx, const char* p_mirror_name);
 void demo_phy_if_ld_set_tx_mirror(fpp_phy_if_cmd_t* p_phyif, uint8_t idx, const char* p_mirror_name);
 void demo_phy_if_ld_set_flexifilter(fpp_phy_if_cmd_t* p_phyif, const char* p_table_name);
+void demo_phy_if_ld_set_ptp_mgmt_if(fpp_phy_if_cmd_t* p_phyif, const char* p_name);
  
 /* ==== PUBLIC FUNCTIONS : query local data (no FCI calls) ================= */
  
@@ -105,6 +106,7 @@ fpp_phy_if_block_state_t demo_phy_if_ld_get_block_state(const fpp_phy_if_cmd_t* 
 const char*              demo_phy_if_ld_get_rx_mirror(const fpp_phy_if_cmd_t* p_phyif, uint8_t idx);
 const char*              demo_phy_if_ld_get_tx_mirror(const fpp_phy_if_cmd_t* p_phyif, uint8_t idx);
 const char*              demo_phy_if_ld_get_flexifilter(const fpp_phy_if_cmd_t* p_phyif);
+const char*              demo_phy_if_ld_get_ptp_mgmt_if(const fpp_phy_if_cmd_t* p_phyif);
  
 uint32_t demo_phy_if_ld_get_stt_ingress(const fpp_phy_if_cmd_t* p_phyif);
 uint32_t demo_phy_if_ld_get_stt_egress(const fpp_phy_if_cmd_t* p_phyif);

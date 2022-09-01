@@ -106,6 +106,8 @@ export PFE_CFG_RT_HASH_SIZE?=256
 export PFE_CFG_RT_COLLISION_SIZE?=256
 #Conntrack stats table size (number of entries)
 export PFE_CFG_CONN_STATS_SIZE?=20
+#Health monitor error string compiled in switch(true or false)
+export PFE_CFG_HM_STRINGS_ENABLED?=1
 
 #Enable firmware-based priority control for HIF traffic
 export PFE_CFG_HIF_PRIO_CTRL=1
@@ -121,8 +123,6 @@ export PFE_CFG_HIF_RING_LENGTH?=256
 export PFE_CFG_SLAVE_HIF_MASTER_UP_TMOUT?=1000
 #Number of milisecs to wait by Slave until IP ready flag set by Master
 export PFE_CFG_IP_READY_MS_TMOUT?=5000
-#HIF used to process PTP traffic in bridge mode (see pfe_ct_phy_if_id_t, configuration is enabled when set to valid HIF id)
-export PFE_CFG_PTP_COMMON_HIF?=0
 
 ifeq ($(PFE_CFG_HIF_DRV_MODE),0)
   #Use multi-client HIF driver. Required when multiple logical interfaces need to
@@ -230,7 +230,6 @@ GLOBAL_CCFLAGS+=-DPFE_CFG_PFE2_IF=$(PFE_CFG_PFE2_IF)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE0_PROMISC=$(PFE_CFG_PFE0_PROMISC)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE1_PROMISC=$(PFE_CFG_PFE1_PROMISC)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE2_PROMISC=$(PFE_CFG_PFE2_PROMISC)
-GLOBAL_CCFLAGS+=-DPFE_CFG_PTP_COMMON_HIF=$(PFE_CFG_PTP_COMMON_HIF)
 
 ifneq ($(PFE_CFG_HIF_NOCPY_SUPPORT),0)
   ifeq ($(TARGET_OS),QNX)
@@ -304,6 +303,10 @@ ifneq ($(PFE_CFG_HIF_TX_FIFO_FIX),0)
     GLOBAL_CCFLAGS+= -DPFE_CFG_HIF_TX_FIFO_FIX
 endif
 
+ifneq ($(PFE_CFG_BMU_IRQ_ENABLED),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_BMU_IRQ_ENABLED=TRUE
+endif
+
 ifneq ($(PFE_CFG_IEEE1588_SUPPORT),0)
   ifeq ($(PFE_CFG_IEEE1588_I_CLK_HZ),0)
     $(error When IEEE1588 support is enabled the PFE_CFG_IEEE1588_I_CLK_HZ shall not be zero)
@@ -372,6 +375,10 @@ ifneq ($(PFE_CFG_CONN_STATS_SIZE),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_CONN_STATS_SIZE=$(PFE_CFG_CONN_STATS_SIZE)
 endif
 
+ifneq ($(PFE_CFG_HM_STRINGS_ENABLED),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_HM_STRINGS_ENABLED
+endif
+
 ifneq ($(PFE_CFG_HIF_PRIO_CTRL),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_PRIO_CTRL
 endif
@@ -392,6 +399,13 @@ ifneq ($(PFE_CFG_HIF_RING_LENGTH),0)
     # The following symbol exists for compatibility with MCAL HIF RX RING length symbol in the shared platform code.
     GLOBAL_CCFLAGS+=-DPFE_HIF_RX_RING_CFG_LENGTH=$(PFE_CFG_HIF_RING_LENGTH)
 endif
+
+# Workaround to remove MCAL version checks when building from repository
+PREFIX:=M4_
+SRC_CHECK:=FILE_VERSION_CHECK_SRC
+HEADER_CHECK:=FILE_VERSION_CHECK_HDR
+GLOBAL_CCFLAGS+=-D$(PREFIX)$(HEADER_CHECK)= -D$(PREFIX)$(SRC_CHECK)=
+
 # This variable will be propagated to every Makefile in the project
 export GLOBAL_CCFLAGS;
 

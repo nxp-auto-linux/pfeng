@@ -114,7 +114,11 @@ pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cf
 void pfe_tmu_enable(const pfe_tmu_t *tmu);
 void pfe_tmu_reset(const pfe_tmu_t *tmu);
 void pfe_tmu_disable(const pfe_tmu_t *tmu);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_tmu_get_text_statistics(const pfe_tmu_t *tmu, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 void pfe_tmu_destroy(const pfe_tmu_t *tmu);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR

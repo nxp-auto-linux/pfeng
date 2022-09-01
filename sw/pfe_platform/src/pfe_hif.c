@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -33,7 +33,7 @@ struct pfe_hif_tag
  * @param[in]	hif The HIF instance
  * @return		EOK if interrupt has been processed
  */
-errno_t pfe_hif_isr(const pfe_hif_t *hif)
+errno_t pfe_hif_isr(pfe_hif_t *hif)
 {
 	errno_t ret;
 
@@ -70,7 +70,7 @@ errno_t pfe_hif_isr(const pfe_hif_t *hif)
  * @details		Only affects HIF IRQs, not channel IRQs.
  * @param[in]	hif The HIF instance
  */
-void pfe_hif_irq_mask(const pfe_hif_t *hif)
+void pfe_hif_irq_mask(pfe_hif_t *hif)
 {
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&hif->lock))
@@ -94,7 +94,7 @@ void pfe_hif_irq_mask(const pfe_hif_t *hif)
  * @details		Only affects HIF IRQs, not channel IRQs.
  * @param[in]	hif The HIF instance
  */
-void pfe_hif_irq_unmask(const pfe_hif_t *hif)
+void pfe_hif_irq_unmask(pfe_hif_t *hif)
 {
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&hif->lock))
@@ -451,6 +451,45 @@ uint32_t pfe_hif_get_text_statistics(const pfe_hif_t *hif, char_t *buf, uint32_t
 	len += pfe_hif_cfg_get_text_stat(hif->cbus_base_va, buf, buf_len, verb_level);
 
 	return len;
+}
+
+/**
+ * @brief		HIF error polling
+ * @param[in]	hif The HIF instance
+ * @return		the HIF error interrupt source
+ */
+uint32_t pfe_hif_get_err_poll(pfe_hif_t *hif)
+{
+	uint32_t int_src;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == hif))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		int_src = 0x0U;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+#ifdef PFE_CFG_PARANOID_IRQ
+		if (EOK != oal_mutex_lock(&hif->lock))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+#endif /* PFE_CFG_PARANOID_IRQ */
+
+		/*	Run the low-level polling to identify and process the interrupt error src */
+		int_src = pfe_hif_cfg_get_err_poll(hif->cbus_base_va);
+
+#ifdef PFE_CFG_PARANOID_IRQ
+		if (EOK != oal_mutex_unlock(&hif->lock))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
+#endif /* PFE_CFG_PARANOID_IRQ */
+	}
+
+	return int_src;
 }
 #endif /* PFE_CFG_PFE_MASTER */
 

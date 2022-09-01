@@ -11,6 +11,7 @@
 #include "oal.h"
 #include "hal.h"
 #include "pfe_cbus.h"
+#include "pfe_hm.h"
 #include "pfe_hif_csr.h"
 #include "pfe_platform_cfg.h"
 #include "pfe_feature_mgr.h"
@@ -163,12 +164,8 @@ errno_t pfe_hif_cfg_isr(addr_t base_va)
 			/*	Process interrupts which are triggered AND enabled */
 			if ((reg_src & reg_en & HIF_ERR_INT) != 0U)
 			{
-				NXP_LOG_INFO("HIF_ERR_INT (0x%x)\n", (uint_t)reg_src);
+				pfe_hm_report_error(HM_SRC_HIF, HM_EVT_HIF_ERR, "Interrupt (0x%x)", (uint_t)reg_src);
 				ret = EOK;
-			}
-			else
-			{
-				NXP_LOG_INFO("HIF_INT_SRC_HIF_ERR_INT\n");
 			}
 		}
 
@@ -188,12 +185,8 @@ errno_t pfe_hif_cfg_isr(addr_t base_va)
 			/*	Process interrupts which are triggered AND enabled */
 			if ((reg_src & reg_en & HIF_TX_FIFO_ERR_INT) != 0U)
 			{
-				NXP_LOG_INFO("HIF_TX_FIFO_ERR_INT (0x%x)\n", (uint_t)reg_src);
+				pfe_hm_report_error(HM_SRC_HIF, HM_EVT_HIF_TX_FIFO, "Interrupt (0x%x)", (uint_t)reg_src);
 				ret = EOK;
-			}
-			else
-			{
-				NXP_LOG_INFO("HIF_INT_SRC_HIF_TX_FIFO_ERR_INT\n");
 			}
 		}
 
@@ -213,12 +206,8 @@ errno_t pfe_hif_cfg_isr(addr_t base_va)
 			/*	Process interrupts which are triggered AND enabled */
 			if ((reg_src & reg_en & HIF_RX_FIFO_ERR_INT) != 0U)
 			{
-				NXP_LOG_INFO("HIF_RX_FIFO_ERR_INT (0x%x)\n", (uint_t)reg_src);
+				pfe_hm_report_error(HM_SRC_HIF, HM_EVT_HIF_RX_FIFO, "Interrupt (0x%x)", (uint_t)reg_src);
 				ret = EOK;
-			}
-			else
-			{
-				NXP_LOG_INFO("HIF_INT_SRC_HIF_RX_FIFO_ERR_INT\n");
 			}
 		}
 	}
@@ -1223,6 +1212,65 @@ uint32_t pfe_hif_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
+/**
+ * @brief		HIF error detect in polling
+ * @details		check and return the interrupt src in polling mode
+ * @param[in]	base_va Base address of HIF register space (virtual)
+ * @return		return HIF error interrupt source
+ * @note		This is polling function and will be called to check the error status of HIF
+ * 				Make sure the call is protected by some per-HIF mutex
+ */
+uint32_t pfe_hif_cfg_get_err_poll(addr_t base_va)
+{
+	uint32_t int_src;
+	uint32_t reg_src;
+
+	int_src = hal_read32(base_va + HIF_INT_SRC);
+
+	if(0U != int_src)
+	{
+		if (0U != (int_src & HIF_INT_SRC_HIF_ERR_INT))
+		{
+			/*	Get interrupt src */
+			reg_src = hal_read32(base_va + HIF_ERR_INT_SRC);
+			/*	Write 1 to clear */
+			hal_write32(reg_src, base_va + HIF_ERR_INT_SRC);
+
+			if(0U != (reg_src & HIF_ERR_INT_SRC))
+			{
+				NXP_LOG_INFO("HIF_ERR_INT (0x%x)\n", (uint_t)reg_src);
+			}
+		}
+
+		if (0U != (int_src & HIF_INT_SRC_HIF_TX_FIFO_ERR_INT))
+		{
+			/*	Get interrupt src */
+			reg_src = hal_read32(base_va + HIF_TX_FIFO_ERR_INT_SRC);
+			/*	Write 1 to clear */
+			hal_write32(reg_src, base_va + HIF_TX_FIFO_ERR_INT_SRC);
+
+			if(0U != (reg_src & HIF_ERR_INT_SRC))
+			{
+				NXP_LOG_INFO("HIF_TX_FIFO_ERR_INT (0x%x)\n", (uint_t)reg_src);
+			}
+		}
+
+		if (0U != (int_src & HIF_INT_SRC_HIF_RX_FIFO_ERR_INT))
+		{
+			/*	Get interrupt src */
+			reg_src = hal_read32(base_va + HIF_RX_FIFO_ERR_INT_SRC);
+			/*	Write 1 to clear */
+			hal_write32(reg_src, base_va + HIF_RX_FIFO_ERR_INT_SRC);
+
+			if(0U != (reg_src & HIF_ERR_INT_SRC))
+			{
+				NXP_LOG_INFO("HIF_RX_FIFO_ERR_INT (0x%x)\n", (uint_t)reg_src);
+			}
+		}
+	}
+
+	return int_src;
+}
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE
 #include "Eth_43_PFE_MemMap.h"

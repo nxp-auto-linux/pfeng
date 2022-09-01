@@ -69,10 +69,15 @@ pfe_hif_chnl_t *pfe_hif_get_channel(const pfe_hif_t *hif, pfe_hif_chnl_id_t chan
 void pfe_hif_destroy(pfe_hif_t *hif);
 
 #ifdef PFE_CFG_PFE_MASTER
-errno_t pfe_hif_isr(const pfe_hif_t *hif);
-void pfe_hif_irq_mask(const pfe_hif_t *hif);
-void pfe_hif_irq_unmask(const pfe_hif_t *hif);
+errno_t pfe_hif_isr(pfe_hif_t *hif);
+void pfe_hif_irq_mask(pfe_hif_t *hif);
+void pfe_hif_irq_unmask(pfe_hif_t *hif);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_hif_get_text_statistics(const pfe_hif_t *hif, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+uint32_t pfe_hif_get_err_poll(pfe_hif_t *hif);
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 void pfe_hif_clear_master_up(const pfe_hif_t *hif);

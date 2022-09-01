@@ -659,10 +659,12 @@ typedef enum {
  *
  * @snippet     fpp.h  fpp_conntrack_stats_t
  */
+/* [fpp_conntrack_stats_t] */
 typedef struct CAL_PACKED_ALIGNED(4) {
     uint32_t hit;        /*< Number of frames that hit the conntrack */
     uint32_t hit_bytes;  /*< Sum of bytesizes of all frames that hit the conntrack */
 } fpp_conntrack_stats_t;
+/* [fpp_conntrack_stats_t] */
 
 /**
  * @brief       Data structure for IPv4 conntrack.

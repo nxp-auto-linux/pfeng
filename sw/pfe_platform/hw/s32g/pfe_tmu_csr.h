@@ -263,7 +263,10 @@ void pfe_tmu_reclaim_init(addr_t cbus_base_va);
 void pfe_tmu_cfg_reset(addr_t cbus_base_va);
 void pfe_tmu_cfg_enable(addr_t cbus_base_va);
 void pfe_tmu_cfg_disable(addr_t cbus_base_va);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_tmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

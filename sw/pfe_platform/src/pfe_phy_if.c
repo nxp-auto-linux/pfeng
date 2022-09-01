@@ -1,9 +1,9 @@
 /* =========================================================================
- *  
- *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *	
+ *	Copyright (c) 2019 Imagination Technologies Limited
+ *	Copyright 2018-2022 NXP
  *
- *  SPDX-License-Identifier: GPL-2.0
+ *	SPDX-License-Identifier: GPL-2.0
  *
  * ========================================================================= */
 
@@ -39,8 +39,8 @@ struct pfe_phy_if_tag
 	LLIST_t log_ifs;
 	oal_mutex_t lock;
 	bool_t is_enabled;
-    pfe_ct_block_state_t block_state; /* Copy of value in phy_if_class for faster access */
-    pfe_mac_db_t *mac_db; /* MAC database */
+	pfe_ct_block_state_t block_state; /* Copy of value in phy_if_class for faster access */
+	pfe_mac_db_t *mac_db; /* MAC database */
 	union
 	{
 		pfe_emac_t *emac;
@@ -80,6 +80,7 @@ static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface);
 static errno_t pfe_phy_if_set_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag);
 static errno_t pfe_phy_if_clear_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag);
 static pfe_ct_if_flags_t pfe_phy_if_get_flag_nolock(const pfe_phy_if_t *iface, pfe_ct_if_flags_t flag);
+static errno_t pfe_phy_if_enable_hw_block(const pfe_phy_if_t *iface);
 
 #if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
@@ -155,7 +156,7 @@ static uint32_t pfe_phy_if_stat_to_str(const pfe_ct_phy_if_stats_t *stat, char *
 {
 	uint32_t len = 0U;
 
-    (void)verb_level;
+	(void)verb_level;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == stat) || (NULL == buf)))
 	{
@@ -165,8 +166,8 @@ static uint32_t pfe_phy_if_stat_to_str(const pfe_ct_phy_if_stats_t *stat, char *
 	else
 #endif
 	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "Ingress frames:   %u\n", oal_ntohl(stat->ingress));
-		len += oal_util_snprintf(buf + len, buf_len - len, "Egress frames:    %u\n", oal_ntohl(stat->egress));
+		len += oal_util_snprintf(buf + len, buf_len - len, "Ingress frames:	  %u\n", oal_ntohl(stat->ingress));
+		len += oal_util_snprintf(buf + len, buf_len - len, "Egress frames:	  %u\n", oal_ntohl(stat->egress));
 		len += oal_util_snprintf(buf + len, buf_len - len, "Malformed frames: %u\n", oal_ntohl(stat->malformed));
 		len += oal_util_snprintf(buf + len, buf_len - len, "Discarded frames: %u\n", oal_ntohl(stat->discarded));
 	}
@@ -180,8 +181,8 @@ static uint32_t pfe_phy_if_stat_to_str(const pfe_ct_phy_if_stats_t *stat, char *
  * @brief		Create new physical interface instance
  * @param[in]	class The classifier instance
  * @param[in]	id The PFE firmware is using HW interface identifiers to distinguish
- * 				between particular interfaces. The set of available IDs (the
- * 				pfe_ct_phy_if_id_t) shall remain compatible with the firmware.
+ *				between particular interfaces. The set of available IDs (the
+ *				pfe_ct_phy_if_id_t) shall remain compatible with the firmware.
  * @param[in]	name Name of the interface
  * @return		The interface instance or NULL if failed
  */
@@ -226,19 +227,22 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 		if (NULL == iface->mac_db)
 		{
 			NXP_LOG_ERROR("Could not create MAC db\n");
-			goto free_and_fail;
+			pfe_phy_if_destroy(iface);
+			return NULL;
 		}
 
 		if (EOK != pfe_class_get_mmap(class, 0, &pfe_pe_mmap))
 		{
 			NXP_LOG_ERROR("Could not get memory map\n");
-			goto free_and_fail;
+			pfe_phy_if_destroy(iface);
+			return NULL;
 		}
 
 		if (oal_ntohl(pfe_pe_mmap.dmem_phy_if_size) < ((1UL + (uint8_t)id) * sizeof(pfe_ct_phy_if_t)))
 		{
 			NXP_LOG_ERROR("PhyIf storage is too small\n");
-			goto free_and_fail;
+			pfe_phy_if_destroy(iface);
+			return NULL;
 		}
 
 		/*	Get physical interface instance address within DMEM array */
@@ -257,6 +261,7 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 		/*	Initialize the interface structure in classifier */
 		iface->phy_if_class.id = id;
 		iface->phy_if_class.block_state = IF_BS_FORWARDING;
+		iface->phy_if_class.mgmt_interface = PFE_PHY_IF_ID_INVALID;
 		for(i = 0U; i < PFE_CT_MIRRORS_COUNT; i++)
 		{
 			iface->phy_if_class.rx_mirrors[i] = 0;
@@ -280,10 +285,6 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 	}
 
 	return iface;
-
-free_and_fail:
-	pfe_phy_if_destroy(iface);
-	return NULL;
 }
 
 /**
@@ -375,7 +376,7 @@ __attribute__((pure)) pfe_class_t *pfe_phy_if_get_class(const pfe_phy_if_t *ifac
 /**
  * @brief		Add logical interface
  * @details		First added logical interface will become the default one. Default is used
- * 				when packet is not matching any other logical interface within the physical one.
+ *				when packet is not matching any other logical interface within the physical one.
  * @param[in]	iface The physical interface instance
  * @param[in]	log_if The logical interface instance
  * @retval		EOK Success
@@ -424,14 +425,24 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 			NXP_LOG_ERROR("Could not get DMEM base (%s, parent: %s)\n",
 					pfe_log_if_get_name(log_if), iface->name);
 
-			goto unlock_and_fail;
+			if (EOK != oal_mutex_unlock(&iface->lock))
+			{
+				NXP_LOG_DEBUG("mutex unlock failed\n");
+			}
+
+			return ENOEXEC;
 		}
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 		if (0U == log_if_dmem_base)
 		{
 			NXP_LOG_ERROR("LogIf base is NULL (%s)\n", pfe_log_if_get_name(log_if));
-			goto unlock_and_fail;
+			if (EOK != oal_mutex_unlock(&iface->lock))
+			{
+				NXP_LOG_DEBUG("mutex unlock failed\n");
+			}
+
+			return ENOEXEC;
 		}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
@@ -467,15 +478,24 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 		{
 			NXP_LOG_ERROR("Could not get DMEM base (%s, parent: %s)\n",
 					pfe_log_if_get_name(tmp_entry->log_if), iface->name);
+			if (EOK != oal_mutex_unlock(&iface->lock))
+			{
+				NXP_LOG_DEBUG("mutex unlock failed\n");
+			}
 
-			goto unlock_and_fail;
+			return ENOEXEC;
 		}
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 		if (0U == log_if_dmem_base)
 		{
 			NXP_LOG_ERROR("LogIf base is NULL (%s)\n", pfe_log_if_get_name(tmp_entry->log_if));
-			goto unlock_and_fail;
+			if (EOK != oal_mutex_unlock(&iface->lock))
+			{
+				NXP_LOG_DEBUG("mutex unlock failed\n");
+			}
+
+			return ENOEXEC;
 		}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
@@ -485,18 +505,26 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 			NXP_LOG_ERROR("Can't set next linked list pointer (%s, parent: %s)\n",
 					pfe_log_if_get_name(log_if), iface->name);
 
-			goto unlock_and_fail;
+			if (EOK != oal_mutex_unlock(&iface->lock))
+			{
+				NXP_LOG_DEBUG("mutex unlock failed\n");
+			}
+
+			return ENOEXEC;
 		}
 	}
-
 	/*	Get DMEM pointer to the new logIf */
 	log_if_dmem_base = 0U;
 	if (EOK != pfe_log_if_get_dmem_base(log_if, &log_if_dmem_base))
 	{
 		NXP_LOG_ERROR("Could not get logIf DMEM base (%s, parent: %s)\n",
 				pfe_log_if_get_name(log_if), iface->name);
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
 
-		goto unlock_and_fail;
+		return ENOEXEC;
 	}
 
 	/*	Set list head to the new logIf */
@@ -506,7 +534,12 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	if (EOK != pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class))
 	{
 		NXP_LOG_ERROR("Unable to update structure in DMEM (%s)\n", iface->name);
-		goto unlock_and_fail;
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
+
+		return ENOEXEC;
 	}
 	else
 	{
@@ -525,14 +558,6 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	}
 
 	return EOK;
-
-unlock_and_fail:
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-
-	return ENOEXEC;
 }
 
 static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
@@ -628,7 +653,7 @@ static bool_t pfe_phy_if_has_loopback_log_if_nolock(const pfe_phy_if_t *iface)
  * @param[in]	iface The physical interface instance
  * @param[in]	log_if The logical interface instance
  * @return		TRUE if logical interface is bound to the physical one. False
- * 				otherwise.
+ *				otherwise.
  */
 bool_t pfe_phy_if_has_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 {
@@ -723,7 +748,12 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 		NXP_LOG_ERROR("Could not get DMEM base (%s, parent: %s)\n",
 				pfe_log_if_get_name(entry->log_if), iface->name);
 
-		goto unlock_and_fail;
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
+
+		return ENOEXEC;
 	}
 
 	if (NULL == prev_entry)
@@ -752,7 +782,12 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 			NXP_LOG_ERROR("Can't set next linked list pointer (%s, parent: %s)\n",
 					pfe_log_if_get_name(prev_entry->log_if), iface->name);
 
-			goto unlock_and_fail;
+			if (EOK != oal_mutex_unlock(&iface->lock))
+			{
+				NXP_LOG_DEBUG("mutex unlock failed\n");
+			}
+
+			return ENOEXEC;
 		}
 
 		/*	If 'next' pointer of deleted entry is NULL then we're removing default interface */
@@ -778,7 +813,12 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 	if (EOK != pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class))
 	{
 		NXP_LOG_ERROR("Unable to update structure in DMEM (%s)\n", iface->name);
-		goto unlock_and_fail;
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
+
+		return ENOEXEC;
 	}
 	else
 	{
@@ -814,14 +854,6 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 	}
 
 	return ret;
-
-unlock_and_fail:
-	if (EOK != oal_mutex_unlock(&iface->lock))
-	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
-	}
-
-	return ENOEXEC;
 }
 
 /**
@@ -856,7 +888,7 @@ errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t blo
 		ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 
 		if (EOK != ret)
-		{   /* Failure to update the HW */
+		{	/* Failure to update the HW */
 			/* Restore previous value */
 			iface->block_state = tmp;
 			iface->phy_if_class.block_state = tmp;
@@ -1250,6 +1282,54 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 }
 
 /**
+ * @brief		Check if hw_block is enabled
+ * @param[in]	iface The interface instance
+ * @retval		TRUE if enabled
+ * @retval		FALSE if disabled
+ */
+static errno_t pfe_phy_if_enable_hw_block(const pfe_phy_if_t *iface)
+{
+	errno_t ret = EOK;
+
+	/*	Enable also associated HW block */
+	if (NULL == iface->port.instance)
+	{
+		/*	No HW block associated */
+		;
+	}
+	else
+	{
+		if (PFE_PHY_IF_EMAC == iface->type)
+		{
+			pfe_emac_enable(iface->port.emac);
+		}
+		else if (PFE_PHY_IF_HIF == iface->type)
+		{
+			ret = pfe_hif_chnl_rx_enable(iface->port.hif_ch);
+			if (EOK != ret)
+			{
+				NXP_LOG_DEBUG("Can't enable HIF channel RX: %d\n", ret);
+			}
+			else
+			{
+				ret = pfe_hif_chnl_tx_enable(iface->port.hif_ch);
+				if (EOK != ret)
+				{
+					NXP_LOG_DEBUG("Can't enable HIF channel TX: %d\n", ret);
+				}
+			}
+		}
+		else
+		{
+			NXP_LOG_DEBUG("Invalid interface type\n");
+			ret = EINVAL;
+		}
+	}
+
+	return ret;
+}
+
+/**
  * @brief		Enable interface (RX/TX)
  * @param[in]	iface The interface instance
  * @retval		EOK Success
@@ -1291,40 +1371,7 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 			/*	Mark the interface as enabled */
 			iface->is_enabled = TRUE;
 
-			/*	Enable also associated HW block */
-			if (NULL == iface->port.instance)
-			{
-				/*	No HW block associated */
-				;
-			}
-			else
-			{
-				if (PFE_PHY_IF_EMAC == iface->type)
-				{
-					pfe_emac_enable(iface->port.emac);
-				}
-				else if (PFE_PHY_IF_HIF == iface->type)
-				{
-					ret = pfe_hif_chnl_rx_enable(iface->port.hif_ch);
-					if (EOK != ret)
-					{
-						NXP_LOG_DEBUG("Can't enable HIF channel RX: %d\n", ret);
-					}
-					else
-					{
-						ret = pfe_hif_chnl_tx_enable(iface->port.hif_ch);
-						if (EOK != ret)
-						{
-							NXP_LOG_DEBUG("Can't enable HIF channel TX: %d\n", ret);
-						}
-					}
-				}
-				else
-				{
-					NXP_LOG_DEBUG("Invalid interface type\n");
-					ret = EINVAL;
-				}
-			}
+			ret = pfe_phy_if_enable_hw_block(iface);
 
 			if (EOK != ret)
 			{
@@ -1459,6 +1506,87 @@ errno_t pfe_phy_if_disable(pfe_phy_if_t *iface)
 	}
 
 	return ret;
+}
+
+
+/**
+ * @brief		Set management interface
+ * @param[in]	iface The interface instance
+ * @param[in]	mgmt_interface The management interface
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ */
+errno_t pfe_phy_if_set_mgmt_interface(pfe_phy_if_t *iface, pfe_ct_phy_if_id_t mgmt_interface)
+{
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+
+		iface->phy_if_class.mgmt_interface = mgmt_interface;
+		/*	Write the configuration to classifier */
+		if (EOK != pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class))
+		{
+			NXP_LOG_ERROR("Phy IF configuration mgmt interface failed\n");
+			ret = EINVAL;
+		}
+		else
+		{
+			ret = EOK;
+		}
+
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Get management interface
+ * @param[in]	iface The interface instance
+ * @retval		Phy interface ID used as PTP management interface.
+ */
+pfe_ct_phy_if_id_t pfe_phy_if_get_mgmt_interface(pfe_phy_if_t *iface)
+{
+	pfe_ct_phy_if_id_t mgmt_interface = PFE_PHY_IF_ID_INVALID;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		/*	Update the interface structure */
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+
+		mgmt_interface = iface->phy_if_class.mgmt_interface;
+
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
+	}
+
+	return mgmt_interface;
 }
 
 /**
@@ -1719,10 +1847,10 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 }
 
 /**
- * @brief               Enable loopback mode
- * @param[in]   iface The interface instance
- * @retval              EOK Success
- * @retval              EINVAL Invalid or missing argument
+ * @brief				Enable loopback mode
+ * @param[in]	iface The interface instance
+ * @retval				EOK Success
+ * @retval				EINVAL Invalid or missing argument
  */
 errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 {
@@ -1743,22 +1871,22 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 			NXP_LOG_DEBUG("mutex lock failed\n");
 		}
 
-		/*      Enable instance loopback mode. Backup flags and write the changes. */
+		/*		Enable instance loopback mode. Backup flags and write the changes. */
 		tmp = iface->phy_if_class.flags;
 		iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp | oal_htonl(IF_FL_LOOPBACK));
 		ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 		if (EOK != ret)
 		{
-			/*      Failed. Revert flags. */
+			/*		Failed. Revert flags. */
 			NXP_LOG_ERROR("Phy IF configuration failed\n");
 			iface->phy_if_class.flags = tmp;
 		}
 		else
 		{
-			/*      Set up also associated HW block */
+			/*		Set up also associated HW block */
 			if (NULL == iface->port.instance)
 			{
-				/*      No HW block associated */
+				/*		No HW block associated */
 				;
 			}
 			else
@@ -1769,7 +1897,7 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 				}
 				else if (PFE_PHY_IF_HIF == iface->type)
 				{
-					/*      HIF/UTIL does not offer filtering ability */
+					/*		HIF/UTIL does not offer filtering ability */
 					;
 				}
 				else
@@ -1790,10 +1918,10 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 }
 
 /**
- * @brief               Disable loopback mode
- * @param[in]   iface The interface instance
- * @retval              EOK Success
- * @retval              EINVAL Invalid or missing argument
+ * @brief				Disable loopback mode
+ * @param[in]	iface The interface instance
+ * @retval				EOK Success
+ * @retval				EINVAL Invalid or missing argument
  */
 errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 {
@@ -1833,22 +1961,22 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 		}
 		else
 		{
-			/*      Disable instance loopback mode. Backup flags and write the changes. */
+			/*		Disable instance loopback mode. Backup flags and write the changes. */
 			tmp = iface->phy_if_class.flags;
 			iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & oal_htonl(~(uint32_t)IF_FL_LOOPBACK));
 			ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 			if (EOK != ret)
 			{
-				/*      Failed. Revert flags. */
+				/*		Failed. Revert flags. */
 				NXP_LOG_ERROR("Phy IF configuration failed\n");
 				iface->phy_if_class.flags = tmp;
 			}
 			else
 			{
-				/*      Set up also associated HW block */
+				/*		Set up also associated HW block */
 				if (NULL == iface->port.instance)
 				{
-					/*      No HW block associated */
+					/*		No HW block associated */
 					;
 				}
 				else
@@ -1859,7 +1987,7 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 					}
 					else if (PFE_PHY_IF_HIF == iface->type)
 					{
-						/*      HIF does not offer filtering ability */
+						/*		HIF does not offer filtering ability */
 						;
 					}
 					else
@@ -2249,7 +2377,7 @@ errno_t pfe_phy_if_allmulti_disable(pfe_phy_if_t *iface)
  * @param[in]	iface The interface instance
  * @param[out]	tx_ena tx flow control status
  * @param[out]	rx_ena rx flow control status
- * @return      EOK on success
+ * @return		EOK on success
  */
 errno_t pfe_phy_if_get_flow_control(pfe_phy_if_t *iface, bool_t* tx_ena, bool_t* rx_ena)
 {
@@ -2270,7 +2398,7 @@ errno_t pfe_phy_if_get_flow_control(pfe_phy_if_t *iface, bool_t* tx_ena, bool_t*
 		}
 		if (NULL == iface->port.instance)
 		{
-			/*      No HW block associated */
+			/*		No HW block associated */
 			;
 		}
 		else
@@ -2294,10 +2422,10 @@ errno_t pfe_phy_if_get_flow_control(pfe_phy_if_t *iface, bool_t* tx_ena, bool_t*
 }
 
 /**
- * @brief       Set tx flow control
- * @param[in]   iface The interface instance
- * @param[in]   tx_ena TRUE: enable flow control, FALSE: disable flow control
- * @return      EOK on success
+ * @brief		Set tx flow control
+ * @param[in]	iface The interface instance
+ * @param[in]	tx_ena TRUE: enable flow control, FALSE: disable flow control
+ * @return		EOK on success
  */
 errno_t pfe_phy_if_set_tx_flow_control(pfe_phy_if_t *iface, bool_t tx_ena)
 {
@@ -2351,10 +2479,10 @@ errno_t pfe_phy_if_set_tx_flow_control(pfe_phy_if_t *iface, bool_t tx_ena)
 }
 
 /**
- * @brief       Set rx flow control
- * @param[in]   iface The interface instance
- * @param[in]   rx_ena TRUE: enable flow control, FALSE: disable flow control
- * @return      EOK on success
+ * @brief		Set rx flow control
+ * @param[in]	iface The interface instance
+ * @param[in]	rx_ena TRUE: enable flow control, FALSE: disable flow control
+ * @return		EOK on success
  */
 errno_t pfe_phy_if_set_rx_flow_control(pfe_phy_if_t *iface, bool_t rx_ena)
 {
@@ -2374,7 +2502,7 @@ errno_t pfe_phy_if_set_rx_flow_control(pfe_phy_if_t *iface, bool_t rx_ena)
 		}
 		if (NULL == iface->port.instance)
 		{
-			/*      No HW block associated */
+			/*		No HW block associated */
 			;
 		}
 		else
@@ -2816,22 +2944,22 @@ errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, 
 errno_t pfe_phy_if_set_spd(pfe_phy_if_t *iface, uint32_t spd_addr)
 {
 	errno_t ret;
-    /* Update configuration */
-    iface->phy_if_class.ipsec_spd = oal_htonl(spd_addr);
-    /* Propagate the change into the classifier */
-    ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
-    return ret;
+	/* Update configuration */
+	iface->phy_if_class.ipsec_spd = oal_htonl(spd_addr);
+	/* Propagate the change into the classifier */
+	ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
+	return ret;
 }
 
 /**
  * @brief Returns the SPD address used by the physical interface
  * @param[in] iface Physical interface which shall be queried
  * @return Address of the SPD being used by the given physical interface. Value 0 means that no
- * *       SPD is in use thus the IPsec feature is disabled for the given interface.
+ * *	   SPD is in use thus the IPsec feature is disabled for the given interface.
  */
 uint32_t pfe_phy_if_get_spd(const pfe_phy_if_t *iface)
 {
-    return oal_ntohl(iface->phy_if_class.ipsec_spd);
+	return oal_ntohl(iface->phy_if_class.ipsec_spd);
 }
 
 /**
@@ -3001,14 +3129,14 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
  * @param[in] iface Interface to be configured
  * @param[in] sel Selector of the RX mirror (0 to PFE_CT_MIRRORS_COUNT - 1)
  * @param[in] mirror Mirror to be configured.
- *                   Value NULL disables the selected RX mirror
- *  @return EOK when success or error code otherwise
+ *					 Value NULL disables the selected RX mirror
+ *	@return EOK when success or error code otherwise
  */
 errno_t pfe_phy_if_set_rx_mirror(pfe_phy_if_t *iface, uint32_t sel, const pfe_mirror_t *mirror)
 {
-    errno_t ret;
-    uint32_t tmp;
-    uint32_t address = 0U;
+	errno_t ret;
+	uint32_t tmp;
+	uint32_t address = 0U;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -3041,7 +3169,7 @@ errno_t pfe_phy_if_set_rx_mirror(pfe_phy_if_t *iface, uint32_t sel, const pfe_mi
 		}
 	}
 
-    return ret;
+	return ret;
 }
 
 /**
@@ -3049,14 +3177,14 @@ errno_t pfe_phy_if_set_rx_mirror(pfe_phy_if_t *iface, uint32_t sel, const pfe_mi
  * @param[in] iface Interface to be configured
  * @param[in] sel Selector of the TX mirror (0 to PFE_CT_MIRRORS_COUNT - 1)
  * @param[in] mirror Mirror to be configured.
- *                   Value NULL disables the selected RX mirror
- *  @return EOK when success or error code otherwise
+ *					 Value NULL disables the selected RX mirror
+ *	@return EOK when success or error code otherwise
  */
 errno_t pfe_phy_if_set_tx_mirror(pfe_phy_if_t *iface, uint32_t sel, const pfe_mirror_t *mirror)
 {
-    errno_t ret;
-    uint32_t tmp;
-    uint32_t address = 0U;
+	errno_t ret;
+	uint32_t tmp;
+	uint32_t address = 0U;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == iface))
@@ -3090,7 +3218,7 @@ errno_t pfe_phy_if_set_tx_mirror(pfe_phy_if_t *iface, uint32_t sel, const pfe_mi
 		}
 	}
 
-    return ret;
+	return ret;
 }
 
 /**
@@ -3101,7 +3229,7 @@ errno_t pfe_phy_if_set_tx_mirror(pfe_phy_if_t *iface, uint32_t sel, const pfe_mi
  */
 pfe_mirror_t *pfe_phy_if_get_tx_mirror(const pfe_phy_if_t *iface, uint32_t sel)
 {
-    uint32_t address;
+	uint32_t address;
 	pfe_mirror_t *ptr;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -3124,7 +3252,7 @@ pfe_mirror_t *pfe_phy_if_get_tx_mirror(const pfe_phy_if_t *iface, uint32_t sel)
 		}
 	}
 
-    return ptr;
+	return ptr;
 }
 
 /**
@@ -3135,7 +3263,7 @@ pfe_mirror_t *pfe_phy_if_get_tx_mirror(const pfe_phy_if_t *iface, uint32_t sel)
  */
 pfe_mirror_t *pfe_phy_if_get_rx_mirror(const pfe_phy_if_t *iface, uint32_t sel)
 {
-    uint32_t address;
+	uint32_t address;
 	pfe_mirror_t *ptr;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -3158,7 +3286,7 @@ pfe_mirror_t *pfe_phy_if_get_rx_mirror(const pfe_phy_if_t *iface, uint32_t sel)
 		}
 	}
 
-    return ptr;
+	return ptr;
 }
 
 /**
@@ -3212,10 +3340,10 @@ __attribute__((pure)) char_t *pfe_phy_if_get_name(const pfe_phy_if_t *iface)
 /**
  * @brief		Return physical interface runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
- * @param[in]	iface 		The physical interface instance
- * @param[in]	buf 		A pointer to the buffer to write to
- * @param[in]	buf_len 	Buffer length
- * @param[in]	verb_level 	Verbosity level
+ * @param[in]	iface		The physical interface instance
+ * @param[in]	buf			A pointer to the buffer to write to
+ * @param[in]	buf_len		Buffer length
+ * @param[in]	verb_level	Verbosity level
  * @return		Number of bytes written to the buffer
  */
 uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level)
@@ -3259,6 +3387,61 @@ uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, 
 }
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+/**
+ * @brief		Get statistic values in numeric form
+ * @details		This function providing single statistic value
+ *				from the EMAC block.
+ * @param[in]	iface The interface instance
+ * @param[in]	stat_id	ID of required statistic (offset of register)
+ * @return		Value of requested statistic
+ */
+uint32_t pfe_phy_if_get_stat_value(pfe_phy_if_t *iface, uint32_t stat_id)
+{
+	uint32_t ret = 0U;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = 0xFFFFFFFFU;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex lock failed\n");
+		}
+
+		if (NULL == iface->port.instance)
+		{
+			/*	No HW block associated */
+			;
+		}
+		else
+		{
+			if (PFE_PHY_IF_EMAC == iface->type)
+			{
+				ret = pfe_emac_get_stat_value(iface->port.emac, stat_id);
+				if (0xFFFFFFFFU == ret)
+				{
+					NXP_LOG_ERROR("Unable to get statistic values\n");
+				}
+			}
+			else
+			{
+				ret = 0xFFFFFFFFU;
+			}
+		}
+
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_DEBUG("mutex unlock failed\n");
+		}
+	}
+	return ret;
+}
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

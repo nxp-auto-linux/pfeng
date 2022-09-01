@@ -284,12 +284,17 @@ bool_t pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(addr_t base_va, uint32_t channel_id
 bool_t pfe_hif_chnl_cfg_is_tx_bdp_fifo_empty(addr_t base_va, uint32_t channel_id);
 errno_t pfe_hif_chnl_cfg_set_rx_irq_coalesce(addr_t base_va, uint32_t channel_id, uint32_t frames, uint32_t cycles);
 errno_t pfe_hif_chnl_cfg_get_rx_irq_coalesce(addr_t base_va, uint32_t channel_id, uint32_t *frames, uint32_t *cycles);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_hif_chnl_cfg_get_text_stat(addr_t base_va, uint32_t channel_id, char_t *buf, uint32_t size, uint8_t verb_level);
+uint32_t pfe_hif_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 uint32_t pfe_hif_chnl_cfg_get_tx_cnt(addr_t base_va, uint32_t channel_id);
 uint32_t pfe_hif_chnl_cfg_get_rx_cnt(addr_t base_va, uint32_t channel_id);
-uint32_t pfe_hif_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
 errno_t pfe_hif_chnl_cfg_ltc_set(addr_t base_va, uint32_t channel_id, uint8_t val);
 uint32_t pfe_hif_chnl_cfg_ltc_get(addr_t base_va, uint32_t channel_id);
+uint32_t pfe_hif_cfg_get_err_poll(addr_t base_va);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

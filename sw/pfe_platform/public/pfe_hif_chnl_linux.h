@@ -145,8 +145,11 @@
  * @details	When TRUE then RX buffer management is embedded so caller layer
  * 			does not need to care about it. FALSE disables the feature.
  */
+#ifndef PFE_CFG_PLATFORM_TEST
 #define PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED	FALSE
-
+#else
+#define PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED	TRUE
+#endif
 /**
  * @brief	RX OOB management
  * @details	When TRUE then RX OOB buffer management is embedded so caller layer

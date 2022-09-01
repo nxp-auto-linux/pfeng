@@ -430,7 +430,7 @@ static inline bool_t pfe_hif_pkt_icmp_csum_valid(const pfe_hif_pkt_t *pkt)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return !!(pkt->flags.specific.rx_flags & HIF_RX_ICMP_CSUM);
+	return !!((uint16_t)pkt->flags.specific.rx_flags & (uint16_t)HIF_RX_ICMP_CSUM);
 }
 /**
  * @brief		Get pointer to data buffer

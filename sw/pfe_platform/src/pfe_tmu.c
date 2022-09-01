@@ -29,6 +29,9 @@ struct pfe_tmu_tag
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
+static errno_t pfe_tmu_set_queue_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue,
+									  pfe_tmu_queue_mode_t mode, uint32_t min, uint32_t max, uint16_t sum);
+
 /**
  * @brief		Check whether the provided physical interface ID represents HIF-type interface or not.
  * @details		Optionally, for HIF-type interfaces the function can also provide index of the given HIF
@@ -196,7 +199,7 @@ static errno_t set_all_queues_to_min_length(const pfe_tmu_t *tmu, pfe_ct_phy_if_
 				mode = pfe_tmu_queue_get_mode(tmu, phy, queue, &min, &max);
 				switch (mode)
 				{
-					case TMU_Q_MODE_TAIL_DROP:	
+					case TMU_Q_MODE_TAIL_DROP:
 					{
 						ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, 1U);
 						break;
@@ -252,6 +255,73 @@ static void pfe_tmu_init(const pfe_tmu_t *tmu, const pfe_tmu_cfg_t *cfg)
 }
 
 /**
+ * @brief		Set queue mode
+ * @param[in]	tmu The TMU instance
+ * @parma[in]	phy Physical interface ID
+ * @param[in]	queue The queue ID
+ * @param[in]	mode Mode
+ * @param[in]	min Min threshold (number of packets)
+ * @param[in]	max Max threshold (number of packets)
+ * @param[in]	sum Sum of queue lengths
+ * @return		EOK if success, error code otherwise
+ */
+static errno_t pfe_tmu_set_queue_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_t queue,
+							  pfe_tmu_queue_mode_t mode, uint32_t min, uint32_t max, uint16_t sum)
+{
+	errno_t ret_val = EOK;
+	uint16_t sum_tmp = 0U;
+	uint8_t err051211_hif_idx = 0xFF;	/* Index of HIF in  pfe_ct_hif_tmu_queue_sizes_t */
+
+	/* If err051211_workaround is active and queue of some HIF was modified, then update sum of queue lengths in firmware. */
+	if ((TRUE == is_hif_by_id(phy, &err051211_hif_idx)) &&
+		(TRUE == pfe_feature_mgr_is_available("err051211_workaround")))
+	{
+		pfe_ct_class_mmap_t mmap = {0};
+		ret_val = pfe_class_get_mmap(tmu->class, 0, &mmap);
+		if (EOK == ret_val)
+		{
+			const uint32_t addr = oal_ntohl(mmap.hif_tmu_queue_sizes) + (err051211_hif_idx * sizeof(uint16_t));
+			sum_tmp = oal_htons(sum);
+			ret_val = pfe_class_write_dmem(tmu->class, -1, addr, (void *)&sum_tmp, sizeof(uint16_t));
+		}
+	}
+
+	/* Set new tmu configuration */
+	if (EOK == ret_val)
+	{
+		switch (mode)
+		{
+			case TMU_Q_MODE_TAIL_DROP:
+			{
+				ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, (uint16_t)max);
+				break;
+			}
+
+			case TMU_Q_MODE_WRED:
+			{
+				ret_val = pfe_tmu_q_mode_set_wred(tmu->cbus_base_va, phy, queue, (uint16_t)min, (uint16_t)max);
+				break;
+			}
+
+			case TMU_Q_MODE_DEFAULT:
+			{
+				ret_val = pfe_tmu_q_mode_set_default(tmu->cbus_base_va, phy, queue);
+				break;
+			}
+
+			default:
+			{
+				NXP_LOG_ERROR("Unknown queue mode: %d\n", mode);
+				ret_val = EINVAL;
+				break;
+			}
+		}
+	}
+
+	return ret_val;
+}
+
+/**
 * @brief Create new TMU instance
 * @details		Creates and initializes TMU instance. After successful
 * 				call the TMU is configured and disabled.
@@ -295,7 +365,7 @@ pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cf
 
 			/*	Set new configuration */
 			pfe_tmu_init(tmu, cfg);
-		}	
+		}
 	}
 
 	return tmu;
@@ -598,7 +668,6 @@ errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
 {
 	errno_t ret_val = EOK;
 	uint16_t sum = 0U;	/* Sum of queue lengths */
-	uint8_t err051211_hif_idx = 0xFF;	/* Index of HIF in  pfe_ct_hif_tmu_queue_sizes_t */
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
@@ -625,51 +694,7 @@ errno_t pfe_tmu_queue_set_mode(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uin
 		}
 		else
 		{
-			/* If err051211_workaround is active and queue of some HIF was modified, then update sum of queue lengths in firmware. */
-			if ((TRUE == is_hif_by_id(phy, &err051211_hif_idx)) &&
-				(TRUE == pfe_feature_mgr_is_available("err051211_workaround")))
-			{
-				pfe_ct_class_mmap_t mmap = {0};
-				ret_val = pfe_class_get_mmap(tmu->class, 0, &mmap);
-				if (EOK == ret_val)
-				{
-					const uint32_t addr = oal_ntohl(mmap.hif_tmu_queue_sizes) + (err051211_hif_idx * sizeof(uint16_t));
-					sum = oal_htons(sum);
-					ret_val = pfe_class_write_dmem(tmu->class, -1, addr, (void *)&sum, sizeof(uint16_t));
-				}
-			}
-
-			/* Set new tmu configuration */
-			if (EOK == ret_val)
-			{
-				switch (mode)
-				{
-					case TMU_Q_MODE_TAIL_DROP:
-					{
-						ret_val = pfe_tmu_q_mode_set_tail_drop(tmu->cbus_base_va, phy, queue, (uint16_t)max);
-						break;
-					}
-
-					case TMU_Q_MODE_WRED:
-					{
-						ret_val = pfe_tmu_q_mode_set_wred(tmu->cbus_base_va, phy, queue, (uint16_t)min, (uint16_t)max);
-						break;
-					}
-
-					case TMU_Q_MODE_DEFAULT:
-					{
-						ret_val = pfe_tmu_q_mode_set_default(tmu->cbus_base_va, phy, queue);
-						break;
-					}
-
-					default:
-					{
-						NXP_LOG_ERROR("Unknown queue mode: %d\n", mode);
-						ret_val = EINVAL;
-						break;
-					}
-				}
-			}
+			ret_val = pfe_tmu_set_queue_mode(tmu, phy, queue, mode, min, max, sum);
 		}
 	}
 

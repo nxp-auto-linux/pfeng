@@ -4,6 +4,7 @@
  *  SPDX-License-Identifier: GPL-2.0
  *
  * ========================================================================= */
+
 #include "pfe_cfg.h"
 #include "libfci.h"
 #include "fpp.h"
@@ -101,6 +102,8 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     fpp_fp_table_cmd_t *fp_cmd;
     errno_t ret = EOK;
+    fci_fp_rule_info_t rule;
+    char *next_rule;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -183,16 +186,13 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
                 }
                 case FPP_ACTION_QUERY:
                 {
-                    char *rule_name = NULL;
-                    char *next_rule = NULL;
-                    uint32_t data, mask;
-                    uint16_t offset;
-                    pfe_ct_fp_flags_t flags;
+                    rule.rule_name = NULL;
+                    next_rule = NULL;
 
-                    ret = fci_fp_db_get_table_first_rule((char_t *)fp_cmd->table_info.t.table_name, &rule_name, &data, &mask, &offset, &flags, &next_rule);
+                    ret = fci_fp_db_get_table_first_rule((char_t *)fp_cmd->table_info.t.table_name, &rule, &next_rule);
                     if(EOK == ret)
                     {
-                        fci_fp_construct_rule_reply(&reply_buf->table_info.r, rule_name, next_rule, data, mask, offset, flags);
+                        fci_fp_construct_rule_reply(&reply_buf->table_info.r, rule.rule_name, next_rule, rule.data, rule.mask, rule.offset, rule.flags);
                         *fci_ret = FPP_ERR_OK;
                         *reply_len = sizeof(fpp_fp_table_cmd_t);
                     }
@@ -204,16 +204,10 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
                 }
                 case FPP_ACTION_QUERY_CONT:
                 {
-                    char *rule_name;
-                    char *next_rule;
-                    uint32_t data, mask;
-                    uint16_t offset;
-                    pfe_ct_fp_flags_t flags;
-
-                    ret = fci_fp_db_get_table_next_rule((char_t *)fp_cmd->table_info.t.table_name, &rule_name, &data, &mask, &offset, &flags, &next_rule);
+                    ret = fci_fp_db_get_table_next_rule((char_t *)fp_cmd->table_info.t.table_name, &rule, &next_rule);
                     if(EOK == ret)
                     {
-                        fci_fp_construct_rule_reply(&reply_buf->table_info.r, rule_name, next_rule, data, mask, offset, flags);
+                        fci_fp_construct_rule_reply(&reply_buf->table_info.r, rule.rule_name, next_rule, rule.data, rule.mask, rule.offset, rule.flags);
                         *fci_ret = FPP_ERR_OK;
                         *reply_len = sizeof(fpp_fp_table_cmd_t);
                     }
@@ -353,16 +347,13 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
                 }
                 case FPP_ACTION_QUERY:
                 {
-                    char *rule_name;
+                    fci_fp_rule_info_t rule;
                     char *next_rule;
-                    uint32_t data, mask;
-                    uint16_t offset;
-                    pfe_ct_fp_flags_t flags;
 
-                    ret = fci_fp_db_get_first_rule(&rule_name, &data, &mask, &offset, &flags, &next_rule);
+                    ret = fci_fp_db_get_first_rule(&rule, &next_rule);
                     if(EOK == ret)
                     {
-                        fci_fp_construct_rule_reply(&reply_buf->r, rule_name, next_rule, data, mask, offset, flags);
+                        fci_fp_construct_rule_reply(&reply_buf->r, rule.rule_name, next_rule, rule.data, rule.mask, rule.offset, rule.flags);
                         *fci_ret = FPP_ERR_OK;
                         *reply_len = sizeof(fpp_fp_rule_cmd_t);
                     }
@@ -374,16 +365,13 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
                 }
                 case FPP_ACTION_QUERY_CONT:
                 {
-                    char *rule_name;
+                    fci_fp_rule_info_t rule;
                     char *next_rule;
-                    uint32_t data, mask;
-                    uint16_t offset;
-                    pfe_ct_fp_flags_t flags;
 
-                    ret = fci_fp_db_get_next_rule(&rule_name, &data, &mask, &offset, &flags, &next_rule);
+                    ret = fci_fp_db_get_next_rule(&rule, &next_rule);
                     if(EOK == ret)
                     {
-                        fci_fp_construct_rule_reply(&reply_buf->r, rule_name, next_rule, data, mask, offset, flags);
+                        fci_fp_construct_rule_reply(&reply_buf->r, rule.rule_name, next_rule, rule.data, rule.mask, rule.offset, rule.flags);
                         *fci_ret = FPP_ERR_OK;
                         *reply_len = sizeof(fpp_fp_rule_cmd_t);
                     }

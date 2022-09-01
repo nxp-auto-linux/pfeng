@@ -16,6 +16,7 @@
 
 #include "hal.h"
 
+#include "pfe_hm.h"
 #include "pfe_cbus.h"
 #include "pfe_hif.h"
 #include "pfe_platform_cfg.h"
@@ -28,7 +29,6 @@
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 #ifdef PFE_CFG_FLEX_PARSER_AND_FILTER
 #include "pfe_fp.h"
-#include "pfe_flexible_filter.h"
 #endif /* PFE_CFG_FLEX_PARSER_AND_FILTER */
 #ifdef PFE_CFG_FCI_ENABLE
 #include "pfe_spd_acc.h"
@@ -120,6 +120,7 @@ static bool_t pfe_platform_bmu_isr(void *arg)
 static void *pfe_poller_func(void *arg)
 {
 	pfe_platform_t *platform = (pfe_platform_t *)arg;
+	uint8_t i;
 
 	if (NULL == platform)
 	{
@@ -140,12 +141,79 @@ static void *pfe_poller_func(void *arg)
 
 			case POLLER_STATE_ENABLED:
 			{
+				/*	Parity */
+				if (NULL != platform->parity)
+				{
+					pfe_parity_irq_mask(platform->parity);
+					(void)pfe_parity_isr(platform->parity);
+					pfe_parity_irq_unmask(platform->parity);
+				}
+
+				/*	Watchdogs */
+				if (NULL != platform->wdt)
+				{
+					pfe_wdt_irq_mask(platform->wdt);
+					(void)pfe_wdt_isr(platform->wdt);
+					pfe_wdt_irq_unmask(platform->wdt);
+				}
+
+				/*	Bus Error */
+				if (NULL != platform->bus_err)
+				{
+					pfe_bus_err_irq_mask(platform->bus_err);
+					(void)pfe_bus_err_isr(platform->bus_err);
+					pfe_bus_err_irq_unmask(platform->bus_err);
+				}
+
+				/*	FW Fail Stop */
+				if (NULL != platform->fw_fail_stop)
+				{
+					pfe_fw_fail_stop_irq_mask(platform->fw_fail_stop);
+					(void)pfe_fw_fail_stop_isr(platform->fw_fail_stop);
+					pfe_fw_fail_stop_irq_unmask(platform->fw_fail_stop);
+				}
+
+				/*	Host Fail Stop */
+				if (NULL != platform->host_fail_stop)
+				{
+					pfe_host_fail_stop_irq_mask(platform->host_fail_stop);
+					(void)pfe_host_fail_stop_isr(platform->host_fail_stop);
+					pfe_host_fail_stop_irq_unmask(platform->host_fail_stop);
+				}
+
+				/*	Fail Stop */
+				if (NULL != platform->fail_stop)
+				{
+					pfe_fail_stop_irq_mask(platform->fail_stop);
+					(void)pfe_fail_stop_isr(platform->fail_stop);
+					pfe_fail_stop_irq_unmask(platform->fail_stop);
+				}
+
+				/*	ECC Error */
+				if (NULL != platform->ecc_err)
+				{
+					pfe_ecc_err_irq_mask(platform->ecc_err);
+					(void)pfe_ecc_err_isr(platform->ecc_err);
+					pfe_ecc_err_irq_unmask(platform->ecc_err);
+				}
+
 				/*  Process HIF global ISR */
 				if (NULL != platform->hif)
 				{
 					pfe_hif_irq_mask(platform->hif);
 					(void)pfe_hif_isr(platform->hif);
 					pfe_hif_irq_unmask(platform->hif);
+				}
+
+				/* EMAC */
+				if (NULL != platform->emac)
+				{
+					for (i = 0; i < platform->emac_count; i++)
+					{
+						pfe_emac_irq_mask(platform->emac[i]);
+						pfe_emac_isr(platform->emac[i]);
+						pfe_emac_irq_unmask(platform->emac[i]);
+					}
 				}
 
 				/*	Classifier */
@@ -162,23 +230,6 @@ static void *pfe_poller_func(void *arg)
 					pfe_util_irq_mask(platform->util);
 					(void)pfe_util_isr(platform->util);
 					pfe_util_irq_unmask(platform->util);
-				}
-
-
-				/*	Safety */
-				if (NULL != platform->safety)
-				{
-					pfe_safety_irq_mask(platform->safety);
-					(void)pfe_safety_isr(platform->safety);
-					pfe_safety_irq_unmask(platform->safety);
-				}
-
-				/*	Watchdogs */
-				if (NULL != platform->wdt)
-				{
-					pfe_wdt_irq_mask(platform->wdt);
-					(void)pfe_wdt_isr(platform->wdt);
-					pfe_wdt_irq_unmask(platform->wdt);
 				}
 
 				break;
@@ -1476,6 +1527,29 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				break;
 			}
+			
+			case (uint32_t)PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE:
+			{
+				pfe_platform_rpc_pfe_phy_if_get_stat_value_arg_t *rpc_arg = (pfe_platform_rpc_pfe_phy_if_get_stat_value_arg_t *)buf;
+				pfe_platform_rpc_pfe_phy_if_get_stat_value_ret_t rpc_ret = {0};
+				uint32_t stat_val = 0;
+
+				NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE\n");
+
+				if (EOK == ret)
+				{
+					stat_val = pfe_phy_if_get_stat_value(phy_if_arg, rpc_arg->stat_id);
+					rpc_ret.stat_val = stat_val;
+				}
+
+				/*	Report execution status to caller */
+				if (EOK != pfe_idex_set_rpc_ret_val(ret, &rpc_ret, (uint16_t)sizeof(rpc_ret)))
+				{
+					NXP_LOG_ERROR("Could not send RPC response\n");
+				}
+
+				break;
+			}
 
 	#if defined(PFE_CFG_FCI_ENABLE)
 			case (uint32_t)PFE_PLATFORM_RPC_PFE_FCI_PROXY:
@@ -1584,13 +1658,11 @@ static errno_t pfe_platform_create_hif_nocpy(pfe_platform_t *platform)
 {
     uint16_t lmem_header_size;
 
-#if 0 /* AAVB-5037 */
 	if(PFE_S32G3_VERSION == platform->pfe_version)
 	{   /* S32G3 */
 		lmem_header_size = 48U;
 	}
 	else
-#endif
 	{   /* S32G2 */
 		lmem_header_size = 112U;
 	}
@@ -1630,7 +1702,7 @@ static void pfe_platform_destroy_hif_nocpy(pfe_platform_t *platform)
 static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, const pfe_platform_config_t *config)
 {
 	pfe_bmu_cfg_t bmu_cfg = {0U};
-	errno_t ret;
+	errno_t ret = EOK;
 
 	platform->bmu = oal_mm_malloc(platform->bmu_count * sizeof(pfe_bmu_t *));
 	if (NULL == platform->bmu)
@@ -1703,9 +1775,9 @@ static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, const pfe_platf
 					NXP_LOG_ERROR("Couldn't create BMU2 instance\n");
 					ret = ENODEV;
 				}
+			#if (TRUE == PFE_CFG_BMU_IRQ_ENABLED)
 				else
 				{
-
 					platform->irq_bmu = oal_irq_create((int32_t)config->irq_vector_bmu, (oal_irq_flags_t)0, "PFE BMU IRQ");
 					if (NULL == platform->irq_bmu)
 					{
@@ -1727,6 +1799,7 @@ static errno_t pfe_platform_create_bmu(pfe_platform_t *platform, const pfe_platf
 						}
 					}
 				}
+			#endif /* PFE_CFG_BMU_IRQ_ENABLED */
 			}
 		}
 	}
@@ -1743,11 +1816,13 @@ static void pfe_platform_destroy_bmu(pfe_platform_t *platform)
 
 	if (NULL != platform->bmu)
 	{
+	#if (TRUE == PFE_CFG_BMU_IRQ_ENABLED)
 		if (NULL != platform->irq_bmu)
 		{
 			oal_irq_destroy(platform->irq_bmu);
 			platform->irq_bmu = NULL;
 		}
+	#endif /* PFE_CFG_BMU_IRQ_ENABLED */
 
 		for (ii=0; ii<pfe.bmu_count; ii++)
 		{
@@ -1787,13 +1862,11 @@ static errno_t pfe_platform_create_gpi(pfe_platform_t *platform)
 	}
 	else
 	{
-	#if 0 /* AAVB-5037 */
 		if(PFE_S32G3_VERSION == platform->pfe_version)
 		{   /* S32G3 */
 			gpi_cfg_tmp.lmem_header_size = 48U;
 		}
 		else
-	#endif
 		{   /* S32G2 */
 			gpi_cfg_tmp.lmem_header_size = 112U;
 		}
@@ -1889,13 +1962,11 @@ static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
 	}
 	else
 	{
-	#if 0 /* AAVB-5037 */
 		if(PFE_S32G3_VERSION == platform->pfe_version)
 		{   /* S32G3 */
 			gpi_cfg_tmp.lmem_header_size = 48U;
 		}
 		else
-	#endif
 		{   /* S32G2 */
 			gpi_cfg_tmp.lmem_header_size = 112U;
 		}
@@ -1990,13 +2061,11 @@ static errno_t pfe_platform_create_hgpi(pfe_platform_t *platform)
 	}
 	else
 	{
-	#if 0 /* AAVB-5037 */
 		if(PFE_S32G3_VERSION == platform->pfe_version)
 		{   /* S32G3 */
 			hgpi_cfg.lmem_header_size = 48U;
 		}
 		else
-	#endif
 		{   /* S32G2 */
 			hgpi_cfg.lmem_header_size = 112U;
 		}
@@ -2066,7 +2135,8 @@ static errno_t pfe_platform_create_class(pfe_platform_t *platform)
 		NXP_LOG_ERROR("The CLASS firmware is NULL\n");
 		ret = ENODEV;
 	}
-	else if ((NULL == platform->fw->class_data) || (0U == platform->fw->class_size))
+
+	else if (NULL == platform->fw->class_data)
 	{
 		NXP_LOG_ERROR("The CLASS firmware is not loaded\n");
 		ret = EIO;
@@ -2074,14 +2144,12 @@ static errno_t pfe_platform_create_class(pfe_platform_t *platform)
 	else
 	{
 
-	#if 0 /* AAVB-5037 */
 		if(PFE_S32G3_VERSION == platform->pfe_version)
 		{   /* S32G3 */
 			class_cfg.lmem_header_size = 48U;
 			class_cfg.ro_header_size = 512U;
 		}
 		else
-	#endif
 		{   /* S32G2 */
 			class_cfg.lmem_header_size = 112U;
 			class_cfg.ro_header_size = 256U;
@@ -2106,7 +2174,7 @@ static errno_t pfe_platform_create_class(pfe_platform_t *platform)
 				/*	FW is ELF file */
 				NXP_LOG_INFO("Firmware .elf detected\n");
 
-				if (FALSE == ELF_Open(&elf, platform->fw->class_data, platform->fw->class_size))
+				if (FALSE == ELF_Open(&elf, platform->fw->class_data))
 				{
 					NXP_LOG_ERROR("Can't parse CLASS firmware\n");
 					ret = EIO;
@@ -2352,6 +2420,7 @@ static errno_t pfe_platform_create_util(pfe_platform_t *platform)
 	pfe_util_cfg_t util_cfg =
 	{
 		.pe_sys_clk_ratio = PFE_CFG_CLMODE,
+		.on_g3 = pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3),
 	};
 
 	platform->util = pfe_util_create(platform->cbus_baseaddr, platform->util_pe_count, &util_cfg);
@@ -2365,14 +2434,14 @@ static errno_t pfe_platform_create_util(pfe_platform_t *platform)
 	{
 		ELF_File_t elf;
 
-		if ((NULL == platform->fw->util_data) || (0U == platform->fw->util_size))
+		if (NULL == platform->fw->util_data)
 		{
 			NXP_LOG_WARNING("The UTIL firmware is not loaded\n");
 			ret = EOK;
 		}
 		else
 		{
-			if (FALSE == ELF_Open(&elf, platform->fw->util_data, platform->fw->util_size))
+			if (FALSE == ELF_Open(&elf, platform->fw->util_data))
 			{
 				NXP_LOG_ERROR("Can't parse UTIL firmware\n");
 				ret = EIO;
@@ -2534,42 +2603,128 @@ static void pfe_platform_destroy_emac(pfe_platform_t *platform)
 }
 
 /**
- * @brief		Assign SAFETY and Watchdogs to the platform
+ * @brief		Assign PFE_ERRORS to the platform
  */
-static errno_t pfe_platform_create_safety(pfe_platform_t *platform, const pfe_platform_config_t *config)
+static errno_t pfe_platform_create_pfe_errors(pfe_platform_t *platform, const pfe_platform_config_t *config)
 {
-	errno_t ret;
+	errno_t ret = EOK;
 	(void)config;
 
-	/*	Safety */
-	platform->safety = pfe_safety_create(platform->cbus_baseaddr, CBUS_GLOBAL_CSR_BASE_ADDR);
+	/*	Parity */
+	platform->parity = pfe_parity_create(platform->cbus_baseaddr, CBUS_GLOBAL_CSR_BASE_ADDR);
 
-	if (NULL == platform->safety)
+	if (NULL == platform->parity)
 	{
-		NXP_LOG_ERROR("Couldn't create SAFETY instance\n");
+		NXP_LOG_ERROR("Couldn't create PFE_ERRORS:Parity instance\n");
 		ret = ENODEV;
 	}
 	else
 	{
-		NXP_LOG_INFO("SAFETY instance created\n");
+		NXP_LOG_INFO("PFE_ERRORS:Parity instance created\n");
+	}
 
+	if (EOK == ret)
+	{
 		/*	Watchdogs */
 		platform->wdt = pfe_wdt_create(platform->cbus_baseaddr, CBUS_GLOBAL_CSR_BASE_ADDR);
 
 		if (NULL == platform->wdt)
 		{
-			NXP_LOG_ERROR("Couldn't create Watchdog instance\n");
+			NXP_LOG_ERROR("Couldn't create PFE_ERRORS:Watchdog instance\n");
 			ret = ENODEV;
 		}
 		else
 		{
-			NXP_LOG_INFO("Watchdog instance created\n");
+			NXP_LOG_INFO("PFE_ERRORS:Watchdog instance created\n");
+		}
+	}
 
-			pfe_safety_irq_unmask(platform->safety);
+	if (EOK == ret && TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+	{
+		/*	Bus Errors */
+		platform->bus_err = pfe_bus_err_create(platform->cbus_baseaddr, CBUS_GLOBAL_CSR_BASE_ADDR);
 
-			pfe_wdt_irq_unmask(platform->wdt);
+		if (NULL == platform->bus_err)
+		{
+			NXP_LOG_ERROR("Couldn't create PFE_ERRORS:Bus Error instance\n");
+			ret = ENODEV;
+		}
+		else
+		{
+			NXP_LOG_INFO("PFE_ERRORS:Bus Error instance created\n");
+		}
 
-			ret = EOK;
+		/*	FW Fail Stop */
+		platform->fw_fail_stop = pfe_fw_fail_stop_create(platform->cbus_baseaddr, CBUS_GLOBAL_CSR_BASE_ADDR);
+
+		if (NULL == platform->fw_fail_stop)
+		{
+			NXP_LOG_ERROR("Couldn't create PFE_ERRORS:FW Fail Stop instance\n");
+			ret = ENODEV;
+		}
+		else
+		{
+			NXP_LOG_INFO("PFE_ERRORS:FW Fail Stop instance created\n");
+		}
+
+		/*	Host Fail Stop */
+		platform->host_fail_stop = pfe_host_fail_stop_create(platform->cbus_baseaddr, CBUS_GLOBAL_CSR_BASE_ADDR);
+
+		if (NULL == platform->host_fail_stop)
+		{
+			NXP_LOG_ERROR("Couldn't create PFE_ERRORS:Host Fail Stop instance\n");
+			ret = ENODEV;
+		}
+		else
+		{
+			NXP_LOG_INFO("PFE_ERRORS:Host Fail Stop instance created\n");
+		}
+
+		/*	Fail Stop */
+		platform->fail_stop = pfe_fail_stop_create(platform->cbus_baseaddr, CBUS_GLOBAL_CSR_BASE_ADDR);
+
+		if (NULL == platform->fail_stop)
+		{
+			NXP_LOG_ERROR("Couldn't create PFE_ERRORS:Fail Stop instance\n");
+			ret = ENODEV;
+		}
+		else
+		{
+			NXP_LOG_INFO("PFE_ERRORS:Fail Stop instance created\n");
+		}
+
+		/*	ECC Error */
+		platform->ecc_err = pfe_ecc_err_create(platform->cbus_baseaddr, CBUS_GLOBAL_CSR_BASE_ADDR);
+
+		if (NULL == platform->ecc_err)
+		{
+			NXP_LOG_ERROR("Couldn't create PFE_ERRORS:ECC Err instance\n");
+			ret = ENODEV;
+		}
+		else
+		{
+			NXP_LOG_INFO("PFE_ERRORS:ECC Err instance created\n");
+		}
+
+	}
+
+	if (EOK == ret)
+	{
+		pfe_parity_irq_unmask(platform->parity);
+
+		pfe_wdt_irq_unmask(platform->wdt);
+
+		if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+		{
+			pfe_bus_err_irq_unmask(platform->bus_err);
+
+			pfe_fw_fail_stop_irq_unmask(platform->fw_fail_stop);
+
+			pfe_host_fail_stop_irq_unmask(platform->host_fail_stop);
+
+			pfe_fail_stop_irq_unmask(platform->fail_stop);
+
+			pfe_ecc_err_irq_unmask(platform->ecc_err);
 		}
 	}
 
@@ -2577,14 +2732,44 @@ static errno_t pfe_platform_create_safety(pfe_platform_t *platform, const pfe_pl
 }
 
 /**
- * @brief		Release SAFETY-related resources
+ * @brief		Release PFE_ERRORS-related resources
  */
-static void pfe_platform_destroy_safety(pfe_platform_t *platform)
+static void pfe_platform_destroy_pfe_errors(pfe_platform_t *platform)
 {
-	if (NULL != platform->safety)
+	if (NULL != platform->ecc_err)
 	{
-		pfe_safety_destroy(platform->safety);
-		platform->safety = NULL;
+		pfe_ecc_err_destroy(platform->ecc_err);
+		platform->ecc_err = NULL;
+	}
+
+	if (NULL != platform->fail_stop)
+	{
+		pfe_fail_stop_destroy(platform->fail_stop);
+		platform->fail_stop = NULL;
+	}
+
+	if (NULL != platform->host_fail_stop)
+	{
+		pfe_host_fail_stop_destroy(platform->host_fail_stop);
+		platform->host_fail_stop = NULL;
+	}
+
+	if (NULL != platform->fw_fail_stop)
+	{
+		pfe_fw_fail_stop_destroy(platform->fw_fail_stop);
+		platform->fw_fail_stop = NULL;
+	}
+
+	if (NULL != platform->bus_err)
+	{
+		pfe_bus_err_destroy(platform->bus_err);
+		platform->bus_err = NULL;
+	}
+
+	if (NULL != platform->parity)
+	{
+		pfe_parity_destroy(platform->parity);
+		platform->parity = NULL;
 	}
 
 	if (NULL != platform->wdt)
@@ -2812,7 +2997,7 @@ pfe_log_if_t *pfe_platform_get_log_if_by_id(const pfe_platform_t *platform, uint
  */
 pfe_log_if_t *pfe_platform_get_log_if_by_name(const pfe_platform_t *platform, char_t *name)
 {
-	pfe_if_db_entry_t *entry;
+	pfe_if_db_entry_t *entry = NULL;
 	uint32_t session_id = 0U;
 	pfe_log_if_t *logif;
 
@@ -2857,7 +3042,7 @@ pfe_log_if_t *pfe_platform_get_log_if_by_name(const pfe_platform_t *platform, ch
  */
 pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_ct_phy_if_id_t id)
 {
-	pfe_if_db_entry_t *entry;
+	pfe_if_db_entry_t *entry = NULL;
 	uint32_t session_id = 0U;
 	pfe_phy_if_t *phyif;
 
@@ -3307,6 +3492,20 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	pfe.util_pe_count = 1U;
 	pfe.tmu_pe_count = 0U;
 
+	/* Health monitor */
+	ret = pfe_hm_init();
+	if (EOK != ret)
+	{
+		goto exit;
+	}
+
+	/*	PFE_ERRORS */
+	ret = pfe_platform_create_pfe_errors(&pfe, config);
+	if (EOK != ret)
+	{
+		goto exit;
+	}
+
 	/*	BMU */
 	ret = pfe_platform_create_bmu(&pfe, config);
 	if (EOK != ret)
@@ -3335,12 +3534,6 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 		goto exit;
 	}
 
-	/*	SAFETY & Watchdogs */
-	ret = pfe_platform_create_safety(&pfe, config);
-	if (EOK != ret)
-	{
-		goto exit;
-	}
 	if(config->enable_util)
 	{
 		/*	UTIL */
@@ -3516,7 +3709,6 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 #endif /* PFE_CFG_FCI_ENABLE */
 #ifdef PFE_CFG_FLEX_PARSER_AND_FILTER
 	pfe_fp_init();
-	pfe_flexible_filter_init();
 #endif /* PFE_CFG_FLEX_PARSER_AND_FILTER */
 
 	/*	Activate PFE blocks */
@@ -3580,7 +3772,7 @@ static void pfe_platform_destroy_group2(void)
 	pfe_platform_destroy_util(&pfe);
 	pfe_platform_destroy_tmu(&pfe);
 	pfe_platform_destroy_emac(&pfe);
-	pfe_platform_destroy_safety(&pfe);
+	pfe_platform_destroy_pfe_errors(&pfe);
 }
 
 /**
@@ -3610,6 +3802,8 @@ errno_t pfe_platform_remove(void)
 		pfe.poller = NULL;
 	}
 #endif /* PFE_CFG_GLOB_ERR_POLL_WORKER */
+
+	(void)pfe_hm_destroy();
 
 	pfe_platform_destroy_group1();
 	pfe_platform_destroy_group2();

@@ -24,7 +24,7 @@
 #if !defined(PFE_CFG_TARGET_OS_LINUX)
 #include "pfe_hif_nocpy.h"
 #endif
-#include "pfe_safety.h"
+#include "pfe_parity.h"
 #include "pfe_emac.h"
 #if defined(PFE_CFG_L2BRIDGE_ENABLE)
 	#include "pfe_l2br_table.h"
@@ -34,6 +34,11 @@
 #include "pfe_log_if.h"
 #include "pfe_if_db.h"
 #include "pfe_wdt.h"
+#include "pfe_bus_err.h"
+#include "pfe_fw_fail_stop.h"
+#include "pfe_host_fail_stop.h"
+#include "pfe_fail_stop.h"
+#include "pfe_ecc_err.h"
 
 #define GEMAC0_MAC						{ 0x00U, 0x0AU, 0x0BU, 0x0CU, 0x0DU, 0x0EU }
 #define GEMAC1_MAC						{ 0x00U, 0x1AU, 0x1BU, 0x1CU, 0x1DU, 0x1EU }
@@ -49,14 +54,12 @@ typedef enum
 typedef struct
 /*	The PFE firmware data type */
 {
-	char_t *version;				/* free text: version */
-	char_t *source;				/* free text: filename, filepath, ... etc */
-	void *class_data;			/* The CLASS fw data buffer */
-	uint32_t class_size;	/* The CLASS fw data size */
-	void *tmu_data;				/* The TMU fw data buffer */
-	uint32_t tmu_size;		/* The TMU fw data size */
-	void *util_data;			/* The UTIL fw data buffer */
-	uint32_t util_size;		/* The UTIL fw data size */
+	char_t *version;        /* free text: version */
+	char_t *source;         /* free text: filename, filepath, ... etc */
+	const void *class_data; /* The CLASS fw data buffer */
+	void *tmu_data;         /* The TMU fw data buffer */
+	uint32_t tmu_size;      /* The TMU fw data size */
+	const void *util_data;  /* The UTIL fw data buffer */
 } pfe_fw_t;
 
 /*	The PFE platform config */
@@ -68,7 +71,9 @@ typedef struct
 	pfe_fw_t *fw;			/* Required firmware, embedded */
 	bool_t common_irq_mode;	/* True if FPGA specific common irq is used */
 	uint32_t irq_vector_global;		/* Global IRQ number */
+#if (TRUE == PFE_CFG_BMU_IRQ_ENABLED)
 	uint32_t irq_vector_bmu;		/* BMU IRQ number */
+#endif /* PFE_CFG_BMU_IRQ_ENABLED */
 	pfe_hif_chnl_id_t hif_chnls_mask; /* The bitmap list of the requested HIF channels */
 	pfe_ct_phy_if_id_t master_if; /* Interface where master driver is located */
 	uint32_t irq_vector_hif_chnls[HIF_CFG_MAX_CHANNELS];	/* HIF channels IRQ number */
@@ -98,7 +103,9 @@ typedef struct
 	oal_thread_t *poller;	/* Global poller thread */
 #endif /* PFE_CFG_GLOB_ERR_POLL_WORKER */
 	pfe_poller_state_t poller_state;
+#if (TRUE == PFE_CFG_BMU_IRQ_ENABLED)
 	oal_irq_t *irq_bmu;			/* BMU IRQ */
+#endif /* PFE_CFG_BMU_IRQ_ENABLED */
 	uint32_t hif_chnl_count;	/* Number of HIF channels */
 #if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
 	pfe_hif_nocpy_t *hif_nocpy;	/* The HIF_NOCPY block */
@@ -130,8 +137,13 @@ typedef struct
 	pfe_gpi_t **hgpi;
 	pfe_hif_t *hif;
 	pfe_emac_t **emac;
-	pfe_safety_t *safety;
+	pfe_parity_t *parity;
 	pfe_wdt_t 	*wdt;
+	pfe_bus_err_t 	*bus_err;
+	pfe_fw_fail_stop_t 	*fw_fail_stop;
+	pfe_host_fail_stop_t 	*host_fail_stop;
+	pfe_fail_stop_t 	*fail_stop;
+	pfe_ecc_err_t 	*ecc_err;
 	pfe_if_db_t *phy_if_db;
 	pfe_if_db_t *log_if_db;
 	bool_t fci_created;

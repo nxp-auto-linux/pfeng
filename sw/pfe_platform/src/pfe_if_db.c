@@ -89,6 +89,8 @@ static if_db_context_t if_db_context;
 
 static bool_t pfe_if_db_match_criterion(const pfe_if_db_t *db, pfe_if_db_get_criterion_t crit, const crit_arg_t *arg, const pfe_if_db_entry_t *entry);
 static errno_t pfe_if_db_check_precondition(const if_db_context_t *pr_if_db_context, uint32_t session_id);
+static pfe_if_db_entry_t *pfe_if_db_get_first_entry(pfe_if_db_t *db);
+static pfe_if_db_entry_t *pfe_if_db_get_single_entry(const pfe_if_db_t *db, pfe_if_db_get_criterion_t crit, crit_arg_t argument);
 #if defined(PFE_CFG_IF_DB_WORKER)
 static void * pfe_if_db_worker(void *arg);
 #endif /* PFE_CFG_IF_DB_WORKER */
@@ -199,7 +201,7 @@ static errno_t pfe_if_db_check_precondition(const if_db_context_t *pr_if_db_cont
  * @brief		Match entry with latest criterion provided via pfe_if_db_get_first()
  * @param[in]	db The interface DB instance
  * @param[in]	crit Criterion to search
- * @param[in]	crit_arg Criterion arguments
+ * @param[in]	arg Criterion arguments
  * @param[in]	entry The entry to be matched
  * @retval		TRUE Entry matches the criterion
  * @retval		FALSE Entry does not match the criterion
@@ -274,6 +276,101 @@ static bool_t pfe_if_db_match_criterion(const pfe_if_db_t *db, pfe_if_db_get_cri
 		}
 	}
 	return match;
+}
+
+/**
+ * @brief		Get first record from the DB matching given criterion
+ * @details		Intended to be used with pfe_if_db_get_next
+ * @param[in]	db The interface DB instance
+ * @return		entry The entry or NULL if not found
+ */
+static pfe_if_db_entry_t *pfe_if_db_get_first_entry(pfe_if_db_t *db)
+{
+	bool_t match = FALSE;
+	LLIST_t *curItem;
+	pfe_if_db_entry_t *entry = NULL;
+
+	if (FALSE == LLIST_IsEmpty(&db->theList))
+	{
+		/*	Get first matching entry */
+		LLIST_ForEach(curItem, &db->theList)
+		{
+			/*	Get data */
+			entry = LLIST_Data(curItem, pfe_if_db_entry_t, list_member);
+
+			/*	Remember current item to know where to start later */
+			db->cur_item = curItem->prNext;
+			if (NULL != entry)
+			{
+				if (TRUE == pfe_if_db_match_criterion(db, db->cur_crit, &db->cur_crit_arg, entry))
+				{
+					match = TRUE;
+					break;
+				}
+			}
+		}
+	}
+
+	if (EOK != oal_mutex_unlock(&if_db_context.mutex))
+	{
+		NXP_LOG_DEBUG("DB mutex unlock failed\n");
+	}
+
+	if (FALSE == match)
+	{
+		/* No match found */
+		entry = NULL;
+	}
+
+	return entry;
+}
+
+/**
+ * @brief		Get first record from the DB matching given criterion without changing previous
+ *				search criteria
+ * @param[in]	db The interface DB instance
+ * @param[in]	crit Get criterion
+ * @param[in]	arg Pointer to criterion argument
+ * @return		entry The entry or NULL if not found
+ */
+static pfe_if_db_entry_t *pfe_if_db_get_single_entry(const pfe_if_db_t *db, pfe_if_db_get_criterion_t crit, crit_arg_t argument)
+{
+	pfe_if_db_entry_t *entry = NULL;
+	bool_t             match = FALSE;
+	LLIST_t 		  *curItem;
+
+	if (FALSE == LLIST_IsEmpty(&db->theList))
+	{
+		/*	Get first matching entry */
+		LLIST_ForEach(curItem, &db->theList)
+		{
+			/*	Get data */
+			entry = LLIST_Data(curItem, pfe_if_db_entry_t, list_member);
+
+			/*	Remember current item to know where to start later */
+			if (NULL != entry)
+			{
+				if (TRUE == pfe_if_db_match_criterion(db, crit, &argument, entry))
+				{
+					match = TRUE;
+					break;
+				}
+			}
+		}
+	}
+
+	if (EOK != oal_mutex_unlock(&if_db_context.mutex))
+	{
+		NXP_LOG_DEBUG("DB mutex unlock failed\n");
+	}
+
+	if (FALSE == match)
+	{
+		/* No match found */
+		entry = NULL;
+	}
+
+	return entry;
 }
 
 /**
@@ -660,9 +757,6 @@ errno_t pfe_if_db_remove(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry_t
  */
 errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_criterion_t crit, void *arg, pfe_if_db_entry_t **db_entry)
 {
-	LLIST_t *          curItem;
-	bool_t             match = FALSE;
-	pfe_if_db_entry_t *entry = NULL;
 	errno_t            ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -690,7 +784,6 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
 		}
 		else
 		{
-
 			/*	Remember criterion and argument for possible subsequent pfe_log_if_db_get_next() calls */
 			db->cur_crit = crit;
 			switch (db->cur_crit)
@@ -749,7 +842,6 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
 				default:
 				{
 					NXP_LOG_ERROR("Unknown criterion\n");
-					entry = NULL;
 					ret = EPERM;
 					break;
 				}
@@ -757,39 +849,7 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
 
 			if (ret == EOK)
 			{
-				if (FALSE == LLIST_IsEmpty(&db->theList))
-				{
-					/*	Get first matching entry */
-					LLIST_ForEach(curItem, &db->theList)
-					{
-						/*	Get data */
-						entry = LLIST_Data(curItem, pfe_if_db_entry_t, list_member);
-
-						/*	Remember current item to know where to start later */
-						db->cur_item = curItem->prNext;
-						if (NULL != entry)
-						{
-							if (TRUE == pfe_if_db_match_criterion(db, db->cur_crit, &db->cur_crit_arg, entry))
-							{
-								match = TRUE;
-								break;
-							}
-						}
-					}
-				}
-
-				if (EOK != oal_mutex_unlock(&if_db_context.mutex))
-				{
-					NXP_LOG_DEBUG("DB mutex unlock failed\n");
-				}
-
-				*db_entry = entry;
-
-				if (FALSE == match)
-				{
-					/* No match found */
-					*db_entry = NULL;
-				}
+				*db_entry = pfe_if_db_get_first_entry(db);
 			}
 		}
 	}
@@ -815,9 +875,6 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
  */
 errno_t pfe_if_db_get_single(const pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_criterion_t crit, void *arg, pfe_if_db_entry_t **db_entry)
 {
-	LLIST_t *          curItem;
-	bool_t             match = FALSE;
-	pfe_if_db_entry_t *entry = NULL;
 	crit_arg_t         argument;
 	errno_t            ret = EOK;
 
@@ -887,7 +944,6 @@ errno_t pfe_if_db_get_single(const pfe_if_db_t *db, uint32_t session_id, pfe_if_
 			default:
 			{
 				NXP_LOG_ERROR("Unknown criterion\n");
-				entry = NULL;
 				ret = EPERM;
 				break;
 			}
@@ -910,38 +966,7 @@ errno_t pfe_if_db_get_single(const pfe_if_db_t *db, uint32_t session_id, pfe_if_
 			}
 			if (ret != EPERM)
 			{
-				if (FALSE == LLIST_IsEmpty(&db->theList))
-				{
-					/*	Get first matching entry */
-					LLIST_ForEach(curItem, &db->theList)
-					{
-						/*	Get data */
-						entry = LLIST_Data(curItem, pfe_if_db_entry_t, list_member);
-
-						/*	Remember current item to know where to start later */
-						if (NULL != entry)
-						{
-							if (TRUE == pfe_if_db_match_criterion(db, crit, &argument, entry))
-							{
-								match = TRUE;
-								break;
-							}
-						}
-					}
-				}
-
-				if (EOK != oal_mutex_unlock(&if_db_context.mutex))
-				{
-					NXP_LOG_DEBUG("DB mutex unlock failed\n");
-				}
-
-				*db_entry = entry;
-
-				if (FALSE == match)
-				{
-					/* No match found */
-					*db_entry = NULL;
-				}
+				*db_entry = pfe_if_db_get_single_entry(db, crit, argument);
 			}
 		}
 	}

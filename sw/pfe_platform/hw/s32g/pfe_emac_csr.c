@@ -10,9 +10,20 @@
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
+#include "pfe_hm.h"
 #include "pfe_cbus.h"
 #include "pfe_emac_csr.h"
 #include "pfe_feature_mgr.h"
+
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+/* TODO: Remove this macro after ARTD-27720 is finished (AAVB-5221) */
+#define ETH_43_PFE_PROT_MEM_U32            ((uint32)0x00000004UL) 
+
+#if (STD_ON == ETH_43_PFE_USER_ACCESS_ALLOWED_AVAILABLE)
+    #define USER_MODE_REG_PROT_ENABLED      (STD_ON)
+    #include "RegLockMacros.h"
+#endif /* (STD_ON == ETH_43_PFE_SET_USER_ACCESS_ALLOWED_AVAILABLE) */
+#endif /*PFE_CFG_TARGET_OS_AUTOSAR*/
 
 #if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
@@ -154,6 +165,28 @@ static const char *emac_speed_to_str(pfe_emac_speed_t speed)
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
+#ifdef PFE_CFG_TARGET_OS_AUTOSAR
+#if (STD_ON == ETH_43_PFE_USER_ACCESS_ALLOWED_AVAILABLE)
+/**
+ * @brief		Set UAA bit in the register protection module while using the usermode functionality
+ * @param[in]	base_va The EMAC base address
+ */
+void pfe_emac_csr_set_user_mode_allowed(const uint32_t * base_va)
+{
+    SET_USER_ACCESS_ALLOWED((uint32_t)base_va, ETH_43_PFE_PROT_MEM_U32);
+}
+
+/**
+ * @brief		Clear UAA bit in the register protection module while using the usermode functionality
+ * @param[in]	base_va The EMAC base address
+ */
+void pfe_emac_csr_clr_user_mode_allowed(const uint32_t * base_va)
+{
+    CLR_USER_ACCESS_ALLOWED((uint32_t)base_va, ETH_43_PFE_PROT_MEM_U32);
+}
+#endif /*STD_ON == ETH_43_PFE_USER_ACCESS_ALLOWED_AVAILABLE*/
+#endif /*PFE_CFG_TARGET_OS_AUTOSAR*/
+
 /**
  * @brief		HW-specific initialization function
  * @param[in]	base_va Base address of MAC register space (virtual)
@@ -196,6 +229,29 @@ errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,
 	hal_write32(0xffffffffU, base_va + MMC_RX_INTERRUPT_MASK);
 	hal_write32(0xffffffffU, base_va + MMC_TX_INTERRUPT_MASK);
 	hal_write32(0xffffffffU, base_va + MMC_IPC_RX_INTERRUPT_MASK);
+
+	/* Enable ECC, timeout and parity chcecking */
+	hal_write32(0U
+			| ECC_TX(1U)
+			| ECC_RX(1U)
+			| ECC_EST(1U)
+			| ECC_RXP(1U)
+			| ECC_TSO(1U)
+			, base_va + MTL_ECC_CONTROL);
+	reg = hal_read32(base_va + MAC_FSM_ACT_TIMER);
+	hal_write32(reg
+			| LARGE_MODE_TIMEOUT(0x2U)
+			| NORMAL_MODE_TIMEOUT(0x2U)
+			| 0x10UL
+			, base_va + MAC_FSM_ACT_TIMER);
+	hal_write32(0U
+			| DATA_PARITY_PROTECTION(1U)
+			| SLAVE_PARITY_CHECK(1U)
+			, base_va + MTL_DPP_CONTROL);
+	hal_write32(0U
+			| FSM_PARITY_ENABLE(1U)
+			| FSM_TIMEOUT_ENABLE(0U)
+			, base_va + MAC_FSM_CONTROL);
 
 	reg = 0U | ARP_OFFLOAD_ENABLE(0U)
                  | SA_INSERT_REPLACE_CONTROL(CTRL_BY_SIGNALS)
@@ -1456,6 +1512,10 @@ uint32_t pfe_emac_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, 
 			len += oal_util_snprintf(buf + len, size - len, "RX_RECEIVE_ERROR_PACKETS          : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_RECEIVE_ERROR_PACKETS);
 			len += oal_util_snprintf(buf + len, size - len, "RX_RECEIVE_ERROR_PACKETS          : 0x%x\n", reg);
+
+			reg = hal_read32(base_va + MTL_ECC_ERR_CNTR_STATUS);
+			len += oal_util_snprintf(buf + len, size - len, "MTL_ECC_CORRECTABLE_ERRORS        : 0x%x\n", (reg & 0xffU));
+			len += oal_util_snprintf(buf + len, size - len, "MTL_ECC_UNCORRECTABLE_ERRORS      : 0x%x\n", ((reg >> 16U) & 0xfU));
 		}
 
 		/* Cast/vlan/flow control */
@@ -1576,6 +1636,125 @@ uint32_t pfe_emac_cfg_get_stat_value(addr_t base_va, uint32_t stat_id)
 		stat_value = hal_read32(base_va + stat_id);
 	}
 	return stat_value;
+}
+
+/**
+ * @brief		Reports events corresponding to triggered interrupts to HM
+ * @param[in]	id ID of the Peripheral that triggered the interrupt
+ * @param[in]	events	List of events, ordered by interrupt flag position (0-31)
+ * @param[in]	events_len	Amount of events defined
+ * @param[in]	interrupts	Interrupts flags
+ */
+static void pfe_emac_cfg_report_hm_event(uint8_t id, const pfe_hm_evt_t events[], uint8_t events_len, uint32_t flags)
+{
+	static const pfe_hm_src_t hm_src[] =
+	{
+		HM_SRC_EMAC0,
+		HM_SRC_EMAC1,
+		HM_SRC_EMAC2,
+	};
+
+	uint8_t index = 0;
+	pfe_hm_src_t src = HM_SRC_EMAC0;
+
+	if (id <= sizeof(hm_src)/sizeof(hm_src[0]))
+	{
+		src = hm_src[id];
+	}
+	else
+	{
+		NXP_LOG_ERROR("Argument out of range");
+	}
+
+	while ((0U != flags) && (index < events_len))
+	{
+		if ((0U != (flags & 0x1UL)) && (events[index] != HM_EVT_NONE))
+		{
+			if ((events[index] == HM_EVT_EMAC_ECC_RX_FIFO_CORRECTABLE) || (events[index] == HM_EVT_EMAC_ECC_TX_FIFO_CORRECTABLE))
+			{
+				pfe_hm_report_warning(src, events[index], "");
+			}
+			else
+			{
+				pfe_hm_report_error(src, events[index], "");
+			}
+		}
+		index++;
+		flags >>= 1U;
+	}
+}
+
+/**
+ * @brief		EMAC ISR
+ * @details		Process triggered interrupts.
+ * @param[in]	base_va EMAC register space base address
+ * @param[in]	cbus_base The PFE CBUS base address
+ * @return		EOK if interrupt has been handled, error code otherwise
+ */
+errno_t pfe_emac_cfg_isr(addr_t base_va, addr_t cbus_base)
+{
+	uint8_t instance_id = pfe_emac_cfg_get_index(base_va, cbus_base);
+
+	static const pfe_hm_evt_t mtl_ecc_events[] =
+	{
+		HM_EVT_EMAC_ECC_TX_FIFO_CORRECTABLE,
+		HM_EVT_EMAC_ECC_TX_FIFO_ADDRESS,
+		HM_EVT_EMAC_ECC_TX_FIFO_UNCORRECTABLE,
+		HM_EVT_NONE,
+		HM_EVT_EMAC_ECC_RX_FIFO_CORRECTABLE,
+		HM_EVT_EMAC_ECC_RX_FIFO_ADDRESS,
+		HM_EVT_EMAC_ECC_RX_FIFO_UNCORRECTABLE,
+	};
+
+	static const pfe_hm_evt_t dpp_fsm_events[] =
+	{
+		HM_EVT_EMAC_APP_TX_PARITY,
+		HM_EVT_NONE,
+		HM_EVT_NONE,
+		HM_EVT_EMAC_MTL_PARITY,
+		HM_EVT_NONE,
+		HM_EVT_EMAC_APP_RX_PARITY,
+		HM_EVT_NONE,
+		HM_EVT_NONE,
+		HM_EVT_EMAC_FSM_TX_TIMEOUT,
+		HM_EVT_EMAC_FSM_RX_TIMEOUT,
+		HM_EVT_NONE,
+		HM_EVT_EMAC_FSM_APP_TIMEOUT,
+		HM_EVT_EMAC_FSM_PTP_TIMEOUT,
+		HM_EVT_NONE,
+		HM_EVT_NONE,
+		HM_EVT_NONE,
+		HM_EVT_EMAC_MASTER_TIMEOUT,
+		HM_EVT_NONE,
+		HM_EVT_NONE,
+		HM_EVT_NONE,
+		HM_EVT_NONE,
+		HM_EVT_NONE,
+		HM_EVT_NONE,
+		HM_EVT_NONE,
+		HM_EVT_EMAC_FSM_PARITY,
+	};
+
+	uint32_t mtl_ecc_status = hal_read32(base_va + MTL_ECC_INTERRUPT_STATUS);
+	uint32_t dpp_fsm_status = hal_read32(base_va + MAC_DPP_FSM_INTERRUPT_STATUS);
+
+	pfe_emac_cfg_report_hm_event(
+			instance_id,
+			mtl_ecc_events,
+			sizeof(mtl_ecc_events)/sizeof(mtl_ecc_events[0]),
+			mtl_ecc_status);
+
+	pfe_emac_cfg_report_hm_event(
+			instance_id,
+			dpp_fsm_events,
+			sizeof(dpp_fsm_events)/sizeof(dpp_fsm_events[0]),
+			dpp_fsm_status);
+
+	/* Clear interrupts */
+	hal_write32(mtl_ecc_status, base_va + MTL_ECC_INTERRUPT_STATUS);
+	hal_write32(dpp_fsm_status, base_va + MAC_DPP_FSM_INTERRUPT_STATUS);
+
+	return EOK;
 }
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR

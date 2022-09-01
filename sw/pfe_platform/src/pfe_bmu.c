@@ -45,7 +45,7 @@ struct pfe_bmu_tag
  * @param[in]	bmu The BMU instance
  * @return		EOK if interrupt has been handled
  */
-__attribute__((cold)) errno_t pfe_bmu_isr(const pfe_bmu_t *bmu)
+__attribute__((cold)) errno_t pfe_bmu_isr(pfe_bmu_t *bmu)
 {
 	errno_t ret;
 
@@ -83,7 +83,7 @@ __attribute__((cold)) errno_t pfe_bmu_isr(const pfe_bmu_t *bmu)
  * @brief		Mask BMU interrupts
  * @param[in]	bmu The BMU instance
  */
-void pfe_bmu_irq_mask(const pfe_bmu_t *bmu)
+void pfe_bmu_irq_mask(pfe_bmu_t *bmu)
 {
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&bmu->lock))
@@ -106,7 +106,7 @@ void pfe_bmu_irq_mask(const pfe_bmu_t *bmu)
  * @brief		Unmask BMU interrupts
  * @param[in]	hif The BMU instance
  */
-void pfe_bmu_irq_unmask(const pfe_bmu_t *bmu)
+void pfe_bmu_irq_unmask(pfe_bmu_t *bmu)
 {
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&bmu->lock))
@@ -206,7 +206,7 @@ __attribute__((cold)) pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_
  * @brief		Reset the BMU block
  * @param[in]	bmu The BMU instance
  */
-__attribute__((cold)) void pfe_bmu_reset(const pfe_bmu_t *bmu)
+__attribute__((cold)) void pfe_bmu_reset(pfe_bmu_t *bmu)
 {
 	errno_t ret;
 
@@ -254,7 +254,7 @@ __attribute__((cold)) void pfe_bmu_reset(const pfe_bmu_t *bmu)
  * @brief		Enable the BMU block
  * @param[in]	bmu The BMU instance
  */
-__attribute__((cold)) void pfe_bmu_enable(const pfe_bmu_t *bmu)
+__attribute__((cold)) void pfe_bmu_enable(pfe_bmu_t *bmu)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
@@ -286,7 +286,7 @@ __attribute__((cold)) void pfe_bmu_enable(const pfe_bmu_t *bmu)
  * @brief		Disable the BMU block
  * @param[in]	bmu The BMU instance
  */
-__attribute__((cold)) void pfe_bmu_disable(const pfe_bmu_t *bmu)
+__attribute__((cold)) void pfe_bmu_disable(pfe_bmu_t *bmu)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
@@ -444,7 +444,7 @@ __attribute__((hot)) void pfe_bmu_free_buf(const pfe_bmu_t *bmu, addr_t buffer)
  * @brief		Destroy BMU instance
  * @param[in]	bmu The BMU instance
  */
-__attribute__((cold)) void pfe_bmu_destroy(const pfe_bmu_t *bmu)
+__attribute__((cold)) void pfe_bmu_destroy(pfe_bmu_t *bmu)
 {
 	if (NULL != bmu)
 	{
@@ -504,6 +504,47 @@ __attribute__((cold)) uint32_t pfe_bmu_get_text_statistics(const pfe_bmu_t *bmu,
 }
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
+#ifdef PFE_CFG_PFE_MASTER
+/**
+ * @brief		BMU error polling
+ * @param[in]	bmu The BMU instance
+ * @return		Return BMU interrupt source error
+ */
+__attribute__((hot)) uint32_t pfe_bmu_get_err_poll(pfe_bmu_t *bmu)
+{
+	uint32_t int_src = 0U;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == bmu))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		int_src = 0U;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+	#ifdef PFE_CFG_PARANOID_IRQ
+		if (EOK != oal_mutex_lock(&bmu->lock))
+		{
+			NXP_LOG_DEBUG("Mutex lock failed\n");
+		}
+	#endif /* PFE_CFG_PARANOID_IRQ */
+
+		/*	Run the low-level polling to identify and process the interrupt source error */
+		int_src = pfe_bmu_cfg_get_err_poll(bmu->bmu_base_va);
+
+	#ifdef PFE_CFG_PARANOID_IRQ
+		if (EOK != oal_mutex_unlock(&bmu->lock))
+		{
+			NXP_LOG_DEBUG("Mutex unlock failed\n");
+		}
+	#endif /* PFE_CFG_PARANOID_IRQ */
+	}
+
+	return int_src;
+}
+#endif /* #ifdef PFE_CFG_PFE_MASTER */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

@@ -13,6 +13,7 @@
 #include "pfe_platform_cfg.h"
 #include "pfe_cbus.h"
 #include "pfe_class_csr.h"
+#include "pfe_feature_mgr.h"
 
 #ifndef PFE_CBUS_H_
 #error Missing cbus.h
@@ -23,6 +24,8 @@
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
+static errno_t pfe_class_cfg_validate_rtable_len(uint32_t rtable_len, uint8_t *rtable_idx);
+
 /**
  * @brief		Initialize and configure the CLASS block
  * @param[in]	base_va Base address of CLASS register space (virtual)
@@ -30,6 +33,7 @@
  */
 void pfe_class_cfg_set_config(addr_t base_va, const pfe_class_cfg_t *cfg)
 {
+	uint32_t regval;
 	(void)cfg;
 
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_BMU1_BASE_ADDR + BMU_FREE_CTRL, base_va + CLASS_BMU1_BUF_FREE);
@@ -44,10 +48,18 @@ void pfe_class_cfg_set_config(addr_t base_va, const pfe_class_cfg_t *cfg)
 	hal_write32(0x1U, base_va + CLASS_USE_TMU_INQ);
 	hal_write32(0x1U, base_va + CLASS_PE_SYS_CLK_RATIO);
 	hal_write32(0U, base_va + CLASS_L4_CHKSUM);
-	hal_write32((cfg->ro_header_size << 16) | cfg->lmem_header_size, base_va + CLASS_HDR_SIZE);
+	hal_write32(((uint32_t)cfg->ro_header_size << 16U) | (uint32_t)cfg->lmem_header_size, base_va + CLASS_HDR_SIZE);
 	hal_write32(PFE_CFG_LMEM_BUF_SIZE, base_va + CLASS_LMEM_BUF_SIZE);
 	hal_write32(CLASS_TPID0_TPID1_VAL, base_va + CLASS_TPID0_TPID1);
 	hal_write32(CLASS_TPID2_VAL, base_va + CLASS_TPID2);
+	regval = hal_read32(base_va + CLASS_AXI_CTRL_ADDR);
+	if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+	{
+		regval &= ~AXI_DBUS_BURST_SIZE(0x3ffU);
+		regval |= AXI_DBUS_BURST_SIZE(0x100U);
+	}
+	regval |= 0x3U;
+	hal_write32(regval, base_va + CLASS_AXI_CTRL_ADDR);
 
 	hal_write32(0U
 			| RT_TWO_LEVEL_REF(FALSE)
@@ -61,7 +73,7 @@ void pfe_class_cfg_set_config(addr_t base_va, const pfe_class_cfg_t *cfg)
 			| VLAN_AWARE_BRIDGE_PHY2(FALSE)
 			| VLAN_AWARE_BRIDGE_PHY3(FALSE)
 			| CLASS_TOE(FALSE)
-			| ASYM_HASH(ASYM_HASH_NORMAL)
+			| ASYM_HASH(ASYM_HASH_SIP_SPORT_CRC)
 			| SYM_RTENTRY(FALSE)
 			| QB2BUS_ENDIANESS(TRUE)
 			| LEN_CHECK(FALSE)
@@ -98,6 +110,45 @@ void pfe_class_cfg_disable(addr_t base_va)
 }
 
 /**
+ * @brief		Validate rtable length
+ * @param[in]	rtable_len Number of entries in the table
+ * @param[in]	rtable_idx Pointer to the rtable index
+ */
+static errno_t pfe_class_cfg_validate_rtable_len(uint32_t rtable_len, uint8_t *rtable_idx)
+{
+	errno_t ret = EOK;
+	uint8_t idx;
+
+	/* Validate that rtable_len is a power of 2 and it's within boundaries. */
+	for (idx = 0U; idx < (sizeof(rtable_len) * 8U); idx++)
+	{
+		if (0U != (rtable_len & (1UL << idx)))
+		{
+			if (0U != (rtable_len & ~(1UL << idx)))
+			{
+				NXP_LOG_ERROR("Routing table length is not a power of 2\n");
+				ret = EINVAL;
+			}
+			else if ((idx < 6U) || (idx > 20U))
+			{
+				NXP_LOG_ERROR("Table length out of boundaries\n");
+				ret = EINVAL;
+			}
+			else
+			{
+				ret = EOK;
+			}
+
+			break;
+		}
+	}
+	
+	*rtable_idx = idx;
+	
+	return ret;
+}
+
+/**
  * @brief		Set up routing table
  * @param[in]	base_va Base address of CLASS register space (virtual)
  * @param[in]	rtable_pa Physical address of the routing table space
@@ -107,9 +158,9 @@ void pfe_class_cfg_disable(addr_t base_va)
  */
 errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtable_len, uint32_t entry_size)
 {
-	uint8_t ii;
 	uint32_t reg;
 	errno_t ret = EOK;
+	uint8_t rtable_idx;
 
 	if (NULL_ADDR == rtable_pa)
 	{
@@ -140,35 +191,13 @@ errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtab
 
 			if (EOK == ret)
 			{
-				/* Validate that rtable_len is a power of 2 and it's within boundaries. */
-				for (ii=0U; ii<(sizeof(rtable_len) * 8U); ii++)
-				{
-					if (0U != (rtable_len & (1UL << ii)))
-					{
-						if (0U != (rtable_len & ~(1UL << ii)))
-						{
-							NXP_LOG_ERROR("Routing table length is not a power of 2\n");
-							ret = EINVAL;
-						}
-						else if ((ii < 6U) || (ii > 20U))
-						{
-							NXP_LOG_ERROR("Table length out of boundaries\n");
-							ret = EINVAL;
-						}
-						else
-						{
-							/* Do Nothing */
-						}
-
-						break;
-					}
-				}
+				ret = pfe_class_cfg_validate_rtable_len(rtable_len, &rtable_idx);
 
 				if (EOK == ret)
 				{
 					hal_write32((uint32_t)(rtable_pa & 0xffffffffU), base_va + CLASS_ROUTE_TABLE_BASE);
 					hal_write32(0UL
-								| ROUTE_HASH_SIZE(ii)
+								| ROUTE_HASH_SIZE(rtable_idx)
 								| ROUTE_ENTRY_SIZE(entry_size)
 								, base_va + CLASS_ROUTE_HASH_ENTRY_SIZE);
 

@@ -22,6 +22,18 @@
 typedef struct fci_fp_table_tag fci_fp_table_t;
 
 /**
+ * @brief	Rule data details type
+ */
+typedef struct
+{
+	char *rule_name;
+    uint32_t data;
+    uint32_t mask;
+    uint16_t offset;
+    pfe_ct_fp_flags_t flags;
+} fci_fp_rule_info_t;
+
+/**
 * @brief Criterion for table database search
 */
 typedef enum
@@ -73,14 +85,16 @@ fci_fp_table_t *fci_fp_db_get_first(fci_fp_table_criterion_t crit, void *arg);
 /* Get the table from address */
 errno_t fci_fp_db_get_table_from_addr(uint32_t addr, char_t **table_name);
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 /* Printing the information */
 uint32_t fci_fp_print_tables(char_t *buf, uint32_t buf_len, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /* FCI queries */
-errno_t fci_fp_db_get_first_rule(char_t **rule_name, uint32_t *data, uint32_t *mask, uint16_t *offset, pfe_ct_fp_flags_t *flags, char_t **next_rule);
-errno_t fci_fp_db_get_next_rule(char_t **rule_name, uint32_t *data, uint32_t *mask, uint16_t *offset, pfe_ct_fp_flags_t *flags, char_t **next_rule);
-errno_t fci_fp_db_get_table_first_rule(char_t *table_name, char_t **rule_name, uint32_t *data, uint32_t *mask, uint16_t *offset, pfe_ct_fp_flags_t *flags, char_t **next_rule);
-errno_t fci_fp_db_get_table_next_rule(char_t *table_name, char_t **rule_name, uint32_t *data, uint32_t *mask, uint16_t *offset, pfe_ct_fp_flags_t *flags, char_t **next_rule);
+errno_t fci_fp_db_get_first_rule(fci_fp_rule_info_t *rule_info, char_t **next_rule);
+errno_t fci_fp_db_get_next_rule(fci_fp_rule_info_t *rule_info, char_t **next_rule);
+errno_t fci_fp_db_get_table_first_rule(char_t *table_name, fci_fp_rule_info_t *rule_info, char_t **next_rule);
+errno_t fci_fp_db_get_table_next_rule(char_t *table_name, fci_fp_rule_info_t *rule_info, char_t **next_rule);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

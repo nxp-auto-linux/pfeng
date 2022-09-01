@@ -61,12 +61,14 @@
  */
 errno_t oal_mm_init(const void *dev);
 
+#ifdef PFE_CFG_TARGET_OS_LINUX
 /**
  * @brief		Re-initialize the memory management library
  * @details		The oal_mm can be re-initalized when returned from WAKEUP event. Optional
  * @return		EOK if success
  */
 errno_t oal_mm_wakeup_reinit(void);
+#endif /* PFE_CFG_TARGET_OS_LINUX */
 
 /**
  * @brief		Shut the memory management library down

@@ -67,6 +67,7 @@ typedef struct __attribute__((packed))
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(NXP_LOG_ENABLED)
 /**
  * @brief		Modified snprintf function
  * @details		Function return real number of written data into buffer
@@ -79,6 +80,7 @@ typedef struct __attribute__((packed))
  * @return		Number of bytes written to the buffer
  */
 extern uint32_t oal_util_snprintf(char_t *buffer, size_t buf_len, const char_t *format, ...);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(NXP_LOG_ENABLED) */
 
 #ifdef PFE_CFG_IEEE1588_SUPPORT
 /**

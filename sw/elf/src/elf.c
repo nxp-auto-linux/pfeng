@@ -22,15 +22,6 @@
                                          MISRA VIOLATIONS
 ==================================================================================================*/
 
-/**
-* @page misra_violations MISRA-C:2004 violations
-*
-* @section elf_c_REF_1
-* Violates MISRA 2004 TODO Rule TODO,
-*
-*
-*/
-
 /*==================================================================================================
                                          INCLUDE FILES
  1) system and project includes
@@ -270,7 +261,7 @@ static bool_t LoadFileData(const ELF_File_t *pElfFile, uint32_t u32Offset, uint3
     #endif /* ELF_CFG_SECTION_PRINT_ENABLED */
 #endif /* ELF_CFG_ELF32_SUPPORTED */
 
-static uint32_t buf_read(const void *src_buf, uint32_t u32FileSize, uint32_t u32Offset, void *dst_buf, uint32_t nbytes);
+static uint32_t buf_read(const void *src_buf, uint32_t u32Offset, void *dst_buf, uint32_t nbytes);
 static void ELF_FreePtr(ELF_File_t *pElfFile);
 static bool_t ELF_LoadTables(ELF_File_t *pElfFile, uint32_t *u32NamesSectionOffset, uint32_t *u32NamesSectionSize);
 
@@ -300,14 +291,7 @@ static bool_t LoadFileData(const ELF_File_t *pElfFile, uint32_t u32Offset, uint3
     }
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-    /* Does it fit to file? */
-    if ((u32Offset + u32Size) > pElfFile->u32FileSize)
-    {
-        NXP_LOG_ERROR( "LoadFileData: Requested data block exceeds size of the file\n");
-        NXP_LOG_INFO("\n");
-    }
-    /* Try to read. */
-    else if (u32Size != buf_read(pElfFile->pvData, pElfFile->u32FileSize, u32Offset, pvDestMem, u32Size))
+    if (u32Size != buf_read(pElfFile->pvData, u32Offset, pvDestMem, u32Size))
     {
         NXP_LOG_ERROR("LoadFileData: Reading program header failed\n");
     }
@@ -343,12 +327,6 @@ static bool_t ELF32_LoadTables(ELF_File_t *pElfFile)
     {
         NXP_LOG_ERROR("ELF32_LoadTables: Unexpected progam header entry size\n");
     }
-    /* Check the size */
-    else if ((pElfFile->Header.r32.e_phoff + ((uint32_t)pElfFile->Header.r32.e_phentsize * (uint32_t)pElfFile->Header.r32.e_phnum)) > pElfFile->u32FileSize)
-    {
-        NXP_LOG_ERROR("ELF32_LoadTables: Requested data block exceeds size of the file\n");
-        NXP_LOG_INFO("\n");
-    }
     /* All checkes passed */
     else
     {
@@ -370,11 +348,6 @@ static bool_t ELF32_LoadTables(ELF_File_t *pElfFile)
     else if (sizeof(Elf32_Shdr) != pElfFile->Header.r32.e_shentsize)
     {
         NXP_LOG_ERROR("ELF32_LoadTables: Unexpected section header entry size\n");
-    }
-    /* Check the size */
-    else if ((pElfFile->Header.r32.e_shoff + ((uint32_t)pElfFile->Header.r32.e_shentsize * (uint32_t)pElfFile->Header.r32.e_shnum)) > pElfFile->u32FileSize)
-    {
-        NXP_LOG_ERROR("ELF32_LoadTables: Requested data block exceeds size of the file\n");
     }
     else /* All checkes passed */
     {
@@ -806,10 +779,6 @@ static bool_t ELF64_LoadTables(ELF_File_t *pElfFile)
     {
         NXP_LOG_ERROR("ELF64_LoadTables: Unexpected program header entry size\n");
     }
-    else if ((pElfFile->Header.r64.e_phoff + ((uint64_t)pElfFile->Header.r64.e_phentsize * (uint64_t)pElfFile->Header.r64.e_phnum)) > (uint64_t)(pElfFile->u32FileSize))
-    {
-        NXP_LOG_ERROR("ELF64_LoadTables: Requested data block exceeds size of the file\n");
-    }
     else /* All checks passed */
     {
         /* Save the pointer */
@@ -827,10 +796,6 @@ static bool_t ELF64_LoadTables(ELF_File_t *pElfFile)
     else if (sizeof(Elf64_Shdr) != pElfFile->Header.r64.e_shentsize)
     {
         NXP_LOG_ERROR("ELF64_LoadTables: Unexpected section header entry size\n");
-    }
-    else if ((pElfFile->Header.r64.e_shoff + ((uint64_t)pElfFile->Header.r64.e_shentsize * (uint64_t)pElfFile->Header.r64.e_shnum)) > (uint64_t)(pElfFile->u32FileSize))
-    {
-        NXP_LOG_ERROR("ELF64_LoadTables: Requested data block exceeds size of the file\n");
     }
     else /* All checks passed */
     {
@@ -1243,10 +1208,10 @@ static void ELF64_PrintSections(const ELF_File_t *pElfFile)
 #endif /* ELF_CFG_ELF64_SUPPORTED */
 
 /*================================================================================================*/
-static uint32_t buf_read(const void *src_buf, uint32_t u32FileSize, uint32_t u32Offset, void *dst_buf, uint32_t nbytes)
+static uint32_t buf_read(const void *src_buf, uint32_t u32Offset, void *dst_buf, uint32_t nbytes)
 {
     uint32_t u32i = 0;
-    const uint8_t *pu8src = (uint8_t *)((addr_t)src_buf + u32Offset);
+    const uint8_t *pu8src = (const uint8_t *)((addr_t)src_buf + u32Offset);
     uint8_t *pu8dst = (uint8_t *)dst_buf;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1259,12 +1224,6 @@ static uint32_t buf_read(const void *src_buf, uint32_t u32FileSize, uint32_t u32
 
     for (u32i = 0U; u32i < nbytes; u32i++)
     {
-        /* Check for file end here */
-        if (u32i >= (u32FileSize - u32Offset))
-        {
-            /* File end reached */
-            break;
-        }
         *pu8dst = *pu8src;
         pu8dst++;
         pu8src++;
@@ -1332,11 +1291,10 @@ static void ELF_FreePtr(ELF_File_t *pElfFile)
 * @details      It also handles file format and loads all tables handling their endianness.
 * @param[out]   pElfFile Structure holding all informations about opened ELF file.
 * @param[in]    pvFile Pointer to the file content.
-* @param[in]    u32FileSize Size of the file data passed in pvFile.
 * @retval       TRUE Succeeded
 * @retval       FALSE Failed
 */
-bool_t ELF_Open(ELF_File_t *pElfFile,void *pvFile, uint32_t u32FileSize)
+bool_t ELF_Open(ELF_File_t *pElfFile, const void *pvFile)
 {
     bool_t    bRetVal = FALSE;
     uint32_t     u32NamesSectionOffset = 0U;
@@ -1358,7 +1316,7 @@ bool_t ELF_Open(ELF_File_t *pElfFile,void *pvFile, uint32_t u32FileSize)
     pElfFile->acSectNames = NULL;
     pElfFile->pvData = NULL;
 
-    if (ELF64_HEADER_SIZE != buf_read(pvFile, u32FileSize, 0,(void *)&(pElfFile->Header.r64), ELF64_HEADER_SIZE))
+    if (ELF64_HEADER_SIZE != buf_read(pvFile, 0,(void *)&(pElfFile->Header.r64), ELF64_HEADER_SIZE))
     {
         NXP_LOG_ERROR("ELF_Open: Failed to read ELF header\n");
     }
@@ -1375,7 +1333,6 @@ bool_t ELF_Open(ELF_File_t *pElfFile,void *pvFile, uint32_t u32FileSize)
     else /* So far SUCCESS */
     {
         pElfFile->pvData = pvFile;
-        pElfFile->u32FileSize = u32FileSize;
         pElfFile->bIs64Bit = ELF_Is64bit(pElfFile);
         pElfFile->u32ProgScanIdx = 0U;
         /* Load tables */
@@ -1386,19 +1343,9 @@ bool_t ELF_Open(ELF_File_t *pElfFile,void *pvFile, uint32_t u32FileSize)
     /* === Load section names from file ============================================= */
     if (TRUE == bRetVal)
     {
-        bRetVal = FALSE;
-
-        /* Check file size */
-        if ((u32NamesSectionOffset + u32NamesSectionSize) >= u32FileSize)
-        {
-            NXP_LOG_ERROR("ELF_Open: Section names section offset out of file\n");
-        }
         /* Save the section name pointer */
-        else
-        {
-            pElfFile->acSectNames = (((int8_t *)pElfFile->pvData) + u32NamesSectionOffset);
-            bRetVal = TRUE;
-        }
+        pElfFile->acSectNames = (((int8_t *)pElfFile->pvData) + u32NamesSectionOffset);
+        bRetVal = TRUE;
     }
     #endif /* ELF_CFG_SECTION_TABLE_USED */
 

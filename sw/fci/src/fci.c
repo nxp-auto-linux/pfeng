@@ -4,6 +4,7 @@
  *  SPDX-License-Identifier: GPL-2.0
  *
  * ========================================================================= */
+
 #include "pfe_cfg.h"
 #include "fci_internal.h"
 #include "fci.h"
@@ -402,7 +403,7 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		if(TRUE == fci_context->fci_initialized)
+		if (TRUE == fci_context->fci_initialized)
 		{
 			NXP_LOG_ERROR("FCI has already been initialized!\n");
 			err = EINVAL;
@@ -422,101 +423,103 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 			if (6U != sizeof(pfe_mac_addr_t))
 			{
 				err = EINVAL;
-				goto free_and_fail;
+                fci_fini();
 			}
+            else
+            {
+			    /*	Create communication core */
+			    err = fci_core_init(identifier);
+			    if (EOK != err)
+			    {
+			    	NXP_LOG_ERROR("Could not create FCI core\n");
+                    fci_fini();
+			    }
+                else
+                {
+#ifdef PFE_CFG_PFE_MASTER
+			        err = oal_mutex_init(&fci_context->db_mutex);
+			        if (EOK != err)
+			        {
+                        fci_fini();
+			        }
+			        else
+			        {
+			        	fci_context->db_mutex_initialized = TRUE;
 
-			/*	Create communication core */
-			err = fci_core_init(identifier);
-			if (err != EOK)
-			{
-				NXP_LOG_ERROR("Could not create FCI core\n");
-				goto free_and_fail;
-			}
+			            /*	Initialize the Flexible Parser databases */
+			            fci_fp_db_init();
+			            if (NULL != info)
+			            {
+			            	fci_context->class = info->class;
+			            }
 
-		#ifdef PFE_CFG_PFE_MASTER
-			err = oal_mutex_init(&fci_context->db_mutex);
-			if (EOK != err)
-			{
-				goto free_and_fail;
-			}
-			else
-			{
-				fci_context->db_mutex_initialized = TRUE;
-			}
+			            /*	Initialize the physical interface database */
+			            if (NULL != info)
+			            {
+			            	fci_context->phy_if_db = info->phy_if_db;
+			            }
 
-			/*	Initialize the Flexible Parser databases */
-			fci_fp_db_init();
-			if (NULL != info)
-			{
-				fci_context->class = info->class;
-			}
+			            if (NULL != fci_context->log_if_db)
+			            {
+			            	fci_context->phy_if_db_initialized = TRUE;
+			            }
 
-			/*	Initialize the physical interface database */
-			if (NULL != info)
-			{
-				fci_context->phy_if_db = info->phy_if_db;
-			}
+			            /*	Initialize the logical interface database */
+			            if (NULL != info)
+			            {
+			            	fci_context->log_if_db = info->log_if_db;
+			            }
 
-			if(NULL != fci_context->log_if_db)
-			{
-				fci_context->phy_if_db_initialized = TRUE;
-			}
+			            if (NULL != fci_context->log_if_db)
+			            {
+			            	fci_context->log_if_db_initialized = TRUE;
+			            }
 
-			/*	Initialize the logical interface database */
-			if (NULL != info)
-			{
-				fci_context->log_if_db = info->log_if_db;
-			}
+			            /*	Initialize the route database */
+			            fci_rt_db_init(&fci_context->route_db);
+			            fci_context->rt_db_initialized = TRUE;
 
-			if(NULL != fci_context->log_if_db)
-			{
-				fci_context->log_if_db_initialized = TRUE;
-			}
+			            /*	Store the routing table and bridge reference */
+			            if (NULL != info)
+			            {
+			            	if (NULL != info->rtable)
+			            	{
+			            		fci_context->rtable = info->rtable;
+			            		fci_context->rtable_initialized = TRUE;
+			            	}
 
-			/*	Initialize the route database */
-			fci_rt_db_init(&fci_context->route_db);
-			fci_context->rt_db_initialized = TRUE;
+			            	if (NULL != info->l2_bridge)
+			            	{
+			            		fci_context->l2_bridge = info->l2_bridge;
+			            		fci_context->l2_bridge_initialized = TRUE;
+			            	}
+			            }
 
-			/*	Store the routing table and bridge reference */
-			if (NULL != info)
-			{
-				if (NULL != info->rtable)
-				{
-					fci_context->rtable = info->rtable;
-					fci_context->rtable_initialized = TRUE;
-				}
+			            if (NULL != info)
+			            {
+			            	/*	Initialize the TMU  */
+			            	fci_context->tmu = info->tmu;
+			            }
 
-				if (NULL != info->l2_bridge)
-				{
-					fci_context->l2_bridge = info->l2_bridge;
-					fci_context->l2_bridge_initialized = TRUE;
-				}
-			}
+			            if (NULL != fci_context->tmu)
+			            {
+			            	fci_context->tmu_initialized = TRUE;
+			            }
+#else
+		    	        (void)info;
+#endif /* PFE_CFG_PFE_MASTER */
 
-			if (NULL != info)
-			{
-				/*	Initialize the TMU  */
-				fci_context->tmu = info->tmu;
-			}
-
-			if(NULL != fci_context->tmu)
-			{
-				fci_context->tmu_initialized = TRUE;
-			}
-		#else
-			(void)info;
-		#endif /* PFE_CFG_PFE_MASTER */
-
-			fci_context->default_timeouts.timeout_tcp = 5U * 24U * 60U * 60U; 	/* 5 days */
-			fci_context->default_timeouts.timeout_udp = 300U; 					/* 5 min */
-			fci_context->default_timeouts.timeout_other = 240U; 				/* 4 min */
-			fci_context->fci_initialized = TRUE;
+		    	        fci_context->default_timeouts.timeout_tcp = 5U * 24U * 60U * 60U; 	/* 5 days */
+		    	        fci_context->default_timeouts.timeout_udp = 300U; 					/* 5 min */
+		    	        fci_context->default_timeouts.timeout_other = 240U; 				/* 4 min */
+		    	        fci_context->fci_initialized = TRUE;
+#ifdef PFE_CFG_PFE_MASTER
+                    }
+#endif
+                }
+            }
 		}
 	}
-	return err;
-
-free_and_fail:
-	fci_fini();
 	return err;
 }
 
@@ -530,11 +533,7 @@ void fci_fini(void)
 	uint32_t session_id = 0U;
 #endif /* PFE_CFG_PFE_MASTER */
 
-	if (FALSE == fci_context->fci_initialized)
-	{
-
-	}
-	else
+	if (TRUE == fci_context->fci_initialized)
 	{
 
 #ifdef PFE_CFG_PFE_MASTER

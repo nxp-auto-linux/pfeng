@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2021 NXP
+ * Copyright 2018-2022 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -47,6 +47,8 @@ int pfeng_fw_load(struct pfeng_priv *priv, const char *class_name, const char *u
 	pfe_fw_t *fw;
 	int ret;
 	bool enable_util = priv->pfe_cfg->enable_util;
+	u32 class_size;
+	u32 util_size;
 
 	fw = kzalloc(sizeof(*fw), GFP_KERNEL);
 	if(IS_ERR(fw)) {
@@ -57,20 +59,20 @@ int pfeng_fw_load(struct pfeng_priv *priv, const char *class_name, const char *u
 	priv->pfe_cfg->fw = fw;
 
 	/* load CLASS fw */
-	ret = pfeng_fw_load_file(dev, class_name, &fw->class_data, &fw->class_size);
+	ret = pfeng_fw_load_file(dev, class_name, (void **)&fw->class_data, &class_size);
 	if (ret)
 		goto err;
 
 	/* load UTIL fw */
 	if (enable_util) {
-		ret = pfeng_fw_load_file(dev, util_name, &fw->util_data, &fw->util_size);
+		ret = pfeng_fw_load_file(dev, util_name, (void **)&fw->util_data, &util_size);
 		if (ret)
 			goto err;
 	}
 
-	dev_info(dev, "Firmware: CLASS %s [%d bytes]\n", class_name, fw->class_size);
+	dev_info(dev, "Firmware: CLASS %s [%d bytes]\n", class_name, class_size);
 	if (enable_util)
-		dev_info(dev, "Firmware: UTIL %s [%d bytes]\n", util_name, fw->util_size);
+		dev_info(dev, "Firmware: UTIL %s [%d bytes]\n", util_name, util_size);
 
 end:
 	return ret;

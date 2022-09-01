@@ -1,27 +1,31 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2019-2022 NXP
+ *  Copyright 2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
  * ========================================================================= */
-#ifndef PFE_FLEXIBLE_FILTER_H
-#define PFE_FLEXIBLE_FILTER_H
 
-#include "pfe_class.h"
+#ifndef PUBLIC_PFE_ECC_ERR_H_
+#define PUBLIC_PFE_ECC_ERR_H_
+
+typedef struct pfe_ecc_err_tag pfe_ecc_err_t;
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_START_SEC_CODE
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-void pfe_flexible_filter_init(void);
-errno_t pfe_flexible_filter_set(pfe_class_t *class, const uint32_t dmem_addr);
+pfe_ecc_err_t *pfe_ecc_err_create(addr_t cbus_base_va, addr_t safety_base);
+void pfe_ecc_err_destroy(pfe_ecc_err_t *ecc_err);
+errno_t pfe_ecc_err_isr(const pfe_ecc_err_t *ecc_err);
+void pfe_ecc_err_irq_mask(const pfe_ecc_err_t *ecc_err);
+void pfe_ecc_err_irq_unmask(const pfe_ecc_err_t *ecc_err);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-#endif
+#endif /* PUBLIC_PFE_ECC_ERR_H_ */

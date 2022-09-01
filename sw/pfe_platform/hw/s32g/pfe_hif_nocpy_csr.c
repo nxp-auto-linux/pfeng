@@ -112,6 +112,8 @@ void pfe_hif_nocpy_cfg_irq_unmask(addr_t base_va)
  */
 errno_t pfe_hif_nocpy_cfg_init(addr_t base_va)
 {
+	uint32_t regval;
+
 	/*	Disable channel interrupts */
 	hal_write32(0U, base_va + HIF_NOCPY_INT_EN);
 	hal_write32(0xffffffffU, base_va + HIF_NOCPY_INT_SRC);
@@ -129,6 +131,10 @@ errno_t pfe_hif_nocpy_cfg_init(addr_t base_va)
 	hal_write32(HIF_CTRL_BDP_POLL_CTRL_EN, base_va + HIF_NOCPY_RX_CTRL);
 	hal_write32(HIF_CTRL_BDP_POLL_CTRL_EN, base_va + HIF_NOCPY_TX_CTRL);
 #endif /* PFE_HIF_NOCPY_CFG_USE_BD_POLLING */
+
+	regval = hal_read32(base_va + HIF_NOCPY_CSR_AXI_WAIT_DONE);
+	regval |= 0x1U;
+	hal_write32(regval, base_va + HIF_NOCPY_CSR_AXI_WAIT_DONE);
 
 	hal_write32(0xffffffffU
 				& ~HIF_NOCPY_INT

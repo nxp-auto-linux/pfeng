@@ -47,7 +47,8 @@ typedef enum __attribute__((packed))
 	PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE = 119U,         /* Arg: pfe_platform_rpc_pfe_phy_if_loadbalance_disable_arg_t, Ret: None */
 	PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE = 120U,				/* Arg: pfe_platform_rpc_pfe_phy_if_set_block_state_arg_t, Ret: None */
 	PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE = 121U,				/* Arg: pfe_platform_rpc_pfe_phy_if_get_block_state_arg_t, Ret: pfe_platform_rpc_pfe_phy_if_get_block_state_ret_t */
-	PFE_PLATFORM_RPC_PFE_PHY_IF_ID_COMPATIBLE_LAST = PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE, /* last entry compatible with generic phy_if structure for args*/
+	PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE = 122U,			    /* Arg: pfe_platform_rpc_pfe_phy_if_get_stat_value_arg_t, Ret: pfe_platform_rpc_pfe_phy_if_get_stat_value_ret_t */
+	PFE_PLATFORM_RPC_PFE_PHY_IF_ID_COMPATIBLE_LAST = PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE, /* last entry compatible with generic phy_if structure for args*/
 
 	/* Lock for atomic operations */
 	PFE_PLATFORM_RPC_PFE_IF_LOCK = 190U,						/* Arg: None, Ret: None */
@@ -381,6 +382,19 @@ typedef struct __attribute__((packed, aligned(4)))
 	pfe_ct_phy_if_stats_t stats;
 }pfe_platform_rpc_pfe_phy_if_stats_ret_t;
 
+typedef struct __attribute__((packed, aligned(4)))
+{
+	/*	statistic value */
+	uint32_t stat_val;
+} pfe_platform_rpc_pfe_phy_if_get_stat_value_ret_t;
+
+typedef struct __attribute__((packed, aligned(4)))
+{
+	pfe_ct_phy_if_id_t phy_if_id;
+	uint32_t stat_id;
+} pfe_platform_rpc_pfe_phy_if_get_stat_value_arg_t;
+ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_phy_if_get_stat_value_arg_t, phy_if_id));
+
 #if defined(PFE_CFG_FCI_ENABLE)
 typedef struct __attribute__((packed, aligned(4)))
 {
@@ -395,6 +409,7 @@ typedef struct __attribute__((packed, aligned(4)))
 	/*	FCI reply data */
 	fci_msg_cmd_t msg_cmd;
 } pfe_platform_rpc_pfe_fci_proxy_ret_t;
+
 #endif /* PFE_CFG_FCI_ENABLE */
 
 #endif /* SRC_PFE_PLATFORM_RPC_H_ */

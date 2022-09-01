@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -101,7 +101,11 @@ uint8_t  demo_l2_bd_ld_get_mcast_miss(const fpp_l2_bd_cmd_t* p_bd);
 uint32_t demo_l2_bd_ld_get_if_list(const fpp_l2_bd_cmd_t* p_bd);
 uint32_t demo_l2_bd_ld_get_untag_if_list(const fpp_l2_bd_cmd_t* p_bd);
 fpp_l2_bd_flags_t demo_l2_bd_ld_get_flags(const fpp_l2_bd_cmd_t* p_bd);
- 
+uint32_t demo_l2_bd_ld_get_stt_ingress(const fpp_l2_bd_cmd_t* p_bd);
+uint32_t demo_l2_bd_ld_get_stt_ingress_bytes(const fpp_l2_bd_cmd_t* p_bd);
+uint32_t demo_l2_bd_ld_get_stt_egress(const fpp_l2_bd_cmd_t* p_bd);
+uint32_t demo_l2_bd_ld_get_stt_egress_bytes(const fpp_l2_bd_cmd_t* p_bd);
+
  
 bool demo_l2_stent_ld_is_fwlist_phyifs(const fpp_l2_static_ent_cmd_t* p_stent, uint32_t fwlist_bitflag);
 bool demo_l2_stent_ld_is_local(const fpp_l2_static_ent_cmd_t* p_stent);

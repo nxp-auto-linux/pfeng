@@ -537,17 +537,21 @@ pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_
  * @param[in]	emac The EMAC instance
  * @return		Index (0, 1, 2, ..) or 255 if failed
  */
-uint8_t pfe_emac_get_index(pfe_emac_t *emac)
+uint8_t pfe_emac_get_index(const pfe_emac_t *emac)
 {
+	uint8_t emac_idx;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 255U;
+		emac_idx = 255U;
 	}
+	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	return pfe_emac_cfg_get_index(emac->emac_base_va, emac->cbus_base_va);
+	{
+		emac_idx = pfe_emac_cfg_get_index(emac->emac_base_va, emac->cbus_base_va);
+	}
+	return emac_idx;
 }
 
 errno_t pfe_emac_bind_gpi(pfe_emac_t *emac, pfe_gpi_t *gpi)
@@ -2038,6 +2042,49 @@ uint32_t pfe_emac_get_stat_value(const pfe_emac_t *emac, uint32_t stat_id)
 		stat_value = pfe_emac_cfg_get_stat_value(emac->emac_base_va, stat_id);
 	}
 	return stat_value;
+}
+
+/**
+ * @brief		EMAC ISR
+ * @param[in]	emac The EMAC instance
+ */
+errno_t pfe_emac_isr(pfe_emac_t *emac)
+{
+	errno_t ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		(void)oal_mutex_lock(&emac->mutex);
+		ret = pfe_emac_cfg_isr(emac->emac_base_va, emac->cbus_base_va);
+		(void)oal_mutex_unlock(&emac->mutex);
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Mask EMAC interrupts
+ * @param[in]	emac The EMAC instance
+ */
+void pfe_emac_irq_mask(pfe_emac_t *emac)
+{
+	(void)emac;
+}
+
+/**
+ * @brief		Unmask EMAC interrupts
+ * @param[in]	emac The EMAC instance
+ */
+void pfe_emac_irq_unmask(pfe_emac_t *emac)
+{
+	(void)emac;
 }
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR

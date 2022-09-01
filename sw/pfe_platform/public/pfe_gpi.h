@@ -183,7 +183,11 @@ pfe_gpi_t *pfe_gpi_create(addr_t cbus_base_va, addr_t gpi_base, const pfe_gpi_cf
 void pfe_gpi_enable(const pfe_gpi_t *gpi);
 errno_t pfe_gpi_reset(const pfe_gpi_t *gpi);
 void pfe_gpi_disable(const pfe_gpi_t *gpi);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_gpi_get_text_statistics(const pfe_gpi_t *gpi, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 void pfe_gpi_destroy(pfe_gpi_t *gpi);
 uint32_t pfe_gpi_cfg_get_sys_clk_mhz(addr_t cbus_base_va);
 

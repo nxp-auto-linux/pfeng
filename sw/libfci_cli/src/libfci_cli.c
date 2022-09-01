@@ -31,6 +31,7 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "libfci_cli_common.h"
 #include "libfci_cli_def_help.h"
@@ -75,28 +76,37 @@ int main(int argc, char* argv[])
     
     if (1 >= argc)
     {
-        cli_print_app_version();
+        cli_print_app_version(false);
         cli_print_help(0);
+        rtn = CLI_OK;
     }
-    
-    rtn = demo_client_open_in_cmd_mode(&cli_p_cl);
-    if (CLI_OK != rtn)
+    else if (0 == strcmp(argv[1], "--version"))
     {
-        cli_print_error(rtn, TXT_ERR_NONAME, TXT_ERR_INDENT "FCI endpoint failed to open.\n");
+        const bool is_verbose = ((2 < argc) && (0 == strcmp(argv[2], "--verbose")));
+        cli_print_app_version(is_verbose);
+        rtn = CLI_OK;
     }
     else
     {
-        rtn = cli_parse_and_execute(argv, argc);
-    }
-    
-    /* close FCI (do not hide behind rtn check) */
-    if (NULL != cli_p_cl)
-    {
-        const int rtn_close = demo_client_close(cli_p_cl);
-        rtn = ((CLI_OK == rtn) ? (rtn_close) : (rtn));
-        if (CLI_OK != rtn_close)
+        rtn = demo_client_open_in_cmd_mode(&cli_p_cl);
+        if (CLI_OK != rtn)
         {
-            cli_print_error(rtn_close, TXT_ERR_NONAME, TXT_ERR_INDENT "FCI endpoint failed to close.\n");
+            cli_print_error(rtn, TXT_ERR_NONAME, TXT_ERR_INDENT "FCI endpoint failed to open.\n");
+        }
+        else
+        {
+            rtn = cli_parse_and_execute(argv, argc);
+        }
+        
+        /* close FCI (do not hide behind rtn check) */
+        if (NULL != cli_p_cl)
+        {
+            const int rtn_close = demo_client_close(cli_p_cl);
+            rtn = ((CLI_OK == rtn) ? (rtn_close) : (rtn));
+            if (CLI_OK != rtn_close)
+            {
+                cli_print_error(rtn_close, TXT_ERR_NONAME, TXT_ERR_INDENT "FCI endpoint failed to close.\n");
+            }
         }
     }
     

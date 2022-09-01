@@ -194,7 +194,7 @@ static inline bool_t pfe_emac_check_crit_by_type(const pfe_mac_addr_t addr, pfe_
 }
 
 pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_mode_t mode, pfe_emac_speed_t speed, pfe_emac_duplex_t duplex);
-uint8_t pfe_emac_get_index(pfe_emac_t *emac);
+uint8_t pfe_emac_get_index(const pfe_emac_t *emac);
 errno_t pfe_emac_bind_gpi(pfe_emac_t *emac, pfe_gpi_t *gpi);
 pfe_gpi_t *pfe_emac_get_gpi(const pfe_emac_t *emac);
 void pfe_emac_enable(const pfe_emac_t *emac);
@@ -235,10 +235,17 @@ errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_emac_crit_t crit, pfe_mac
 errno_t pfe_emac_get_addr(pfe_emac_t *emac, pfe_mac_addr_t addr);
 errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 void pfe_emac_destroy(pfe_emac_t *emac);
+
+#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+
 uint32_t pfe_emac_get_rx_cnt(const pfe_emac_t *emac);
 uint32_t pfe_emac_get_tx_cnt(const pfe_emac_t *emac);
 uint32_t pfe_emac_get_stat_value(const pfe_emac_t *emac, uint32_t stat_id);
+errno_t pfe_emac_isr(pfe_emac_t *emac);
+void pfe_emac_irq_mask(pfe_emac_t *emac);
+void pfe_emac_irq_unmask(pfe_emac_t *emac);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

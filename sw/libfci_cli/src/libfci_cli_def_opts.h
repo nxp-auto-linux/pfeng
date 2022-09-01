@@ -1487,6 +1487,17 @@ typedef enum cli_opt_incompat_grp_tt {
         OPT_117_TXT_HELP
 
 
+#define OPT_118_ENUM_NAME        OPT_PTP_MGMT_IF
+#define OPT_118_HAS_ARG          y
+#define OPT_118_OPT_PARSE        opt_parse_ptp_mgmt_if
+#define OPT_118_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_118_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_118_CLI_LONG_TXT_A   "ptp-mgmt-if"
+#define OPT_118_TXT_HELP         "--ptp-mgmt-if"
+#define                          TXT_HELP__PTP_MGMT_IF \
+        OPT_118_TXT_HELP
+
+
 
 
 /* OPT_LAST (keep this at the bottom of the cli option definition list) */
