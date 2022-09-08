@@ -401,16 +401,20 @@
 #define CMD_88_CMDEXEC      cli_cmd_qos_pol_flow_del
 #define CMD_88_HELP         txt_help_qos_pol_flow_del
 
-#define CMD_90_ENUM_NAME    CMD_DEMO_FEATURE_PRINT
-#define CMD_90_CLI_TXT      "demo-feature-print"
-#define CMD_90_CMDEXEC      cli_cmd_demo_feature_print
-#define CMD_90_HELP         txt_help_demo_feature_print
+#define CMD_90_ENUM_NAME    CMD_FCI_OWNERSHIP
+#define CMD_90_CLI_TXT      "fci-ownership"
+#define CMD_90_CMDEXEC      cli_cmd_fci_ownership
+#define CMD_90_HELP         txt_help_fci_ownership
 
-#define CMD_91_ENUM_NAME    CMD_DEMO_FEATURE_RUN
-#define CMD_91_CLI_TXT      "demo-feature-run"
-#define CMD_91_CMDEXEC      cli_cmd_demo_feature_run
-#define CMD_91_HELP         txt_help_demo_feature_run
+#define CMD_98_ENUM_NAME    CMD_DEMO_FEATURE_PRINT
+#define CMD_98_CLI_TXT      "demo-feature-print"
+#define CMD_98_CMDEXEC      cli_cmd_demo_feature_print
+#define CMD_98_HELP         txt_help_demo_feature_print
 
+#define CMD_99_ENUM_NAME    CMD_DEMO_FEATURE_RUN
+#define CMD_99_CLI_TXT      "demo-feature-run"
+#define CMD_99_CMDEXEC      cli_cmd_demo_feature_run
+#define CMD_99_HELP         txt_help_demo_feature_run
 
 /* CMD_LAST (keep this at the bottom of the cli command definition list) */
 

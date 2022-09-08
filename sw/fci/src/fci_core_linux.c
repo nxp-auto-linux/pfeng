@@ -405,6 +405,10 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 			msg->client = (void *)client;
 			mutex_unlock(&GET_FCI_CORE()->clients_lock);
 
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+			/*	Local sender identification */
+			msg->msg_cmd.sender = OAL_PFE_CFG_MASTER_IF;
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 			memset(rep_msg, 0, sizeof(fci_msg_t));
 
 			/*	Here we call the OS-independent FCI message processor */

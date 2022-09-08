@@ -70,6 +70,9 @@ SRCS += src/fci_spd.c
 SRCS += src/fci_qos.c
 SRCS += src/fci_mirror.c
 endif
+ifneq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),0)
+SRCS += src/fci_owner.c
+endif
 ifeq ($(TARGET_OS),QNX)
 SRCS += src/fci_core_qnx.c
 endif

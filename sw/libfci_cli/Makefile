@@ -60,7 +60,7 @@ ifeq ($(TARGET_OS),LINUX)
 	GLOBAL_CCFLAGS := $(shell echo $(GLOBAL_CCFLAGS))
 	
 	CLI_TARGET_OS = "LNX"
-	CLI_DRV_VERSION = "RTM 1.1.0 RC1"
+	CLI_DRV_VERSION = "RTM 1.1.0"
 	CLI_DRV_COMMIT_HASH = "M4_DRIVER_COMMIT_HASH"
 else
 #This branch by defaut means QNX.

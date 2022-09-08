@@ -25,6 +25,9 @@
 #include "fpp.h"
 #include "fpp_ext.h"
 #include "pfe_if_db.h"
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+#include "fci_ownership_mask.h"
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 #include "fci.h"
 #include "fci_msg.h"   /* The IPC message format (fci_msg_t) */
@@ -69,6 +72,10 @@ struct fci_tag
 		uint32_t timeout_udp;
 		uint32_t timeout_other;
 	} default_timeouts;
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	bool_t fci_owner_initialized;
+#endif /* #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	bool_t fci_initialized;
 };
@@ -115,6 +122,17 @@ errno_t fci_qos_policer_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_c
 errno_t fci_qos_policer_flow_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_flow_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_qos_policer_wred_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_wred_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_shp_cmd_t *reply_buf, uint32_t *reply_len);
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+errno_t fci_owner_session_cmd(pfe_ct_phy_if_id_t sender, uint32_t code, uint16_t *fci_ret);
+errno_t fci_owner_get_floating_lock(pfe_ct_phy_if_id_t sender, uint16_t *fci_ret, bool_t *floating_lock);
+errno_t fci_owner_clear_floating_lock(void);
+errno_t fci_owner_authorize(pfe_ct_phy_if_id_t sender, bool_t *auth_ret);
+errno_t fci_sender_get_phy_if_id(uint32_t sender, pfe_ct_phy_if_id_t *phy_if_id);
+errno_t fci_owner_mutex_lock(void);
+errno_t fci_owner_mutex_unlock(void);
+errno_t fci_owner_init(fci_init_info_t *info);
+void fci_owner_fini(void);
+#endif /* #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

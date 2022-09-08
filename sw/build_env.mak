@@ -115,8 +115,6 @@ export PFE_CFG_HIF_PRIO_CTRL=1
 export PFE_CFG_SAFE_IRQ?=1
 #Maximum number of System buffers
 export PFE_CFG_BMU2_BUF_COUNT?=1024
-#System buffer size
-export PFE_CFG_BMU2_BUF_SIZE?=2048
 #Number of entries of a HIF ring, must be power of 2
 export PFE_CFG_HIF_RING_LENGTH?=256
 #Number of milisecs in Master-UP wait inside Platform. Used by Slave only
@@ -390,9 +388,7 @@ endif
 ifneq ($(PFE_CFG_BMU2_BUF_COUNT),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_BMU2_BUF_COUNT=$(PFE_CFG_BMU2_BUF_COUNT)
 endif
-ifneq ($(PFE_CFG_BMU2_BUF_SIZE),0)
-    GLOBAL_CCFLAGS+=-DPFE_CFG_BMU2_BUF_SIZE=$(PFE_CFG_BMU2_BUF_SIZE)
-endif
+
 ifneq ($(PFE_CFG_HIF_RING_LENGTH),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_RING_LENGTH=$(PFE_CFG_HIF_RING_LENGTH)
 

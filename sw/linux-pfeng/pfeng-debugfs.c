@@ -82,6 +82,28 @@ CREATE_DEBUGFS_ENTRY_TYPE(hif_chnl,hif_chnl);
 		}								\
 	}
 
+static int pfeng_debugfs_single_open_version(struct inode *inode, struct file *file);
+
+static const struct file_operations pfeng_version_fops = {
+	.open		= pfeng_debugfs_single_open_version,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+static int pfeng_debugfs_seq_show_version(struct seq_file *s, void *v)
+{
+	seq_printf(s, "Version: %s\n", PFENG_DRIVER_VERSION);
+	seq_printf(s, "Driver commit hash: %s\n", PFENG_DRIVER_COMMIT_HASH);
+
+	return 0;
+}
+
+static int pfeng_debugfs_single_open_version(struct inode *inode, struct file *file)
+{
+	return single_open(file, pfeng_debugfs_seq_show_version, NULL);
+}
+
 int pfeng_debugfs_create(struct pfeng_priv *priv)
 {
 	struct device *dev = &priv->pdev->dev;
@@ -102,6 +124,8 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 		dev_err(dev, "debugfs create directory failed\n");
 		return -ENOMEM;
 	}
+
+	debugfs_create_file("drv_version", S_IRUSR, priv->dbgfs, NULL, &pfeng_version_fops);
 
 #ifdef PFE_CFG_PFE_MASTER
 	ADD_DEBUGFS_ENTRY("class", class, priv->dbgfs, priv->pfe_platform->classifier, &dsav);

@@ -17,6 +17,9 @@
 #include "pfe_tmu.h"	/* pfe_tmu_t */
 #include "fci_msg.h"
 
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+#include "fci_ownership_mask.h"
+#endif /* #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 /**
  * @brief	Information passed into the fci_init() function
@@ -30,6 +33,9 @@ typedef struct
 	pfe_if_db_t *phy_if_db;	/* Pointer to platform driver phy_if DB */
 	pfe_if_db_t *log_if_db;	/* Pointer to platform driver log_if DB */
 	pfe_tmu_t *tmu;			/* Pointer to platform driver tmu */
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	pfe_fci_owner_hif_id_t hif_fci_owner_chnls_mask;	/* Bit mask representing allowed FCI ownership */
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 } fci_init_info_t;
 
 /**

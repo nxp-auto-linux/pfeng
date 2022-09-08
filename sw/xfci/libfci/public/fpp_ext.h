@@ -120,6 +120,10 @@
  *        Unknown (nonexistent) mirroring rule in the `.rx_mirrors` or `.tx_mirrors` property.
  * - @c FPP_ERR_FW_FEATURE_NOT_AVAILABLE <br>
  *        Attempted to modify properties which are not available (not enabled in FW).
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -260,6 +264,10 @@
  *        Update of the `.egress` bitset has failed.
  * - @c FPP_ERR_IF_EGRESS_DOESNT_EXIST <br>
  *        Invalid (nonexistent) egress physical interface in the `.egress` bitset.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -346,6 +354,12 @@
  *        Success
  * - @c FPP_ERR_IF_RESOURCE_ALREADY_LOCKED <br>
  *        Some other client has the interface database locked for exclusive access.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
@@ -370,6 +384,12 @@
  *        Success
  * - @c FPP_ERR_IF_WRONG_SESSION_ID <br>
  *        Either the database is not locked, or it is currently locked by some other client.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
  *
  * @hideinitializer
  */
@@ -746,6 +766,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Requested physical interface does not support MAC address management.
  * - @c FPP_ERR_IF_WRONG_SESSION_ID <br>
  *        Some other client has the interface database locked for exclusive access.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -894,6 +918,10 @@ typedef struct CAL_PACKED_ALIGNED(2)
  *        Unexpected value of some property.
  * - @c FPP_ERR_IF_ENTRY_NOT_FOUND <br>
  *        Unknown (nonexistent) physical interface in the `.egress_phy_if` property.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -1076,6 +1104,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Requested bridge domain already exists (is already registered).
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Unexpected value of some property.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -1294,6 +1326,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        - For other ACTIONs: Unknown (nonexistent) L2 static entry was requested.
  * - @c FPP_ERR_L2_STATIC_ENT_ALREADY_REGISTERED <br>
  *        Requested L2 static entry already exists (is already registered).
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -1363,6 +1399,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  * ---------------------
  * - @c FPP_ERR_OK <br>
  *        Success
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -1387,6 +1427,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  * ---------------------
  * - @c FPP_ERR_OK <br>
  *        Success
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -1411,6 +1455,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  * ---------------------
  * - @c FPP_ERR_OK <br>
  *        Success
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -1566,6 +1614,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Requested FP table cannot be destroyed (is probably in use by some PFE feature).
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Unexpected value of some property.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -1689,6 +1741,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Requested FP rule cannot be destroyed (is probably a member of some FP table).
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Unexpected value of some property.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -1841,6 +1897,8 @@ typedef struct CAL_PACKED_ALIGNED(2)
  * Possible command return values are:
  *     - @c FPP_ERR_OK: Data written and available to the accelerator
  *     - @c FPP_ERR_AGAIN: Previous command has not been finished yet
+ *     - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER: The client is not FCI owner
+ *     - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED: The client is not authorized get FCI ownership
  *     - @c FPP_ERR_INTERNAL_FAILURE: Internal FCI failure
  */
 #define FPP_CMD_DATA_BUF_PUT		0xf300
@@ -1995,6 +2053,10 @@ typedef struct CAL_PACKED
  *        - For other ACTIONs: Unknown (nonexistent) SPD entry was requested.
  * - @c FPP_ERR_FW_FEATURE_NOT_AVAILABLE <br>
  *        The feature is not available (not enabled in FW).
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -2144,6 +2206,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Unexpected value of some property.
  * - @c FPP_ERR_IF_NOT_SUPPORTED <br>
  *        Requested interface does not support Egress QoS queue management.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -2279,6 +2345,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Unexpected value of some property.
  * - @c FPP_ERR_IF_NOT_SUPPORTED <br>
  *        Requested interface does not support Egress QoS scheduler management.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -2404,6 +2474,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Unexpected value of some property.
  * - @c FPP_ERR_IF_NOT_SUPPORTED <br>
  *        Requested interface does not support Egress QoS shaper management.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -2522,6 +2596,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Success
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Wrong physical interface provided (i.e. non-'emac'), or unexpected value of some property.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -2651,6 +2729,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Attempting to register flow with `.id >= FPP_IQOS_FLOW_TABLE_SIZE` or flow table full.
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Wrong physical interface provided (i.e. non-'emac'), or unexpected value of some property.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -2922,6 +3004,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Success
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Wrong physical interface provided (i.e. non-'emac'), or unexpected value of some property.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -3086,6 +3172,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  *        Success
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Wrong physical interface provided (i.e. non-'emac'), or unexpected value of some property.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -3223,6 +3313,10 @@ typedef struct CAL_PACKED_ALIGNED(4)
  * - @c ENOENT @c (-2)
  *        - For FPP_ACTION_QUERY or FPP_ACTION_QUERY_CONT: The end of the FW feature query session (no more FW features).
  *        - For other ACTIONs: Unknown (nonexistent) FW feature was requested.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -3274,6 +3368,82 @@ typedef struct CAL_PACKED_ALIGNED(2)
     uint8_t reserved;              /*< RESERVED (do not use) */
 } fpp_fw_features_cmd_t;
 /* [fpp_fw_features_cmd_t] */
+
+/**
+ * @def         FPP_CMD_FCI_OWNERSHIP_LOCK
+ * @brief       FCI command to get FCI ownership.
+ * @details     Supported `.action` values: ---
+ * <br>
+ * @code{.c}
+ *  .............................................
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_FCI_OWNERSHIP_LOCK, 0, NULL);
+ *  .............................................
+ * @endcode
+ *
+ * Command return values
+ * ---------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
+ * - @c FPP_ERR_FCI_OWNERSHIP_ALREADY_LOCKED <br>
+ *        The FCI ownership is already held by other client.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
+ *
+ * @hideinitializer
+ */
+#define FPP_CMD_FCI_OWNERSHIP_LOCK  0xf500
+
+/**
+ * @def         FPP_CMD_FCI_OWNERSHIP_UNLOCK
+ * @brief       FCI command to release FCI ownership.
+ * @details     Supported `.action` values: ---
+ * <br>
+ * @code{.c}
+ *  .............................................
+ *  int rtn = 0;
+ *  rtn = fci_write(client, FPP_CMD_FCI_OWNERSHIP_UNLOCK, 0, NULL);
+ *  .............................................
+ * @endcode
+ *
+ * Command return values
+ * ---------------------
+ * - @c FPP_ERR_OK <br>
+ *        Success
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_INTERNAL_FAILURE <br>
+ *        Internal FCI failure.
+ *
+ * @hideinitializer
+ */
+#define FPP_CMD_FCI_OWNERSHIP_UNLOCK  0xf501
+
+/**
+ * @def         FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED
+ * @hideinitializer
+ */
+#define FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED  0xf502
+
+/**
+ * @def         FPP_ERR_FCI_OWNERSHIP_ALREADY_LOCKED
+ * @hideinitializer
+ */
+#define FPP_ERR_FCI_OWNERSHIP_ALREADY_LOCKED  0xf503
+
+/**
+ * @def         FPP_ERR_FCI_OWNERSHIP_NOT_OWNER
+ * @hideinitializer
+ */
+#define FPP_ERR_FCI_OWNERSHIP_NOT_OWNER 0xf504
+
+/**
+ * @def         FPP_ERR_FCI_OWNERSHIP_NOT_ENABLED
+ * @hideinitializer
+ */
+#define FPP_ERR_FCI_OWNERSHIP_NOT_ENABLED 0xf505
 
 #endif /* FPP_EXT_H_ */
 

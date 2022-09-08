@@ -15,6 +15,7 @@
 #include "pfe_gpi_csr.h"
 #include "pfe_bmu_csr.h"
 #include "pfe_class_csr.h"
+#include "pfe_feature_mgr.h"
 
 #ifndef PFE_CBUS_H_
 #error Missing cbus.h
@@ -128,9 +129,12 @@ void pfe_gpi_cfg_init(addr_t base_va, const pfe_gpi_cfg_t *cfg)
 	hal_write32(cfg->gpi_tmlf_txthres, base_va + GPI_TMLF_TX);
 	hal_write32(cfg->gpi_dtx_aseq_len, base_va + GPI_DTX_ASEQ);
 	hal_write32(1, base_va + GPI_CSR_TOE_CHKSUM_EN);
-	regval = hal_read32(base_va + GPI_CSR_AXI_WRITE_DONE_ADDR);
-	regval |= 0x3U;
-	hal_write32(regval, base_va + GPI_CSR_AXI_WRITE_DONE_ADDR);
+	if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3) || cfg->g2_ordered_class_writes)
+	{
+		regval = hal_read32(base_va + GPI_CSR_AXI_WRITE_DONE_ADDR);
+		regval |= 0x3U;
+		hal_write32(regval, base_va + GPI_CSR_AXI_WRITE_DONE_ADDR);
+	}
 }
 
 /**

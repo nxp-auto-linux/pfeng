@@ -30,6 +30,7 @@ typedef struct
 	uint32_t ddr_size;				/*	Size of the DDR region */
 	uint16_t lmem_header_size;
 	uint16_t ro_header_size;
+	bool_t g2_ordered_class_writes;
 } pfe_class_cfg_t;
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR

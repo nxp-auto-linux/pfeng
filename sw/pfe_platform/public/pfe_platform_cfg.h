@@ -51,6 +51,13 @@
 #define PFE_CFG_BMU1_BUF_SIZE				256U	/* 256 bytes */
 
 /**
+ * @brief	BMU2 buffer size in bytes
+ * @note	As a H/W requirement, the BMU2 buffer size must not be
+ *		changed from the current value of 2 KB.
+ */
+#define PFE_CFG_BMU2_BUF_SIZE				2048U	/* 2K bytes */
+
+/**
  * @brief	DMEM base address as defined by .elf
  */
 #define PFE_CFG_CLASS_ELF_DMEM_BASE			0x20000000UL

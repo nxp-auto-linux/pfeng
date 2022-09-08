@@ -42,6 +42,7 @@
 #include "oal_mm.h"
 #include "oal_util.h"
 #include "oal_sync.h"
+#include "oal_master_if.h"
 #if !defined(PFE_CFG_DETACHED_MINIHIF)
 #include "oal_mbox.h"
 #include "oal_irq.h"

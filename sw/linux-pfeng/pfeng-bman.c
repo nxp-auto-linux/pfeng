@@ -345,8 +345,20 @@ static struct sk_buff *pfeng_rx_map_buff_to_skb(struct pfeng_rx_chnl_pool *pool,
 
 	va = page_address(rx_map->page) + rx_map->page_offset;
 	skb = build_skb(va - PFE_RXB_PAD, PFE_RXB_TRUESIZE);
-	if (unlikely(!skb))
+	if (unlikely(!skb)) {
+		/* We're OOM: release the page (drop the frame) and
+		 * advance the pool consumer index to the next frame to keep
+		 * it in sync with the BD ring consumer index. Do this until
+		 * the OOM condtion is gone or there's no more space left in
+		 * the BD ring, in which case the HW will stop receiving frames.*/
+		dma_unmap_page(pool->dev, rx_map->dma, PAGE_SIZE, DMA_FROM_DEVICE);
+		__free_page(rx_map->page);
+
+		memset(rx_map, 0, sizeof(*rx_map));
+		/* pull rx map */
+		pool->rd_idx++;
 		return NULL;
+	}
 
 	skb_reserve(skb, PFE_RXB_PAD);
 	__skb_put(skb, rx_len);
@@ -385,16 +397,18 @@ struct sk_buff *pfeng_hif_chnl_receive_pkt(struct pfeng_hif_chnl *chnl)
 	if (unlikely(pfeng_bman_rx_chnl_pool_unused(chnl->bman.rx_pool) >= PFENG_BMAN_REFILL_THR))
 		pfeng_hif_chnl_refill_rx_pool(chnl, PFENG_BMAN_REFILL_THR);
 
-	/*	Get RX buffer */
+	/* get received frame info from the RX BD and move to the next BD in the ring */
 	if (EOK != pfe_hif_chnl_rx(chnl->priv, &buf_pa, &rx_len, &lifm))
 	{
 		return NULL;
 	}
 
-	/*  Get buffer VA */
+	/* map the corresponding buffer (frame) to an skb and advance
+	 * the pool consumer index, to keep it in sync with the BD ring
+	 * consumer index */
 	skb = pfeng_rx_map_buff_to_skb(chnl->bman.rx_pool, rx_len);
 	if (unlikely(!skb)) {
-		dev_err(chnl->dev, "chnl%d: pull VA failed\n", chnl->idx);
+		dev_err(chnl->dev, "chnl%d: Rx skb mapping failed\n", chnl->idx);
 		return NULL;
 	}
 	prefetch(skb->data);

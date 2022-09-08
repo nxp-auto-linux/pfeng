@@ -172,6 +172,7 @@ typedef struct
 	uint32_t gpi_dtx_aseq_len;
 	uint16_t lmem_header_size;
 	bool_t emac_1588_ts_en;
+	bool_t g2_ordered_class_writes;
 } pfe_gpi_cfg_t;
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR

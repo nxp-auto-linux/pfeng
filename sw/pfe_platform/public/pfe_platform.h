@@ -39,6 +39,9 @@
 #include "pfe_host_fail_stop.h"
 #include "pfe_fail_stop.h"
 #include "pfe_ecc_err.h"
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+#include "fci_ownership_mask.h"
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 #define GEMAC0_MAC						{ 0x00U, 0x0AU, 0x0BU, 0x0CU, 0x0DU, 0x0EU }
 #define GEMAC1_MAC						{ 0x00U, 0x1AU, 0x1BU, 0x1CU, 0x1DU, 0x1EU }
@@ -75,6 +78,9 @@ typedef struct
 	uint32_t irq_vector_bmu;		/* BMU IRQ number */
 #endif /* PFE_CFG_BMU_IRQ_ENABLED */
 	pfe_hif_chnl_id_t hif_chnls_mask; /* The bitmap list of the requested HIF channels */
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	pfe_fci_owner_hif_id_t hif_fci_owner_chnls_mask; /* The bitmap list of HIF channels that are allowed to take FCI ownership */
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 	pfe_ct_phy_if_id_t master_if; /* Interface where master driver is located */
 	uint32_t irq_vector_hif_chnls[HIF_CFG_MAX_CHANNELS];	/* HIF channels IRQ number */
 	uint32_t irq_vector_hif_nocpy;	/* HIF nocopy channel IRQ number */
@@ -88,6 +94,7 @@ typedef struct
 	uint16_t vlan_id;	/* VLAN ID used for L2 Bridge configuration */
 	uint16_t vlan_stats_size;	/*VLAN stats size(number of vlan entry) used to collect info from firmware */
 	pfe_emac_mii_mode_t emac_mode[3]; /* MII mode per PFE EMAC */
+	bool_t g2_ordered_class_writes;	/* S32G2 ordered class writes switch */
 } pfe_platform_config_t;
 
 typedef struct
@@ -146,6 +153,9 @@ typedef struct
 	pfe_ecc_err_t 	*ecc_err;
 	pfe_if_db_t *phy_if_db;
 	pfe_if_db_t *log_if_db;
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	pfe_fci_owner_hif_id_t hif_fci_owner_chnls_mask;
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 	bool_t fci_created;
 	uint32_t pfe_version;
 } pfe_platform_t;

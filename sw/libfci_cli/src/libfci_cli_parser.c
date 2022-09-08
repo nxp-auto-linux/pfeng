@@ -2014,6 +2014,26 @@ static int opt_parse_ptp_mgmt_if(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt
     return (rtn);
 }
 
+static int opt_parse_lock(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    UNUSED(p_txt_optarg);  /* just to suppress gcc warning */
+
+
+    p_rtn_cmdargs->lock0.is_valid = true;
+    return (CLI_OK);
+}
+
+static int opt_parse_unlock(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    UNUSED(p_txt_optarg);  /* just to suppress gcc warning */
+
+
+    p_rtn_cmdargs->unlock0.is_valid = true;
+    return (CLI_OK);
+}
+
 
 
 
@@ -4130,6 +4150,26 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
                                 TXT_ERR_INDENT "Are all options filled correctly?\n";
             break;
             
+            case FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED);
+                p_txt_errmsg  = TXT_ERR_INDENT "Client is not authorized to obtain FCI ownership.\n";
+            break;
+
+            case FPP_ERR_FCI_OWNERSHIP_ALREADY_LOCKED:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_FCI_OWNERSHIP_ALREADY_LOCKED);
+                p_txt_errmsg  = TXT_ERR_INDENT "FCI ownership is already locked by someone else.\n";
+            break;
+
+            case FPP_ERR_FCI_OWNERSHIP_NOT_OWNER:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_FCI_OWNERSHIP_NOT_OWNER);
+                p_txt_errmsg  = TXT_ERR_INDENT "FCI ownership was not held by you.\n";
+            break;
+
+            case FPP_ERR_FCI_OWNERSHIP_NOT_ENABLED:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_FCI_OWNERSHIP_NOT_ENABLED);
+                p_txt_errmsg  = TXT_ERR_INDENT "FCI ownership feature is not enabled.\n";
+            break;
+
             case FPP_ERR_WRONG_COMMAND_PARAM:
                 p_txt_errname = TXT_ERR_NAME(FPP_ERR_WRONG_COMMAND_PARAM);
                 p_txt_errmsg  = TXT_ERR_INDENT "Some parameter of the command is wrong or invalid.\n"

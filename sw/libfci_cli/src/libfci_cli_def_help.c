@@ -879,6 +879,14 @@
                                         "  If not used, then PTP traffic is processed the same way as any other traffic.\n"  \
                                         "  Use empty string (\"\") to disable (clear).\n"
 
+#define TXT_OPT__LOCK                   TXT_HELP__LOCK
+#define TXT_OPTDESCR__LOCK              TXT_HELP__LOCK  "\n"  \
+                                        "  Request FCI ownership lock.\n"
+
+#define TXT_OPT__UNLOCK                 TXT_HELP__UNLOCK
+#define TXT_OPTDESCR__UNLOCK            TXT_HELP__UNLOCK  "\n"  \
+                                        "  Release FCI ownership lock.\n"
+
 
 
 
@@ -886,8 +894,7 @@
     Sanity check for opt help texts. When new opt is added, create a help text for the opt and remove its symbol from here.
     And don't forget to check the pairing! ^_^
 */
-#if (defined(OPT_119_TXT_HELP) || \
-     defined(OPT_120_TXT_HELP) || defined(OPT_121_TXT_HELP) || defined(OPT_122_TXT_HELP) || defined(OPT_123_TXT_HELP) || defined(OPT_124_TXT_HELP) || \
+#if (defined(OPT_121_TXT_HELP) || defined(OPT_122_TXT_HELP) || defined(OPT_123_TXT_HELP) || defined(OPT_124_TXT_HELP) || \
      defined(OPT_125_TXT_HELP) || defined(OPT_126_TXT_HELP) || defined(OPT_127_TXT_HELP) || defined(OPT_128_TXT_HELP) || defined(OPT_129_TXT_HELP) || \
      defined(OPT_130_TXT_HELP) || defined(OPT_131_TXT_HELP) || defined(OPT_132_TXT_HELP) || defined(OPT_133_TXT_HELP) || defined(OPT_134_TXT_HELP) || \
      defined(OPT_135_TXT_HELP) || defined(OPT_136_TXT_HELP) || defined(OPT_137_TXT_HELP) || defined(OPT_138_TXT_HELP) || defined(OPT_139_TXT_HELP) || \
@@ -2331,6 +2338,28 @@ static const char* txt_help_qos_pol_flow_del[] =
     TXT_OPTDESCR__POSITION_REMDEL_IQOS_FLOW,
     "\n",
     
+    NULL
+};
+
+static const char* txt_help_fci_ownership[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] fci-ownership"   "   ",
+    "<"   TXT_OPT__LOCK     ">  ",
+    "\n",
+    ""    "[2] fci-ownership"   "   ",
+    "<"   TXT_OPT__UNLOCK   ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Request FCI ownership.",
+    "\n",
+    ""    "[2] Release FCI ownership.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__LOCK,
+    TXT_OPTDESCR__UNLOCK,
+    "\n",
+
     NULL
 };
 

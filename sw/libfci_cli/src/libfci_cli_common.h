@@ -43,7 +43,7 @@
 
 /* app version */
 #define CLI_VERSION_MAJOR  "2"
-#define CLI_VERSION_MINOR  "7"
+#define CLI_VERSION_MINOR  "8"
 #define CLI_VERSION_PATCH  "0"
 
 
@@ -596,6 +596,15 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         char txt[IF_NAME_TXT_LN];
     } ptp_mgmt_if_name;
+
+    struct
+    {
+        bool is_valid;
+    } lock0;
+    struct
+    {
+        bool is_valid;
+    } unlock0;
 
 } cli_cmdargs_t;
 

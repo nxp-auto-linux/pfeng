@@ -50,6 +50,7 @@ typedef struct
 {
 	uint32_t code;									/*!< Message code */
 	uint32_t length;								/*!< Message length */
+	uint32_t sender;								/*!< Message sender originator identifier */
 	uint8_t payload[FCI_CFG_MAX_CMD_PAYLOAD_LEN];	/*!< Message payload */
 } fci_msg_cmd_t;
 

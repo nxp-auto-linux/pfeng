@@ -430,6 +430,10 @@ typedef enum {
  *        Requested IPv4 conntrack already exists (is already registered).
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Unexpected value of some property (probably nonexistent route).
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -645,6 +649,10 @@ typedef enum {
  *        Requested IPv6 conntrack already exists (is already registered).
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Unexpected value of some property (probably nonexistent route).
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -945,6 +953,10 @@ typedef struct CAL_PACKED {
  *        Requested route already exists (is already registered).
  * - @c FPP_ERR_WRONG_COMMAND_PARAM <br>
  *        Unexpected value of some property.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -969,6 +981,10 @@ typedef struct CAL_PACKED {
  * ---------------------
  * - @c FPP_ERR_OK <br>
  *        Success
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -994,6 +1010,10 @@ typedef struct CAL_PACKED {
  * ---------------------
  * - @c FPP_ERR_OK <br>
  *        Success
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *
@@ -2316,6 +2336,10 @@ typedef struct {
  * ---------------------
  * - @c FPP_ERR_OK <br>
  *        Success
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_OWNER <br>
+ *        The client is not FCI owner.
+ * - @c FPP_ERR_FCI_OWNERSHIP_NOT_AUTHORIZED <br>
+ *        The client is not authorized get FCI ownership.
  * - @c FPP_ERR_INTERNAL_FAILURE <br>
  *        Internal FCI failure.
  *

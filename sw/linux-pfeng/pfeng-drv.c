@@ -80,6 +80,8 @@ static const u32 default_msg_level = (
 	NETIF_MSG_IFDOWN | NETIF_MSG_TIMER
 );
 
+static u32 pfeng_pfe_cfg_master_if = (u32)PFE_PHY_IF_ID_INVALID;
+
 int msg_verbosity = PFE_CFG_VERBOSITY_LEVEL;
 module_param(msg_verbosity, int, 0644);
 MODULE_PARM_DESC(msg_verbosity, "\t 0 - 9, default 4");
@@ -100,6 +102,12 @@ static int l2br_vlan_stats_size = 20;
 module_param(l2br_vlan_stats_size, int, 0644);
 MODULE_PARM_DESC(l2br_vlan_stats_size, "\t Default vlan stats size vector (default read from DT or 20");
 
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+static int fci_ownership_mask = 0;
+module_param(fci_ownership_mask, int, 0644);
+MODULE_PARM_DESC(fci_ownership_mask, "\t Overrides bitmask of HIF channels that are allowed to take FCI ownership (default 0: all senders allowed)");
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
 /* The following parameter is currently defined in [fci_core_linux.c]: */
 /*
 static bool disable_netlink = false;
@@ -112,6 +120,15 @@ static int disable_master_detection = 0;
 module_param(disable_master_detection, int, 0644);
 MODULE_PARM_DESC(disable_master_detection, "\t 1 - disable Master detection signalization (default is 0)");
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
+static bool g2_ordered_class_writes = false;
+module_param(g2_ordered_class_writes, bool, 0644);
+MODULE_PARM_DESC(g2_ordered_class_writes, "\t Enable ordered class writes on S32G2 (default: false)");
+
+uint32_t get_pfeng_pfe_cfg_master_if(void)
+{
+	return pfeng_pfe_cfg_master_if;
+}
 
 static int pfeng_s32g_set_port_coherency(struct pfeng_priv *priv)
 {
@@ -425,6 +442,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 
 	dev_info(dev, "PFEng ethernet driver loading ...\n");
 	dev_info(dev, "Version: %s\n", PFENG_DRIVER_VERSION);
+	dev_info(dev, "Driver commit hash: %s\n", PFENG_DRIVER_COMMIT_HASH);
 
 	/* Print MULTI-INSATNCE mode (MASTER/SLAVE/disabled) */
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
@@ -638,6 +656,15 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_drv;
 
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	/* Set FCI ownership permission mask */
+	if (fci_ownership_mask)
+		priv->pfe_cfg->hif_fci_owner_chnls_mask = fci_ownership_mask;
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
+	/* Provide switch value for S32G2 ordered class writes */
+	priv->pfe_cfg->g2_ordered_class_writes = g2_ordered_class_writes;
+
 	/* Start PFE Platform */
 	ret = pfe_platform_init(priv->pfe_cfg);
 	if (ret)
@@ -687,6 +714,16 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 
 	/* Create MDIO buses */
 	pfeng_mdio_register(priv);
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	/* Set master_if for OAL_PFE_CFG_MASTER_IF */
+	for (id = 0; id < PFENG_PFE_HIF_CHANNELS; id++) {
+		if (priv->hif_chnl[id].ihc) {
+			pfeng_pfe_cfg_master_if = (uint32_t)pfeng_hif_ids[priv->ihc_master_chnl];
+			break;
+		}
+	}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	/* Create HIFs */
 	ret = pfeng_hif_create(priv);

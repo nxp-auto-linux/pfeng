@@ -1568,6 +1568,9 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 					fci_msg_t msg = {.type=(rpc_arg->type), .msg_cmd=(rpc_arg->msg_cmd)};
 					fci_msg_t rep_msg = {.type=FCI_MSG_CMD, .msg_cmd={0}};
 
+					/* Set sender / originator's interface */
+					msg.msg_cmd.sender = (uint32_t)sender;
+
 					/* Process the FCI message. */
 					ret = fci_process_ipc_message(&msg, &rep_msg);
 
@@ -1608,6 +1611,10 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 static errno_t pfe_platform_create_hif(pfe_platform_t *platform, const pfe_platform_config_t *config)
 {
 	errno_t ret;
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	/* Set FCI ownership configuration */
+	platform->hif_fci_owner_chnls_mask = config->hif_fci_owner_chnls_mask;
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 	platform->hif = pfe_hif_create(platform->cbus_baseaddr + CBUS_HIF_BASE_ADDR, config->hif_chnls_mask);
 	if (NULL == platform->hif)
 	{
@@ -1847,7 +1854,7 @@ static void pfe_platform_destroy_bmu(pfe_platform_t *platform)
 /**
  * @brief		Assign GPI to the platform
  */
-static errno_t pfe_platform_create_gpi(pfe_platform_t *platform)
+static errno_t pfe_platform_create_gpi(pfe_platform_t *platform, const pfe_platform_config_t *config)
 {
 	pfe_gpi_cfg_t gpi_cfg_tmp;
 	uint32_t aseq_len = 0x50U;
@@ -1869,6 +1876,7 @@ static errno_t pfe_platform_create_gpi(pfe_platform_t *platform)
 		else
 		{   /* S32G2 */
 			gpi_cfg_tmp.lmem_header_size = 112U;
+			gpi_cfg_tmp.g2_ordered_class_writes = config->g2_ordered_class_writes;
 		}
 
 		/*	GPI1 */
@@ -2116,7 +2124,7 @@ static void pfe_platform_destroy_hgpi(pfe_platform_t *platform)
 /**
  * @brief		Assign CLASS to the platform
  */
-static errno_t pfe_platform_create_class(pfe_platform_t *platform)
+static errno_t pfe_platform_create_class(pfe_platform_t *platform, const pfe_platform_config_t *conf)
 {
 	errno_t ret;
 	pfe_class_cfg_t class_cfg =
@@ -2125,10 +2133,23 @@ static errno_t pfe_platform_create_class(pfe_platform_t *platform)
 		.toe_mode = FALSE,
 		.pe_sys_clk_ratio = PFE_CFG_CLMODE,
 		.pkt_parse_offset = 6U, /* This is actually the sizeof(struct hif_hdr) to skip the HIF header */
+		.g2_ordered_class_writes = conf->g2_ordered_class_writes,
 	};
 
 	ELF_File_t elf;
 	const uint8_t *temp;
+
+	if (FALSE != conf->g2_ordered_class_writes)
+	{
+		if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+		{
+			NXP_LOG_WARNING("The option 'g2_ordered_class_writes' has no effect on S32G3\n");
+		}
+		else
+		{
+			NXP_LOG_WARNING("The option 'g2_ordered_class_writes' is enabled\n");
+		}
+	}
 
 	if (NULL == platform->fw)
 	{
@@ -2799,6 +2820,9 @@ static errno_t pfe_platform_create_fci(pfe_platform_t *platform)
 	fci_init_info.phy_if_db = platform->phy_if_db;
 	fci_init_info.log_if_db = platform->log_if_db;
 	fci_init_info.tmu = platform->tmu;
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	fci_init_info.hif_fci_owner_chnls_mask = platform->hif_fci_owner_chnls_mask;
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 	ret = fci_init(&fci_init_info, "pfe_fci");
 	if (EOK != ret)
 	{
@@ -3514,7 +3538,7 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	}
 
 	/*	Classifier */
-	ret = pfe_platform_create_class(&pfe);
+	ret = pfe_platform_create_class(&pfe, config);
 	if (EOK != ret)
 	{
 		goto exit;
@@ -3562,7 +3586,7 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	}
 
 	/*	GPI */
-	ret = pfe_platform_create_gpi(&pfe);
+	ret = pfe_platform_create_gpi(&pfe, config);
 	if (EOK != ret)
 	{
 		goto exit;

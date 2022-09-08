@@ -60,6 +60,12 @@ static int ipready_tmout = PFE_CFG_IP_READY_MS_TMOUT;
 module_param(ipready_tmout, int, 0644);
 MODULE_PARM_DESC(ipready_tmout, "\t 0 - nn, timeout for IP-ready, 0 means 'no timeout'");
 
+uint32_t get_pfeng_pfe_cfg_master_if(void)
+{
+	/* Needed for compilation */
+	return 0;
+}
+
 static struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -323,6 +329,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 
 	dev_info(dev, "PFEng ethernet driver loading ...\n");
 	dev_info(dev, "Version: %s\n", PFENG_DRIVER_VERSION);
+	dev_info(dev, "Driver commit hash: %s\n", PFENG_DRIVER_COMMIT_HASH);
 
 	/* Print MULTI-INSATNCE mode (MASTER/SLAVE/disabled) */
 	dev_info(dev, "Multi instance support: SLAVE/mdetect=%s\n", disable_master_detection ? "off" : "on");

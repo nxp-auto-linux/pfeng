@@ -58,6 +58,7 @@ typedef enum cli_opt_incompat_grp_tt {
     OPT_GRP_NOREPLY_NOORIG_ID,
     OPT_GRP_ARN_ID,
     OPT_GRP_STATDYN_ID,
+    OPT_GRP_LOCKUNLOCK_ID,
 
     OPT_GRP_LN
 } cli_opt_incompat_grp_t;
@@ -66,7 +67,7 @@ typedef enum cli_opt_incompat_grp_tt {
 #define OPT_GRP_NOREPLY_NOORIG  (1uL << OPT_GRP_NOREPLY_NOORIG_ID)
 #define OPT_GRP_ARN             (1uL << OPT_GRP_ARN_ID)
 #define OPT_GRP_STATDYN         (1uL << OPT_GRP_STATDYN_ID)
-
+#define OPT_GRP_LOCKUNLOCK      (1uL << OPT_GRP_LOCKUNLOCK_ID)
 
 /* ==== DEFINITIONS : CLI OPTS ============================================= */
 /*
@@ -1486,7 +1487,6 @@ typedef enum cli_opt_incompat_grp_tt {
 #define                          TXT_HELP__DIP_PFX \
         OPT_117_TXT_HELP
 
-
 #define OPT_118_ENUM_NAME        OPT_PTP_MGMT_IF
 #define OPT_118_HAS_ARG          y
 #define OPT_118_OPT_PARSE        opt_parse_ptp_mgmt_if
@@ -1498,6 +1498,25 @@ typedef enum cli_opt_incompat_grp_tt {
         OPT_118_TXT_HELP
 
 
+#define OPT_119_ENUM_NAME         OPT_LOCK
+#define OPT_119_OPT_PARSE         opt_parse_lock
+#define OPT_119_HAS_ARG           n
+#define OPT_119_INCOMPAT_GRPS     OPT_GRP_LOCKUNLOCK
+#define OPT_119_CLI_SHORT_CODE    L
+#define OPT_119_CLI_LONG_TXT_A    "lock"
+#define OPT_119_TXT_HELP          "-L|--L|--lock"
+#define                          TXT_HELP__LOCK \
+        OPT_119_TXT_HELP
+
+#define OPT_120_ENUM_NAME         OPT_UNLOCK
+#define OPT_120_OPT_PARSE         opt_parse_unlock
+#define OPT_120_HAS_ARG           n
+#define OPT_120_INCOMPAT_GRPS     OPT_GRP_LOCKUNLOCK
+#define OPT_120_CLI_SHORT_CODE    U
+#define OPT_120_CLI_LONG_TXT_A    "unlock"
+#define OPT_120_TXT_HELP          "-U|--U|--unlock"
+#define                          TXT_HELP__UNLOCK \
+        OPT_120_TXT_HELP
 
 
 /* OPT_LAST (keep this at the bottom of the cli option definition list) */

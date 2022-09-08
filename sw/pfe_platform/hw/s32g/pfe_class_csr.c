@@ -57,9 +57,14 @@ void pfe_class_cfg_set_config(addr_t base_va, const pfe_class_cfg_t *cfg)
 	{
 		regval &= ~AXI_DBUS_BURST_SIZE(0x3ffU);
 		regval |= AXI_DBUS_BURST_SIZE(0x100U);
+		regval |= 0x3U;
+		hal_write32(regval, base_va + CLASS_AXI_CTRL_ADDR);
 	}
-	regval |= 0x3U;
-	hal_write32(regval, base_va + CLASS_AXI_CTRL_ADDR);
+	else if (cfg->g2_ordered_class_writes)
+	{
+		regval |= 0x3U;
+		hal_write32(regval, base_va + CLASS_AXI_CTRL_ADDR);
+	}
 
 	hal_write32(0U
 			| RT_TWO_LEVEL_REF(FALSE)

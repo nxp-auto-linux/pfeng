@@ -86,6 +86,11 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 	uint32_t *reply_buf_ptr = NULL;
 	uint32_t *reply_buf_len_ptr = NULL;
 	uint16_t *reply_retval_ptr = NULL;
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	pfe_ct_phy_if_id_t sender_phy_if_id = PFE_PHY_IF_ID_INVALID;
+	bool_t fci_cmd_execute = FALSE;
+	bool_t fci_floating_lock = FALSE;
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == fci_context) || (NULL == msg) || (NULL == rep_msg)))
@@ -110,7 +115,92 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 		*reply_buf_len_ptr = FCI_CFG_MAX_CMD_PAYLOAD_LEN;
 	#endif /* FCI_CFG_FORCE_LEGACY_API */
 
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+		/*	HANDLE FCI OWNERSHIP */
+		if (FCI_MSG_CMD == msg->type)
+		{
+			/*	Get mutex when handling FCI Ownership */
+			ret = fci_owner_mutex_lock();
+			if (EOK == ret)
+			{
+				/*	Authentication - get validated sender's HIF */
+				ret = fci_sender_get_phy_if_id(msg->msg_cmd.sender, &sender_phy_if_id);
+				if (EOK == ret)
+				{
+					if ((FPP_CMD_FCI_OWNERSHIP_LOCK == msg->msg_cmd.code) ||
+						(FPP_CMD_FCI_OWNERSHIP_UNLOCK == msg->msg_cmd.code))
+					{
+						/*	Handle FCI lock/unlock commands */
+						ret = fci_owner_session_cmd(sender_phy_if_id, msg->msg_cmd.code, &fci_ret);
+					}
+					else
+					{
+						/*	Authorization - check if sender is matching current FCI owner lock holder */
+						ret = fci_owner_authorize(sender_phy_if_id, &fci_cmd_execute);
+						if (EOK == ret)
+						{
+							if (FALSE == fci_cmd_execute)
+							{
+								/* 	Do not execute not authorized command and try to get floating FCI ownership */
+								ret = fci_owner_get_floating_lock(sender_phy_if_id, &fci_ret, &fci_floating_lock);
+								if (EOK == ret)
+								{
+									/* 	Execute FCI command as we have got the floating FCI owner lock */
+									fci_cmd_execute = fci_floating_lock;
+								}
+							}
+						}
+						if ((EOK == ret) && (FALSE == fci_cmd_execute))
+						{
+							/* 	Clear reply buf len as FCI command is not going to be executed */
+							*reply_buf_len_ptr = 0;
+						}
+					}
+				}
+
+				/*	fci_owner_mutex_unlock overrides ret, so set internal failure here */
+				if (EOK != ret)
+				{
+					fci_ret = FPP_ERR_INTERNAL_FAILURE;
+				}
+
+				/*	Release FCI Ownership mutex if the floating FCI lock was not granted */
+				if (FALSE == fci_floating_lock)
+				{
+					ret = fci_owner_mutex_unlock();
+				}
+
+			}
+			if (EOK != ret)
+			{
+				fci_ret = FPP_ERR_INTERNAL_FAILURE;
+			}
+
+			/*	Exit fci_process_ipc_message if: */
+			/*		1) Handled FCI lock/unlock command */
+			/*		2) Current sender is not authorized to execute FCI command due to missing Ownership / lock */
+			/*		3) An internal error occurred */
+			if (FALSE == fci_cmd_execute)
+			{
+				/*	Inform client about command execution status */
+#if (FALSE == FCI_CFG_FORCE_LEGACY_API)
+				/*	We're adding another 4 bytes at the beginning of the FCI message payload area */
+				rep_msg->msg_cmd.length = *reply_buf_len_ptr + 4U;
+#else
+				/*	Pass reply buffer length as is. First 4 bytes will be overwritten by the return value. */
+				rep_msg->msg_cmd.length = *reply_buf_len_ptr;
+#endif /* FCI_CFG_FORCE_LEGACY_API */
+				reply_retval_ptr = (uint16_t *)rep_msg->msg_cmd.payload;
+				*reply_retval_ptr = (uint16_t)fci_ret;
+
+				return ret;
+			}
+		}
+		NXP_LOG_DEBUG("Process FCI message (type=0x%02x, code=0x%02x, sender=0x%02x)\n", (uint_t)msg->type, (uint_t)msg->msg_cmd.code, (uint_t)sender_phy_if_id);
+#else
 		NXP_LOG_DEBUG("Process FCI message (type=0x%02x, code=0x%02x)\n", (uint_t)msg->type, (uint_t)msg->msg_cmd.code);
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
 		switch (msg->type)
 		{
 			case FCI_MSG_CMD:
@@ -345,6 +435,14 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 						break;
 					}
 
+					case FPP_CMD_FCI_OWNERSHIP_LOCK:
+					case FPP_CMD_FCI_OWNERSHIP_UNLOCK:
+					{
+						NXP_LOG_WARNING("Received FCI ownership command: 0x%x. It is not supported in standalone mode.\n", (uint_t)msg->msg_cmd.code);
+						fci_ret = FPP_ERR_FCI_OWNERSHIP_NOT_ENABLED;
+						break;
+					}
+
 					default:
 					{
 						NXP_LOG_WARNING("Unknown CMD code received: 0x%x\n", (uint_t)msg->msg_cmd.code);
@@ -353,6 +451,24 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 						break;
 					}
 				}
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+				if (TRUE == fci_floating_lock)
+				{
+					/* Release floating FCI ownership lock */
+					ret = fci_owner_clear_floating_lock();
+					if (EOK != ret)
+					{
+						fci_ret = FPP_ERR_INTERNAL_FAILURE;
+					}
+
+					ret = fci_owner_mutex_unlock();
+					if (EOK != ret)
+					{
+						fci_ret = FPP_ERR_INTERNAL_FAILURE;
+					}
+				}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 				/*	Inform client about command execution status */
 	#if (FALSE == FCI_CFG_FORCE_LEGACY_API)
@@ -418,6 +534,9 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 			fci_context->rt_db_initialized = FALSE;
 			fci_context->rtable_initialized = FALSE;
 			fci_context->tmu_initialized = FALSE;
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+			fci_context->fci_owner_initialized = FALSE;
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 			/*	Sanity check */
 			if (6U != sizeof(pfe_mac_addr_t))
@@ -438,6 +557,19 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
                 {
 #ifdef PFE_CFG_PFE_MASTER
 			        err = oal_mutex_init(&fci_context->db_mutex);
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+				if (EOK == err)
+				{
+					/*	Initialize FCI ownership */
+					err = fci_owner_init(info);
+					if (EOK == err)
+					{
+						fci_context->fci_owner_initialized = TRUE;
+					}
+				}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
 			        if (EOK != err)
 			        {
                         fci_fini();
@@ -596,6 +728,14 @@ void fci_fini(void)
 		{
 			(void)oal_mutex_destroy(&fci_context->db_mutex);
 		}
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+		if (TRUE == fci_context->fci_owner_initialized)
+		{
+			fci_owner_fini();
+			fci_context->fci_owner_initialized = FALSE;
+		}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 	#endif /* PFE_CFG_PFE_MASTER */
 
 		(void)memset(fci_context, 0, sizeof(fci_t));

@@ -26,11 +26,6 @@
  *              LibFCI user and the endpoint. For reference: in Linux a netlink socket is used;
  *              in QNX a message is used.
  *
- * @section     limitations  Limitations
- * @subsection  mst_slv  Master-Slave setup
- *              If PFE is ran in Master-Slave setup, then only the Master can issue FCI commands and configure PFE.
- *              For more information about Master-Slave setup, please see driver user manual.
- *
  * @section     how_to_use  How to use the FCI API
  * @subsection  fciuse_cmd  Sending FCI commands
  *              -# Call @ref fci_open() to get an @ref FCI_CLIENT instance, using @ref FCI_GROUP_NONE
@@ -40,6 +35,24 @@
  *                 - Endpoint generates a response and sends it back to the client.
  *              -# [optional] Repeat the previous step to send all requested FCI commands.
  *              -# Call @ref fci_close() to finalize the @ref FCI_CLIENT instance.
+ * @subsection  fci_owner  FCI ownership in Master-Slave setup
+ *              The FCI ownership applies only to PFE driver Master-Slave setup. This feature ensures that at any given time
+ *              there is only one driver instance which can successfully issue FCI commands.
+ *              Configuration of FCI Ownership is stored in the Master instance. The configuration specifies
+ *              which driver instances are allowed to acquire FCI ownership.
+ *
+ *              There can be only one FCI owner at a time. Only the FCI commands issued by the FCI
+ *              owner can be executed successfully. FCI commands issued by a driver instance which
+ *              does not have FCI ownership are never executed and return an error code instead.
+ *              Driver instance can acquire or release the FCI ownership via the following means:
+ *                 - <b>Manually</b>, by requesting the FCI ownership via dedicated FCI commands
+ *              @ref FPP_CMD_FCI_OWNERSHIP_LOCK and @ref FPP_CMD_FCI_OWNERSHIP_UNLOCK.
+ *              If the ownership is acquired manually, it has to be manually released as well
+ *              (responsibility of the requesting driver).
+ *                 - <b>Automatically</b>, by acquiring floating FCI ownership if it is not held at the moment by
+ *              other client. The floating FCI ownership is granted temporarily for each issued FCI
+ *              command. Once the execution of the respective FCI command is finished, the FCI
+ *              ownership is automatically released, so other sender can take FCI ownership.
  *
  * @if INCLUDE_ASYNC_DESC
  * @subsection  fciuse_msg  Asynchronous message processing
@@ -159,6 +172,10 @@
  *                <i>Management of @ref ingress_qos WRED queues.</i>
  *              - @ref FPP_CMD_QOS_POLICER_SHP <br>
  *                <i>Management of @ref ingress_qos shapers.</i>
+ *              - @ref FPP_CMD_FCI_OWNERSHIP_LOCK <br>
+ *                <i>Management of @ref fci_owner.</i>
+ *              - @ref FPP_CMD_FCI_OWNERSHIP_UNLOCK <br>
+ *                <i>Management of @ref fci_owner.</i>
  *
  * @section     cbks  Events summary
  * @if FCI_EVENTS_IMPLEMENTED
@@ -1082,6 +1099,7 @@ traffic--+->| flow table +-->| queues +-->|   shapers   +--+-->processing
  * @example demo_qos.c
  * @example demo_qos_pol.c
  * @example demo_fwfeat.c
+ * @example demo_fci_owner.c
  */
 
 /**

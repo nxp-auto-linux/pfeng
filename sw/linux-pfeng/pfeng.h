@@ -37,10 +37,12 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"RTM 1.1.0 RC1"
+#define PFENG_DRIVER_VERSION		"RTM 1.1.0"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
+
+#define PFENG_DRIVER_COMMIT_HASH	"M4_DRIVER_COMMIT_HASH"
 
 static const pfe_ct_phy_if_id_t pfeng_emac_ids[] = {
 	PFE_PHY_IF_ID_EMAC0,
