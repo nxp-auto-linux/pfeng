@@ -31,9 +31,13 @@
  2) needed interfaces from external units
  3) internal and external interfaces from this unit
 ==================================================================================================*/
+#include <linux/module.h>
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "blalloc.h"
+
+MODULE_LICENSE("GPL");
+
 /*==================================================================================================
 											CHECKS
 ==================================================================================================*/

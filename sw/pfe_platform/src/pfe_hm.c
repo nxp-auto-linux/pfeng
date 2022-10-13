@@ -56,8 +56,8 @@ static const hm_string_t hm_evt_strings[] = {
     {HM_EVT_WDT_EMAC2_ETGPI, "EMAC2 ETGPI Watchdog trigered"},
     {HM_EVT_WDT_EXT_GPT1, "EXT GPT1 Watchdog trigered"},
     {HM_EVT_WDT_EXT_GPT2, "EXT GPT1 Watchdog trigered"},
-    {HM_EVT_WDT_EXT_GPT2, "LMEM Watchdog trigered"},
-    {HM_EVT_WDT_EXT_GPT2, "ROUTE LMEM Watchdog trigered"},
+    {HM_EVT_WDT_LMEM, "LMEM Watchdog trigered"},
+    {HM_EVT_WDT_ROUTE_LMEM, "ROUTE LMEM Watchdog trigered"},
 
 	{HM_EVT_EMAC_ECC_TX_FIFO_CORRECTABLE, "MTL Tx memory correctable error"},
 	{HM_EVT_EMAC_ECC_TX_FIFO_UNCORRECTABLE, "MTL Tx memory uncorrectable error"},

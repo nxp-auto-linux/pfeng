@@ -362,8 +362,8 @@ int pfeng_phylink_create(struct pfeng_netif *netif)
 	if (emac->serdes_phy) {
 		if (!phy_init(emac->serdes_phy) && !phy_power_on(emac->serdes_phy)) {
 			if (!phy_configure(emac->serdes_phy, NULL)) {
-				emac->xpcs = s32gen1_phy2xpcs(emac->serdes_phy);
-				emac->xpcs_ops = s32gen1_xpcs_get_ops();
+				emac->xpcs = s32cc_phy2xpcs(emac->serdes_phy);
+				emac->xpcs_ops = s32cc_xpcs_get_ops();
 			} else {
 				dev_err(netif->dev, "SerDes PHY configuration failed on EMAC%d\n", netif->cfg->emac_id);
 			}

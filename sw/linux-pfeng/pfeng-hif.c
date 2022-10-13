@@ -302,7 +302,8 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 		}
 
 		/* Cksumming support */
-		if (likely(netdev->features & NETIF_F_RXCSUM)) {
+		if (likely(netdev->features & NETIF_F_RXCSUM) &&
+		    likely(hif_hdr->flags & (HIF_RX_UDPV4_CSUM | HIF_RX_TCPV4_CSUM | HIF_RX_UDPV6_CSUM | HIF_RX_TCPV6_CSUM))) {
 			/* we have only OK info, signal it */
 			skb->ip_summed = CHECKSUM_UNNECESSARY;
 			/* one level csumming support */

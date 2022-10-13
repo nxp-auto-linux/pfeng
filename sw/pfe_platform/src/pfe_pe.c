@@ -13,6 +13,7 @@
 
 #include "pfe_platform.h"
 #include "elf_cfg.h"
+#include <uapi/linux/elf.h>
 #include "elf.h"
 #include "pfe_cbus.h"
 #include "pfe_pe.h"

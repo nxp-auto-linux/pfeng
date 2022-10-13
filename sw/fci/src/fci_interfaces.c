@@ -750,8 +750,8 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 						ret = EOK;
 						break;
 					}
+					fallthrough;
 				}
-				/* FALLTHRU */
 				case FPP_ACTION_QUERY_CONT:
 				{
 					if (NULL == entry)
@@ -1339,7 +1339,8 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 						*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 						break;
 					}
-				} /* FALLTHRU */
+					fallthrough;
+				}
 
 				case FPP_ACTION_QUERY_CONT:
 				{

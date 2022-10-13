@@ -114,7 +114,11 @@ static int pfeng_ethtool_get_ts_info(struct net_device *netdev, struct ethtool_t
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
 static int pfeng_get_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec)
+#else
+static int pfeng_get_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec, struct kernel_ethtool_coalesce *kec, struct netlink_ext_ack *nla)
+#endif
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 	struct pfeng_hif_chnl *chnl;
@@ -134,7 +138,7 @@ static int pfeng_get_coalesce(struct net_device *netdev, struct ethtool_coalesce
 	return 0;
 }
 
-static int pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec)
+static int __pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 	struct pfeng_hif_chnl *chnl;
@@ -164,6 +168,15 @@ static int pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coalesce
 	}
 
 	return ret;
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
+static int pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec)
+#else
+static int pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec, struct kernel_ethtool_coalesce *kec, struct netlink_ext_ack *nla)
+#endif
+{
+	return __pfeng_set_coalesce(netdev, ec);
 }
 
 static int pfeng_ethtool_begin(struct net_device *netdev)
@@ -229,7 +242,7 @@ int pfeng_ethtool_params_restore(struct pfeng_netif *netif) {
 	ec.rx_max_coalesced_frames = chnl->cfg_rx_max_coalesced_frames;
 	ec.rx_coalesce_usecs = chnl->cfg_rx_coalesce_usecs;
 
-	ret = pfeng_set_coalesce(netdev, &ec);
+	ret = __pfeng_set_coalesce(netdev, &ec);
 	if (ret)
 		netdev_warn(netdev, "Coalescing not restored\n");
 

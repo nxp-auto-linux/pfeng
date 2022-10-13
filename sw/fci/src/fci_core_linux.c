@@ -15,6 +15,7 @@
  *
  */
 
+#include <linux/module.h>
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "fci.h"
@@ -30,6 +31,8 @@
 #define NETLINK_TYPE_CUSTOM_FCI 17
 
 #include <linux/rtnetlink.h>
+
+MODULE_LICENSE("GPL");
 
 static bool disable_netlink = false;
 module_param(disable_netlink, bool, 0644);

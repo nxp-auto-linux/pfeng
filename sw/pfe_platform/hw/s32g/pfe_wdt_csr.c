@@ -90,6 +90,7 @@ errno_t pfe_wdt_cfg_isr(addr_t base_va, addr_t cbus_base_va)
 
 	uint32_t *int_src_arr, *int_en_arr;
 	const pfe_hm_evt_t *int_event_arr;
+	uint8_t int_src_nbr = 0;
 
 	(void)cbus_base_va;
 
@@ -98,12 +99,14 @@ errno_t pfe_wdt_cfg_isr(addr_t base_va, addr_t cbus_base_va)
 		int_src_arr = (uint32_t *)wdt_int_src_arr_g2;
 		int_en_arr = (uint32_t *)wdt_int_en_arr_g2;
 		int_event_arr = wdt_int_event_id_g2;
+		int_src_nbr = (uint8_t)WDT_INT_SRC_NUMBER_G2;
 	}
 	else
 	{
 		int_src_arr = (uint32_t *)wdt_int_src_arr_g3;
 		int_en_arr = (uint32_t *)wdt_int_en_arr_g3;
 		int_event_arr = wdt_int_event_id_g3;
+		int_src_nbr = (uint8_t)WDT_INT_SRC_NUMBER_G3;
 	}
 
 	/*	Get enabled interrupts */
@@ -116,7 +119,7 @@ errno_t pfe_wdt_cfg_isr(addr_t base_va, addr_t cbus_base_va)
 	hal_write32(reg_src, base_va + WDT_INT_SRC);
 
 	/*	Process interrupts which are triggered AND enabled */
-	for(index = 0U; index < WDT_INT_SRC_NUMBER_G2; index++)
+	for(index = 0U; index < int_src_nbr; index++)
 	{
 		if (((reg_src & int_src_arr[index]) != 0U) && ((reg_en & int_en_arr[index]) != 0U))
 		{
@@ -201,9 +204,9 @@ void pfe_wdt_cfg_init(addr_t base_va)
 	hal_write32(0x3FU, base_va + HNCPY_WDT_INT_EN);
 	hal_write32(0xFU, base_va + BMU1_WDT_INT_EN);
 	hal_write32(0xFU, base_va + BMU2_WDT_INT_EN);
-	hal_write32(0x1FFU, base_va + EMAC0_WDT_INT_EN);
-	hal_write32(0x1FFU, base_va + EMAC1_WDT_INT_EN);
-	hal_write32(0x1FFU, base_va + EMAC2_WDT_INT_EN);
+	hal_write32(0xFFFU, base_va + EMAC0_WDT_INT_EN);
+	hal_write32(0xFFFU, base_va + EMAC1_WDT_INT_EN);
+	hal_write32(0xFFFU, base_va + EMAC2_WDT_INT_EN);
 
 	if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
 	{

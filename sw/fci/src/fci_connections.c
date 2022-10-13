@@ -1223,8 +1223,8 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 						*fci_ret = FPP_ERR_CT_ENTRY_NOT_FOUND;
 						break;
 					}
+					fallthrough;
 				}
-				/* FALLTHRU */
 
 				case FPP_ACTION_QUERY_CONT:
 				{

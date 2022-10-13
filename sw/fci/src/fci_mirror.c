@@ -106,8 +106,8 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 						ret = EPERM;
 						break;
 					}
+					fallthrough;
 				}
-				/* FALLTHRU */
 
 				case FPP_ACTION_UPDATE:
 				{
@@ -353,8 +353,8 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 						ret = EOK;
 						break;
 					}
+					fallthrough;
 				}
-				/* FALLTHRU */
 
 				case FPP_ACTION_QUERY_CONT:
 				{

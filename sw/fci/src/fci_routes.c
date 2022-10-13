@@ -264,8 +264,8 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 						*fci_ret = FPP_ERR_RT_ENTRY_NOT_FOUND;
 						break;
 					}
+					fallthrough;
 				}
-				/* FALLTHRU */
 
 				case FPP_ACTION_QUERY_CONT:
 				{

@@ -1,15 +1,18 @@
 /* =========================================================================
- *  Copyright 2017-2021 NXP
+ *  Copyright 2017-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
  * ========================================================================= */
 
+#include <linux/module.h>
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "hal.h"
 #include "fifo.h"
 #include "bpool.h"
+
+MODULE_LICENSE("GPL");
 
 /*==================================================================================================
 *                          LOCAL TYPEDEFS (STRUCTURES, UNIONS, ENUMS)

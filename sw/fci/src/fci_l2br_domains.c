@@ -151,8 +151,8 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						{
 							NXP_LOG_DEBUG("Bridge domain %d created\n", oal_ntohs(bd_cmd->vlan));
 						}
+						fallthrough;
 					}
-					/* FALLTHRU */
 
 					case FPP_ACTION_UPDATE:
 					{
@@ -350,8 +350,8 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 							*fci_ret = FPP_ERR_L2_BD_NOT_FOUND;
 							break;
 						}
+						fallthrough;
 					}
-					/* FALLTHRU */
 
 					case FPP_ACTION_QUERY_CONT:
 					{
@@ -591,8 +591,8 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 						*fci_ret = FPP_ERR_L2_STATIC_EN_NOT_FOUND;
 						break;
 					}
+					fallthrough;
 				}
-				/* FALLTHRU */
 				case FPP_ACTION_QUERY_CONT:
 				{
 					if (NULL == entry)

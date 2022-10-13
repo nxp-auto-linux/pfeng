@@ -29,6 +29,7 @@
  3) internal and external interfaces from this unit
 ==================================================================================================*/
 
+#include <linux/module.h>
 #include "pfe_cfg.h"
 #include "oal.h"
 
@@ -36,6 +37,8 @@
 #include "elf.h"
 
 #include "hal.h"
+
+MODULE_LICENSE("GPL");
 
 /*==================================================================================================
                                       FILE VERSION CHECKS
@@ -49,7 +52,6 @@
 ==================================================================================================*/
 #define ELF64_HEADER_SIZE 64U
 #define ELF32_HEADER_SIZE 52U
-#define SHN_UNDEF       0U    /* Undefined/Not present */
 
 /*==================================================================================================
                           LOCAL TYPEDEFS (STRUCTURES, UNIONS, ENUMS)
@@ -60,20 +62,6 @@ enum
     ELF_Type_Executable = 2U,
     ELF_Type_Shared = 3U,
     ELF_Type_Core = 4U,
-};
-
-enum
-{
-    PT_NULL      = 0U,
-    PT_LOAD      = 1U, /* Loadable segment */
-    PT_DYNAMIC   = 2U,
-    PT_INTERP    = 3U,
-    PT_NOTE      = 4U,
-    PT_SHLIB     = 5U,
-    PT_PHDR      = 6U,
-    PT_LOPROC    = 7U,
-    PT_HIPROC    = 8U,
-    PT_GNU_STACK = 9U,
 };
 
 /*==================================================================================================

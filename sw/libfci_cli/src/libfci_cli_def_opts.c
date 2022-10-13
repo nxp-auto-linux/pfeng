@@ -7972,7 +7972,7 @@ inline uint32_t cli_opt_get_incompat_grps(cli_opt_t opt)
 
 /* ==== TYPEDEFS & DATA : MANDOPT ========================================== */
 
-static const char* txt_mandopts[MANDOPT_OPTS_LN] = {NULL};
+static mandopt_optbuf_t internal_optbuf = {{OPT_NONE}};
 
 /* ==== PUBLIC FUNCTIONS : MANDOPT ========================================= */
 
@@ -7984,7 +7984,7 @@ void cli_mandopt_print(const char* p_txt_indent, const char* p_txt_delim)
     const char* p_txt_tmp = p_txt_indent;
     for (uint8_t i = 0u; (MANDOPT_OPTS_LN > i); (++i))
     {
-        const char* p_txt_opt = txt_mandopts[i];
+        const char* p_txt_opt = cli_opt_get_txt_help(internal_optbuf.opts[i]);
         if ((NULL != p_txt_opt) && ('\0' != (p_txt_opt[0])))
         {
             printf("%s%s", p_txt_tmp, p_txt_opt);
@@ -7996,10 +7996,7 @@ void cli_mandopt_print(const char* p_txt_indent, const char* p_txt_delim)
 
 void cli_mandopt_clear(void)
 {
-    for(uint8_t i = 0u; (MANDOPT_OPTS_LN > i); (++i))
-    {
-        txt_mandopts[i] = NULL;
-    }
+    memset(&internal_optbuf, 0, sizeof(internal_optbuf));
 }
 
 int cli_mandopt_check(const mandopt_t* p_mandopts, const uint8_t mandopts_ln)
@@ -8023,20 +8020,31 @@ int cli_mandopt_check(const mandopt_t* p_mandopts, const uint8_t mandopts_ln)
         if (NULL == (p_item->p_mandopt_optbuf))
         {
             /* NULL optbuf == use single opt */
-            txt_mandopts[0] = cli_opt_get_txt_help(p_item->opt);
+            internal_optbuf.opts[0] = p_item->opt;
         }
         else
         {
             /* non-NULL optbuf == use optbuf data */
-            for(uint8_t i = 0u; (MANDOPT_OPTS_LN > i); (++i))
-            {
-                txt_mandopts[i] = cli_opt_get_txt_help(p_item->p_mandopt_optbuf->opts[i]);
-            }
+            internal_optbuf = *(p_item->p_mandopt_optbuf);
         }
         rtn = CLI_ERR_MISSING_MANDOPT;
     }
     
     return (rtn);
+}
+
+/* only for daemon ; do not use casually */
+void cli_mandopt_getinternal(mandopt_optbuf_t* p_rtn_optbuf)
+{
+    assert(NULL != p_rtn_optbuf);
+    *p_rtn_optbuf = internal_optbuf;
+}
+
+/* only for daemon ; do not use casually */
+void cli_mandopt_setinternal(mandopt_optbuf_t *const p_optbuf)
+{
+    assert(NULL != p_optbuf);
+    internal_optbuf = *p_optbuf;
 }
 
 /* ==== TESTMODE constants ================================================= */

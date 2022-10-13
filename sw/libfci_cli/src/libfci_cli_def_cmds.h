@@ -132,7 +132,7 @@
 #define CMD_18_CMDEXEC      cli_cmd_mirror_del
 #define CMD_18_HELP         txt_help_mirror_del
 
-/*      CMD_19_ENUM_NAME    reserved for future LOGIF cmds */
+/*      CMD_19_ENUM_NAME    reserved for future MIRROR cmds */
 
 #define CMD_20_ENUM_NAME    CMD_BD_PRINT
 #define CMD_20_CLI_TXT      "bd-print"
@@ -401,20 +401,55 @@
 #define CMD_88_CMDEXEC      cli_cmd_qos_pol_flow_del
 #define CMD_88_HELP         txt_help_qos_pol_flow_del
 
+/*      CMD_89_ENUM_NAME    reserved for future QOS_POL cmds */
+
 #define CMD_90_ENUM_NAME    CMD_FCI_OWNERSHIP
 #define CMD_90_CLI_TXT      "fci-ownership"
 #define CMD_90_CMDEXEC      cli_cmd_fci_ownership
 #define CMD_90_HELP         txt_help_fci_ownership
 
-#define CMD_98_ENUM_NAME    CMD_DEMO_FEATURE_PRINT
-#define CMD_98_CLI_TXT      "demo-feature-print"
-#define CMD_98_CMDEXEC      cli_cmd_demo_feature_print
-#define CMD_98_HELP         txt_help_demo_feature_print
+/*      CMD_91_ENUM_NAME    reserved for future misc OWNERSHIP cmds */
+/*      CMD_92_ENUM_NAME    reserved for future misc OWNERSHIP cmds */
+/*      CMD_93_ENUM_NAME    reserved for future misc OWNERSHIP cmds */
+/*      CMD_94_ENUM_NAME    reserved for future misc OWNERSHIP cmds */
+/*      CMD_95_ENUM_NAME    reserved for future misc OWNERSHIP cmds */
+/*      CMD_96_ENUM_NAME    reserved for future misc OWNERSHIP cmds */
+/*      CMD_97_ENUM_NAME    reserved for future misc OWNERSHIP cmds */
+/*      CMD_98_ENUM_NAME    reserved for future misc OWNERSHIP cmds */
+/*      CMD_99_ENUM_NAME    reserved for future misc OWNERSHIP cmds */
 
-#define CMD_99_ENUM_NAME    CMD_DEMO_FEATURE_RUN
-#define CMD_99_CLI_TXT      "demo-feature-run"
-#define CMD_99_CMDEXEC      cli_cmd_demo_feature_run
-#define CMD_99_HELP         txt_help_demo_feature_run
+#define CMD_100_ENUM_NAME   CMD_DAEMON_PRINT
+#define CMD_100_CLI_TXT     "daemon-print"
+#define CMD_100_CMDEXEC     cli_cmd_daemon_print
+#define CMD_100_HELP        txt_help_daemon_print
+
+#define CMD_101_ENUM_NAME   CMD_DAEMON_UPDATE
+#define CMD_101_CLI_TXT     "daemon-update"
+#define CMD_101_CMDEXEC     cli_cmd_daemon_update
+#define CMD_101_HELP        txt_help_daemon_update
+
+#define CMD_102_ENUM_NAME   CMD_DAEMON_START
+#define CMD_102_CLI_TXT     "daemon-start"
+#define CMD_102_CMDEXEC     cli_cmd_daemon_start
+#define CMD_102_HELP        txt_help_daemon_start
+
+#define CMD_103_ENUM_NAME   CMD_DAEMON_STOP
+#define CMD_103_CLI_TXT     "daemon-stop"
+#define CMD_103_CMDEXEC     cli_cmd_daemon_stop
+#define CMD_103_HELP        txt_help_daemon_stop
+
+
+
+
+#define CMD_198_ENUM_NAME    CMD_DEMO_FEATURE_PRINT
+#define CMD_198_CLI_TXT      "demo-feature-print"
+#define CMD_198_CMDEXEC      cli_cmd_demo_feature_print
+#define CMD_198_HELP         txt_help_demo_feature_print
+
+#define CMD_199_ENUM_NAME    CMD_DEMO_FEATURE_RUN
+#define CMD_199_CLI_TXT      "demo-feature-run"
+#define CMD_199_CMDEXEC      cli_cmd_demo_feature_run
+#define CMD_199_HELP         txt_help_demo_feature_run
 
 /* CMD_LAST (keep this at the bottom of the cli command definition list) */
 
@@ -731,6 +766,316 @@ typedef enum cli_cmd_tt {
        CMD_99_ENUM_NAME,
 #endif
 
+#ifdef CMD_100_ENUM_NAME
+       CMD_100_ENUM_NAME,
+#endif
+#ifdef CMD_101_ENUM_NAME
+       CMD_101_ENUM_NAME,
+#endif
+#ifdef CMD_102_ENUM_NAME
+       CMD_102_ENUM_NAME,
+#endif
+#ifdef CMD_103_ENUM_NAME
+       CMD_103_ENUM_NAME,
+#endif
+#ifdef CMD_104_ENUM_NAME
+       CMD_104_ENUM_NAME,
+#endif
+#ifdef CMD_105_ENUM_NAME
+       CMD_105_ENUM_NAME,
+#endif
+#ifdef CMD_106_ENUM_NAME
+       CMD_106_ENUM_NAME,
+#endif
+#ifdef CMD_107_ENUM_NAME
+       CMD_107_ENUM_NAME,
+#endif
+#ifdef CMD_108_ENUM_NAME
+       CMD_108_ENUM_NAME,
+#endif
+#ifdef CMD_109_ENUM_NAME
+       CMD_109_ENUM_NAME,
+#endif
+
+#ifdef CMD_110_ENUM_NAME
+       CMD_110_ENUM_NAME,
+#endif
+#ifdef CMD_111_ENUM_NAME
+       CMD_111_ENUM_NAME,
+#endif
+#ifdef CMD_112_ENUM_NAME
+       CMD_112_ENUM_NAME,
+#endif
+#ifdef CMD_113_ENUM_NAME
+       CMD_113_ENUM_NAME,
+#endif
+#ifdef CMD_114_ENUM_NAME
+       CMD_114_ENUM_NAME,
+#endif
+#ifdef CMD_115_ENUM_NAME
+       CMD_115_ENUM_NAME,
+#endif
+#ifdef CMD_116_ENUM_NAME
+       CMD_116_ENUM_NAME,
+#endif
+#ifdef CMD_117_ENUM_NAME
+       CMD_117_ENUM_NAME,
+#endif
+#ifdef CMD_118_ENUM_NAME
+       CMD_118_ENUM_NAME,
+#endif
+#ifdef CMD_119_ENUM_NAME
+       CMD_119_ENUM_NAME,
+#endif
+
+#ifdef CMD_120_ENUM_NAME
+       CMD_120_ENUM_NAME,
+#endif
+#ifdef CMD_121_ENUM_NAME
+       CMD_121_ENUM_NAME,
+#endif
+#ifdef CMD_122_ENUM_NAME
+       CMD_122_ENUM_NAME,
+#endif
+#ifdef CMD_123_ENUM_NAME
+       CMD_123_ENUM_NAME,
+#endif
+#ifdef CMD_124_ENUM_NAME
+       CMD_124_ENUM_NAME,
+#endif
+#ifdef CMD_125_ENUM_NAME
+       CMD_125_ENUM_NAME,
+#endif
+#ifdef CMD_126_ENUM_NAME
+       CMD_126_ENUM_NAME,
+#endif
+#ifdef CMD_127_ENUM_NAME
+       CMD_127_ENUM_NAME,
+#endif
+#ifdef CMD_128_ENUM_NAME
+       CMD_128_ENUM_NAME,
+#endif
+#ifdef CMD_129_ENUM_NAME
+       CMD_129_ENUM_NAME,
+#endif
+
+#ifdef CMD_130_ENUM_NAME
+       CMD_130_ENUM_NAME,
+#endif
+#ifdef CMD_131_ENUM_NAME
+       CMD_131_ENUM_NAME,
+#endif
+#ifdef CMD_132_ENUM_NAME
+       CMD_132_ENUM_NAME,
+#endif
+#ifdef CMD_133_ENUM_NAME
+       CMD_133_ENUM_NAME,
+#endif
+#ifdef CMD_134_ENUM_NAME
+       CMD_134_ENUM_NAME,
+#endif
+#ifdef CMD_135_ENUM_NAME
+       CMD_135_ENUM_NAME,
+#endif
+#ifdef CMD_136_ENUM_NAME
+       CMD_136_ENUM_NAME,
+#endif
+#ifdef CMD_137_ENUM_NAME
+       CMD_137_ENUM_NAME,
+#endif
+#ifdef CMD_138_ENUM_NAME
+       CMD_138_ENUM_NAME,
+#endif
+#ifdef CMD_139_ENUM_NAME
+       CMD_139_ENUM_NAME,
+#endif
+
+#ifdef CMD_140_ENUM_NAME
+       CMD_140_ENUM_NAME,
+#endif
+#ifdef CMD_141_ENUM_NAME
+       CMD_141_ENUM_NAME,
+#endif
+#ifdef CMD_142_ENUM_NAME
+       CMD_142_ENUM_NAME,
+#endif
+#ifdef CMD_143_ENUM_NAME
+       CMD_143_ENUM_NAME,
+#endif
+#ifdef CMD_144_ENUM_NAME
+       CMD_144_ENUM_NAME,
+#endif
+#ifdef CMD_145_ENUM_NAME
+       CMD_145_ENUM_NAME,
+#endif
+#ifdef CMD_146_ENUM_NAME
+       CMD_146_ENUM_NAME,
+#endif
+#ifdef CMD_147_ENUM_NAME
+       CMD_147_ENUM_NAME,
+#endif
+#ifdef CMD_148_ENUM_NAME
+       CMD_148_ENUM_NAME,
+#endif
+#ifdef CMD_149_ENUM_NAME
+       CMD_149_ENUM_NAME,
+#endif
+
+#ifdef CMD_150_ENUM_NAME
+       CMD_150_ENUM_NAME,
+#endif
+#ifdef CMD_151_ENUM_NAME
+       CMD_151_ENUM_NAME,
+#endif
+#ifdef CMD_152_ENUM_NAME
+       CMD_152_ENUM_NAME,
+#endif
+#ifdef CMD_153_ENUM_NAME
+       CMD_153_ENUM_NAME,
+#endif
+#ifdef CMD_154_ENUM_NAME
+       CMD_154_ENUM_NAME,
+#endif
+#ifdef CMD_155_ENUM_NAME
+       CMD_155_ENUM_NAME,
+#endif
+#ifdef CMD_156_ENUM_NAME
+       CMD_156_ENUM_NAME,
+#endif
+#ifdef CMD_157_ENUM_NAME
+       CMD_157_ENUM_NAME,
+#endif
+#ifdef CMD_158_ENUM_NAME
+       CMD_158_ENUM_NAME,
+#endif
+#ifdef CMD_159_ENUM_NAME
+       CMD_159_ENUM_NAME,
+#endif
+
+#ifdef CMD_160_ENUM_NAME
+       CMD_160_ENUM_NAME,
+#endif
+#ifdef CMD_161_ENUM_NAME
+       CMD_161_ENUM_NAME,
+#endif
+#ifdef CMD_162_ENUM_NAME
+       CMD_162_ENUM_NAME,
+#endif
+#ifdef CMD_163_ENUM_NAME
+       CMD_163_ENUM_NAME,
+#endif
+#ifdef CMD_164_ENUM_NAME
+       CMD_164_ENUM_NAME,
+#endif
+#ifdef CMD_165_ENUM_NAME
+       CMD_165_ENUM_NAME,
+#endif
+#ifdef CMD_166_ENUM_NAME
+       CMD_166_ENUM_NAME,
+#endif
+#ifdef CMD_167_ENUM_NAME
+       CMD_167_ENUM_NAME,
+#endif
+#ifdef CMD_168_ENUM_NAME
+       CMD_168_ENUM_NAME,
+#endif
+#ifdef CMD_169_ENUM_NAME
+       CMD_169_ENUM_NAME,
+#endif
+
+#ifdef CMD_170_ENUM_NAME
+       CMD_170_ENUM_NAME,
+#endif
+#ifdef CMD_171_ENUM_NAME
+       CMD_171_ENUM_NAME,
+#endif
+#ifdef CMD_172_ENUM_NAME
+       CMD_172_ENUM_NAME,
+#endif
+#ifdef CMD_173_ENUM_NAME
+       CMD_173_ENUM_NAME,
+#endif
+#ifdef CMD_174_ENUM_NAME
+       CMD_174_ENUM_NAME,
+#endif
+#ifdef CMD_175_ENUM_NAME
+       CMD_175_ENUM_NAME,
+#endif
+#ifdef CMD_176_ENUM_NAME
+       CMD_176_ENUM_NAME,
+#endif
+#ifdef CMD_177_ENUM_NAME
+       CMD_177_ENUM_NAME,
+#endif
+#ifdef CMD_178_ENUM_NAME
+       CMD_178_ENUM_NAME,
+#endif
+#ifdef CMD_179_ENUM_NAME
+       CMD_179_ENUM_NAME,
+#endif
+
+#ifdef CMD_180_ENUM_NAME
+       CMD_180_ENUM_NAME,
+#endif
+#ifdef CMD_181_ENUM_NAME
+       CMD_181_ENUM_NAME,
+#endif
+#ifdef CMD_182_ENUM_NAME
+       CMD_182_ENUM_NAME,
+#endif
+#ifdef CMD_183_ENUM_NAME
+       CMD_183_ENUM_NAME,
+#endif
+#ifdef CMD_184_ENUM_NAME
+       CMD_184_ENUM_NAME,
+#endif
+#ifdef CMD_185_ENUM_NAME
+       CMD_185_ENUM_NAME,
+#endif
+#ifdef CMD_186_ENUM_NAME
+       CMD_186_ENUM_NAME,
+#endif
+#ifdef CMD_187_ENUM_NAME
+       CMD_187_ENUM_NAME,
+#endif
+#ifdef CMD_188_ENUM_NAME
+       CMD_188_ENUM_NAME,
+#endif
+#ifdef CMD_189_ENUM_NAME
+       CMD_189_ENUM_NAME,
+#endif
+
+#ifdef CMD_190_ENUM_NAME
+       CMD_190_ENUM_NAME,
+#endif
+#ifdef CMD_191_ENUM_NAME
+       CMD_191_ENUM_NAME,
+#endif
+#ifdef CMD_192_ENUM_NAME
+       CMD_192_ENUM_NAME,
+#endif
+#ifdef CMD_193_ENUM_NAME
+       CMD_193_ENUM_NAME,
+#endif
+#ifdef CMD_194_ENUM_NAME
+       CMD_194_ENUM_NAME,
+#endif
+#ifdef CMD_195_ENUM_NAME
+       CMD_195_ENUM_NAME,
+#endif
+#ifdef CMD_196_ENUM_NAME
+       CMD_196_ENUM_NAME,
+#endif
+#ifdef CMD_197_ENUM_NAME
+       CMD_197_ENUM_NAME,
+#endif
+#ifdef CMD_198_ENUM_NAME
+       CMD_198_ENUM_NAME,
+#endif
+#ifdef CMD_199_ENUM_NAME
+       CMD_199_ENUM_NAME,
+#endif
+
     CMD_LN  /* length of the ID enum list */
 } cli_cmd_t;
 
@@ -744,6 +1089,9 @@ typedef enum cli_cmd_tt {
 
 bool cli_cmd_is_valid(uint16_t value);
 bool cli_cmd_is_not_valid(uint16_t value);
+
+bool cli_cmd_is_daemon_related(uint16_t value);
+bool cli_cmd_is_not_daemon_related(uint16_t value);
 
 int cli_cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs);
 

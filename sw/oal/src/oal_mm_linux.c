@@ -17,6 +17,7 @@
 
 #include <linux/version.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
 #include <linux/types.h>
@@ -28,6 +29,8 @@
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "oal_mm.h"
+
+MODULE_LICENSE("GPL");
 
 /* managed memory allocation types */
 enum pfe_kmem_type {

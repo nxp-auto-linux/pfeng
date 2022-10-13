@@ -54,13 +54,14 @@ endif
 ifeq ($(TARGET_OS),LINUX)
 	LD = $(CC)
 	LIBS += -L../xfci/libfci/build/$(PLATFORM)-$(BUILD_PROFILE) -l:libfci.a
+	LIBS_all += -lpthread
 	
 	#Expand GLOBAL_CCFLAGS to get rid of single quotes around string parameters of GLOBAL_CCFLAGS.
 	#Those single quotes are utilized in build process of the Linux PFE driver, but they cause warnings in this makefile.
 	GLOBAL_CCFLAGS := $(shell echo $(GLOBAL_CCFLAGS))
 	
 	CLI_TARGET_OS = "LNX"
-	CLI_DRV_VERSION = "RTM 1.1.0"
+	CLI_DRV_VERSION = "RTM 1.2.0 RC1"
 	CLI_DRV_COMMIT_HASH = "M4_DRIVER_COMMIT_HASH"
 else
 #This branch by defaut means QNX.
@@ -69,13 +70,15 @@ else
 	
 	CLI_TARGET_OS = "QNX"
 	CLI_DRV_VERSION = "$(RELEASE_VERSION)"
+	CLI_DRV_COMMIT_HASH = "$(DRIVER_COMMIT_HASH)"
 endif
 
 #User defined include/preprocessor flags and libraries
 INCLUDES += -I../xfci/libfci/public \
 			-I../fci/public \
 			-I../common/public \
-			-I./src/libfci_demo
+			-I./src/libfci_demo \
+			-I./src/daemon
 
 #Dependencies
 DEPENDENCIES = $(subst -L,,$(subst $(EMPTY) $(EMPTY)-l:,/,$(LIBS)))
@@ -102,9 +105,13 @@ DEPS = -Wp,-MMD,$(@:%.o=%.d),-MT,$@
 PFE_CT_H_START_OFFSET=$(word 1, $(shell cat -n ../pfe_platform/public/pfe_ct.h | sed -n '/=== \*/,$$p'))
 PFE_CT_H_MD5 = $(word 1, $(shell cat ../pfe_platform/public/pfe_ct.h | sed -n '$(PFE_CT_H_START_OFFSET),$$p' | tr -d '\040\011\012\015' | md5sum))
 CCFLAGS += -DPFE_CT_H_MD5=\"$(PFE_CT_H_MD5)\"
-CCFLAGS += -DCLI_DRV_VERSION=\"$(CLI_DRV_VERSION)\"
 CCFLAGS += -DCLI_TARGET_OS=\"$(CLI_TARGET_OS)\"
-CCFLAGS += -DCLI_DRV_COMMIT_HASH=\"$(CLI_DRV_COMMIT_HASH)\"
+ifneq ($(CLI_DRV_VERSION), "")
+	CCFLAGS += -DCLI_DRV_VERSION=\"$(CLI_DRV_VERSION)\"
+endif
+ifneq ($(CLI_DRV_COMMIT_HASH), "")
+	CCFLAGS += -DCLI_DRV_COMMIT_HASH=\"$(CLI_DRV_COMMIT_HASH)\"
+endif
 
 #Macro to expand files recursively: parameters $1 -  directory, $2 - extension, i.e. cpp
 rwildcard = $(wildcard $(addprefix $1/*.,$2)) $(foreach d,$(wildcard $1/*),$(call rwildcard,$d,$2))

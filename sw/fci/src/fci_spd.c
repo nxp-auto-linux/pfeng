@@ -181,7 +181,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
 
                                     case FPP_ACTION_QUERY:
                                         search_position = 0U;
-                                        /* FALLTHRU */
+                                        fallthrough;
 
                                     case FPP_ACTION_QUERY_CONT:
                                         ret = pfe_spd_acc_get_rule(phy_if, search_position, &spd_entry);

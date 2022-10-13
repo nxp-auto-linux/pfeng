@@ -42,9 +42,10 @@
 
 
 /* app version */
-#define CLI_VERSION_MAJOR  "2"
-#define CLI_VERSION_MINOR  "8"
-#define CLI_VERSION_PATCH  "0"
+#define CLI_VERSION_MAJOR   "2"
+#define CLI_VERSION_MINOR   "9"
+#define CLI_VERSION_PATCH   "0"
+#define CLI_VERSION_STRING  CLI_VERSION_MAJOR"."CLI_VERSION_MINOR"."CLI_VERSION_PATCH
 
 
 /* drv version (default values for non-makefile compilation) */
@@ -58,7 +59,7 @@
 #define PFE_CT_H_MD5  "????????????????????????????????"
 #endif
 #ifndef CLI_DRV_COMMIT_HASH
-#define CLI_DRV_COMMIT_HASH  "????????????????????????????????"
+#define CLI_DRV_COMMIT_HASH  "????????????????????????????????????????"
 #endif
 
 
@@ -75,6 +76,15 @@
 #define CLI_ERR_INCOMPATIBLE_IPS   (-119)
 #define CLI_ERR_WRONG_IP_TYPE      (-120)
 #define CLI_ERR_INV_DEMO_FEATURE   (-121)
+#define CLI_ERR_DAEMON_NOT_DETECTED       (-122)
+#define CLI_ERR_DAEMON_ALREADY_EXISTS     (-123)
+#define CLI_ERR_DAEMON_INCOMPATIBLE       (-124)
+#define CLI_ERR_DAEMON_COMM_FAIL_SOCKET   (-125)
+#define CLI_ERR_DAEMON_COMM_FAIL_CONNECT  (-126)
+#define CLI_ERR_DAEMON_COMM_FAIL_SEND     (-127)
+#define CLI_ERR_DAEMON_COMM_FAIL_RECEIVE  (-128)
+#define CLI_ERR_DAEMON_REPLY_NONZERO_RTN  (-129)
+#define CLI_ERR_DAEMON_REPLY_BAD_DATA     (-130)
 
 
 /* misc macros */
@@ -605,6 +615,27 @@ typedef struct cli_cmdargs_tt
     {
         bool is_valid;
     } unlock0;
+
+    struct
+    {
+        bool is_valid;
+        bool is_on;
+    } print_to_terminal;
+    struct
+    {
+        bool is_valid;
+        bool is_on;
+    } print_to_logfile;
+    struct
+    {
+        bool is_valid;
+        bool is_on;
+    } dbg_to_terminal;
+    struct
+    {
+        bool is_valid;
+        bool is_on;
+    } dbg_to_dbgfile;
 
 } cli_cmdargs_t;
 

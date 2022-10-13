@@ -21,7 +21,6 @@
 #include <linux/reset.h>
 #include <linux/processor.h>
 #include <linux/pinctrl/consumer.h>
-#include <soc/s32/revision.h>
 
 #include "pfe_cfg.h"
 #include "hal.h"

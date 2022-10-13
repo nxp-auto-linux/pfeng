@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -351,6 +351,316 @@ cli_cmdargs_t TEST_cmdargs;
    int CMD_99_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
 #endif
 
+#ifdef CMD_100_ENUM_NAME
+   int CMD_100_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_101_ENUM_NAME
+   int CMD_101_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_102_ENUM_NAME
+   int CMD_102_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_103_ENUM_NAME
+   int CMD_103_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_104_ENUM_NAME
+   int CMD_104_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_105_ENUM_NAME
+   int CMD_105_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_106_ENUM_NAME
+   int CMD_106_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_107_ENUM_NAME
+   int CMD_107_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_108_ENUM_NAME
+   int CMD_108_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_109_ENUM_NAME
+   int CMD_109_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+
+#ifdef CMD_110_ENUM_NAME
+   int CMD_110_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_111_ENUM_NAME
+   int CMD_111_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_112_ENUM_NAME
+   int CMD_112_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_113_ENUM_NAME
+   int CMD_113_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_114_ENUM_NAME
+   int CMD_114_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_115_ENUM_NAME
+   int CMD_115_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_116_ENUM_NAME
+   int CMD_116_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_117_ENUM_NAME
+   int CMD_117_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_118_ENUM_NAME
+   int CMD_118_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_119_ENUM_NAME
+   int CMD_119_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+
+#ifdef CMD_120_ENUM_NAME
+   int CMD_120_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_121_ENUM_NAME
+   int CMD_121_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_122_ENUM_NAME
+   int CMD_122_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_123_ENUM_NAME
+   int CMD_123_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_124_ENUM_NAME
+   int CMD_124_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_125_ENUM_NAME
+   int CMD_125_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_126_ENUM_NAME
+   int CMD_126_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_127_ENUM_NAME
+   int CMD_127_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_128_ENUM_NAME
+   int CMD_128_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_129_ENUM_NAME
+   int CMD_129_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+
+#ifdef CMD_130_ENUM_NAME
+   int CMD_130_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_131_ENUM_NAME
+   int CMD_131_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_132_ENUM_NAME
+   int CMD_132_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_133_ENUM_NAME
+   int CMD_133_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_134_ENUM_NAME
+   int CMD_134_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_135_ENUM_NAME
+   int CMD_135_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_136_ENUM_NAME
+   int CMD_136_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_137_ENUM_NAME
+   int CMD_137_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_138_ENUM_NAME
+   int CMD_138_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_139_ENUM_NAME
+   int CMD_139_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+
+#ifdef CMD_140_ENUM_NAME
+   int CMD_140_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_141_ENUM_NAME
+   int CMD_141_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_142_ENUM_NAME
+   int CMD_142_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_143_ENUM_NAME
+   int CMD_143_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_144_ENUM_NAME
+   int CMD_144_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_145_ENUM_NAME
+   int CMD_145_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_146_ENUM_NAME
+   int CMD_146_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_147_ENUM_NAME
+   int CMD_147_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_148_ENUM_NAME
+   int CMD_148_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_149_ENUM_NAME
+   int CMD_149_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+
+#ifdef CMD_150_ENUM_NAME
+   int CMD_150_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_151_ENUM_NAME
+   int CMD_151_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_152_ENUM_NAME
+   int CMD_152_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_153_ENUM_NAME
+   int CMD_153_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_154_ENUM_NAME
+   int CMD_154_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_155_ENUM_NAME
+   int CMD_155_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_156_ENUM_NAME
+   int CMD_156_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_157_ENUM_NAME
+   int CMD_157_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_158_ENUM_NAME
+   int CMD_158_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_159_ENUM_NAME
+   int CMD_159_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+
+#ifdef CMD_160_ENUM_NAME
+   int CMD_160_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_161_ENUM_NAME
+   int CMD_161_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_162_ENUM_NAME
+   int CMD_162_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_163_ENUM_NAME
+   int CMD_163_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_164_ENUM_NAME
+   int CMD_164_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_165_ENUM_NAME
+   int CMD_165_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_166_ENUM_NAME
+   int CMD_166_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_167_ENUM_NAME
+   int CMD_167_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_168_ENUM_NAME
+   int CMD_168_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_169_ENUM_NAME
+   int CMD_169_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+
+#ifdef CMD_170_ENUM_NAME
+   int CMD_170_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_171_ENUM_NAME
+   int CMD_171_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_172_ENUM_NAME
+   int CMD_172_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_173_ENUM_NAME
+   int CMD_173_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_174_ENUM_NAME
+   int CMD_174_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_175_ENUM_NAME
+   int CMD_175_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_176_ENUM_NAME
+   int CMD_176_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_177_ENUM_NAME
+   int CMD_177_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_178_ENUM_NAME
+   int CMD_178_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_179_ENUM_NAME
+   int CMD_179_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+
+#ifdef CMD_180_ENUM_NAME
+   int CMD_180_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_181_ENUM_NAME
+   int CMD_181_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_182_ENUM_NAME
+   int CMD_182_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_183_ENUM_NAME
+   int CMD_183_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_184_ENUM_NAME
+   int CMD_184_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_185_ENUM_NAME
+   int CMD_185_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_186_ENUM_NAME
+   int CMD_186_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_187_ENUM_NAME
+   int CMD_187_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_188_ENUM_NAME
+   int CMD_188_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_189_ENUM_NAME
+   int CMD_189_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+
+#ifdef CMD_190_ENUM_NAME
+   int CMD_190_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_191_ENUM_NAME
+   int CMD_191_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_192_ENUM_NAME
+   int CMD_192_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_193_ENUM_NAME
+   int CMD_193_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_194_ENUM_NAME
+   int CMD_194_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_195_ENUM_NAME
+   int CMD_195_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_196_ENUM_NAME
+   int CMD_196_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_197_ENUM_NAME
+   int CMD_197_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_198_ENUM_NAME
+   int CMD_198_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+#ifdef CMD_199_ENUM_NAME
+   int CMD_199_CMDEXEC (const cli_cmdargs_t* p_cmdargs);
+#endif
+
 
 static int cmdexec_dummy(const cli_cmdargs_t* p_cmdargs);
 
@@ -666,6 +976,316 @@ static const cb_cmdexec_t cmdexecs[CMD_LN] =
 #ifdef CMD_99_ENUM_NAME
        CMD_99_CMDEXEC,
 #endif
+
+#ifdef CMD_100_ENUM_NAME
+       CMD_100_CMDEXEC,
+#endif
+#ifdef CMD_101_ENUM_NAME
+       CMD_101_CMDEXEC,
+#endif
+#ifdef CMD_102_ENUM_NAME
+       CMD_102_CMDEXEC,
+#endif
+#ifdef CMD_103_ENUM_NAME
+       CMD_103_CMDEXEC,
+#endif
+#ifdef CMD_104_ENUM_NAME
+       CMD_104_CMDEXEC,
+#endif
+#ifdef CMD_105_ENUM_NAME
+       CMD_105_CMDEXEC,
+#endif
+#ifdef CMD_106_ENUM_NAME
+       CMD_106_CMDEXEC,
+#endif
+#ifdef CMD_107_ENUM_NAME
+       CMD_107_CMDEXEC,
+#endif
+#ifdef CMD_108_ENUM_NAME
+       CMD_108_CMDEXEC,
+#endif
+#ifdef CMD_109_ENUM_NAME
+       CMD_109_CMDEXEC,
+#endif
+
+#ifdef CMD_110_ENUM_NAME
+       CMD_110_CMDEXEC,
+#endif
+#ifdef CMD_111_ENUM_NAME
+       CMD_111_CMDEXEC,
+#endif
+#ifdef CMD_112_ENUM_NAME
+       CMD_112_CMDEXEC,
+#endif
+#ifdef CMD_113_ENUM_NAME
+       CMD_113_CMDEXEC,
+#endif
+#ifdef CMD_114_ENUM_NAME
+       CMD_114_CMDEXEC,
+#endif
+#ifdef CMD_115_ENUM_NAME
+       CMD_115_CMDEXEC,
+#endif
+#ifdef CMD_116_ENUM_NAME
+       CMD_116_CMDEXEC,
+#endif
+#ifdef CMD_117_ENUM_NAME
+       CMD_117_CMDEXEC,
+#endif
+#ifdef CMD_118_ENUM_NAME
+       CMD_118_CMDEXEC,
+#endif
+#ifdef CMD_119_ENUM_NAME
+       CMD_119_CMDEXEC,
+#endif
+
+#ifdef CMD_120_ENUM_NAME
+       CMD_120_CMDEXEC,
+#endif
+#ifdef CMD_121_ENUM_NAME
+       CMD_121_CMDEXEC,
+#endif
+#ifdef CMD_122_ENUM_NAME
+       CMD_122_CMDEXEC,
+#endif
+#ifdef CMD_123_ENUM_NAME
+       CMD_123_CMDEXEC,
+#endif
+#ifdef CMD_124_ENUM_NAME
+       CMD_124_CMDEXEC,
+#endif
+#ifdef CMD_125_ENUM_NAME
+       CMD_125_CMDEXEC,
+#endif
+#ifdef CMD_126_ENUM_NAME
+       CMD_126_CMDEXEC,
+#endif
+#ifdef CMD_127_ENUM_NAME
+       CMD_127_CMDEXEC,
+#endif
+#ifdef CMD_128_ENUM_NAME
+       CMD_128_CMDEXEC,
+#endif
+#ifdef CMD_129_ENUM_NAME
+       CMD_129_CMDEXEC,
+#endif
+
+#ifdef CMD_130_ENUM_NAME
+       CMD_130_CMDEXEC,
+#endif
+#ifdef CMD_131_ENUM_NAME
+       CMD_131_CMDEXEC,
+#endif
+#ifdef CMD_132_ENUM_NAME
+       CMD_132_CMDEXEC,
+#endif
+#ifdef CMD_133_ENUM_NAME
+       CMD_133_CMDEXEC,
+#endif
+#ifdef CMD_134_ENUM_NAME
+       CMD_134_CMDEXEC,
+#endif
+#ifdef CMD_135_ENUM_NAME
+       CMD_135_CMDEXEC,
+#endif
+#ifdef CMD_136_ENUM_NAME
+       CMD_136_CMDEXEC,
+#endif
+#ifdef CMD_137_ENUM_NAME
+       CMD_137_CMDEXEC,
+#endif
+#ifdef CMD_138_ENUM_NAME
+       CMD_138_CMDEXEC,
+#endif
+#ifdef CMD_139_ENUM_NAME
+       CMD_139_CMDEXEC,
+#endif
+
+#ifdef CMD_140_ENUM_NAME
+       CMD_140_CMDEXEC,
+#endif
+#ifdef CMD_141_ENUM_NAME
+       CMD_141_CMDEXEC,
+#endif
+#ifdef CMD_142_ENUM_NAME
+       CMD_142_CMDEXEC,
+#endif
+#ifdef CMD_143_ENUM_NAME
+       CMD_143_CMDEXEC,
+#endif
+#ifdef CMD_144_ENUM_NAME
+       CMD_144_CMDEXEC,
+#endif
+#ifdef CMD_145_ENUM_NAME
+       CMD_145_CMDEXEC,
+#endif
+#ifdef CMD_146_ENUM_NAME
+       CMD_146_CMDEXEC,
+#endif
+#ifdef CMD_147_ENUM_NAME
+       CMD_147_CMDEXEC,
+#endif
+#ifdef CMD_148_ENUM_NAME
+       CMD_148_CMDEXEC,
+#endif
+#ifdef CMD_149_ENUM_NAME
+       CMD_149_CMDEXEC,
+#endif
+
+#ifdef CMD_150_ENUM_NAME
+       CMD_150_CMDEXEC,
+#endif
+#ifdef CMD_151_ENUM_NAME
+       CMD_151_CMDEXEC,
+#endif
+#ifdef CMD_152_ENUM_NAME
+       CMD_152_CMDEXEC,
+#endif
+#ifdef CMD_153_ENUM_NAME
+       CMD_153_CMDEXEC,
+#endif
+#ifdef CMD_154_ENUM_NAME
+       CMD_154_CMDEXEC,
+#endif
+#ifdef CMD_155_ENUM_NAME
+       CMD_155_CMDEXEC,
+#endif
+#ifdef CMD_156_ENUM_NAME
+       CMD_156_CMDEXEC,
+#endif
+#ifdef CMD_157_ENUM_NAME
+       CMD_157_CMDEXEC,
+#endif
+#ifdef CMD_158_ENUM_NAME
+       CMD_158_CMDEXEC,
+#endif
+#ifdef CMD_159_ENUM_NAME
+       CMD_159_CMDEXEC,
+#endif
+
+#ifdef CMD_160_ENUM_NAME
+       CMD_160_CMDEXEC,
+#endif
+#ifdef CMD_161_ENUM_NAME
+       CMD_161_CMDEXEC,
+#endif
+#ifdef CMD_162_ENUM_NAME
+       CMD_162_CMDEXEC,
+#endif
+#ifdef CMD_163_ENUM_NAME
+       CMD_163_CMDEXEC,
+#endif
+#ifdef CMD_164_ENUM_NAME
+       CMD_164_CMDEXEC,
+#endif
+#ifdef CMD_165_ENUM_NAME
+       CMD_165_CMDEXEC,
+#endif
+#ifdef CMD_166_ENUM_NAME
+       CMD_166_CMDEXEC,
+#endif
+#ifdef CMD_167_ENUM_NAME
+       CMD_167_CMDEXEC,
+#endif
+#ifdef CMD_168_ENUM_NAME
+       CMD_168_CMDEXEC,
+#endif
+#ifdef CMD_169_ENUM_NAME
+       CMD_169_CMDEXEC,
+#endif
+
+#ifdef CMD_170_ENUM_NAME
+       CMD_170_CMDEXEC,
+#endif
+#ifdef CMD_171_ENUM_NAME
+       CMD_171_CMDEXEC,
+#endif
+#ifdef CMD_172_ENUM_NAME
+       CMD_172_CMDEXEC,
+#endif
+#ifdef CMD_173_ENUM_NAME
+       CMD_173_CMDEXEC,
+#endif
+#ifdef CMD_174_ENUM_NAME
+       CMD_174_CMDEXEC,
+#endif
+#ifdef CMD_175_ENUM_NAME
+       CMD_175_CMDEXEC,
+#endif
+#ifdef CMD_176_ENUM_NAME
+       CMD_176_CMDEXEC,
+#endif
+#ifdef CMD_177_ENUM_NAME
+       CMD_177_CMDEXEC,
+#endif
+#ifdef CMD_178_ENUM_NAME
+       CMD_178_CMDEXEC,
+#endif
+#ifdef CMD_179_ENUM_NAME
+       CMD_179_CMDEXEC,
+#endif
+
+#ifdef CMD_180_ENUM_NAME
+       CMD_180_CMDEXEC,
+#endif
+#ifdef CMD_181_ENUM_NAME
+       CMD_181_CMDEXEC,
+#endif
+#ifdef CMD_182_ENUM_NAME
+       CMD_182_CMDEXEC,
+#endif
+#ifdef CMD_183_ENUM_NAME
+       CMD_183_CMDEXEC,
+#endif
+#ifdef CMD_184_ENUM_NAME
+       CMD_184_CMDEXEC,
+#endif
+#ifdef CMD_185_ENUM_NAME
+       CMD_185_CMDEXEC,
+#endif
+#ifdef CMD_186_ENUM_NAME
+       CMD_186_CMDEXEC,
+#endif
+#ifdef CMD_187_ENUM_NAME
+       CMD_187_CMDEXEC,
+#endif
+#ifdef CMD_188_ENUM_NAME
+       CMD_188_CMDEXEC,
+#endif
+#ifdef CMD_189_ENUM_NAME
+       CMD_189_CMDEXEC,
+#endif
+
+#ifdef CMD_190_ENUM_NAME
+       CMD_190_CMDEXEC,
+#endif
+#ifdef CMD_191_ENUM_NAME
+       CMD_191_CMDEXEC,
+#endif
+#ifdef CMD_192_ENUM_NAME
+       CMD_192_CMDEXEC,
+#endif
+#ifdef CMD_193_ENUM_NAME
+       CMD_193_CMDEXEC,
+#endif
+#ifdef CMD_194_ENUM_NAME
+       CMD_194_CMDEXEC,
+#endif
+#ifdef CMD_195_ENUM_NAME
+       CMD_195_CMDEXEC,
+#endif
+#ifdef CMD_196_ENUM_NAME
+       CMD_196_CMDEXEC,
+#endif
+#ifdef CMD_197_ENUM_NAME
+       CMD_197_CMDEXEC,
+#endif
+#ifdef CMD_198_ENUM_NAME
+       CMD_198_CMDEXEC,
+#endif
+#ifdef CMD_199_ENUM_NAME
+       CMD_199_CMDEXEC,
+#endif
 };
 
 /* indexed by 'cmd_t' */
@@ -979,6 +1599,316 @@ static const char *const txt_cmdnames[CMD_LN] =
 #ifdef CMD_99_ENUM_NAME
        CMD_99_CLI_TXT,
 #endif
+
+#ifdef CMD_100_ENUM_NAME
+       CMD_100_CLI_TXT,
+#endif
+#ifdef CMD_101_ENUM_NAME
+       CMD_101_CLI_TXT,
+#endif
+#ifdef CMD_102_ENUM_NAME
+       CMD_102_CLI_TXT,
+#endif
+#ifdef CMD_103_ENUM_NAME
+       CMD_103_CLI_TXT,
+#endif
+#ifdef CMD_104_ENUM_NAME
+       CMD_104_CLI_TXT,
+#endif
+#ifdef CMD_105_ENUM_NAME
+       CMD_105_CLI_TXT,
+#endif
+#ifdef CMD_106_ENUM_NAME
+       CMD_106_CLI_TXT,
+#endif
+#ifdef CMD_107_ENUM_NAME
+       CMD_107_CLI_TXT,
+#endif
+#ifdef CMD_108_ENUM_NAME
+       CMD_108_CLI_TXT,
+#endif
+#ifdef CMD_109_ENUM_NAME
+       CMD_109_CLI_TXT,
+#endif
+
+#ifdef CMD_110_ENUM_NAME
+       CMD_110_CLI_TXT,
+#endif
+#ifdef CMD_111_ENUM_NAME
+       CMD_111_CLI_TXT,
+#endif
+#ifdef CMD_112_ENUM_NAME
+       CMD_112_CLI_TXT,
+#endif
+#ifdef CMD_113_ENUM_NAME
+       CMD_113_CLI_TXT,
+#endif
+#ifdef CMD_114_ENUM_NAME
+       CMD_114_CLI_TXT,
+#endif
+#ifdef CMD_115_ENUM_NAME
+       CMD_115_CLI_TXT,
+#endif
+#ifdef CMD_116_ENUM_NAME
+       CMD_116_CLI_TXT,
+#endif
+#ifdef CMD_117_ENUM_NAME
+       CMD_117_CLI_TXT,
+#endif
+#ifdef CMD_118_ENUM_NAME
+       CMD_118_CLI_TXT,
+#endif
+#ifdef CMD_119_ENUM_NAME
+       CMD_119_CLI_TXT,
+#endif
+
+#ifdef CMD_120_ENUM_NAME
+       CMD_120_CLI_TXT,
+#endif
+#ifdef CMD_121_ENUM_NAME
+       CMD_121_CLI_TXT,
+#endif
+#ifdef CMD_122_ENUM_NAME
+       CMD_122_CLI_TXT,
+#endif
+#ifdef CMD_123_ENUM_NAME
+       CMD_123_CLI_TXT,
+#endif
+#ifdef CMD_124_ENUM_NAME
+       CMD_124_CLI_TXT,
+#endif
+#ifdef CMD_125_ENUM_NAME
+       CMD_125_CLI_TXT,
+#endif
+#ifdef CMD_126_ENUM_NAME
+       CMD_126_CLI_TXT,
+#endif
+#ifdef CMD_127_ENUM_NAME
+       CMD_127_CLI_TXT,
+#endif
+#ifdef CMD_128_ENUM_NAME
+       CMD_128_CLI_TXT,
+#endif
+#ifdef CMD_129_ENUM_NAME
+       CMD_129_CLI_TXT,
+#endif
+
+#ifdef CMD_130_ENUM_NAME
+       CMD_130_CLI_TXT,
+#endif
+#ifdef CMD_131_ENUM_NAME
+       CMD_131_CLI_TXT,
+#endif
+#ifdef CMD_132_ENUM_NAME
+       CMD_132_CLI_TXT,
+#endif
+#ifdef CMD_133_ENUM_NAME
+       CMD_133_CLI_TXT,
+#endif
+#ifdef CMD_134_ENUM_NAME
+       CMD_134_CLI_TXT,
+#endif
+#ifdef CMD_135_ENUM_NAME
+       CMD_135_CLI_TXT,
+#endif
+#ifdef CMD_136_ENUM_NAME
+       CMD_136_CLI_TXT,
+#endif
+#ifdef CMD_137_ENUM_NAME
+       CMD_137_CLI_TXT,
+#endif
+#ifdef CMD_138_ENUM_NAME
+       CMD_138_CLI_TXT,
+#endif
+#ifdef CMD_139_ENUM_NAME
+       CMD_139_CLI_TXT,
+#endif
+
+#ifdef CMD_140_ENUM_NAME
+       CMD_140_CLI_TXT,
+#endif
+#ifdef CMD_141_ENUM_NAME
+       CMD_141_CLI_TXT,
+#endif
+#ifdef CMD_142_ENUM_NAME
+       CMD_142_CLI_TXT,
+#endif
+#ifdef CMD_143_ENUM_NAME
+       CMD_143_CLI_TXT,
+#endif
+#ifdef CMD_144_ENUM_NAME
+       CMD_144_CLI_TXT,
+#endif
+#ifdef CMD_145_ENUM_NAME
+       CMD_145_CLI_TXT,
+#endif
+#ifdef CMD_146_ENUM_NAME
+       CMD_146_CLI_TXT,
+#endif
+#ifdef CMD_147_ENUM_NAME
+       CMD_147_CLI_TXT,
+#endif
+#ifdef CMD_148_ENUM_NAME
+       CMD_148_CLI_TXT,
+#endif
+#ifdef CMD_149_ENUM_NAME
+       CMD_149_CLI_TXT,
+#endif
+
+#ifdef CMD_150_ENUM_NAME
+       CMD_150_CLI_TXT,
+#endif
+#ifdef CMD_151_ENUM_NAME
+       CMD_151_CLI_TXT,
+#endif
+#ifdef CMD_152_ENUM_NAME
+       CMD_152_CLI_TXT,
+#endif
+#ifdef CMD_153_ENUM_NAME
+       CMD_153_CLI_TXT,
+#endif
+#ifdef CMD_154_ENUM_NAME
+       CMD_154_CLI_TXT,
+#endif
+#ifdef CMD_155_ENUM_NAME
+       CMD_155_CLI_TXT,
+#endif
+#ifdef CMD_156_ENUM_NAME
+       CMD_156_CLI_TXT,
+#endif
+#ifdef CMD_157_ENUM_NAME
+       CMD_157_CLI_TXT,
+#endif
+#ifdef CMD_158_ENUM_NAME
+       CMD_158_CLI_TXT,
+#endif
+#ifdef CMD_159_ENUM_NAME
+       CMD_159_CLI_TXT,
+#endif
+
+#ifdef CMD_160_ENUM_NAME
+       CMD_160_CLI_TXT,
+#endif
+#ifdef CMD_161_ENUM_NAME
+       CMD_161_CLI_TXT,
+#endif
+#ifdef CMD_162_ENUM_NAME
+       CMD_162_CLI_TXT,
+#endif
+#ifdef CMD_163_ENUM_NAME
+       CMD_163_CLI_TXT,
+#endif
+#ifdef CMD_164_ENUM_NAME
+       CMD_164_CLI_TXT,
+#endif
+#ifdef CMD_165_ENUM_NAME
+       CMD_165_CLI_TXT,
+#endif
+#ifdef CMD_166_ENUM_NAME
+       CMD_166_CLI_TXT,
+#endif
+#ifdef CMD_167_ENUM_NAME
+       CMD_167_CLI_TXT,
+#endif
+#ifdef CMD_168_ENUM_NAME
+       CMD_168_CLI_TXT,
+#endif
+#ifdef CMD_169_ENUM_NAME
+       CMD_169_CLI_TXT,
+#endif
+
+#ifdef CMD_170_ENUM_NAME
+       CMD_170_CLI_TXT,
+#endif
+#ifdef CMD_171_ENUM_NAME
+       CMD_171_CLI_TXT,
+#endif
+#ifdef CMD_172_ENUM_NAME
+       CMD_172_CLI_TXT,
+#endif
+#ifdef CMD_173_ENUM_NAME
+       CMD_173_CLI_TXT,
+#endif
+#ifdef CMD_174_ENUM_NAME
+       CMD_174_CLI_TXT,
+#endif
+#ifdef CMD_175_ENUM_NAME
+       CMD_175_CLI_TXT,
+#endif
+#ifdef CMD_176_ENUM_NAME
+       CMD_176_CLI_TXT,
+#endif
+#ifdef CMD_177_ENUM_NAME
+       CMD_177_CLI_TXT,
+#endif
+#ifdef CMD_178_ENUM_NAME
+       CMD_178_CLI_TXT,
+#endif
+#ifdef CMD_179_ENUM_NAME
+       CMD_179_CLI_TXT,
+#endif
+
+#ifdef CMD_180_ENUM_NAME
+       CMD_180_CLI_TXT,
+#endif
+#ifdef CMD_181_ENUM_NAME
+       CMD_181_CLI_TXT,
+#endif
+#ifdef CMD_182_ENUM_NAME
+       CMD_182_CLI_TXT,
+#endif
+#ifdef CMD_183_ENUM_NAME
+       CMD_183_CLI_TXT,
+#endif
+#ifdef CMD_184_ENUM_NAME
+       CMD_184_CLI_TXT,
+#endif
+#ifdef CMD_185_ENUM_NAME
+       CMD_185_CLI_TXT,
+#endif
+#ifdef CMD_186_ENUM_NAME
+       CMD_186_CLI_TXT,
+#endif
+#ifdef CMD_187_ENUM_NAME
+       CMD_187_CLI_TXT,
+#endif
+#ifdef CMD_188_ENUM_NAME
+       CMD_188_CLI_TXT,
+#endif
+#ifdef CMD_189_ENUM_NAME
+       CMD_189_CLI_TXT,
+#endif
+
+#ifdef CMD_190_ENUM_NAME
+       CMD_190_CLI_TXT,
+#endif
+#ifdef CMD_191_ENUM_NAME
+       CMD_191_CLI_TXT,
+#endif
+#ifdef CMD_192_ENUM_NAME
+       CMD_192_CLI_TXT,
+#endif
+#ifdef CMD_193_ENUM_NAME
+       CMD_193_CLI_TXT,
+#endif
+#ifdef CMD_194_ENUM_NAME
+       CMD_194_CLI_TXT,
+#endif
+#ifdef CMD_195_ENUM_NAME
+       CMD_195_CLI_TXT,
+#endif
+#ifdef CMD_196_ENUM_NAME
+       CMD_196_CLI_TXT,
+#endif
+#ifdef CMD_197_ENUM_NAME
+       CMD_197_CLI_TXT,
+#endif
+#ifdef CMD_198_ENUM_NAME
+       CMD_198_CLI_TXT,
+#endif
+#ifdef CMD_199_ENUM_NAME
+       CMD_199_CLI_TXT,
+#endif
 };
 
 /* ==== PRIVATE FUNCTIONS ================================================== */
@@ -1001,6 +1931,28 @@ inline bool cli_cmd_is_valid(uint16_t value)
 inline bool cli_cmd_is_not_valid(uint16_t value)
 {
     return !(cli_cmd_is_valid(value));
+}
+
+inline bool cli_cmd_is_daemon_related(uint16_t value)
+{
+    switch (value)
+    {
+        case CMD_DAEMON_PRINT:
+        case CMD_DAEMON_UPDATE:
+        case CMD_DAEMON_START:
+        case CMD_DAEMON_STOP:
+            return (true);
+        break;
+        
+        default:
+            return (false);
+        break;
+    }
+}
+
+inline bool cli_cmd_is_not_daemon_related(uint16_t value)
+{
+    return !(cli_cmd_is_daemon_related(value));
 }
 
 int cli_cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)

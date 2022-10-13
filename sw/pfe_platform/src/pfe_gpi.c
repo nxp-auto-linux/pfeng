@@ -512,18 +512,18 @@ static void igqos_convert_entry_to_flow(const uint32_t entry[], pfe_iqos_flow_sp
 	/* entry reg3 */
 	val = entry[3];
 	args->dip |= entry_arg_get_upper(DIP, val);
-	args->sport_max = (uint16_t)entry_arg_get(SPORT_MAX, val);
-	args->sport_min = (uint16_t)entry_arg_get_lower(SPORT_MIN, val);
+	args->sport_min = (uint16_t)entry_arg_get(SPORT_MIN, val);
+	args->sport_max = (uint16_t)entry_arg_get_lower(SPORT_MAX, val);
 
 	/* entry reg4 */
 	val = entry[4];
-	args->sport_min |= (uint16_t)entry_arg_get_upper(SPORT_MIN, val);
-	args->dport_max = (uint16_t)entry_arg_get(DPORT_MAX, val);
-	args->dport_min = (uint16_t)entry_arg_get_lower(DPORT_MIN, val);
+	args->sport_max |= (uint16_t)entry_arg_get_upper(SPORT_MAX, val);
+	args->dport_min = (uint16_t)entry_arg_get(DPORT_MIN, val);
+	args->dport_max = (uint16_t)entry_arg_get_lower(DPORT_MAX, val);
 
 	/* entry reg5 */
 	val = entry[5];
-	args->dport_min |= (uint16_t)entry_arg_get_upper(DPORT_MIN, val);
+	args->dport_max |= (uint16_t)entry_arg_get_upper(DPORT_MAX, val);
 	args->vlan_m = (uint16_t)entry_arg_get(VLAN_ID_M, val);
 	args->tos_m  = (uint8_t)entry_arg_get_lower(TOS_M, val);
 
@@ -543,6 +543,138 @@ static void igqos_convert_entry_to_flow(const uint32_t entry[], pfe_iqos_flow_sp
 	{
 		flow->action = PFE_IQOS_FLOW_RESERVED;
 	}
+
+	/* revert h/w fixups from returned flow params */
+	args->sport_max <<= 1; /* AAVB-5836 */
+	args->dport_max <<= 1; /* AAVB-5836 */
+}
+
+
+static bool igqos_l4_port_range_is_valid(uint16_t min, uint16_t max)
+{
+	if (min > max)
+	{
+		return false;
+	}
+
+	/* AAVB-5836 */
+	if (min > 0x7FFFU)
+	{
+		return false;
+	}
+
+	/* AAVB-5836 */
+	if ((max > 0x7FFEU) || (max & 0x1U))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+static errno_t igqos_flow_entry_validate_and_fixup(pfe_iqos_flow_spec_t *flow)
+{
+	pfe_iqos_flow_args_t *args = &flow->args;
+	errno_t ret = EOK;
+
+	if (((uint16_t)flow->type_mask >= ((uint16_t)PFE_IQOS_FLOW_TYPE_MAX << 1)) ||
+	    ((uint16_t)flow->arg_type_mask >= ((uint16_t)PFE_IQOS_ARG_MAX << 1)) ||
+	    (flow->action >= PFE_IQOS_FLOW_COUNT))
+	{
+		ret = EINVAL;
+	}
+	else
+	{
+
+		if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_VLAN) != 0U)
+		{
+			if ((args->vlan > PFE_IQOS_VLAN_ID_MASK) || (args->vlan_m > PFE_IQOS_VLAN_ID_MASK))
+			{
+				ret = EINVAL;
+			}
+			else
+			{
+				/* fixup */
+				if (args->vlan_m == 0U)
+				{
+					/* mask not specified */
+					args->vlan_m = PFE_IQOS_VLAN_ID_MASK;
+				}
+			}
+		}
+
+		if (EOK == ret)
+		{
+			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_TOS) != 0U)
+			{
+				/* fixup */
+				if (args->tos_m == 0U)
+				{
+					/* mask not specified */
+					args->tos_m = PFE_IQOS_TOS_MASK;
+				}
+			}
+
+			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_L4PROTO) != 0U)
+			{
+				/* fixup */
+				if (args->l4proto_m == 0U)
+				{
+					/* mask not specified */
+					args->l4proto_m = PFE_IQOS_L4PROTO_MASK;
+				}
+			}
+
+			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_SIP) != 0U)
+			{
+				if (args->sip_m > PFE_IQOS_SDIP_MASK)
+				{
+					ret = EINVAL;
+				}
+			}
+		}
+
+		if (EOK == ret)
+		{
+			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_DIP) != 0U)
+			{
+				if (args->dip_m > PFE_IQOS_SDIP_MASK)
+				{
+					ret = EINVAL;
+				}
+			}
+		}
+
+		if (EOK == ret)
+		{
+			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_SPORT) != 0U)
+			{
+				if (!igqos_l4_port_range_is_valid(args->sport_min, args->sport_max))
+				{
+					ret = EINVAL;
+				}
+
+				/* fixup - AAVB-5836 */
+				args->sport_max >>= 1;
+			}
+		}
+
+		if (EOK == ret)
+		{
+			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_DPORT) != 0U)
+			{
+				if (!igqos_l4_port_range_is_valid(args->dport_min, args->dport_max))
+				{
+					ret = EINVAL;
+				}
+
+				/* fixup - AAVB-5836 */
+				args->dport_max >>= 1;
+			}
+		}
+	}
+
+	return ret;
 }
 
 static void igqos_convert_flow_to_entry(const pfe_iqos_flow_spec_t *flow, uint32_t entry[])
@@ -598,8 +730,8 @@ static void igqos_convert_flow_to_entry(const pfe_iqos_flow_spec_t *flow, uint32
 	}
 	if (0U != ((uint32_t)flow->arg_type_mask & (uint32_t)PFE_IQOS_ARG_SPORT))
 	{
-		val |= entry_arg_set(SPORT_MAX, (uint32_t)args->sport_max);
-		val |= entry_arg_set_lower(SPORT_MIN, (uint32_t)args->sport_min);
+		val |= entry_arg_set(SPORT_MIN, (uint32_t)args->sport_min);
+		val |= entry_arg_set_lower(SPORT_MAX, (uint32_t)args->sport_max);
 	}
 	entry[3] = val;
 
@@ -607,12 +739,12 @@ static void igqos_convert_flow_to_entry(const pfe_iqos_flow_spec_t *flow, uint32
 	val = 0;
 	if (0U != ((uint32_t)flow->arg_type_mask & (uint32_t)PFE_IQOS_ARG_SPORT))
 	{
-		val |= entry_arg_set_upper(SPORT_MIN, (uint32_t)args->sport_min);
+		val |= entry_arg_set_upper(SPORT_MAX, (uint32_t)args->sport_max);
 	}
 	if (0U != ((uint32_t)flow->arg_type_mask & (uint32_t)PFE_IQOS_ARG_DPORT))
 	{
-		val |= entry_arg_set(DPORT_MAX, (uint32_t)args->dport_max);
-		val |= entry_arg_set_lower(DPORT_MIN, (uint32_t)args->dport_min);
+		val |= entry_arg_set(DPORT_MIN, (uint32_t)args->dport_min);
+		val |= entry_arg_set_lower(DPORT_MAX, (uint32_t)args->dport_max);
 	}
 	entry[4] = val;
 
@@ -624,7 +756,7 @@ static void igqos_convert_flow_to_entry(const pfe_iqos_flow_spec_t *flow, uint32
 
 	if (0U != ((uint32_t)flow->arg_type_mask & (uint32_t)PFE_IQOS_ARG_DPORT))
 	{
-		val |= entry_arg_set_upper(DPORT_MIN, (uint32_t)args->dport_min);
+		val |= entry_arg_set_upper(DPORT_MAX, (uint32_t)args->dport_max);
 	}
 
 	if (0U != ((uint32_t)flow->arg_type_mask & (uint32_t)PFE_IQOS_ARG_VLAN))
@@ -746,13 +878,17 @@ errno_t pfe_gpi_qos_rem_flow(pfe_gpi_t *gpi, uint8_t id)
 	return ret;
 }
 
-errno_t pfe_gpi_qos_add_flow(pfe_gpi_t *gpi, uint8_t id, const pfe_iqos_flow_spec_t *flow)
+errno_t pfe_gpi_qos_add_flow(pfe_gpi_t *gpi, uint8_t id, pfe_iqos_flow_spec_t *flow)
 {
 	uint32_t class_table_entry[8];
 	uint8_t  entry_id;
 	errno_t  ret;
 
 	if ((id >= PFE_IQOS_FLOW_TABLE_SIZE) && (id != PFE_IQOS_FLOW_TABLE_ENTRY_SKIP))
+	{
+		ret = EINVAL;
+	}
+	else if (EOK != igqos_flow_entry_validate_and_fixup(flow))
 	{
 		ret = EINVAL;
 	}

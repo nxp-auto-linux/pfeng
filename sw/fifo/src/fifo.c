@@ -5,12 +5,15 @@
  *
  * ========================================================================= */
 
+#include <linux/module.h>
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "oal_mm.h"
 #include "oal_sync.h"
 #include "hal.h"
 #include "fifo.h"
+
+MODULE_LICENSE("GPL");
 
 #define is_power_of_2(n) ((n) && !((n) & ((n) - 1U)))
 

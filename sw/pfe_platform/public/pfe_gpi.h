@@ -200,7 +200,7 @@ bool_t pfe_gpi_qos_is_enabled(const pfe_gpi_t *gpi);
 errno_t pfe_gpi_qos_reset(pfe_gpi_t *gpi);
 
 /* flow add/remove/get */
-errno_t pfe_gpi_qos_add_flow(pfe_gpi_t *gpi, uint8_t id, const pfe_iqos_flow_spec_t *flow);
+errno_t pfe_gpi_qos_add_flow(pfe_gpi_t *gpi, uint8_t id, pfe_iqos_flow_spec_t *flow);
 errno_t pfe_gpi_qos_rem_flow(pfe_gpi_t *gpi, uint8_t id);
 errno_t pfe_gpi_qos_get_flow(const pfe_gpi_t *gpi, uint8_t id, pfe_iqos_flow_spec_t *flow);
 errno_t pfe_gpi_qos_get_first_flow(pfe_gpi_t *gpi, uint8_t *id, pfe_iqos_flow_spec_t *flow);

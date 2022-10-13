@@ -27,39 +27,29 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * ========================================================================= */
- 
-#ifndef DEMO_COMMON_H_
-#define DEMO_COMMON_H_
- 
-#include <stdint.h>
-#include <stddef.h>
-#include "fpp.h"
-#include "fpp_ext.h"
-#include "libfci.h"
- 
-/* ==== TYPEDEFS & DATA ==================================================== */
- 
- typedef fci_cb_retval_t (*demo_events_cb_t)(unsigned short fcode, unsigned short len, unsigned short* payload);
- 
+
+#ifndef DAEMON_CMDS_H_
+#define DAEMON_CMDS_H_
+
 /* ==== PUBLIC FUNCTIONS =================================================== */
- 
-void print_if_error(int rtn, const char* p_txt_error);
- 
-void ntoh_enum(void* p_rtn, size_t size);
-void hton_enum(void* p_rtn, size_t size);
- 
-int set_text(char* p_dst, const char* p_src, const uint16_t dst_ln);
- 
-int demo_if_session_lock(FCI_CLIENT* p_cl);
-int demo_if_session_unlock(FCI_CLIENT* p_cl, int rtn);
- 
-int demo_client_open_in_cmd_mode(FCI_CLIENT** pp_rtn_cl);
-int demo_client_close(FCI_CLIENT* p_cl);
- 
-int demo_events_catching_init(FCI_CLIENT* p_cl, demo_events_cb_t p_cb_events);
-int demo_events_catching_fini(FCI_CLIENT* p_cl);
- 
+
+typedef struct daemon_cfg_tt daemon_cfg_t;
+typedef enum cli_cmd_tt cli_cmd_t;
+typedef struct cli_cmdargs_tt cli_cmdargs_t;
+
+
+void daemon_errno_print(const char* p_txt_indent);
+void daemon_errno_clear(void);
+
+int daemon_stop(void);
+int daemon_ping(void);
+int daemon_get_cfg(daemon_cfg_t *const p_daemon_cfg);
+int daemon_cli_cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs);
+int daemon_terminal_fciev_set_print(uint8_t is_on);
+int daemon_terminal_dbg_set_print(uint8_t is_on);
+int daemon_logfile_fciev_set_print(uint8_t is_on);
+int daemon_dbgfile_dbg_set_print(uint8_t is_on);
+
 /* ========================================================================= */
- 
+
 #endif
- 

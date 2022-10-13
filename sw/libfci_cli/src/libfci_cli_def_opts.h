@@ -1487,6 +1487,7 @@ typedef enum cli_opt_incompat_grp_tt {
 #define                          TXT_HELP__DIP_PFX \
         OPT_117_TXT_HELP
 
+
 #define OPT_118_ENUM_NAME        OPT_PTP_MGMT_IF
 #define OPT_118_HAS_ARG          y
 #define OPT_118_OPT_PARSE        opt_parse_ptp_mgmt_if
@@ -1498,25 +1499,78 @@ typedef enum cli_opt_incompat_grp_tt {
         OPT_118_TXT_HELP
 
 
-#define OPT_119_ENUM_NAME         OPT_LOCK
-#define OPT_119_OPT_PARSE         opt_parse_lock
-#define OPT_119_HAS_ARG           n
-#define OPT_119_INCOMPAT_GRPS     OPT_GRP_LOCKUNLOCK
-#define OPT_119_CLI_SHORT_CODE    L
-#define OPT_119_CLI_LONG_TXT_A    "lock"
-#define OPT_119_TXT_HELP          "-L|--L|--lock"
+#define OPT_119_ENUM_NAME        OPT_LOCK
+#define OPT_119_OPT_PARSE        opt_parse_lock
+#define OPT_119_HAS_ARG          n
+#define OPT_119_INCOMPAT_GRPS    OPT_GRP_LOCKUNLOCK
+#define OPT_119_CLI_SHORT_CODE   L
+#define OPT_119_CLI_LONG_TXT_A   "lock"
+#define OPT_119_TXT_HELP         "-L|--L|--lock"
 #define                          TXT_HELP__LOCK \
         OPT_119_TXT_HELP
 
-#define OPT_120_ENUM_NAME         OPT_UNLOCK
-#define OPT_120_OPT_PARSE         opt_parse_unlock
-#define OPT_120_HAS_ARG           n
-#define OPT_120_INCOMPAT_GRPS     OPT_GRP_LOCKUNLOCK
-#define OPT_120_CLI_SHORT_CODE    U
-#define OPT_120_CLI_LONG_TXT_A    "unlock"
-#define OPT_120_TXT_HELP          "-U|--U|--unlock"
+
+#define OPT_120_ENUM_NAME        OPT_UNLOCK
+#define OPT_120_OPT_PARSE        opt_parse_unlock
+#define OPT_120_HAS_ARG          n
+#define OPT_120_INCOMPAT_GRPS    OPT_GRP_LOCKUNLOCK
+#define OPT_120_CLI_SHORT_CODE   U
+#define OPT_120_CLI_LONG_TXT_A   "unlock"
+#define OPT_120_TXT_HELP         "-U|--U|--unlock"
 #define                          TXT_HELP__UNLOCK \
         OPT_120_TXT_HELP
+
+
+#define OPT_121_ENUM_NAME        OPT_PRINT_TO_TERMINAL
+#define OPT_121_HAS_ARG          y
+#define OPT_121_OPT_PARSE        opt_print_to_terminal
+#define OPT_121_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_121_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_121_CLI_LONG_TXT_A   "prn2term"
+#define OPT_121_CLI_LONG_TXT_B   "print-to-terminal"
+#define OPT_121_TXT_HELP         "--prn2term|--print-to-terminal"
+#define                          TXT_HELP__PRINT_TO_TERMINAL \
+        OPT_121_TXT_HELP
+
+
+#define OPT_122_ENUM_NAME        OPT_PRINT_TO_LOGFILE
+#define OPT_122_HAS_ARG          y
+#define OPT_122_OPT_PARSE        opt_print_to_logfile
+#define OPT_122_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_122_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_122_CLI_LONG_TXT_A   "prn2log"
+#define OPT_122_CLI_LONG_TXT_B   "print-to-logfile"
+#define OPT_122_TXT_HELP         "--prn2log|--print-to-logfile"
+#define                          TXT_HELP__PRINT_TO_LOGFILE \
+        OPT_122_TXT_HELP
+
+
+#define OPT_123_ENUM_NAME        OPT_DBG_TO_TERMINAL
+#define OPT_123_HAS_ARG          y
+#define OPT_123_OPT_PARSE        opt_dbg_to_terminal
+#define OPT_123_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_123_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_123_CLI_LONG_TXT_A   "dbg2term"
+#define OPT_123_CLI_LONG_TXT_B   "dbg-to-terminal"
+#define OPT_123_CLI_LONG_TXT_C   "debug-to-terminal"
+#define OPT_123_TXT_HELP         "--dbg2term|--dbg-to-terminal|--debug-to-terminal"
+#define                          TXT_HELP__DBG_TO_TERMINAL \
+        OPT_123_TXT_HELP
+
+
+#define OPT_124_ENUM_NAME        OPT_DBG_TO_DBGFILE
+#define OPT_124_HAS_ARG          y
+#define OPT_124_OPT_PARSE        opt_dbg_to_dbgfile
+#define OPT_124_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_124_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_124_CLI_LONG_TXT_A   "dbg2dbg"
+#define OPT_124_CLI_LONG_TXT_B   "dbg-to-dbgfile"
+#define OPT_124_CLI_LONG_TXT_C   "debug-to-dbgfile"
+#define OPT_124_TXT_HELP         "--dbg2dbg|--dbg-to-dbgfile|--debug-to-dbgfile"
+#define                          TXT_HELP__DBG_TO_DBGFILE \
+        OPT_124_TXT_HELP
+
+
 
 
 /* OPT_LAST (keep this at the bottom of the cli option definition list) */
@@ -4893,6 +4947,8 @@ uint32_t cli_opt_get_incompat_grps(cli_opt_t opt);
 void cli_mandopt_print(const char* p_txt_indent, const char* p_txt_delim);
 void cli_mandopt_clear(void);
 int cli_mandopt_check(const mandopt_t* p_mandopts, const uint8_t mandopts_ln);
+void cli_mandopt_getinternal(mandopt_optbuf_t* p_rtn_optbuf);    /* only for daemon ; do not use casually */
+void cli_mandopt_setinternal(mandopt_optbuf_t *const p_optbuf);  /* only for daemon ; do not use casually */
 
 /* ========================================================================= */
 

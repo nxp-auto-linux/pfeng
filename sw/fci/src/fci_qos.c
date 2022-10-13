@@ -34,7 +34,6 @@
 static pfe_phy_if_t *fci_get_phy_if_by_name(char_t *name);
 static pfe_gpi_t *fci_qos_get_gpi(const pfe_phy_if_t *phy_if);
 static errno_t fci_validate_cmd_params(const fci_msg_t *msg, uint16_t *fci_ret, void *reply_buf, uint32_t *reply_len, uint32_t cmd_len);
-static errno_t fci_qos_flow_entry_validate_and_fixup_masks(pfe_iqos_flow_spec_t *flow);
 static void fci_qos_flow_entry_convert_to_gpi(const fpp_iqos_flow_spec_t *flow, pfe_iqos_flow_spec_t *gpi_flow);
 static void fci_qos_flow_entry_convert_from_gpi(const pfe_iqos_flow_spec_t *gpi_flow, fpp_iqos_flow_spec_t *flow);
 
@@ -1157,105 +1156,6 @@ errno_t fci_qos_policer_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_c
 	return ret;
 }
 
-static errno_t fci_qos_flow_entry_validate_and_fixup_masks(pfe_iqos_flow_spec_t *flow)
-{
-	pfe_iqos_flow_args_t *args = &flow->args;
-	errno_t ret = EOK;
-
-	if (((uint16_t)flow->type_mask >= ((uint16_t)PFE_IQOS_FLOW_TYPE_MAX << 1)) ||
-	    ((uint16_t)flow->arg_type_mask >= ((uint16_t)PFE_IQOS_ARG_MAX << 1)) ||
-	    (flow->action >= PFE_IQOS_FLOW_COUNT))
-	{
-		ret = EINVAL;
-	}
-	else
-	{
-
-		if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_VLAN) != 0U)
-		{
-			if ((args->vlan > PFE_IQOS_VLAN_ID_MASK) || (args->vlan_m > PFE_IQOS_VLAN_ID_MASK))
-			{
-				ret = EINVAL;
-			}
-			else
-			{
-				/* fixup */
-				if (args->vlan_m == 0U)
-				{
-					/* mask not specified */
-					args->vlan_m = PFE_IQOS_VLAN_ID_MASK;
-				}
-			}
-		}
-
-		if (EOK == ret)
-		{
-			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_TOS) != 0U)
-			{
-				/* fixup */
-				if (args->tos_m == 0U)
-				{
-					/* mask not specified */
-					args->tos_m = PFE_IQOS_TOS_MASK;
-				}
-			}
-
-			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_L4PROTO) != 0U)
-			{
-				/* fixup */
-				if (args->l4proto_m == 0U)
-				{
-					/* mask not specified */
-					args->l4proto_m = PFE_IQOS_L4PROTO_MASK;
-				}
-			}
-
-			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_SIP) != 0U)
-			{
-				if (args->sip_m > PFE_IQOS_SDIP_MASK)
-				{
-					ret = EINVAL;
-				}
-			}
-		}
-
-		if (EOK == ret)
-		{
-			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_DIP) != 0U)
-			{
-				if (args->dip_m > PFE_IQOS_SDIP_MASK)
-				{
-					ret = EINVAL;
-				}
-			}
-		}
-
-		if (EOK == ret)
-		{
-			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_SPORT) != 0U)
-			{
-				if (args->sport_min > args->sport_max)
-				{
-					ret = EINVAL;
-				}
-			}
-		}
-
-		if (EOK == ret)
-		{
-			if (((uint16_t)flow->arg_type_mask & (uint16_t)PFE_IQOS_ARG_DPORT) != 0U)
-			{
-				if (args->dport_min > args->dport_max)
-				{
-					ret = EINVAL;
-				}
-			}
-		}
-	}
-
-	return ret;
-}
-
 static void fci_qos_flow_entry_convert_to_gpi(const fpp_iqos_flow_spec_t *flow, pfe_iqos_flow_spec_t *gpi_flow)
 {
 	gpi_flow->type_mask = (pfe_iqos_flow_type_t)oal_ntohs(flow->type_mask);
@@ -1357,25 +1257,16 @@ errno_t fci_qos_policer_flow_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 						/* populate gpi flow struct */
 						fci_qos_flow_entry_convert_to_gpi(&flow_cmd->flow, &gpi_flow);
 
-						ret = fci_qos_flow_entry_validate_and_fixup_masks(&gpi_flow);
-						if (EOK != ret)
-						{
-							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
-							break;
-						}
-
-						/* id == 0xFF means the driver chooses the entry position */
-						if ((flow_cmd->id >= PFE_IQOS_FLOW_TABLE_SIZE) && (flow_cmd->id != 0xFFU))
-						{
-							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
-							break;
-						}
-
 						/* commit configuration to H/W */
 						ret = pfe_gpi_qos_add_flow(gpi, flow_cmd->id, &gpi_flow);
 						if (EOVERFLOW == ret)
 						{
 							*fci_ret = FPP_ERR_QOS_POLICER_FLOW_TABLE_FULL;
+							break;
+						}
+						else if (EINVAL == ret)
+						{
+							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							break;
 						}
 						else if (EOK != ret)

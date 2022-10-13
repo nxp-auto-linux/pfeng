@@ -276,9 +276,14 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 		dev_info(dev, "netif name: %s", netif_cfg->name);
 
 		/* MAC eth address */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
 		netif_cfg->macaddr = (u8 *)of_get_mac_address(child);
 		if (netif_cfg->macaddr)
 			dev_info(dev, "DT mac addr: %pM", netif_cfg->macaddr);
+#else
+		if (!of_get_mac_address(child, netif_cfg->macaddr))
+			dev_info(dev, "DT mac addr: %pM", netif_cfg->macaddr);
+#endif
 
 		if (of_find_property(child, "nxp,pfeng-netif-mode-aux", NULL))
 				netif_cfg->aux = true;

@@ -7,6 +7,7 @@
  *
  * ========================================================================= */
 
+#include <linux/module.h>
 #include "pfe_cfg.h"
 #include "oal.h"
 
@@ -26,6 +27,8 @@
 #define ETH_43_PFE_START_SEC_VAR_INIT_UNSPECIFIED
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+MODULE_LICENSE("GPL");
 
 static pfe_platform_t pfe = {.probed = FALSE};
 /* usage scope: pfe_platform_create_hif*/

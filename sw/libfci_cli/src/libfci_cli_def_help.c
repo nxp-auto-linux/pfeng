@@ -887,6 +887,22 @@
 #define TXT_OPTDESCR__UNLOCK            TXT_HELP__UNLOCK  "\n"  \
                                         "  Release FCI ownership lock.\n"
 
+#define TXT_OPT__PRINT_TO_TERMINAL      TXT_HELP__PRINT_TO_TERMINAL  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__PRINT_TO_TERMINAL TXT_HELP__PRINT_TO_TERMINAL  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                        "  Commands libfci_cli daemon to enable/disable printing of caught FCI events into terminal. \n"
+
+#define TXT_OPT__PRINT_TO_LOGFILE       TXT_HELP__PRINT_TO_LOGFILE  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__PRINT_TO_LOGFILE  TXT_HELP__PRINT_TO_LOGFILE  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                        "  Commands libfci_cli daemon to enable/disable printing of caught FCI events into logfile. \n"
+
+#define TXT_OPT__DBG_TO_TERMINAL        TXT_HELP__DBG_TO_TERMINAL  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__DBG_TO_TERMINAL   TXT_HELP__DBG_TO_TERMINAL  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                        "  Commands libfci_cli daemon to enable/disable printing of debug messages into terminal. \n"
+
+#define TXT_OPT__DBG_TO_DBGFILE         TXT_HELP__DBG_TO_DBGFILE  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__DBG_TO_DBGFILE    TXT_HELP__DBG_TO_DBGFILE  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                        "  Commands libfci_cli daemon to enable/disable printing of debug messages into debugfile. \n"
+
 
 
 
@@ -894,8 +910,7 @@
     Sanity check for opt help texts. When new opt is added, create a help text for the opt and remove its symbol from here.
     And don't forget to check the pairing! ^_^
 */
-#if (defined(OPT_121_TXT_HELP) || defined(OPT_122_TXT_HELP) || defined(OPT_123_TXT_HELP) || defined(OPT_124_TXT_HELP) || \
-     defined(OPT_125_TXT_HELP) || defined(OPT_126_TXT_HELP) || defined(OPT_127_TXT_HELP) || defined(OPT_128_TXT_HELP) || defined(OPT_129_TXT_HELP) || \
+#if (defined(OPT_125_TXT_HELP) || defined(OPT_126_TXT_HELP) || defined(OPT_127_TXT_HELP) || defined(OPT_128_TXT_HELP) || defined(OPT_129_TXT_HELP) || \
      defined(OPT_130_TXT_HELP) || defined(OPT_131_TXT_HELP) || defined(OPT_132_TXT_HELP) || defined(OPT_133_TXT_HELP) || defined(OPT_134_TXT_HELP) || \
      defined(OPT_135_TXT_HELP) || defined(OPT_136_TXT_HELP) || defined(OPT_137_TXT_HELP) || defined(OPT_138_TXT_HELP) || defined(OPT_139_TXT_HELP) || \
      defined(OPT_140_TXT_HELP) || defined(OPT_141_TXT_HELP) || defined(OPT_142_TXT_HELP) || defined(OPT_143_TXT_HELP) || defined(OPT_144_TXT_HELP) || \
@@ -2363,6 +2378,86 @@ static const char* txt_help_fci_ownership[] =
     NULL
 };
 
+static const char* txt_help_daemon_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "daemon-print"  "   ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Query daemon about its configuration and print it.",
+    "\n",
+    ""    "Daemon must be already running, otherwise this command fails.",
+    "\n",
+    TXT_DECOR_OPT,
+    "no options\n",
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_daemon_update[] =
+{
+    TXT_DECOR_CMD,
+    ""    "daemon-update"             "   ",
+    "["   TXT_OPT__PRINT_TO_TERMINAL  "]  ",
+    "["   TXT_OPT__PRINT_TO_LOGFILE   "]  ",
+    "["   TXT_OPT__DBG_TO_TERMINAL    "]  ",
+    "["   TXT_OPT__DBG_TO_DBGFILE     "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Tell daemon to change its confguration.",
+    "\n",
+    ""    "Daemon must be already running, otherwise this command fails.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__PRINT_TO_TERMINAL,
+    TXT_OPTDESCR__PRINT_TO_LOGFILE,
+    TXT_OPTDESCR__DBG_TO_TERMINAL,
+    TXT_OPTDESCR__DBG_TO_DBGFILE,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_daemon_start[] =
+{
+    TXT_DECOR_CMD,
+    ""    "daemon-start"              "   ",
+    "["   TXT_OPT__PRINT_TO_TERMINAL  "]  ",
+    "["   TXT_OPT__PRINT_TO_LOGFILE   "]  ",
+    "["   TXT_OPT__DBG_TO_TERMINAL    "]  ",
+    "["   TXT_OPT__DBG_TO_DBGFILE     "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Start libfci_cli daemon with given configuration.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__PRINT_TO_TERMINAL,
+    TXT_OPTDESCR__PRINT_TO_LOGFILE,
+    TXT_OPTDESCR__DBG_TO_TERMINAL,
+    TXT_OPTDESCR__DBG_TO_DBGFILE,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_daemon_stop[] =
+{
+    TXT_DECOR_CMD,
+    ""    "daemon-stop"  "   ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Stop libfci_cli daemon.",
+    "\n",
+    ""    "Daemon must be already running, otherwise this command fails.",
+    "\n",
+    TXT_DECOR_OPT,
+    "no options\n",
+    "\n",
+    
+    NULL
+};
+
 static const char* txt_help_demo_feature_print[] =
 {
     TXT_DECOR_CMD,
@@ -2715,6 +2810,316 @@ static const char *const txt_help_no_command[] =
  "  "  CMD_99_CLI_TXT  "\n",
 #endif
 
+#ifdef CMD_100_ENUM_NAME
+ "  "  CMD_100_CLI_TXT  "\n",
+#endif
+#ifdef CMD_101_ENUM_NAME
+ "  "  CMD_101_CLI_TXT  "\n",
+#endif
+#ifdef CMD_102_ENUM_NAME
+ "  "  CMD_102_CLI_TXT  "\n",
+#endif
+#ifdef CMD_103_ENUM_NAME
+ "  "  CMD_103_CLI_TXT  "\n",
+#endif
+#ifdef CMD_104_ENUM_NAME
+ "  "  CMD_104_CLI_TXT  "\n",
+#endif
+#ifdef CMD_105_ENUM_NAME
+ "  "  CMD_105_CLI_TXT  "\n",
+#endif
+#ifdef CMD_106_ENUM_NAME
+ "  "  CMD_106_CLI_TXT  "\n",
+#endif
+#ifdef CMD_107_ENUM_NAME
+ "  "  CMD_107_CLI_TXT  "\n",
+#endif
+#ifdef CMD_108_ENUM_NAME
+ "  "  CMD_108_CLI_TXT  "\n",
+#endif
+#ifdef CMD_109_ENUM_NAME
+ "  "  CMD_109_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_110_ENUM_NAME
+ "  "  CMD_110_CLI_TXT  "\n",
+#endif
+#ifdef CMD_111_ENUM_NAME
+ "  "  CMD_111_CLI_TXT  "\n",
+#endif
+#ifdef CMD_112_ENUM_NAME
+ "  "  CMD_112_CLI_TXT  "\n",
+#endif
+#ifdef CMD_113_ENUM_NAME
+ "  "  CMD_113_CLI_TXT  "\n",
+#endif
+#ifdef CMD_114_ENUM_NAME
+ "  "  CMD_114_CLI_TXT  "\n",
+#endif
+#ifdef CMD_115_ENUM_NAME
+ "  "  CMD_115_CLI_TXT  "\n",
+#endif
+#ifdef CMD_116_ENUM_NAME
+ "  "  CMD_116_CLI_TXT  "\n",
+#endif
+#ifdef CMD_117_ENUM_NAME
+ "  "  CMD_117_CLI_TXT  "\n",
+#endif
+#ifdef CMD_118_ENUM_NAME
+ "  "  CMD_118_CLI_TXT  "\n",
+#endif
+#ifdef CMD_119_ENUM_NAME
+ "  "  CMD_119_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_120_ENUM_NAME
+ "  "  CMD_120_CLI_TXT  "\n",
+#endif
+#ifdef CMD_121_ENUM_NAME
+ "  "  CMD_121_CLI_TXT  "\n",
+#endif
+#ifdef CMD_122_ENUM_NAME
+ "  "  CMD_122_CLI_TXT  "\n",
+#endif
+#ifdef CMD_123_ENUM_NAME
+ "  "  CMD_123_CLI_TXT  "\n",
+#endif
+#ifdef CMD_124_ENUM_NAME
+ "  "  CMD_124_CLI_TXT  "\n",
+#endif
+#ifdef CMD_125_ENUM_NAME
+ "  "  CMD_125_CLI_TXT  "\n",
+#endif
+#ifdef CMD_126_ENUM_NAME
+ "  "  CMD_126_CLI_TXT  "\n",
+#endif
+#ifdef CMD_127_ENUM_NAME
+ "  "  CMD_127_CLI_TXT  "\n",
+#endif
+#ifdef CMD_128_ENUM_NAME
+ "  "  CMD_128_CLI_TXT  "\n",
+#endif
+#ifdef CMD_129_ENUM_NAME
+ "  "  CMD_129_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_130_ENUM_NAME
+ "  "  CMD_130_CLI_TXT  "\n",
+#endif
+#ifdef CMD_131_ENUM_NAME
+ "  "  CMD_131_CLI_TXT  "\n",
+#endif
+#ifdef CMD_132_ENUM_NAME
+ "  "  CMD_132_CLI_TXT  "\n",
+#endif
+#ifdef CMD_133_ENUM_NAME
+ "  "  CMD_133_CLI_TXT  "\n",
+#endif
+#ifdef CMD_134_ENUM_NAME
+ "  "  CMD_134_CLI_TXT  "\n",
+#endif
+#ifdef CMD_135_ENUM_NAME
+ "  "  CMD_135_CLI_TXT  "\n",
+#endif
+#ifdef CMD_136_ENUM_NAME
+ "  "  CMD_136_CLI_TXT  "\n",
+#endif
+#ifdef CMD_137_ENUM_NAME
+ "  "  CMD_137_CLI_TXT  "\n",
+#endif
+#ifdef CMD_138_ENUM_NAME
+ "  "  CMD_138_CLI_TXT  "\n",
+#endif
+#ifdef CMD_139_ENUM_NAME
+ "  "  CMD_139_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_140_ENUM_NAME
+ "  "  CMD_140_CLI_TXT  "\n",
+#endif
+#ifdef CMD_141_ENUM_NAME
+ "  "  CMD_141_CLI_TXT  "\n",
+#endif
+#ifdef CMD_142_ENUM_NAME
+ "  "  CMD_142_CLI_TXT  "\n",
+#endif
+#ifdef CMD_143_ENUM_NAME
+ "  "  CMD_143_CLI_TXT  "\n",
+#endif
+#ifdef CMD_144_ENUM_NAME
+ "  "  CMD_144_CLI_TXT  "\n",
+#endif
+#ifdef CMD_145_ENUM_NAME
+ "  "  CMD_145_CLI_TXT  "\n",
+#endif
+#ifdef CMD_146_ENUM_NAME
+ "  "  CMD_146_CLI_TXT  "\n",
+#endif
+#ifdef CMD_147_ENUM_NAME
+ "  "  CMD_147_CLI_TXT  "\n",
+#endif
+#ifdef CMD_148_ENUM_NAME
+ "  "  CMD_148_CLI_TXT  "\n",
+#endif
+#ifdef CMD_149_ENUM_NAME
+ "  "  CMD_149_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_150_ENUM_NAME
+ "  "  CMD_150_CLI_TXT  "\n",
+#endif
+#ifdef CMD_151_ENUM_NAME
+ "  "  CMD_151_CLI_TXT  "\n",
+#endif
+#ifdef CMD_152_ENUM_NAME
+ "  "  CMD_152_CLI_TXT  "\n",
+#endif
+#ifdef CMD_153_ENUM_NAME
+ "  "  CMD_153_CLI_TXT  "\n",
+#endif
+#ifdef CMD_154_ENUM_NAME
+ "  "  CMD_154_CLI_TXT  "\n",
+#endif
+#ifdef CMD_155_ENUM_NAME
+ "  "  CMD_155_CLI_TXT  "\n",
+#endif
+#ifdef CMD_156_ENUM_NAME
+ "  "  CMD_156_CLI_TXT  "\n",
+#endif
+#ifdef CMD_157_ENUM_NAME
+ "  "  CMD_157_CLI_TXT  "\n",
+#endif
+#ifdef CMD_158_ENUM_NAME
+ "  "  CMD_158_CLI_TXT  "\n",
+#endif
+#ifdef CMD_159_ENUM_NAME
+ "  "  CMD_159_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_160_ENUM_NAME
+ "  "  CMD_160_CLI_TXT  "\n",
+#endif
+#ifdef CMD_161_ENUM_NAME
+ "  "  CMD_161_CLI_TXT  "\n",
+#endif
+#ifdef CMD_162_ENUM_NAME
+ "  "  CMD_162_CLI_TXT  "\n",
+#endif
+#ifdef CMD_163_ENUM_NAME
+ "  "  CMD_163_CLI_TXT  "\n",
+#endif
+#ifdef CMD_164_ENUM_NAME
+ "  "  CMD_164_CLI_TXT  "\n",
+#endif
+#ifdef CMD_165_ENUM_NAME
+ "  "  CMD_165_CLI_TXT  "\n",
+#endif
+#ifdef CMD_166_ENUM_NAME
+ "  "  CMD_166_CLI_TXT  "\n",
+#endif
+#ifdef CMD_167_ENUM_NAME
+ "  "  CMD_167_CLI_TXT  "\n",
+#endif
+#ifdef CMD_168_ENUM_NAME
+ "  "  CMD_168_CLI_TXT  "\n",
+#endif
+#ifdef CMD_169_ENUM_NAME
+ "  "  CMD_169_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_170_ENUM_NAME
+ "  "  CMD_170_CLI_TXT  "\n",
+#endif
+#ifdef CMD_171_ENUM_NAME
+ "  "  CMD_171_CLI_TXT  "\n",
+#endif
+#ifdef CMD_172_ENUM_NAME
+ "  "  CMD_172_CLI_TXT  "\n",
+#endif
+#ifdef CMD_173_ENUM_NAME
+ "  "  CMD_173_CLI_TXT  "\n",
+#endif
+#ifdef CMD_174_ENUM_NAME
+ "  "  CMD_174_CLI_TXT  "\n",
+#endif
+#ifdef CMD_175_ENUM_NAME
+ "  "  CMD_175_CLI_TXT  "\n",
+#endif
+#ifdef CMD_176_ENUM_NAME
+ "  "  CMD_176_CLI_TXT  "\n",
+#endif
+#ifdef CMD_177_ENUM_NAME
+ "  "  CMD_177_CLI_TXT  "\n",
+#endif
+#ifdef CMD_178_ENUM_NAME
+ "  "  CMD_178_CLI_TXT  "\n",
+#endif
+#ifdef CMD_179_ENUM_NAME
+ "  "  CMD_179_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_180_ENUM_NAME
+ "  "  CMD_180_CLI_TXT  "\n",
+#endif
+#ifdef CMD_181_ENUM_NAME
+ "  "  CMD_181_CLI_TXT  "\n",
+#endif
+#ifdef CMD_182_ENUM_NAME
+ "  "  CMD_182_CLI_TXT  "\n",
+#endif
+#ifdef CMD_183_ENUM_NAME
+ "  "  CMD_183_CLI_TXT  "\n",
+#endif
+#ifdef CMD_184_ENUM_NAME
+ "  "  CMD_184_CLI_TXT  "\n",
+#endif
+#ifdef CMD_185_ENUM_NAME
+ "  "  CMD_185_CLI_TXT  "\n",
+#endif
+#ifdef CMD_186_ENUM_NAME
+ "  "  CMD_186_CLI_TXT  "\n",
+#endif
+#ifdef CMD_187_ENUM_NAME
+ "  "  CMD_187_CLI_TXT  "\n",
+#endif
+#ifdef CMD_188_ENUM_NAME
+ "  "  CMD_188_CLI_TXT  "\n",
+#endif
+#ifdef CMD_189_ENUM_NAME
+ "  "  CMD_189_CLI_TXT  "\n",
+#endif
+
+#ifdef CMD_190_ENUM_NAME
+ "  "  CMD_190_CLI_TXT  "\n",
+#endif
+#ifdef CMD_191_ENUM_NAME
+ "  "  CMD_191_CLI_TXT  "\n",
+#endif
+#ifdef CMD_192_ENUM_NAME
+ "  "  CMD_192_CLI_TXT  "\n",
+#endif
+#ifdef CMD_193_ENUM_NAME
+ "  "  CMD_193_CLI_TXT  "\n",
+#endif
+#ifdef CMD_194_ENUM_NAME
+ "  "  CMD_194_CLI_TXT  "\n",
+#endif
+#ifdef CMD_195_ENUM_NAME
+ "  "  CMD_195_CLI_TXT  "\n",
+#endif
+#ifdef CMD_196_ENUM_NAME
+ "  "  CMD_196_CLI_TXT  "\n",
+#endif
+#ifdef CMD_197_ENUM_NAME
+ "  "  CMD_197_CLI_TXT  "\n",
+#endif
+#ifdef CMD_198_ENUM_NAME
+ "  "  CMD_198_CLI_TXT  "\n",
+#endif
+#ifdef CMD_199_ENUM_NAME
+ "  "  CMD_199_CLI_TXT  "\n",
+#endif
+
     "\n",
     NULL
 };
@@ -3030,6 +3435,316 @@ static const char *const *const txt_helps[] =
 #endif
 #ifdef CMD_99_ENUM_NAME
        CMD_99_HELP,
+#endif
+
+#ifdef CMD_100_ENUM_NAME
+       CMD_100_HELP,
+#endif
+#ifdef CMD_101_ENUM_NAME
+       CMD_101_HELP,
+#endif
+#ifdef CMD_102_ENUM_NAME
+       CMD_102_HELP,
+#endif
+#ifdef CMD_103_ENUM_NAME
+       CMD_103_HELP,
+#endif
+#ifdef CMD_104_ENUM_NAME
+       CMD_104_HELP,
+#endif
+#ifdef CMD_105_ENUM_NAME
+       CMD_105_HELP,
+#endif
+#ifdef CMD_106_ENUM_NAME
+       CMD_106_HELP,
+#endif
+#ifdef CMD_107_ENUM_NAME
+       CMD_107_HELP,
+#endif
+#ifdef CMD_108_ENUM_NAME
+       CMD_108_HELP,
+#endif
+#ifdef CMD_109_ENUM_NAME
+       CMD_109_HELP,
+#endif
+
+#ifdef CMD_110_ENUM_NAME
+       CMD_110_HELP,
+#endif
+#ifdef CMD_111_ENUM_NAME
+       CMD_111_HELP,
+#endif
+#ifdef CMD_112_ENUM_NAME
+       CMD_112_HELP,
+#endif
+#ifdef CMD_113_ENUM_NAME
+       CMD_113_HELP,
+#endif
+#ifdef CMD_114_ENUM_NAME
+       CMD_114_HELP,
+#endif
+#ifdef CMD_115_ENUM_NAME
+       CMD_115_HELP,
+#endif
+#ifdef CMD_116_ENUM_NAME
+       CMD_116_HELP,
+#endif
+#ifdef CMD_117_ENUM_NAME
+       CMD_117_HELP,
+#endif
+#ifdef CMD_118_ENUM_NAME
+       CMD_118_HELP,
+#endif
+#ifdef CMD_119_ENUM_NAME
+       CMD_119_HELP,
+#endif
+
+#ifdef CMD_120_ENUM_NAME
+       CMD_120_HELP,
+#endif
+#ifdef CMD_121_ENUM_NAME
+       CMD_121_HELP,
+#endif
+#ifdef CMD_122_ENUM_NAME
+       CMD_122_HELP,
+#endif
+#ifdef CMD_123_ENUM_NAME
+       CMD_123_HELP,
+#endif
+#ifdef CMD_124_ENUM_NAME
+       CMD_124_HELP,
+#endif
+#ifdef CMD_125_ENUM_NAME
+       CMD_125_HELP,
+#endif
+#ifdef CMD_126_ENUM_NAME
+       CMD_126_HELP,
+#endif
+#ifdef CMD_127_ENUM_NAME
+       CMD_127_HELP,
+#endif
+#ifdef CMD_128_ENUM_NAME
+       CMD_128_HELP,
+#endif
+#ifdef CMD_129_ENUM_NAME
+       CMD_129_HELP,
+#endif
+
+#ifdef CMD_130_ENUM_NAME
+       CMD_130_HELP,
+#endif
+#ifdef CMD_131_ENUM_NAME
+       CMD_131_HELP,
+#endif
+#ifdef CMD_132_ENUM_NAME
+       CMD_132_HELP,
+#endif
+#ifdef CMD_133_ENUM_NAME
+       CMD_133_HELP,
+#endif
+#ifdef CMD_134_ENUM_NAME
+       CMD_134_HELP,
+#endif
+#ifdef CMD_135_ENUM_NAME
+       CMD_135_HELP,
+#endif
+#ifdef CMD_136_ENUM_NAME
+       CMD_136_HELP,
+#endif
+#ifdef CMD_137_ENUM_NAME
+       CMD_137_HELP,
+#endif
+#ifdef CMD_138_ENUM_NAME
+       CMD_138_HELP,
+#endif
+#ifdef CMD_139_ENUM_NAME
+       CMD_139_HELP,
+#endif
+
+#ifdef CMD_140_ENUM_NAME
+       CMD_140_HELP,
+#endif
+#ifdef CMD_141_ENUM_NAME
+       CMD_141_HELP,
+#endif
+#ifdef CMD_142_ENUM_NAME
+       CMD_142_HELP,
+#endif
+#ifdef CMD_143_ENUM_NAME
+       CMD_143_HELP,
+#endif
+#ifdef CMD_144_ENUM_NAME
+       CMD_144_HELP,
+#endif
+#ifdef CMD_145_ENUM_NAME
+       CMD_145_HELP,
+#endif
+#ifdef CMD_146_ENUM_NAME
+       CMD_146_HELP,
+#endif
+#ifdef CMD_147_ENUM_NAME
+       CMD_147_HELP,
+#endif
+#ifdef CMD_148_ENUM_NAME
+       CMD_148_HELP,
+#endif
+#ifdef CMD_149_ENUM_NAME
+       CMD_149_HELP,
+#endif
+
+#ifdef CMD_150_ENUM_NAME
+       CMD_150_HELP,
+#endif
+#ifdef CMD_151_ENUM_NAME
+       CMD_151_HELP,
+#endif
+#ifdef CMD_152_ENUM_NAME
+       CMD_152_HELP,
+#endif
+#ifdef CMD_153_ENUM_NAME
+       CMD_153_HELP,
+#endif
+#ifdef CMD_154_ENUM_NAME
+       CMD_154_HELP,
+#endif
+#ifdef CMD_155_ENUM_NAME
+       CMD_155_HELP,
+#endif
+#ifdef CMD_156_ENUM_NAME
+       CMD_156_HELP,
+#endif
+#ifdef CMD_157_ENUM_NAME
+       CMD_157_HELP,
+#endif
+#ifdef CMD_158_ENUM_NAME
+       CMD_158_HELP,
+#endif
+#ifdef CMD_159_ENUM_NAME
+       CMD_159_HELP,
+#endif
+
+#ifdef CMD_160_ENUM_NAME
+       CMD_160_HELP,
+#endif
+#ifdef CMD_161_ENUM_NAME
+       CMD_161_HELP,
+#endif
+#ifdef CMD_162_ENUM_NAME
+       CMD_162_HELP,
+#endif
+#ifdef CMD_163_ENUM_NAME
+       CMD_163_HELP,
+#endif
+#ifdef CMD_164_ENUM_NAME
+       CMD_164_HELP,
+#endif
+#ifdef CMD_165_ENUM_NAME
+       CMD_165_HELP,
+#endif
+#ifdef CMD_166_ENUM_NAME
+       CMD_166_HELP,
+#endif
+#ifdef CMD_167_ENUM_NAME
+       CMD_167_HELP,
+#endif
+#ifdef CMD_168_ENUM_NAME
+       CMD_168_HELP,
+#endif
+#ifdef CMD_169_ENUM_NAME
+       CMD_169_HELP,
+#endif
+
+#ifdef CMD_170_ENUM_NAME
+       CMD_170_HELP,
+#endif
+#ifdef CMD_171_ENUM_NAME
+       CMD_171_HELP,
+#endif
+#ifdef CMD_172_ENUM_NAME
+       CMD_172_HELP,
+#endif
+#ifdef CMD_173_ENUM_NAME
+       CMD_173_HELP,
+#endif
+#ifdef CMD_174_ENUM_NAME
+       CMD_174_HELP,
+#endif
+#ifdef CMD_175_ENUM_NAME
+       CMD_175_HELP,
+#endif
+#ifdef CMD_176_ENUM_NAME
+       CMD_176_HELP,
+#endif
+#ifdef CMD_177_ENUM_NAME
+       CMD_177_HELP,
+#endif
+#ifdef CMD_178_ENUM_NAME
+       CMD_178_HELP,
+#endif
+#ifdef CMD_179_ENUM_NAME
+       CMD_179_HELP,
+#endif
+
+#ifdef CMD_180_ENUM_NAME
+       CMD_180_HELP,
+#endif
+#ifdef CMD_181_ENUM_NAME
+       CMD_181_HELP,
+#endif
+#ifdef CMD_182_ENUM_NAME
+       CMD_182_HELP,
+#endif
+#ifdef CMD_183_ENUM_NAME
+       CMD_183_HELP,
+#endif
+#ifdef CMD_184_ENUM_NAME
+       CMD_184_HELP,
+#endif
+#ifdef CMD_185_ENUM_NAME
+       CMD_185_HELP,
+#endif
+#ifdef CMD_186_ENUM_NAME
+       CMD_186_HELP,
+#endif
+#ifdef CMD_187_ENUM_NAME
+       CMD_187_HELP,
+#endif
+#ifdef CMD_188_ENUM_NAME
+       CMD_188_HELP,
+#endif
+#ifdef CMD_189_ENUM_NAME
+       CMD_189_HELP,
+#endif
+
+#ifdef CMD_190_ENUM_NAME
+       CMD_190_HELP,
+#endif
+#ifdef CMD_191_ENUM_NAME
+       CMD_191_HELP,
+#endif
+#ifdef CMD_192_ENUM_NAME
+       CMD_192_HELP,
+#endif
+#ifdef CMD_193_ENUM_NAME
+       CMD_193_HELP,
+#endif
+#ifdef CMD_194_ENUM_NAME
+       CMD_194_HELP,
+#endif
+#ifdef CMD_195_ENUM_NAME
+       CMD_195_HELP,
+#endif
+#ifdef CMD_196_ENUM_NAME
+       CMD_196_HELP,
+#endif
+#ifdef CMD_197_ENUM_NAME
+       CMD_197_HELP,
+#endif
+#ifdef CMD_198_ENUM_NAME
+       CMD_198_HELP,
+#endif
+#ifdef CMD_199_ENUM_NAME
+       CMD_199_HELP,
 #endif
 };
 

@@ -42,6 +42,8 @@
 #include "fpp.h"
 #include "fpp_ext.h"
 
+#include "daemon/daemon_cmds.h"
+
 #include "libfci_cli_common.h"
 #include "libfci_cli_def_cmds.h"
 #include "libfci_cli_def_opts.h"
@@ -2034,6 +2036,69 @@ static int opt_parse_unlock(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_opta
     return (CLI_OK);
 }
 
+static int opt_print_to_terminal(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->print_to_terminal.is_valid);
+    bool* p_is_on    = &(p_rtn_cmdargs->print_to_terminal.is_on);
+    
+    rtn = cli_txt2bool_on_off(p_is_on, p_txt_optarg);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_print_to_logfile(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->print_to_logfile.is_valid);
+    bool* p_is_on    = &(p_rtn_cmdargs->print_to_logfile.is_on);
+    
+    rtn = cli_txt2bool_on_off(p_is_on, p_txt_optarg);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_dbg_to_terminal(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->dbg_to_terminal.is_valid);
+    bool* p_is_on    = &(p_rtn_cmdargs->dbg_to_terminal.is_on);
+    
+    rtn = cli_txt2bool_on_off(p_is_on, p_txt_optarg);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_dbg_to_dbgfile(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->dbg_to_dbgfile.is_valid);
+    bool* p_is_on    = &(p_rtn_cmdargs->dbg_to_dbgfile.is_on);
+    
+    rtn = cli_txt2bool_on_off(p_is_on, p_txt_optarg);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
 
 
 
@@ -3948,7 +4013,30 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
     else
     {
         /* standard execution path */
-        rtn = cli_cmd_execute(cmd, p_cmdargs);
+        rtn = daemon_ping();
+        if (CLI_OK == rtn)
+        {
+            if (cli_cmd_is_not_daemon_related(cmd))
+            {
+                /* daemon exists and cli cmd is not a control command for daemon ; execute the cli cmd as a remote procedure call in daemon */
+                printf("NOTE: Using daemon to execute the cli command.\n");
+                rtn = daemon_cli_cmd_execute(cmd, p_cmdargs);
+            }
+            else
+            {
+                /* daemon exists, but cli cmd is a control command for daemon ; always execute locally */
+                rtn = cli_cmd_execute(cmd, p_cmdargs);
+            }
+        }
+        else if (CLI_ERR_DAEMON_NOT_DETECTED == rtn)
+        {
+            /* standard local execution */
+            rtn = cli_cmd_execute(cmd, p_cmdargs);
+        }
+        else
+        {
+            /* empty ; keep the reported error code */
+        }
     }
     
     /* print error message if something went wrong */
@@ -3957,6 +4045,7 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
         const char* p_txt_errname = TXT_ERR_NONAME;
         const char* p_txt_errmsg = "";
         bool do_mandopt_print = false;
+        bool do_daemon_errno_print = false;
         switch (rtn)
         {
             /* errors of the libFCI_cli app */
@@ -4003,6 +4092,53 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
                 p_txt_errmsg = TXT_ERR_INDENT "Requested demo feature not found.\n"
                                TXT_ERR_INDENT "Is the feature name correct?\n"
                                TXT_ERR_INDENT "Does the feature exist?\n";
+            break;
+            
+            /* errors of communication between libFCI_cli daemon and libFCI_cli app */
+            
+            case CLI_ERR_DAEMON_NOT_DETECTED:
+                p_txt_errmsg = TXT_ERR_INDENT "Libfci_cli daemon not detected.\n"
+                               TXT_ERR_INDENT "Is the daemon really running?\n";
+            break;
+            
+            case CLI_ERR_DAEMON_ALREADY_EXISTS:
+                p_txt_errmsg = TXT_ERR_INDENT "Libfci_cli daemon is already running.\n"
+                               TXT_ERR_INDENT "There can be only one instance of libfci_cli daemon per session.\n";
+            break;
+            
+            case CLI_ERR_DAEMON_INCOMPATIBLE:
+                p_txt_errmsg = TXT_ERR_INDENT "Incompatible versions between libfci_cli demo app and libfci_cli daemon.\n"
+                               TXT_ERR_INDENT "Probably kill the old daemon and then properly start a new one?\n";
+            break;
+            
+            case CLI_ERR_DAEMON_COMM_FAIL_SOCKET:
+                p_txt_errmsg = TXT_ERR_INDENT "Failed to setup a network socket for communication with libfci_cli daemon. errno=";
+                do_daemon_errno_print = true;
+            break;
+            
+            case CLI_ERR_DAEMON_COMM_FAIL_CONNECT:
+                p_txt_errmsg = TXT_ERR_INDENT "Failed to connect to libfci_cli daemon. errno=";
+                do_daemon_errno_print = true;
+            break;
+            
+            case CLI_ERR_DAEMON_COMM_FAIL_SEND:
+                p_txt_errmsg = TXT_ERR_INDENT "Failed to send a command to libfci_cli daemon. errno=";
+                do_daemon_errno_print = true;
+            break;
+            
+            case CLI_ERR_DAEMON_COMM_FAIL_RECEIVE:
+                p_txt_errmsg = TXT_ERR_INDENT "Failed to receive a reply from libfci_cli daemon. errno=";
+                do_daemon_errno_print = true;
+            break;
+            
+            case CLI_ERR_DAEMON_REPLY_NONZERO_RTN:
+                p_txt_errmsg = TXT_ERR_INDENT "Libfci_cli daemon failed to process a command. Daemon return code = ";
+                do_daemon_errno_print = true;  /* errno passing mechanism is utilized for daemon return code as well */
+            break;
+            
+            case CLI_ERR_DAEMON_REPLY_BAD_DATA:
+                p_txt_errmsg = TXT_ERR_INDENT "Bad data in reply from libfci_cli daemon.\n"
+                               TXT_ERR_INDENT "Is the daemon compatible with libfci_cli (same versions)?\n";
             break;
             
             /* errors of the libFCI library */
@@ -4211,6 +4347,12 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
             cli_mandopt_print("  ", "  or  ");
             cli_mandopt_clear();
         }
+        
+        if (do_daemon_errno_print)
+        {
+            daemon_errno_print("  ");
+            daemon_errno_clear();
+        }
     }
     
     /* print confirmation message if all OK */
@@ -4227,7 +4369,7 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
 void cli_print_app_version(bool is_verbose)
 {
     /* the following printf() is a one long string, spanning over multiple lines */
-    printf("App version: "  CLI_VERSION_MAJOR  "."  CLI_VERSION_MINOR  "."  CLI_VERSION_PATCH
+    printf("App version: "  CLI_VERSION_STRING
            " ("  __DATE__  " "  __TIME__  ") "
            " ("  CLI_TARGET_OS  " ; "  CLI_DRV_VERSION  " ; "  PFE_CT_H_MD5  ")\n");
     

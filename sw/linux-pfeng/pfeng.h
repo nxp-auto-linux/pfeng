@@ -20,7 +20,13 @@
 #include <linux/kfifo.h>
 #include <linux/mutex.h>
 #include <linux/clk.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
 #include <linux/pcs/fsl-s32gen1-xpcs.h>
+#define s32cc_phy2xpcs s32gen1_phy2xpcs
+#define s32cc_xpcs_get_ops s32gen1_xpcs_get_ops
+#else
+#include <linux/pcs/nxp-s32cc-xpcs.h>
+#endif
 #include <linux/phy/phy.h>
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -37,7 +43,7 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"RTM 1.1.0"
+#define PFENG_DRIVER_VERSION		"RTM 1.2.0 RC1"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
@@ -121,7 +127,11 @@ struct pfeng_netif_cfg {
 	struct list_head		lnode;
 	const char			*name;
 	struct device_node		*dn;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
 	u8				*macaddr;
+#else
+	u8				macaddr[ETH_ALEN];
+#endif
 	u8				emac_id;
 	u8				hifs;
 	u32				hifmap;
@@ -263,8 +273,13 @@ struct pfeng_emac {
 	struct mii_bus			*mii_bus;
 	/* XPCS */
 	struct phy			*serdes_phy;
-	struct s32gen1_xpcs		*xpcs;
-	const struct s32gen1_xpcs_ops	*xpcs_ops;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
+	struct s32gen1_xpcs             *xpcs;
+	const struct s32gen1_xpcs_ops   *xpcs_ops;
+#else
+	struct s32cc_xpcs		*xpcs;
+	const struct s32cc_xpcs_ops	*xpcs_ops;
+#endif
 	struct phylink_link_state 	xpcs_link;
 	u32				serdes_an_speed;
 	bool				sgmii_link;
