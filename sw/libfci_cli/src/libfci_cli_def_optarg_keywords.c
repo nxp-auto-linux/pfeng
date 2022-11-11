@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -431,6 +431,16 @@ static const char *const txt_pol_flow_types32[] =
 };
 #define POL_FLOW_TYPES32_LN  CALC_LN(txt_pol_flow_types32) 
 
+/* based on element order of 'fpp_fw_feature_element_type_t' */
+/* WARNING: elements of 'fpp_fw_feature_element_type_t' are bitmasks, and thus CANNOT directly index this array */
+static const char *const txt_fwfeat_el_group[] = 
+{
+    TXT_FWFEAT_EL_GROUP__DEFAULT,
+    TXT_FWFEAT_EL_GROUP__CONFIG,
+    TXT_FWFEAT_EL_GROUP__STATS
+};
+#define FWFEAT_EL_GROUP_LN  CALC_LN(txt_fwfeat_el_group) 
+
 /* ==== PRIVATE FUNCTIONS ================================================== */
 
 static int txt2value(uint8_t *p_rtn_value, const char *p_txt,
@@ -795,6 +805,15 @@ const char* cli_value2txt_pol_flow_type32(uint8_t value)
 int cli_txt2value_pol_flow_type32(uint8_t* p_rtn_value, const char* p_txt)
 {
     return txt2value(p_rtn_value, p_txt, txt_pol_flow_types32, POL_FLOW_TYPES32_LN, 0u);
+}
+
+const char* cli_value2txt_fwfeat_el_group(uint8_t value)
+{
+    return ((FWFEAT_EL_GROUP_LN <= value) ? (TXT_INVALID_ITEM) : (txt_fwfeat_el_group[value]));
+}
+int cli_txt2value_fwfeat_el_group(uint8_t* p_rtn_value, const char* p_txt)
+{
+    return txt2value(p_rtn_value, p_txt, txt_fwfeat_el_group, FWFEAT_EL_GROUP_LN, 0u);
 }
 
 

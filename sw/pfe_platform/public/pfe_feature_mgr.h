@@ -20,6 +20,13 @@
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
+enum CAL_PACKED
+{
+	FW_FEATURE_TABLE_DEFAULT = 0U,
+	FW_FEATURE_TABLE_CONFIG = 1U,
+	FW_FEATURE_TABLE_STATS = 2U
+};
+
 errno_t pfe_feature_mgr_init(uint32_t *cbus_base);
 errno_t pfe_feature_mgr_fini(void);
 errno_t pfe_feature_mgr_add_modules(pfe_class_t *class, pfe_util_t *util, pfe_tmu_t *tmu);
@@ -35,6 +42,14 @@ errno_t pfe_feature_mgr_get_variant(const char *feature_name, uint8_t *val);
 
 errno_t pfe_feature_mgr_enable(const char *feature_name);
 errno_t pfe_feature_mgr_disable(const char *feature_name);
+
+errno_t pfe_feature_mgr_table_first(const char *feature_name, uint8_t table_type, const char **table_el_name);
+errno_t pfe_feature_mgr_table_next(const char *feature_name, uint8_t table_type, const char **table_el_name);
+errno_t pfe_feature_mgr_table_get_size(const char *feature_name, uint8_t table_type, const char *table_el_name, uint8_t *size);
+errno_t pfe_feature_mgr_table_get_multiplicity(const char *feature_name, uint8_t table_type, const char *table_el_name, uint8_t *count);
+errno_t pfe_feature_mgr_table_get_payload(const char *feature_name, uint8_t table_type, const char *table_el_name, uint8_t *payload);
+
+errno_t pfe_feature_mgr_table_set_val(const char *feature_name, uint8_t table_type, const char *table_el_name, uint8_t index, uint8_t* val);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

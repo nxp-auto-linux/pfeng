@@ -316,9 +316,17 @@
 #define CMD_66_CLI_TXT      "fwfeat-set"
 #define CMD_66_CMDEXEC      cli_cmd_fwfeat_set
 #define CMD_66_HELP         txt_help_fwfeat_set
+ 
+#define CMD_67_ENUM_NAME    CMD_FWFEAT_EL_PRINT
+#define CMD_67_CLI_TXT      "fwfeat-el-print"
+#define CMD_67_CMDEXEC      cli_cmd_fwfeat_el_print
+#define CMD_67_HELP         txt_help_fwfeat_el_print
 
-/*      CMD_67_ENUM_NAME    reserved for future FWFEAT cmds */
-/*      CMD_68_ENUM_NAME    reserved for future FWFEAT cmds */
+#define CMD_68_ENUM_NAME    CMD_FWFEAT_EL_SET
+#define CMD_68_CLI_TXT      "fwfeat-el-set"
+#define CMD_68_CMDEXEC      cli_cmd_fwfeat_el_set
+#define CMD_68_HELP         txt_help_fwfeat_el_set
+
 /*      CMD_69_ENUM_NAME    reserved for future FWFEAT cmds */
 
 #define CMD_70_ENUM_NAME    CMD_QOS_QUE_PRINT
@@ -1079,12 +1087,6 @@ typedef enum cli_cmd_tt {
     CMD_LN  /* length of the ID enum list */
 } cli_cmd_t;
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
 bool cli_cmd_is_valid(uint16_t value);
@@ -1099,10 +1101,5 @@ int cli_cmd_txt2cmd(cli_cmd_t* p_rtn_cmd, const char* p_txt);
 const char* cli_cmd_cmd2txt(cli_cmd_t cmd);
 
 /* ========================================================================= */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif

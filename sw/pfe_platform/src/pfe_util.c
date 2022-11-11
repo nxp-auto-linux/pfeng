@@ -94,7 +94,7 @@ static bool_t pfe_util_check_new_fw_features(pfe_util_t *util, errno_t *ret, uin
 		else
 		{
 			/* Set the low level data in the feature */
-			(void)pfe_fw_feature_set_ll_data(util->fw_features[features_idx], entry);
+			(void)pfe_fw_feature_set_ll_data(util->fw_features[features_idx], entry, util->pe_num);
 			/* Set the feature string base */
 			*ret = pfe_fw_feature_set_string_base(util->fw_features[features_idx], pfe_pe_get_fw_feature_str_base(util->pe[0U]));
 			if(EOK != *ret)

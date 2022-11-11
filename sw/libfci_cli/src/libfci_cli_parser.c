@@ -96,6 +96,7 @@ static int cli_txt2num_i32(int32_t* p_rtn_num, const char* p_txt, int base,
 static int cli_txt2bitset32(uint32_t* p_rtn_bitset, const char* p_txt, const cb_txt2value_t p_cb_txt2value);
 static int cli_txt2zprobs(uint8_t* p_rtn_zprobs, const char* p_txt);
 static int cli_txt2sch_ins(struct sch_in_tt* p_rtn_struct_with_sch_ins, const char* p_txt);
+static int txt2num_payload(uint8_t* p_rtn_payload, uint8_t* p_rtn_count, uint8_t max_count, uint8_t unit_size, const char* p_txt);
 
 static int cli_txt2mac(uint8_t* p_rtn_mac, const char* p_txt);
 static int cli_txt2ip(bool* p_rtn_is6, uint32_t* p_rtn_ip, const char* p_txt);
@@ -2100,6 +2101,103 @@ static int opt_dbg_to_dbgfile(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_op
     return (rtn);
 }
 
+static int opt_parse_element(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->element_name.is_valid);
+    char* p_txt      =  (p_rtn_cmdargs->element_name.txt);
+    
+    rtn = cli_txtcpy_feature_name(p_txt, p_txt_optarg);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_element_group(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->element_group.is_valid);
+    uint8_t* p_value = &(p_rtn_cmdargs->element_group.value);
+    
+    rtn = cli_txt2value_fwfeat_el_group(p_value, p_txt_optarg);
+    if (CLI_OK != rtn)
+    {
+        rtn = cli_txt2num_u8(p_value, p_txt_optarg, BASE_DEC, 0u, UINT8_MAX);
+    }
+
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
+static int opt_parse_unit_size(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->unit_size.is_valid);
+    uint8_t* p_value = &(p_rtn_cmdargs->unit_size.value);
+    
+    rtn = cli_txt2num_u8(p_value, p_txt_optarg, BASE_DEC, 0u, UINT8_MAX);
+
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+
+}
+
+static const char* p_txt_optarg_payload = NULL;
+static int opt_parse_payload(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    
+    int rtn = CLI_ERR;
+    
+    if (NULL == p_txt_optarg_payload)
+    {
+        /*
+         * NOTE:
+         *   To properly parse 'values' opt, the algorithm needs to know unit_size (that is another opt).
+         *   However, opts can be parsed in arbitrary order.
+         *   Therefore, during the 1st pass (normal opt parsing), just save ptr to associated optarg input text.
+         *   After normal opt parsing is done, this function will be called by the main parser for the 2nd time.
+         *   During this 2nd time, input will be properly parsed.
+         */
+        p_txt_optarg_payload = p_txt_optarg;
+        rtn = CLI_OK;
+    }
+    else
+    {
+        /* It is assumed this code runs after all opts were already processed during normal opt parsing. */
+        
+        bool* p_is_valid = &(p_rtn_cmdargs->payload.is_valid);
+        uint8_t* p_arr   =  (p_rtn_cmdargs->payload.arr);
+        uint8_t* p_count = &(p_rtn_cmdargs->payload.count);
+        
+        if (p_rtn_cmdargs->unit_size.is_valid)
+        {
+            rtn = txt2num_payload(p_arr, p_count,
+                                  (PAYLOAD_LN / (p_rtn_cmdargs->unit_size.value)),
+                                  (p_rtn_cmdargs->unit_size.value),
+                                  p_txt_optarg_payload);
+        }
+        
+        set_if_rtn_ok(rtn, p_is_valid);
+    }
+    
+    return (rtn);
+}
+
 
 
 
@@ -2617,6 +2715,94 @@ static int loop_sch_ins(void* p_rtn_void, char* p_txt, const cb_txt2value_t p_cb
 static int cli_txt2sch_ins(struct sch_in_tt* p_rtn_struct_with_sch_ins, const char* p_txt)
 {
     return parse_substrings(p_rtn_struct_with_sch_ins, p_txt, NULL, loop_sch_ins, SCH_INS_LN);
+}
+
+/* ==== PRIVATE FUNCTIONS : cli_txt2num_values ============================= */
+
+/*
+ * Conversion of payload values for FW feature elements is a bit specific (depends on other opts, returns multiple information).
+ * Due to these peculiarities, it has its own loop and does not use the generic 'parse_substings()' loop system.
+ */
+static int txt2num_payload(uint8_t* p_rtn_payload, uint8_t* p_rtn_count, uint8_t max_count, uint8_t unit_size, const char* p_txt)
+{    
+    assert(NULL != p_rtn_payload);
+    assert(NULL != p_rtn_count);
+    assert(NULL != p_txt);    
+    
+    int rtn = CLI_ERR;
+    char* p_txt_mutable = NULL;
+    int base;
+    
+    
+    /* malloc a local modifiable copy of 'p_txt', because even if 'p_txt' was modifiable, it could still point to a literal --> problems galore */
+    {
+        const size_t ln = (strlen(p_txt) + 1u);
+        p_txt_mutable = malloc(ln * sizeof(char));
+        if (NULL == p_txt_mutable)
+        {
+            rtn = CLI_ERR_INVPTR;
+        }
+        else
+        {
+            memcpy(p_txt_mutable, p_txt, ln);
+            rtn = CLI_OK;  /* greenlight execution of the next sub-block */
+        }
+    }
+    
+    /* run the target loop */
+    if (CLI_OK == rtn)
+    {
+        uint8_t i = UINT8_MAX;  /* WARNING: intentional use of owf behavior */
+        char* p_txt_token_next = strtok(p_txt_mutable, ",");
+       
+        /* loop_body */
+        while ((max_count > (++i)) && (CLI_OK == rtn) && (NULL != p_txt_token_next))
+        {
+            /* some strtok() implementations improperly react on "3rd party" modifications of the CURRENT substring */
+            /* work-around is to use the "current - 1" substring */
+            char* p_txt_token = p_txt_token_next;
+            p_txt_token_next = strtok(NULL, ",");
+            
+            /* parse the substring based on unit size ; write parsed results directly into rtn buffer */
+            char* p_txt_hex_token = strstr(p_txt_token, "0x");
+            base = (p_txt_hex_token == p_txt_token) ? (BASE_HEX) : (BASE_DEC);
+            switch(unit_size)
+            {
+                case 1u:
+                    rtn = cli_txt2num_u8((p_rtn_payload + i), p_txt_token, base, 0, UINT8_MAX);
+                break;
+                
+                case 2u:
+                    rtn = cli_txt2num_u16(((uint16_t*)p_rtn_payload + i), p_txt_token, base, 0, UINT16_MAX);
+                break;
+                
+                case 4u:
+                    rtn = cli_txt2num_u32(((uint32_t*)p_rtn_payload + i), p_txt_token, base, 0, UINT32_MAX);
+                break;
+                
+                default:
+                    rtn = CLI_ERR_INVARG;
+                break;
+            }
+        }
+        
+        /* local post-loop check that there are no more substrings left */
+        if ((max_count <= i) && (NULL != p_txt_token_next))
+        {
+            rtn = CLI_ERR_INVARG;
+        }
+        
+        /* return count of data units that are in rtn buffer */
+        *p_rtn_count = i;
+    }
+    
+    /* free the malloc'd memory (do not hide behind rtn check) */
+    if (NULL != p_txt_mutable)  /* better safe than sorry; some C-runtimes crash when NULL ptr is freed */
+    {
+        free(p_txt_mutable);
+    }
+    
+    return (rtn);
 }
 
 /* ==== PRIVATE FUNCTIONS : txt2mac ===================================== */
@@ -3930,6 +4116,13 @@ static int opts_parse(cli_cmdargs_t* p_rtn_cmdargs, char* p_txt_vec[], int vec_l
         rtn = CLI_ERR_NONOPT;
     }
     
+    /* execute 2nd pass for opts which depend on other opts */
+    if (NULL != p_txt_optarg_payload)
+    {
+        p_txt_opt = TXT_HELP__PAYLOAD;
+        rtn = opt_parse_payload(p_rtn_cmdargs, p_txt_optarg_payload);
+    }
+    
     /* reset 'getopt()' fnc family internal static variables (do not hide behind rtn check) */
     /* WARNING: This hack is crucial in order to ensure that 'getopt()' fnc family behaves correctly each time new input txt vector is scanned. */
     while(-1 != getopt_long(vec_ln, p_txt_vec, p_txt_shortopts, p_longopts, NULL)) { /* empty */ };
@@ -4263,6 +4456,17 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
                                 TXT_ERR_INDENT "Use fwfeat-print to see a list of all FW features.\n";
             break;
             
+            case FPP_ERR_FW_FEATURE_ELEMENT_NOT_FOUND:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_FW_FEATURE_ELEMENT_NOT_FOUND);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested FW feature element not found.\n"
+                                TXT_ERR_INDENT "Is the FW feature element name correct?\n";
+            break;
+
+            case FPP_ERR_FW_FEATURE_ELEMENT_READ_ONLY:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_FW_FEATURE_ELEMENT_READ_ONLY);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested FW feature element is read only.\n";
+            break;
+
             case FPP_ERR_RT_ENTRY_ALREADY_REGISTERED:
                 p_txt_errname = TXT_ERR_NAME(FPP_ERR_RT_ENTRY_ALREADY_REGISTERED);
                 p_txt_errmsg  = TXT_ERR_INDENT "Requested route is already registered.\n";

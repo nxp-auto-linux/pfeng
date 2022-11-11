@@ -120,9 +120,13 @@ module_param(disable_master_detection, int, 0644);
 MODULE_PARM_DESC(disable_master_detection, "\t 1 - disable Master detection signalization (default is 0)");
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
-static bool g2_ordered_class_writes = false;
+static bool g2_ordered_class_writes = true;
 module_param(g2_ordered_class_writes, bool, 0644);
-MODULE_PARM_DESC(g2_ordered_class_writes, "\t Enable ordered class writes on S32G2 (default: false)");
+MODULE_PARM_DESC(g2_ordered_class_writes, "\t Enable ordered class writes on S32G2 (default: true)");
+
+static bool g3_rtable_in_lmem = false;
+module_param(g3_rtable_in_lmem , bool, 0644);
+MODULE_PARM_DESC(g3_rtable_in_lmem , "\t Allocate PFE's Routing Table in local memory on S32G3 (default: false)");
 
 uint32_t get_pfeng_pfe_cfg_master_if(void)
 {
@@ -663,6 +667,9 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 
 	/* Provide switch value for S32G2 ordered class writes */
 	priv->pfe_cfg->g2_ordered_class_writes = g2_ordered_class_writes;
+
+	/* Routing Table allocation option for S32G3 */
+	priv->pfe_cfg->g3_rtable_in_lmem = g3_rtable_in_lmem;
 
 	/* Start PFE Platform */
 	ret = pfe_platform_init(priv->pfe_cfg);

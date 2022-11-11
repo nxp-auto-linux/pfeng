@@ -263,7 +263,7 @@ static void pfeng_mac_config(struct phylink_config *config, unsigned int mode, c
 	__maybe_unused struct phylink_link_state sgmii_state = { 0 };
 
 	if (mode == MLO_AN_FIXED || mode == MLO_AN_PHY) {
-		if (phy_interface_mode_is_rgmii(emac->intf_mode)) {
+		if (phy_interface_mode_is_rgmii(emac->intf_mode) || emac->intf_mode == PHY_INTERFACE_MODE_RMII) {
 			if (s32g_set_rgmii_speed(netif, state->speed))
 				return;
 		} else if  (emac->intf_mode == PHY_INTERFACE_MODE_SGMII) {

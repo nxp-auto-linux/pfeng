@@ -22,6 +22,17 @@
  */
 #define PFE_RTABLE_CFG_TICK_PERIOD_SEC			1U
 
+typedef struct
+{
+	addr_t htable_base_va;	/*!< Virtual address where the hash table shall be placed */
+	addr_t htable_base_pa;	/*!< The physical base address of the hash table */
+	uint32_t htable_size;	/*!< Number of entries within the hash table */
+	addr_t pool_base_va;	/*!< Virtual address where the pool of collision entries shall be placed */
+	addr_t pool_base_pa;	/*!< The physical base address of the pool */
+	uint32_t pool_size;	/*|< Number of entries within the pool */
+	bool_t lmem_allocated;
+} pfe_rtable_cfg_t;
+
 typedef struct pfe_rtable_tag pfe_rtable_t;
 typedef struct pfe_rtable_entry_tag pfe_rtable_entry_t;
 
@@ -92,7 +103,7 @@ typedef void (* pfe_rtable_callback_t)(void *arg, pfe_rtable_cbk_event_t event);
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, addr_t htable_base_va, uint32_t htable_size, addr_t pool_base_va, uint32_t pool_size, pfe_l2br_t *bridge);
+pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, pfe_l2br_t *bridge, pfe_rtable_cfg_t *config);
 errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
 errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
 void pfe_rtable_destroy(pfe_rtable_t *rtable);

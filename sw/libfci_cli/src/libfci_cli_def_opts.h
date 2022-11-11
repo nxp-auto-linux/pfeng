@@ -1571,6 +1571,53 @@ typedef enum cli_opt_incompat_grp_tt {
         OPT_124_TXT_HELP
 
 
+#define OPT_125_ENUM_NAME        OPT_ELEMENT
+#define OPT_125_OPT_PARSE        opt_parse_element
+#define OPT_125_HAS_ARG          y
+#define OPT_125_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_125_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_125_CLI_LONG_TXT_A   "el"
+#define OPT_125_CLI_LONG_TXT_B   "element"
+#define OPT_125_TXT_HELP         "--el|--element"
+#define                          TXT_HELP__ELEMENT \
+        OPT_125_TXT_HELP
+
+
+#define OPT_126_ENUM_NAME        OPT_ELEMENT_GROUP
+#define OPT_126_OPT_PARSE        opt_parse_element_group
+#define OPT_126_HAS_ARG          y
+#define OPT_126_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_126_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_126_CLI_LONG_TXT_A   "elgrp"
+#define OPT_126_CLI_LONG_TXT_B   "el-group"
+#define OPT_126_TXT_HELP         "--elgrp|--el-group"
+#define                          TXT_HELP__ELEMENT_GROUP \
+        OPT_126_TXT_HELP
+
+
+#define OPT_127_ENUM_NAME        OPT_UNIT_SIZE
+#define OPT_127_OPT_PARSE        opt_parse_unit_size
+#define OPT_127_HAS_ARG          y
+#define OPT_127_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_127_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_127_CLI_LONG_TXT_A   "us"
+#define OPT_127_CLI_LONG_TXT_B   "unit_size"
+#define OPT_127_TXT_HELP         "--us|--unit-size"
+#define                          TXT_HELP__UNIT_SIZE \
+        OPT_127_TXT_HELP
+
+
+#define OPT_128_ENUM_NAME        OPT_PAYLOAD
+#define OPT_128_OPT_PARSE        opt_parse_payload
+#define OPT_128_HAS_ARG          y
+#define OPT_128_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_128_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_128_CLI_LONG_TXT_A   "payload"
+#define OPT_128_TXT_HELP         "--payload"
+#define                          TXT_HELP__PAYLOAD \
+        OPT_128_TXT_HELP
+
+
 
 
 /* OPT_LAST (keep this at the bottom of the cli option definition list) */

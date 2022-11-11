@@ -13,7 +13,6 @@
 
 #include "pfe_platform.h"
 #include "elf_cfg.h"
-#include <uapi/linux/elf.h>
 #include "elf.h"
 #include "pfe_cbus.h"
 #include "pfe_pe.h"
@@ -21,6 +20,8 @@
 
 #define BYTES_TO_4B_ALIGNMENT(x)	(4U - ((x) & 0x3U))
 #define INVALID_FEATURES_BASE 		0xFFFFFFFFU
+#define ALIGNMENT_CHECKMASK			0x3U
+#define ALIGNMENT_PACKEDNUMBER		4U
 /**
  * @brief	Mutex protecting access to common mem_access_* registers
  */
@@ -156,7 +157,7 @@ static addr_t pfe_pe_get_elf_sect_load_addr(const ELF_File_t *elf_file, const El
 static errno_t pfe_pe_fw_ops_valid(pfe_pe_t *pe1, const pfe_pe_t *pe2);
 static errno_t pfe_pe_fw_install_ops(pfe_pe_t **pe, uint8_t pe_num);
 static uint32_t pfe_pe_mem_read(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t addr, uint8_t size);
-static void pfe_pe_mem_write(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_t addr, uint8_t size);
+static void pfe_pe_mem_write(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_t addr, uint8_t size, uint8_t offset);
 static inline uint32_t pfe_pe_get_u32_from_byteptr(const uint8_t *src_byteptr, uint32_t len);
 static errno_t pfe_pe_load_dmem_section_nolock(pfe_pe_t *pe, const void *sdata, addr_t addr, addr_t size, uint32_t type);
 static errno_t pfe_pe_load_imem_section_nolock(pfe_pe_t *pe, const void *data, addr_t addr, addr_t size, uint32_t type);
@@ -992,16 +993,15 @@ static uint32_t pfe_pe_mem_read(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t addr, uin
  * @param[in]	addr Write address (should be aligned to 32 bits)
  * @param[in]	val Value to write (BE)
  * @param[in]	size Number of bytes to write (maximum 4)
+ * @param[in]	offset Number of bytes the addr needs to be aligned (maximum 3)
  */
-static void pfe_pe_mem_write(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_t addr, uint8_t size)
+static void pfe_pe_mem_write(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_t addr, uint8_t size, uint8_t offset)
 {
 	uint8_t bytesel = 0U;
-	uint32_t memsel;
-	uint8_t offset;
+	uint32_t memsel = 0U;
 	uint32_t val_temp = val;
 	uint8_t size_temp = size;
 	addr_t addr_temp = addr;
-	bool_t status = FALSE;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pe))
@@ -1011,63 +1011,42 @@ static void pfe_pe_mem_write(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		if (unlikely((addr_temp & 0x3U) != 0U))
+		if (unlikely((0U != offset)))
 		{
-			offset = BYTES_TO_4B_ALIGNMENT(addr_temp);
-
-			if (size_temp <= offset)
-			{
-				/*	Move the value to the desired address offset */
-				val_temp = val << (8U * (addr_temp & 0x3U));
-				/*	Enable writes of depicted bytes */
-				bytesel = (((1U << size_temp) - 1U) << (offset - size_temp));
-			}
-			else
-			{
-				/*	Here we need to split the write into two writes */
-
-				/*	Write 1 (LS bytes). Recursive call. Limited to single recursion. */
-				pfe_pe_mem_write(pe, mem, val_temp, addr, offset);
-				val_temp >>= 8U * offset;
-				size_temp = size - offset;
-				addr_temp = addr + offset;
-
-				/*	Write 2 (MS bytes). Recursive call. Limited to single recursion. */
-				pfe_pe_mem_write(pe, mem, val_temp, addr_temp, size_temp);
-				status = TRUE;
-			}
+			/* Move the value to the desired address offset */
+			val_temp = val << (8U * (addr_temp & ALIGNMENT_CHECKMASK));
+			/* Enable writes of depicted bytes */
+			bytesel = (1U << (offset - size_temp));
 		}
 		else
 		{
 			/*	Destination is aligned */
 			bytesel = (uint8_t)PE_IBUS_BYTES(size_temp);
 		}
-		if(status == FALSE)
+
+		if (PFE_PE_DMEM == mem)
 		{
-			if (PFE_PE_DMEM == mem)
-			{
-				memsel = PE_IBUS_ACCESS_DMEM;
-			}
-			else
-			{
-				memsel = PE_IBUS_ACCESS_IMEM;
-			}
-
-			addr_temp = (addr_temp & 0xfffffU)
-					| PE_IBUS_WRITE
-					| memsel
-					| PE_IBUS_PE_ID(pe->id)
-					| PE_IBUS_WREN(bytesel);
-
-			/*	Sanity check if we can safely access the memory interface */
-			if (unlikely(!pe->miflock))
-			{
-				NXP_LOG_ERROR("Accessing unlocked PE memory interface (write).\n");
-			}
-
-			hal_write32(oal_htonl(val_temp), pe->mem_access_wdata);
-			hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
+			memsel = PE_IBUS_ACCESS_DMEM;
 		}
+		else
+		{
+			memsel = PE_IBUS_ACCESS_IMEM;
+		}
+
+		addr_temp = (addr_temp & 0xfffffU)
+				| PE_IBUS_WRITE
+				| memsel
+				| PE_IBUS_PE_ID(pe->id)
+				| PE_IBUS_WREN(bytesel);
+
+		/*	Sanity check if we can safely access the memory interface */
+		if (unlikely(!pe->miflock))
+		{
+			NXP_LOG_ERROR("Accessing unlocked PE memory interface (write).\n");
+		}
+
+		hal_write32(oal_htonl(val_temp), pe->mem_access_wdata);
+		hal_write32((uint32_t)addr_temp, pe->mem_access_addr);
 	}
 }
 
@@ -1129,55 +1108,33 @@ static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		if ((dst_temp & 0x3U) != 0U)
+		/* First loop is for the unaligned dst_addr */
+		/* It fills the offset with one by one byte taken from src_ptr */
+		while ((0U != (dst_temp & ALIGNMENT_CHECKMASK)) && (0U != len_temp))
 		{
-			/*	Write unaligned bytes to align the destination address */
 			offset = BYTES_TO_4B_ALIGNMENT(dst_temp);
-			offset = (len < offset) ? len : offset;
-			/* Check if src_byteptr is 4 bytes alignment */
-			if (((uintptr_t)src_byteptr & 0x3U) == 0U)
-			{
-				/* src_byteptr aligns 4 bytes */
-				val = pfe_pe_get_u32_from_byteptr(src_byteptr, len);
-			}
-			else
-			{
-				/* src_byteptr doesn't align 4 bytes : access each byte */
-				val =  ((uint32_t)*(src_byteptr + 0U)) << 0U;
-				if (2U <= len)
-				{
-					val += ((uint32_t)*(src_byteptr + 1U)) << 8U;
-				}
-				if (3U <= len)
-				{
-					val += ((uint32_t)*(src_byteptr + 2U)) << 16U;
-				}
-				if (4U <= len)
-				{
-					val += ((uint32_t)*(src_byteptr + 3U)) << 24U;
-				}
-			}
-			pfe_pe_mem_write(pe, PFE_PE_DMEM, val, dst_temp, (uint8_t)offset);
-			src_byteptr += offset;
-			dst_temp = dst_addr + offset;
-			len_temp = (len >= offset) ? (len - offset) : 0U;
+			val = *src_byteptr;
+			pfe_pe_mem_write(pe, PFE_PE_DMEM, val, dst_temp, 1U, offset);
+			dst_temp += 1U;
+			src_byteptr += 1U;
+			len_temp -= 1U;
 		}
-
-		while (len_temp>=4U)
+		/* Second loops if to write the data with 4 bytes each time to the aligned address */
+		while (ALIGNMENT_PACKEDNUMBER <= len_temp)
 		{
 			/*	4-byte writes */
 			val = *(uint32_t *)src_byteptr;
-			pfe_pe_mem_write(pe, PFE_PE_DMEM, val, (uint32_t)dst_temp, 4U);
-			len_temp-=4U;
-			src_byteptr+=4U;
-			dst_temp+=4U;
+			pfe_pe_mem_write(pe, PFE_PE_DMEM, val, (uint32_t)dst_temp, 4U, 0U);
+			len_temp -= 4U;
+			src_byteptr += 4U;
+			dst_temp += 4U;
 		}
-
+		/* The last step is to write the trailing last data to the aligned address */
 		if (0U != len_temp)
 		{
 			/*	The rest */
 			val = pfe_pe_get_u32_from_byteptr(src_byteptr, len_temp);
-			pfe_pe_mem_write(pe, PFE_PE_DMEM, val, (uint32_t)dst_temp, (uint8_t)len_temp);
+			pfe_pe_mem_write(pe, PFE_PE_DMEM, val, (uint32_t)dst_temp, (uint8_t)len_temp, 0U);
 		}
 	}
 }

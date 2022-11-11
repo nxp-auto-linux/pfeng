@@ -95,6 +95,7 @@ typedef struct
 	uint16_t vlan_stats_size;	/*VLAN stats size(number of vlan entry) used to collect info from firmware */
 	pfe_emac_mii_mode_t emac_mode[3]; /* MII mode per PFE EMAC */
 	bool_t g2_ordered_class_writes;	/* S32G2 ordered class writes switch */
+	bool_t g3_rtable_in_lmem;	/* allocate the routing table in LMEM for S32G3 */
 } pfe_platform_config_t;
 
 typedef struct
@@ -157,6 +158,7 @@ typedef struct
 	pfe_fci_owner_hif_id_t hif_fci_owner_chnls_mask;
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 	bool_t fci_created;
+	bool_t g3_rtable_in_lmem;
 	uint32_t pfe_version;
 } pfe_platform_t;
 

@@ -33,6 +33,23 @@ static void pfeng_ethtool_getdrvinfo(struct net_device *netdev, struct ethtool_d
 #endif
 }
 
+static int pfeng_ethtool_get_ts_info(struct net_device *netdev, struct ethtool_ts_info *info)
+{
+	struct pfeng_netif *netif = netdev_priv(netdev);
+
+	ethtool_op_get_ts_info(netdev, info);
+
+	pfeng_hwts_ethtool(netif, info);
+
+	if (netif->ptp_clock)
+		info->phc_index = ptp_clock_index(netif->ptp_clock);
+	else
+		info->phc_index = -1;
+
+	return 0;
+}
+
+#ifdef PFE_CFG_PFE_MASTER
 static int pfeng_ethtool_get_link_ksettings(struct net_device *netdev, struct ethtool_link_ksettings *cmd)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
@@ -96,22 +113,6 @@ static int pfeng_ethtool_nway_reset(struct net_device *netdev)
 		return -ENOTSUPP;
 
 	return phylink_ethtool_nway_reset(netif->phylink);
-}
-
-static int pfeng_ethtool_get_ts_info(struct net_device *netdev, struct ethtool_ts_info *info)
-{
-	struct pfeng_netif *netif = netdev_priv(netdev);
-
-	ethtool_op_get_ts_info(netdev, info);
-
-	pfeng_hwts_ethtool(netif, info);
-
-	if (netif->ptp_clock)
-		info->phc_index = ptp_clock_index(netif->ptp_clock);
-	else
-		info->phc_index = -1;
-
-	return 0;
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
@@ -192,23 +193,26 @@ static void pfeng_ethtool_complete(struct net_device *netdev)
 
 	pm_runtime_put(&netif->priv->pdev->dev);
 }
+#endif
 
 static const struct ethtool_ops pfeng_ethtool_ops = {
+#ifdef PFE_CFG_PFE_MASTER
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,7,0)
 	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS,
 #endif
-	.get_drvinfo = pfeng_ethtool_getdrvinfo,
 	.get_link = ethtool_op_get_link,
 	.nway_reset = pfeng_ethtool_nway_reset,
 	.get_pauseparam = pfeng_ethtool_get_pauseparam,
 	.set_pauseparam = pfeng_ethtool_set_pauseparam,
 	.get_link_ksettings = pfeng_ethtool_get_link_ksettings,
 	.set_link_ksettings = pfeng_ethtool_set_link_ksettings,
-	.get_ts_info = pfeng_ethtool_get_ts_info,
 	.get_coalesce = pfeng_get_coalesce,
 	.set_coalesce = pfeng_set_coalesce,
 	.begin = pfeng_ethtool_begin,
 	.complete = pfeng_ethtool_complete,
+#endif
+	.get_drvinfo = pfeng_ethtool_getdrvinfo,
+	.get_ts_info = pfeng_ethtool_get_ts_info,
 };
 
 void pfeng_ethtool_init(struct net_device *netdev)
@@ -216,6 +220,7 @@ void pfeng_ethtool_init(struct net_device *netdev)
 	netdev->ethtool_ops = &pfeng_ethtool_ops;
 }
 
+#ifdef PFE_CFG_PFE_MASTER
 int pfeng_ethtool_params_save(struct pfeng_netif *netif) {
 	struct net_device *netdev = netif->netdev;
 	struct ethtool_pauseparam epp;
@@ -256,3 +261,12 @@ int pfeng_ethtool_params_restore(struct pfeng_netif *netif) {
 
 	return 0;
 }
+#else
+int pfeng_ethtool_params_save(struct pfeng_netif *netif) {
+	return 0;
+}
+
+int pfeng_ethtool_params_restore(struct pfeng_netif *netif) {
+	return 0;
+}
+#endif

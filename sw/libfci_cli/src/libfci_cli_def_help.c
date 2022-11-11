@@ -536,6 +536,14 @@
                                         "  Index of the first item to print.\n"  \
                                         "  Default value is 0 (start from the very first item of the table).\n"
 
+#define TXT_OPT__POSITION_FWFEAT_EL_SET          TXT_HELP__POSITION  "=<value>"
+#define TXT_OPTDESCR__POSITION_FWFEAT_EL_SET     TXT_HELP__POSITION  "=<"  TXT_OPTARGS__U8_DEC  ">"  "\n"    \
+                                                 "  Index of the target item in the element table. \n"       \
+                                                 "  Position == 0 : Operate with all table items. \n"        \
+                                                 "  Position > 0  : Operate with the particular item that is at given position. \n"  \
+                                                 "  Indexing starts from positon 1. \n"  \
+                                                 "  Default value of this parameter is 0 (operate with all table items).\n"
+
 #define TXT_OPT__POSITION_INSADD_IQOS_FLOW       TXT_HELP__POSITION  "=<value>"
 #define TXT_OPTDESCR__POSITION_INSADD_IQOS_FLOW  TXT_HELP__POSITION  "=<"  TXT_OPTARGS__U8_DEC  ">"  "\n"  \
                                                  "  Index where to insert the item.\n"                     \
@@ -619,6 +627,10 @@
 
 #define TXT_OPT__FEATURE_FW             TXT_HELP__FEATURE  "=<feature_name>"
 #define TXT_OPTDESCR__FEATURE_FW        TXT_HELP__FEATURE  "=<ingress_vlan>"  "\n"  \
+                                        "  Name of a FW feature.\n"
+                                                                               
+#define TXT_OPT__FEATURE_EL_FW_EL       TXT_HELP__FEATURE  "=<feature_name>"
+#define TXT_OPTDESCR__FEATURE_FW_EL     TXT_HELP__FEATURE  "=<ingress_vlan>"  "\n"  \
                                         "  Name of a FW feature.\n"
 
 #define TXT_OPT__FEATURE_DEMO           TXT_HELP__FEATURE  "=<feature_name>"
@@ -903,6 +915,29 @@
 #define TXT_OPTDESCR__DBG_TO_DBGFILE    TXT_HELP__DBG_TO_DBGFILE  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
                                         "  Commands libfci_cli daemon to enable/disable printing of debug messages into debugfile. \n"
 
+#define TXT_OPT__ELEMENT                TXT_HELP__ELEMENT  "=<element_name>"
+#define TXT_OPTDESCR__ELEMENT           TXT_HELP__ELEMENT  "=<br_accept>"  "\n"   \
+                                        "  Name of the requested element.\n" 
+
+#define TXT_OPT__ELEMENT_GROUP          TXT_HELP__ELEMENT_GROUP  "=<group_name|group_ID>"
+#define TXT_OPTDESCR__ELEMENT_GROUP     TXT_HELP__ELEMENT_GROUP  "=<"  TXT_FWFEAT_EL_GROUP__CONFIG  "|2>"  "\n"   \
+                                        "  Specify FW feature element group.\n"  \
+                                        "  Command will search for the target FW feature element only within the specified element group.\n"  \
+                                        "  Groups:\n"  \
+                                        "    "  TXT_FWFEAT_EL_GROUP__DEFAULT  " : search in all available groups \n"  \
+                                        "    "  TXT_FWFEAT_EL_GROUP__CONFIG   "  : search only in configuration elements group \n"  \
+                                        "    "  TXT_FWFEAT_EL_GROUP__STATS    "   : search only in statistics elements group \n"
+
+#define TXT_OPT__UNIT_SIZE              TXT_HELP__UNIT_SIZE  "=<1|2|4>"
+#define TXT_OPTDESCR__UNIT_SIZE         TXT_HELP__UNIT_SIZE  "=<1|2|4>"  "\n"   \
+                                        "  Bytesize of element's data unit. \n" \
+                                        "  See description of FW feature elements (or libfci_cli printout) to learn \n" \
+                                        "  what is the correct unit size of data for any given FW feature element. \n"
+ 
+#define TXT_OPT__PAYLOAD                TXT_HELP__PAYLOAD  "=<list_of_values>"
+#define TXT_OPTDESCR__PAYLOAD           TXT_HELP__PAYLOAD  "=<"  "0,5,20,... | 0x00,0x05,0x14..."  ">"  "\n"   \
+                                        "  Comma seperated list of values. These values will serve as payload of some command.\n"
+
 
 
 
@@ -910,7 +945,7 @@
     Sanity check for opt help texts. When new opt is added, create a help text for the opt and remove its symbol from here.
     And don't forget to check the pairing! ^_^
 */
-#if (defined(OPT_125_TXT_HELP) || defined(OPT_126_TXT_HELP) || defined(OPT_127_TXT_HELP) || defined(OPT_128_TXT_HELP) || defined(OPT_129_TXT_HELP) || \
+#if (defined(OPT_129_TXT_HELP) || \
      defined(OPT_130_TXT_HELP) || defined(OPT_131_TXT_HELP) || defined(OPT_132_TXT_HELP) || defined(OPT_133_TXT_HELP) || defined(OPT_134_TXT_HELP) || \
      defined(OPT_135_TXT_HELP) || defined(OPT_136_TXT_HELP) || defined(OPT_137_TXT_HELP) || defined(OPT_138_TXT_HELP) || defined(OPT_139_TXT_HELP) || \
      defined(OPT_140_TXT_HELP) || defined(OPT_141_TXT_HELP) || defined(OPT_142_TXT_HELP) || defined(OPT_143_TXT_HELP) || defined(OPT_144_TXT_HELP) || \
@@ -1985,6 +2020,58 @@ static const char* txt_help_fwfeat_set[] =
     TXT_OPTDESCR__FEATURE_FW,
     TXT_OPTDESCR__ENABLE,
     TXT_OPTDESCR__DISABLE,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_fwfeat_el_print[] =
+{
+    TXT_DECOR_CMD,
+    ""    "[1] fwfeat-el-print"   "   ",
+    "<"   TXT_OPT__FEATURE_FW     ">  ",
+    "["   TXT_OPT__ELEMENT_GROUP  "]  ",
+    "\n",
+    ""    "[2] fwfeat-el-print"   "   ",
+    "<"   TXT_OPT__FEATURE_FW     ">  ",
+    "<"   TXT_OPT__ELEMENT        ">  ",
+    "["   TXT_OPT__ELEMENT_GROUP  "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "[1] Print all elements of a FW feature.",
+    "\n",
+    ""    "[2] Print the selected element of a FW feature.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FEATURE_FW,
+    TXT_OPTDESCR__ELEMENT,
+    TXT_OPTDESCR__ELEMENT_GROUP,
+    "\n",
+    
+    NULL
+};
+
+static const char* txt_help_fwfeat_el_set[] =
+{
+    TXT_DECOR_CMD,
+    ""    "fwfeat-el-set"         "   ",
+    "<"   TXT_OPT__FEATURE_FW     ">  ",
+    "<"   TXT_OPT__ELEMENT        ">  ",
+    "<"   TXT_OPT__UNIT_SIZE      ">  ", 
+    "<"   TXT_OPT__PAYLOAD        ">  ",
+    "["   TXT_OPT__POSITION_FWFEAT_EL_SET "]  ",
+    "["   TXT_OPT__ELEMENT_GROUP  "]  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "Set data of a FW feature element.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__FEATURE_FW,
+    TXT_OPTDESCR__ELEMENT,
+    TXT_OPTDESCR__UNIT_SIZE,
+    TXT_OPTDESCR__PAYLOAD,
+    TXT_OPTDESCR__POSITION_FWFEAT_EL_SET,
+    TXT_OPTDESCR__ELEMENT_GROUP,
     "\n",
     
     NULL

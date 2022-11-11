@@ -20,6 +20,10 @@
 #error Missing cbus.h
 #endif /* PFE_CBUS_H_ */
 
+#define HIF_CH_TIMEOUT_EN (BDP_RD_CSR_RX_TIMEOUT_CH_INT_EN  | BDP_WR_CSR_RX_TIMEOUT_CH_INT_EN \
+                          | BDP_RD_CSR_TX_TIMEOUT_CH_INT_EN | BDP_WD_CSR_TX_TIMEOUT_CH_INT_EN \
+                          | DXR_CSR_RX_TIMEOUT_CH_INT_EN    | DXR_CSR_TX_TIMEOUT_CH_INT_EN)
+
 /**
  * @brief	Control the buffer descriptor fetch
  * @details	When TRUE then HIF is fetching the same BD until it is valid BD. If FALSE
@@ -376,12 +380,15 @@ errno_t pfe_hif_chnl_cfg_init(addr_t base_va, uint32_t channel_id)
 
 	/*	Enable channel status interrupts except of the RX/TX and
 	 	the global enable bit. */
+
+	/*	Disable bogus HIF timeouts reporting */
 	hal_write32(0xffffffffU
 			& ~HIF_CH_INT_EN
 			& ~BDP_CSR_RX_CBD_CH_INT_EN
 			& ~BDP_CSR_RX_PKT_CH_INT_EN
 			& ~BDP_CSR_TX_CBD_CH_INT_EN
 			& ~BDP_CSR_TX_PKT_CH_INT_EN
+			& ~HIF_CH_TIMEOUT_EN
 			, base_va + HIF_CHn_INT_EN(channel_id));
 
 	return EOK;

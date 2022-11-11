@@ -390,11 +390,11 @@ extern const uint8_t SPD_ACTIONS__MAX;
 #define TXT_POL_FLOW_TYPE2__SPORT       TXT_MATCH_RULE__SPORT
 #define TXT_POL_FLOW_TYPE2__DPORT       TXT_MATCH_RULE__DPORT
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
+/* based on element order of 'fpp_fw_feature_element_type_t' */
+/* WARNING: elements of 'fpp_fw_feature_element_type_t' are bitmasks, and thus CANNOT directly index this array */
+#define TXT_FWFEAT_EL_GROUP__DEFAULT    "DEFAULT"
+#define TXT_FWFEAT_EL_GROUP__CONFIG     "CONFIG"
+#define TXT_FWFEAT_EL_GROUP__STATS      "STATS"
 
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
@@ -482,12 +482,9 @@ int         cli_txt2value_pol_flow_type2(uint8_t* p_rtn_value, const char* p_txt
 const char* cli_value2txt_pol_flow_type32(uint8_t value);
 int         cli_txt2value_pol_flow_type32(uint8_t* p_rtn_value, const char* p_txt);
 
+const char* cli_value2txt_fwfeat_el_group(uint8_t value);
+int         cli_txt2value_fwfeat_el_group(uint8_t* p_rtn_value, const char* p_txt);
+
 /* ========================================================================= */
-
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif

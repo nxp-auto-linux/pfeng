@@ -15,7 +15,6 @@ MODULE_LICENSE("GPL");
 
 #ifdef PFE_CFG_PFE_MASTER
 #include "elf_cfg.h"
-#include <uapi/linux/elf.h>
 #include "elf.h"
 
 #include "hal.h"
@@ -1876,6 +1875,7 @@ static errno_t pfe_platform_create_gpi(pfe_platform_t *platform, const pfe_platf
 		if(PFE_S32G3_VERSION == platform->pfe_version)
 		{   /* S32G3 */
 			gpi_cfg_tmp.lmem_header_size = 48U;
+			aseq_len = 0x10U;
 		}
 		else
 		{   /* S32G2 */
@@ -1965,6 +1965,7 @@ static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
 {
 	pfe_gpi_cfg_t gpi_cfg_tmp;
 	errno_t ret;
+	uint32_t aseq_len = 0x40U;
 
 	platform->etgpi = oal_mm_malloc(platform->etgpi_count * sizeof(pfe_gpi_t *));
 	if (NULL == platform->etgpi)
@@ -1977,6 +1978,7 @@ static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
 		if(PFE_S32G3_VERSION == platform->pfe_version)
 		{   /* S32G3 */
 			gpi_cfg_tmp.lmem_header_size = 48U;
+			aseq_len = 0x10U;
 		}
 		else
 		{   /* S32G2 */
@@ -1986,7 +1988,7 @@ static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
 		/*	ETGPI1 */
 		gpi_cfg_tmp.alloc_retry_cycles = 0x200U;
 		gpi_cfg_tmp.gpi_tmlf_txthres = 0xbcU;
-		gpi_cfg_tmp.gpi_dtx_aseq_len = 0x40;
+		gpi_cfg_tmp.gpi_dtx_aseq_len = aseq_len;
 		gpi_cfg_tmp.emac_1588_ts_en = TRUE;
 
 		platform->etgpi[0] = pfe_gpi_create(platform->cbus_baseaddr, CBUS_ETGPI1_BASE_ADDR, &gpi_cfg_tmp);
@@ -2000,7 +2002,7 @@ static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
 			/*	ETGPI2 */
 			gpi_cfg_tmp.alloc_retry_cycles = 0x200U;
 			gpi_cfg_tmp.gpi_tmlf_txthres = 0xbcU;
-			gpi_cfg_tmp.gpi_dtx_aseq_len = 0x40;
+			gpi_cfg_tmp.gpi_dtx_aseq_len = aseq_len;
 			gpi_cfg_tmp.emac_1588_ts_en = TRUE;
 
 			platform->etgpi[1] = pfe_gpi_create(platform->cbus_baseaddr, CBUS_ETGPI2_BASE_ADDR, &gpi_cfg_tmp);
@@ -2014,7 +2016,7 @@ static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
 				/*	ETGPI3 */
 				gpi_cfg_tmp.alloc_retry_cycles = 0x200U;
 				gpi_cfg_tmp.gpi_tmlf_txthres = 0xbcU;
-				gpi_cfg_tmp.gpi_dtx_aseq_len = 0x40;
+				gpi_cfg_tmp.gpi_dtx_aseq_len = aseq_len;
 				gpi_cfg_tmp.emac_1588_ts_en = TRUE;
 
 				platform->etgpi[2] = pfe_gpi_create(platform->cbus_baseaddr, CBUS_ETGPI3_BASE_ADDR, &gpi_cfg_tmp);
@@ -2064,6 +2066,7 @@ static errno_t pfe_platform_create_hgpi(pfe_platform_t *platform)
 {
 	pfe_gpi_cfg_t hgpi_cfg;
 	errno_t ret;
+	uint32_t aseq_len = HGPI_ASEQ_LEN;
 
 	platform->hgpi = oal_mm_malloc(platform->hgpi_count * sizeof(pfe_gpi_t *));
 	if (NULL == platform->hgpi)
@@ -2076,6 +2079,7 @@ static errno_t pfe_platform_create_hgpi(pfe_platform_t *platform)
 		if(PFE_S32G3_VERSION == platform->pfe_version)
 		{   /* S32G3 */
 			hgpi_cfg.lmem_header_size = 48U;
+			aseq_len = 0x10U;
 		}
 		else
 		{   /* S32G2 */
@@ -2084,7 +2088,7 @@ static errno_t pfe_platform_create_hgpi(pfe_platform_t *platform)
 
 		hgpi_cfg.alloc_retry_cycles = 0x200U;
 		hgpi_cfg.gpi_tmlf_txthres = 0x178U;
-		hgpi_cfg.gpi_dtx_aseq_len = HGPI_ASEQ_LEN;
+		hgpi_cfg.gpi_dtx_aseq_len = aseq_len;
 		hgpi_cfg.emac_1588_ts_en = FALSE;
 
 		platform->hgpi[0] = pfe_gpi_create(platform->cbus_baseaddr, CBUS_HGPI_BASE_ADDR, &hgpi_cfg);
@@ -2328,9 +2332,9 @@ static void pfe_platform_destroy_l2_bridge(pfe_platform_t *platform)
  */
 static errno_t pfe_platform_create_rtable(pfe_platform_t *platform, const pfe_platform_config_t *config)
 {
-	addr_t htable_mem;
-	addr_t pool_mem;
+	pfe_rtable_cfg_t cfg = { 0 };
 	uint32_t pool_offs;
+	bool_t in_lmem;
 	errno_t ret;
 
 	if (config->rtable_hash_size > PFE_CFG_RT_HASH_ENTRIES_MAX_CNT)
@@ -2343,7 +2347,35 @@ static errno_t pfe_platform_create_rtable(pfe_platform_t *platform, const pfe_pl
 		pool_offs = config->rtable_hash_size * pfe_rtable_get_entry_size();
 
 		platform->rtable_size = (config->rtable_hash_size + config->rtable_collision_size) * pfe_rtable_get_entry_size();
-		platform->rtable_va = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_RT_MEM, platform->rtable_size, 2048U);
+		in_lmem = config->g3_rtable_in_lmem;
+
+		if (TRUE == in_lmem && FALSE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+		{
+			NXP_LOG_WARNING("'g3_rtable_in_lmem' works only on S32G3, ignore option\n");
+			in_lmem = FALSE;
+		}
+
+		if (TRUE == in_lmem)
+		{
+			if (CBUS_ROUTE_LMEM_SIZE >= platform->rtable_size)
+			{
+				platform->g3_rtable_in_lmem = TRUE;
+			}
+			else
+			{
+				NXP_LOG_WARNING("Not enough space to allocate the routing table in LMEM (%u bytes), fall back to default allocation\n", (uint_t)platform->rtable_size);
+			}
+		}
+
+		if (TRUE == platform->g3_rtable_in_lmem)
+		{
+			platform->rtable_va = (void *)(platform->cbus_baseaddr + CBUS_ROUTE_LMEM_ADDR);
+		}
+		else
+		{
+			platform->rtable_va = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_RT_MEM, platform->rtable_size, 2048U);
+		}
+
 		if (NULL == platform->rtable_va)
 		{
 			NXP_LOG_ERROR("Unable to get routing table memory\n");
@@ -2351,8 +2383,22 @@ static errno_t pfe_platform_create_rtable(pfe_platform_t *platform, const pfe_pl
 		}
 		else
 		{
-			htable_mem = (addr_t)platform->rtable_va;
-			pool_mem = (addr_t)platform->rtable_va + pool_offs;
+			cfg.htable_base_va = (addr_t)platform->rtable_va;
+			cfg.pool_base_va = (addr_t)platform->rtable_va + pool_offs;
+			cfg.htable_size = config->rtable_hash_size;
+			cfg.pool_size = config->rtable_collision_size;
+			cfg.lmem_allocated = platform->g3_rtable_in_lmem;
+
+			if (TRUE == platform->g3_rtable_in_lmem)
+			{
+				cfg.htable_base_pa = PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_ROUTE_LMEM_ADDR;
+				cfg.pool_base_pa = cfg.htable_base_pa + pool_offs;
+			}
+			else
+			{
+				cfg.htable_base_pa = (addr_t)oal_mm_virt_to_phys_contig((void *)cfg.htable_base_va);
+				cfg.pool_base_pa = cfg.htable_base_pa + pool_offs;
+			}
 
 			if (NULL == platform->classifier)
 			{
@@ -2361,7 +2407,7 @@ static errno_t pfe_platform_create_rtable(pfe_platform_t *platform, const pfe_pl
 			}
 			else
 			{
-				platform->rtable = pfe_rtable_create(platform->classifier, htable_mem, config->rtable_hash_size, pool_mem, config->rtable_collision_size, platform->l2_bridge);
+				platform->rtable = pfe_rtable_create(platform->classifier, platform->l2_bridge, &cfg);
 
 				if (NULL == platform->rtable)
 				{
@@ -2370,7 +2416,7 @@ static errno_t pfe_platform_create_rtable(pfe_platform_t *platform, const pfe_pl
 				}
 				else
 				{
-					NXP_LOG_INFO("Routing table created, Hash Table @ p0x%"PRINTADDR_T", Pool @ p0x%"PRINTADDR_T" (%u bytes)\n", (addr_t)oal_mm_virt_to_phys_contig((void *)htable_mem), (addr_t)oal_mm_virt_to_phys_contig((void *)htable_mem) + (addr_t)pool_offs, (uint_t)platform->rtable_size);
+					NXP_LOG_INFO("Routing table created, Hash Table @ p0x%"PRINTADDR_T", Pool @ p0x%"PRINTADDR_T" (%u bytes)\n", cfg.htable_base_pa, cfg.pool_base_pa, (uint_t)platform->rtable_size);
 					ret = EOK;
 				}
 			}
@@ -2392,7 +2438,10 @@ static void pfe_platform_destroy_rtable(pfe_platform_t *platform)
 
 	if (NULL != platform->rtable_va)
 	{
-		oal_mm_free_contig(platform->rtable_va);
+		if (FALSE == platform->g3_rtable_in_lmem)
+		{
+			oal_mm_free_contig(platform->rtable_va);
+		}
 		platform->rtable_va = NULL;
 	}
 }
@@ -3477,7 +3526,7 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	}
 	else
 	{
-		NXP_LOG_INFO("PFE CBUS p0x%"PRINTADDR_T" mapped @ v0x%"PRINTADDR_T"\n", config->cbus_base, pfe.cbus_baseaddr);
+		NXP_LOG_INFO("PFE CBUS p0x%"PRINTADDR_T" mapped @ v0x%"PRINTADDR_T" (0x%"PRINTADDR_T" bytes)\n", config->cbus_base, pfe.cbus_baseaddr, config->cbus_len);
 	}
 
 	/* Get PFE Version */
@@ -3503,11 +3552,20 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 		hal_write32(0x0, addr);
 	}
 
-	/*	Initialize LMEM TODO: Get LMEM size from global WSP_LMEM_SIZE register */
+	/*	Initialize LMEM and ROUTE LMEM (G3) TODO: Get LMEM size from global WSP_LMEM_SIZE register */
 	addr = (uint32_t*)(void*)((addr_t)pfe.cbus_baseaddr + CBUS_LMEM_BASE_ADDR);
 	for (ii = addr; ((addr_t)ii - (addr_t)addr) < CBUS_LMEM_SIZE; ++ii)
 	{
 		*ii = 0U;
+	}
+
+	if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+	{
+		addr = (uint32_t*)(void*)((addr_t)pfe.cbus_baseaddr + CBUS_ROUTE_LMEM_ADDR);
+		for (ii = addr; ((addr_t)ii - (addr_t)addr) < CBUS_ROUTE_LMEM_SIZE; ++ii)
+		{
+			*ii = 0U;
+		}
 	}
 
 	/*	Create HW components */

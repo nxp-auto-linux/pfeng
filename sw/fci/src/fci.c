@@ -374,6 +374,12 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 						break;
 					}
 
+					case FPP_CMD_FW_FEATURE_ELEMENT:
+					{
+						ret = fci_fw_features_element_cmd(msg, &fci_ret, (fpp_fw_features_element_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
+						break;
+					}
+
 					case FPP_CMD_SPD:
 					{
 						ret = fci_spd_cmd(msg, &fci_ret, (fpp_spd_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);

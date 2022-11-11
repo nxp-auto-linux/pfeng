@@ -570,7 +570,7 @@ static errno_t pfe_class_load_fw_process(pfe_class_t *class)
 			else
 			{
 				/* Set the low level data in the feature */
-				(void)pfe_fw_feature_set_ll_data(class->fw_features[i], entry);
+				(void)pfe_fw_feature_set_ll_data(class->fw_features[i], entry, pfe_class_get_num_of_pes(class));
 				/* Set the feature string base */
 				ret = pfe_fw_feature_set_string_base(class->fw_features[i], pfe_pe_get_fw_feature_str_base(class->pe[0U]));
 				if (EOK != ret)

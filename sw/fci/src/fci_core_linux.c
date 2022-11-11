@@ -193,7 +193,7 @@ void fci_core_fini(void)
 			
 			if (TRUE == GET_FCI_CORE()->clients[ii].connected)
 			{
-				if (EOK != fci_netlink_send(GET_FCI_CORE()->clients[ii].cmd_port_id, &msg))
+				if (EOK != fci_netlink_send(GET_FCI_CORE()->clients[ii].back_port_id, &msg))
 				{
 					NXP_LOG_ERROR("fci_netlink_send failed\n");
 				}

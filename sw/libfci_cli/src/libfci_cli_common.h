@@ -43,7 +43,7 @@
 
 /* app version */
 #define CLI_VERSION_MAJOR   "2"
-#define CLI_VERSION_MINOR   "9"
+#define CLI_VERSION_MINOR   "10"
 #define CLI_VERSION_PATCH   "0"
 #define CLI_VERSION_STRING  CLI_VERSION_MAJOR"."CLI_VERSION_MINOR"."CLI_VERSION_PATCH
 
@@ -96,6 +96,7 @@
 #define FEATURE_NAME_TXT_LN  (FPP_FEATURE_NAME_SIZE + 1)  /* this is how the buffer size is defined in 'fpp.ext.h' */
 #define ZPROBS_LN            (8u)  /* Max count of probability zones is based on info from FCI API Reference (chapter about "QoS" feature) */
 #define SCH_INS_LN           (8u)  /* Max count of scheduler inputs is based on info from FCI API Reference (chapter about "QoS" feature) */
+#define PAYLOAD_LN           (128) /* Value of this symbol must match the hardcoded size of '.payload' array in fpp_fw_features_element_cmd_t */
 
 /* misc macro sanity checks */
 #if (MAC_BYTES_LN < 2u)
@@ -636,6 +637,28 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         bool is_on;
     } dbg_to_dbgfile;
+
+    struct
+    {
+        bool is_valid;
+        char txt[FEATURE_NAME_TXT_LN];
+    } element_name;
+    struct 
+    {
+        bool is_valid;
+        uint8_t value;
+    } element_group;
+    struct
+    {
+        bool is_valid;
+        uint8_t value;
+    } unit_size;
+    struct
+    {
+        bool is_valid;
+        uint8_t arr[PAYLOAD_LN];
+        uint8_t count;
+    } payload;
 
 } cli_cmdargs_t;
 

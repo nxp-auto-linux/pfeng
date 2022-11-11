@@ -41,7 +41,6 @@
 void cli_print_app_version(bool is_verbose);
 
 int cli_parse_and_execute(char* pp_txtarr[], int arrln);
-
 /* ========================================================================= */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR

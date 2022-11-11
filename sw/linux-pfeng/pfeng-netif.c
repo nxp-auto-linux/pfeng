@@ -1100,9 +1100,9 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 	/* Each packet requires extra buffer for Tx header (metadata) */
 	netdev->needed_headroom = PFENG_TX_PKT_HEADER_SIZE;
 
-#ifdef PFE_CFG_PFE_MASTER
 	pfeng_ethtool_init(netdev);
 
+#ifdef PFE_CFG_PFE_MASTER
 	/* Add phylink */
 	if (!netif_cfg->aux && priv->emac[netif_cfg->emac_id].intf_mode != PHY_INTERFACE_MODE_INTERNAL)
 		pfeng_phylink_create(netif);

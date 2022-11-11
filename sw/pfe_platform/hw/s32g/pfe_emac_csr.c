@@ -588,9 +588,15 @@ errno_t pfe_emac_cfg_adjust_ts_freq(addr_t base_va, uint32_t i_clk_hz, uint32_t 
  */
 void pfe_emac_cfg_get_ts_time(addr_t base_va, uint32_t *sec, uint32_t *nsec, uint16_t *sec_hi)
 {
+	uint32_t sec_tmp;
+
 	*sec = hal_read32(base_va + MAC_SYSTEM_TIME_SECONDS);
-	*nsec = hal_read32(base_va + MAC_SYSTEM_TIME_NANOSECONDS);
-	*sec_hi = (uint16_t)hal_read32(base_va + MAC_STS_HIGHER_WORD);
+	do {
+		sec_tmp = *sec;
+		*nsec = hal_read32(base_va + MAC_SYSTEM_TIME_NANOSECONDS);
+		*sec_hi = (uint16_t)hal_read32(base_va + MAC_STS_HIGHER_WORD);
+		*sec = hal_read32(base_va + MAC_SYSTEM_TIME_SECONDS);
+	} while (*sec != sec_tmp);
 }
 
 /**

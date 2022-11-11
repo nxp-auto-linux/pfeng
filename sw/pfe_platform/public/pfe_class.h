@@ -11,6 +11,7 @@
 #define PFE_CLASS_H_
 
 #include "pfe_ct.h"
+#include "pfe_ct_comp.h"
 #include "pfe_fw_feature.h"
 
 typedef struct pfe_classifier_tag pfe_class_t;

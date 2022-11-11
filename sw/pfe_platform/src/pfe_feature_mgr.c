@@ -16,6 +16,7 @@
 #include "pfe_tmu.h"
 #include "pfe_hw_feature.h"
 #include "pfe_feature_mgr.h"
+#include "pfe_fw_feature.h"
 
 /*
 --------------         -----------------         -----------
@@ -59,6 +60,11 @@ typedef struct
 
 static pfe_feature_mgr_t *feature_mgr = NULL;
 
+/**
+ *  Internal flag supporting transition walk from cfg table to stats table
+ */
+static bool_t table_rewind_flag = FALSE;
+
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_VAR_INIT_32
 #include "Eth_43_PFE_MemMap.h"
@@ -100,6 +106,7 @@ errno_t pfe_feature_mgr_init(uint32_t *cbus_base)
 				(void)memset(feature_mgr, 0, sizeof(pfe_feature_mgr_t));
 				feature_mgr->cbus_base = cbus_base;
 				feature_mgr->hw_features = oal_mm_malloc(2U * sizeof(pfe_hw_feature_t *));
+				table_rewind_flag = FALSE;
 				ret = pfe_hw_feature_init_all(cbus_base, feature_mgr->hw_features, &feature_mgr->hw_features_count);
 			}
 			else
@@ -818,9 +825,9 @@ errno_t pfe_feature_mgr_get_first(const char **feature_name)
 			}
 		}
 	}
-
 	return ret;
 }
+
 
 /**
  * @brief		Returns the next feature (continues the features query)
@@ -1204,6 +1211,673 @@ static errno_t pfe_feature_mgr_configure_driver(const char *feature_name, const 
 			{
 				ret = pfe_tmu_queue_err051211_sync(feature_mgr->tmu);
 			}
+		}
+	}
+	return ret;
+}
+
+static errno_t pfe_feature_mgr_table_parent_inst(const char *feature_name, pfe_fw_feature_t **feature)
+{
+	errno_t ret = EOK;
+	bool_t class_parrent = TRUE;
+
+	if(feature_name[0] == 'u' && feature_name[1] == '_')
+	{
+		feature_name += 2;
+		class_parrent = FALSE;
+	}
+
+	if(TRUE == class_parrent)
+	{
+		if (NULL == feature_mgr->class)
+		{ /* Class block is not initialized */
+			ret = EINVAL;
+		}
+		else
+		{
+			ret = pfe_class_get_feature(feature_mgr->class, feature, feature_name);
+		}
+	}
+	else
+	{
+		if (NULL == feature_mgr->util)
+		{ /* Class block is not initialized */
+			ret = EINVAL;
+		}
+		else
+		{
+			ret = pfe_util_get_feature(feature_mgr->util, feature, feature_name);
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Sets a value in the provided feature table element
+ * @param[in]	feature_name Name of the feature to set the value
+ * @param[in]	table_type In witch table the element is looked for
+ * @param[in]	table_el_name Name of the table element to set the value
+ * @param[in]	index Index of the value in the table
+				index=0 means set the value on all table described by elemnt
+				index > 0 means to set the value at a specific index witch
+				start from 1.
+ * @param[in]	val Value to be set
+ * @return		EOK or failure code.
+ */
+errno_t pfe_feature_mgr_table_set_val(const char *feature_name, uint8_t table_type, const char *table_el_name, uint8_t index, uint8_t* val)
+{
+	pfe_fw_feature_t	*fw_feature;
+	pfe_fw_tbl_handle_t	fw_feature_table_entry;
+	errno_t				ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name || NULL == val)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		ret = pfe_feature_mgr_table_parent_inst(feature_name, &fw_feature);
+		if (EOK == ret)
+		{
+			switch (table_type)
+			{
+				case FW_FEATURE_TABLE_DEFAULT:
+					ret = pfe_fw_feature_table_cfg_by_name(fw_feature, table_el_name, &fw_feature_table_entry);
+					if (ENOENT == ret)
+					{
+						ret = pfe_fw_feature_table_stats_by_name(fw_feature, table_el_name, &fw_feature_table_entry);
+					}
+					break;
+				case FW_FEATURE_TABLE_CONFIG:
+					ret = pfe_fw_feature_table_cfg_by_name(fw_feature, table_el_name, &fw_feature_table_entry);
+					break;
+				case FW_FEATURE_TABLE_STATS:
+					ret = pfe_fw_feature_table_stats_by_name(fw_feature, table_el_name, &fw_feature_table_entry);
+					break;
+				default:
+					ret = EINVAL;
+			}
+
+			if (EOK == ret)
+			{
+				if (index == 0)
+				{
+					ret = pfe_fw_feature_table_entry_set(fw_feature_table_entry, (void *) val, pfe_fw_feature_table_entry_allocsize(fw_feature_table_entry));
+				}
+				else
+				{
+					ret = pfe_fw_feature_table_entry_set_by_idx(fw_feature_table_entry, (void *) val, index-1);
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief	Returns the 1st feature table stats element
+ *			(resets the features table stts element query)
+ * @param[in]	feature_name Name of the feature to be set.
+ * @param[out]	Name of the 1st element.
+ * @return		EOK or failure code.
+ */
+static errno_t pfe_feature_mgr_table_stats_first(const char *feature_name, const char **table_el_name)
+{
+	pfe_fw_feature_t	*fw_feature;
+	pfe_fw_tbl_handle_t	fw_feature_table_stats;
+	errno_t				ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{ 
+		ret = pfe_feature_mgr_table_parent_inst(feature_name, &fw_feature);
+		if (EOK == ret)
+		{
+			ret = pfe_fw_feature_table_stats_first(fw_feature, &fw_feature_table_stats);
+			if (EOK == ret)
+			{
+				ret = pfe_fw_feature_table_entry_name(fw_feature_table_stats, table_el_name);
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief	Returns the next feature element in stats table
+ *			(continues the features table stats query)
+ * @param[in]	feature_name Name of the feature to be set
+ * @param[out]	Name of the next element.
+ * @return		EOK or failure code.
+ */
+static errno_t pfe_feature_mgr_table_stats_next(const char *feature_name, const char **table_el_name)
+{
+	pfe_fw_feature_t	*fw_feature;
+	pfe_fw_tbl_handle_t	fw_feature_table_stats;
+	errno_t				ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		ret = pfe_feature_mgr_table_parent_inst(feature_name, &fw_feature);
+		if (EOK == ret)
+		{
+			ret = pfe_fw_feature_table_stats_next(fw_feature, &fw_feature_table_stats);
+			if (EOK == ret)
+			{
+				ret = pfe_fw_feature_table_entry_name(fw_feature_table_stats, table_el_name);
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief	Returns the 1st feature table config element 
+ *			(resets the features table config element query)
+ * @param[in]	feature_name Name of the feature to be set.
+ * @param[out]	Name of the 1st element.
+ * @return		EOK or failure code.
+ */
+static errno_t pfe_feature_mgr_table_cfg_first(const char *feature_name, const char **table_el_name)
+{
+	pfe_fw_feature_t	*fw_feature;
+	pfe_fw_tbl_handle_t	fw_feature_table_cfg;
+	errno_t				ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		ret = pfe_feature_mgr_table_parent_inst(feature_name, &fw_feature);
+		if (EOK == ret)
+		{
+			ret = pfe_fw_feature_table_cfg_first(fw_feature, &fw_feature_table_cfg);
+			if (EOK == ret)
+			{
+				ret = pfe_fw_feature_table_entry_name(fw_feature_table_cfg, table_el_name);
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief	Returns the next feature element in config table 
+ * 			(continues the features table config query)
+ * @param[in]	feature_name Name of the feature to be set
+ * @param[out]	Name of the next element.
+ * @return		EOK or failure code.
+ */
+static errno_t pfe_feature_mgr_table_cfg_next(const char *feature_name, const char **table_el_name)
+{
+	pfe_fw_feature_t	*fw_feature;
+	pfe_fw_tbl_handle_t	fw_feature_table_cfg;
+	errno_t				ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == feature_table_name)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		ret = pfe_feature_mgr_table_parent_inst(feature_name, &fw_feature);
+		if (EOK == ret)
+		{
+			ret = pfe_fw_feature_table_cfg_next(fw_feature, &fw_feature_table_cfg);
+			if (EOK == ret)
+			{
+				ret = pfe_fw_feature_table_entry_name(fw_feature_table_cfg, table_el_name);
+			}
+		}
+ 	}
+
+	return ret;
+}
+
+/**
+ * @brief		Returns the 1st feature table element (resets the features table element query)
+ * @param[in]	feature_name Name of the feature to be set
+ * @param[in]	table_type In witch table the element is looked for
+ * @param[out]	Name of the 1st element
+ * @return		EOK or failure code.
+ */
+errno_t pfe_feature_mgr_table_first(const char *feature_name, uint8_t table_type, const char **table_el_name)
+{
+	errno_t ret = EOK;
+
+	switch(table_type)
+	{
+		case FW_FEATURE_TABLE_DEFAULT:
+			ret = pfe_feature_mgr_table_cfg_first(feature_name, table_el_name);
+			table_rewind_flag = TRUE;
+			if (EOK != ret)
+			{
+				ret = pfe_feature_mgr_table_stats_first(feature_name, table_el_name);
+				table_rewind_flag = FALSE;
+			}
+			break;
+		case FW_FEATURE_TABLE_CONFIG:
+			ret = pfe_feature_mgr_table_cfg_first(feature_name, table_el_name);
+			break;
+		case FW_FEATURE_TABLE_STATS:
+			ret = pfe_feature_mgr_table_stats_first(feature_name, table_el_name);
+			break;
+		default:
+			ret = EINVAL;
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Returns the next feature element (continues the features element query)
+ * @param[in]	feature_name Name of the feature to be set
+ * @param[in]	table_type In witch table the element is looked for
+ * @param[out]	feature table name of the next element
+ * @return		EOK or failure code.
+ */
+
+errno_t pfe_feature_mgr_table_next(const char *feature_name, uint8_t table_type, const char **table_el_name)
+{
+	errno_t ret = EOK;
+
+	switch(table_type)
+	{
+		case FW_FEATURE_TABLE_DEFAULT:
+			ret = pfe_feature_mgr_table_cfg_next(feature_name, table_el_name);
+			if (ENOENT == ret)
+			{
+				if (TRUE == table_rewind_flag)
+				{
+					ret = pfe_feature_mgr_table_stats_first(feature_name, table_el_name);
+					table_rewind_flag = FALSE;
+				}
+				else
+				{
+					ret = pfe_feature_mgr_table_stats_next(feature_name, table_el_name);
+				}
+			}
+			break;
+		case FW_FEATURE_TABLE_CONFIG:
+			ret = pfe_feature_mgr_table_cfg_next(feature_name, table_el_name);
+			break;
+		case FW_FEATURE_TABLE_STATS:
+			ret = pfe_feature_mgr_table_stats_next(feature_name, table_el_name);
+			break;
+		default:
+			ret = EINVAL;
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Reads the config table element size
+ * @param[in]	feature_name Name of the feature to be read
+ * @param[in]	table_el_name Name of the table element to be read
+ * @param[out]	count The read value of the table element size
+ * @return		EOK or failure code.
+ */
+static errno_t pfe_feature_mgr_table_cfg_get_size(const char *feature_name, const char *table_el_name, uint8_t *size)
+{
+	pfe_fw_feature_t	*fw_feature;
+	pfe_fw_tbl_handle_t	fw_feature_table_cfg;
+	errno_t				ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name || NULL == size)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		ret = pfe_feature_mgr_table_parent_inst(feature_name, &fw_feature);
+		if (EOK == ret)
+		{
+			ret = pfe_fw_feature_table_cfg_by_name(fw_feature, table_el_name, &fw_feature_table_cfg);
+			if (EOK == ret)
+			{
+				*size = pfe_fw_feature_table_entry_size(fw_feature_table_cfg);
+			}
+		}
+	}
+	return ret;
+}
+
+/**
+ * @brief		Reads the config table element multiplicity
+ * @param[in]	feature_name Name of the feature to be read
+ * @param[in]	table_el_name Name of the table element to be read
+ * @param[out]	count The read value of the table element multiplicity
+ * @return		EOK or failure code.
+ */
+static errno_t pfe_feature_mgr_table_cfg_get_multiplicity(const char *feature_name, const char *table_el_name, uint8_t *count)
+{
+	pfe_fw_feature_t	*fw_feature;
+	pfe_fw_tbl_handle_t	fw_feature_table_cfg;
+	errno_t				ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name || NULL == count)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		ret = pfe_feature_mgr_table_parent_inst(feature_name, &fw_feature);
+		if (EOK == ret)
+		{
+			ret = pfe_fw_feature_table_cfg_by_name(fw_feature, table_el_name, &fw_feature_table_cfg);
+			if (EOK == ret)
+			{
+				*count = pfe_fw_feature_table_entry_multiplicity(fw_feature_table_cfg);
+			}
+		}
+	}
+	return ret;
+}
+
+/**
+ * @brief		Reads the config table element payload
+ * @param[in]	feature_name Name of the feature to be read
+ * @param[in]	table_el_name Name of the table element to be read
+ * @param[out]	payload The read value of the table element payload
+ * @return		EOK or failure code.
+ */
+static errno_t pfe_feature_mgr_table_cfg_get_payload(const char *feature_name, const char *table_el_name, uint8_t *payload)
+{
+
+	pfe_fw_feature_t	*fw_feature;
+	pfe_fw_tbl_handle_t	fw_feature_table_cfg;
+	errno_t				ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name || NULL == payload)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		ret = pfe_feature_mgr_table_parent_inst(feature_name, &fw_feature);
+		if (EOK == ret)
+		{
+			ret = pfe_fw_feature_table_cfg_by_name(fw_feature, table_el_name, &fw_feature_table_cfg);
+			if (EOK == ret)
+			{
+				pfe_fw_feature_table_entry_get(fw_feature_table_cfg, payload,
+						pfe_fw_feature_table_entry_allocsize(fw_feature_table_cfg), FALSE);
+			}
+		}
+	}
+ 	return ret;
+}
+
+/**
+ * @brief		Reads the stats table element size
+ * @param[in]	feature_name Name of the feature to be read
+ * @param[in]	table_el_name Name of the table element to be read
+ * @param[out]	size The read value of the table element size
+ * @return		EOK or failure code.
+ */
+static errno_t pfe_feature_mgr_table_stats_get_size(const char *feature_name, const char *table_el_name, uint8_t *size)
+{
+	pfe_fw_feature_t	*fw_feature;
+	pfe_fw_tbl_handle_t	fw_feature_table_stats;
+	errno_t				ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name || NULL == size)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		ret = pfe_feature_mgr_table_parent_inst(feature_name, &fw_feature);
+		if (EOK == ret)
+		{
+			ret = pfe_fw_feature_table_stats_by_name(fw_feature, table_el_name, &fw_feature_table_stats);
+			if (EOK == ret)
+			{
+				*size = pfe_fw_feature_table_entry_size(fw_feature_table_stats);
+			}
+		}
+	}
+	return ret;
+}
+
+/**
+ * @brief		Reads the stats table element multiplicity
+ * @param[in]	feature_name Name of the feature to be read
+ * @param[in]	table_el_name Name of the table element to be read
+ * @param[out]	count The read value of the table element multiplicity
+ * @return		EOK or failure code.
+ */
+static errno_t pfe_feature_mgr_table_stats_get_multiplicity(const char *feature_name, const char *table_el_name, uint8_t *count)
+{
+	pfe_fw_feature_t	*fw_feature;
+	pfe_fw_tbl_handle_t	fw_feature_table_stats;
+	errno_t				ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name || NULL == count)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		ret = pfe_feature_mgr_table_parent_inst(feature_name, &fw_feature);
+		if (EOK == ret)
+		{
+			ret = pfe_fw_feature_table_stats_by_name(fw_feature, table_el_name, &fw_feature_table_stats);
+			if (EOK == ret)
+			{
+				*count = pfe_fw_feature_table_entry_multiplicity(fw_feature_table_stats);
+			}
+		}
+	}
+	return ret;
+}
+
+/**
+ * @brief		Reads the stats table element payload
+ * @param[in]	feature_name Name of the feature to be read
+ * @param[in]	table_el_name Name of the table element to be read
+ * @param[out]	payload The read value of the table element payload
+ * @return		EOK or failure code.
+ */
+static errno_t pfe_feature_mgr_table_stats_get_payload(const char *feature_name, const char *table_el_name, uint8_t *payload)
+{
+
+	pfe_fw_feature_t	*fw_feature;
+	pfe_fw_tbl_handle_t	fw_feature_table_stats;
+	errno_t			ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name || NULL == payload)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		ret = pfe_feature_mgr_table_parent_inst(feature_name, &fw_feature);
+		if (EOK == ret)
+		{
+			ret = pfe_fw_feature_table_stats_by_name(fw_feature, table_el_name, &fw_feature_table_stats);
+			if (EOK == ret)
+			{
+				pfe_fw_feature_table_entry_get(fw_feature_table_stats, payload,
+						pfe_fw_feature_table_entry_allocsize(fw_feature_table_stats), TRUE);
+			}
+		}
+	}
+	return ret;
+}
+
+/**
+ * @brief		Reads the table element size
+ * @param[in]	feature_name Name of the feature to be read
+ * @param[in]   table_el_name Name of the table element to be read
+ * @param[in]   table_type In witch table the element is looked for
+ * @param[out]	size The read value of the table element size
+ * @return		EOK or failure code.
+ */
+errno_t pfe_feature_mgr_table_get_size(const char *feature_name, uint8_t table_type, const char *table_el_name, uint8_t *size)
+{
+	errno_t ret = EOK;
+	
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name || NULL == size)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		switch(table_type)
+		{
+			case FW_FEATURE_TABLE_DEFAULT:
+				ret = pfe_feature_mgr_table_cfg_get_size(feature_name, table_el_name, size);
+				if (EOK != ret)
+				{
+					ret = pfe_feature_mgr_table_stats_get_size(feature_name, table_el_name, size);
+				}
+				break;
+			case FW_FEATURE_TABLE_CONFIG:
+				ret = pfe_feature_mgr_table_cfg_get_size(feature_name, table_el_name, size);
+				break;
+			case FW_FEATURE_TABLE_STATS:
+				ret = pfe_feature_mgr_table_stats_get_size(feature_name, table_el_name, size);
+				break;
+			default:
+				ret = EINVAL;
+		}
+	}
+	return ret;
+}
+
+/**
+ * @brief		Reads the table element multiplicity
+ * @param[in]	feature_name Name of the feature to be read
+ * @param[in]	table_el_name Name of the table element to be read
+ * @param[in]	table_type In witch table the element is looked for
+ * @param[out]	count The read value of the table element multiplicity
+ * @return		EOK or failure code.
+ */
+errno_t pfe_feature_mgr_table_get_multiplicity(const char *feature_name, uint8_t table_type, const char *table_el_name, uint8_t *count)
+{
+	errno_t ret = EOK;
+	
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name || NULL == count)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		switch(table_type)
+		{
+			case FW_FEATURE_TABLE_DEFAULT:
+				ret = pfe_feature_mgr_table_cfg_get_multiplicity(feature_name, table_el_name, count);
+				if (EOK != ret)
+				{
+					ret = pfe_feature_mgr_table_stats_get_multiplicity(feature_name, table_el_name, count);
+				}
+				break;
+			case FW_FEATURE_TABLE_CONFIG:
+				ret = pfe_feature_mgr_table_cfg_get_multiplicity(feature_name, table_el_name, count);
+				break;
+			case FW_FEATURE_TABLE_STATS:
+				ret = pfe_feature_mgr_table_stats_get_multiplicity(feature_name, table_el_name, count);
+				break;
+			default:
+				ret = EINVAL;
+		}
+	}
+	return ret;
+}
+
+/**
+ * @brief		Reads the table element payload
+ * @param[in]	feature_name Name of the feature to be read
+ * @param[in]	table_el_name Name of the table element to be read
+ * @param[in]	table_type In witch table the element is looked for
+ * @param[out]	payload The read value of the table element payload
+ * @return		EOK or failure code.
+ */
+errno_t pfe_feature_mgr_table_get_payload(const char *feature_name, uint8_t table_type, const char *table_el_name, uint8_t *payload)
+{
+	errno_t ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == feature_name || NULL == table_el_name || NULL == count)
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif
+	{
+		switch(table_type)
+		{
+			case FW_FEATURE_TABLE_DEFAULT:
+				ret = pfe_feature_mgr_table_cfg_get_payload(feature_name, table_el_name, payload);
+				if (EOK != ret)
+				{
+					ret = pfe_feature_mgr_table_stats_get_payload(feature_name, table_el_name, payload);
+				}
+				break;
+			case FW_FEATURE_TABLE_CONFIG:
+				ret = pfe_feature_mgr_table_cfg_get_payload(feature_name, table_el_name, payload);
+				break;
+			case FW_FEATURE_TABLE_STATS:
+				ret = pfe_feature_mgr_table_stats_get_payload(feature_name, table_el_name, payload);
+				break;
+			default:
+				ret = EINVAL;
 		}
 	}
 	return ret;

@@ -3369,6 +3369,46 @@ typedef struct CAL_PACKED_ALIGNED(2)
 } fpp_fw_features_cmd_t;
 /* [fpp_fw_features_cmd_t] */
 
+#define FPP_CMD_FW_FEATURE_ELEMENT				0xf260
+#define FPP_ERR_FW_FEATURE_ELEMENT_NOT_FOUND		0xf261
+#define FPP_ERR_FW_FEATURE_ELEMENT_READ_ONLY		0xf262
+
+enum CAL_PACKED
+{
+    FW_FEATURE_ELEMENT_DEFAUT = 0U,
+    FW_FEATURE_ELEMENT_CONFIG = 1U,
+    FW_FEATURE_ELEMENT_STATS = 2U
+};
+
+/* [fpp_fw_feature_element_cmd_t] */
+typedef struct CAL_PACKED_ALIGNED(4)
+{
+    uint16_t action;                                 /*< Action */
+    char fw_feature_name[FPP_FEATURE_NAME_SIZE + 1]; /*< Name of a fw feature (see fpp_fw_features_cmd_t) */
+    char element_name[FPP_FEATURE_NAME_SIZE + 1];    /*< Name of the fw feature's target element */
+    uint8_t group; /*< Element group
+                                             0 == ANY ; No group specified. Special value, intended only for FPP_ACTION_QUERY.
+                                                        FPP_ACTION_QUERY command with EMPTY element_name[] and with this group starts
+                                                        a QUERY/QUERY_CONT process that will successively report all elements of 
+                                                        the parent fw feature (regardless of their element group).
+                                             1 == CFG  ;Configuration group. Command with this group can target only some configuration element.
+                                                        FPP_ACTION_QUERY command with EMPTY element_name[] and with this group starts
+                                                        a QUERY/QUERY_CONT process that will successively report all configuration elements of 
+                                                        the parent fw feature.
+                                             2 == STATS ; Statistics group. Command with this group can target only some statistics element.
+                                                        FPP_ACTION_QUERY command with EMPTY element_name[] and with this group starts
+                                                        a QUERY/QUERY_CONT process that will successively report all statistics elements of 
+                                                        the parent fw feature. */
+
+    uint8_t unit_size;     /*< Byte size of element's data unit.
+                               Data unit exact size (and underlying data type) is feature and element specific.
+                               See appropriate documentation of fw feature elements. */
+    uint8_t index;         /*< Index into element's data (as laid out in PFE firmware) which correspond with the first data unit in the .payload */
+    uint8_t count;         /*< Count of consecutive data units in the .payload */
+    uint8_t payload[128];  /*< Data (composed of one or more data units). */
+} fpp_fw_features_element_cmd_t;
+/* [fpp_fw_feature_element_cmd_t] */
+
 /**
  * @def         FPP_CMD_FCI_OWNERSHIP_LOCK
  * @brief       FCI command to get FCI ownership.

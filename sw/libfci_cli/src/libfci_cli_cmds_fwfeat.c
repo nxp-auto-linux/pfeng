@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2022 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -111,6 +111,65 @@ static int fwfeat_print(const fpp_fw_features_cmd_t* p_fwfeat)
     return (FPP_ERR_OK); 
 }
 
+static int fwfeat_el_print(const fpp_fw_features_element_cmd_t* p_fwfeat_el)
+{
+    assert(NULL != p_fwfeat_el);
+    
+    /* NOTE: native data type to comply with 'printf()' conventions (asterisk specifier) */
+    int indent = 0;
+    
+    uint8_t unit_size = 0u;
+    uint8_t count = 0u;
+    const uint8_t* p_payload = NULL;
+    demo_fwfeat_el_ld_get_payload(p_fwfeat_el, &p_payload, &count, &unit_size);
+    
+    printf("%-*s%s\n", indent, "", demo_fwfeat_el_ld_get_name(p_fwfeat_el));
+    
+    indent += 4;
+    
+    {
+        const uint8_t group = demo_fwfeat_el_ld_get_group(p_fwfeat_el);
+        printf("%-*sel-group:  %s (0x%02x)\n"
+               "%-*sunit-size: %hhu\n"
+               "%-*scount:     %hhu\n"
+               "%-*spayload:   ",
+               indent, "", cli_value2txt_fwfeat_el_group(group), group,
+               indent, "", unit_size,
+               indent, "", count,
+               indent, "");  /* indent for payload data is done here ; actual payload is printed in the next code block */
+    }
+    
+    {
+        const char* p_txt_delim = ""; /* no delim for the 1st item */
+        for (uint8_t i = 0; (i < count); i++)
+        {
+            printf("%s", p_txt_delim);
+            switch (unit_size)
+            {
+                case 1u:
+                    printf("0x%02x", p_payload[i]);
+                break;
+                
+                case 2u:
+                    printf("0x%04x", ((const uint16_t*)p_payload)[i]);
+                break;
+                
+                case 4u:
+                    printf("0x%08x", ((const uint32_t*)p_payload)[i]);
+                break;
+                
+                default:
+                    printf("__INVALID_ITEM__");
+                break;
+            }
+            p_txt_delim = " ; ";
+        }
+        printf("\n");
+    }
+    
+    return (FPP_ERR_OK); 
+}
+
 /* ==== PUBLIC FUNCTIONS =================================================== */ 
 
 int cli_cmd_fwfeat_print(const cli_cmdargs_t *p_cmdargs)
@@ -171,4 +230,105 @@ int cli_cmd_fwfeat_set(const cli_cmdargs_t *p_cmdargs)
     return (rtn);
 }
 
+int cli_cmd_fwfeat_el_print(const cli_cmdargs_t *p_cmdargs)
+{
+    assert(NULL != cli_p_cl);
+    assert(NULL != p_cmdargs);
+    
+    
+    int rtn = CLI_ERR;
+    fpp_fw_features_element_cmd_t fwfeat_el = {0};
+    
+    /* check for mandatory opts */
+    const mandopt_t mandopts[] = 
+    {
+        {OPT_FEATURE, NULL, (p_cmdargs->feature_name.is_valid)},
+    };
+    rtn = cli_mandopt_check(mandopts, MANDOPTS_CALC_LN(mandopts));
+    
+    /* exec */
+    if (FPP_ERR_OK == rtn)
+    {
+        if (p_cmdargs->element_name.is_valid)
+        {
+            /* print a single FW feature element */
+            rtn = demo_fwfeat_el_get_by_name(cli_p_cl, &fwfeat_el, 
+                                             (p_cmdargs->feature_name.txt),
+                                             (p_cmdargs->element_name.txt),
+                                             (p_cmdargs->element_group.value),
+                                             (p_cmdargs->offset.value));
+            if (FPP_ERR_OK == rtn)
+            {
+                rtn = fwfeat_el_print(&fwfeat_el);
+            }
+        }
+        else
+        {
+            /* print all elements of a FW feature */
+            rtn = demo_fwfeat_el_print_all(cli_p_cl, fwfeat_el_print, (p_cmdargs->feature_name.txt), (p_cmdargs->element_group.value));
+        }
+    }
+    
+    return (rtn);
+}
+
+int cli_cmd_fwfeat_el_set(const cli_cmdargs_t *p_cmdargs)
+{
+    assert(NULL != cli_p_cl);
+    assert(NULL != p_cmdargs);
+    
+    
+    int rtn = CLI_ERR;
+    fpp_fw_features_element_cmd_t fwfeat_el = {0};
+    
+    /* check for mandatory opts */
+    const mandopt_t mandopts[] = 
+    {
+        {OPT_FEATURE,   NULL, (p_cmdargs->feature_name.is_valid)},
+        {OPT_ELEMENT,   NULL, (p_cmdargs->element_name.is_valid)},
+        {OPT_UNIT_SIZE, NULL, (p_cmdargs->unit_size.is_valid)},
+        {OPT_PAYLOAD,   NULL, (p_cmdargs->payload.is_valid)},
+    };
+    rtn = cli_mandopt_check(mandopts, MANDOPTS_CALC_LN(mandopts));
+    
+    /* get init local data ; if this is successful, then local data should have correct element group and correct index (offset) */
+    if (FPP_ERR_OK == rtn)
+    {
+        rtn = demo_fwfeat_el_get_by_name(cli_p_cl, &fwfeat_el, 
+                                         (p_cmdargs->feature_name.txt),
+                                         (p_cmdargs->element_name.txt),
+                                         (p_cmdargs->element_group.value),
+                                         (p_cmdargs->offset.value));
+    }
+    
+    /* modify local data - payload and its associated values */
+    if (FPP_ERR_OK == rtn)
+    {
+        rtn = demo_fwfeat_el_set_payload(&fwfeat_el, (p_cmdargs->payload.arr), (p_cmdargs->payload.count), (p_cmdargs->unit_size.value));
+    }
+    
+    /*
+     * HACK: Currently (9th November 2022), PFE driver does not provide correct info about element group nor about index (offset).
+     *       In order to allow setting of data at particular indexes, let's add here explicit setting of element group and index.
+     */
+    if (FPP_ERR_OK == rtn)
+    {
+        if (p_cmdargs->element_group.is_valid)
+        {
+            demo_fwfeat_el_set_group(&fwfeat_el, (p_cmdargs->element_group.value));
+        }
+        if (p_cmdargs->offset.is_valid)
+        {
+            demo_fwfeat_el_set_index(&fwfeat_el, (p_cmdargs->offset.value));
+        }
+    }
+    
+    /* exec */
+    if (FPP_ERR_OK == rtn)
+    {
+        rtn = demo_fwfeat_el_set(cli_p_cl, &fwfeat_el);
+    }
+    
+    return (rtn);
+}
 /* ========================================================================= */

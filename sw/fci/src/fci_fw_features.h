@@ -14,6 +14,7 @@
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 extern errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_cmd_t *reply_buf, uint32_t *reply_len);
+extern errno_t fci_fw_features_element_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_element_cmd_t *reply_buf, uint32_t *reply_len);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

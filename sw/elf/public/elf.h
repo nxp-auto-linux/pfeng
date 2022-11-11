@@ -35,6 +35,7 @@
  2) needed interfaces from external units
  3) internal and external interfaces from this unit
 ==================================================================================================*/
+#include <uapi/linux/elf.h>
 #include "oal.h"
 
 /*==================================================================================================
