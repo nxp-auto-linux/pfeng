@@ -366,6 +366,10 @@ pfe_tmu_t *pfe_tmu_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_tmu_cf
 			/*	Set new configuration */
 			pfe_tmu_init(tmu, cfg);
 		}
+		else
+		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
+		}
 	}
 
 	return tmu;
@@ -763,12 +767,12 @@ errno_t pfe_tmu_queue_set_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy
 		{
 			if (zone >= pfe_tmu_queue_get_wred_zones(tmu, phy, queue))
 			{
-				NXP_LOG_DEBUG("Zone index out of range\n");
+				NXP_LOG_WARNING("Zone index out of range\n");
 				ret = EINVAL;
 			}
 			else if (prob > 100U)
 			{
-				NXP_LOG_DEBUG("Probability out of range\n");
+				NXP_LOG_WARNING("Probability out of range\n");
 				ret = EINVAL;
 			}
 			else
@@ -811,7 +815,7 @@ errno_t pfe_tmu_queue_get_wred_prob(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy
 		{
 			if (zone >= pfe_tmu_queue_get_wred_zones(tmu, phy, queue))
 			{
-				NXP_LOG_DEBUG("Zone index out of range\n");
+				NXP_LOG_WARNING("Zone index out of range\n");
 				ret = EINVAL;
 			}
 			else

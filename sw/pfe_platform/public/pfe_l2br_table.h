@@ -49,7 +49,6 @@ pfe_l2br_table_iterator_t *pfe_l2br_iterator_create(void);
 errno_t pfe_l2br_iterator_destroy(const pfe_l2br_table_iterator_t *inst);
 errno_t pfe_l2br_table_get_first(pfe_l2br_table_t *l2br, pfe_l2br_table_iterator_t *l2t_iter, pfe_l2br_table_get_criterion_t crit, pfe_l2br_table_entry_t *entry);
 errno_t pfe_l2br_table_get_next(pfe_l2br_table_t *l2br, pfe_l2br_table_iterator_t *l2t_iter, pfe_l2br_table_entry_t *entry);
-errno_t pfe_l2br_iterator_halt(pfe_l2br_table_iterator_t *inst);
 
 pfe_l2br_table_entry_t *pfe_l2br_table_entry_create(const pfe_l2br_table_t *l2br);
 errno_t pfe_l2br_table_entry_destroy(const pfe_l2br_table_entry_t *entry);

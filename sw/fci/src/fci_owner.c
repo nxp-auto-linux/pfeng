@@ -60,6 +60,10 @@ errno_t fci_owner_init(fci_init_info_t *info)
 	/* Default FCI ownership holder. Beware of availability of OAL_PFE_CFG_MASTER_IF if it is needed here! */
 	fci_owner_context.lock_owner_if = PFE_PHY_IF_ID_INVALID;
 	ret = oal_mutex_init(&fci_owner_context.fci_owner_mutex);
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Mutex initialization failed\n");
+	}
 
 	return ret;
 }
@@ -69,7 +73,10 @@ errno_t fci_owner_init(fci_init_info_t *info)
  */
 void fci_owner_fini(void)
 {
-        (void)oal_mutex_destroy(&fci_owner_context.fci_owner_mutex);
+	if (EOK != oal_mutex_destroy(&fci_owner_context.fci_owner_mutex))
+	{
+		NXP_LOG_ERROR("Mutex destroy failed\n");
+	}
 }
 
 /**
@@ -230,6 +237,10 @@ errno_t fci_owner_mutex_lock(void)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
 		ret = oal_mutex_lock(&fci_owner_context.fci_owner_mutex);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
 	}
 
 	return ret;
@@ -256,6 +267,10 @@ errno_t fci_owner_mutex_unlock(void)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
 		ret = oal_mutex_unlock(&fci_owner_context.fci_owner_mutex);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Mutex unlock failed\n");
+		}
 	}
 
 	return ret;

@@ -143,7 +143,7 @@ static errno_t pfe_platform_create_hif(pfe_platform_t *platform, const pfe_platf
 				slave_tmout--;
 				if (0U == slave_tmout)
 				{
-					NXP_LOG_INFO("Detection Master UP timeouted\n");
+					NXP_LOG_ERROR("Detection Master UP timeouted\n");
 					return ETIMEDOUT;
 				}
 			}
@@ -260,7 +260,7 @@ errno_t pfe_platform_register_log_if(const pfe_platform_t *platform, pfe_log_if_
 	ret = pfe_if_db_lock(&session_id);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("DB lock failed: %d\n", ret);
+		NXP_LOG_ERROR("DB lock failed: %d\n", ret);
 		return ret;
 	}
 
@@ -274,7 +274,7 @@ errno_t pfe_platform_register_log_if(const pfe_platform_t *platform, pfe_log_if_
 
 	if (EOK != pfe_if_db_unlock(session_id))
 	{
-		NXP_LOG_DEBUG("DB unlock failed\n");
+		NXP_LOG_ERROR("DB unlock failed\n");
 	}
 
 	return ret;
@@ -302,7 +302,7 @@ errno_t pfe_platform_unregister_log_if(const pfe_platform_t *platform, pfe_log_i
 	ret = pfe_if_db_lock(&session_id);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("DB lock failed: %d\n", ret);
+		NXP_LOG_ERROR("DB lock failed: %d\n", ret);
 		return ret;
 	}
 
@@ -318,7 +318,7 @@ errno_t pfe_platform_unregister_log_if(const pfe_platform_t *platform, pfe_log_i
 
 	if (EOK != pfe_if_db_unlock(session_id))
 	{
-		NXP_LOG_DEBUG("DB unlock failed\n");
+		NXP_LOG_ERROR("DB unlock failed\n");
 	}
 
 	return ret;
@@ -372,14 +372,14 @@ pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_
 
 	if (EOK != pfe_if_db_lock(&session_id))
 	{
-		NXP_LOG_DEBUG("DB lock failed\n");
+		NXP_LOG_ERROR("DB lock failed\n");
 	}
 
 	pfe_if_db_get_first(platform->phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)id, &entry);
 
 	if (EOK != pfe_if_db_unlock(session_id))
 	{
-		NXP_LOG_DEBUG("DB unlock failed\n");
+		NXP_LOG_ERROR("DB unlock failed\n");
 	}
 
 	return pfe_if_db_entry_get_phy_if(entry);
@@ -401,13 +401,13 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 		platform->phy_if_db = pfe_if_db_create(PFE_IF_DB_PHY);
 		if (NULL == platform->phy_if_db)
 		{
-			NXP_LOG_DEBUG("Can't create physical interface DB\n");
+			NXP_LOG_ERROR("Can't create physical interface DB\n");
 			return ENODEV;
 		}
 
 		if (EOK != pfe_if_db_lock(&session_id))
 		{
-			NXP_LOG_DEBUG("DB lock failed\n");
+			NXP_LOG_ERROR("DB lock failed\n");
 		}
 
 		/*	Create physical interfaces */
@@ -437,7 +437,7 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 
 		if (EOK != pfe_if_db_unlock(session_id))
 		{
-			NXP_LOG_DEBUG("DB unlock failed\n");
+			NXP_LOG_ERROR("DB unlock failed\n");
 		}
 
 		if (EOK != ret)
@@ -451,7 +451,7 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 		platform->log_if_db = pfe_if_db_create(PFE_IF_DB_LOG);
 		if (NULL == platform->log_if_db)
 		{
-			NXP_LOG_DEBUG("Can't create logical interface DB\n");
+			NXP_LOG_ERROR("Can't create logical interface DB\n");
 			return ENODEV;
 		}
 	}
@@ -492,6 +492,83 @@ static void pfe_platform_destroy_fci(pfe_platform_t *platform)
 #endif /* PFE_CFG_FCI_ENABLE */
 
 /**
+ * @brief		Assign EMAC to the platform
+ */
+static errno_t pfe_platform_create_emac(pfe_platform_t *platform, const pfe_platform_config_t *config)
+{
+	errno_t ret = EOK;
+
+	/*	Create storage for instances */
+	platform->emac = oal_mm_malloc(platform->emac_count * sizeof(pfe_emac_t *));
+	if (NULL == platform->emac)
+	{
+		NXP_LOG_ERROR("oal_mm_malloc() failed\n");
+		ret = ENOMEM;
+	}
+	else
+	{
+
+		/*	EMAC1 */
+		platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC1_BASE_ADDR,
+								config->emac_mode[0], EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
+		if (NULL == platform->emac[0])
+		{
+			NXP_LOG_ERROR("Couldn't create EMAC1 instance\n");
+			ret = ENODEV;
+		}
+
+		/*	EMAC2 */
+		if (EOK == ret)
+		{
+			platform->emac[1] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC2_BASE_ADDR,
+									config->emac_mode[1], EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
+			if (NULL == platform->emac[1])
+			{
+				NXP_LOG_ERROR("Couldn't create EMAC2 instance\n");
+				ret = ENODEV;
+			}
+		}
+
+		/*	EMAC3 */
+		if (EOK == ret)
+		{
+			platform->emac[2] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC3_BASE_ADDR,
+									config->emac_mode[2], EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
+			if (NULL == platform->emac[2])
+			{
+				NXP_LOG_ERROR("Couldn't create EMAC3 instance\n");
+				ret = ENODEV;
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Release EMAC-related resources
+ */
+static void pfe_platform_destroy_emac(pfe_platform_t *platform)
+{
+	uint32_t ii;
+
+	if (NULL != platform->emac)
+	{
+		for (ii=0U; ii<platform->emac_count; ii++)
+		{
+			if (NULL != platform->emac[ii])
+			{
+				pfe_emac_destroy(platform->emac[ii]);
+				platform->emac[ii] = NULL;
+			}
+		}
+
+		oal_mm_free(platform->emac);
+		platform->emac = NULL;
+	}
+}
+
+/**
  * @brief	The platform initialization function
  * @details	Initializes the PFE HW platform and prepares it for usage according to configuration.
  */
@@ -516,6 +593,13 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
     pfe.pfe_version = *(uint32_t*)(void*)((addr_t)pfe.cbus_baseaddr + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_VERSION);
 	NXP_LOG_INFO("HW version 0x%x\n", (uint_t)pfe.pfe_version);
 
+	/* Health monitor */
+	ret = pfe_hm_init();
+	if (EOK != ret)
+	{
+		goto exit;
+	}
+
 	ret = pfe_platform_create_hif(&pfe, config);
 	if (EOK != ret)
 	{
@@ -539,6 +623,14 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	}
 #endif /* PFE_CFG_FCI_ENABLE */
 
+	/*	EMAC */
+	pfe.emac_count = 3U;
+	ret = pfe_platform_create_emac(&pfe, config);
+	if (EOK != ret)
+	{
+		goto exit;
+	}
+
 	pfe.probed = TRUE;
 
 	return EOK;
@@ -554,6 +646,8 @@ exit:
 errno_t pfe_platform_remove(void)
 {
 	errno_t ret;
+
+	pfe_platform_destroy_emac(&pfe);
 
 #if defined(PFE_CFG_FCI_ENABLE)
 	pfe_platform_destroy_fci(&pfe);

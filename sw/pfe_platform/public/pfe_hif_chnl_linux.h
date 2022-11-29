@@ -155,7 +155,9 @@
  * @details	When TRUE then RX OOB buffer management is embedded so caller layer
  * 			can process the RX_OOB_EVENT. FALSE removed the feature.
  */
+#ifndef PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED
 #define PFE_HIF_CHNL_CFG_RX_OOB_EVENT_ENABLED	FALSE
+#endif
 
 /**
  * @brief	List of available HIF channel events
@@ -199,6 +201,7 @@ bool_t pfe_hif_chnl_tx_fifo_empty(const pfe_hif_chnl_t *chnl) __attribute__((pur
 bool_t pfe_hif_chnl_has_tx_conf(const pfe_hif_chnl_t *chnl) __attribute__((pure, hot));
 errno_t pfe_hif_chnl_get_tx_conf(pfe_hif_chnl_t *chnl) __attribute__((hot));
 uint32_t pfe_hif_chnl_get_tx_fifo_depth(const pfe_hif_chnl_t *chnl) __attribute__((pure, cold));
+bool_t pfe_hif_chnl_tx_fifo_is_below_wm(const pfe_hif_chnl_t *chnl);
 
 /*	Instance control */
 pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, uint32_t id, const pfe_bmu_t *bmu) __attribute__((cold));

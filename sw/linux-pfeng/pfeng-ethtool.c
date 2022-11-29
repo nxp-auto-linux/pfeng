@@ -153,7 +153,7 @@ static int __pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coales
 	 * Note: Frame count triggered coalescing is not supported on S32G2 silicon
 	 */
 	if (ec->rx_max_coalesced_frames > 0 && ec->rx_coalesce_usecs == 0) {
-		netdev_err(netif->netdev, "Frame based coalescing is unsupported\n");
+		HM_MSG_NETDEV_ERR(netif->netdev, "Frame based coalescing is unsupported\n");
 		return -EINVAL;
 	}
 
@@ -249,7 +249,7 @@ int pfeng_ethtool_params_restore(struct pfeng_netif *netif) {
 
 	ret = __pfeng_set_coalesce(netdev, &ec);
 	if (ret)
-		netdev_warn(netdev, "Coalescing not restored\n");
+		HM_MSG_NETDEV_WARN(netdev, "Coalescing not restored\n");
 
 	/* Pause */
 	epp.tx_pause = netif->cfg->pause_tx;
@@ -257,7 +257,7 @@ int pfeng_ethtool_params_restore(struct pfeng_netif *netif) {
 	epp.autoneg = AUTONEG_DISABLE;
 	ret = pfeng_ethtool_set_pauseparam(netdev, &epp);
 	if (ret)
-		netdev_warn(netdev, "Pause not restored\n");
+		HM_MSG_NETDEV_WARN(netdev, "Pause not restored\n");
 
 	return 0;
 }

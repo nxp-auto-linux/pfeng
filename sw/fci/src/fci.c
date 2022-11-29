@@ -227,7 +227,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 							ret = pfe_class_put_data(fci_context->class, &buf);
 							if (EOK != ret)
 							{
-								NXP_LOG_DEBUG("pfe_class_buf_put() failed: %d\n", ret);
+								NXP_LOG_ERROR("pfe_class_buf_put() failed: %d\n", ret);
 								fci_ret = FPP_ERR_INTERNAL_FAILURE;
 							}
 						}
@@ -272,6 +272,10 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 							ret = fci_routes_cmd(msg, &fci_ret, (fpp_rt_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
 							(void)oal_mutex_unlock(&fci_context->db_mutex);
 						}
+						else
+						{
+							NXP_LOG_ERROR("Mutex lock failed\n");
+						}
 
 						break;
 					}
@@ -286,6 +290,10 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 							ret = fci_connections_ipv4_timeout_cmd(msg, &fci_ret, (fpp_timeout_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
 							(void)oal_mutex_unlock(&fci_context->db_mutex);
 						}
+						else
+						{
+							NXP_LOG_ERROR("Mutex lock failed\n");
+						}
 
 						break;
 					}
@@ -298,6 +306,10 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 						{
 							ret = fci_connections_ipv4_ct_cmd(msg, &fci_ret, (fpp_ct_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
 							(void)oal_mutex_unlock(&fci_context->db_mutex);
+						}
+						else
+						{
+							NXP_LOG_ERROR("Mutex lock failed\n");
 						}
 
 						break;
@@ -312,6 +324,10 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 							ret = fci_connections_ipv6_ct_cmd(msg, &fci_ret, (fpp_ct6_cmd_t *)reply_buf_ptr, reply_buf_len_ptr);
 							(void)oal_mutex_unlock(&fci_context->db_mutex);
 						}
+						else
+						{
+							NXP_LOG_ERROR("Mutex lock failed\n");
+						}
 
 						break;
 					}
@@ -325,6 +341,10 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 							fci_routes_drop_all_ipv4();
 							(void)oal_mutex_unlock(&fci_context->db_mutex);
 						}
+						else
+						{
+							NXP_LOG_ERROR("Mutex lock failed\n");
+						}
 
 						break;
 					}
@@ -337,6 +357,10 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 						{
 							fci_routes_drop_all_ipv6();
 							(void)oal_mutex_unlock(&fci_context->db_mutex);
+						}
+						else
+						{
+							NXP_LOG_ERROR("Mutex lock failed\n");
 						}
 
 						break;
@@ -540,6 +564,8 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 			fci_context->rt_db_initialized = FALSE;
 			fci_context->rtable_initialized = FALSE;
 			fci_context->tmu_initialized = FALSE;
+			fci_context->hm_cb_registered = FALSE;
+			fci_context->is_some_client = FALSE;
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 			fci_context->fci_owner_initialized = FALSE;
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
@@ -578,6 +604,7 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 
 			        if (EOK != err)
 			        {
+					NXP_LOG_ERROR("Mutex initialization failed\n");
                         fci_fini();
 			        }
 			        else
@@ -647,6 +674,11 @@ errno_t fci_init(fci_init_info_t *info, const char_t *const identifier)
 		    	        (void)info;
 #endif /* PFE_CFG_PFE_MASTER */
 
+						if (EOK == fci_hm_cb_register())
+						{
+							fci_context->hm_cb_registered = TRUE;
+						}
+
 		    	        fci_context->default_timeouts.timeout_tcp = 5U * 24U * 60U * 60U; 	/* 5 days */
 		    	        fci_context->default_timeouts.timeout_udp = 300U; 					/* 5 min */
 		    	        fci_context->default_timeouts.timeout_other = 240U; 				/* 4 min */
@@ -680,12 +712,26 @@ void fci_fini(void)
 		{
 			if (TRUE == fci_context->db_mutex_initialized)
 			{
-				(void)oal_mutex_lock(&fci_context->db_mutex);
+				if (EOK != oal_mutex_lock(&fci_context->db_mutex))
+				{
+					NXP_LOG_ERROR("Mutex lock failed\n");
+				}
 				fci_routes_drop_all();
-				(void)oal_mutex_unlock(&fci_context->db_mutex);
+				if (EOK != oal_mutex_unlock(&fci_context->db_mutex))
+				{
+					NXP_LOG_ERROR("Mutex unlock failed\n");
+				}
 			}
 		}
 #endif /* PFE_CFG_PFE_MASTER */
+
+		/* Deregister HM callback function */
+		if (TRUE == fci_context->hm_cb_registered)
+		{
+			fci_hm_cb_deregister();
+			fci_context->hm_cb_registered = FALSE;
+			fci_context->is_some_client = FALSE;
+		}
 
 		/*	Shut down the endpoint */
 		if (NULL != fci_context->core)
@@ -695,7 +741,10 @@ void fci_fini(void)
 		}
 
 	#ifdef PFE_CFG_PFE_MASTER
-		(void)pfe_if_db_lock(&session_id);
+		if (EOK != pfe_if_db_lock(&session_id))
+		{
+			NXP_LOG_ERROR("DB lock failed\n");
+		}
 		/*	Shutdown the logical IF DB */
 		if (TRUE == fci_context->log_if_db_initialized)
 		{
@@ -711,16 +760,25 @@ void fci_fini(void)
 			fci_context->phy_if_db = NULL;
 			fci_context->phy_if_db_initialized = FALSE;
 		}
-		(void)pfe_if_db_unlock(session_id);
+		if (EOK != pfe_if_db_unlock(session_id))
+		{
+			NXP_LOG_ERROR("DB unlock failed\n");
+		}
 
 		/*	Shutdown the RT DB (paranoia clean) */
 		if (TRUE == fci_context->rt_db_initialized)
 		{
 			if (TRUE == fci_context->db_mutex_initialized)
 			{
-				(void)oal_mutex_lock(&fci_context->db_mutex);
+				if (EOK != oal_mutex_lock(&fci_context->db_mutex))
+				{
+					NXP_LOG_ERROR("Mutex lock failed\n");
+				}
 				fci_routes_drop_all();
-				(void)oal_mutex_unlock(&fci_context->db_mutex);
+				if (EOK != oal_mutex_unlock(&fci_context->db_mutex))
+				{
+					NXP_LOG_ERROR("Mutex unlock failed\n");
+				}
 			}
 
 			fci_context->rt_db_initialized = FALSE;

@@ -396,6 +396,29 @@ extern const uint8_t SPD_ACTIONS__MAX;
 #define TXT_FWFEAT_EL_GROUP__CONFIG     "CONFIG"
 #define TXT_FWFEAT_EL_GROUP__STATS      "STATS"
 
+/* based on IDs of Health Monitor event types from PFE */
+#define TXT_HM_TYPE__INFO     "INFO"
+#define TXT_HM_TYPE__WARNING  "WARNING"
+#define TXT_HM_TYPE__ERROR    "ERROR"
+
+/* based on IDs of Health Monitor event sources from PFE */
+#define TXT_HM_SRC__UNKNOWN         "UNKNOWN"
+#define TXT_HM_SRC__WDT             "WDT"
+#define TXT_HM_SRC__EMAC0           "EMAC0"
+#define TXT_HM_SRC__EMAC1           "EMAC1"
+#define TXT_HM_SRC__EMAC2           "EMAC2"
+#define TXT_HM_SRC__BUS             "BUS"
+#define TXT_HM_SRC__PARITY          "PARITY"
+#define TXT_HM_SRC__FAIL_STOP       "FAIL_STOP"
+#define TXT_HM_SRC__FW_FAIL_STOP    "FW_FAIL_STOP"
+#define TXT_HM_SRC__HOST_FAIL_STOP  "HOST_FAIL_STOP"
+#define TXT_HM_SRC__ECC             "ECC"
+#define TXT_HM_SRC__PE_CLASS        "PE_CLASS"
+#define TXT_HM_SRC__PE_UTIL         "PE_UTIL"
+#define TXT_HM_SRC__PE_TMU          "PE_TMU"
+#define TXT_HM_SRC__HIF             "HIF"
+#define TXT_HM_SRC__BMU             "BMU"
+
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
 const char* cli_value2txt_if_mode(uint8_t value);
@@ -484,6 +507,12 @@ int         cli_txt2value_pol_flow_type32(uint8_t* p_rtn_value, const char* p_tx
 
 const char* cli_value2txt_fwfeat_el_group(uint8_t value);
 int         cli_txt2value_fwfeat_el_group(uint8_t* p_rtn_value, const char* p_txt);
+
+const char* cli_value2txt_hm_type(uint8_t value);
+int         cli_txt2value_hm_type(uint8_t* p_rtn_value, const char* p_txt);
+
+const char* cli_value2txt_hm_src(uint8_t value);
+int         cli_txt2value_hm_src(uint8_t* p_rtn_value, const char* p_txt);
 
 /* ========================================================================= */
 

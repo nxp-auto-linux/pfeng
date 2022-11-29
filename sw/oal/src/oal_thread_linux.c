@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -79,6 +79,7 @@ oal_thread_t *oal_thread_create(oal_thread_func func, void *func_arg, const char
 	thread = oal_mm_malloc(sizeof(oal_thread_t));
 	if (NULL == thread)
 	{
+		NXP_LOG_ERROR("failed to allocate memory\n");
 		return NULL;
 	}
 

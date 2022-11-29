@@ -53,6 +53,7 @@ pfe_ecc_err_t *pfe_ecc_err_create(addr_t cbus_base_va, addr_t ecc_err_base)
 
 	if (NULL == ecc_err)
 	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
 		return NULL;
 	}
 	else
@@ -73,7 +74,10 @@ pfe_ecc_err_t *pfe_ecc_err_create(addr_t cbus_base_va, addr_t ecc_err_base)
 		}
 		else
 		{
-			(void)oal_mutex_init(ecc_err->lock);
+			if (EOK != oal_mutex_init(ecc_err->lock))
+			{
+				NXP_LOG_ERROR("Mutex initialization failed\n");
+			}
 		}
 
 		/* Unmask all interrupts */
@@ -100,9 +104,15 @@ void pfe_ecc_err_destroy(pfe_ecc_err_t *ecc_err)
 	if (NULL != ecc_err->lock)
 	{
 		/* Mask ecc_err interrupts */
-		(void)oal_mutex_lock(ecc_err->lock);
+		if (EOK != oal_mutex_lock(ecc_err->lock))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
 		pfe_ecc_err_cfg_irq_mask(ecc_err->ecc_err_base_va);
-		(void)oal_mutex_unlock(ecc_err->lock);
+		if (EOK != oal_mutex_unlock(ecc_err->lock))
+		{
+			 NXP_LOG_ERROR("Mutex unlock failed\n");
+		}
 		(void)oal_mutex_destroy(ecc_err->lock);
 		(void)oal_mm_free(ecc_err->lock);
 		ecc_err->lock = NULL;
@@ -129,10 +139,16 @@ errno_t pfe_ecc_err_isr(const pfe_ecc_err_t *ecc_err)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	(void)oal_mutex_lock(ecc_err->lock);
+	if (EOK != oal_mutex_lock(ecc_err->lock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
 	/*	Run the low-level ISR to identify and process the interrupt */
 	ret = pfe_ecc_err_cfg_isr(ecc_err->ecc_err_base_va);
-	(void)oal_mutex_unlock(ecc_err->lock);
+	if (EOK != oal_mutex_unlock(ecc_err->lock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 
 	return ret;
 }
@@ -151,9 +167,15 @@ void pfe_ecc_err_irq_mask(const pfe_ecc_err_t *ecc_err)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	(void)oal_mutex_lock(ecc_err->lock);
+	if (EOK != oal_mutex_lock(ecc_err->lock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
 	pfe_ecc_err_cfg_irq_mask(ecc_err->ecc_err_base_va);
-	(void)oal_mutex_unlock(ecc_err->lock);
+	if (EOK != oal_mutex_unlock(ecc_err->lock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 }
 
 /**
@@ -170,9 +192,15 @@ void pfe_ecc_err_irq_unmask(const pfe_ecc_err_t *ecc_err)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	(void)oal_mutex_lock(ecc_err->lock);
+	if (EOK != oal_mutex_lock(ecc_err->lock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
 	pfe_ecc_err_cfg_irq_unmask(ecc_err->ecc_err_base_va);
-	(void)oal_mutex_unlock(ecc_err->lock);
+	if (EOK != oal_mutex_unlock(ecc_err->lock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 }
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR

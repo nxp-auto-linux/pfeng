@@ -117,7 +117,7 @@ static void * pfe_if_db_worker(void *arg)
 
 			if(EOK != oal_mutex_lock(&context->mutex))
 			{
-				NXP_LOG_DEBUG("DB mutex lock failed\n");
+				NXP_LOG_ERROR("DB mutex lock failed\n");
 			}
 
 			context->worker_error = EOK;
@@ -140,12 +140,12 @@ static void * pfe_if_db_worker(void *arg)
 					context->is_locked = FALSE;
 					context->worker_error = ECANCELED;
 
-					NXP_LOG_ERROR("Timeout was detected, if_bd lock unlocked automatically\n");
+					NXP_LOG_WARNING("Timeout was detected, if_bd lock unlocked automatically\n");
 
 					/* Detach timer */
 					if(EOK != oal_mbox_detach_timer(context->mbox))
 					{
-						NXP_LOG_DEBUG("Could not detach timer\n");
+						NXP_LOG_ERROR("Could not detach timer\n");
 					}
 					break;
 				}
@@ -154,14 +154,14 @@ static void * pfe_if_db_worker(void *arg)
 					/* Detach timer */
 					if(EOK != oal_mbox_detach_timer(context->mbox))
 					{
-						NXP_LOG_DEBUG("Could not detach timer\n");
+						NXP_LOG_ERROR("Could not detach timer\n");
 					}
 					break;
 				}
 			}
 			if(EOK != oal_mutex_unlock(&context->mutex))
 			{
-				NXP_LOG_DEBUG("DB mutex unlock failed\n");
+				NXP_LOG_ERROR("DB mutex unlock failed\n");
 			}
 		}
 	}
@@ -269,7 +269,7 @@ static bool_t pfe_if_db_match_criterion(const pfe_if_db_t *db, pfe_if_db_get_cri
 
 			default:
 			{
-				NXP_LOG_ERROR("Unknown criterion\n");
+				NXP_LOG_WARNING("Unknown criterion\n");
 				match = FALSE;
 				break;
 			}
@@ -313,7 +313,7 @@ static pfe_if_db_entry_t *pfe_if_db_get_first_entry(pfe_if_db_t *db)
 
 	if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 	{
-		NXP_LOG_DEBUG("DB mutex unlock failed\n");
+		NXP_LOG_ERROR("DB mutex unlock failed\n");
 	}
 
 	if (FALSE == match)
@@ -361,7 +361,7 @@ static pfe_if_db_entry_t *pfe_if_db_get_single_entry(const pfe_if_db_t *db, pfe_
 
 	if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 	{
-		NXP_LOG_DEBUG("DB mutex unlock failed\n");
+		NXP_LOG_ERROR("DB mutex unlock failed\n");
 	}
 
 	if (FALSE == match)
@@ -390,7 +390,11 @@ pfe_if_db_t * pfe_if_db_create(pfe_if_db_type_t type)
 	{
 
 		db = oal_mm_malloc(sizeof(pfe_if_db_t));
-		if (NULL != db)
+		if (NULL == db)
+		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
+		}
+		else
 		{
 			(void)memset(db, 0, sizeof(pfe_if_db_t));
 
@@ -515,7 +519,7 @@ void pfe_if_db_destroy(const pfe_if_db_t *db)
 	{
 		if(EOK != oal_mutex_lock(&if_db_context.mutex))
 		{
-			NXP_LOG_DEBUG("DB mutex lock failed\n");
+			NXP_LOG_ERROR("DB mutex lock failed\n");
 		}
 
 		if_db_context.is_locked = TRUE;
@@ -526,7 +530,7 @@ void pfe_if_db_destroy(const pfe_if_db_t *db)
 			NXP_LOG_INFO("Stopping if_db worker...\n");
 			if (EOK != oal_mbox_send_signal(if_db_context.mbox, IF_DB_WORKER_QUIT))
 			{
-				NXP_LOG_DEBUG("oal_mbox_send_signal() failed\n");
+				NXP_LOG_ERROR("oal_mbox_send_signal() failed\n");
 			}
 			else
 			{
@@ -534,7 +538,7 @@ void pfe_if_db_destroy(const pfe_if_db_t *db)
 				{
 					if(EOK != oal_thread_join(if_db_context.worker_thread, NULL))
 					{
-						NXP_LOG_DEBUG("oal_thread_join() failed\n");
+						NXP_LOG_ERROR("oal_thread_join() failed\n");
 					}
 					else
 					{
@@ -554,7 +558,7 @@ void pfe_if_db_destroy(const pfe_if_db_t *db)
 
 		if(EOK != oal_mutex_unlock(&if_db_context.mutex))
 		{
-			NXP_LOG_DEBUG("DB mutex unlock failed\n");
+			NXP_LOG_ERROR("DB mutex unlock failed\n");
 		}
 
 		if(EOK != oal_mutex_destroy(&if_db_context.mutex))
@@ -631,7 +635,7 @@ errno_t pfe_if_db_add(pfe_if_db_t *db, uint32_t session_id, void *iface, pfe_ct_
 		ret = pfe_if_db_get_first(db, session_id, IF_DB_CRIT_BY_INSTANCE, iface, &new_entry);
 		if (EOK != oal_mutex_lock(&if_db_context.mutex))
 		{
-			NXP_LOG_DEBUG("DB mutex lock failed\n");
+			NXP_LOG_ERROR("DB mutex lock failed\n");
 		}
 
 		/* Check condition if operation on DB is allowed */
@@ -639,7 +643,7 @@ errno_t pfe_if_db_add(pfe_if_db_t *db, uint32_t session_id, void *iface, pfe_ct_
 		{
 			if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 			{
-				NXP_LOG_DEBUG("DB mutex unlock failed\n");
+				NXP_LOG_ERROR("DB mutex unlock failed\n");
 			}
 			ret = EPERM;
 		}
@@ -651,6 +655,7 @@ errno_t pfe_if_db_add(pfe_if_db_t *db, uint32_t session_id, void *iface, pfe_ct_
 				new_entry = oal_mm_malloc(sizeof(pfe_if_db_entry_t));
 				if (NULL == new_entry)
 				{
+					NXP_LOG_ERROR("Unable to allocate memory\n");
 					ret = ENOMEM;
 				}
 				else
@@ -676,7 +681,7 @@ errno_t pfe_if_db_add(pfe_if_db_t *db, uint32_t session_id, void *iface, pfe_ct_
 
 			if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 			{
-				NXP_LOG_DEBUG("DB mutex unlock failed\n");
+				NXP_LOG_ERROR("DB mutex unlock failed\n");
 			}
 		}
 	}
@@ -706,7 +711,7 @@ errno_t pfe_if_db_remove(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry_t
 	{
 		if (EOK != oal_mutex_lock(&if_db_context.mutex))
 		{
-			NXP_LOG_DEBUG("DB mutex lock failed\n");
+			NXP_LOG_ERROR("DB mutex lock failed\n");
 		}
 
 		/* Check condition if operation on DB is allowed */
@@ -714,7 +719,7 @@ errno_t pfe_if_db_remove(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry_t
 		{
 			if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 			{
-				NXP_LOG_DEBUG("DB mutex unlock failed\n");
+				NXP_LOG_ERROR("DB mutex unlock failed\n");
 			}
 			ret = EPERM;
 		}
@@ -733,7 +738,7 @@ errno_t pfe_if_db_remove(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry_t
 
 			if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 			{
-				NXP_LOG_DEBUG("DB mutex unlock failed\n");
+				NXP_LOG_ERROR("DB mutex unlock failed\n");
 			}
 
 			ret = EOK;
@@ -770,7 +775,7 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
 	{
 		if (EOK != oal_mutex_lock(&if_db_context.mutex))
 		{
-			NXP_LOG_DEBUG("DB mutex lock failed\n");
+			NXP_LOG_ERROR("DB mutex lock failed\n");
 		}
 
 		/* Check condition if operation on DB is allowed */
@@ -778,7 +783,7 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
 		{
 			if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 			{
-				NXP_LOG_DEBUG("DB mutex unlock failed\n");
+				NXP_LOG_ERROR("DB mutex unlock failed\n");
 			}
 			ret = EPERM;
 		}
@@ -841,7 +846,7 @@ errno_t pfe_if_db_get_first(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_get_
 
 				default:
 				{
-					NXP_LOG_ERROR("Unknown criterion\n");
+					NXP_LOG_WARNING("Unknown criterion\n");
 					ret = EPERM;
 					break;
 				}
@@ -943,7 +948,7 @@ errno_t pfe_if_db_get_single(const pfe_if_db_t *db, uint32_t session_id, pfe_if_
 
 			default:
 			{
-				NXP_LOG_ERROR("Unknown criterion\n");
+				NXP_LOG_WARNING("Unknown criterion\n");
 				ret = EPERM;
 				break;
 			}
@@ -952,7 +957,7 @@ errno_t pfe_if_db_get_single(const pfe_if_db_t *db, uint32_t session_id, pfe_if_
 		{
 			if (EOK != oal_mutex_lock(&if_db_context.mutex))
 			{
-				NXP_LOG_DEBUG("DB mutex lock failed\n");
+				NXP_LOG_ERROR("DB mutex lock failed\n");
 			}
 
 			/* Check condition if operation on DB is allowed */
@@ -960,7 +965,7 @@ errno_t pfe_if_db_get_single(const pfe_if_db_t *db, uint32_t session_id, pfe_if_
 			{
 				if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 				{
-					NXP_LOG_DEBUG("DB mutex unlock failed\n");
+					NXP_LOG_ERROR("DB mutex unlock failed\n");
 				}
 				ret = EPERM;
 			}
@@ -1000,7 +1005,7 @@ errno_t pfe_if_db_get_next(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry
 	{
 		if (EOK != oal_mutex_lock(&if_db_context.mutex))
 		{
-			NXP_LOG_DEBUG("DB mutex lock failed\n");
+			NXP_LOG_ERROR("DB mutex lock failed\n");
 		}
 
 		/* Check condition if operation on DB is allowed */
@@ -1008,7 +1013,7 @@ errno_t pfe_if_db_get_next(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry
 		{
 			if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 			{
-				NXP_LOG_DEBUG("DB mutex unlock failed\n");
+				NXP_LOG_ERROR("DB mutex unlock failed\n");
 			}
 			ret = EPERM;
 		}
@@ -1048,7 +1053,7 @@ errno_t pfe_if_db_get_next(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry
 
 			if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 			{
-				NXP_LOG_DEBUG("DB mutex unlock failed\n");
+				NXP_LOG_ERROR("DB mutex unlock failed\n");
 			}
 
 			ret = EOK;
@@ -1080,7 +1085,7 @@ errno_t pfe_log_if_db_drop_all(const pfe_if_db_t *db, uint32_t session_id)
 	{
 		if (EOK != oal_mutex_lock(&if_db_context.mutex))
 		{
-			NXP_LOG_DEBUG("DB mutex lock failed\n");
+			NXP_LOG_ERROR("DB mutex lock failed\n");
 		}
 
 		/* Check condition if operation on DB is allowed */
@@ -1088,7 +1093,7 @@ errno_t pfe_log_if_db_drop_all(const pfe_if_db_t *db, uint32_t session_id)
 		{
 			if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 			{
-				NXP_LOG_DEBUG("DB mutex unlock failed\n");
+				NXP_LOG_ERROR("DB mutex unlock failed\n");
 			}
 			ret = EPERM;
 		}
@@ -1108,7 +1113,7 @@ errno_t pfe_log_if_db_drop_all(const pfe_if_db_t *db, uint32_t session_id)
 
 			if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 			{
-				NXP_LOG_DEBUG("DB mutex unlock failed\n");
+				NXP_LOG_ERROR("DB mutex unlock failed\n");
 			}
 		}
 	}
@@ -1136,7 +1141,7 @@ errno_t pfe_if_db_lock(uint32_t *session_id)
 		/* Lock global if DB mutex */
 		if (EOK != oal_mutex_lock(&if_db_context.mutex))
 		{
-			NXP_LOG_DEBUG("DB mutex lock failed\n");
+			NXP_LOG_ERROR("DB mutex lock failed\n");
 		}
 
 		if (FALSE == if_db_context.is_locked)
@@ -1174,7 +1179,7 @@ errno_t pfe_if_db_lock(uint32_t *session_id)
 		/* Unlock global if DB mutex */
 		if (EOK != oal_mutex_unlock(&if_db_context.mutex))
 		{
-			NXP_LOG_DEBUG("DB mutex unlock failed\n");
+			NXP_LOG_ERROR("DB mutex unlock failed\n");
 		}
 	}
 	return ret;
@@ -1191,7 +1196,7 @@ errno_t pfe_if_db_lock_owned(uint32_t owner_id)
 
 	if(EOK != oal_mutex_lock(&if_db_context.mutex))
 	{
-		NXP_LOG_DEBUG("DB mutex lock failed\n");
+		NXP_LOG_ERROR("DB mutex lock failed\n");
 	}
 
 	if((FALSE == if_db_context.is_locked) && (16U > owner_id))
@@ -1212,7 +1217,7 @@ errno_t pfe_if_db_lock_owned(uint32_t owner_id)
 
 	if(EOK != oal_mutex_unlock(&if_db_context.mutex))
 	{
-		NXP_LOG_DEBUG("DB mutex unlock failed\n");
+		NXP_LOG_ERROR("DB mutex unlock failed\n");
 	}
 
 	return ret;
@@ -1230,7 +1235,7 @@ errno_t pfe_if_db_unlock(uint32_t session_id)
 	/* Lock global if DB mutex */
 	if(EOK != oal_mutex_lock(&if_db_context.mutex))
 	{
-		NXP_LOG_DEBUG("DB mutex lock failed\n");
+		NXP_LOG_ERROR("DB mutex lock failed\n");
 	}
 
 	if((TRUE == if_db_context.is_locked) && (session_id == if_db_context.session_id))
@@ -1255,7 +1260,7 @@ errno_t pfe_if_db_unlock(uint32_t session_id)
 	/* Unlock global if DB mutex */
 	if(EOK != oal_mutex_unlock(&if_db_context.mutex))
 	{
-		NXP_LOG_DEBUG("DB mutex unlock failed\n");
+		NXP_LOG_ERROR("DB mutex unlock failed\n");
 	}
 	return ret;
 }

@@ -74,7 +74,7 @@ CREATE_DEBUGFS_ENTRY_TYPE(hif_chnl,hif_chnl);
 										\
 		if (!(dptr = debugfs_create_file(ename, S_IRUSR, parent,	\
 					epriv, &pfeng_##etype##_fops))) {	\
-			dev_err(dev, "debugfs file create failed\n");		\
+			HM_MSG_DEV_ERR(dev, "debugfs file create failed\n");	\
 			return -ENOMEM;						\
 		} else {							\
 			if (*esav)						\
@@ -121,7 +121,7 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 
 	if (!priv->dbgfs || IS_ERR(priv->dbgfs)) {
 		priv->dbgfs = NULL;
-		dev_err(dev, "debugfs create directory failed\n");
+		HM_MSG_DEV_ERR(dev, "debugfs create directory failed\n");
 		return -ENOMEM;
 	}
 
@@ -191,7 +191,7 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 {
 	struct device *dev = &priv->pdev->dev;
 
-	dev_info(dev, "debugfs not supported\n");
+	HM_MSG_DEV_INFO(dev, "debugfs not supported\n");
 	return 0;
 }
 

@@ -53,6 +53,7 @@ pfe_parity_t *pfe_parity_create(addr_t cbus_base_va, addr_t parity_base)
 
 	if (NULL == parity)
 	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
 		return NULL;
 	}
 	else
@@ -73,7 +74,10 @@ pfe_parity_t *pfe_parity_create(addr_t cbus_base_va, addr_t parity_base)
 		}
 		else
 		{
-			(void)oal_mutex_init(parity->lock);
+			if (EOK != oal_mutex_init(parity->lock))
+			{
+				NXP_LOG_ERROR("Mutex initialization failed\n");
+			}
 		}
 
 		/* Unmask all interrupts */
@@ -100,9 +104,15 @@ void pfe_parity_destroy(pfe_parity_t *parity)
 	if (NULL != parity->lock)
 	{
 		/* Mask parity interrupts */
-		(void)oal_mutex_lock(parity->lock);
+		if (EOK != oal_mutex_lock(parity->lock))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
 		pfe_parity_cfg_irq_mask(parity->parity_base_va);
-		(void)oal_mutex_unlock(parity->lock);
+		if (EOK != oal_mutex_unlock(parity->lock))
+		{
+			NXP_LOG_ERROR("Mutex unlock failed\n");
+		}
 		(void)oal_mutex_destroy(parity->lock);
 		(void)oal_mm_free(parity->lock);
 		parity->lock = NULL;
@@ -129,10 +139,16 @@ errno_t pfe_parity_isr(const pfe_parity_t *parity)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	(void)oal_mutex_lock(parity->lock);
+	if (EOK != oal_mutex_lock(parity->lock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
 	/*	Run the low-level ISR to identify and process the interrupt */
 	ret = pfe_parity_cfg_isr(parity->parity_base_va);
-	(void)oal_mutex_unlock(parity->lock);
+	if (EOK != oal_mutex_unlock(parity->lock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 
 	return ret;
 }
@@ -151,9 +167,15 @@ void pfe_parity_irq_mask(const pfe_parity_t *parity)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	(void)oal_mutex_lock(parity->lock);
+	if (EOK != oal_mutex_lock(parity->lock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
 	pfe_parity_cfg_irq_mask(parity->parity_base_va);
-	(void)oal_mutex_unlock(parity->lock);
+	if (EOK != oal_mutex_unlock(parity->lock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 }
 
 /**
@@ -170,9 +192,15 @@ void pfe_parity_irq_unmask(const pfe_parity_t *parity)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	(void)oal_mutex_lock(parity->lock);
+	if (EOK != oal_mutex_lock(parity->lock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
 	pfe_parity_cfg_irq_unmask(parity->parity_base_va);
-	(void)oal_mutex_unlock(parity->lock);
+	if (EOK != oal_mutex_unlock(parity->lock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 }
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR

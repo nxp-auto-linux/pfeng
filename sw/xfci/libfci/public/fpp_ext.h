@@ -3485,6 +3485,29 @@ typedef struct CAL_PACKED_ALIGNED(4)
  */
 #define FPP_ERR_FCI_OWNERSHIP_NOT_ENABLED 0xf505
 
+/**
+ * @def FPP_CMD_HEALTH_MONITOR_EVENT
+ * @brief FCI event that notifies client about some Health Monitor event from driver.
+ */
+#define FPP_CMD_HEALTH_MONITOR_EVENT    0xf660
+#define FPP_HEALTH_MONITOR_DESC_SIZE    64
+
+/**
+ * @brief       Data structure for Health Monitor event.
+ * @details     For details about events (exact meaning of ID, type and src), see Health Monitor documentation.
+ */
+/* [fpp_health_monitor_cmd_t] */
+typedef struct CAL_PACKED_ALIGNED(2)
+{
+    uint16_t action;
+    uint16_t id;     /*< Event ID as reported by Health Monitor. */
+    uint8_t type;    /*< 0 == information ; 1 == warning ; 2 == error */
+    uint8_t src;     /*< Source (which part of PFE asserted the event) */
+    char desc[FPP_HEALTH_MONITOR_DESC_SIZE];  /*< Event description */
+} fpp_health_monitor_cmd_t;
+/* [fpp_health_monitor_cmd_t] */
+
+
 #endif /* FPP_EXT_H_ */
 
 /** @}*/

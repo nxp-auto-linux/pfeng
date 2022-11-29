@@ -272,7 +272,7 @@ static errno_t pfe_idex_ihc_handler(pfe_hif_drv_client_t *client, void *arg, uin
 
 		default:
 		{
-			NXP_LOG_ERROR("Unexpected IHC event: 0x%x\n", (uint_t)event);
+			NXP_LOG_WARNING("Unexpected IHC event: 0x%x\n", (uint_t)event);
 			ret = EINVAL;
 			break;
 		}
@@ -324,11 +324,11 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 					{
 						if (pfe_hif_pkt_get_data_len(pkt) < (sizeof(pfe_idex_frame_header_t)+sizeof(pfe_idex_msg_master_discovery_t)))
 						{
-							NXP_LOG_ERROR("Invalid payload length\n");
+							NXP_LOG_WARNING("Invalid payload length\n");
 						}
 						else
 						{
-							NXP_LOG_ERROR("Not implemented\n");
+							NXP_LOG_WARNING("Not implemented\n");
 						}
 
 						break;
@@ -388,7 +388,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex)
 				{
 					case IDEX_MASTER_DISCOVERY:
 					{
-						NXP_LOG_ERROR("Not implemented\n");
+						NXP_LOG_WARNING("Not implemented\n");
 						break;
 					}
 
@@ -498,7 +498,7 @@ static void pfe_idex_do_tx_conf(const pfe_hif_drv_client_t *client, const pfe_id
 
 			default:
 			{
-				NXP_LOG_ERROR("Unknown IDEX frame transmitted\n");
+				NXP_LOG_WARNING("Unknown IDEX frame transmitted\n");
 				break;
 			}
 		}
@@ -570,7 +570,7 @@ static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, void *resp_bu
 	/*	Lock request storage access */
 	if (EOK != oal_mutex_lock(&idex->req_list_lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	/*	1.) Find request instance */
@@ -601,7 +601,7 @@ static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, void *resp_bu
 
 	if (EOK != oal_mutex_unlock(&idex->req_list_lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return ret;
@@ -624,7 +624,7 @@ static errno_t pfe_idex_request_set_state(pfe_idex_seqnum_t seqnum, pfe_idex_req
 	/*	Lock request storage access */
 	if (EOK != oal_mutex_lock(&idex->req_list_lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	/*	1.) Find request instance */
@@ -641,7 +641,7 @@ static errno_t pfe_idex_request_set_state(pfe_idex_seqnum_t seqnum, pfe_idex_req
 
 	if (EOK != oal_mutex_unlock(&idex->req_list_lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return ret;
@@ -756,14 +756,14 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 		/*	2.) Save the request to internal storage */
 		if (EOK != oal_mutex_lock(&idex->req_list_lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		LLIST_AddAtEnd(&req->linked.config.list_entry, &idex->req_list);
 
 		if (EOK != oal_mutex_unlock(&idex->req_list_lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 
 		/*	3.) Send the request */
@@ -774,7 +774,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 		/*	Send it out as payload of IDEX frame */
 		if (EOK != pfe_idex_request_set_state(seqnum, IDEX_REQ_STATE_COMMITTED))
 		{
-			NXP_LOG_WARNING("Transition to IDEX_REQ_STATE_COMMITTED failed\n");
+			NXP_LOG_ERROR("Transition to IDEX_REQ_STATE_COMMITTED failed\n");
 		}
 
 		ret = pfe_idex_send_frame(dst_phy, IDEX_FRAME_CTRL_REQUEST, req, ((uint16_t)sizeof(pfe_idex_request_t) + data_len));
@@ -856,7 +856,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			/*	Release the blocking request instance here */
 			if (EOK != oal_mutex_lock(&idex->req_list_lock))
 			{
-				NXP_LOG_DEBUG("Mutex lock failed\n");
+				NXP_LOG_ERROR("Mutex lock failed\n");
 			}
 
 			LLIST_Remove(&req->linked.config.list_entry);
@@ -864,7 +864,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 
 			if (EOK != oal_mutex_unlock(&idex->req_list_lock))
 			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
+				NXP_LOG_ERROR("Mutex unlock failed\n");
 			}
 		}
 	}
@@ -912,7 +912,7 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 		{
 			idex_hdr = (pfe_idex_frame_header_t *)pfe_hif_chnl_bmu_alloc_buf_va(hif_chnl);
 #else
-	idex_hdr = oal_mm_malloc_contig_named_aligned_cache(
+	idex_hdr = oal_mm_malloc_contig_named_aligned_nocache(
 	    PFE_CFG_TX_MEM,
 	    (addr_t)(sizeof(pfe_idex_frame_header_t)) + (addr_t)data_len_tmp,
 	    0U);
@@ -1211,6 +1211,7 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, const void *buf, u
 
 	if (NULL == alloc_buf)
 	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
 		ret = ENOMEM;
 	}
 	else

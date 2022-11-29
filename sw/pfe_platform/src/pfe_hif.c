@@ -48,7 +48,7 @@ errno_t pfe_hif_isr(pfe_hif_t *hif)
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&hif->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -58,7 +58,7 @@ errno_t pfe_hif_isr(pfe_hif_t *hif)
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_unlock(&hif->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -75,7 +75,7 @@ void pfe_hif_irq_mask(pfe_hif_t *hif)
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&hif->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -84,7 +84,7 @@ void pfe_hif_irq_mask(pfe_hif_t *hif)
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_unlock(&hif->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 #endif /* PFE_CFG_PARANOID_IRQ */
 }
@@ -99,7 +99,7 @@ void pfe_hif_irq_unmask(pfe_hif_t *hif)
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&hif->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -108,7 +108,7 @@ void pfe_hif_irq_unmask(pfe_hif_t *hif)
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_unlock(&hif->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 #endif /* PFE_CFG_PARANOID_IRQ */
 }
@@ -159,6 +159,7 @@ pfe_hif_t *pfe_hif_create(addr_t cbus_base_va, pfe_hif_chnl_id_t channels)
 
 	if (NULL == hif)
 	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
 		return NULL;
 	}
 	else
@@ -178,7 +179,7 @@ pfe_hif_t *pfe_hif_create(addr_t cbus_base_va, pfe_hif_chnl_id_t channels)
 
 	if (EOK != oal_mutex_lock(&hif->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -188,7 +189,7 @@ pfe_hif_t *pfe_hif_create(addr_t cbus_base_va, pfe_hif_chnl_id_t channels)
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_unlock(&hif->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -204,6 +205,7 @@ pfe_hif_t *pfe_hif_create(addr_t cbus_base_va, pfe_hif_chnl_id_t channels)
 	hif->channels = oal_mm_malloc(HIF_CFG_MAX_CHANNELS * sizeof(pfe_hif_chnl_t *));
 	if (NULL == hif->channels)
 	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
 		oal_mm_free(hif);
 		return NULL;
 	}
@@ -319,7 +321,7 @@ void pfe_hif_destroy(pfe_hif_t *hif)
 #ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_lock(&hif->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -329,12 +331,12 @@ void pfe_hif_destroy(pfe_hif_t *hif)
 #ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_unlock(&hif->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 
 		if (EOK != oal_mutex_destroy(&hif->lock))
 		{
-			NXP_LOG_WARNING("Unable to destroy HIF mutex\n");
+			NXP_LOG_ERROR("Unable to destroy HIF mutex\n");
 		}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -474,7 +476,7 @@ uint32_t pfe_hif_get_err_poll(pfe_hif_t *hif)
 #ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_lock(&hif->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -484,7 +486,7 @@ uint32_t pfe_hif_get_err_poll(pfe_hif_t *hif)
 #ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_unlock(&hif->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_PARANOID_IRQ */
 	}

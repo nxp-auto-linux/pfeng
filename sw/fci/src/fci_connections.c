@@ -871,7 +871,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 	{
 		if ((*reply_len < sizeof(fpp_ct_cmd_t)) || (*reply_len < sizeof(fpp_ct6_cmd_t)))
 		{
-			NXP_LOG_DEBUG("Buffer length does not match expected value (fpp_ct_cmd_t or fpp_ct6_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_ct_cmd_t or fpp_ct6_cmd_t)\n");
 			ret = EINVAL;
 		}
 		else
@@ -918,7 +918,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 
 					if (EINVAL == ret)
 					{
-						NXP_LOG_DEBUG("FPP_CMD_IPVx_CONNTRACK: Couldn't convert command to valid entry\n");
+						NXP_LOG_WARNING("FPP_CMD_IPVx_CONNTRACK: Couldn't convert command to valid entry\n");
 						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 						ret = EOK;
 						break;
@@ -945,7 +945,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 
 					if (EINVAL == ret)
 					{
-						NXP_LOG_DEBUG("FPP_CMD_IPVx_CONNTRACK: Couldn't convert command to valid entry (reply direction)\n");
+						NXP_LOG_WARNING("FPP_CMD_IPVx_CONNTRACK: Couldn't convert command to valid entry (reply direction)\n");
 						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 						ret = EOK;
 						break;
@@ -1420,7 +1420,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 
 				default:
 				{
-					NXP_LOG_ERROR("Connection Command: Unknown action received: 0x%x\n", ct_cmd->action);
+					NXP_LOG_WARNING("Connection Command: Unknown action received: 0x%x\n", ct_cmd->action);
 					*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 					break;
 				}

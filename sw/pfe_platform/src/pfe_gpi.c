@@ -91,7 +91,11 @@ pfe_gpi_t *pfe_gpi_create(addr_t cbus_base_va, addr_t gpi_base, const pfe_gpi_cf
 	{
 		gpi = (pfe_gpi_t *)oal_mm_malloc(sizeof(pfe_gpi_t));
 
-		if (NULL != gpi)
+		if (NULL == gpi)
+		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
+		}
+		else
 		{
 			(void)memset(gpi, 0, sizeof(pfe_gpi_t));
 			gpi->cbus_base_va    = cbus_base_va;
@@ -1398,12 +1402,12 @@ errno_t pfe_gpi_shp_set_limits(const pfe_gpi_t *gpi, uint8_t id, int32_t max_cre
 	{
 		if ((max_credit > IGQOS_PORT_SHP_CREDIT_MAX) || (max_credit < 0))
 		{
-			NXP_LOG_ERROR("Max credit value exceeded\n");
+			NXP_LOG_WARNING("Max credit value exceeded\n");
 			ret = EINVAL;
 		}
 		else if ((min_credit < -IGQOS_PORT_SHP_CREDIT_MAX) || (min_credit > 0))
 		{
-			NXP_LOG_ERROR("Min credit value exceeded\n");
+			NXP_LOG_WARNING("Min credit value exceeded\n");
 			ret = EINVAL;
 		}
 		else

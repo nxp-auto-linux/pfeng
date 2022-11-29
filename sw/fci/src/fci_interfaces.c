@@ -255,7 +255,7 @@ errno_t fci_interfaces_session_cmd(uint32_t code, uint16_t *fci_ret)
 				if (EOK != pfe_if_db_lock(&fci_context->if_session_id))
 				{
 					*fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;
-					NXP_LOG_DEBUG("DB lock failed\n");
+					NXP_LOG_ERROR("DB lock failed\n");
 				}
 				break;
 			}
@@ -265,13 +265,13 @@ errno_t fci_interfaces_session_cmd(uint32_t code, uint16_t *fci_ret)
 				if (EOK != pfe_if_db_unlock(fci_context->if_session_id))
 				{
 					*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
-					NXP_LOG_DEBUG("DB unlock failed due to incorrect session ID\n");
+					NXP_LOG_ERROR("DB unlock failed due to incorrect session ID\n");
 				}
 				break;
 			}
 			default:
 			{
-				NXP_LOG_ERROR("Unknown Interface Session Command Received\n");
+				NXP_LOG_WARNING("Unknown Interface Session Command Received\n");
 				*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 				break;
 			}
@@ -380,7 +380,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 
 					if(EOK != ret)
 					{
-						NXP_LOG_ERROR("Incorrect session ID detected\n");
+						NXP_LOG_WARNING("Incorrect session ID detected\n");
 						*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
 						break;
 					}
@@ -427,7 +427,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 
 					if(EOK != ret)
 					{
-						NXP_LOG_ERROR("Incorrect session ID detected\n");
+						NXP_LOG_WARNING("Incorrect session ID detected\n");
 						*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
 						break;
 					}
@@ -507,7 +507,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 							{   /* Different table is configured thus the new one must be in use
 								somewhere else (because it does have the address) and cannot be
 								used here */
-								NXP_LOG_ERROR("Table %s already in use.\n", if_cmd->arguments.fp_table0);
+								NXP_LOG_WARNING("Table %s already in use.\n", if_cmd->arguments.fp_table0);
 								*fci_ret = FPP_ERR_IF_MATCH_UPDATE_FAILED;
 								break;
 							}
@@ -543,7 +543,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 							{   /* Different table is configured thus the new one must be in use
 								somewhere else (because it does have the address) and cannot be
 								used here */
-								NXP_LOG_ERROR("Table %s already in use.\n", if_cmd->arguments.fp_table1);
+								NXP_LOG_WARNING("Table %s already in use.\n", if_cmd->arguments.fp_table1);
 								*fci_ret = FPP_ERR_IF_MATCH_UPDATE_FAILED;
 								break;
 							}
@@ -560,7 +560,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 							ret = fci_interfaces_get_arg_info(&if_cmd->arguments, (pfe_ct_if_m_rules_t)(oal_ntohl(if_cmd->match) & (1UL << index)), &offset, &size, &fp_table_addr);
 							if(EOK != ret)
 							{
-								NXP_LOG_ERROR("Failed to get update argument\n");
+								NXP_LOG_WARNING("Failed to get update argument\n");
 								*fci_ret = FPP_ERR_IF_MATCH_UPDATE_FAILED;
 							}
 
@@ -744,7 +744,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 						*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 						if(EOK != ret)
 						{
-							NXP_LOG_ERROR("Incorrect session ID detected\n");
+							NXP_LOG_WARNING("Incorrect session ID detected\n");
 							*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
 						}
 						ret = EOK;
@@ -762,7 +762,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 							*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 							if(EOK != ret)
 							{
-								NXP_LOG_ERROR("Incorrect session ID detected\n");
+								NXP_LOG_WARNING("Incorrect session ID detected\n");
 								*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
 							}
 							ret = EOK;
@@ -784,7 +784,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 					}
 					else
 					{
-						NXP_LOG_DEBUG("Was not possible to resolve DB entry to log_if or parent phy_if");
+						NXP_LOG_WARNING("Was not possible to resolve DB entry to log_if or parent phy_if\n");
 						*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 						break;
 					}
@@ -828,7 +828,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 					/* Store egress interfaces */
 					if(EOK != pfe_log_if_get_egress_ifs(log_if, &egress))
 					{
-						NXP_LOG_DEBUG("Was not possible to get egress interfaces\n");
+						NXP_LOG_ERROR("Was not possible to get egress interfaces\n");
 					}
 					reply_buf->egress = oal_htonl(egress);
 
@@ -837,7 +837,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 					/* Store rules for FCI */
 					if(EOK != pfe_log_if_get_match_rules(log_if, &rules, &args))
 					{
-						NXP_LOG_DEBUG("Was not possible to get match rules and arguments\n");
+						NXP_LOG_ERROR("Was not possible to get match rules and arguments\n");
 					}
 
 					/* Fix endians of FP tables */
@@ -955,7 +955,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 
 					if(EOK != ret)
 					{
-						NXP_LOG_ERROR("Incorrect session ID detected\n");
+						NXP_LOG_WARNING("Incorrect session ID detected\n");
 						*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
 						break;
 					}
@@ -1010,7 +1010,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 							if(NULL == mirror)
 							{
 								/* FCI command requested nonexistent entity. Respond with FCI error code. */
-								NXP_LOG_ERROR("Mirror %s cannot be found\n", if_cmd->rx_mirrors[i]);
+								NXP_LOG_WARNING("Mirror %s cannot be found\n", if_cmd->rx_mirrors[i]);
 								*fci_ret = FPP_ERR_MIRROR_NOT_FOUND;
 								ret = EOK;
 								break;
@@ -1041,7 +1041,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 							if(NULL == mirror)
 							{
 								/* FCI command requested nonexistent entity. Respond with FCI error code. */
-								NXP_LOG_ERROR("Mirror %s cannot be found\n", if_cmd->rx_mirrors[i]);
+								NXP_LOG_WARNING("Mirror %s cannot be found\n", if_cmd->rx_mirrors[i]);
 								*fci_ret = FPP_ERR_MIRROR_NOT_FOUND;
 								ret = EOK;
 								break;
@@ -1226,7 +1226,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 						if (NULL == fci_fp_db_get_first(FP_TABLE_CRIT_NAME, (void *)if_cmd->ftable))
 						{
 							/*	Table not found */
-							NXP_LOG_ERROR("%s: FP table %s not found\n",
+							NXP_LOG_WARNING("%s: FP table %s not found\n",
 									pfe_phy_if_get_name(phy_if), if_cmd->ftable);
 						}
 						else
@@ -1328,7 +1328,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 
 					if(EOK != ret)
 					{
-						NXP_LOG_ERROR("Incorrect session ID detected\n");
+						NXP_LOG_WARNING("Incorrect session ID detected\n");
 						*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
 						break;
 					}
@@ -1365,7 +1365,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 					phy_if = pfe_if_db_entry_get_phy_if(entry);
 					if (NULL == phy_if)
 					{
-						NXP_LOG_DEBUG("Was not possible to resolve DB entry to phy_if");
+						NXP_LOG_WARNING("Was not possible to resolve DB entry to phy_if\n");
 						*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 						break;
 					}
@@ -1500,7 +1500,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 
 				default:
 				{
-					NXP_LOG_ERROR("Interface Command: Unknown action received: 0x%x\n", if_cmd->action);
+					NXP_LOG_WARNING("Interface Command: Unknown action received: 0x%x\n", if_cmd->action);
 					*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 					break;
 				}
@@ -1570,7 +1570,7 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 				{
 					/* DB not locked or locked by some other FCI user.*/
 					/* FCI command requested unfulfillable action. Respond with FCI error code. */
-					NXP_LOG_ERROR("Incorrect session ID detected\n");
+					NXP_LOG_WARNING("Incorrect session ID detected\n");
 					*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
 					ret = EOK;
 				}
@@ -1711,7 +1711,7 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 					default: 
 					{
 						/* Unknown action. Respond with FCI error code. */
-						NXP_LOG_ERROR("FPP_CMD_IF_MAC: Unknown action received: 0x%x\n", if_mac_cmd->action);
+						NXP_LOG_WARNING("FPP_CMD_IF_MAC: Unknown action received: 0x%x\n", if_mac_cmd->action);
 						*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 						ret = EOK;
 						break;

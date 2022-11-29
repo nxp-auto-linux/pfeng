@@ -252,7 +252,7 @@ uint32_t pfe_wdt_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL_ADDR == base_va) || (NULL == buf))
 	{
-		NXP_LOG_ERROR("NULL argument received (pfe_wdt_cfg_get_text_stat)\n");
+		NXP_LOG_ERROR("NULL argument received\n");
 		len = 0U;
 	}
 	else

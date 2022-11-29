@@ -94,7 +94,7 @@ static struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev)
 
 	priv->ihc_wq = create_singlethread_workqueue("pfeng-ihc-slave");
 	if (!priv->ihc_wq) {
-		dev_err(dev, "Initialize of IHC TX WQ failed\n");
+		HM_MSG_DEV_ERR(dev, "Initialize of IHC TX WQ failed\n");
 		goto err_cfg_alloc;
 	}
 	if (kfifo_alloc(&priv->ihc_tx_fifo, 32, GFP_KERNEL))
@@ -123,7 +123,7 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	int ret;
 
 	if (!priv) {
-		dev_err(dev, "Removal failed. No priv data.\n");
+		HM_MSG_DEV_ERR(dev, "Removal failed. No priv data.\n");
 		return -ENOMEM;
 	}
 
@@ -132,7 +132,7 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 
 	ret = pm_runtime_resume_and_get(dev);
 	if (ret < 0) {
-		dev_info(dev, "PM runtime resume returned: %d\n", ret);
+		HM_MSG_DEV_INFO(dev, "PM runtime resume returned: %d\n", ret);
 	}
 
 	if (priv->ihc_slave_wq)
@@ -149,10 +149,10 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	/* PFE platform remove */
 	if (priv->pfe_platform) {
 		if (pfe_platform_remove() != EOK)
-			dev_err(dev, "PFE Platform not stopped successfully\n");
+			HM_MSG_DEV_ERR(dev, "PFE Platform not stopped successfully\n");
 		else {
 			priv->pfe_platform = NULL;
-			dev_info(dev, "PFE Platform stopped\n");
+			HM_MSG_DEV_INFO(dev, "PFE Platform stopped\n");
 		}
 	}
 
@@ -160,6 +160,8 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 		destroy_workqueue(priv->ihc_wq);
 	if (kfifo_initialized(&priv->ihc_tx_fifo))
 		kfifo_free(&priv->ihc_tx_fifo);
+
+	pfeng_mdio_unregister(priv);
 
 	pfeng_dt_release_config(priv);
 
@@ -201,7 +203,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 
 	/* Detect controller state */
 	if (priv->deferred_probe_task) {
-		dev_info(dev, "Wait for PFE controller UP ...\n");
+		HM_MSG_DEV_INFO(dev, "Wait for PFE controller UP ...\n");
 
 		while(1) {
 
@@ -213,7 +215,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 
 			if (ipready_tmout && !loops--) {
 				/* Timed out */
-				dev_err(dev, "PFE controller UP timed out\n");
+				HM_MSG_DEV_ERR(dev, "PFE controller UP timed out\n");
 				priv->deferred_probe_task = NULL;
 				do_exit(0);
 			}
@@ -221,9 +223,9 @@ static int pfeng_drv_deferred_probe(void *arg)
 			usleep_range(100, 500);
 		}
 
-		dev_info(dev, "PFE controller UP detected\n");
+		HM_MSG_DEV_INFO(dev, "PFE controller UP detected\n");
 	} else
-		dev_info(dev, "PFE controller state detection skipped\n");
+		HM_MSG_DEV_INFO(dev, "PFE controller state detection skipped\n");
 
 	/* Overwrite defaults by DT values */
 	ret = pfeng_dt_create_config(priv);
@@ -234,7 +236,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 	if (master_ihc_chnl < (HIF_CFG_MAX_CHANNELS + 1))
 		priv->ihc_master_chnl = master_ihc_chnl;
 	if (priv->ihc_master_chnl >= (HIF_CFG_MAX_CHANNELS + 1)) {
-		dev_err(dev, "Slave mode: Master channel id is missing\n");
+		HM_MSG_DEV_ERR(dev, "Slave mode: Master channel id is missing\n");
 		ret = -EINVAL;
 		goto err_drv;
 	}
@@ -242,24 +244,36 @@ static int pfeng_drv_deferred_probe(void *arg)
 	/* Slave requires deferred worker */
 	priv->ihc_slave_wq = create_singlethread_workqueue("pfeng-slave-init");
 	if (!priv->ihc_slave_wq) {
-		dev_err(dev, "Initialize of Slave WQ failed\n");
+		HM_MSG_DEV_ERR(dev, "Initialize of Slave WQ failed\n");
 		goto err_drv;
 	}
 
 	pm_runtime_get_noresume(dev);
-	pm_runtime_set_active(dev);
+	ret = pm_runtime_set_active(dev);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "Failed to set PM device status\n");
+		goto err_drv;
+	}
+
 	pm_runtime_enable(dev);
 
 	/* PFE platform layer init */
-	oal_mm_init(dev);
+	ret = oal_mm_init(dev);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "OAL memory managment init failed\n");
+		goto err_drv;
+	}
 
 	/* Start PFE Platform */
 	ret = pfe_platform_init(priv->pfe_cfg);
-	if (ret)
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "Could not init PFE platform instance. Error %d\n", ret);
 		goto err_drv;
+	}
+
 	priv->pfe_platform = pfe_platform_get_instance();
 	if (!priv->pfe_platform) {
-		dev_err(dev, "Could not get PFE platform instance\n");
+		HM_MSG_DEV_ERR(dev, "Could not get PFE platform instance\n");
 		ret = -EINVAL;
 		goto err_drv;
 	}
@@ -284,6 +298,9 @@ static int pfeng_drv_deferred_probe(void *arg)
 #endif
 
 	pm_runtime_put_noidle(dev);
+
+	/* Create MDIO buses */
+	pfeng_mdio_register(priv);
 
 	if (priv->deferred_probe_task) {
 		priv->deferred_probe_task = NULL;
@@ -326,27 +343,28 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	if (!of_match_device(pfeng_id_table, &pdev->dev))
 		return -ENODEV;
 
-	dev_info(dev, "PFEng ethernet driver loading ...\n");
-	dev_info(dev, "Version: %s\n", PFENG_DRIVER_VERSION);
-	dev_info(dev, "Driver commit hash: %s\n", PFENG_DRIVER_COMMIT_HASH);
+	HM_MSG_DEV_INFO(dev, "PFEng ethernet driver loading ...\n");
+	HM_MSG_DEV_INFO(dev, "Version: %s\n", PFENG_DRIVER_VERSION);
+	HM_MSG_DEV_INFO(dev, "Driver commit hash: %s\n", PFENG_DRIVER_COMMIT_HASH);
 
 	/* Print MULTI-INSATNCE mode (MASTER/SLAVE/disabled) */
-	dev_info(dev, "Multi instance support: SLAVE/mdetect=%s\n", disable_master_detection ? "off" : "on");
+	HM_MSG_DEV_INFO(dev, "Multi instance support: SLAVE/mdetect=%s\n", disable_master_detection ? "off" : "on");
 
-	dev_info(dev, "Compiled by: %s\n", __VERSION__);
+	HM_MSG_DEV_INFO(dev, "Compiled by: %s\n", __VERSION__);
 
 	if (!of_dma_is_coherent(dev->of_node))
-		dev_err(dev, "DMA coherency disabled - consider impact on device performance\n");
+		HM_MSG_DEV_ERR(dev, "DMA coherency disabled - consider impact on device performance\n");
 
 	/* Signal driver coherency mask */
 	if (dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32)) != 0) {
-		dev_err(dev, "System does not support DMA, aborting\n");
+		HM_MSG_DEV_ERR(dev, "System does not support DMA, aborting\n");
 		return -EINVAL;
 	}
 
 	/* Allocate driver context with defaults */
 	priv = pfeng_drv_alloc(pdev);
 	if(!priv) {
+		HM_MSG_DEV_ERR(dev, "Driver context allocation failed\n");
 		ret = -ENOMEM;
 		goto err_drv;
 	}
@@ -357,7 +375,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		if (IS_ERR(priv->deferred_probe_task)) {
 			ret = PTR_ERR(priv->deferred_probe_task);
 			priv->deferred_probe_task = NULL;
-			dev_err(dev, "Master detection task failed to start: %d\n", ret);
+			HM_MSG_DEV_ERR(dev, "Master detection task failed to start: %d\n", ret);
 			goto err_drv;
 		}
 	} else
@@ -370,7 +388,7 @@ err_drv:
 /* Slave PM is not supported */
 static int pfeng_drv_pm_suspend(struct device *dev)
 {
-	dev_err(dev, "Suspending driver is unsupported\n");
+	HM_MSG_DEV_ERR(dev, "Suspending driver is unsupported\n");
 
 	return -ENOTSUP;
 }

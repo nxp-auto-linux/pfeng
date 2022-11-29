@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -104,6 +104,7 @@ oal_irq_t * oal_irq_create(int32_t id, oal_irq_flags_t flags, const char_t *name
 	irq = oal_mm_malloc(sizeof(oal_irq_t));
 	if (NULL == irq)
 	{
+		NXP_LOG_ERROR("failed to allocate memory\n");
 		return NULL;
 	}
 

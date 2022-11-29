@@ -63,7 +63,7 @@ errno_t fci_l2br_flush_cmd(uint32_t code, uint16_t *fci_ret)
 				if (EOK != ret)
 				{
 					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
-					NXP_LOG_DEBUG("Can't flush MAC table entries: %d\n", ret);
+					NXP_LOG_ERROR("Can't flush MAC table entries: %d\n", ret);
 				}
 
 				break;
@@ -75,7 +75,7 @@ errno_t fci_l2br_flush_cmd(uint32_t code, uint16_t *fci_ret)
 				if (EOK != ret)
 				{
 					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
-					NXP_LOG_DEBUG("Can't flush learned MAC table entries: %d\n", ret);
+					NXP_LOG_ERROR("Can't flush learned MAC table entries: %d\n", ret);
 				}
 
 				break;
@@ -87,7 +87,7 @@ errno_t fci_l2br_flush_cmd(uint32_t code, uint16_t *fci_ret)
 				if (EOK != ret)
 				{
 					*fci_ret = FPP_ERR_INTERNAL_FAILURE;
-					NXP_LOG_DEBUG("Can't flush static MAC table entries: %d\n", ret);
+					NXP_LOG_ERROR("Can't flush static MAC table entries: %d\n", ret);
 				}
 
 				break;
@@ -95,7 +95,7 @@ errno_t fci_l2br_flush_cmd(uint32_t code, uint16_t *fci_ret)
 
 			default:
 			{
-				NXP_LOG_ERROR("Unknown L2 bridge command: 0x%x\n", (uint_t)code);
+				NXP_LOG_WARNING("Unknown L2 bridge command: 0x%x\n", (uint_t)code);
 				*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 				break;
 			}

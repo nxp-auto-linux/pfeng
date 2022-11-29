@@ -604,6 +604,35 @@ __attribute__((cold)) errno_t pfe_hif_ring_drain_buf(pfe_hif_ring_t *ring, void 
 }
 
 /**
+ * @brief       Check if ring contains less than watermark-specified
+ *              number of free entries
+ * @param[in]   ring The ring instance
+ * @return      TRUE if ring contains less than watermark-specified number
+ *              of free entries
+ * @note        Must not be preempted by: pfe_hif_ring_destroy()
+ */
+__attribute__((pure, hot)) bool_t pfe_hif_ring_is_below_wm(const pfe_hif_ring_t *ring)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+    if (unlikely(NULL == ring))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return FALSE;
+    }
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+    /*	TODO: Make the water-mark value configurable */
+    if (pfe_hif_ring_get_fill_level(ring) >= (RING_LEN / 2))
+    {
+        return TRUE;
+    }
+    else
+    {
+        return FALSE;
+    }
+}
+
+/**
  * @brief		Invalidate the ring
  * @details		Disable all buffer descriptors in the ring
  * @param[in]	ring The ring instance

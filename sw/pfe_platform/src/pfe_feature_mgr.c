@@ -106,11 +106,21 @@ errno_t pfe_feature_mgr_init(uint32_t *cbus_base)
 				(void)memset(feature_mgr, 0, sizeof(pfe_feature_mgr_t));
 				feature_mgr->cbus_base = cbus_base;
 				feature_mgr->hw_features = oal_mm_malloc(2U * sizeof(pfe_hw_feature_t *));
-				table_rewind_flag = FALSE;
-				ret = pfe_hw_feature_init_all(cbus_base, feature_mgr->hw_features, &feature_mgr->hw_features_count);
+				if (NULL == feature_mgr->hw_features)
+				{
+					NXP_LOG_ERROR("Unable to allocate memory\n");
+					oal_mm_free(feature_mgr);
+					ret = ENOMEM;
+				}
+				else
+				{
+					table_rewind_flag = FALSE;
+					ret = pfe_hw_feature_init_all(cbus_base, feature_mgr->hw_features, &feature_mgr->hw_features_count);
+				}
 			}
 			else
 			{
+				NXP_LOG_ERROR("Unable to allocate memory\n");
 				ret = ENOMEM;
 			}
 		}

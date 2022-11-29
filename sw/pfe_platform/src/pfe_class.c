@@ -95,7 +95,7 @@ errno_t pfe_class_isr(const pfe_class_t *class)
 				here as we don't need to have coherent accesses. */
 			if (EOK != pfe_pe_lock(class->pe[i]))
 			{
-				NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+				NXP_LOG_ERROR("pfe_pe_lock() failed\n");
 			}
 
 			/*	Read and print the error record from each PE */
@@ -129,7 +129,7 @@ errno_t pfe_class_isr(const pfe_class_t *class)
 
 			if (EOK != pfe_pe_unlock(class->pe[i]))
 			{
-				NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
+				NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
 			}
 		}
 		ret = EOK;
@@ -218,13 +218,18 @@ pfe_class_t *pfe_class_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_cl
 	{
 		class = oal_mm_malloc(sizeof(pfe_class_t));
 
-		if (NULL != class)
+		if (NULL == class)
+		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
+		}
+		else
 		{
 			(void)memset(class, 0, sizeof(pfe_class_t));
 			class->cbus_base_va = cbus_base_va;
 
 			if (EOK != oal_mutex_init(&class->mutex))
 			{
+				NXP_LOG_ERROR("Unable to initialize mutex\n");
 				oal_mm_free(class);
 				class = NULL;
 			}
@@ -236,6 +241,7 @@ pfe_class_t *pfe_class_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_cl
 
 					if (NULL == class->pe)
 					{
+						NXP_LOG_ERROR("Unable to allocate memory\n");
 						(void)oal_mutex_destroy(&class->mutex);
 						oal_mm_free(class);
 						class = NULL;
@@ -290,6 +296,7 @@ static errno_t pfe_class_dmem_heap_init(pfe_class_t *class)
 		class->heap_context = blalloc_create(oal_ntohl(mmap.class_pe.dmem_heap_size), PFE_CLASS_HEAP_CHUNK_SIZE);
 		if (NULL == class->heap_context)
 		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
 			ret = ENOMEM;
 		}
 		else
@@ -321,7 +328,7 @@ addr_t pfe_class_dmem_heap_alloc(const pfe_class_t *class, uint32_t size)
 	}
 	else
 	{ /* Allocation failed - return "NULL" */
-		NXP_LOG_DEBUG("Failed to allocate memory (size %u)\n", (uint_t)size);
+		NXP_LOG_ERROR("Failed to allocate memory (size %u)\n", (uint_t)size);
 		addr = 0U;
 	}
 
@@ -366,7 +373,7 @@ void pfe_class_reset(pfe_class_t *class)
 
 		if (EOK != oal_mutex_lock(&class->mutex))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		pfe_class_cfg_reset(class->cbus_base_va);
@@ -374,7 +381,7 @@ void pfe_class_reset(pfe_class_t *class)
 
 		if (EOK != oal_mutex_unlock(&class->mutex))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 }
@@ -404,7 +411,7 @@ void pfe_class_enable(pfe_class_t *class)
 
 		if (EOK != oal_mutex_lock(&class->mutex))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		pfe_class_cfg_enable(class->cbus_base_va);
@@ -427,7 +434,7 @@ void pfe_class_enable(pfe_class_t *class)
 
 		if (EOK != oal_mutex_unlock(&class->mutex))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 }
@@ -449,14 +456,14 @@ void pfe_class_disable(pfe_class_t *class)
 	{
 		if (EOK != oal_mutex_lock(&class->mutex))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		pfe_class_cfg_disable(class->cbus_base_va);
 
 		if (EOK != oal_mutex_unlock(&class->mutex))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 }
@@ -482,7 +489,7 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
 	{
 		if (EOK != oal_mutex_lock(&class->mutex))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		ret = pfe_pe_load_firmware(class->pe, class->pe_num, elf);
@@ -518,7 +525,7 @@ errno_t pfe_class_load_firmware(pfe_class_t *class, const void *elf)
 
 		if (EOK != oal_mutex_unlock(&class->mutex))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -624,7 +631,7 @@ static errno_t pfe_class_load_fw_features(pfe_class_t *class)
 			if (NULL == class->fw_features)
 			{
 				class->fw_features_count = 0U;
-				NXP_LOG_ERROR("Failed to allocate features storage\n");
+				NXP_LOG_ERROR("Unable to allocate memory\n");
 				ret = ENOMEM;
 			}
 			else
@@ -670,7 +677,7 @@ errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_class_mmap
 		{
 			if (EOK != oal_mutex_lock(&class->mutex))
 			{
-				NXP_LOG_DEBUG("mutex lock failed\n");
+				NXP_LOG_ERROR("mutex lock failed\n");
 			}
 
 			ret = pfe_pe_get_mmap(class->pe[pe_idx], &mmap_tmp);
@@ -678,7 +685,7 @@ errno_t pfe_class_get_mmap(pfe_class_t *class, int32_t pe_idx, pfe_ct_class_mmap
 
 			if (EOK != oal_mutex_unlock(&class->mutex))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 		}
 	}
@@ -718,7 +725,7 @@ errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, addr_t dst_addr, con
 		{
 			if (EOK != oal_mutex_lock(&class->mutex))
 			{
-				NXP_LOG_DEBUG("mutex lock failed\n");
+				NXP_LOG_ERROR("mutex lock failed\n");
 			}
 
 			if (pe_idx >= 0)
@@ -737,7 +744,7 @@ errno_t pfe_class_write_dmem(void *class_p, int32_t pe_idx, addr_t dst_addr, con
 
 			if (EOK != oal_mutex_unlock(&class->mutex))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			ret = EOK;
@@ -777,14 +784,14 @@ errno_t pfe_class_read_dmem(void *class_p, int32_t pe_idx, void *dst_ptr, addr_t
 		{
 			if (EOK != oal_mutex_lock(&class->mutex))
 			{
-				NXP_LOG_DEBUG("mutex lock failed\n");
+				NXP_LOG_ERROR("mutex lock failed\n");
 			}
 
 			pfe_pe_memcpy_from_dmem_to_host_32(class->pe[pe_idx], dst_ptr, src_addr, len);
 
 			if (EOK != oal_mutex_unlock(&class->mutex))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 			ret = EOK;
 		}
@@ -816,14 +823,14 @@ errno_t pfe_class_gather_read_dmem(pfe_class_t *class, void *dst_ptr, addr_t src
 	{
 		if (EOK != oal_mutex_lock(&class->mutex))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		ret = pfe_pe_gather_memcpy_from_dmem_to_host_32(class->pe, (int32_t) class->pe_num, dst_ptr, (addr_t)src_addr, buffer_len, read_len);
 
 		if (EOK != oal_mutex_unlock(&class->mutex))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -873,7 +880,7 @@ void pfe_class_destroy(pfe_class_t *class)
 
 		if (EOK != oal_mutex_destroy(&class->mutex))
 		{
-			NXP_LOG_WARNING("Could not properly destroy mutex\n");
+			NXP_LOG_ERROR("Could not properly destroy mutex\n");
 		}
 
 		oal_mm_free(class);
@@ -1330,7 +1337,7 @@ errno_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
 		 	here as we don't need to have coherent accesses. */
 		if (EOK != pfe_pe_lock(class->pe[ii]))
 		{
-			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+			NXP_LOG_ERROR("pfe_pe_lock() failed\n");
 		}
 
 		tries = 0U;
@@ -1346,7 +1353,7 @@ errno_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
 
 		if (EOK != pfe_pe_unlock(class->pe[ii]))
 		{
-			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+			NXP_LOG_ERROR("pfe_pe_lock() failed\n");
 		}
 
 		if (EOK != ret)
@@ -1504,7 +1511,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	{
 		if (EOK != oal_mutex_lock(&class->mutex))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/* FW version */
@@ -1524,10 +1531,10 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		pe_stats = oal_mm_malloc(sizeof(pfe_ct_pe_stats_t) * (class->pe_num + 1U));
 		if (NULL == pe_stats)
 		{
-			NXP_LOG_ERROR("Memory allocation failed\n");
+			NXP_LOG_ERROR("Unable to allocate memory\n");
 			if (EOK != oal_mutex_unlock(&class->mutex))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 		}
 		else
@@ -1543,7 +1550,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 				oal_mm_free(pe_stats);
 				if (EOK != oal_mutex_unlock(&class->mutex))
 				{
-					NXP_LOG_DEBUG("mutex unlock failed\n");
+					NXP_LOG_ERROR("mutex unlock failed\n");
 				}
 			}
 			else
@@ -1583,7 +1590,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 
 				if (EOK != oal_mutex_unlock(&class->mutex))
 				{
-					NXP_LOG_DEBUG("mutex unlock failed\n");
+					NXP_LOG_ERROR("mutex unlock failed\n");
 				}
 
 				ret = pfe_class_get_stats(class, &c_alg_stats);

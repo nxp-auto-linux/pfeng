@@ -73,6 +73,9 @@ struct fci_tag
 		uint32_t timeout_other;
 	} default_timeouts;
 
+	bool_t hm_cb_registered;
+	bool_t is_some_client;			/* TRUE if there is at least one client registered for FCI events. */
+
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	bool_t fci_owner_initialized;
 #endif /* #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT */
@@ -122,6 +125,9 @@ errno_t fci_qos_policer_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_c
 errno_t fci_qos_policer_flow_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_flow_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_qos_policer_wred_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_wred_cmd_t *reply_buf, uint32_t *reply_len);
 errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_shp_cmd_t *reply_buf, uint32_t *reply_len);
+void fci_hm_send_events(void);
+errno_t fci_hm_cb_register(void);
+errno_t fci_hm_cb_deregister(void);
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 errno_t fci_owner_session_cmd(pfe_ct_phy_if_id_t sender, uint32_t code, uint16_t *fci_ret);
 errno_t fci_owner_get_floating_lock(pfe_ct_phy_if_id_t sender, uint16_t *fci_ret, bool_t *floating_lock);

@@ -62,7 +62,7 @@ static errno_t pfe_log_if_db_lock(void)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_LOCK, NULL, 0, NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Unable to lock interface DB: %d\n", ret);
+		NXP_LOG_ERROR("Unable to lock interface DB: %d\n", ret);
 	}
 
 	return ret;
@@ -75,7 +75,7 @@ static errno_t pfe_log_if_db_unlock(void)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_UNLOCK, NULL, 0, NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Unable to lock interface DB: %d\n", ret);
+		NXP_LOG_ERROR("Unable to lock interface DB: %d\n", ret);
 	}
 
 	return ret;
@@ -115,7 +115,7 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, const char_t *name)
 
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't create logical interface: %d\n", ret);
+		NXP_LOG_WARNING("Can't create logical interface: %d\n", ret);
 		return NULL;
 	}
 
@@ -219,26 +219,26 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_DESTROY, &req, sizeof(req), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("Can't destroy remote instance: %d\n", ret);
+			NXP_LOG_WARNING("Can't destroy remote instance: %d\n", ret);
 		}
 		else
 		{
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 			if (EOK != oal_mutex_lock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex lock failed\n");
+				NXP_LOG_ERROR("mutex lock failed\n");
 			}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 			/*	Destroy local MAC database */
 			ret = pfe_mac_db_destroy(iface->mac_db);
 			if (EOK != ret)
 			{
-				NXP_LOG_WARNING("unable to destroy MAC database: %d\n", ret);
+				NXP_LOG_ERROR("unable to destroy MAC database: %d\n", ret);
 			}
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 		}
@@ -253,7 +253,7 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 
 		if (EOK != oal_mutex_destroy(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Could not destroy mutex\n");
+			NXP_LOG_ERROR("Could not destroy mutex\n");
 		}
 
 		oal_mm_free(iface);
@@ -287,7 +287,7 @@ errno_t pfe_log_if_set_match_or(pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_SET_MATCH_OR, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't set match to OR type on interfaces: %d\n", ret);
+		NXP_LOG_WARNING("Can't set match to OR type on interfaces: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -322,7 +322,7 @@ errno_t pfe_log_if_set_match_and(pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_SET_MATCH_AND, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't set match to AND type on interfaces: %d\n", ret);
+		NXP_LOG_WARNING("Can't set match to AND type on interfaces: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -360,7 +360,7 @@ bool_t pfe_log_if_is_match_or(pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_IS_MATCH_OR, &req, sizeof(req), &rpc_ret, sizeof(rpc_ret));
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't get match OR/AND status: %d\n", ret);
+		NXP_LOG_WARNING("Can't get match OR/AND status: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -413,7 +413,7 @@ errno_t pfe_log_if_set_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_SET_MATCH_RULES, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't set match rules: %d\n", ret);
+		NXP_LOG_WARNING("Can't set match rules: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -478,7 +478,7 @@ errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule,
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_ADD_MATCH_RULE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't add match rule: %d\n", ret);
+		NXP_LOG_WARNING("Can't add match rule: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -515,7 +515,7 @@ errno_t pfe_log_if_del_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_DEL_MATCH_RULE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't delete match rule(s): %d\n", ret);
+		NXP_LOG_WARNING("Can't delete match rule(s): %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -553,7 +553,7 @@ errno_t pfe_log_if_get_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t *rul
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_GET_MATCH_RULES, &req, sizeof(req), &rpc_ret, sizeof(rpc_ret));
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't get match rule(s): %d\n", ret);
+		NXP_LOG_WARNING("Can't get match rule(s): %d\n", ret);
 	}
 	else
 	{
@@ -596,7 +596,7 @@ errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 	}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -612,13 +612,13 @@ errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_ADD_MAC_ADDR, &req, sizeof(req), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("Can't set MAC address: %d\n", ret);
+			NXP_LOG_WARNING("Can't set MAC address: %d\n", ret);
 
 			/*	Remove the address from local database */
 			ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
 			if(EOK != ret)
 			{
-				NXP_LOG_WARNING("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
+				NXP_LOG_ERROR("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
 			}
 		}
 	}
@@ -627,7 +627,7 @@ errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	return ret;
@@ -660,7 +660,7 @@ errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 	}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -669,7 +669,7 @@ errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 	ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
 	if(EOK != ret)
 	{
-		NXP_LOG_WARNING("Unable to remove MAC address from log_if MAC database: %d\n", ret);
+		NXP_LOG_ERROR("Unable to remove MAC address from log_if MAC database: %d\n", ret);
 	}
 	else
 	{
@@ -679,7 +679,7 @@ errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_DEL_MAC_ADDR, &req, sizeof(req), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("Can't del MAC address: %d\n", ret);
+			NXP_LOG_WARNING("Can't del MAC address: %d\n", ret);
 
 			/* Removal of MAC address by master failed, put it back to DB */
 			ret = pfe_mac_db_add_addr(iface->mac_db, addr, owner);
@@ -694,7 +694,7 @@ errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	return ret;
@@ -740,20 +740,20 @@ errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 	}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 	ret = pfe_mac_db_get_first_addr(iface->mac_db, MAC_DB_CRIT_ALL, PFE_TYPE_ANY, PFE_CFG_LOCAL_IF, addr);
 	if(EOK != ret)
 	{
-		NXP_LOG_WARNING("unable to get MAC address: %d\n", ret);
+		NXP_LOG_ERROR("unable to get MAC address: %d\n", ret);
 	}
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -787,7 +787,7 @@ errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_mac_db_crit_t crit, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 	}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -802,7 +802,7 @@ errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_mac_db_crit_t crit, 
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_FLUSH_MAC_ADDRS, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't flush multicast MAC addresses: %d\n", ret);
+		NXP_LOG_WARNING("Can't flush multicast MAC addresses: %d\n", ret);
 	}
 	else
 	{
@@ -810,7 +810,7 @@ errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_mac_db_crit_t crit, 
 		ret = pfe_mac_db_flush(iface->mac_db, crit, type, owner);
 		if(EOK != ret)
 		{
-			NXP_LOG_DEBUG("Unable to flush MAC address from phy_if MAC database: %d\n", ret);
+			NXP_LOG_ERROR("Unable to flush MAC address from phy_if MAC database: %d\n", ret);
 		}
 	}
 
@@ -818,7 +818,7 @@ errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_mac_db_crit_t crit, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	return ret;
@@ -852,7 +852,7 @@ errno_t pfe_log_if_set_egress_ifs(pfe_log_if_t *iface, uint32_t egress)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_SET_EGRESS_IFS, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't set egress interfaces: %d\n", ret);
+		NXP_LOG_WARNING("Can't set egress interfaces: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -888,7 +888,7 @@ errno_t pfe_log_if_get_egress_ifs(pfe_log_if_t *iface, uint32_t *egress)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_GET_EGRESS_IFS, &req, sizeof(req), &rpc_ret, sizeof(rpc_ret));
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't get egress interfaces: %d\n", ret);
+		NXP_LOG_WARNING("Can't get egress interfaces: %d\n", ret);
 	}
 	else
 	{
@@ -938,7 +938,7 @@ errno_t pfe_log_if_add_egress_if(pfe_log_if_t *iface, const pfe_phy_if_t *phy_if
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_ADD_EGRESS_IF, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't add egress interface: %d\n", ret);
+		NXP_LOG_WARNING("Can't add egress interface: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -977,7 +977,7 @@ errno_t pfe_log_if_del_egress_if(pfe_log_if_t *iface, const pfe_phy_if_t *phy_if
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_DEL_EGRESS_IF, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't delete egress interface: %d\n", ret);
+		NXP_LOG_WARNING("Can't delete egress interface: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -1014,7 +1014,7 @@ errno_t pfe_log_if_enable(pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_ENABLE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't enable interface: %d\n", ret);
+		NXP_LOG_WARNING("Can't enable interface: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -1051,7 +1051,7 @@ errno_t pfe_log_if_disable(pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_DISABLE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't disable interface: %d\n", ret);
+		NXP_LOG_WARNING("Can't disable interface: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -1089,7 +1089,7 @@ __attribute__((pure)) bool_t pfe_log_if_is_enabled(pfe_log_if_t *iface)
 
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't get interface enable status: %d\n", ret);
+		NXP_LOG_WARNING("Can't get interface enable status: %d\n", ret);
 		return FALSE;
 	}
 	else
@@ -1128,7 +1128,7 @@ errno_t pfe_log_if_promisc_enable(pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_PROMISC_ENABLE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't enable promiscuous mode: %d\n", ret);
+		NXP_LOG_WARNING("Can't enable promiscuous mode: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -1163,7 +1163,7 @@ errno_t pfe_log_if_promisc_disable(pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_PROMISC_DISABLE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't disable promiscuous mode: %d\n", ret);
+		NXP_LOG_WARNING("Can't disable promiscuous mode: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -1201,7 +1201,7 @@ __attribute__((pure)) bool_t pfe_log_if_is_promisc(pfe_log_if_t *iface)
 
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't get promiscuous status: %d\n", ret);
+		NXP_LOG_WARNING("Can't get promiscuous status: %d\n", ret);
 		return FALSE;
 	}
 	else
@@ -1240,7 +1240,7 @@ __attribute__((pure)) bool_t pfe_log_if_is_loopback(pfe_log_if_t *iface)
 
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't get loopback status: %d\n", ret);
+		NXP_LOG_WARNING("Can't get loopback status: %d\n", ret);
 		return FALSE;
 	}
 	else
@@ -1276,7 +1276,7 @@ errno_t pfe_log_if_loopback_enable(pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_LOOPBACK_ENABLE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't enable loopback mode: %d\n", ret);
+		NXP_LOG_WARNING("Can't enable loopback mode: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -1311,7 +1311,7 @@ errno_t pfe_log_if_loopback_disable(pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_LOOPBACK_DISABLE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't disable loopback mode: %d\n", ret);
+		NXP_LOG_WARNING("Can't disable loopback mode: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -1349,7 +1349,7 @@ bool_t pfe_log_if_is_discard(pfe_log_if_t *iface)
 
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't get discard status: %d\n", ret);
+		NXP_LOG_WARNING("Can't get discard status: %d\n", ret);
 		return FALSE;
 	}
 	else
@@ -1387,7 +1387,7 @@ errno_t pfe_log_if_discard_enable(pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_DISCARD_ENABLE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't enable discard: %d\n", ret);
+		NXP_LOG_WARNING("Can't enable discard: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -1424,7 +1424,7 @@ errno_t pfe_log_if_discard_disable(pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_DISCARD_DISABLE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't disable discard: %d\n", ret);
+		NXP_LOG_WARNING("Can't disable discard: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -1462,7 +1462,7 @@ errno_t pfe_log_if_allmulti_enable(const pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_ALLMULTI_ENABLE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't enable allmulti mode: %d\n", ret);
+		NXP_LOG_WARNING("Can't enable allmulti mode: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -1497,7 +1497,7 @@ errno_t pfe_log_if_allmulti_disable(const pfe_log_if_t *iface)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_ALLMULTI_DISABLE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't disable allmulti mode: %d\n", ret);
+		NXP_LOG_WARNING("Can't disable allmulti mode: %d\n", ret);
 	}
 
 	(void)pfe_log_if_db_unlock();
@@ -1552,7 +1552,7 @@ errno_t pfe_log_if_get_stats(const pfe_log_if_t *iface, pfe_ct_class_algo_stats_
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_LOG_IF_STATS, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't get interface enable status: %d\n", ret);
+		NXP_LOG_WARNING("Can't get interface enable status: %d\n", ret);
 	}
 	else
 	{
@@ -1586,7 +1586,7 @@ uint32_t pfe_log_if_get_text_statistics(const pfe_log_if_t *iface, char_t *buf, 
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	/*	Ask the master driver if interface is in promiscuous mode */
-	NXP_LOG_ERROR("%s: Not supported yet\n", __func__);
+	NXP_LOG_WARNING("%s: Not supported yet\n", __func__);
 	len += oal_util_snprintf(buf + len, buf_len - len, "%s: Unable to get statistics (not implemented)\n", __func__);
 
 	(void)iface;

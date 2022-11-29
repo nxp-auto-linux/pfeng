@@ -167,7 +167,7 @@ void pfe_spd_destroy(pfe_if_db_t *phy_if_db)
 
 		if(EOK != pfe_if_db_lock(&session_id))
 		{
-			NXP_LOG_DEBUG("DB lock failed\n");
+			NXP_LOG_ERROR("DB lock failed\n");
 		}
 
 		/* Get PHY from DB*/
@@ -196,7 +196,7 @@ void pfe_spd_destroy(pfe_if_db_t *phy_if_db)
 
 		if(EOK != pfe_if_db_unlock(session_id))
 		{
-			NXP_LOG_DEBUG("DB unlock failed\n");
+			NXP_LOG_ERROR("DB unlock failed\n");
 		}
 
 	}
@@ -274,6 +274,7 @@ errno_t pfe_spd_add_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd_ent
             }
             else
             {
+                NXP_LOG_ERROR("Unable to allocate memory\n");
                 ret = ENOMEM;
             }
         }
@@ -329,6 +330,7 @@ errno_t pfe_spd_add_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd_ent
             }
             else
             {
+                NXP_LOG_ERROR("Unable to allocate memory\n");
                 ret = ENOMEM;
             }
         }
@@ -427,6 +429,7 @@ errno_t pfe_spd_remove_rule(pfe_phy_if_t * phy_if, uint16_t position)
                 }
                 else
                 {
+                    NXP_LOG_ERROR("Unable to allocate memory\n");
                     ret = ENOMEM;
                 }
             }

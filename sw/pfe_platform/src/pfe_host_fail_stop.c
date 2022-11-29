@@ -53,6 +53,7 @@ pfe_host_fail_stop_t *pfe_host_fail_stop_create(addr_t cbus_base_va, addr_t host
 
 	if (NULL == host_fail_stop)
 	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
 		return NULL;
 	}
 	else
@@ -73,7 +74,10 @@ pfe_host_fail_stop_t *pfe_host_fail_stop_create(addr_t cbus_base_va, addr_t host
 		}
 		else
 		{
-			(void)oal_mutex_init(host_fail_stop->lock);
+			if (EOK != oal_mutex_init(host_fail_stop->lock))
+			{
+				NXP_LOG_ERROR("Mutex initialization failed\n");
+			}
 		}
 
 		/* Unmask all interrupts */
@@ -100,9 +104,15 @@ void pfe_host_fail_stop_destroy(pfe_host_fail_stop_t *host_fail_stop)
 	if (NULL != host_fail_stop->lock)
 	{
 		/* Mask host_fail_stop interrupts */
-		(void)oal_mutex_lock(host_fail_stop->lock);
+		if (EOK != oal_mutex_lock(host_fail_stop->lock))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
 		pfe_host_fail_stop_cfg_irq_mask(host_fail_stop->host_fail_stop_base_va);
-		(void)oal_mutex_unlock(host_fail_stop->lock);
+		if (EOK != oal_mutex_unlock(host_fail_stop->lock))
+		{
+			NXP_LOG_ERROR("Mutex unlock failed\n");
+		}
 		(void)oal_mutex_destroy(host_fail_stop->lock);
 		(void)oal_mm_free(host_fail_stop->lock);
 		host_fail_stop->lock = NULL;
@@ -129,10 +139,16 @@ errno_t pfe_host_fail_stop_isr(const pfe_host_fail_stop_t *host_fail_stop)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	(void)oal_mutex_lock(host_fail_stop->lock);
+	if (EOK != oal_mutex_lock(host_fail_stop->lock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
 	/*	Run the low-level ISR to identify and process the interrupt */
 	ret = pfe_host_fail_stop_cfg_isr(host_fail_stop->host_fail_stop_base_va);
-	(void)oal_mutex_unlock(host_fail_stop->lock);
+	if (EOK != oal_mutex_unlock(host_fail_stop->lock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 
 	return ret;
 }
@@ -151,9 +167,15 @@ void pfe_host_fail_stop_irq_mask(const pfe_host_fail_stop_t *host_fail_stop)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	(void)oal_mutex_lock(host_fail_stop->lock);
+	if (EOK != oal_mutex_lock(host_fail_stop->lock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
 	pfe_host_fail_stop_cfg_irq_mask(host_fail_stop->host_fail_stop_base_va);
-	(void)oal_mutex_unlock(host_fail_stop->lock);
+	if (EOK != oal_mutex_unlock(host_fail_stop->lock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 }
 
 /**
@@ -170,9 +192,15 @@ void pfe_host_fail_stop_irq_unmask(const pfe_host_fail_stop_t *host_fail_stop)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	(void)oal_mutex_lock(host_fail_stop->lock);
+	if (EOK != oal_mutex_lock(host_fail_stop->lock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
 	pfe_host_fail_stop_cfg_irq_unmask(host_fail_stop->host_fail_stop_base_va);
-	(void)oal_mutex_unlock(host_fail_stop->lock);
+	if (EOK != oal_mutex_unlock(host_fail_stop->lock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 }
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR

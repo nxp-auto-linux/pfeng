@@ -102,6 +102,34 @@ static fci_core_client_t *fci_core_get_client(fci_core_t *core, uint32_t port_id
 }
 
 /*
+	Get count of registered clients.
+*/
+static uint8_t fci_core_get_count_of_clients(fci_core_t *core)
+{
+	int ii;
+	uint8_t count = 0;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == core))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return NULL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	/* The core is secured by lock in the caller */
+	for (ii=0U; ii<FCI_CFG_MAX_CLIENTS; ii++)
+	{
+		if (core->clients[ii].connected == TRUE)
+		{
+			count++;
+		}
+	}
+
+	return count;
+}
+
+/*
  	 Create FCI core instance
 */
 errno_t fci_core_init(const char_t *const id)
@@ -297,6 +325,7 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 	errno_t ret = EOK;
 	fci_core_client_t *client;
 	fci_core_t *core = GET_FCI_CORE();
+	bool first_client_connected = FALSE;
 	
 	NXP_LOG_DEBUG("FCI received msg of type %u from port_id 0x%x\n", msg->type, port_id);
 	
@@ -353,7 +382,23 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 				}
 			}
 
+			if (EOK == ret)
+			{
+				__context.is_some_client = TRUE;
+				if (1U == fci_core_get_count_of_clients(core))
+				{
+					first_client_connected = TRUE;
+				}
+			}
+
 			mutex_unlock(&GET_FCI_CORE()->clients_lock);
+
+			/* Health Monitor FCI events ; this must be checked/called after unlock, because FCI event sending manipulates the clients_lock too. */
+			if (TRUE == first_client_connected)
+			{
+				fci_hm_send_events();
+			}
+
 			break;
 		}
 
@@ -389,6 +434,15 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 			{
 				NXP_LOG_INFO("Listener with port id cmd 0x%x unregistered from pos %d\n",port_id, ii);
 				ret = EOK;
+			}
+
+			/* Health Monitor FCI events */
+			if (EOK == ret)
+			{
+				if (0U == fci_core_get_count_of_clients(core))
+				{
+					__context.is_some_client = FALSE;
+				}
 			}
 
 			mutex_unlock(&GET_FCI_CORE()->clients_lock);

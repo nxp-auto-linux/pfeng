@@ -314,7 +314,7 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 			ret = pfe_tmu_sch_cfg_bind_queue(cbus_base_va, phy_if_id_temp[ii], 1U, queue, queue);
 			if (EOK != ret)
 			{
-				NXP_LOG_DEBUG("Can't bind queue to scheduler: %d\n", ret);
+				NXP_LOG_ERROR("Can't bind queue to scheduler: %d\n", ret);
 				ret = ENOEXEC;
 				break;
 			}
@@ -325,7 +325,7 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 			ret = pfe_tmu_sch_cfg_set_rate_mode(cbus_base_va, phy_if_id_temp[ii], 1U, RATE_MODE_DATA_RATE);
 			if (EOK != ret)
 			{
-				NXP_LOG_DEBUG("Could not set scheduler 1 rate mode: %d\n", ret);
+				NXP_LOG_ERROR("Could not set scheduler 1 rate mode: %d\n", ret);
 				ret = ENOEXEC;
 			}
 			else
@@ -333,7 +333,7 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 				ret = pfe_tmu_sch_cfg_set_algo(cbus_base_va, phy_if_id_temp[ii], 1U, SCHED_ALGO_RR);
 				if (EOK != ret)
 				{
-					NXP_LOG_DEBUG("Could not set scheduler 1 algo: %d\n", ret);
+					NXP_LOG_ERROR("Could not set scheduler 1 algo: %d\n", ret);
 					ret = ENOEXEC;
 				}
 				else
@@ -352,7 +352,7 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 
 						if (EOK != ret)
 						{
-							NXP_LOG_DEBUG("Can't set default queue mode: %d\n", ret);
+							NXP_LOG_ERROR("Can't set default queue mode: %d\n", ret);
 							break;
 						}
 					}

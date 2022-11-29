@@ -192,7 +192,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 					if (q->id > cnt)
 					{
 						/* FCI command requested nonexistent entity. Respond with FCI error code. */
-						NXP_LOG_ERROR("Queue ID %d out of range. Interface %s implements %d queues\n",
+						NXP_LOG_WARNING("Queue ID %d out of range. Interface %s implements %d queues\n",
 								(int_t)q->id, q->if_name, (int_t)cnt);
 						*fci_ret = FPP_ERR_QOS_QUEUE_NOT_FOUND;
 						ret = EOK;
@@ -205,7 +205,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 					if (q->mode > 3U)
 					{
 						/* FCI command has wrong data. Respond with FCI error code. */
-						NXP_LOG_ERROR("Unsupported queue mode: %d\n", q->mode);
+						NXP_LOG_WARNING("Unsupported queue mode: %d\n", q->mode);
 						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 						ret = EOK;
 						break;
@@ -229,14 +229,14 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 							if (ENOSPC == ret)
 							{
 								/* FCI command requested unfulfillable action. Respond with FCI error code. */
-								NXP_LOG_ERROR("Refused to set max length of %s queue %d to %u, because then the sum of %s queue lengths would exceed allowed total limit.\n", pfe_phy_if_get_name(phy_if), q->id, (uint_t)oal_ntohl(q->max), pfe_phy_if_get_name(phy_if));
+								NXP_LOG_WARNING("Refused to set max length of %s queue %d to %u, because then the sum of %s queue lengths would exceed allowed total limit.\n", pfe_phy_if_get_name(phy_if), q->id, (uint_t)oal_ntohl(q->max), pfe_phy_if_get_name(phy_if));
 								*fci_ret = FPP_ERR_QOS_QUEUE_SUM_OF_LENGTHS_EXCEEDED;
 								ret = EOK;
 							}
 							else
 							{
 								/* FCI command has wrong data. Respond with FCI error code. */
-								NXP_LOG_ERROR("Could not set queue %d mode %d: %d\n", q->id, q->mode, ret);
+								NXP_LOG_WARNING("Could not set queue %d mode %d: %d\n", q->id, q->mode, ret);
 								*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 								ret = EOK;
 							}
@@ -252,7 +252,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 							if (cnt > 32U)
 							{
 								/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
-								NXP_LOG_DEBUG("Invalid zones count...\n");
+								NXP_LOG_ERROR("Invalid zones count...\n");
 								*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 								ret = EINVAL;
 								break;
@@ -267,7 +267,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 								if (EOK != ret)
 								{
 									/* FCI command has wrong data. Respond with FCI error code. */
-									NXP_LOG_ERROR("Could not set queue %d zone %d probability %d: %d\n",
+									NXP_LOG_WARNING("Could not set queue %d zone %d probability %d: %d\n",
 											(int_t)q->id, (int_t)ii, (int_t)q->zprob[ii], (int_t)ret);
 									*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 									ret = EOK;
@@ -386,7 +386,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 
 				default:
 				{
-					NXP_LOG_ERROR("FPP_CMD_QOS_QUEUE: Unknown action received: 0x%x\n", q->action);
+					NXP_LOG_WARNING("FPP_CMD_QOS_QUEUE: Unknown action received: 0x%x\n", q->action);
 					*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 					break;
 				}
@@ -501,7 +501,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 					}
 					else
 					{
-						NXP_LOG_ERROR("Unsupported scheduler mode: 0x%x\n", sch->mode);
+						NXP_LOG_WARNING("Unsupported scheduler mode: 0x%x\n", sch->mode);
 						ret = EINVAL;
 					}
 
@@ -518,7 +518,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 					if (sch->algo > 3U)
 					{
 						/* FCI command has wrong data. Respond with FCI error code. */
-						NXP_LOG_ERROR("Unsupported scheduler algorithm: 0x%x\n", sch->algo);
+						NXP_LOG_WARNING("Unsupported scheduler algorithm: 0x%x\n", sch->algo);
 						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 						ret = EOK;
 						break;
@@ -565,7 +565,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 								if (EOK != ret)
 								{
 									/* FCI command has wrong data. Respond with FCI error code. */
-									NXP_LOG_ERROR("Could not connect source %d to scheduler input %d\n",
+									NXP_LOG_WARNING("Could not connect source %d to scheduler input %d\n",
 											(int_t)sch->input_src[ii], (int_t)ii);
 									*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 									ret = EOK;
@@ -581,7 +581,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 								if (EOK != ret)
 								{
 									/* FCI command has wrong data. Respond with FCI error code. */
-									NXP_LOG_ERROR("Could not connect scheduler %d output to scheduler %d input %d: %d\n",
+									NXP_LOG_WARNING("Could not connect scheduler %d output to scheduler %d input %d: %d\n",
 											(int_t)(sch->id-1U), (int_t)sch->id, (int_t)ii, (int_t)ret);
 									*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 									ret = EOK;
@@ -591,7 +591,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 							else
 							{
 								/* FCI command has wrong data. Respond with FCI error code. */
-								NXP_LOG_ERROR("Unsupported scheduler input %d source: %d\n", (int_t)ii, (int_t)sch->input_src[ii]);
+								NXP_LOG_WARNING("Unsupported scheduler input %d source: %d\n", (int_t)ii, (int_t)sch->input_src[ii]);
 								*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 								ret = EOK;
 								break; /* for */
@@ -604,7 +604,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 							if (EOK != ret)
 							{
 								/* FCI command has wrong data. Respond with FCI error code. */
-								NXP_LOG_ERROR("Could not set scheduler %d input %d weight %d: %d\n",
+								NXP_LOG_WARNING("Could not set scheduler %d input %d weight %d: %d\n",
 										(int_t)sch->id, (int_t)ii, (int_t)oal_ntohl(sch->input_w[ii]), (int_t)ret);
 								*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 								ret = EOK;
@@ -726,7 +726,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 
 				default:
 				{
-					NXP_LOG_ERROR("FPP_CMD_QOS_SCHEDULER: Unknown action received: 0x%x\n", sch->action);
+					NXP_LOG_WARNING("FPP_CMD_QOS_SCHEDULER: Unknown action received: 0x%x\n", sch->action);
 					*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 					break;
 				}
@@ -871,7 +871,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 						else
 						{
 							/* FCI command has wrong data. Respond with FCI error code. */
-							NXP_LOG_ERROR("Invalid shaper rate mode value: %d\n", shp->mode);
+							NXP_LOG_WARNING("Invalid shaper rate mode value: %d\n", shp->mode);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							ret = EOK;
 							break;
@@ -893,7 +893,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 						if (EOK != ret)
 						{
 							/* FCI command has wrong data. Respond with FCI error code. */
-							NXP_LOG_ERROR("Unable to set shaper %d limits: %d\n", shp->id, ret);
+							NXP_LOG_WARNING("Unable to set shaper %d limits: %d\n", shp->id, ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							ret = EOK;
 							break;
@@ -905,7 +905,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 						if (EOK != ret)
 						{
 							/* FCI command has wrong data. Respond with FCI error code. */
-							NXP_LOG_ERROR("Can't set shaper %d at position %d: %d\n",
+							NXP_LOG_WARNING("Can't set shaper %d at position %d: %d\n",
 									shp->id, shp->position, ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							ret = EOK;
@@ -919,7 +919,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 						if (EOK != ret)
 						{
 							/* FCI command has wrong data. Respond with FCI error code. */
-							NXP_LOG_ERROR("Can't set shaper %d idle slope %d: %d\n",
+							NXP_LOG_WARNING("Can't set shaper %d idle slope %d: %d\n",
 									(int_t)shp->id, (int_t)oal_ntohl(shp->isl), (int_t)ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							ret = EOK;
@@ -1011,7 +1011,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 
 				default:
 				{
-					NXP_LOG_ERROR("FPP_CMD_QOS_SHAPER: Unknown action received: 0x%x\n", shp->action);
+					NXP_LOG_WARNING("FPP_CMD_QOS_SHAPER: Unknown action received: 0x%x\n", shp->action);
 					*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 					break;
 				}
@@ -1144,7 +1144,7 @@ errno_t fci_qos_policer_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_policer_c
 
 					default:
 					{
-						NXP_LOG_ERROR("FPP_CMD_QOS_POLICER: Unknown action received: 0x%x\n", pol_cmd->action);
+						NXP_LOG_WARNING("FPP_CMD_QOS_POLICER: Unknown action received: 0x%x\n", pol_cmd->action);
 						*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 						break;
 					}
@@ -1341,7 +1341,7 @@ errno_t fci_qos_policer_flow_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 					}
 					default:
 					{
-						NXP_LOG_ERROR("FPP_CMD_QOS_POLICER_FLOW: Unknown action received: 0x%x\n", flow_cmd->action);
+						NXP_LOG_WARNING("FPP_CMD_QOS_POLICER_FLOW: Unknown action received: 0x%x\n", flow_cmd->action);
 						*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 						break;
 					}
@@ -1514,7 +1514,7 @@ errno_t fci_qos_policer_wred_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_poli
 
 						default:
 						{
-							NXP_LOG_ERROR("FPP_CMD_QOS_POLICER_WRED: Unknown action received: 0x%x\n", wred_cmd->action);
+							NXP_LOG_WARNING("FPP_CMD_QOS_POLICER_WRED: Unknown action received: 0x%x\n", wred_cmd->action);
 							*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 							break;
 						}
@@ -1698,7 +1698,7 @@ errno_t fci_qos_policer_shp_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_polic
 
 						default:
 						{
-							NXP_LOG_ERROR("FPP_CMD_QOS_POLICER_SHP: Unknown action received: 0x%x\n", shp_cmd->action);
+							NXP_LOG_WARNING("FPP_CMD_QOS_POLICER_SHP: Unknown action received: 0x%x\n", shp_cmd->action);
 							*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 							break;
 						}

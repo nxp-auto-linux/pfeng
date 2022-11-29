@@ -10,7 +10,7 @@
 #ifndef PFE_HM_H
 #define PFE_HM_H
 
-#define PFE_HM_DESCRIPTION_MAX_LEN 64
+#define PFE_HM_DESCRIPTION_MAX_LEN 128
 #define PFE_HM_QUEUE_LEN 8
 
 typedef enum {
@@ -140,6 +140,9 @@ typedef enum {
 
 typedef enum {
 	HM_SRC_UNKNOWN,
+	HM_SRC_DRIVER,
+	HM_SRC_PFENG_DEV,
+	HM_SRC_PFENG_NETDEV,
 	HM_SRC_WDT,
 	HM_SRC_EMAC0,
 	HM_SRC_EMAC1,
@@ -170,7 +173,7 @@ typedef void (* pfe_hm_cb_t)(pfe_hm_item_t *item);
 
 errno_t pfe_hm_init(void);
 errno_t pfe_hm_destroy(void);
-void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id,
+void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id, void *dev,
 		const char *format, ...);
 errno_t pfe_hm_get(pfe_hm_item_t *item);
 const char *pfe_hm_get_event_str(pfe_hm_evt_t id);
@@ -179,8 +182,12 @@ bool_t pfe_hm_register_event_cb(pfe_hm_cb_t cb);
 
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
-#define pfe_hm_report_info(src, id, format, ...) pfe_hm_report((src), HM_INFO, (id), "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define pfe_hm_report_warning(src, id, format, ...) pfe_hm_report((src), HM_WARNING, (id), "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define pfe_hm_report_error(src, id, format, ...) pfe_hm_report((src), HM_ERROR, (id), "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_info(src, id, format, ...) pfe_hm_report((src), HM_INFO, (id), NULL,"[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_warning(src, id, format, ...) pfe_hm_report((src), HM_WARNING, (id), NULL, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_error(src, id, format, ...) pfe_hm_report((src), HM_ERROR, (id), NULL, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+
+#define pfe_hm_report_dev_info(src, id, dev, format, ...) pfe_hm_report((src), HM_INFO, (id), dev,"[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_dev_warning(src, id, dev, format, ...) pfe_hm_report((src), HM_WARNING, (id), dev, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_dev_error(src, id, dev, format, ...) pfe_hm_report((src), HM_ERROR, (id), dev, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
 
 #endif /* PFE_HM_H */

@@ -77,7 +77,9 @@ SRCS =		src/pfe_hif_chnl.c \
 		src/pfe_pe.c \
 		src/pfe_phy_if_slave.c \
 		src/pfe_mac_db.c \
-		src/pfe_hm.c
+		src/pfe_hm.c \
+		src/pfe_mac_db.c \
+		src/pfe_emac_slave.c
 else
 SRCS =	src/pfe_bmu.c \
 		src/pfe_class.c \
@@ -194,7 +196,8 @@ pfe_platform-y := src/pfe_hif_chnl_linux.o \
 		src/pfe_pe.o \
 		src/pfe_phy_if_slave.o \
 		src/pfe_mac_db.o \
-		src/pfe_hm.o
+		src/pfe_hm.o \
+		src/pfe_emac_slave.o
 else
 pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_class.o \

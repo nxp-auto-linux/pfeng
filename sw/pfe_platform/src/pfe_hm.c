@@ -154,6 +154,9 @@ static const hm_string_t hm_evt_strings[] = {
 
 static const char *hm_src_strings[] = {
 	"UNKNOWN",
+	"DRIVER",
+	"PFENG_DEV",
+	"PFENG_NETDEV",
 	"WDT",
 	"EMAC0",
 	"EMAC1",
@@ -185,10 +188,11 @@ errno_t pfe_hm_init(void)
 		pfe_hm.end = 0;
 		pfe_hm.len = 0;
 		pfe_hm.initialized = TRUE;
+		pfe_hm.event_cb = NULL;
 	}
 	else
 	{
-		NXP_LOG_ERROR("Could not initialize mutex\n");
+		NXP_LOG_RAW_ERROR("Could not initialize mutex\n");
 	}
 
 	return ret;
@@ -216,7 +220,7 @@ errno_t pfe_hm_destroy(void)
  * @param[in]	id		ID of the event
  * @param[in]	format	NULL or printf like formatted string
  */
-void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id,
+void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id, void *dev,
 		const char *format, ...)
 {
 	pfe_hm_item_t item;
@@ -238,35 +242,97 @@ void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id,
 		vsnprintf(item.descr, ARRAY_LEN(item.descr), format, args);
 		item.descr[ARRAY_LEN(item.descr)-1] = '\0';
 	}
+	va_end(args);
 #else
 	item.descr[0] = '\0';
 #endif	/** PFE_CFG_TARGET_OS_AUTOSAR */
 
-	switch (type)
+	if (HM_SRC_PFENG_DEV == src)
 	{
+		switch (type)
+		{
 #ifdef PFE_CFG_HM_STRINGS_ENABLED
-		case HM_INFO:
-			NXP_LOG_INFO("(%s) event %d - %s%s%s\n", src_str, (int)id, event_str, separator, item.descr);
-			break;
-		case HM_WARNING:
-			NXP_LOG_WARNING("(%s) event %d - %s%s%s\n", src_str, (int)id, event_str, separator, item.descr);
-			break;
-		case HM_ERROR:
-			NXP_LOG_ERROR("(%s) event %d - %s%s%s\n", src_str, (int)id, event_str, separator, item.descr);
-			break;
+			case HM_INFO:
+				HM_MSG_HM_DEV_INFO(dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				break;
+			case HM_WARNING:
+				HM_MSG_HM_DEV_WARN(dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				break;
+			case HM_ERROR:
+				HM_MSG_HM_DEV_ERR(dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				break;
 #else
-		case HM_INFO:
-			NXP_LOG_INFO("(%d) event %d%s%s\n", (int)src, (int)id, separator, item.descr);
-			break;
-		case HM_WARNING:
-			NXP_LOG_WARNING("(%d) event %d%s%s\n", (int)src, (int)id, separator, item.descr);
-			break;
-		case HM_ERROR:
-			NXP_LOG_ERROR("(%d) event %d%s%s\n", (int)src, (int)id, separator, item.descr);
-			break;
+			case HM_INFO:
+				HM_MSG_HM_DEV_INFO(dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				break;
+			case HM_WARNING:
+				HM_MSG_HM_DEV_WARN(dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				break;
+			case HM_ERROR:
+				HM_MSG_HM_DEV_ERR(dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				break;
 #endif /* PFE_CFG_HM_STRINGS_ENABLED */
-		default:
-			break;
+			default:
+				break;
+		}
+	}
+	else if (HM_SRC_PFENG_NETDEV == src)
+	{
+		switch (type)
+		{
+#ifdef PFE_CFG_HM_STRINGS_ENABLED
+			case HM_INFO:
+				HM_MSG_HM_NETDEV_INFO(dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				break;
+			case HM_WARNING:
+				HM_MSG_HM_NETDEV_WARN(dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				break;
+			case HM_ERROR:
+				HM_MSG_HM_NETDEV_ERR(dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				break;
+#else
+			case HM_INFO:
+				HM_MSG_HM_NETDEV_INFO(dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				break;
+			case HM_WARNING:
+				HM_MSG_HM_NETDEV_WARN(dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				break;
+			case HM_ERROR:
+				HM_MSG_HM_NETDEV_ERR(dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				break;
+#endif /* PFE_CFG_HM_STRINGS_ENABLED */
+			default:
+				break;
+		}
+	}
+	else
+	{
+		switch (type)
+		{
+#ifdef PFE_CFG_HM_STRINGS_ENABLED
+			case HM_INFO:
+				NXP_LOG_HM_INFO("(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				break;
+			case HM_WARNING:
+				NXP_LOG_HM_WARNING("(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				break;
+			case HM_ERROR:
+				NXP_LOG_HM_ERROR("(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				break;
+#else
+			case HM_INFO:
+				NXP_LOG_HM_INFO("(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				break;
+			case HM_WARNING:
+				NXP_LOG_HM_WARNING("(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				break;
+			case HM_ERROR:
+				NXP_LOG_HM_ERROR("(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				break;
+#endif /* PFE_CFG_HM_STRINGS_ENABLED */
+			default:
+				break;
+		}
 	}
 #endif /* NXP_LOG_ENABLED */
 
@@ -274,30 +340,40 @@ void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id,
 	item.src = src;
 	item.id = id;
 
-	if ((TRUE == pfe_hm.initialized) && (EOK == oal_mutex_lock(&pfe_hm.mutex)))
+	if (TRUE == pfe_hm.initialized)
 	{
-		if (pfe_hm.len < ARRAY_LEN(pfe_hm.items))
+		if (EOK == oal_mutex_lock(&pfe_hm.mutex))
 		{
-			memcpy(&pfe_hm.items[pfe_hm.end], &item, sizeof(item));
-
-			pfe_hm.len++;
-			pfe_hm.end++;
-			if (pfe_hm.end >= ARRAY_LEN(pfe_hm.items))
+			if (pfe_hm.len < ARRAY_LEN(pfe_hm.items))
 			{
-				pfe_hm.end = 0;
+				memcpy(&pfe_hm.items[pfe_hm.end], &item, sizeof(item));
+
+				pfe_hm.len++;
+				pfe_hm.end++;
+				if (pfe_hm.end >= ARRAY_LEN(pfe_hm.items))
+				{
+					pfe_hm.end = 0;
+				}
+				if (pfe_hm.len == ARRAY_LEN(pfe_hm.items))
+				{
+					NXP_LOG_RAW_WARNING("HM event storage is full, no further events will be stored.\n");
+				}
+			}
+
+			if (EOK != oal_mutex_unlock(&pfe_hm.mutex))
+			{
+				NXP_LOG_RAW_ERROR("Mutex unlock failed\n");
 			}
 		}
 		else
 		{
-			NXP_LOG_ERROR("Exceeded available storage for HM events\n");
+			NXP_LOG_RAW_ERROR("Mutex init or lock failed\n");
 		}
 
-		(void)oal_mutex_unlock(&pfe_hm.mutex);
-	}
-
-	if (NULL != pfe_hm.event_cb)
-	{
-		pfe_hm.event_cb(&item);
+		if (NULL != pfe_hm.event_cb)
+		{
+			pfe_hm.event_cb(&item);
+		}
 	}
 }
 
@@ -334,7 +410,14 @@ errno_t pfe_hm_get(pfe_hm_item_t *item)
 			ret = ENOENT;
 		}
 
-		(void)oal_mutex_unlock(&pfe_hm.mutex);
+		if (EOK != oal_mutex_unlock(&pfe_hm.mutex))
+		{
+			NXP_LOG_RAW_ERROR("Mutex unlock failed\n");
+		}
+	}
+	else
+	{
+		NXP_LOG_RAW_ERROR("Mutex lock failed\n");
 	}
 
 	return ret;

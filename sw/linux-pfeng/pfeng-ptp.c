@@ -31,7 +31,7 @@ int pfeng_ptp_adjfreq(struct ptp_clock_info *ptp, s32 delta)
 	ret = pfe_emac_set_ts_freq_adjustment(emac, delta, sgn);
 
 	if (ret != 0){
-		netdev_err(netif->netdev, "Frequency adjustment failed (err %d)\n", ret);
+		HM_MSG_NETDEV_ERR(netif->netdev, "Frequency adjustment failed (err %d)\n", ret);
 		ret = -EINVAL;
 	}
 
@@ -60,7 +60,7 @@ int pfeng_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	ret = pfe_emac_adjust_ts_time(emac, sec, nsec, sgn);
 
 	if (ret != 0) {
-		netdev_err(netif->netdev, "Time adjustment failed (err %d)\n", ret);
+		HM_MSG_NETDEV_ERR(netif->netdev, "Time adjustment failed (err %d)\n", ret);
 		ret = -EINVAL;
 	}
 
@@ -83,7 +83,7 @@ int pfeng_ptp_gettime64(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	PTP_DEBUG(netif->netdev, "%s, returned s %lld ns %ld \n",__func__, ts->tv_sec, ts->tv_nsec);
 
 	if (ret != 0) {
-		netdev_err(netif->netdev, "Get time failed (err %d)\n", ret);
+		HM_MSG_NETDEV_ERR(netif->netdev, "Get time failed (err %d)\n", ret);
 		ret = -EINVAL;
 	}
 
@@ -104,7 +104,7 @@ int pfeng_ptp_settime64(struct ptp_clock_info *ptp, const struct timespec64 *ts)
 	ret = pfe_emac_set_ts_time(emac, sec, ts->tv_nsec, sec_hi);
 
 	if (ret != 0) {
-		netdev_err(netif->netdev, "Set time failed (err %d)\n", ret);
+		HM_MSG_NETDEV_ERR(netif->netdev, "Set time failed (err %d)\n", ret);
 		ret = -EINVAL;
 	}
 
@@ -146,7 +146,7 @@ static void pfeng_ptp_prepare_clock_adjustement(struct pfeng_netif *netif, unsig
 	max_freq_delta = ptp_ref_clk - ptp_out_clk;
 	pfeng_ptp_ops.max_adj = (u64)((u64)max_freq_delta * 1000000000ULL) / max_addend;
 
-	netdev_info(netif->netdev, "PTP HW addend 0x%08x, max_adj configured to %d ppb\n",nil_addend, pfeng_ptp_ops.max_adj);
+	HM_MSG_NETDEV_INFO(netif->netdev, "PTP HW addend 0x%08x, max_adj configured to %d ppb\n",nil_addend, pfeng_ptp_ops.max_adj);
 }
 
 void pfeng_ptp_register(struct pfeng_netif *netif)
@@ -170,7 +170,7 @@ void pfeng_ptp_register(struct pfeng_netif *netif)
 				 priv->clk_ptp_reference / 2LLU);
 
 	if(ret) {
-		dev_err(netif->dev, "Failed to register PTP clock on EMAC%d\n", netif->cfg->emac_id);
+		HM_MSG_DEV_ERR(netif->dev, "Failed to register PTP clock on EMAC%d\n", netif->cfg->emac_id);
 		return;
 	}
 
@@ -179,9 +179,9 @@ void pfeng_ptp_register(struct pfeng_netif *netif)
 	netif->ptp_clock = ptp_clock_register(&netif->ptp_ops, netif->dev);
 
 	if (IS_ERR(netif->ptp_clock))
-		netdev_err(netif->netdev, "Failed to register PTP clock on EMAC%d\n", netif->cfg->emac_id);
+		HM_MSG_NETDEV_ERR(netif->netdev, "Failed to register PTP clock on EMAC%d\n", netif->cfg->emac_id);
 	else if (netif->ptp_clock)
-		netdev_info(netif->netdev, "Registered PTP HW clock successfully on EMAC%d\n", netif->cfg->emac_id);
+		HM_MSG_NETDEV_INFO(netif->netdev, "Registered PTP HW clock successfully on EMAC%d\n", netif->cfg->emac_id);
 }
 
 void pfeng_ptp_unregister(struct pfeng_netif *netif)
@@ -189,6 +189,6 @@ void pfeng_ptp_unregister(struct pfeng_netif *netif)
 	if (netif->ptp_clock) {
 		ptp_clock_unregister(netif->ptp_clock);
 		netif->ptp_clock = NULL;
-		netdev_info(netif->netdev, "Unregistered PTP HW clock successfully on EMAC%d\n", netif->cfg->emac_id);
+		HM_MSG_NETDEV_INFO(netif->netdev, "Unregistered PTP HW clock successfully on EMAC%d\n", netif->cfg->emac_id);
 	}
 }

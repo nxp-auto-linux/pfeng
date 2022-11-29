@@ -219,7 +219,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
                 }
                 default:
                 {
-                    NXP_LOG_ERROR("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", fp_cmd->action);
+                    NXP_LOG_WARNING("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", fp_cmd->action);
                     *fci_ret = FPP_ERR_UNKNOWN_ACTION;
                     break;
                 }
@@ -384,7 +384,7 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
 
                 default:
                 {
-                    NXP_LOG_ERROR("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", fp_cmd->action);
+                    NXP_LOG_WARNING("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", fp_cmd->action);
                     *fci_ret = FPP_ERR_UNKNOWN_ACTION;
                     break;
                 }

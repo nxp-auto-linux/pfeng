@@ -71,14 +71,14 @@ static int pfeng_uc_list_sync(struct net_device *netdev)
 	ret = pfe_phy_if_flush_mac_addrs(phyif_emac, MAC_DB_CRIT_BY_OWNER_AND_TYPE,
 					 PFE_TYPE_UC, netif->priv->local_drv_id);
 	if (ret != EOK) {
-		netdev_err(netdev, "failed to flush multicast MAC addresses\n");
+		HM_MSG_NETDEV_ERR(netdev, "failed to flush multicast MAC addresses\n");
 		return -ret;
 	}
 
 	ret = pfe_phy_if_add_mac_addr(phyif_emac, netdev->dev_addr,
 				      netif->priv->local_drv_id);
 	if (ret != EOK) {
-		netdev_err(netdev, "failed to add %s to %s: %d\n",
+		HM_MSG_NETDEV_ERR(netdev, "failed to add %s to %s: %d\n",
 			   mac_to_str(netdev->dev_addr, buf),
 			   pfe_phy_if_get_name(phyif_emac), ret);
 		return -ret;
@@ -90,7 +90,7 @@ static int pfeng_uc_list_sync(struct net_device *netdev)
 
 		ret = pfe_phy_if_add_mac_addr(phyif_emac, ha->addr, netif->priv->local_drv_id);
 		if (ret != EOK)
-			netdev_warn(netdev, "failed to add %s to %s: %d\n",
+			HM_MSG_NETDEV_WARN(netdev, "failed to add %s to %s: %d\n",
 				    mac_to_str(ha->addr, buf), pfe_phy_if_get_name(phyif_emac), ret);
 	}
 
@@ -112,7 +112,7 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 
 #ifdef PFE_CFG_PFE_SLAVE
 	if (!netif->slave_netif_inited) {
-		netdev_err(netif->netdev, "SLAVE init transaction failed.\n");
+		HM_MSG_NETDEV_ERR(netif->netdev, "SLAVE init transaction failed.\n");
 		return -EINVAL;
 	}
 #endif /* PFE_CFG_PFE_SLAVE */
@@ -130,7 +130,7 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 			pfeng_hif_chnl_start(chnl);
 
 		if (chnl->status != PFENG_HIF_STATUS_RUNNING) {
-			netdev_err(netif->netdev, "Invalid HIF%u (not running)\n", i);
+			HM_MSG_NETDEV_ERR(netif->netdev, "Invalid HIF%u (not running)\n", i);
 			return -EINVAL;
 		}
 
@@ -139,16 +139,16 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 			if (!pfe_log_if_is_enabled(chnl->logif_hif)) {
 				ret = pfe_log_if_enable(chnl->logif_hif);
 				if (ret)
-					netdev_warn(netdev, "Cannot enable logif HIF%i: %d\n", i, ret);
+					HM_MSG_NETDEV_WARN(netdev, "Cannot enable logif HIF%i: %d\n", i, ret);
 			} else
-				netdev_info(netdev, "Logif HIF%i already enabled\n", i);
+				HM_MSG_NETDEV_INFO(netdev, "Logif HIF%i already enabled\n", i);
 
 			if (!pfe_log_if_is_promisc(chnl->logif_hif)) {
 				ret = pfe_log_if_promisc_enable(chnl->logif_hif);
 				if (ret)
-					netdev_warn(netdev, "Cannot set promisc mode for logif HIF%i: %d\n", i, ret);
+					HM_MSG_NETDEV_WARN(netdev, "Cannot set promisc mode for logif HIF%i: %d\n", i, ret);
 			} else
-				netdev_dbg(netdev, "Logif HIF%i already in promisc mode\n", i);
+				HM_MSG_NETDEV_DBG(netdev, "Logif HIF%i already in promisc mode\n", i);
 		}
 	}
 
@@ -156,13 +156,13 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 	if (netif->phylink) {
 		ret = pfeng_phylink_connect_phy(netif);
 		if (ret) {
-			netdev_err(netdev, "Error connecting to the phy: %d\n", ret);
+			HM_MSG_NETDEV_ERR(netdev, "Error connecting to the phy: %d\n", ret);
 			goto err_pl_con;
 		} else {
 			/* Start PHY */
 			ret = pfeng_phylink_start(netif);
 			if (ret) {
-				netdev_err(netdev, "Error starting phylink: %d\n", ret);
+				HM_MSG_NETDEV_ERR(netdev, "Error starting phylink: %d\n", ret);
 				goto err_pl_start;
 			}
 		}
@@ -175,7 +175,7 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 	if (logif_emac) {
 		ret = pfe_log_if_enable(logif_emac);
 		if (ret) {
-			netdev_err(netdev, "Cannot enable EMAC: %d\n", ret);
+			HM_MSG_NETDEV_ERR(netdev, "Cannot enable EMAC: %d\n", ret);
 			goto err_mac_ena;
 		}
 	}
@@ -322,7 +322,7 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	}
 
 	/* store the linear part info */
-	pfeng_hif_chnl_txconf_put_map_frag(chnl, skb->data, dma, len, skb, PFENG_MAP_PKT_NORMAL, 0);
+	pfeng_hif_chnl_txconf_put_map_frag(chnl, dma, len, skb, PFENG_MAP_PKT_NORMAL, 0);
 
 	/* Software tx time stamp */
 	skb_tx_timestamp(skb);
@@ -347,6 +347,9 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 			goto busy_drop_unroll;
 		}
 
+		/* save dma map data for tx_conf cleanup before triggering the H/W DMA */
+		pfeng_hif_chnl_txconf_put_map_frag(chnl, dma, len, NULL, PFENG_MAP_PKT_NORMAL, i);
+
 		ret = pfe_hif_chnl_tx(chnl->priv, (void *)dma, frag, len, f == nfrags - 1);
 		if (unlikely(EOK != ret)) {
 			net_err_ratelimited("%s: HIF channel frag tx failed. Packet dropped. Error %d\n",
@@ -354,7 +357,6 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 			goto busy_drop_unroll;
 		}
 
-		pfeng_hif_chnl_txconf_put_map_frag(chnl, frag, dma, len, NULL, PFENG_MAP_PKT_NORMAL, i);
 		i++;
 	}
 
@@ -414,6 +416,35 @@ static int pfeng_netif_logif_change_mtu(struct net_device *netdev, int mtu)
 	return 0;
 }
 
+static int pfeng_mii_ioctl(struct net_device *netdev, struct ifreq *rq, int cmd)
+{
+	struct pfeng_netif *netif = netdev_priv(netdev);
+	struct mii_ioctl_data *mii = if_mii(rq);
+	u16 val;
+
+	if (netdev->phydev)
+		switch (cmd) {
+		case SIOCGMIIPHY:
+		case SIOCGMIIREG:
+		case SIOCSMIIREG:
+			return phy_mii_ioctl(netdev->phydev, rq, cmd);
+		}
+	else
+		switch (cmd) {
+		case SIOCGMIIREG:
+			val = pfeng_mdio_read(netif->priv->emac[netif->cfg->emac_id].mii_bus, mii->phy_id, mii->reg_num);
+			if (val > -1) {
+				mii->val_out = val;
+				return 0;
+			}
+			return val;
+		case SIOCSMIIREG:
+			return pfeng_mdio_write(netif->priv->emac[netif->cfg->emac_id].mii_bus, mii->phy_id, mii->reg_num, mii->val_in);
+		}
+
+	return -EOPNOTSUPP;
+}
+
 static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, int cmd)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
@@ -427,10 +458,17 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 		}
 	}
 
-	if (!netif->phylink)
-		return -EOPNOTSUPP;
+	if (netif->phylink)
+		return phylink_mii_ioctl(netif->phylink, rq, cmd);
 
-	return phylink_mii_ioctl(netif->phylink, rq, cmd);
+	switch (cmd) {
+	case SIOCGMIIPHY:
+	case SIOCGMIIREG:
+	case SIOCSMIIREG:
+		return pfeng_mii_ioctl(netdev, rq, cmd);
+	}
+
+	return -EOPNOTSUPP;
 }
 
 #ifdef PFE_CFG_PFE_MASTER
@@ -446,7 +484,7 @@ static int pfeng_addr_sync(struct net_device *netdev, const u8 *addr)
 
 	ret = pfe_phy_if_add_mac_addr(phyif_emac, addr, netif->priv->local_drv_id);
 	if (ret != EOK)
-		netdev_warn(netdev, "failed to add %s to %s: %d\n",
+		HM_MSG_NETDEV_WARN(netdev, "failed to add %s to %s: %d\n",
 			    mac_to_str(addr, buf), pfe_phy_if_get_name(phyif_emac), ret);
 
 	return -ret;
@@ -500,7 +538,7 @@ static int pfeng_mc_list_sync(struct net_device *netdev)
 	ret = pfe_phy_if_flush_mac_addrs(phyif_emac, MAC_DB_CRIT_BY_OWNER_AND_TYPE,
 					 PFE_TYPE_MC, netif->priv->local_drv_id);
 	if (ret != EOK) {
-		netdev_err(netdev, "failed to flush multicast MAC addresses\n");
+		HM_MSG_NETDEV_ERR(netdev, "failed to flush multicast MAC addresses\n");
 		return -ret;
 	}
 
@@ -510,7 +548,7 @@ static int pfeng_mc_list_sync(struct net_device *netdev)
 
 		ret = pfe_phy_if_add_mac_addr(phyif_emac, ha->addr, netif->priv->local_drv_id);
 		if (ret != EOK)
-			netdev_warn(netdev, "failed to add %s to %s: %d\n",
+			HM_MSG_NETDEV_WARN(netdev, "failed to add %s to %s: %d\n",
 				    mac_to_str(ha->addr, buf), pfe_phy_if_get_name(phyif_emac), ret);
 	}
 
@@ -546,13 +584,13 @@ static void pfeng_netif_set_rx_mode(struct net_device *netdev)
 	if (netdev->flags & IFF_PROMISC) {
 		/* Enable promiscuous mode */
 		if (pfe_phy_if_promisc_enable(phyif_emac) != EOK)
-			netdev_warn(netdev, "failed to enable promisc mode\n");
+			HM_MSG_NETDEV_WARN(netdev, "failed to enable promisc mode\n");
 
 		uprom = true;
 		mprom = true;
 	} else if (netdev->flags & IFF_ALLMULTI) {
 		if (pfe_phy_if_allmulti_enable(phyif_emac) != EOK)
-			netdev_warn(netdev, "failed to enable promisc mode\n");
+			HM_MSG_NETDEV_WARN(netdev, "failed to enable promisc mode\n");
 
 		mprom = true;
 	}
@@ -572,15 +610,15 @@ static void pfeng_netif_set_rx_mode(struct net_device *netdev)
 
 	if (!mprom) {
 		if (pfe_phy_if_allmulti_disable(phyif_emac) != EOK)
-			netdev_warn(netdev, "failed to disable allmulti mode\n");
+			HM_MSG_NETDEV_WARN(netdev, "failed to disable allmulti mode\n");
 	}
 
 	if (!uprom) {
 		if (pfeng_phyif_is_bridge(phyif_emac)) {
-			netdev_dbg(netdev, "bridge op: ignore to disable promisc mode\n");
+			HM_MSG_NETDEV_DBG(netdev, "bridge op: ignore to disable promisc mode\n");
 		} else if (pfe_phy_if_is_promisc(phyif_emac)) {
 				if (pfe_phy_if_promisc_disable(phyif_emac) != EOK)
-					netdev_warn(netdev, "failed to disable promisc mode\n");
+					HM_MSG_NETDEV_WARN(netdev, "failed to disable promisc mode\n");
 		}
 	}
 
@@ -599,20 +637,20 @@ static int pfeng_netif_set_mac_address(struct net_device *netdev, void *p)
 	if (is_valid_ether_addr(addr->sa_data)) {
 		ether_addr_copy(netdev->dev_addr, addr->sa_data);
 	} else {
-		netdev_warn(netdev, "No MAC address found, using random\n");
+		HM_MSG_NETDEV_WARN(netdev, "No MAC address found, using random\n");
 		eth_hw_addr_random(netdev);
 	}
 
 	if (!emac)
 		return 0;
 
-	netdev_info(netdev, "setting MAC addr: %pM\n", netdev->dev_addr);
+	HM_MSG_NETDEV_INFO(netdev, "setting MAC addr: %pM\n", netdev->dev_addr);
 
 #ifdef PFE_CFG_PFE_SLAVE
 	{
 		errno_t ret = pfe_log_if_add_match_rule(emac->logif_emac, IF_MATCH_DMAC, (void *)netdev->dev_addr, 6U);
 		if (EOK != ret) {
-			netdev_err(netdev, "Can't add DMAC match rule\n");
+			HM_MSG_NETDEV_ERR(netdev, "Can't add DMAC match rule\n");
 			return -ret;
 		}
 	}
@@ -628,7 +666,7 @@ static netdev_features_t pfeng_netif_fix_features(struct net_device *netdev, net
 	/* Don't enable hw checksumming for AUX interface */
 	if (netif->cfg->aux) {
 		features &= ~(NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM | NETIF_F_RXCSUM);
-		netdev_info(netdev, "checksum offload not possible for AUX interface\n");
+		HM_MSG_NETDEV_INFO(netdev, "checksum offload not possible for AUX interface\n");
 	}
 
 	return features;
@@ -657,18 +695,18 @@ static void pfeng_netif_detach_hifs(struct pfeng_netif *netif)
 
 		if (netif->cfg->aux) {
 			chnl->netifs[PFENG_NETIFS_AUX_IDX] = NULL;
-			netdev_info(netdev, "AUX unsubscribe from HIF%u\n", chnl->idx);
+			HM_MSG_NETDEV_INFO(netdev, "AUX unsubscribe from HIF%u\n", chnl->idx);
 			continue;
 		}
 
 		/* Unsubscribe from HIF channel */
 		if (chnl->netifs[netif->cfg->emac_id] != netif) {
-			netdev_err(netdev, "Unknown netif registered to HIF%u\n", i);
+			HM_MSG_NETDEV_ERR(netdev, "Unknown netif registered to HIF%u\n", i);
 			ret = -EINVAL;
 			return;
 		}
 		chnl->netifs[netif->cfg->emac_id] = NULL;
-		netdev_err(netdev, "Unsubscribe from HIF%u\n", chnl->idx);
+		HM_MSG_NETDEV_ERR(netdev, "Unsubscribe from HIF%u\n", chnl->idx);
 	}
 }
 
@@ -683,25 +721,25 @@ static int pfeng_netif_attach_hifs(struct pfeng_netif *netif)
 			continue;
 
 		if ((chnl->status != PFENG_HIF_STATUS_ENABLED) && (chnl->ihc && (chnl->status != PFENG_HIF_STATUS_RUNNING))) {
-			netdev_err(netdev, "Invalid HIF%u configuration\n", i);
+			HM_MSG_NETDEV_ERR(netdev, "Invalid HIF%u configuration\n", i);
 			ret = -EINVAL;
 			goto err;
 		}
 
 		if (netif->cfg->aux) {
 			chnl->netifs[PFENG_NETIFS_AUX_IDX] = netif;
-			netdev_info(netdev, "AUX subscribe to HIF%u\n", chnl->idx);
+			HM_MSG_NETDEV_INFO(netdev, "AUX subscribe to HIF%u\n", chnl->idx);
 			continue;
 		}
 
 		/* Subscribe to HIF channel */
 		if (chnl->netifs[netif->cfg->emac_id]) {
-			netdev_err(netdev, "Unable to register to HIF%u\n", i);
+			HM_MSG_NETDEV_ERR(netdev, "Unable to register to HIF%u\n", i);
 			ret = -EINVAL;
 			goto err;
 		}
 		chnl->netifs[netif->cfg->emac_id] = netif;
-		netdev_info(netdev, "Subscribe to HIF%u\n", chnl->idx);
+		HM_MSG_NETDEV_INFO(netdev, "Subscribe to HIF%u\n", chnl->idx);
 	}
 	ret = 0;
 
@@ -737,13 +775,13 @@ static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 	if (logif_emac) {
 		pfe_log_if_disable(logif_emac);
 		if (EOK != pfe_platform_unregister_log_if(netif->priv->pfe_platform, logif_emac))
-			netdev_warn(netif->netdev, "Can't unregister EMAC Logif\n");
+			HM_MSG_NETDEV_WARN(netif->netdev, "Can't unregister EMAC Logif\n");
 		else
 			pfe_log_if_destroy(logif_emac);
 		netif->priv->emac[netif->cfg->emac_id].logif_emac = NULL;
 	}
 
-	netdev_info(netif->netdev, "unregisted\n");
+	HM_MSG_NETDEV_INFO(netif->netdev, "unregisted\n");
 
 	if (!netif->cfg->aux) {
 #ifdef PFE_CFG_PFE_MASTER
@@ -776,7 +814,7 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 
 	/* Create PFE platform-wide pool of interfaces */
 	if (pfe_platform_create_ifaces(priv->pfe_platform)) {
-		netdev_err(netdev, "Can't init platform interfaces\n");
+		HM_MSG_NETDEV_ERR(netdev, "Can't init platform interfaces\n");
 		goto err;
 	}
 
@@ -785,32 +823,32 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 		if (!emac->phyif_emac) {
 			emac->phyif_emac = pfe_platform_get_phy_if_by_id(priv->pfe_platform, netif->cfg->emac_id);
 			if (!emac->phyif_emac) {
-				netdev_err(netdev, "Could not get linked EMAC physical interface\n");
+				HM_MSG_NETDEV_ERR(netdev, "Could not get linked EMAC physical interface\n");
 				goto err;
 			}
 		}
 		if (!emac->logif_emac) {
 			emac->logif_emac = pfe_log_if_create(emac->phyif_emac, (char *)netif->cfg->name);
 			if (!emac->logif_emac) {
-				netdev_err(netdev, "EMAC Logif can't be created: %s\n", netif->cfg->name);
+				HM_MSG_NETDEV_ERR(netdev, "EMAC Logif can't be created: %s\n", netif->cfg->name);
 				goto err;
 			} else {
 				ret = pfe_platform_register_log_if(priv->pfe_platform, emac->logif_emac);
 				if (ret) {
-					netdev_err(netdev, "Can't register EMAC Logif\n");
+					HM_MSG_NETDEV_ERR(netdev, "Can't register EMAC Logif\n");
 					goto err;
 				}
 			}
 #ifdef PFE_CFG_PFE_MASTER
 			ret = pfe_log_if_promisc_enable(emac->logif_emac);
 			if (ret) {
-				netdev_err(netdev, "Can't set EMAC Logif promiscuous mode\n");
+				HM_MSG_NETDEV_ERR(netdev, "Can't set EMAC Logif promiscuous mode\n");
 				goto err;
 			}
 #endif /* PFE_CFG_PFE_MASTER */
-			netdev_dbg(netdev, "EMAC Logif created: %s @%px\n", netif->cfg->name, emac->logif_emac);
+			HM_MSG_NETDEV_DBG(netdev, "EMAC Logif created: %s @%px\n", netif->cfg->name, emac->logif_emac);
 		} else
-			netdev_dbg(netdev, "EMAC Logif reused: %s @%px\n", netif->cfg->name, emac->logif_emac);
+			HM_MSG_NETDEV_DBG(netdev, "EMAC Logif reused: %s @%px\n", netif->cfg->name, emac->logif_emac);
 
 		/* Make sure that EMAC ingress traffic will be forwarded to respective HIF channel */
 		i = ffs(netif->cfg->hifmap) - 1;
@@ -824,7 +862,7 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 		ret = pfe_log_if_add_egress_if(emac->logif_emac, pfe_platform_get_phy_if_by_id(priv->pfe_platform, pfeng_hif_ids[i]));
 #endif /* PFE_CFG_PFE_MASTER */
 		if (EOK != ret) {
-			netdev_err(netdev, "Can't set EMAC egress interface\n");
+			HM_MSG_NETDEV_ERR(netdev, "Can't set EMAC egress interface\n");
 			goto err;
 		}
 	}
@@ -839,7 +877,7 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 		if (!chnl->phyif_hif) {
 			chnl->phyif_hif = pfe_platform_get_phy_if_by_id(priv->pfe_platform, pfeng_hif_ids[i]);
 			if (!chnl->phyif_hif) {
-				netdev_err(netdev, "Could not get HIF%u physical interface\n", i);
+				HM_MSG_NETDEV_ERR(netdev, "Could not get HIF%u physical interface\n", i);
 				goto err;
 			}
 		}
@@ -849,38 +887,38 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 			/* Enable loadbalance for multi-HIF config */
 			ret = pfe_phy_if_loadbalance_enable(chnl->phyif_hif);
 			if (EOK != ret) {
-				netdev_err(netdev, "Can't set loadbalancing mode to HIF%u\n", i);
+				HM_MSG_NETDEV_ERR(netdev, "Can't set loadbalancing mode to HIF%u\n", i);
 				goto err;
 			} else
-				netdev_info(netdev, "add HIF%u loadbalance\n", i);
+				HM_MSG_NETDEV_INFO(netdev, "add HIF%u loadbalance\n", i);
 #else
-			netdev_warn(netdev, "Can't set loadbalancing mode to HIF%u on SLAVE instance\n", i);
+			HM_MSG_NETDEV_WARN(netdev, "Can't set loadbalancing mode to HIF%u on SLAVE instance\n", i);
 #endif
 		}
 
 		ret = pfe_phy_if_enable(chnl->phyif_hif);
 		if (EOK != ret) {
-			netdev_err(netdev, "Can't enable HIF%u\n", i);
+			HM_MSG_NETDEV_ERR(netdev, "Can't enable HIF%u\n", i);
 			goto err;
 		}
-		netdev_info(netdev, "Enable HIF%u\n", i);
+		HM_MSG_NETDEV_INFO(netdev, "Enable HIF%u\n", i);
 
 		if (!chnl->logif_hif) {
 			scnprintf(hifname, sizeof(hifname) - 1, "%s-logif", pfe_phy_if_get_name(chnl->phyif_hif));
 			chnl->logif_hif = pfe_log_if_create(chnl->phyif_hif, hifname);
 			if (!chnl->logif_hif) {
-				netdev_err(netdev, "HIF Logif can't be created: %s\n", hifname);
+				HM_MSG_NETDEV_ERR(netdev, "HIF Logif can't be created: %s\n", hifname);
 				goto err;
 			}
 
 			ret = pfe_platform_register_log_if(priv->pfe_platform, chnl->logif_hif);
 			if (ret) {
-				netdev_err(netdev, "Can't register HIF Logif\n");
+				HM_MSG_NETDEV_ERR(netdev, "Can't register HIF Logif\n");
 				goto err;
 			}
-			netdev_dbg(netdev, "HIF Logif created: %s @%px\n", hifname, chnl->logif_hif);
+			HM_MSG_NETDEV_DBG(netdev, "HIF Logif created: %s @%px\n", hifname, chnl->logif_hif);
 		} else
-			netdev_dbg(netdev, "HIF Logif reused: %s @%px\n", hifname, chnl->logif_hif);
+			HM_MSG_NETDEV_DBG(netdev, "HIF Logif reused: %s @%px\n", hifname, chnl->logif_hif);
 
 		if (emac) {
 			if (netif->cfg->aux) {
@@ -891,7 +929,7 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 				ret = pfe_log_if_add_egress_if(chnl->logif_hif, pfe_platform_get_phy_if_by_id(priv->pfe_platform, pfeng_emac_ids[netif->cfg->emac_id]));
 #endif
 				if (EOK != ret) {
-					netdev_err(netdev, "Can't set HIF egress interface\n");
+					HM_MSG_NETDEV_ERR(netdev, "Can't set HIF egress interface\n");
 					goto err;
 				}
 			}
@@ -904,7 +942,7 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 		/* Configure the logical interface to accept frames matching local MAC address */
 		ret = pfe_log_if_add_match_rule(emac->logif_emac, IF_MATCH_DMAC, (void *)netif->cfg->macaddr, 6U);
 		if (EOK != ret) {
-			netdev_err(netdev, "Can't add DMAC match rule\n");
+			HM_MSG_NETDEV_ERR(netdev, "Can't add DMAC match rule\n");
 			ret = -ret;
 			goto err;
 		}
@@ -912,12 +950,12 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 			/* Set parent physical interface to FlexibleRouter mode */
 			ret = pfe_phy_if_set_op_mode(emac->phyif_emac, IF_OP_FLEX_ROUTER);
 			if (EOK != ret) {
-				netdev_err(netdev, "Can't set flexrouter operation mode\n");
+				HM_MSG_NETDEV_ERR(netdev, "Can't set flexrouter operation mode\n");
 				ret = -ret;
 				goto err;
 			}
 		}
-		netdev_info(netdev, "receive traffic matching its MAC address\n");
+		HM_MSG_NETDEV_INFO(netdev, "receive traffic matching its MAC address\n");
 	}
 #endif /* PFE_CFG_PFE_SLAVE */
 
@@ -950,7 +988,7 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 		/* Init hw timestamp */
 		ret = pfeng_hwts_init(netif);
 		if (ret) {
-			netdev_err(netdev, "Cannot initialize timestamping: %d\n", ret);
+			HM_MSG_NETDEV_ERR(netdev, "Cannot initialize timestamping: %d\n", ret);
 			goto err;
 		}
 #ifdef PFE_CFG_PFE_MASTER
@@ -1006,14 +1044,14 @@ static int pfeng_netif_event(struct notifier_block *nb,
 
 			ret = clk_prepare_enable(emac->rx_clk);
 			if (ret) {
-				dev_err(netif->dev, "Failed to enable RX clock on EMAC%d for interface %s (err %d)\n",
+				HM_MSG_DEV_ERR(netif->dev, "Failed to enable RX clock on EMAC%d for interface %s (err %d)\n",
 					netif->cfg->emac_id, phy_modes(emac->intf_mode), ret);
 				goto out;
 			}
 
 			emac->rx_clk_pending = false;
 
-			dev_info(netif->dev, "RX clock on EMAC%d for interface %s installed\n",
+			HM_MSG_DEV_INFO(netif->dev, "RX clock on EMAC%d for interface %s installed\n",
 				 netif->cfg->emac_id, phy_modes(emac->intf_mode));
 		}
 
@@ -1036,14 +1074,14 @@ static int pfeng_netif_register_dsa_notifier(struct pfeng_netif *netif)
 
 			ret = register_netdevice_notifier(&priv->upper_notifier);
 			if (ret) {
-				dev_err(netif->dev, "Error registering the DSA notifier\n");
+				HM_MSG_DEV_ERR(netif->dev, "Error registering the DSA notifier\n");
 				return ret;
 			}
 
 			priv->lower_ndev = netif->netdev;
 
 		} else {
-			dev_warn(netif->dev, "DSA master notifier already registered\n");
+			HM_MSG_DEV_WARN(netif->dev, "DSA master notifier already registered\n");
 		}
 	}
 
@@ -1061,14 +1099,14 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 	int ret;
 
 	if (!netif_cfg->name || !strlen(netif_cfg->name)) {
-		dev_err(dev, "Interface name is missing: %s\n", netif_cfg->name);
+		HM_MSG_DEV_ERR(dev, "Interface name is missing: %s\n", netif_cfg->name);
 		return NULL;
 	}
 
 	/* allocate net device with max RX and max TX queues */
 	netdev = alloc_etherdev_mqs(sizeof(*netif), PFENG_PFE_HIF_CHANNELS, PFENG_PFE_HIF_CHANNELS);
 	if (!netdev) {
-		dev_err(dev, "Error allocating the etherdev\n");
+		HM_MSG_DEV_ERR(dev, "Error allocating the etherdev\n");
 		return NULL;
 	}
 
@@ -1121,20 +1159,20 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 
 	ret = pfeng_netif_register_dsa_notifier(netif);
 	if (ret) {
-		dev_err(dev, "Error registering the DSA notifier: %d\n", ret);
+		HM_MSG_DEV_ERR(dev, "Error registering the DSA notifier: %d\n", ret);
 		goto err_netdev_reg;
 	}
 
 	ret = register_netdev(netdev);
 	if (ret) {
-		dev_err(dev, "Error registering the device: %d\n", ret);
+		HM_MSG_DEV_ERR(dev, "Error registering the device: %d\n", ret);
 		goto err_netdev_reg;
 	}
 
 	/* start without the RUNNING flag, phylink/idex controls it later */
 	netif_carrier_off(netdev);
 
-	netdev_info(netdev, "registered\n");
+	HM_MSG_NETDEV_INFO(netdev, "registered\n");
 
 	/* Attach netif to HIF(s) */
 	ret = pfeng_netif_attach_hifs(netif);
@@ -1147,19 +1185,19 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 	 * and finish the rest in thread
 	 * */
 	if (!priv->ihc_chnl) {
-		netdev_err(netdev, "IHC channel not configured.\n");
+		HM_MSG_NETDEV_ERR(netdev, "IHC channel not configured.\n");
 		goto err_netdev_reg;
 	}
 	ret = pfeng_hif_chnl_start(priv->ihc_chnl);
 	if (ret) {
-		netdev_err(netdev, "IHC channel not started\n");
+		HM_MSG_NETDEV_ERR(netdev, "IHC channel not started\n");
 		goto err_netdev_reg;
 	}
 
 	/* Finish device init in deffered work */
 	INIT_WORK(&netif->ihc_slave_work, pfeng_netif_slave_work_handler);
 	if (!queue_work(priv->ihc_slave_wq, &netif->ihc_slave_work)) {
-		netdev_err(netdev, "second stage of netif init failed\n");
+		HM_MSG_NETDEV_ERR(netdev, "second stage of netif init failed\n");
 		goto err_netdev_reg;
 	}
 
@@ -1301,13 +1339,13 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 		if (emac->tx_clk) {
 			ret = clk_set_rate(emac->tx_clk, clk_rate);
 			if (ret)
-				dev_err(dev, "Failed to set TX clock on EMAC%d: %d\n", netif->cfg->emac_id, ret);
+				HM_MSG_DEV_ERR(dev, "Failed to set TX clock on EMAC%d: %d\n", netif->cfg->emac_id, ret);
 			else {
 				ret = clk_prepare_enable(emac->tx_clk);
 				if (ret)
-					dev_err(dev, "TX clocks restart on EMAC%d failed: %d\n", netif->cfg->emac_id, ret);
+					HM_MSG_DEV_ERR(dev, "TX clocks restart on EMAC%d failed: %d\n", netif->cfg->emac_id, ret);
 				else
-					dev_info(dev, "TX clocks on EMAC%d restarted\n", netif->cfg->emac_id);
+					HM_MSG_DEV_INFO(dev, "TX clocks on EMAC%d restarted\n", netif->cfg->emac_id);
 			}
 			if (ret) {
 				devm_clk_put(dev, emac->tx_clk);
@@ -1318,13 +1356,13 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 		if (emac->rx_clk) {
 			ret = clk_set_rate(emac->rx_clk, clk_rate);
 			if (ret)
-				dev_err(dev, "Failed to set RX clock on EMAC%d: %d\n", netif->cfg->emac_id, ret);
+				HM_MSG_DEV_ERR(dev, "Failed to set RX clock on EMAC%d: %d\n", netif->cfg->emac_id, ret);
 			else {
 				ret = clk_prepare_enable(emac->rx_clk);
 				if (ret)
-					dev_err(dev, "RX clocks restart on EMAC%d failed: %d\n", netif->cfg->emac_id, ret);
+					HM_MSG_DEV_ERR(dev, "RX clocks restart on EMAC%d failed: %d\n", netif->cfg->emac_id, ret);
 				else
-					dev_info(dev, "RX clocks on EMAC%d restarted\n", netif->cfg->emac_id);
+					HM_MSG_DEV_INFO(dev, "RX clocks on EMAC%d restarted\n", netif->cfg->emac_id);
 			}
 			if (ret) {
 				devm_clk_put(dev, emac->rx_clk);
@@ -1345,23 +1383,23 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 			pfeng_hif_chnl_start(chnl);
 
 		if (chnl->status != PFENG_HIF_STATUS_RUNNING)
-			netdev_warn(netif->netdev, "HIF%u in invalid state: not running\n", i);
+			HM_MSG_NETDEV_WARN(netif->netdev, "HIF%u in invalid state: not running\n", i);
 
 		if (netif->cfg->aux) {
 			/* PFENG_LOGIF_MODE_TX_CLASS mode requires logIf config */
 			if (!pfe_log_if_is_enabled(chnl->logif_hif)) {
 				ret = pfe_log_if_enable(chnl->logif_hif);
 				if (ret)
-					netdev_warn(netdev, "Cannot enable logif HIF%i: %d\n", i, ret);
+					HM_MSG_NETDEV_WARN(netdev, "Cannot enable logif HIF%i: %d\n", i, ret);
 			} else
-				netdev_info(netdev, "Logif HIF%i already enabled\n", i);
+				HM_MSG_NETDEV_INFO(netdev, "Logif HIF%i already enabled\n", i);
 
 			if (!pfe_log_if_is_promisc(chnl->logif_hif)) {
 				ret = pfe_log_if_promisc_enable(chnl->logif_hif);
 				if (ret)
-					netdev_warn(netdev, "Cannot set promisc mode for logif HIF%i: %d\n", i, ret);
+					HM_MSG_NETDEV_WARN(netdev, "Cannot set promisc mode for logif HIF%i: %d\n", i, ret);
 			} else
-				netdev_dbg(netdev, "Logif HIF%i already in promisc mode\n", i);
+				HM_MSG_NETDEV_DBG(netdev, "Logif HIF%i already in promisc mode\n", i);
 		}
 	}
 
@@ -1369,7 +1407,7 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 	if (emac) {
 		ret = pfe_log_if_enable(emac->logif_emac);
 		if (ret)
-			netdev_warn(netdev, "Cannot enable EMAC: %d\n", ret);
+			HM_MSG_NETDEV_WARN(netdev, "Cannot enable EMAC: %d\n", ret);
 
 #ifdef PFE_CFG_PFE_MASTER
 		/* Restore RX mode: promisc & UC/MC addresses */
@@ -1388,7 +1426,7 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 	if (netif_running(netif->netdev) && netif->phylink) {
 		ret = pfeng_phylink_start(netif);
 		if (ret)
-			netdev_err(netdev, "Error starting phy: %d\n", ret);
+			HM_MSG_NETDEV_ERR(netdev, "Error starting phy: %d\n", ret);
 
 		pfeng_phylink_mac_change(netif, true);
 	}

@@ -225,14 +225,14 @@ __attribute__((hot)) errno_t bpool_get_fill_level(bpool_t *pool, uint32_t *fill_
 
 	if (unlikely(EOK != oal_mutex_lock(&pool->fifo_lock)))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	ret = fifo_get_fill_level((fifo_t *)pool->free_fifo, fill_level);
 
 	if (unlikely(EOK != oal_mutex_unlock(&pool->fifo_lock)))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return ret;
@@ -276,14 +276,14 @@ __attribute__((hot)) void * bpool_get(bpool_t *pool)
 
 	if (unlikely(EOK != oal_mutex_lock(&pool->fifo_lock)))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	curItem = fifo_get((fifo_t *)(pool->free_fifo));
 
 	if (unlikely(EOK != oal_mutex_unlock(&pool->fifo_lock)))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	if (likely(NULL != curItem))
@@ -331,7 +331,7 @@ __attribute__((hot)) void bpool_put(bpool_t *pool, const void *va)
 
 	if (unlikely(EOK != oal_mutex_lock(&pool->fifo_lock)))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 #if defined (PFE_CFG_GET_ALL_ERRORS)
@@ -346,7 +346,7 @@ __attribute__((hot)) void bpool_put(bpool_t *pool, const void *va)
 
 	if (unlikely(EOK != oal_mutex_unlock(&pool->fifo_lock)))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 }
 
@@ -377,7 +377,7 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 
 	if ((sizeof(bpool_rx_buf_t) % HAL_CACHE_LINE_SIZE) != 0U)
 	{
-		NXP_LOG_DEBUG("Sub-optimal structure size: buffer\n");
+		NXP_LOG_WARNING("Sub-optimal structure size: buffer\n");
 	}
 
 	if(EOK != bpool_create_check_buffer_size_and_align(buf_size, align))
@@ -420,7 +420,7 @@ __attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, 
 
 	if (((addr_t)the_pool % HAL_CACHE_LINE_SIZE) != 0U)
 	{
-		NXP_LOG_DEBUG("Sub-optimal structure alignment: bpool instance\n");
+		NXP_LOG_WARNING("Sub-optimal structure alignment: bpool instance\n");
 	}
 
 	ret = bpool_fifo_creat_and_mutex_init(the_pool, &depth);

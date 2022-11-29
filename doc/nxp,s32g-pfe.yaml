@@ -214,11 +214,6 @@ properties:
         $ref: /schemas/types.yaml#/definitions/flag
         description: |
           If present, the netdevice is used in AUX mode.
-      nxp,pfeng-netif-mode-mgmt-only:
-        $ref: /schemas/types.yaml#/definitions/flag
-        description: |
-          If present, receive only "management" frames
-          (PTP, egress TS, mirrored), for EMAC bound netdevices.
       unevaluatedProperties: false
 
 required:

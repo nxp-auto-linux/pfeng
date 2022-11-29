@@ -303,7 +303,7 @@ static void pfe_pe_free_mem(pfe_pe_t **pe, uint32_t pe_num)
 	{
 		if (EOK != pfe_pe_unlock(pe[ii]))
 		{
-			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+			NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
 		}
 		pe[ii]->mmap_data = NULL;
 
@@ -327,7 +327,7 @@ static errno_t pfe_pe_get_state_monitor_nolock(pfe_pe_t *pe, pfe_ct_pe_sw_state_
 
 	if(NULL == pe->mmap_data)
 	{
-		NXP_LOG_WARNING("PE %u: Firmware not loaded\n", pe->id);
+		NXP_LOG_ERROR("PE %u: Firmware not loaded\n", pe->id);
 		return EIO;
 	}
 
@@ -416,7 +416,7 @@ static errno_t pfe_pe_mem_process_lock(pfe_pe_t *pe, PFE_PTR(pfe_ct_pe_misc_cont
 
 	if (EOK != pfe_pe_lock(pe))
 	{
-		NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+		NXP_LOG_ERROR("pfe_pe_lock() failed\n");
 		ret = EPERM;
 	}
 	else
@@ -1154,7 +1154,7 @@ void pfe_pe_memcpy_from_host_to_dmem_32(pfe_pe_t *pe, addr_t dst_addr, const voi
 	ret = pfe_pe_mem_lock(pe);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Memory lock failed\n");
+		NXP_LOG_ERROR("Memory lock failed\n");
 	}
 	else
 	{
@@ -1162,7 +1162,7 @@ void pfe_pe_memcpy_from_host_to_dmem_32(pfe_pe_t *pe, addr_t dst_addr, const voi
 
 		if (EOK != pfe_pe_mem_unlock(pe))
 		{
-			NXP_LOG_DEBUG("Memory unlock failed\n");
+			NXP_LOG_ERROR("Memory unlock failed\n");
 		}
 	}
 }
@@ -1238,7 +1238,7 @@ void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst_ptr, addr_t src_
 	ret = pfe_pe_mem_lock(pe);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Memory lock failed\n");
+		NXP_LOG_ERROR("Memory lock failed\n");
 	}
 	else
 	{
@@ -1246,7 +1246,7 @@ void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst_ptr, addr_t src_
 
 		if (EOK != pfe_pe_mem_unlock(pe))
 		{
-			NXP_LOG_DEBUG("Memory unlock failed\n");
+			NXP_LOG_ERROR("Memory unlock failed\n");
 		}
 	}
 }
@@ -1278,7 +1278,7 @@ errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_coun
 		if (EOK != ret)
 		{
 			mem_lock_error++;
-			NXP_LOG_DEBUG("Memory lock failed for PE instance %d\n", (int_t)ii);
+			NXP_LOG_ERROR("Memory lock failed for PE instance %d\n", (int_t)ii);
 		}
 	}
 
@@ -1311,7 +1311,7 @@ errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_coun
 		ret = pfe_pe_mem_unlock(pe[ii]);
 		if(EOK != ret)
 		{
-			NXP_LOG_DEBUG("Memory unlock failed\n");
+			NXP_LOG_ERROR("Memory unlock failed\n");
 
 			/* Error occurred. Override the return from previous actions. */
 			ret_store = ret;
@@ -1434,6 +1434,7 @@ static errno_t pfe_pe_load_dmem_section_nolock(pfe_pe_t *pe, const void *sdata, 
 					void *buf = oal_mm_malloc(size);
 					if (NULL == buf)
 					{
+						NXP_LOG_ERROR("Unable to allocate memory\n");
 						ret = ENOMEM;
 					}
 					else
@@ -1538,6 +1539,7 @@ static errno_t pfe_pe_load_imem_section_nolock(pfe_pe_t *pe, const void *data, a
 					void *buf = oal_mm_malloc(size);
 					if (NULL == buf)
 					{
+						NXP_LOG_ERROR("Unable to allocate memory\n");
 						ret = ENOMEM;
 					}
 					else
@@ -1725,7 +1727,7 @@ static addr_t pfe_pe_get_elf_sect_load_addr(const ELF_File_t *elf_file, const El
 	if(FALSE == stt)
 	{
 		/* No segment containing the section was found ! */
-		NXP_LOG_ERROR("Translation of 0x%"PRINTADDR_T"x failed, fallback used\n", virt_addr);
+		NXP_LOG_WARNING("Translation of 0x%"PRINTADDR_T"x failed, fallback used\n", virt_addr);
 	}
 
 	return load_addr;
@@ -1755,7 +1757,11 @@ pfe_pe_t * pfe_pe_create(addr_t cbus_base_va, pfe_ct_pe_type_t type, uint8_t id)
 		{
 			pe = oal_mm_malloc(sizeof(pfe_pe_t));
 
-			if (NULL != pe)
+			if (NULL == pe)
+			{
+				NXP_LOG_ERROR("Unable to allocate memory\n");
+			}
+			else
 			{
 				(void)memset(pe, 0, sizeof(pfe_pe_t));
 				pe->type = type;
@@ -1765,7 +1771,7 @@ pfe_pe_t * pfe_pe_create(addr_t cbus_base_va, pfe_ct_pe_type_t type, uint8_t id)
 				pe->mmap_data = NULL;
 				if(EOK != oal_mutex_init(&pe->lock_mutex))
 				{
-					NXP_LOG_DEBUG("Mutex init failed\n");
+					NXP_LOG_ERROR("Mutex init failed\n");
 					oal_mm_free(pe);
 					pe = NULL;
 				}
@@ -1778,7 +1784,7 @@ pfe_pe_t * pfe_pe_create(addr_t cbus_base_va, pfe_ct_pe_type_t type, uint8_t id)
 					}
 					else
 					{
-						NXP_LOG_DEBUG("Mutex (mem_access_lock) init failed\n");
+						NXP_LOG_ERROR("Mutex (mem_access_lock) init failed\n");
 						if (NULL != pe)
 						{
 							(void)oal_mutex_destroy(&pe->lock_mutex);
@@ -1924,7 +1930,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 	{
 		if (EOK != pfe_pe_lock(pe[pe_idx]))
 		{
-			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+			NXP_LOG_ERROR("pfe_pe_lock() failed\n");
 		}
 		/* TODO unlock if it fails (maybe it doesn't matter  as we fail init anyway ?)*/
 	}
@@ -1969,6 +1975,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		tmp_mmap = (pfe_ct_pe_mmap_t *)oal_mm_malloc(sizeof(*tmp_mmap));
 		if (NULL == tmp_mmap)
 		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
 			ret = ENOMEM;
 			pfe_pe_free_mem(pe, pe_num);
 			return ret;
@@ -2010,6 +2017,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		messages_mem = oal_mm_malloc(ENDIAN_SW_4B(shdr->sh_size));
 		if (NULL == messages_mem)
 		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
 			ret = ENOMEM;
 			pfe_pe_free_mem(pe, pe_num);
 			if (NULL != tmp_mmap)
@@ -2040,6 +2048,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		features_mem = oal_mm_malloc(ENDIAN_SW_4B(shdr->sh_size));
 		if (NULL == features_mem)
 		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
 			ret = ENOMEM;
 			pfe_pe_free_mem(pe, pe_num);
 			if (NULL != tmp_mmap)
@@ -2066,7 +2075,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 	/*	.elf data must be in BIG ENDIAN */
 	if (1U == elf_file->Header.e_ident[EI_DATA])
 	{
-		NXP_LOG_DEBUG("Unexpected .elf format (little endian)\n");
+		NXP_LOG_ERROR("Unexpected .elf format (little endian)\n");
 		ret = EINVAL;
 		pfe_pe_free_mem(pe, pe_num);
 		if (NULL != tmp_mmap)
@@ -2107,7 +2116,7 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 	{
 		if (EOK != pfe_pe_unlock(pe[ii]))
 		{
-			NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+			NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
 		}
 
 		/*	Indicate that mmap_data is available */
@@ -2726,7 +2735,11 @@ static uint32_t pfe_pe_get_measurements_nolock(pfe_pe_t *pe, uint32_t count, uin
     {
         /* Get buffer to read data from DMEM */
         m = oal_mm_malloc(sizeof(pfe_ct_measurement_t) * count);
-        if(NULL != m)
+        if (NULL == m)
+        {
+            NXP_LOG_ERROR("Unable to allocate memory\n");
+        }
+        else
         {   /* Memory allocation succeed */
             /* Copy the data into the allocated buffer */
             pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, m, ptr, sizeof(pfe_ct_measurement_t) * count);
@@ -2770,7 +2783,7 @@ pfe_ct_pe_sw_state_t pfe_pe_get_fw_state(pfe_pe_t *pe)
 	 memory interface without locking the PE memory. */
 	if (EOK != pfe_pe_lock(pe))
 	{
-		NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+		NXP_LOG_ERROR("pfe_pe_lock() failed\n");
 	}
 
 	if (pfe_pe_get_state_monitor_nolock(pe, &state_monitor) != EOK)
@@ -2780,7 +2793,7 @@ pfe_ct_pe_sw_state_t pfe_pe_get_fw_state(pfe_pe_t *pe)
 
 	if (EOK != pfe_pe_unlock(pe))
 	{
-		NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
+		NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
 	}
 
 	return state_monitor.state;
@@ -2921,7 +2934,7 @@ uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len,
 	ret = pfe_pe_mem_lock(pe);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Memory lock failed\n");
+		NXP_LOG_ERROR("Memory lock failed\n");
 		return 0;
 	}
 
@@ -2944,7 +2957,7 @@ uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len,
 
 	if (EOK != pfe_pe_mem_unlock(pe))
 	{
-		NXP_LOG_DEBUG("Memory unlock failed\n");
+		NXP_LOG_ERROR("Memory unlock failed\n");
 		len = 0U;
 	}
 

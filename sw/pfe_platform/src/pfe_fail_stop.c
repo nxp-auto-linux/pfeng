@@ -73,7 +73,10 @@ pfe_fail_stop_t *pfe_fail_stop_create(addr_t cbus_base_va, addr_t fail_stop_base
 		}
 		else
 		{
-			(void)oal_mutex_init(fail_stop->lock);
+			if (EOK != oal_mutex_init(fail_stop->lock))
+			{
+				NXP_LOG_ERROR("Mutex initialization failed\n");
+			}
 		}
 
 		/* Unmask all interrupts */
@@ -100,9 +103,15 @@ void pfe_fail_stop_destroy(pfe_fail_stop_t *fail_stop)
 	if (NULL != fail_stop->lock)
 	{
 		/* Mask fail_stop interrupts */
-		(void)oal_mutex_lock(fail_stop->lock);
+		if (EOK != oal_mutex_lock(fail_stop->lock))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
 		pfe_fail_stop_cfg_irq_mask(fail_stop->fail_stop_base_va);
-		(void)oal_mutex_unlock(fail_stop->lock);
+		if (EOK != oal_mutex_unlock(fail_stop->lock))
+		{
+			NXP_LOG_ERROR("Mutex unlock failed\n");
+		}
 		(void)oal_mutex_destroy(fail_stop->lock);
 		(void)oal_mm_free(fail_stop->lock);
 		fail_stop->lock = NULL;
@@ -129,10 +138,16 @@ errno_t pfe_fail_stop_isr(const pfe_fail_stop_t *fail_stop)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	(void)oal_mutex_lock(fail_stop->lock);
+	if (EOK != oal_mutex_lock(fail_stop->lock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
 	/*	Run the low-level ISR to identify and process the interrupt */
 	ret = pfe_fail_stop_cfg_isr(fail_stop->fail_stop_base_va);
-	(void)oal_mutex_unlock(fail_stop->lock);
+	if (EOK != oal_mutex_unlock(fail_stop->lock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 
 	return ret;
 }
@@ -151,9 +166,15 @@ void pfe_fail_stop_irq_mask(const pfe_fail_stop_t *fail_stop)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	(void)oal_mutex_lock(fail_stop->lock);
+	if (EOK != oal_mutex_lock(fail_stop->lock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
 	pfe_fail_stop_cfg_irq_mask(fail_stop->fail_stop_base_va);
-	(void)oal_mutex_unlock(fail_stop->lock);
+	if (EOK != oal_mutex_unlock(fail_stop->lock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 }
 
 /**
@@ -170,9 +191,15 @@ void pfe_fail_stop_irq_unmask(const pfe_fail_stop_t *fail_stop)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	(void)oal_mutex_lock(fail_stop->lock);
+	if (EOK != oal_mutex_lock(fail_stop->lock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
 	pfe_fail_stop_cfg_irq_unmask(fail_stop->fail_stop_base_va);
-	(void)oal_mutex_unlock(fail_stop->lock);
+	if (EOK != oal_mutex_unlock(fail_stop->lock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 }
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR

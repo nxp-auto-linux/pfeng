@@ -79,7 +79,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
             if (FALSE == pfe_feature_mgr_is_available("IPsec"))
             {
                 /* Unavailable feature. Respond with FCI error code. */
-                NXP_LOG_ERROR("Feature 'IPsec' is not available (not enabled in FW).\n");
+                NXP_LOG_WARNING("Feature 'IPsec' is not available (not enabled in FW).\n");
                 *fci_ret = FPP_ERR_FW_FEATURE_NOT_AVAILABLE;
                 ret = EOK;
             }
@@ -94,7 +94,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
                 if (EOK != ret)
                 {
                     *fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;
-                    NXP_LOG_DEBUG("DB lock failed\n");
+                    NXP_LOG_ERROR("DB lock failed\n");
                 }
                 else
                 {
@@ -103,7 +103,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
                     if (EOK != pfe_if_db_unlock(fci_context->if_session_id))
                     {
                         *fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
-                        NXP_LOG_DEBUG("DB unlock failed\n");
+                        NXP_LOG_ERROR("DB unlock failed\n");
                         ret = ENOENT;
                     }
                     else
@@ -118,7 +118,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
                             phy_if = pfe_if_db_entry_get_phy_if(pfe_if_db_entry);
                             if(NULL == phy_if)
                             {
-                                NXP_LOG_ERROR("Failed to get PHY if from DB entry\n");
+                                NXP_LOG_WARNING("Failed to get PHY if from DB entry\n");
                                 *fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
                                 ret = ENOENT;
                             }
@@ -231,7 +231,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
 
                                     default:
                                     {
-                                        NXP_LOG_ERROR("Connection Command: Unknown action received: 0x%x\n", spd_cmd->action);
+                                        NXP_LOG_WARNING("Connection Command: Unknown action received: 0x%x\n", spd_cmd->action);
                                         *fci_ret = FPP_ERR_UNKNOWN_ACTION;
                                         ret = EINVAL;
                                         break;

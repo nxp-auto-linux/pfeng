@@ -17,18 +17,18 @@ static int pfeng_fw_load_file(struct device *dev, const char *name, void **data,
 
 	ret = request_firmware(&entry, name, dev);
 	if(ret < 0) {
-		dev_err(dev, "Firmware not available: %s\n", name);
+		HM_MSG_DEV_ERR(dev, "Firmware not available: %s\n", name);
 		return ret;
 	}
 
 	if(!entry->size) {
-		dev_err(dev, "Firmware file is empty: %s\n", name);
+		HM_MSG_DEV_ERR(dev, "Firmware file is empty: %s\n", name);
 		goto end;
 	}
 
 	*data = kmalloc(entry->size, GFP_KERNEL);
 	if(IS_ERR(*data)) {
-		dev_err(dev, "Failed to alloc fw data memory\n");
+		HM_MSG_DEV_ERR(dev, "Failed to alloc fw data memory\n");
 		ret = IS_ERR(*data);
 		goto end;
 	}
@@ -52,7 +52,7 @@ int pfeng_fw_load(struct pfeng_priv *priv, const char *class_name, const char *u
 
 	fw = kzalloc(sizeof(*fw), GFP_KERNEL);
 	if(IS_ERR(fw)) {
-		dev_err(dev, "Failed to alloc fw memory\n");
+		HM_MSG_DEV_ERR(dev, "Failed to alloc fw memory\n");
 		return -ENOMEM;
 	}
 
@@ -70,9 +70,9 @@ int pfeng_fw_load(struct pfeng_priv *priv, const char *class_name, const char *u
 			goto err;
 	}
 
-	dev_info(dev, "Firmware: CLASS %s [%d bytes]\n", class_name, class_size);
+	HM_MSG_DEV_INFO(dev, "Firmware: CLASS %s [%d bytes]\n", class_name, class_size);
 	if (enable_util)
-		dev_info(dev, "Firmware: UTIL %s [%d bytes]\n", util_name, util_size);
+		HM_MSG_DEV_INFO(dev, "Firmware: UTIL %s [%d bytes]\n", util_name, util_size);
 
 end:
 	return ret;

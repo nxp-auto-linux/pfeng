@@ -447,7 +447,11 @@ pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_
 	{
 		emac = oal_mm_malloc(sizeof(pfe_emac_t));
 
-		if (NULL != emac)
+		if (NULL == emac)
+		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
+		}
+		else
 		{
 			(void)memset(emac, 0, sizeof(pfe_emac_t));
 			emac->cbus_base_va = cbus_base_va;
@@ -477,7 +481,7 @@ pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_
 				{
 					if (EOK != oal_mutex_lock(&emac->mutex))
 					{
-						NXP_LOG_DEBUG("Mutex lock failed\n");
+						NXP_LOG_ERROR("Mutex lock failed\n");
 					}
 
 					/*	All slots are free */
@@ -494,7 +498,7 @@ pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_
 					{
 						if (EOK != oal_mutex_unlock(&emac->mutex))
 						{
-							NXP_LOG_DEBUG("Mutex unlock failed\n");
+							NXP_LOG_ERROR("Mutex unlock failed\n");
 						}
 
 						/*	Invalid configuration */
@@ -521,7 +525,7 @@ pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_
 
 						if (EOK != oal_mutex_unlock(&emac->mutex))
 						{
-							NXP_LOG_DEBUG("Mutex unlock failed\n");
+							NXP_LOG_ERROR("Mutex unlock failed\n");
 						}
 					}
 				}
@@ -644,14 +648,14 @@ errno_t pfe_emac_enable_ts(pfe_emac_t *emac, uint32_t i_clk_hz, uint32_t o_clk_h
 
 		if (EOK != oal_mutex_lock(&emac->ts_mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		ret = pfe_emac_cfg_enable_ts(emac->emac_base_va, eclk, i_clk_hz, o_clk_hz);
 
 		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 	}
 	return ret;
@@ -669,7 +673,7 @@ errno_t pfe_emac_set_ts_freq_adjustment(pfe_emac_t *emac, uint32_t ppb, bool_t s
 
 	if (EOK != oal_mutex_lock(&emac->ts_mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	emac->adj_ppb = ppb;
@@ -679,7 +683,7 @@ errno_t pfe_emac_set_ts_freq_adjustment(pfe_emac_t *emac, uint32_t ppb, bool_t s
 
 	if (EOK != oal_mutex_unlock(&emac->ts_mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	return ret;
@@ -704,7 +708,7 @@ errno_t pfe_emac_get_ts_freq_adjustment(pfe_emac_t *emac, uint32_t *ppb, bool_t 
 	{
 		if (EOK != oal_mutex_lock(&emac->ts_mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		*ppb = emac->adj_ppb;
@@ -712,7 +716,7 @@ errno_t pfe_emac_get_ts_freq_adjustment(pfe_emac_t *emac, uint32_t *ppb, bool_t 
 
 		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 		ret = EOK;
 	}
@@ -748,14 +752,14 @@ errno_t pfe_emac_get_ts_time(pfe_emac_t *emac, uint32_t *sec, uint32_t *nsec, ui
 		{
 			if (EOK != oal_mutex_lock(&emac->ts_mutex))
 			{
-				NXP_LOG_DEBUG("Mutex lock failed\n");
+				NXP_LOG_ERROR("Mutex lock failed\n");
 			}
 
 			pfe_emac_cfg_get_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
 
 			if (EOK != oal_mutex_unlock(&emac->ts_mutex))
 			{
-				NXP_LOG_DEBUG("Mutex lock failed\n");
+				NXP_LOG_ERROR("Mutex lock failed\n");
 			}
 			ret = EOK;
 		}
@@ -791,14 +795,14 @@ errno_t pfe_emac_adjust_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, b
 	{
 		if (EOK != oal_mutex_lock(&emac->ts_mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		ret = pfe_emac_cfg_adjust_ts_time(emac->emac_base_va, sec, nsec, sgn);
 
 		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 	}
 
@@ -830,14 +834,14 @@ errno_t pfe_emac_set_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, uint
 	{
 		if (EOK != oal_mutex_lock(&emac->ts_mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		ret = pfe_emac_cfg_set_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
 
 		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 	}
 
@@ -1264,7 +1268,7 @@ errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_emac_crit_t crit, pfe_mac
 	{
 		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		LLIST_ForEachRemovable(item, tmp_item, &emac->mac_addr_list)
@@ -1278,7 +1282,7 @@ errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_emac_crit_t crit, pfe_mac
 					ret = pfe_emac_del_addr_nolock(emac, entry->addr, entry->owner);
 					if (EOK != ret)
 					{
-						NXP_LOG_WARNING("Can't remove MAC address within the flush function\n");
+						NXP_LOG_ERROR("Can't remove MAC address within the flush function\n");
 						break;
 					}
 					else
@@ -1295,7 +1299,7 @@ errno_t pfe_emac_flush_mac_addrs(pfe_emac_t *emac, pfe_emac_crit_t crit, pfe_mac
 
 		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 
@@ -1327,14 +1331,14 @@ errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_i
 	{
 		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		ret = pfe_emac_del_addr_nolock(emac, addr, owner);
 
 		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 
@@ -1449,7 +1453,7 @@ errno_t pfe_emac_add_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_i
 	{
 		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		/*	Check if address is already registered */
@@ -1515,7 +1519,7 @@ errno_t pfe_emac_add_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_i
 
 		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 
@@ -1545,7 +1549,7 @@ errno_t pfe_emac_get_addr(pfe_emac_t *emac, pfe_mac_addr_t addr)
 	{
 		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		/*	Return address from the 0th individual address slot */
@@ -1567,7 +1571,7 @@ errno_t pfe_emac_get_addr(pfe_emac_t *emac, pfe_mac_addr_t addr)
 
 		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 
@@ -1591,7 +1595,7 @@ void pfe_emac_destroy(pfe_emac_t *emac)
 	{
 		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		/*	Remove all registered MAC addresses */
@@ -1600,7 +1604,7 @@ void pfe_emac_destroy(pfe_emac_t *emac)
 			entry = LLIST_Data(curItem, pfe_mac_addr_db_entry_t, iterator);
 			if (EOK != pfe_emac_del_addr_nolock(emac, entry->addr, entry->owner))
 			{
-				NXP_LOG_WARNING("Can't remove MAC address within the destroy function\n");
+				NXP_LOG_ERROR("Can't remove MAC address within the destroy function\n");
 			}
 		}
 
@@ -1615,7 +1619,7 @@ void pfe_emac_destroy(pfe_emac_t *emac)
 
 		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 
 		/*	Destroy mutex */
@@ -1650,7 +1654,7 @@ errno_t pfe_emac_mdio_lock(pfe_emac_t *emac, uint32_t *key)
 	{
 		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		if (TRUE == emac->mdio_locked)
@@ -1669,7 +1673,7 @@ errno_t pfe_emac_mdio_lock(pfe_emac_t *emac, uint32_t *key)
 
 		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 
@@ -1698,7 +1702,7 @@ errno_t pfe_emac_mdio_unlock(pfe_emac_t *emac, uint32_t key)
 	{
 		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		if (TRUE == emac->mdio_locked)
@@ -1720,7 +1724,7 @@ errno_t pfe_emac_mdio_unlock(pfe_emac_t *emac, uint32_t key)
 
 		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 
@@ -1751,7 +1755,7 @@ errno_t pfe_emac_mdio_read22(pfe_emac_t *emac, uint8_t pa, uint8_t ra, uint16_t 
 	{
 		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		if (TRUE == emac->mdio_locked)
@@ -1774,7 +1778,7 @@ errno_t pfe_emac_mdio_read22(pfe_emac_t *emac, uint8_t pa, uint8_t ra, uint16_t 
 
 		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 
@@ -1805,7 +1809,7 @@ errno_t pfe_emac_mdio_write22(pfe_emac_t *emac, uint8_t pa, uint8_t ra, uint16_t
 	{
 		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		if (TRUE == emac->mdio_locked)
@@ -1828,7 +1832,7 @@ errno_t pfe_emac_mdio_write22(pfe_emac_t *emac, uint8_t pa, uint8_t ra, uint16_t
 
 		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 	return ret;
@@ -1859,7 +1863,7 @@ errno_t pfe_emac_mdio_read45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_t
 	{
 		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		if (TRUE == emac->mdio_locked)
@@ -1882,7 +1886,7 @@ errno_t pfe_emac_mdio_read45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_t
 
 		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 
@@ -1914,7 +1918,7 @@ errno_t pfe_emac_mdio_write45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_
 	{
 		if (EOK != oal_mutex_lock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		if (TRUE == emac->mdio_locked)
@@ -1937,7 +1941,7 @@ errno_t pfe_emac_mdio_write45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_
 
 		if (EOK != oal_mutex_unlock(&emac->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 
@@ -2061,9 +2065,15 @@ errno_t pfe_emac_isr(pfe_emac_t *emac)
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		(void)oal_mutex_lock(&emac->mutex);
+		if (EOK != oal_mutex_lock(&emac->mutex))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
 		ret = pfe_emac_cfg_isr(emac->emac_base_va, emac->cbus_base_va);
-		(void)oal_mutex_unlock(&emac->mutex);
+		if (EOK != oal_mutex_unlock(&emac->mutex))
+		{
+			NXP_LOG_ERROR("Mutex unlock failed\n");
+		}
 	}
 
 	return ret;

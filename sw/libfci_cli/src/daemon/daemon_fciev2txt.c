@@ -36,8 +36,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <arpa/inet.h>
 
 #include "../libfci_cli_common.h"
+#include "../libfci_cli_def_optarg_keywords.h"
 
 
 /*
@@ -61,6 +63,7 @@
 static int fciev_snprintf(char**const pp_rtn_dst, int* p_rtn_dst_ln, const char* p_txt_fmt, ...);
 
 static int fciev_print_ip_route(char** pp_rtn_dst, int* p_rtn_dst_ln, const unsigned short len, const unsigned short* payload);
+static int fciev_print_health_monitor_event(char** pp_rtn_dst, int* p_rtn_dst_ln, const unsigned short len, const unsigned short* payload);
 
 /* ==== PRIVATE FUNCTIONS : aux ============================================ */
 
@@ -83,6 +86,10 @@ static int fciev_print_payload_decoded(char**const pp_rtn_dst, int* p_rtn_dst_ln
             
             case FPP_CMD_IP_ROUTE:
                 rtn = fciev_print_ip_route(pp_rtn_dst, p_rtn_dst_ln, len, payload);
+            break;
+            
+            case FPP_CMD_HEALTH_MONITOR_EVENT:
+                rtn = fciev_print_health_monitor_event(pp_rtn_dst, p_rtn_dst_ln, len, payload);
             break;
             
             default:
@@ -112,6 +119,10 @@ static const char* fciev_fcode2txt(unsigned short fcode)
         
         case FPP_CMD_IP_ROUTE:
             p_txt = TXT_STRINGIFY(FPP_CMD_IP_ROUTE);
+        break;
+        
+        case FPP_CMD_HEALTH_MONITOR_EVENT:
+            p_txt = TXT_STRINGIFY(FPP_CMD_HEALTH_MONITOR_EVENT);
         break;
         
         default:
@@ -251,6 +262,25 @@ static int fciev_print_ip_route(char** pp_rtn_dst, int* p_rtn_dst_ln, const unsi
                 "  id     = %"PRIu32"\n",
                 p_rt->action, fciev_action2txt(p_rt->action),
                 demo_rt_ld_get_route_id(p_rt)
+           );
+}
+
+/* print decoded FPP_CMD_HEALTH_MONITOR_EVENT ; NOTE: non-zero len and non-NULL payload are assumed */
+static int fciev_print_health_monitor_event(char** pp_rtn_dst, int* p_rtn_dst_ln, const unsigned short len, const unsigned short* payload)
+{
+    UNUSED(len);  /* just to suppress gcc warning */
+    
+    const fpp_health_monitor_cmd_t* p_hm = (fpp_health_monitor_cmd_t*)(payload);
+    
+    return fciev_snprintf(pp_rtn_dst, p_rtn_dst_ln,
+                "  id   = %-5"PRIu16"\n"
+                "  type = %-5"PRIu8" (%s)\n"
+                "  src  = %-5"PRIu8" (%s)\n"
+                "  desc = %s\n",
+                ntohs(p_hm->id),
+                p_hm->type, cli_value2txt_hm_type(p_hm->type),
+                p_hm->src, cli_value2txt_hm_src(p_hm->src),
+                p_hm->desc
            );
 }
 

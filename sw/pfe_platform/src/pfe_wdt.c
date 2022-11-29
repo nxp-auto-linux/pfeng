@@ -43,7 +43,11 @@ pfe_wdt_t *pfe_wdt_create(addr_t cbus_base_va, addr_t wdt_base)
     {
 	    wdt = oal_mm_malloc(sizeof(pfe_wdt_t));
 
-		if (NULL != wdt)
+		if (NULL == wdt)
+		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
+		}
+		else
 	    {
 	    	(void)memset(wdt, 0, sizeof(pfe_wdt_t));
 	    	wdt->cbus_base_va = cbus_base_va;
@@ -53,7 +57,7 @@ pfe_wdt_t *pfe_wdt_create(addr_t cbus_base_va, addr_t wdt_base)
 	    	/*	Resource protection */
 	    	if (EOK != oal_mutex_init(&wdt->lock))
 	    	{
-	    		NXP_LOG_DEBUG("Mutex initialization failed\n");
+	    		NXP_LOG_ERROR("Mutex initialization failed\n");
 	    		oal_mm_free(wdt);
 	    		wdt = NULL;
 	    	}
@@ -62,7 +66,7 @@ pfe_wdt_t *pfe_wdt_create(addr_t cbus_base_va, addr_t wdt_base)
 #ifdef PFE_CFG_PARANOID_IRQ
 	            if (EOK != oal_mutex_lock(&wdt->lock))
 	            {
-	            	NXP_LOG_DEBUG("Mutex lock failed\n");
+	            	NXP_LOG_ERROR("Mutex lock failed\n");
 	            }
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -71,7 +75,7 @@ pfe_wdt_t *pfe_wdt_create(addr_t cbus_base_va, addr_t wdt_base)
 #ifdef PFE_CFG_PARANOID_IRQ
 	            if (EOK != oal_mutex_unlock(&wdt->lock))
 	            {
-	            	NXP_LOG_DEBUG("Mutex unlock failed\n");
+	            	NXP_LOG_ERROR("Mutex unlock failed\n");
 	            }
 #endif /* PFE_CFG_PARANOID_IRQ */
             }
@@ -90,19 +94,19 @@ void pfe_wdt_destroy(pfe_wdt_t *wdt)
 	{
 		if (EOK != oal_mutex_lock(&wdt->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		pfe_wdt_cfg_fini(wdt->wdt_base_va);
 
 		if (EOK != oal_mutex_unlock(&wdt->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 
 		if (EOK != oal_mutex_destroy(&wdt->lock))
 		{
-			NXP_LOG_DEBUG("Mutex destroy failed\n");
+			NXP_LOG_ERROR("Mutex destroy failed\n");
 		}
 
 		/* Free memory used for structure */
@@ -130,7 +134,7 @@ errno_t pfe_wdt_isr(pfe_wdt_t *wdt)
     {
 	    if (EOK != oal_mutex_lock(&wdt->lock))
 	    {
-	    	NXP_LOG_DEBUG("Mutex lock failed\n");
+	    	NXP_LOG_ERROR("Mutex lock failed\n");
 	    }
 
 	    /*	Run the low-level ISR to identify and process the interrupt */
@@ -146,7 +150,7 @@ errno_t pfe_wdt_isr(pfe_wdt_t *wdt)
 
 	    if (EOK != oal_mutex_unlock(&wdt->lock))
 	    {
-	    	NXP_LOG_DEBUG("Mutex unlock failed\n");
+	    	NXP_LOG_ERROR("Mutex unlock failed\n");
 	    }
     }
 	return ret;
@@ -160,14 +164,14 @@ void pfe_wdt_irq_mask(pfe_wdt_t *wdt)
 {
 	if (EOK != oal_mutex_lock(&wdt->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	pfe_wdt_cfg_irq_mask(wdt->wdt_base_va);
 
 	if (EOK != oal_mutex_unlock(&wdt->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 }
 
@@ -179,14 +183,14 @@ void pfe_wdt_irq_unmask(pfe_wdt_t * wdt)
 {
 	if (EOK != oal_mutex_lock(&wdt->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	pfe_wdt_cfg_irq_unmask(wdt->wdt_base_va);
 
 	if (EOK != oal_mutex_unlock(&wdt->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 }
 

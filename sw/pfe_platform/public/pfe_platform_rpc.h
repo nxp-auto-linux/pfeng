@@ -91,8 +91,10 @@ typedef enum __attribute__((packed))
 	PFE_PLATFORM_RPC_PFE_LOG_IF_ID_COMPATIBLE_LAST = PFE_PLATFORM_RPC_PFE_LOG_IF_IS_LOOPBACK, /* last entry compatible with generic log_if structure for args*/
 
 #if defined(PFE_CFG_FCI_ENABLE)
-	PFE_PLATFORM_RPC_PFE_FCI_PROXY = 300U					/* Arg: pfe_platform_rpc_pfe_fci_proxy_arg_t, Ret: pfe_platform_rpc_pfe_fci_proxy_ret_t */
+	PFE_PLATFORM_RPC_PFE_FCI_PROXY = 300U,					/* Arg: pfe_platform_rpc_pfe_fci_proxy_arg_t, Ret: pfe_platform_rpc_pfe_fci_proxy_ret_t */
 #endif /* PFE_CFG_FCI_ENABLE */
+
+	PFE_PLATFORM_RPC_MDIO_PROXY = 310U,					/* Arg: pfe_platform_rpc_mdio_proxy_arg_t, Ret: pfe_platform_rpc_mdio_proxy_ret_t */
 
 } pfe_platform_rpc_code_t;
 
@@ -411,5 +413,39 @@ typedef struct __attribute__((packed, aligned(4)))
 } pfe_platform_rpc_pfe_fci_proxy_ret_t;
 
 #endif /* PFE_CFG_FCI_ENABLE */
+
+typedef enum __attribute__((packed))
+{
+	/*	MDIO operation READ, Clause 22 */
+	PFE_PLATFORM_RPC_MDIO_OP_READ_CL22 = 101U,
+	/*	MDIO operation WRITE, Clause 22 */
+	PFE_PLATFORM_RPC_MDIO_OP_WRITE_CL22 = 102U,
+	/*	MDIO operation READ, Clause 45 */
+	PFE_PLATFORM_RPC_MDIO_OP_READ_CL45 = 103U,
+	/*	MDIO operation WRITE, Clause 45 */
+	PFE_PLATFORM_RPC_MDIO_OP_WRITE_CL45 = 104U,
+} pfe_platform_rpc_mdio_proxy_op_t;
+
+typedef struct __attribute__((packed, aligned(4)))
+{
+	/*	PFE EMAC id */
+	uint8_t emac_id;
+	/*	MDIO operation */
+	pfe_platform_rpc_mdio_proxy_op_t op;
+	/*	MDIO device: port address */
+	uint8_t pa;
+	/*	MDIO device: device address */
+	uint8_t dev;
+	/*	MDIO device: register address */
+	uint16_t ra;
+	/*	MDIO WRITE data */
+	uint16_t val;
+} pfe_platform_rpc_mdio_proxy_arg_t;
+
+typedef struct __attribute__((packed, aligned(4)))
+{
+	/*	MDIO READ data */
+	uint16_t val;
+} pfe_platform_rpc_mdio_proxy_ret_t;
 
 #endif /* SRC_PFE_PLATFORM_RPC_H_ */

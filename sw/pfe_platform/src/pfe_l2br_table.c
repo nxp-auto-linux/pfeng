@@ -56,7 +56,12 @@ struct __pfe_l2br_table_iterator_tag
 	pfe_l2br_table_get_criterion_t cur_crit;	/*!< Current criterion							*/
 	uint32_t cur_hash_addr;						/*!< Current address within hash space			*/
 	uint32_t cur_coll_addr;						/*!< Current address within collision space		*/
-	uint32_t next_coll_addr;					/*!< Next entry address within collision space		*/
+	uint32_t next_coll_addr;					/*!< Next entry address within collision space	*/
+	struct										/*!< MAC and VLAN of the current entry			*/
+	{
+		pfe_mac_addr_t mac;
+		uint16_t vlan;
+	} cur_macvlan;
 };
 
 /**
@@ -172,6 +177,9 @@ static errno_t pfe_l2br_table_do_del_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2
 static errno_t pfe_l2br_table_do_add_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry);
 static errno_t pfe_l2br_table_do_search_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t *entry);
 static errno_t pfe_l2br_table_flush_cmd(pfe_l2br_table_t *l2br);
+static uint8_t pfe_l2br_entry_get_hash(const pfe_l2br_table_entry_t *entry);
+static void pfe_l2br_iterator_save_macvlan(pfe_l2br_table_iterator_t *l2t_iter, const pfe_l2br_table_entry_t *entry);
+static bool_t pfe_l2br_iterator_is_macvlan_match(const pfe_l2br_table_iterator_t *l2t_iter, const pfe_l2br_table_entry_t *entry);
 
 /**
  * @brief		Match entry with latest criterion provided via pfe_l2br_table_get_first()
@@ -228,7 +236,7 @@ static bool_t pfe_l2br_table_entry_match_criterion(const pfe_l2br_table_t *l2br,
 
 		default:
 		{
-			NXP_LOG_ERROR("Unknown criterion\n");
+			NXP_LOG_WARNING("Unknown criterion\n");
 			break;
 		}
 	}
@@ -386,7 +394,7 @@ static errno_t pfe_l2br_table_do_update_entry_nolock(pfe_l2br_table_t *l2br, pfe
 	{
 		if ((FALSE == entry->mac_addr_set) && (FALSE == entry->vlan_set))
 		{
-			NXP_LOG_DEBUG("MAC or VLAN must be set\n");
+			NXP_LOG_WARNING("MAC or VLAN must be set\n");
 			return EINVAL;
 		}
 
@@ -396,7 +404,7 @@ static errno_t pfe_l2br_table_do_update_entry_nolock(pfe_l2br_table_t *l2br, pfe
 	{
 		if (FALSE == entry->vlan_set)
 		{
-			NXP_LOG_DEBUG("VLAN must be set\n");
+			NXP_LOG_WARNING("VLAN must be set\n");
 			return EINVAL;
 		}
 
@@ -419,7 +427,7 @@ static errno_t pfe_l2br_table_do_update_entry_nolock(pfe_l2br_table_t *l2br, pfe
 
 	if (0U != (status & STATUS_REG_SIG_ENTRY_NOT_FOUND))
 	{
-		NXP_LOG_DEBUG("Attempting to update non-existing entry\n");
+		NXP_LOG_WARNING("Attempting to update non-existing entry\n");
 		return ENOENT;
 	}
 
@@ -462,7 +470,7 @@ static errno_t pfe_l2br_table_do_del_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2
 	{
 		if ((FALSE == entry->mac_addr_set) && (FALSE == entry->vlan_set))
 		{
-			NXP_LOG_DEBUG("MAC or VLAN must be set\n");
+			NXP_LOG_WARNING("MAC or VLAN must be set\n");
 			return EINVAL;
 		}
 
@@ -472,7 +480,7 @@ static errno_t pfe_l2br_table_do_del_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2
 	{
 		if (FALSE == entry->vlan_set)
 		{
-			NXP_LOG_DEBUG("VLAN must be set\n");
+			NXP_LOG_WARNING("VLAN must be set\n");
 			return EINVAL;
 		}
 
@@ -495,7 +503,7 @@ static errno_t pfe_l2br_table_do_del_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2
 
 	if (0U != (status & STATUS_REG_SIG_ENTRY_NOT_FOUND))
 	{
-		NXP_LOG_DEBUG("Attempting to delete non-existing entry\n");
+		NXP_LOG_WARNING("Attempting to delete non-existing entry\n");
 	}
 
 	return EOK;
@@ -533,7 +541,7 @@ static errno_t pfe_l2br_table_do_add_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2
             if (((FALSE == entry->mac_addr_set) && (FALSE == entry->vlan_set))
                     || (FALSE == entry->action_data_set))
             {
-                NXP_LOG_DEBUG("MAC/VLAN and action must be set\n");
+                NXP_LOG_WARNING("MAC/VLAN and action must be set\n");
                 return EINVAL;
             }
 
@@ -543,7 +551,7 @@ static errno_t pfe_l2br_table_do_add_entry_nolock(pfe_l2br_table_t *l2br, pfe_l2
         {
             if ((FALSE == entry->vlan_set) || (FALSE == entry->action_data_set))
             {
-                NXP_LOG_DEBUG("VLAN and action must be set\n");
+                NXP_LOG_WARNING("VLAN and action must be set\n");
                 return EINVAL;
             }
 
@@ -607,7 +615,7 @@ static errno_t pfe_l2br_table_do_search_entry_nolock(pfe_l2br_table_t *l2br, pfe
         {
             if ((FALSE == entry->mac_addr_set) && (FALSE == entry->vlan_set))
             {
-                NXP_LOG_DEBUG("MAC or VLAN must be set\n");
+                NXP_LOG_WARNING("MAC or VLAN must be set\n");
                 return EINVAL;
             }
 
@@ -617,7 +625,7 @@ static errno_t pfe_l2br_table_do_search_entry_nolock(pfe_l2br_table_t *l2br, pfe
         {
             if (FALSE == entry->vlan_set)
             {
-                NXP_LOG_DEBUG("VLAN must be set\n");
+                NXP_LOG_WARNING("VLAN must be set\n");
                 return EINVAL;
             }
 
@@ -640,13 +648,13 @@ static errno_t pfe_l2br_table_do_search_entry_nolock(pfe_l2br_table_t *l2br, pfe
 
         if (0U != (status & STATUS_REG_SIG_ENTRY_NOT_FOUND))
         {
-            NXP_LOG_DEBUG("L2BR table entry not found\n");
+            NXP_LOG_WARNING("L2BR table entry not found\n");
             return ENOENT;
         }
 
         if (0U == (status & STATUS_REG_MATCH))
         {
-            NXP_LOG_DEBUG("L2BR table entry mismatch\n");
+            NXP_LOG_WARNING("L2BR table entry mismatch\n");
             return ENOENT;
         }
 
@@ -676,14 +684,14 @@ errno_t pfe_l2br_table_update_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry
 
 	if (EOK != oal_mutex_lock(&l2br->reg_lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	ret = pfe_l2br_table_do_update_entry_nolock(l2br, entry);
 
 	if (EOK != oal_mutex_unlock(&l2br->reg_lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return ret;
@@ -705,14 +713,14 @@ errno_t pfe_l2br_table_del_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t 
 
 	if (EOK != oal_mutex_lock(&l2br->reg_lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	ret = pfe_l2br_table_do_del_entry_nolock(l2br, entry);
 
 	if (EOK != oal_mutex_unlock(&l2br->reg_lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return ret;
@@ -733,14 +741,14 @@ errno_t pfe_l2br_table_add_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry_t 
 
 	if (EOK != oal_mutex_lock(&l2br->reg_lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	ret = pfe_l2br_table_do_add_entry_nolock(l2br, entry);
 
 	if (EOK != oal_mutex_unlock(&l2br->reg_lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return ret;
@@ -762,14 +770,14 @@ errno_t pfe_l2br_table_search_entry(pfe_l2br_table_t *l2br, pfe_l2br_table_entry
 
 	if (EOK != oal_mutex_lock(&l2br->reg_lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	ret = pfe_l2br_table_do_search_entry_nolock(l2br, entry);
 
 	if (EOK != oal_mutex_unlock(&l2br->reg_lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return ret;
@@ -784,6 +792,7 @@ pfe_l2br_table_iterator_t *pfe_l2br_iterator_create(void)
 	pfe_l2br_table_iterator_t *loop_inst = oal_mm_malloc(sizeof(pfe_l2br_table_iterator_t));
 
 	if (NULL == loop_inst) {
+		NXP_LOG_ERROR("Unable to allocate memory\n");
 		return NULL;
 	}
 
@@ -791,6 +800,8 @@ pfe_l2br_table_iterator_t *pfe_l2br_iterator_create(void)
 	loop_inst->cur_coll_addr = 0;
 	loop_inst->next_coll_addr = 0;
 	loop_inst->cur_crit = L2BR_TABLE_CRIT_ALL;
+
+	memset(&loop_inst->cur_macvlan, 0U, sizeof(loop_inst->cur_macvlan)); 
 
 	return loop_inst;
 }
@@ -807,29 +818,103 @@ errno_t pfe_l2br_iterator_destroy(const pfe_l2br_table_iterator_t *inst)
 }
 
 /**
- * @brief	Halt table iterator to the current position
- *		in hash and collison table.
- *		This is needed if we delete an entry that has
- *		links in collision domain. The next entry will be
- *		automatically moved by hw to the removed position.
- * @param[in]	inst Iterator instance
- * @retval	EOK on success
+ * @brief			Compute hash of the entry.
+ * @details			It is assumed that this function uses same algorithms as PFE HW.
+ * @param[in]		entry Entry to be hashed
+ * @param[out]		hash [passback] Hash of the entry
+ * @retval			hash of the entry
  */
-
-errno_t pfe_l2br_iterator_halt(pfe_l2br_table_iterator_t *inst)
+static uint8_t pfe_l2br_entry_get_hash(const pfe_l2br_table_entry_t *entry)
 {
-    errno_t ret = ENOENT;
+	uint16_t hash = 0U;
+	
+	#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == entry) || (NULL == hash))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+	#endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if ((inst->cur_hash_addr > 0U) && (inst->next_coll_addr != 0U))
-    {
-        inst->cur_hash_addr--;
+	if (PFE_L2BR_TABLE_MAC2F == entry->type)
+	{
+		/*	NOTE: It is assumed that MAC entry (as provided by pfe_l2br_table_read_cmd()) has reverse byte order of MAC address bytes */
+		const uint16_t *p = (uint16_t*)(entry->u.mac2f_entry.mac);
+		hash = oal_htons(p[0]) ^ oal_htons(p[1]) ^ oal_htons(p[2]) ^ (entry->u.mac2f_entry.vlan);
+		hash &= 0x00FFU;
+	}
+	else
+	{
+		hash = entry->u.vlan_entry.vlan & 0x003FU; /* max hash value is 63 */
+	}
 
-        inst->next_coll_addr = inst->cur_coll_addr;
+	return (uint8_t)hash;
+}
 
-        ret = EOK;
-    }
+/**
+ * @brief			Save macvlan data to iterator
+ * @param[in,out]	l2t_iter Iterator which shall be updated
+ * @param[in]		entry Entry to be used as a source of macvlan data
+ */
+static void pfe_l2br_iterator_save_macvlan(pfe_l2br_table_iterator_t *l2t_iter, const pfe_l2br_table_entry_t *entry)
+{
+	#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == l2t_iter) || (NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+	#endif /* PFE_CFG_NULL_ARG_CHECK */
+	
+	if (PFE_L2BR_TABLE_MAC2F == entry->type)
+	{
+		memcpy(l2t_iter->cur_macvlan.mac, entry->u.mac2f_entry.mac, sizeof(pfe_mac_addr_t));
+		l2t_iter->cur_macvlan.vlan = entry->u.mac2f_entry.vlan;
+	}
+	else
+	{
+		l2t_iter->cur_macvlan.vlan = entry->u.vlan_entry.vlan;
+	}
+}
 
-    return ret;
+/**
+ * @brief			Check whether iterator macvlan data matches data of provided entry.
+ * @param[in]		l2t_iter Iterator with macvlan data
+ * @param[in]		entry Entry to be checked
+ * @retval			TRUE Data match
+ * @retval			FALSE Data don't match
+ */
+static bool_t pfe_l2br_iterator_is_macvlan_match(const pfe_l2br_table_iterator_t *l2t_iter, const pfe_l2br_table_entry_t *entry)
+{
+	bool_t is_match = FALSE;
+
+	#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == l2t_iter) || (NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+	#endif /* PFE_CFG_NULL_ARG_CHECK */
+	
+	if (PFE_L2BR_TABLE_MAC2F == entry->type)
+	{
+		if (0 == memcmp(l2t_iter->cur_macvlan.mac, entry->u.mac2f_entry.mac, sizeof(pfe_mac_addr_t)))
+		{
+			if (l2t_iter->cur_macvlan.vlan == entry->u.mac2f_entry.vlan)
+			{
+				is_match = TRUE;
+			}
+		}
+	}
+	else
+	{
+		if (l2t_iter->cur_macvlan.vlan == entry->u.vlan_entry.vlan)
+		{
+			is_match = TRUE;
+		}
+	}
+
+	return is_match;
 }
 
 /**
@@ -858,16 +943,19 @@ errno_t pfe_l2br_table_get_first(pfe_l2br_table_t *l2br, pfe_l2br_table_iterator
 	l2t_iter->cur_crit = crit;
 
 	/*	Get entries from address 0x0 */
+	memset(&l2t_iter->cur_macvlan, 0U, sizeof(l2t_iter->cur_macvlan)); 
 	for (l2t_iter->cur_hash_addr=0U, l2t_iter->cur_coll_addr=0U; l2t_iter->cur_hash_addr<l2br->hash_space_depth; l2t_iter->cur_hash_addr++)
 	{
 		ret = pfe_l2br_table_read_cmd(l2br, l2t_iter->cur_hash_addr, entry);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("Can not read table entry from location %d\n", (int_t)l2t_iter->cur_hash_addr);
+			NXP_LOG_ERROR("Can not read table entry from location %d\n", (int_t)l2t_iter->cur_hash_addr);
 			break;
 		}
 		else
 		{
+			l2t_iter->cur_coll_addr = l2t_iter->cur_hash_addr; /* cur_coll_addr is utilized to store address of previous valid MAC entry from HW, regardless of hash/coll space */
+			pfe_l2br_iterator_save_macvlan(l2t_iter, entry);
 			if (TRUE == pfe_l2br_table_entry_match_criterion(l2br, l2t_iter, entry))
 			{
 				/*	Remember entry to be processed next */
@@ -908,19 +996,65 @@ errno_t pfe_l2br_table_get_next(pfe_l2br_table_t *l2br, pfe_l2br_table_iterator_
 	{
 		if (0U == l2t_iter->next_coll_addr)
 		{
+			/*	Read from hash space */
 			ret = pfe_l2br_table_read_cmd(l2br, l2t_iter->cur_hash_addr, entry);
-			l2t_iter->cur_coll_addr = 0;
-			l2t_iter->cur_hash_addr++;
+			if (EOK == ret)
+			{
+				/*	candidate MAC entry found */
+				l2t_iter->cur_coll_addr = l2t_iter->cur_hash_addr; /* cur_coll_addr is utilized to store address of previous valid MAC entry from HW, regardless of hash/coll space */
+				l2t_iter->cur_hash_addr++;
+				pfe_l2br_iterator_save_macvlan(l2t_iter, entry);
+			}
 		}
 		else
 		{
+			/*	Read from collision space */
 			ret = pfe_l2br_table_read_cmd(l2br, l2t_iter->next_coll_addr, entry);
-			l2t_iter->cur_coll_addr = l2t_iter->next_coll_addr;
+			if (EOK == ret)
+			{
+				/*	check hash ; by design of the lookup routine, iterator's actual cur_hash_addr is already +1 ahead */
+				if ((l2t_iter->cur_hash_addr - 1U) == pfe_l2br_entry_get_hash(entry))
+				{
+					/*	=== hash OK === ; candidate MAC entry found */
+					l2t_iter->cur_coll_addr = l2t_iter->next_coll_addr; /* cur_coll_addr is utilized to store address of previous valid MAC entry from HW, regardless of hash/coll space */
+					pfe_l2br_iterator_save_macvlan(l2t_iter, entry);
+				}
+				else
+				{
+					/*	=== hash NOT OK === ; try to re-read previous valid MAC entry */
+					ret = pfe_l2br_table_read_cmd(l2br, l2t_iter->cur_coll_addr, entry);
+					if (EOK == ret)
+					{
+						/*	check hash ; by design of the lookup routine, iterator's actual cur_hash_addr is already +1 ahead */
+						if ((l2t_iter->cur_hash_addr - 1U) == pfe_l2br_entry_get_hash(entry))
+						{
+							/* --- hash OK --- */
+							if (pfe_l2br_iterator_is_macvlan_match(l2t_iter, entry))
+							{
+								/*	acquire new (hopefully valid) collision pointer from re-read previous MAC entry and go get data from the new collision pointer */
+								l2t_iter->next_coll_addr = pfe_l2br_table_get_col_ptr(entry);
+								continue;
+							}
+							else
+							{
+								/*	previous MAC entry has different macvlan ; candidate MAC entry found */
+								pfe_l2br_iterator_save_macvlan(l2t_iter, entry);
+							}
+						}
+						else
+						{
+							/* --- hash NOT OK --- ; collision list is compromised. Abandon it and move to the next hash space slot. */
+							l2t_iter->next_coll_addr = 0U;
+							continue;
+						}
+					}
+				}
+			}
 		}
 
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("Can not read table entry\n");
+			NXP_LOG_ERROR("Can not read table entry\n");
 			break;
 		}
 		else
@@ -1256,6 +1390,7 @@ pfe_l2br_table_t *pfe_l2br_table_create(addr_t cbus_base_va, pfe_l2br_table_type
 
 	if (NULL == l2br)
 	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
 		return NULL;
 	}
 	else
@@ -1385,7 +1520,7 @@ void pfe_l2br_table_destroy(pfe_l2br_table_t *l2br)
 	{
 		if (EOK != oal_mutex_destroy(&l2br->reg_lock))
 		{
-			NXP_LOG_DEBUG("Could not destroy mutex\n");
+			NXP_LOG_ERROR("Could not destroy mutex\n");
 		}
 		oal_mm_free(l2br);
 	}
@@ -1473,12 +1608,12 @@ errno_t pfe_l2br_table_entry_set_mac_addr(pfe_l2br_table_entry_t *entry,const pf
 	}
 	else if (PFE_L2BR_TABLE_VLAN == entry->type)
 	{
-		NXP_LOG_DEBUG("Unsupported entry type\n");
+		NXP_LOG_WARNING("Unsupported entry type\n");
 		return EPERM;
 	}
 	else
 	{
-		NXP_LOG_DEBUG("Invalid entry type\n");
+		NXP_LOG_WARNING("Invalid entry type\n");
 		return EINVAL;
 	}
 
@@ -1516,7 +1651,7 @@ errno_t pfe_l2br_table_entry_set_vlan(pfe_l2br_table_entry_t *entry, uint16_t vl
 	}
 	else
 	{
-		NXP_LOG_DEBUG("Invalid entry type\n");
+		NXP_LOG_WARNING("Invalid entry type\n");
 		return EINVAL;
 	}
 
@@ -1558,7 +1693,7 @@ errno_t pfe_l2br_table_entry_set_action_data(pfe_l2br_table_entry_t *entry, uint
 	{
 		if (action_data > 0x7fffffffU)
 		{
-			NXP_LOG_DEBUG("Action data too long. Max 31bits allowed for MAC table.\n");
+			NXP_LOG_WARNING("Action data too long. Max 31bits allowed for MAC table.\n");
 		}
 
 		entry->u.mac2f_entry.action_data = (uint32_t)(action_data & 0x7fffffffU);
@@ -1567,14 +1702,14 @@ errno_t pfe_l2br_table_entry_set_action_data(pfe_l2br_table_entry_t *entry, uint
 	{
 		if (action_data > 0x7fffffffffffffULL)
 		{
-			NXP_LOG_DEBUG("Action data too long. Max 55bits allowed for VLAN table.\n");
+			NXP_LOG_WARNING("Action data too long. Max 55bits allowed for VLAN table.\n");
 		}
 
 		entry->u.vlan_entry.action_data = (uint64_t)(action_data & 0x7fffffffffffffULL);
 	}
 	else
 	{
-		NXP_LOG_DEBUG("Invalid entry type\n");
+		NXP_LOG_WARNING("Invalid entry type\n");
 		return EINVAL;
 	}
 
@@ -1731,7 +1866,7 @@ __attribute__((pure)) bool_t pfe_l2br_table_entry_is_static(const pfe_l2br_table
 	}
 	else
 	{
-		NXP_LOG_DEBUG("Invalid entry type\n");
+		NXP_LOG_WARNING("Invalid entry type\n");
 		return FALSE;
 	}
 }

@@ -157,7 +157,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 						ret = pfe_if_db_get_first(fci_context->phy_if_db, session_id, IF_DB_CRIT_BY_NAME, (void *)rt_cmd->output_device, &if_entry);
 						if(EOK != ret)
 						{
-							NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: DB is locked in different session, entry was not retrieved from DB\n");
+							NXP_LOG_WARNING("FPP_CMD_IP_ROUTE: DB is locked in different session, entry was not retrieved from DB\n");
 						}
 					}
 					else
@@ -168,7 +168,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 					if (NULL == if_entry)
 					{
 						/*	No such interface */
-						NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Interface %s not found\n", rt_cmd->output_device);
+						NXP_LOG_WARNING("FPP_CMD_IP_ROUTE: Interface %s not found\n", rt_cmd->output_device);
 						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 						break;
 					}
@@ -201,7 +201,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 
 					if (EPERM == ret)
 					{
-						NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Already registered\n");
+						NXP_LOG_WARNING("FPP_CMD_IP_ROUTE: Already registered\n");
 						*fci_ret = FPP_ERR_RT_ENTRY_ALREADY_REGISTERED;
 						break;
 					}
@@ -226,7 +226,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 					rt_entry = fci_rt_db_get_first(&fci_context->route_db, RT_DB_CRIT_BY_ID, (void *)&rt_cmd->id);
 					if (NULL == rt_entry)
 					{
-						NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: Requested route %d not found\n", (int_t)oal_ntohl(rt_cmd->id));
+						NXP_LOG_WARNING("FPP_CMD_IP_ROUTE: Requested route %d not found\n", (int_t)oal_ntohl(rt_cmd->id));
 						*fci_ret = FPP_ERR_RT_ENTRY_NOT_FOUND;
 						break;
 					}
@@ -250,7 +250,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 				case FPP_ACTION_UPDATE:
 				{
 					/*	Not supported yet */
-					NXP_LOG_DEBUG("FPP_CMD_IP_ROUTE: FPP_ACTION_UPDATE not supported (yet)\n");
+					NXP_LOG_WARNING("FPP_CMD_IP_ROUTE: FPP_ACTION_UPDATE not supported (yet)\n");
 					*fci_ret = FPP_ERR_UNKNOWN_COMMAND;
 					break;
 				}
@@ -312,7 +312,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 
 				default:
 				{
-					NXP_LOG_ERROR("FPP_CMD_IP_ROUTE: Unknown action received: 0x%x\n", reply_buf->action);
+					NXP_LOG_WARNING("FPP_CMD_IP_ROUTE: Unknown action received: 0x%x\n", reply_buf->action);
 					*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 					break;
 				}
@@ -421,7 +421,7 @@ void fci_routes_drop_all(void)
 			ret = fci_routes_drop_one(entry);
 			if (EOK != ret)
 			{
-				NXP_LOG_WARNING("Couldn't properly drop a route: %d\n", ret);
+				NXP_LOG_ERROR("Couldn't properly drop a route: %d\n", ret);
 			}
 
 			entry = fci_rt_db_get_next(&fci_context->route_db);
@@ -458,7 +458,7 @@ void fci_routes_drop_all_ipv4(void)
 				ret = fci_routes_drop_one(entry);
 				if (EOK != ret)
 				{
-					NXP_LOG_WARNING("Couldn't properly drop a route: %d\n", ret);
+					NXP_LOG_ERROR("Couldn't properly drop a route: %d\n", ret);
 				}
 			}
 
@@ -496,7 +496,7 @@ void fci_routes_drop_all_ipv6(void)
 				ret = fci_routes_drop_one(entry);
 				if (EOK != ret)
 				{
-					NXP_LOG_WARNING("Couldn't properly drop a route: %d\n", ret);
+					NXP_LOG_ERROR("Couldn't properly drop a route: %d\n", ret);
 				}
 			}
 

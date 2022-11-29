@@ -19,7 +19,6 @@ MODULE_LICENSE("GPL");
 
 #include "hal.h"
 
-#include "pfe_hm.h"
 #include "pfe_cbus.h"
 #include "pfe_hif.h"
 #include "pfe_platform_cfg.h"
@@ -127,7 +126,7 @@ static void *pfe_poller_func(void *arg)
 
 	if (NULL == platform)
 	{
-		NXP_LOG_WARNING("Global poller init failed\n");
+		NXP_LOG_ERROR("Global poller init failed\n");
 		return NULL;
 	}
 
@@ -323,7 +322,7 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 			else
 			{
 				/* Entry doesn't exist */
-				NXP_LOG_DEBUG("Requested entry not found\n");
+				NXP_LOG_WARNING("Requested entry not found\n");
 				ret = ENOENT;
 			}
 		}
@@ -386,7 +385,7 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 						ret = pfe_if_db_add(platform->log_if_db, (uint32_t)sender, log_if, sender);
 						if (EOK != ret)
 						{
-							NXP_LOG_DEBUG("Unable to register logical interface: %d\n", ret);
+							NXP_LOG_ERROR("Unable to register logical interface: %d\n", ret);
 							pfe_log_if_destroy(log_if);
 							log_if = NULL;
 						}
@@ -422,7 +421,7 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 						if (EOK != ret)
 						{
 							/*	This failure is normal in case the logical interface has not been registered */
-							NXP_LOG_DEBUG("Can't unregister %s: %d\n", pfe_log_if_get_name(log_if), ret);
+							NXP_LOG_ERROR("Can't unregister %s: %d\n", pfe_log_if_get_name(log_if), ret);
 						}
 						else
 						{
@@ -459,7 +458,7 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 					if (EOK != ret)
 					{
-						NXP_LOG_DEBUG("Unable to unregister %s with ID: %d\n", pfe_log_if_get_name(log_if_arg), pfe_log_if_get_id(log_if_arg));
+						NXP_LOG_ERROR("Unable to unregister %s with ID: %d\n", pfe_log_if_get_name(log_if_arg), pfe_log_if_get_id(log_if_arg));
 					}
 					else
 					{
@@ -1590,6 +1589,65 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 				break;
 			}
 	#endif /* PFE_CFG_FCI_ENABLE */
+
+			case (uint32_t)PFE_PLATFORM_RPC_MDIO_PROXY:
+			{
+				pfe_platform_rpc_mdio_proxy_arg_t *rpc_arg = (pfe_platform_rpc_mdio_proxy_arg_t *)buf;
+				pfe_platform_rpc_mdio_proxy_ret_t rpc_ret = {0};
+				pfe_emac_t *emac;
+				uint32_t key;
+
+				NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_MDIO_PROXY\n");
+
+				if (EOK == ret)
+				{
+					if (rpc_arg->emac_id > 2) {
+						NXP_LOG_ERROR("RPC: PFE_PLATFORM_RPC_MDIO_PROXY: invalid EMAC id: %d\n", rpc_arg->emac_id);
+						ret = ENOENT;
+					}
+					else
+					{
+						emac = platform->emac[rpc_arg->emac_id];
+
+						/* Lock the MDIO bus */
+						ret = pfe_emac_mdio_lock(emac, &key);
+						if (EOK == ret)
+						{
+
+							/* Process the MDIO OP message */
+							switch (rpc_arg->op)
+							{
+								case PFE_PLATFORM_RPC_MDIO_OP_READ_CL22:
+									ret = pfe_emac_mdio_read22(platform->emac[rpc_arg->emac_id], rpc_arg->pa, rpc_arg->ra, &rpc_ret.val, key);
+									break;
+								case PFE_PLATFORM_RPC_MDIO_OP_WRITE_CL22:
+									ret = pfe_emac_mdio_write22(platform->emac[rpc_arg->emac_id], rpc_arg->pa, rpc_arg->ra, rpc_arg->val, key);
+									break;
+								case PFE_PLATFORM_RPC_MDIO_OP_READ_CL45:
+									ret = pfe_emac_mdio_read45(platform->emac[rpc_arg->emac_id], rpc_arg->pa, rpc_arg->dev, rpc_arg->ra, &rpc_ret.val, key);
+									break;
+								case PFE_PLATFORM_RPC_MDIO_OP_WRITE_CL45:
+									ret = pfe_emac_mdio_write45(platform->emac[rpc_arg->emac_id], rpc_arg->pa, rpc_arg->dev, rpc_arg->ra, rpc_arg->val, key);
+									break;
+								default:
+									ret = EINVAL;
+									break;
+							}
+
+							/* Unlock the locked MDIO bus */
+							(void)pfe_emac_mdio_unlock(emac, key);
+						}
+					}
+				}
+
+				/*	Report execution status to caller */
+				if (EOK != pfe_idex_set_rpc_ret_val(ret, &rpc_ret, (uint16_t)sizeof(rpc_ret)))
+				{
+					NXP_LOG_ERROR("Could not send RPC response\n");
+				}
+
+				break;
+			}
 
 			default:
 			{
@@ -2920,7 +2978,7 @@ errno_t pfe_platform_register_log_if(const pfe_platform_t *platform, pfe_log_if_
 		ret = pfe_if_db_lock(&session_id);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("DB lock failed: %d\n", ret);
+			NXP_LOG_ERROR("DB lock failed: %d\n", ret);
 		}
 		else
 		{
@@ -2935,7 +2993,7 @@ errno_t pfe_platform_register_log_if(const pfe_platform_t *platform, pfe_log_if_
 
 			if (EOK != pfe_if_db_unlock(session_id))
 			{
-				NXP_LOG_DEBUG("DB unlock failed\n");
+				NXP_LOG_ERROR("DB unlock failed\n");
 			}
 		}
 	}
@@ -2966,7 +3024,7 @@ errno_t pfe_platform_unregister_log_if(const pfe_platform_t *platform, pfe_log_i
 		ret = pfe_if_db_lock(&session_id);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("DB lock failed: %d\n", ret);
+			NXP_LOG_ERROR("DB lock failed: %d\n", ret);
 		}
 		else
 		{
@@ -2988,7 +3046,7 @@ errno_t pfe_platform_unregister_log_if(const pfe_platform_t *platform, pfe_log_i
 
 			if (EOK != pfe_if_db_unlock(session_id))
 			{
-				NXP_LOG_DEBUG("DB unlock failed\n");
+				NXP_LOG_ERROR("DB unlock failed\n");
 			}
 		}
 	}
@@ -3050,14 +3108,14 @@ pfe_log_if_t *pfe_platform_get_log_if_by_id(const pfe_platform_t *platform, uint
 	{
 		if (EOK != pfe_if_db_lock(&session_id))
 		{
-			NXP_LOG_DEBUG("DB lock failed\n");
+			NXP_LOG_ERROR("DB lock failed\n");
 		}
 
 		(void)pfe_if_db_get_first(platform->log_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)id, &entry);
 
 		if (EOK != pfe_if_db_unlock(session_id))
 		{
-			NXP_LOG_DEBUG("DB unlock failed\n");
+			NXP_LOG_ERROR("DB unlock failed\n");
 		}
 
 		logif = pfe_if_db_entry_get_log_if(entry);
@@ -3094,14 +3152,14 @@ pfe_log_if_t *pfe_platform_get_log_if_by_name(const pfe_platform_t *platform, ch
 	{
 		if (EOK != pfe_if_db_lock(&session_id))
 		{
-			NXP_LOG_DEBUG("DB lock failed\n");
+			NXP_LOG_ERROR("DB lock failed\n");
 		}
 
 		(void)pfe_if_db_get_first(platform->log_if_db, session_id, IF_DB_CRIT_BY_NAME, (void *)name, &entry);
 
 		if (EOK != pfe_if_db_unlock(session_id))
 		{
-			NXP_LOG_DEBUG("DB unlock failed\n");
+			NXP_LOG_ERROR("DB unlock failed\n");
 		}
 
 		logif = pfe_if_db_entry_get_log_if(entry);
@@ -3139,14 +3197,14 @@ pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_
 	{
 		if (EOK != pfe_if_db_lock(&session_id))
 		{
-			NXP_LOG_DEBUG("DB lock failed\n");
+			NXP_LOG_ERROR("DB lock failed\n");
 		}
 
 		(void)pfe_if_db_get_first(platform->phy_if_db, session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)id, &entry);
 
 		if (EOK != pfe_if_db_unlock(session_id))
 		{
-			NXP_LOG_DEBUG("DB unlock failed\n");
+			NXP_LOG_ERROR("DB unlock failed\n");
 		}
 
 		phyif = pfe_if_db_entry_get_phy_if(entry);
@@ -3199,14 +3257,14 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 		platform->phy_if_db = pfe_if_db_create(PFE_IF_DB_PHY);
 		if (NULL == platform->phy_if_db)
 		{
-			NXP_LOG_DEBUG("Can't create physical interface DB\n");
+			NXP_LOG_ERROR("Can't create physical interface DB\n");
 			ret = ENODEV;
 		}
 		else
 		{
 			if (EOK != pfe_if_db_lock(&session_id))
 			{
-				NXP_LOG_DEBUG("DB lock failed\n");
+				NXP_LOG_ERROR("DB lock failed\n");
 			}
 
 			/*	Create interfaces */
@@ -3314,7 +3372,7 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 
 			if (EOK != pfe_if_db_unlock(session_id))
 			{
-				NXP_LOG_DEBUG("DB unlock failed\n");
+				NXP_LOG_ERROR("DB unlock failed\n");
 			}
 		}
 	}
@@ -3326,7 +3384,7 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 			pfe.log_if_db = pfe_if_db_create(PFE_IF_DB_LOG);
 			if (NULL == pfe.log_if_db)
 			{
-				NXP_LOG_DEBUG("Can't create logical interface DB\n");
+				NXP_LOG_ERROR("Can't create logical interface DB\n");
 				ret = ENODEV;
 			}
 		}
@@ -3350,7 +3408,7 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 	{
 		if(EOK != pfe_if_db_lock(&session_id))
 		{
-			NXP_LOG_DEBUG("DB lock failed\n");
+			NXP_LOG_ERROR("DB lock failed\n");
 		}
 
 		ret = pfe_if_db_get_first(platform->log_if_db, session_id, IF_DB_CRIT_ALL, NULL, &entry);
@@ -3361,7 +3419,7 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 
 			if (EOK != pfe_if_db_remove(platform->log_if_db, session_id, entry))
 			{
-				NXP_LOG_DEBUG("Could not remove log_if DB entry\n");
+				NXP_LOG_ERROR("Could not remove log_if DB entry\n");
 			}
 
 			pfe_log_if_destroy(log_if);
@@ -3372,12 +3430,12 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 
 		if(EOK != ret)
 		{
-			NXP_LOG_DEBUG("Could not remove log_if DB entry, DB was locked\n");
+			NXP_LOG_ERROR("Could not remove log_if DB entry, DB was locked\n");
 		}
 
 		if(EOK != pfe_if_db_unlock(session_id))
 		{
-			NXP_LOG_DEBUG("DB unlock failed\n");
+			NXP_LOG_ERROR("DB unlock failed\n");
 		}
 
 		if (NULL != platform->log_if_db)
@@ -3391,7 +3449,7 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 	{
 		if(EOK != pfe_if_db_lock(&session_id))
 		{
-			NXP_LOG_DEBUG("DB lock failed\n");
+			NXP_LOG_ERROR("DB lock failed\n");
 		}
 
 		ret = pfe_if_db_get_first(platform->phy_if_db, session_id, IF_DB_CRIT_ALL, NULL, &entry);
@@ -3402,7 +3460,7 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 
 			if (EOK != pfe_if_db_remove(platform->phy_if_db, session_id, entry))
 			{
-				NXP_LOG_DEBUG("Could not remove phy_if DB entry\n");
+				NXP_LOG_ERROR("Could not remove phy_if DB entry\n");
 			}
 
 			pfe_phy_if_destroy(phy_if);
@@ -3414,12 +3472,12 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 
 		if(EOK != ret)
 		{
-			NXP_LOG_DEBUG("Could not remove log_if DB entry, DB was locked\n");
+			NXP_LOG_ERROR("Could not remove log_if DB entry, DB was locked\n");
 		}
 
 		if(EOK != pfe_if_db_unlock(session_id))
 		{
-			NXP_LOG_DEBUG("DB unlock failed\n");
+			NXP_LOG_ERROR("DB unlock failed\n");
 		}
 
 		if (NULL != platform->phy_if_db)
@@ -3476,7 +3534,7 @@ errno_t pfe_platform_soft_reset(const pfe_platform_t *platform)
 
 		if (0U == timeout)
 		{
-			NXP_LOG_INFO("Soft reset done indication timeouted\n");
+			NXP_LOG_ERROR("Soft reset done indication timeouted\n");
 			ret = ETIMEDOUT;
 		}
 		else
@@ -3738,8 +3796,8 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 		/* Check HIF RX Ring size in relation to err051211_workaround. */
 		if (PFE_HIF_RX_RING_CFG_LENGTH < PFE_TMU_ERR051211_MINIMAL_REQUIRED_RX_RING_LENGTH)
 		{
-			NXP_LOG_WARNING("HIF RX Rings are too small for FW feature err051211_workaround to fully work.");
-			NXP_LOG_WARNING("The feature requires HIF RX Rings with at least %u slots, but rings currently have only %u slots.",
+			NXP_LOG_ERROR("HIF RX Rings are too small for FW feature err051211_workaround to fully work.");
+			NXP_LOG_ERROR("The feature requires HIF RX Rings with at least %u slots, but rings currently have only %u slots.",
 							(uint_t)PFE_TMU_ERR051211_MINIMAL_REQUIRED_RX_RING_LENGTH, (uint_t)PFE_HIF_RX_RING_CFG_LENGTH);
 		}
 	}

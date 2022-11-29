@@ -19,7 +19,7 @@ static inline int pfeng_hwts_check_dup(struct pfeng_netif *netif,struct pfeng_ts
 	list_for_each_safe(curr, tmp, &netif->ts_skb_list) {
 		ts_skb = list_entry(curr, struct pfeng_ts_skb, list);
 		if(new_entry->ref_num == ts_skb->ref_num) {
-			netdev_err(netif->netdev, "Duplicate ref_num %04x dropping skb\n", new_entry->ref_num);
+			HM_MSG_NETDEV_ERR(netif->netdev, "Duplicate ref_num %04x dropping skb\n", new_entry->ref_num);
 			return -EINVAL;
 		}
 	}
@@ -62,7 +62,10 @@ static void pfeng_hwts_work(struct work_struct *work)
 			curr_ts_skb = list_entry(curr, struct pfeng_ts_skb, list);
 			if (curr_ts_skb->ref_num == tx_timestamp.ref_num) {
 				match = true;
+				skb_pull(curr_ts_skb->skb, PFENG_TX_PKT_HEADER_SIZE);
+				/* Pass skb to the kernel stack */
 				skb_tstamp_tx(curr_ts_skb->skb, &tx_timestamp.ts);
+
 				consume_skb(curr_ts_skb->skb);
 				list_del(&curr_ts_skb->list);
 				kfree(curr_ts_skb);
@@ -71,32 +74,19 @@ static void pfeng_hwts_work(struct work_struct *work)
 		}
 
 		if (false == match)
-			netdev_err(netif->netdev, "Dropping unknown TX time stamp with ref_num %04x\n", tx_timestamp.ref_num);
+			HM_MSG_NETDEV_ERR(netif->netdev, "Dropping unknown TX time stamp with ref_num %04x\n", tx_timestamp.ref_num);
 	}
 
 	/* Here do aging (time stamp has to be available in less than 1ms but we will wait for 5ms) */
 	list_for_each_safe(curr, tmp, &netif->ts_skb_list) {
 		curr_ts_skb = list_entry(curr, struct pfeng_ts_skb, list);
 		if (time_after(jiffies, curr_ts_skb->jif_enlisted + usecs_to_jiffies(5000U))) {
-			netdev_warn(netif->netdev, "Aging TX time stamp with ref_num %04x\n", curr_ts_skb->ref_num);
+			HM_MSG_NETDEV_WARN(netif->netdev, "Aging TX time stamp with ref_num %04x\n", curr_ts_skb->ref_num);
 			kfree_skb(curr_ts_skb->skb);
 			list_del(&curr_ts_skb->list);
 			kfree(curr_ts_skb);
 		}
 	}
-}
-
-/* Store HW time stamp to skb */
-void pfeng_hwts_skb_set_rx_ts(struct pfeng_netif *netif, struct sk_buff *skb)
-{
-	pfe_ct_hif_rx_hdr_t *hif_hdr = (pfe_ct_hif_rx_hdr_t *)skb->data;
-	struct skb_shared_hwtstamps *hwts = skb_hwtstamps(skb);
-	u64 nanos = 0ULL;
-
-	memset(hwts, 0, sizeof(*hwts));
-	nanos = hif_hdr->rx_timestamp_ns;
-	nanos += hif_hdr->rx_timestamp_s * 1000000000ULL;
-	hwts->hwtstamp = ns_to_ktime(nanos);
 }
 
 /* Store reference to tx skb that should be time stamped */
@@ -123,9 +113,8 @@ int pfeng_hwts_store_tx_ref(struct pfeng_netif *netif, struct sk_buff *skb)
 }
 
 /* Store time stamp that should be matched with skb */
-void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, struct sk_buff *skb)
+void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, pfe_ct_ets_report_t *etsr)
 {
-	pfe_ct_ets_report_t *etsr = (pfe_ct_ets_report_t *)((addr_t)skb->data + sizeof(pfe_ct_hif_rx_hdr_t));
 	struct pfeng_tx_ts tx_timestamp;
 	int ret = 1;
 
@@ -137,13 +126,9 @@ void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, struct sk_buff *skb)
 	schedule_work(&netif->ts_tx_work);
 
 	if(0 == ret)
-		netdev_err(netif->netdev, "No more memory. Time stamp dropped.\n");
+		HM_MSG_NETDEV_ERR(netif->netdev, "No more memory. Time stamp dropped.\n");
 }
 #else /* PFE_CFG_PFE_MASTER */
-void pfeng_hwts_skb_set_rx_ts(struct pfeng_netif *netif, struct sk_buff *skb)
-{
-	/* NOP */
-}
 
 void pfeng_hwts_get_rx_ts(struct pfeng_netif *netif, struct sk_buff *skb)
 {
@@ -155,7 +140,7 @@ int pfeng_hwts_store_tx_ref(struct pfeng_netif *netif, struct sk_buff *skb)
 	return -ENOMEM;
 }
 
-void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, struct sk_buff *skb)
+void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, pfe_ct_ets_report_t *etsr)
 {
 	/* NOP */
 }

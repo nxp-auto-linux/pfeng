@@ -11,6 +11,7 @@
 #include <linux/version.h>
 #include <linux/etherdevice.h>
 #include <linux/netdevice.h>
+#include <linux/mii.h>
 #include <linux/phy.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -105,6 +106,7 @@ enum {
 };
 
 #define PFENG_TX_PKT_HEADER_SIZE	(sizeof(pfe_ct_hif_tx_hdr_t))
+#define PFENG_RX_PKT_HEADER_SIZE	(sizeof(pfe_ct_hif_rx_hdr_t))
 
 #define PFENG_INT_TIMER_DEFAULT		256 /* usecs */
 
@@ -382,7 +384,7 @@ void pfeng_ihc_rx_work_handler(struct work_struct *work);
 int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl);
 void pfeng_bman_pool_destroy(struct pfeng_hif_chnl *chnl);
 int pfeng_hif_chnl_fill_rx_buffers(struct pfeng_hif_chnl *chnl);
-void pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_hif_chnl *chnl, void *va_addr, addr_t pa_addr, u32 size, struct sk_buff *skb, u8 flags, int i);
+void pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_hif_chnl *chnl, addr_t pa_addr, u32 size, struct sk_buff *skb, u8 flags, int i);
 u8 pfeng_hif_chnl_txconf_get_flag(struct pfeng_hif_chnl *chnl);
 struct sk_buff *pfeng_hif_chnl_txconf_get_skbuf(struct pfeng_hif_chnl *chnl);
 void pfeng_hif_chnl_txconf_unroll_map_full(struct pfeng_hif_chnl *chnl, int i);
@@ -413,12 +415,31 @@ void pfeng_ptp_unregister(struct pfeng_netif *netif);
 /* hw timestamp */
 int pfeng_hwts_init(struct pfeng_netif *netif);
 void pfeng_hwts_release(struct pfeng_netif *netif);
-void pfeng_hwts_skb_set_rx_ts(struct pfeng_netif *netif, struct sk_buff *skb);
-void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, struct sk_buff *skb);
+
+#ifdef PFE_CFG_PFE_MASTER
+static inline void pfeng_hwts_skb_set_rx_ts(struct skb_shared_hwtstamps *hwts, u32 rx_timestamp_s, u32 rx_timestamp_ns)
+{
+	u64 nanos = 0ULL;
+
+	memset(hwts, 0, sizeof(*hwts));
+	nanos = rx_timestamp_ns;
+	nanos += rx_timestamp_s * 1000000000ULL;
+	hwts->hwtstamp = ns_to_ktime(nanos);
+}
+#else
+static inline void pfeng_hwts_skb_set_rx_ts(struct skb_shared_hwtstamps *hwts, u32 rx_timestamp_s, u32 rx_timestamp_ns)
+{
+	/* NOP */
+}
+#endif
+
+void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, pfe_ct_ets_report_t *etsr);
 int pfeng_hwts_store_tx_ref(struct pfeng_netif *netif, struct sk_buff *skb);
 int pfeng_hwts_ioctl_set(struct pfeng_netif *netif, struct ifreq *rq);
 int pfeng_hwts_ioctl_get(struct pfeng_netif *netif, struct ifreq *rq);
 int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct ethtool_ts_info *info);
+int pfeng_mdio_read(struct mii_bus *bus, int phyaddr, int phyreg);
+int pfeng_mdio_write(struct mii_bus *bus, int phyaddr, int phyreg, u16 phydata);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,9,0)
 static inline int pm_runtime_resume_and_get(struct device *dev)

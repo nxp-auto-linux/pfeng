@@ -376,7 +376,7 @@ static void pfe_rtable_invalidate(pfe_rtable_t *rtable)
 
 	if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	for (ii=0U; ii<rtable->htable_size; ii++)
@@ -393,7 +393,7 @@ static void pfe_rtable_invalidate(pfe_rtable_t *rtable)
 
 	if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 }
 
@@ -619,7 +619,11 @@ pfe_rtable_entry_t *pfe_rtable_entry_create(void)
 	pfe_rtable_entry_t *entry;
 
 	entry = oal_mm_malloc(sizeof(pfe_rtable_entry_t));
-	if (NULL != entry)
+	if (NULL == entry)
+	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
+	}
+	else
 	{
 		(void)memset(entry, 0, sizeof(pfe_rtable_entry_t));
 
@@ -627,6 +631,7 @@ pfe_rtable_entry_t *pfe_rtable_entry_create(void)
 		entry->phys_entry_cache = oal_mm_malloc(sizeof(pfe_ct_rtable_entry_t));
 		if (NULL == entry->phys_entry_cache)
 		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
 			oal_mm_free(entry);
 			entry = NULL;
 		}
@@ -1064,7 +1069,7 @@ errno_t pfe_rtable_entry_set_dstif_id(pfe_rtable_entry_t *entry, pfe_ct_phy_if_i
 	{
 		if (if_id > PFE_PHY_IF_ID_MAX)
 		{
-			NXP_LOG_WARNING("Physical interface ID is invalid: 0x%x\n", if_id);
+			NXP_LOG_ERROR("Physical interface ID is invalid: 0x%x\n", if_id);
 			ret = EINVAL;
 		}
 		else
@@ -1664,7 +1669,7 @@ void pfe_rtable_entry_set_timeout(pfe_rtable_entry_t *entry, uint32_t timeout)
 		{
 			if (unlikely(EOK != oal_mutex_lock(entry->rtable->lock)))
 			{
-				NXP_LOG_DEBUG("Mutex lock failed\n");
+				NXP_LOG_ERROR("Mutex lock failed\n");
 			}
 		}
 
@@ -1694,7 +1699,7 @@ void pfe_rtable_entry_set_timeout(pfe_rtable_entry_t *entry, uint32_t timeout)
 		{
 			if (unlikely(EOK != oal_mutex_unlock(entry->rtable->lock)))
 			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
+				NXP_LOG_ERROR("Mutex unlock failed\n");
 			}
 		}
 	}
@@ -2134,17 +2139,17 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 	/*	Protect table accesses */
 	if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	/*	Check for duplicates */
 	if (TRUE == pfe_rtable_entry_is_duplicate(rtable, entry))
 	{
-		NXP_LOG_INFO("Entry already added\n");
+		NXP_LOG_WARNING("Entry already added\n");
 
 		if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 
 		return EEXIST;
@@ -2218,7 +2223,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 
 	if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return ret;
@@ -2247,7 +2252,7 @@ errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 		/*	Protect table accesses */
 		if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		ret = pfe_rtable_del_entry_nolock(rtable, entry);
@@ -2260,7 +2265,7 @@ errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 
 		if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 
@@ -2494,7 +2499,7 @@ void pfe_rtable_do_timeouts(pfe_rtable_t *rtable)
 	{
 		if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		LLIST_Init(&to_be_removed_list);
@@ -2565,7 +2570,7 @@ void pfe_rtable_do_timeouts(pfe_rtable_t *rtable)
 
 		if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 
@@ -2595,7 +2600,7 @@ static void *rtable_worker_func(void *arg)
 		err = oal_mbox_receive(rtable->mbox, &msg);
 		if (EOK != err)
 		{
-			NXP_LOG_WARNING("mbox: Problem receiving message: %d", err);
+			NXP_LOG_ERROR("mbox: Problem receiving message: %d", err);
 		}
 		else
 		{
@@ -2753,6 +2758,7 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, pfe_l2br_t *bridge, pfe_rtab
 
 	if (NULL == rtable)
 	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
 		return NULL;
 	}
 	else
@@ -2771,7 +2777,13 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, pfe_l2br_t *bridge, pfe_rtab
 		}
 		else
 		{
-			if (EOK == oal_mutex_init(rtable->lock))
+			if (EOK != oal_mutex_init(rtable->lock))
+			{
+				NXP_LOG_ERROR("Mutex initialization failed\n");
+				pfe_rtable_destroy(rtable);
+				return NULL;
+			}
+			else
 			{
 				/*	Store properties */
 				rtable->htable_base_va = config->htable_base_va;
@@ -2974,7 +2986,7 @@ void pfe_rtable_destroy(pfe_rtable_t *rtable)
 
 		if (EOK != pfe_rtable_destroy_stats_table(rtable->class, rtable->conntrack_stats_table_addr))
 		{
-			NXP_LOG_DEBUG("Could not destroy conntrack stats\n");
+			NXP_LOG_ERROR("Could not destroy conntrack stats\n");
 		}
 
 		if (NULL != rtable->lock)
@@ -3257,7 +3269,7 @@ pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_cr
 			/*	Protect table accesses */
 			if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
 			{
-				NXP_LOG_DEBUG("Mutex lock failed\n");
+				NXP_LOG_ERROR("Mutex lock failed\n");
 			};
 
 			/*	Get first matching entry */
@@ -3280,7 +3292,7 @@ pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_cr
 
 			if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
 			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
+				NXP_LOG_ERROR("Mutex unlock failed\n");
 			}
 		}
 
@@ -3325,7 +3337,7 @@ pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 			/*	Protect table accesses */
 			if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
 			{
-				NXP_LOG_DEBUG("Mutex lock failed\n");
+				NXP_LOG_ERROR("Mutex lock failed\n");
 			}
 
 			while (rtable->cur_item != &rtable->active_entries)
@@ -3348,7 +3360,7 @@ pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 
 			if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
 			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
+				NXP_LOG_ERROR("Mutex unlock failed\n");
 			}
 		}
 
@@ -3498,7 +3510,7 @@ uint32_t pfe_rtable_get_text_statistics(const pfe_rtable_t *rtable, char_t *buf,
 		/*	Protect table accesses */
 		if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		LLIST_ForEach(item, &rtable->active_entries)
@@ -3525,7 +3537,7 @@ uint32_t pfe_rtable_get_text_statistics(const pfe_rtable_t *rtable, char_t *buf,
 
 		if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 

@@ -261,6 +261,7 @@ pfe_util_t *pfe_util_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_util
 
 	if (NULL == util)
 	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
 		return NULL;
 	}
 	else
@@ -271,6 +272,7 @@ pfe_util_t *pfe_util_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_util
 
 	if (EOK != oal_mutex_init(&util->mutex))
 	{
+		NXP_LOG_ERROR("Mutex initialization failed\n");
 		oal_mm_free(util);
 		return NULL;
 	}
@@ -283,6 +285,7 @@ pfe_util_t *pfe_util_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_util
 
 		if (NULL == util->pe)
 		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
 			oal_mm_free(util);
 			return NULL;
 		}
@@ -324,12 +327,12 @@ void pfe_util_reset(pfe_util_t *util)
 	{
 		if (EOK != oal_mutex_lock(&util->mutex))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 		hal_write32(PFE_CORE_SW_RESET, util->cbus_base_va + UTIL_TX_CTRL);
 		if (EOK != oal_mutex_unlock(&util->mutex))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 }
@@ -351,16 +354,16 @@ void pfe_util_enable(pfe_util_t *util)
 	{
 		if (unlikely(FALSE == util->is_fw_loaded))
 		{
-			NXP_LOG_WARNING("Attempt to enable UTIL PE(s) without previous firmware upload\n");
+			NXP_LOG_ERROR("Attempt to enable UTIL PE(s) without previous firmware upload\n");
 		}
 		if (EOK != oal_mutex_lock(&util->mutex))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 		hal_write32(PFE_CORE_ENABLE, util->cbus_base_va + UTIL_TX_CTRL);
 		if (EOK != oal_mutex_unlock(&util->mutex))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 }
@@ -381,12 +384,12 @@ void pfe_util_disable(pfe_util_t *util)
 	{
 		if (EOK != oal_mutex_lock(&util->mutex))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 		hal_write32(PFE_CORE_DISABLE, util->cbus_base_va + UTIL_TX_CTRL);
 		if (EOK != oal_mutex_unlock(&util->mutex))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 }
@@ -412,7 +415,7 @@ errno_t pfe_util_load_firmware(pfe_util_t *util, const void *elf)
 	{
 		if (EOK != oal_mutex_lock(&util->mutex))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		ret = pfe_pe_load_firmware(util->pe, util->pe_num, elf);
@@ -429,7 +432,7 @@ errno_t pfe_util_load_firmware(pfe_util_t *util, const void *elf)
 		}
 		if (EOK != oal_mutex_unlock(&util->mutex))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 	return ret;
@@ -623,7 +626,7 @@ static errno_t pfe_util_write_dmem(void *util_p, int32_t pe_idx, addr_t dst_addr
 		{
 			if (EOK != oal_mutex_lock(&util->mutex))
 			{
-				NXP_LOG_DEBUG("mutex lock failed\n");
+				NXP_LOG_ERROR("mutex lock failed\n");
 			}
 
 			if (pe_idx >= 0)
@@ -642,7 +645,7 @@ static errno_t pfe_util_write_dmem(void *util_p, int32_t pe_idx, addr_t dst_addr
 
 			if (EOK != oal_mutex_unlock(&util->mutex))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			ret = EOK;
@@ -683,14 +686,14 @@ static errno_t pfe_util_read_dmem(void *util_p, int32_t pe_idx, void *dst_ptr, a
 		{
 			if (EOK != oal_mutex_lock(&util->mutex))
 			{
-				NXP_LOG_DEBUG("mutex lock failed\n");
+				NXP_LOG_ERROR("mutex lock failed\n");
 			}
 
 			pfe_pe_memcpy_from_dmem_to_host_32(util->pe[pe_idx], dst_ptr, src_addr, len);
 
 			if (EOK != oal_mutex_unlock(&util->mutex))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			ret = EOK;
@@ -725,7 +728,7 @@ errno_t pfe_util_isr(const pfe_util_t *util)
 				here as we don't need to have coherent accesses. */
 			if (EOK != pfe_pe_lock(util->pe[count]))
 			{
-				NXP_LOG_DEBUG("pfe_pe_lock() failed\n");
+				NXP_LOG_ERROR("pfe_pe_lock() failed\n");
 			}
 
 			(void)pfe_pe_get_fw_messages_nolock(util->pe[count]);
@@ -733,7 +736,7 @@ errno_t pfe_util_isr(const pfe_util_t *util)
 
 			if (EOK != pfe_pe_unlock(util->pe[count]))
 			{
-				NXP_LOG_DEBUG("pfe_pe_unlock() failed\n");
+				NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
 			}
 		}
 

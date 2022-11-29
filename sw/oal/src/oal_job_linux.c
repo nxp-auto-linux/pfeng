@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2021 NXP
+ *  Copyright 2019-2022 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -98,13 +98,14 @@ oal_job_t *oal_job_create(oal_job_func func, void *arg, const char_t *name, oal_
 
 	if (NULL == func)
 	{
-		NXP_LOG_DEBUG("Job function must not be NULL\n");
+		NXP_LOG_ERROR("Job function must not be NULL\n");
 		return NULL;
 	}
 
 	job = oal_mm_malloc(sizeof(oal_job_t));
 	if (NULL == job)
 	{
+		NXP_LOG_ERROR("failed to allocate memory\n");
 		return NULL;
 	}
 

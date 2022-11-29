@@ -204,6 +204,7 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 
 	if (NULL == iface)
 	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
 		return NULL;
 	}
 	else
@@ -255,6 +256,12 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 		else
 		{
 			iface->name = oal_mm_malloc(strlen(name) + 1U);
+			if (NULL == iface->name)
+			{
+				NXP_LOG_ERROR("Unable to allocate memory\n");
+				pfe_phy_if_destroy(iface);
+				return NULL;
+			}
 			(void)strcpy(iface->name, name);
 		}
 
@@ -299,7 +306,7 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		if (FALSE == LLIST_IsEmpty(&iface->log_ifs))
@@ -309,7 +316,7 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 		}
 		else
@@ -319,7 +326,7 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 				ret = pfe_mac_db_destroy(iface->mac_db);
 				if (ret != EOK)
 				{
-					NXP_LOG_WARNING("unable to destroy MAC database: %d\n", ret);
+					NXP_LOG_ERROR("unable to destroy MAC database: %d\n", ret);
 				}
 			}
 			else
@@ -329,7 +336,7 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			if (NULL != iface->name)
@@ -340,7 +347,7 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 
 			if (EOK != oal_mutex_destroy(&iface->lock))
 			{
-				NXP_LOG_DEBUG("Could not destroy mutex\n");
+				NXP_LOG_ERROR("Could not destroy mutex\n");
 			}
 
 			oal_mm_free(iface);
@@ -402,7 +409,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	entry = oal_mm_malloc(sizeof(pfe_phy_if_list_entry_t));
 	if (NULL == entry)
 	{
-		NXP_LOG_DEBUG("Memory allocation failed\n");
+		NXP_LOG_ERROR("Memory allocation failed\n");
 		return ENOMEM;
 	}
 
@@ -410,7 +417,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 	}
 
 	if (TRUE == LLIST_IsEmpty(&iface->log_ifs))
@@ -427,7 +434,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			return ENOEXEC;
@@ -439,7 +446,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 			NXP_LOG_ERROR("LogIf base is NULL (%s)\n", pfe_log_if_get_name(log_if));
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			return ENOEXEC;
@@ -461,7 +468,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 			NXP_LOG_WARNING("%s already added\n", pfe_log_if_get_name(log_if));
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			oal_mm_free(entry);
@@ -480,7 +487,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 					pfe_log_if_get_name(tmp_entry->log_if), iface->name);
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			return ENOEXEC;
@@ -492,7 +499,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 			NXP_LOG_ERROR("LogIf base is NULL (%s)\n", pfe_log_if_get_name(tmp_entry->log_if));
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			return ENOEXEC;
@@ -507,7 +514,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			return ENOEXEC;
@@ -521,7 +528,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 				pfe_log_if_get_name(log_if), iface->name);
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 
 		return ENOEXEC;
@@ -536,7 +543,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 		NXP_LOG_ERROR("Unable to update structure in DMEM (%s)\n", iface->name);
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 
 		return ENOEXEC;
@@ -554,7 +561,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 
 	return EOK;
@@ -670,14 +677,14 @@ bool_t pfe_phy_if_has_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		match = pfe_phy_if_has_log_if_nolock(iface, log_if);
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -713,7 +720,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 	}
 
 	LLIST_ForEach(curItem, &iface->log_ifs)
@@ -735,7 +742,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 		NXP_LOG_WARNING("%s not found in %s\n", pfe_log_if_get_name(log_if), iface->name);
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 
 		return ENOENT;
@@ -750,7 +757,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 
 		return ENOEXEC;
@@ -784,7 +791,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			return ENOEXEC;
@@ -815,7 +822,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 		NXP_LOG_ERROR("Unable to update structure in DMEM (%s)\n", iface->name);
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 
 		return ENOEXEC;
@@ -850,7 +857,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 
 	return ret;
@@ -878,7 +885,7 @@ errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t blo
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 		/* Set the requested state */
 		tmp = iface->block_state;
@@ -893,7 +900,7 @@ errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t blo
 			iface->block_state = tmp;
 			iface->phy_if_class.block_state = tmp;
 			/* Report an error */
-			NXP_LOG_DEBUG("Can't write PHY IF structure to classifier\n");
+			NXP_LOG_ERROR("Can't write PHY IF structure to classifier\n");
 			ret = EINVAL;
 		}
 
@@ -927,7 +934,7 @@ errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *bl
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/* The value is being stored in the iface structure and kept up-to-date
@@ -955,14 +962,14 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 	/*	Update the interface structure */
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 	}
 
 	ret = iface->phy_if_class.mode;
 
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 
 	return ret;
@@ -993,7 +1000,7 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 		ret = pfe_class_get_mmap(iface->class, 0, &mmap);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("Can't get memory map\n");
+			NXP_LOG_ERROR("Can't get memory map\n");
 			ret = EINVAL;
 		}
 		else
@@ -1001,20 +1008,20 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 			/*	Update the interface structure */
 			if (EOK != oal_mutex_lock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex lock failed\n");
+				NXP_LOG_ERROR("mutex lock failed\n");
 			}
 
 			iface->phy_if_class.mode = mode;
 			ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 			if (EOK != ret)
 			{
-				NXP_LOG_DEBUG("Can't write PHY IF structure to classifier\n");
+				NXP_LOG_ERROR("Can't write PHY IF structure to classifier\n");
 				ret = EINVAL;
 			}
 
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 		}
 	}
@@ -1045,7 +1052,7 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		if (PFE_PHY_IF_INVALID == iface->type)
@@ -1057,7 +1064,7 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
 			{
 				if (EOK != oal_mutex_unlock(&iface->lock))
 				{
-					NXP_LOG_DEBUG("mutex unlock failed\n");
+					NXP_LOG_ERROR("mutex unlock failed\n");
 				}
 
 				ret = pfe_phy_if_enable(iface);
@@ -1066,7 +1073,7 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
 			{
 				if (EOK != oal_mutex_unlock(&iface->lock))
 				{
-					NXP_LOG_DEBUG("mutex unlock failed\n");
+					NXP_LOG_ERROR("mutex unlock failed\n");
 				}
 
 				ret = pfe_phy_if_disable(iface);
@@ -1074,11 +1081,11 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
 		}
 		else
 		{
-			NXP_LOG_DEBUG("Interface already bound\n");
+			NXP_LOG_WARNING("Interface already bound\n");
 
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			ret = EPERM;
@@ -1112,7 +1119,7 @@ pfe_emac_t *pfe_phy_if_get_emac(const pfe_phy_if_t *iface)
 		}
 		else
 		{
-			NXP_LOG_DEBUG("Invalid interface type\n");
+			NXP_LOG_ERROR("Invalid interface type\n");
 			ptr = NULL;
 		}
 	}
@@ -1143,7 +1150,7 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		if (PFE_PHY_IF_INVALID == iface->type)
@@ -1154,13 +1161,13 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
 		}
 		else
 		{
-			NXP_LOG_DEBUG("Interface already bound\n");
+			NXP_LOG_WARNING("Interface already bound\n");
 			ret = EPERM;
 		}
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -1191,7 +1198,7 @@ pfe_hif_chnl_t *pfe_phy_if_get_hif(const pfe_phy_if_t *iface)
 		}
 		else
 		{
-			NXP_LOG_DEBUG("Invalid interface type\n");
+			NXP_LOG_ERROR("Invalid interface type\n");
 			ptr = NULL;
 		}
 	}
@@ -1221,7 +1228,7 @@ errno_t pfe_phy_if_bind_util(pfe_phy_if_t *iface)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		if (PFE_PHY_IF_INVALID == iface->type)
@@ -1233,13 +1240,13 @@ errno_t pfe_phy_if_bind_util(pfe_phy_if_t *iface)
 		}
 		else
 		{
-			NXP_LOG_DEBUG("Interface already bound\n");
+			NXP_LOG_WARNING("Interface already bound\n");
 			ret = EPERM;
 		}
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -1267,14 +1274,14 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		ret = iface->is_enabled;
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -1308,20 +1315,20 @@ static errno_t pfe_phy_if_enable_hw_block(const pfe_phy_if_t *iface)
 			ret = pfe_hif_chnl_rx_enable(iface->port.hif_ch);
 			if (EOK != ret)
 			{
-				NXP_LOG_DEBUG("Can't enable HIF channel RX: %d\n", ret);
+				NXP_LOG_ERROR("Can't enable HIF channel RX: %d\n", ret);
 			}
 			else
 			{
 				ret = pfe_hif_chnl_tx_enable(iface->port.hif_ch);
 				if (EOK != ret)
 				{
-					NXP_LOG_DEBUG("Can't enable HIF channel TX: %d\n", ret);
+					NXP_LOG_ERROR("Can't enable HIF channel TX: %d\n", ret);
 				}
 			}
 		}
 		else
 		{
-			NXP_LOG_DEBUG("Invalid interface type\n");
+			NXP_LOG_ERROR("Invalid interface type\n");
 			ret = EINVAL;
 		}
 	}
@@ -1351,7 +1358,7 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		NXP_LOG_DEBUG("Enabling %s\n", iface->name);
@@ -1394,7 +1401,7 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -1462,7 +1469,7 @@ static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 					}
 					else
 					{
-						NXP_LOG_DEBUG("Invalid interface type\n");
+						NXP_LOG_ERROR("Invalid interface type\n");
 						ret = EINVAL;
 					}
 				}
@@ -1494,14 +1501,14 @@ errno_t pfe_phy_if_disable(pfe_phy_if_t *iface)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		ret = pfe_phy_if_disable_nolock(iface);
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -1531,7 +1538,7 @@ errno_t pfe_phy_if_set_mgmt_interface(pfe_phy_if_t *iface, pfe_ct_phy_if_id_t mg
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		iface->phy_if_class.mgmt_interface = mgmt_interface;
@@ -1548,7 +1555,7 @@ errno_t pfe_phy_if_set_mgmt_interface(pfe_phy_if_t *iface, pfe_ct_phy_if_id_t mg
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -1575,14 +1582,14 @@ pfe_ct_phy_if_id_t pfe_phy_if_get_mgmt_interface(pfe_phy_if_t *iface)
 		/*	Update the interface structure */
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		mgmt_interface = iface->phy_if_class.mgmt_interface;
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -1615,7 +1622,7 @@ static errno_t pfe_phy_if_set_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags_t
 
 		if ((NULL != feat_name) && (FALSE == pfe_feature_mgr_is_available(feat_name)))
 		{
-			NXP_LOG_INFO("Feature '%s' is not available (not enabled in FW).\n", feat_name);
+			NXP_LOG_WARNING("Feature '%s' is not available (not enabled in FW).\n", feat_name);
 			ret = EPERM;
 		}
 		else
@@ -1661,7 +1668,7 @@ static errno_t pfe_phy_if_clear_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags
 								((IF_FL_PTP_CONF_CHECK == flag) ? ("ptp_conf_check") : (NULL)));
 		if ((NULL != feat_name) && (FALSE == pfe_feature_mgr_is_available(feat_name)))
 		{
-			NXP_LOG_INFO("Feature '%s' is not available (not enabled in FW).\n", feat_name);
+			NXP_LOG_WARNING("Feature '%s' is not available (not enabled in FW).\n", feat_name);
 			ret = EPERM;
 		}
 		else
@@ -1727,14 +1734,14 @@ errno_t pfe_phy_if_set_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		ret = pfe_phy_if_set_flag_nolock(iface, flag);
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -1762,14 +1769,14 @@ errno_t pfe_phy_if_clear_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		ret = pfe_phy_if_clear_flag_nolock(iface, flag);
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -1797,14 +1804,14 @@ pfe_ct_if_flags_t pfe_phy_if_get_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t fla
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		ret = pfe_phy_if_get_flag_nolock(iface, flag);
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -1832,14 +1839,14 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		ret = (0U != (oal_ntohl(iface->phy_if_class.flags) & (uint32_t)IF_FL_PROMISC));
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -1868,7 +1875,7 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/*		Enable instance loopback mode. Backup flags and write the changes. */
@@ -1910,7 +1917,7 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -1939,7 +1946,7 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/*
@@ -1954,7 +1961,7 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 
 			ret = EOK;
@@ -2000,7 +2007,7 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 		}
 	}
@@ -2030,7 +2037,7 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/*	Enable instance promiscuous mode. Backup flags and write the changes. */
@@ -2072,7 +2079,7 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -2102,7 +2109,7 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/*	Disable instance promiscuous mode. Backup flags and write the changes. */
@@ -2144,7 +2151,7 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -2181,7 +2188,7 @@ errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
 		{
 			if (EOK != oal_mutex_lock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex lock failed\n");
+				NXP_LOG_ERROR("mutex lock failed\n");
 			}
 
 			/*	Enable instance load balance mode. Backup flags and write the changes. */
@@ -2197,7 +2204,7 @@ errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
 
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 		}
 	}
@@ -2235,7 +2242,7 @@ errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
 		{
 			if (EOK != oal_mutex_lock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex lock failed\n");
+				NXP_LOG_ERROR("mutex lock failed\n");
 			}
 
 			/*	Disable instance loadbalance mode. Backup flags and write the changes. */
@@ -2251,7 +2258,7 @@ errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
 
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
-				NXP_LOG_DEBUG("mutex unlock failed\n");
+				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
 		}
 	}
@@ -2281,7 +2288,7 @@ errno_t pfe_phy_if_allmulti_enable(pfe_phy_if_t * iface)
 
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/*	Set up also associated HW block */
@@ -2310,7 +2317,7 @@ errno_t pfe_phy_if_allmulti_enable(pfe_phy_if_t * iface)
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 	return ret;
@@ -2337,7 +2344,7 @@ errno_t pfe_phy_if_allmulti_disable(pfe_phy_if_t *iface)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/*	Set up also associated HW block */
@@ -2366,7 +2373,7 @@ errno_t pfe_phy_if_allmulti_disable(pfe_phy_if_t *iface)
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 	return ret;
@@ -2394,7 +2401,7 @@ errno_t pfe_phy_if_get_flow_control(pfe_phy_if_t *iface, bool_t* tx_ena, bool_t*
 
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 		if (NULL == iface->port.instance)
 		{
@@ -2415,7 +2422,7 @@ errno_t pfe_phy_if_get_flow_control(pfe_phy_if_t *iface, bool_t* tx_ena, bool_t*
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 	return ret;
@@ -2443,7 +2450,7 @@ errno_t pfe_phy_if_set_tx_flow_control(pfe_phy_if_t *iface, bool_t tx_ena)
 
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 		if (NULL == iface->port.instance)
 		{
@@ -2471,7 +2478,7 @@ errno_t pfe_phy_if_set_tx_flow_control(pfe_phy_if_t *iface, bool_t tx_ena)
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -2498,7 +2505,7 @@ errno_t pfe_phy_if_set_rx_flow_control(pfe_phy_if_t *iface, bool_t rx_ena)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 		if (NULL == iface->port.instance)
 		{
@@ -2526,7 +2533,7 @@ errno_t pfe_phy_if_set_rx_flow_control(pfe_phy_if_t *iface, bool_t rx_ena)
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -2557,7 +2564,7 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/*	Configure also associated HW block */
@@ -2605,7 +2612,7 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -2636,7 +2643,7 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/*	Configure also associated HW block */
@@ -2690,7 +2697,7 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -2747,7 +2754,7 @@ errno_t pfe_phy_if_get_mac_addr_first(pfe_phy_if_t *iface, pfe_mac_addr_t addr, 
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/*	Get MAC address from associated HW block */
@@ -2780,7 +2787,7 @@ errno_t pfe_phy_if_get_mac_addr_first(pfe_phy_if_t *iface, pfe_mac_addr_t addr, 
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -2813,7 +2820,7 @@ errno_t pfe_phy_if_get_mac_addr_next(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/*	Get MAC address from associated HW block */
@@ -2846,7 +2853,7 @@ errno_t pfe_phy_if_get_mac_addr_next(pfe_phy_if_t *iface, pfe_mac_addr_t addr)
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -2878,7 +2885,7 @@ errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, 
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		/*	Configure also associated HW block */
@@ -2928,7 +2935,7 @@ errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, 
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -2999,7 +3006,7 @@ errno_t pfe_phy_if_set_ftable(pfe_phy_if_t *iface, uint32_t table)
 		/*	Update the interface structure */
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		tmp = iface->phy_if_class.filter;
@@ -3008,14 +3015,14 @@ errno_t pfe_phy_if_set_ftable(pfe_phy_if_t *iface, uint32_t table)
 		if (EOK != ret)
 		{
 			/*	Revert */
-			NXP_LOG_DEBUG("Can't write PHY IF structure to classifier\n");
+			NXP_LOG_ERROR("Can't write PHY IF structure to classifier\n");
 			iface->phy_if_class.filter = tmp;
 			ret = EINVAL;
 		}
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -3046,14 +3053,14 @@ uint32_t pfe_phy_if_get_ftable(pfe_phy_if_t *iface)
 		/*	Update the interface structure */
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		addr = oal_ntohl(iface->phy_if_class.filter);
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -3094,6 +3101,7 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 		stats = oal_mm_malloc(buffer_len);
 		if(NULL == stats)
 		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
 			ret = ENOMEM;
 		}
 		else
@@ -3411,7 +3419,7 @@ uint32_t pfe_phy_if_get_stat_value(pfe_phy_if_t *iface, uint32_t stat_id)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		if (NULL == iface->port.instance)
@@ -3437,7 +3445,7 @@ uint32_t pfe_phy_if_get_stat_value(pfe_phy_if_t *iface, uint32_t stat_id)
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 	return ret;

@@ -63,7 +63,7 @@ static errno_t pfe_phy_if_db_lock(void)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_LOCK, NULL, 0, NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Unable to lock interface DB: %d\n", ret);
+		NXP_LOG_WARNING("Unable to lock interface DB: %d\n", ret);
 	}
 
 	return ret;
@@ -76,7 +76,7 @@ static errno_t pfe_phy_if_db_unlock(void)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_UNLOCK, NULL, 0, NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Unable to lock interface DB: %d\n", ret);
+		NXP_LOG_WARNING("Unable to lock interface DB: %d\n", ret);
 	}
 
 	return ret;
@@ -105,13 +105,17 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_CREATE, &req, sizeof(req), NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("Can't get remote instance: %d\n", ret);
+		NXP_LOG_WARNING("Can't get remote instance: %d\n", ret);
 		iface = NULL;
 	}
 	else
 	{
 		iface = oal_mm_malloc(sizeof(pfe_phy_if_t));
-		if (NULL != iface)
+		if (NULL == iface)
+		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
+		}
+		else
 		{
 			memset(iface, 0, sizeof(pfe_phy_if_t));
 			iface->id = id;
@@ -171,7 +175,7 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -182,20 +186,20 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS failed: %d\n", ret);
 		}
 
 		/* Destroy local MAC database */
 		ret = pfe_mac_db_destroy(iface->mac_db);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("Unable to destroy MAC database: %d\n", ret);
+			NXP_LOG_ERROR("Unable to destroy MAC database: %d\n", ret);
 		}
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -207,7 +211,7 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 
 		if (EOK != oal_mutex_destroy(&iface->lock))
 		{
-			NXP_LOG_DEBUG("Could not destroy mutex\n");
+			NXP_LOG_ERROR("Could not destroy mutex\n");
 		}
 
 		oal_mm_free(iface);
@@ -260,7 +264,7 @@ errno_t pfe_phy_if_add_log_if(pfe_phy_if_t *iface, pfe_log_if_t *log_if)
 	(void)log_if;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		NXP_LOG_DEBUG("%s: Not supported in slave variant\n", __func__);
+		NXP_LOG_WARNING("%s: Not supported in slave variant\n", __func__);
 		ret = ENOTSUP;
 	}
 
@@ -304,7 +308,7 @@ static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_
 		}
 		else
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_HAS_LOG_IF failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_HAS_LOG_IF failed: %d\n", ret);
 			val = FALSE;
 		}
 
@@ -338,7 +342,7 @@ bool_t pfe_phy_if_has_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -347,7 +351,7 @@ bool_t pfe_phy_if_has_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -379,7 +383,7 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 	(void)log_if;
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		NXP_LOG_DEBUG("%s: Not supported in slave variant\n", __func__);
+		NXP_LOG_WARNING("%s: Not supported in slave variant\n", __func__);
 		ret = ENOTSUP;
 	}
 
@@ -412,7 +416,7 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -424,7 +428,7 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE failed: %d\n", ret);
 		}
 		else
 		{
@@ -436,7 +440,7 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -469,7 +473,7 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -481,7 +485,7 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -489,7 +493,7 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -522,7 +526,7 @@ errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t blo
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -534,7 +538,7 @@ errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t blo
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -542,7 +546,7 @@ errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t blo
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -576,7 +580,7 @@ errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *bl
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -588,7 +592,7 @@ errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *bl
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE failed: %d\n", ret);
 		}
 		else
 		{
@@ -600,7 +604,7 @@ errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *bl
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -632,7 +636,7 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
 		/*	We're not going to allow slave driver to do this */
-		NXP_LOG_ERROR("%s: Not supported\n", __func__);
+		NXP_LOG_WARNING("%s: Not supported\n", __func__);
 		ret = ENOTSUP;
 	}
 
@@ -664,7 +668,7 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
 		/*	We're not going to allow slave driver to do this */
-		NXP_LOG_ERROR("%s: Not supported\n", __func__);
+		NXP_LOG_WARNING("%s: Not supported\n", __func__);
 		ret = ENOTSUP;
 	}
 
@@ -694,7 +698,7 @@ errno_t pfe_phy_if_bind_util(pfe_phy_if_t *iface)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
 		/*	We're not going to allow slave driver to do this */
-		NXP_LOG_ERROR("%s: Not supported\n", __func__);
+		NXP_LOG_WARNING("%s: Not supported\n", __func__);
 		ret = ENOTSUP;
 	}
 
@@ -726,7 +730,7 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -737,7 +741,7 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
 		}
 		else
 		{
@@ -749,7 +753,7 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -782,7 +786,7 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -793,7 +797,7 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -801,7 +805,7 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -832,7 +836,7 @@ errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -863,7 +867,7 @@ errno_t pfe_phy_if_disable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -872,7 +876,7 @@ errno_t pfe_phy_if_disable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -902,7 +906,7 @@ errno_t pfe_phy_if_set_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
 		/*	We're not going to allow slave driver to do this */
-		NXP_LOG_ERROR("%s: Not supported\n", __func__);
+		NXP_LOG_WARNING("%s: Not supported\n", __func__);
 		ret = ENOTSUP;
 
 		(void)flag;
@@ -933,7 +937,7 @@ errno_t pfe_phy_if_clear_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
 		/*	We're not going to allow slave driver to do this */
-		NXP_LOG_ERROR("%s: Not supported\n", __func__);
+		NXP_LOG_WARNING("%s: Not supported\n", __func__);
 		ret = ENOTSUP;
 
 		(void)flag;
@@ -964,7 +968,7 @@ pfe_ct_if_flags_t pfe_phy_if_get_flag(pfe_phy_if_t *iface, pfe_ct_if_flags_t fla
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
 		/*	We're not going to allow slave driver to do this */
-		NXP_LOG_ERROR("%s: Not supported\n", __func__);
+		NXP_LOG_WARNING("%s: Not supported\n", __func__);
 		(void)flag;
 		ret_flag = IF_FL_NONE;
 	}
@@ -997,7 +1001,7 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -1008,7 +1012,7 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_IS_PROMISC, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
 		}
 		else
 		{
@@ -1020,7 +1024,7 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -1053,7 +1057,7 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -1064,7 +1068,7 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_ENABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_ENABLE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_ENABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1072,7 +1076,7 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -1105,7 +1109,7 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -1116,7 +1120,7 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_DISABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1124,7 +1128,7 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -1157,7 +1161,7 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -1168,7 +1172,7 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_ENABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_ENABLE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_ENABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1176,7 +1180,7 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -1209,7 +1213,7 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -1220,7 +1224,7 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_DISABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1228,7 +1232,7 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -1261,7 +1265,7 @@ errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -1272,7 +1276,7 @@ errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1280,7 +1284,7 @@ errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -1313,7 +1317,7 @@ errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -1324,7 +1328,7 @@ errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1332,7 +1336,7 @@ errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -1369,7 +1373,7 @@ errno_t pfe_phy_if_allmulti_enable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_ENABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_ENABLE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_ENABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1407,7 +1411,7 @@ errno_t pfe_phy_if_allmulti_disable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_DISABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_DISABLE failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_DISABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1441,6 +1445,7 @@ errno_t pfe_phy_if_get_flow_control(pfe_phy_if_t *iface, bool_t* tx_ena, bool_t*
 		(void)tx_ena;
 		(void)rx_ena;
 		ret = ENOTSUP;
+		NXP_LOG_WARNING("%s: Not supported\n", __func__);
 	}
 
 	return ret;
@@ -1469,6 +1474,7 @@ errno_t pfe_phy_if_set_tx_flow_control(pfe_phy_if_t *iface, bool_t tx_ena)
 	{
 		(void)tx_ena;
 		ret = ENOTSUP;
+		NXP_LOG_WARNING("%s: Not supported\n", __func__);
 	}
 
 	return ret;
@@ -1497,6 +1503,7 @@ errno_t pfe_phy_if_set_rx_flow_control(pfe_phy_if_t *iface, bool_t rx_ena)
 	{
 		(void)rx_ena;
 		ret = ENOTSUP;
+		NXP_LOG_WARNING("%s: Not supported\n", __func__);
 	}
 
 	return ret;
@@ -1534,7 +1541,7 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -1550,11 +1557,11 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 			ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR, &arg, sizeof(arg), NULL, 0U);
 			if (EOK != ret)
 			{
-				NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR failed: %d\n", ret);
+				NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR failed: %d\n", ret);
 				ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
 				if(EOK != ret)
 				{
-					NXP_LOG_WARNING("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
+					NXP_LOG_ERROR("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
 				}
 			}
 		}
@@ -1564,7 +1571,7 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -1602,7 +1609,7 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -1611,7 +1618,7 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 		ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
 		if(EOK != ret)
 		{
-			NXP_LOG_WARNING("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
+			NXP_LOG_ERROR("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
 		}
 		else
 		{
@@ -1621,7 +1628,7 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 			ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_DEL_MAC_ADDR, &arg, sizeof(arg), NULL, 0U);
 			if (EOK != ret)
 			{
-				NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_DEL_MAC_ADDR failed: %d\n", ret);
+				NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_DEL_MAC_ADDR failed: %d\n", ret);
 
 				/* Removal of MAC address by master failed, put it back to DB */
 				ret = pfe_mac_db_add_addr(iface->mac_db, addr, owner);
@@ -1637,7 +1644,7 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -1696,20 +1703,20 @@ errno_t pfe_phy_if_get_mac_addr_first(pfe_phy_if_t *iface, pfe_mac_addr_t addr, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 		ret = pfe_mac_db_get_first_addr(iface->mac_db, crit, type, owner, addr);
 		if(EOK != ret)
 		{
-			NXP_LOG_WARNING("%s: Unable to get MAC address: %d\n", iface->name, ret);
+			NXP_LOG_ERROR("%s: Unable to get MAC address: %d\n", iface->name, ret);
 		}
 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -1747,7 +1754,7 @@ errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -1760,7 +1767,7 @@ errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, 
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS failed: %d\n", ret);
 		}
 		else
 		{
@@ -1768,7 +1775,7 @@ errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, 
 			ret = pfe_mac_db_flush(iface->mac_db, crit, type, owner);
 			if(EOK != ret)
 			{
-				NXP_LOG_DEBUG("Unable to flush MAC address from phy_if MAC database: %d\n", ret);
+				NXP_LOG_ERROR("Unable to flush MAC address from phy_if MAC database: %d\n", ret);
 			}
 		}
 
@@ -1777,7 +1784,7 @@ errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, 
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -1859,7 +1866,7 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_lock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -1869,7 +1876,7 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_STATS, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_STATS failed: %d\n", ret);
+			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_STATS failed: %d\n", ret);
 		}
 		else
 		{
@@ -1881,7 +1888,7 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	}
@@ -1949,7 +1956,7 @@ uint32_t pfe_phy_if_get_stat_value(pfe_phy_if_t *iface, uint32_t stat_id)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 	}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
@@ -1961,7 +1968,7 @@ uint32_t pfe_phy_if_get_stat_value(pfe_phy_if_t *iface, uint32_t stat_id)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 	if (EOK != ret)
 	{
-		NXP_LOG_DEBUG("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE failed: %d\n", ret);
+		NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE failed: %d\n", ret);
 	}
 	else
 	{
@@ -1973,7 +1980,7 @@ uint32_t pfe_phy_if_get_stat_value(pfe_phy_if_t *iface, uint32_t stat_id)
 #ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 

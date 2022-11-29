@@ -90,7 +90,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 					if (NULL != mirror)
 					{
 						/* FCI command attempted to register already registered entity. Respond with FCI error code. */
-						NXP_LOG_DEBUG("Mirror '%s' is already registered.\n", mirror_cmd->name);
+						NXP_LOG_WARNING("Mirror '%s' is already registered.\n", mirror_cmd->name);
 						*fci_ret = FPP_ERR_MIRROR_ALREADY_REGISTERED;
 						ret = EOK;
 						break;
@@ -118,7 +118,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 						if(NULL == mirror)
 						{
 							/* FCI command requested nonexistent entity. Respond with FCI error code. */
-							NXP_LOG_DEBUG("No mirror with name '%s'\n", mirror_cmd->name);
+							NXP_LOG_WARNING("No mirror with name '%s'\n", mirror_cmd->name);
 							*fci_ret = FPP_ERR_MIRROR_NOT_FOUND;
 							ret = EINVAL;
 							break;
@@ -147,7 +147,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 					{
 						/* FCI command requested nonexistent entity. Respond with FCI error code. */
 						(void)pfe_if_db_unlock(fci_context->if_session_id);
-						NXP_LOG_DEBUG("No interface '%s'\n", mirror_cmd->egress_phy_if);
+						NXP_LOG_WARNING("No interface '%s'\n", mirror_cmd->egress_phy_if);
 						*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
 						ret = EOK;
 						break;
@@ -160,7 +160,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 					{
 						/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 						(void)pfe_if_db_unlock(fci_context->if_session_id);
-						NXP_LOG_DEBUG("Cannot set egress port for '%s'\n", mirror_cmd->name);
+						NXP_LOG_ERROR("Cannot set egress port for '%s'\n", mirror_cmd->name);
 						*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 						break;
 					}
@@ -208,7 +208,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 						if (NULL == fci_fp_db_get_first(FP_TABLE_CRIT_NAME, mirror_cmd->filter_table_name))
 						{
 							/* FCI command requested nonexistent entity. Respond with FCI error code. */
-							NXP_LOG_ERROR("Requested filter table '%s' does not exist.\n", mirror_cmd->filter_table_name);
+							NXP_LOG_WARNING("Requested filter table '%s' does not exist.\n", mirror_cmd->filter_table_name);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;  /* TODO_BOB: Replace this with FPP_ERR_FP_TABLE_NOT_FOUND after AAVB-3369 gets implemented. */
 							ret = EOK;
 							break;
@@ -255,7 +255,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 						{	/* Requested filter table (from FCI command) is already used somewhere and cannot be used here. */
 
 							/* FCI command requested unfulfillable action. Respond with FCI error code. */
-							NXP_LOG_ERROR("Filter '%s' already in use, but it should not be!\n", mirror_cmd->filter_table_name);
+							NXP_LOG_WARNING("Filter '%s' already in use, but it should not be!\n", mirror_cmd->filter_table_name);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;  /* TODO_BOB: Replace this with FPP_ERR_FP_TABLE_ALREADY_IN_USE after AAVB-3369 gets implemented. */
 							ret = EOK;
 							break;
@@ -310,7 +310,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 					if(NULL == mirror)
 					{
 						/* FCI command requested nonexistent entity. Respond with FCI error code. */
-						NXP_LOG_DEBUG("No mirror with name '%s'\n", mirror_cmd->name);
+						NXP_LOG_WARNING("No mirror with name '%s'\n", mirror_cmd->name);
 						*fci_ret = FPP_ERR_MIRROR_NOT_FOUND;
 						ret = EOK;
 						break;
@@ -396,7 +396,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 					{
 						/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 						(void)pfe_if_db_unlock(fci_context->if_session_id);
-						NXP_LOG_DEBUG("Cannot get egress interface of the mirror '%s'.\n", pfe_mirror_get_name(mirror));
+						NXP_LOG_ERROR("Cannot get egress interface of the mirror '%s'.\n", pfe_mirror_get_name(mirror));
 						*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 						ret = ENOENT;
 						break;
@@ -446,7 +446,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 				default:
 				{
 					/* Unknown command. Respond with FCI error code. */
-					NXP_LOG_ERROR("FPP_CMD_MIRROR command: Unknown action received: 0x%x\n", mirror_cmd->action);
+					NXP_LOG_WARNING("FPP_CMD_MIRROR command: Unknown action received: 0x%x\n", mirror_cmd->action);
 					*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 					ret = EOK;
 					break;

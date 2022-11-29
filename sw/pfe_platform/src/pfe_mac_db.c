@@ -98,7 +98,11 @@ pfe_mac_db_t *pfe_mac_db_create(void)
 	pfe_mac_db_t *db;
 
 	db = oal_mm_malloc(sizeof(pfe_mac_db_t));
-	if (NULL != db)
+	if (NULL == db)
+	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
+	}
+	else
 	{
 		(void)memset(db, 0, sizeof(pfe_mac_db_t));
 		LLIST_Init(&db->mac_list);
@@ -131,7 +135,7 @@ errno_t pfe_mac_db_destroy(pfe_mac_db_t *db)
 	{
 		if (EOK != oal_mutex_lock(&db->lock))
 		{
-			NXP_LOG_DEBUG("mutex lock failed\n");
+			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
 		LLIST_ForEachRemovable(item, aux, &db->mac_list)
@@ -147,12 +151,12 @@ errno_t pfe_mac_db_destroy(pfe_mac_db_t *db)
 
 		if (EOK != oal_mutex_unlock(&db->lock))
 		{
-			NXP_LOG_DEBUG("mutex unlock failed\n");
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 
 		if (EOK != oal_mutex_destroy(&db->lock))
 		{
-			NXP_LOG_DEBUG("Could not destroy mutex\n");
+			NXP_LOG_ERROR("Could not destroy mutex\n");
 		}
 
 		oal_mm_free(db);
@@ -206,7 +210,7 @@ errno_t pfe_mac_db_add_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv
 
 	if (EOK != oal_mutex_lock(&db->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 	}
 
 	/* Add only if the same address does not already exist in DB */
@@ -221,7 +225,7 @@ errno_t pfe_mac_db_add_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv
 #endif
 		if (NULL == entry)
 		{
-			NXP_LOG_WARNING("Memory allocation failed\n");
+			NXP_LOG_ERROR("Memory allocation failed\n");
 			ret = ENOMEM;
 		}
 		else
@@ -250,7 +254,7 @@ errno_t pfe_mac_db_add_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv
 
 	if (EOK != oal_mutex_unlock(&db->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 
 	return ret;
@@ -269,13 +273,13 @@ errno_t pfe_mac_db_del_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv
 
 	if (EOK != oal_mutex_lock(&db->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 	}
 
 	entry = pfe_mac_db_find_by_addr(db, addr, owner);
 	if (NULL == entry)
 	{
-		NXP_LOG_DEBUG("MAC address was not found\n");
+		NXP_LOG_WARNING("MAC address was not found\n");
 		ret = ENOENT;
 	}
 	else
@@ -299,7 +303,7 @@ errno_t pfe_mac_db_del_addr(pfe_mac_db_t *db, const pfe_mac_addr_t addr, pfe_drv
 
 	if (EOK != oal_mutex_unlock(&db->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 
 	return ret;
@@ -321,7 +325,7 @@ errno_t pfe_mac_db_flush(pfe_mac_db_t *db, pfe_mac_db_crit_t crit, pfe_mac_type_
 
 	if (EOK != oal_mutex_lock(&db->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 
 	}
 	/*	Remove associated MAC addresses due to flush mode */
@@ -341,7 +345,7 @@ errno_t pfe_mac_db_flush(pfe_mac_db_t *db, pfe_mac_db_crit_t crit, pfe_mac_type_
 
 	if (EOK != oal_mutex_unlock(&db->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 
 	return ret;
@@ -366,7 +370,7 @@ errno_t pfe_mac_db_get_first_addr(pfe_mac_db_t *db, pfe_mac_db_crit_t crit, pfe_
 
 	if (EOK != oal_mutex_lock(&db->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 	}
 
 	if (TRUE == LLIST_IsEmpty(&db->mac_list))
@@ -403,7 +407,7 @@ errno_t pfe_mac_db_get_first_addr(pfe_mac_db_t *db, pfe_mac_db_crit_t crit, pfe_
 
 	if (EOK != oal_mutex_unlock(&db->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 
 	return ret;
@@ -425,7 +429,7 @@ errno_t pfe_mac_db_get_next_addr(pfe_mac_db_t *db, pfe_mac_addr_t addr)
 
 	if (EOK != oal_mutex_lock(&db->lock))
 	{
-		NXP_LOG_DEBUG("mutex lock failed\n");
+		NXP_LOG_ERROR("mutex lock failed\n");
 	}
 
 	item = db->iterator;
@@ -456,7 +460,7 @@ errno_t pfe_mac_db_get_next_addr(pfe_mac_db_t *db, pfe_mac_addr_t addr)
 
 	if (EOK != oal_mutex_unlock(&db->lock))
 	{
-		NXP_LOG_DEBUG("mutex unlock failed\n");
+		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 
 	return ret;

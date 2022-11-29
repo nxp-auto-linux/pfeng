@@ -441,6 +441,37 @@ static const char *const txt_fwfeat_el_group[] =
 };
 #define FWFEAT_EL_GROUP_LN  CALC_LN(txt_fwfeat_el_group) 
 
+/* based on IDs of Health Monitor event types from PFE */
+static const char *const txt_hm_types[] = 
+{
+    TXT_HM_TYPE__INFO,
+    TXT_HM_TYPE__WARNING,
+    TXT_HM_TYPE__ERROR
+};
+#define HM_TYPES_LN  CALC_LN(txt_hm_types) 
+
+/* based on IDs of Health Monitor event sources from PFE */
+static const char *const txt_hm_srcs[] = 
+{
+    TXT_HM_SRC__UNKNOWN,
+    TXT_HM_SRC__WDT,
+    TXT_HM_SRC__EMAC0,
+    TXT_HM_SRC__EMAC1,
+    TXT_HM_SRC__EMAC2,
+    TXT_HM_SRC__BUS,
+    TXT_HM_SRC__PARITY,
+    TXT_HM_SRC__FAIL_STOP,
+    TXT_HM_SRC__FW_FAIL_STOP,
+    TXT_HM_SRC__HOST_FAIL_STOP,
+    TXT_HM_SRC__ECC,
+    TXT_HM_SRC__PE_CLASS,
+    TXT_HM_SRC__PE_UTIL,
+    TXT_HM_SRC__PE_TMU,
+    TXT_HM_SRC__HIF,
+    TXT_HM_SRC__BMU
+};
+#define HM_SRCS_LN  CALC_LN(txt_hm_srcs)
+
 /* ==== PRIVATE FUNCTIONS ================================================== */
 
 static int txt2value(uint8_t *p_rtn_value, const char *p_txt,
@@ -807,6 +838,7 @@ int cli_txt2value_pol_flow_type32(uint8_t* p_rtn_value, const char* p_txt)
     return txt2value(p_rtn_value, p_txt, txt_pol_flow_types32, POL_FLOW_TYPES32_LN, 0u);
 }
 
+
 const char* cli_value2txt_fwfeat_el_group(uint8_t value)
 {
     return ((FWFEAT_EL_GROUP_LN <= value) ? (TXT_INVALID_ITEM) : (txt_fwfeat_el_group[value]));
@@ -814,6 +846,26 @@ const char* cli_value2txt_fwfeat_el_group(uint8_t value)
 int cli_txt2value_fwfeat_el_group(uint8_t* p_rtn_value, const char* p_txt)
 {
     return txt2value(p_rtn_value, p_txt, txt_fwfeat_el_group, FWFEAT_EL_GROUP_LN, 0u);
+}
+
+
+const char* cli_value2txt_hm_type(uint8_t value)
+{
+    return ((HM_TYPES_LN <= value) ? (TXT_INVALID_ITEM) : (txt_hm_types[value]));
+}
+int cli_txt2value_hm_type(uint8_t* p_rtn_value, const char* p_txt)
+{
+    return txt2value(p_rtn_value, p_txt, txt_hm_types, HM_TYPES_LN, 0u);
+}
+
+
+const char* cli_value2txt_hm_src(uint8_t value)
+{
+    return ((HM_SRCS_LN <= value) ? (TXT_INVALID_ITEM) : (txt_hm_srcs[value]));
+}
+int cli_txt2value_hm_src(uint8_t* p_rtn_value, const char* p_txt)
+{
+    return txt2value(p_rtn_value, p_txt, txt_hm_srcs, HM_SRCS_LN, 0u);
 }
 
 
@@ -846,6 +898,9 @@ const uint8_t TEST_defkws__pol_flow_actions_ln = POL_FLOW_ACTIONS_LN;
 const uint8_t TEST_defkws__pol_flow_types1_ln  = POL_FLOW_TYPES1_LN;
 const uint8_t TEST_defkws__pol_flow_types2_ln  = POL_FLOW_TYPES2_LN;
 const uint8_t TEST_defkws__pol_flow_types32_ln = POL_FLOW_TYPES32_LN;
+
+const uint8_t TEST_defkws__hm_types_ln         = HM_TYPES_LN;
+const uint8_t TEST_defkws__hm_srcs_ln          = HM_SRCS_LN;
 #endif
 
 /* ========================================================================= */

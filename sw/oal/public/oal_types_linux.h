@@ -14,6 +14,7 @@
 
 #include <linux/string.h>
 #include <linux/platform_device.h>
+#include <linux/netdevice.h>
 
 /* get device from oal_mm_linux */
 extern struct device *oal_mm_get_dev(void);
@@ -27,7 +28,7 @@ extern int msg_verbosity;
 
 #define NXP_LOG_ENABLED
 
-#define NXP_LOG_WARNING(format, ...) { \
+#define NXP_LOG_RAW_WARNING(format, ...) { \
 	struct device *dev = oal_mm_get_dev(); \
 	if (dev) { \
 		if (msg_verbosity >= 7) { \
@@ -38,7 +39,7 @@ extern int msg_verbosity;
 	} \
 }
 
-#define NXP_LOG_ERROR(format, ...) { \
+#define NXP_LOG_RAW_ERROR(format, ...) { \
 	struct device *dev = oal_mm_get_dev(); \
 	if (dev) { \
 		if (msg_verbosity >= 7) { \
@@ -49,7 +50,7 @@ extern int msg_verbosity;
 	} \
 }
 
-#define NXP_LOG_INFO(format, ...) { \
+#define NXP_LOG_RAW_INFO(format, ...) { \
 	struct device *dev = oal_mm_get_dev(); \
 	if (dev) { \
 		if (msg_verbosity >= 7) { \
@@ -60,7 +61,7 @@ extern int msg_verbosity;
 	} \
 }
 
-#define NXP_LOG_DEBUG(format, ...) { \
+#define NXP_LOG_RAW_DEBUG(format, ...) { \
 	struct device *dev = oal_mm_get_dev(); \
 	if (dev) { \
 		if (msg_verbosity >= 7) { \
@@ -68,6 +69,74 @@ extern int msg_verbosity;
 		} else { \
 			dev_dbg(dev, format, ##__VA_ARGS__); \
 		} \
+	} \
+}
+
+#define HM_MSG_RAW_DEV_ERR(dev, format, ...) dev_err(dev, format, ##__VA_ARGS__)
+#define HM_MSG_RAW_DEV_WARN(dev, format, ...) dev_warn(dev, format, ##__VA_ARGS__)
+#define HM_MSG_RAW_DEV_INFO(dev, format, ...) dev_info(dev, format, ##__VA_ARGS__)
+#define HM_MSG_RAW_DEV_DBG(dev, format, ...) dev_dbg(dev, format, ##__VA_ARGS__)
+
+#define HM_MSG_RAW_NETDEV_ERR(netdev, format, ...) netdev_err(netdev, format, ##__VA_ARGS__)
+#define HM_MSG_RAW_NETDEV_WARN(netdev, format, ...) netdev_warn(netdev, format, ##__VA_ARGS__)
+#define HM_MSG_RAW_NETDEV_INFO(netdev, format, ...) netdev_info(netdev, format, ##__VA_ARGS__)
+#define HM_MSG_RAW_NETDEV_DBG(netdev, format, ...) netdev_dbg(netdev, format, ##__VA_ARGS__)
+
+/* To be used from Healt Monitor pfe_hm_report() function */
+#define NXP_LOG_HM_WARNING(format, ...) { \
+	struct device *dev = oal_mm_get_dev(); \
+	if (dev) { \
+		dev_warn(dev, format, ##__VA_ARGS__); \
+	} \
+}
+
+#define NXP_LOG_HM_ERROR(format, ...) { \
+	struct device *dev = oal_mm_get_dev(); \
+	if (dev) { \
+		dev_err(dev, "ERR: " format, ##__VA_ARGS__); \
+	} \
+}
+
+#define NXP_LOG_HM_INFO(format, ...) { \
+	struct device *dev = oal_mm_get_dev(); \
+	if (dev) { \
+		dev_info(dev, format, ##__VA_ARGS__); \
+	} \
+}
+
+#define HM_MSG_HM_DEV_ERR(dev, format, ...) { \
+	if (dev) { \
+		dev_err((struct device *)dev, format, ##__VA_ARGS__); \
+	} \
+}
+
+#define HM_MSG_HM_DEV_WARN(dev, format, ...) { \
+	if (dev) { \
+		dev_warn((struct device *)dev, "ERR: " format, ##__VA_ARGS__); \
+	} \
+}
+
+#define HM_MSG_HM_DEV_INFO(dev, format, ...) { \
+	if (dev) { \
+		dev_info((struct device *)dev, format, ##__VA_ARGS__); \
+	} \
+}
+
+#define HM_MSG_HM_NETDEV_ERR(dev, format, ...) { \
+	if (dev) { \
+		netdev_err((struct net_device *)dev, format, ##__VA_ARGS__); \
+	} \
+}
+
+#define HM_MSG_HM_NETDEV_WARN(dev, format, ...) { \
+	if (dev) { \
+		netdev_warn((struct net_device *)dev, "ERR: " format, ##__VA_ARGS__); \
+	} \
+}
+
+#define HM_MSG_HM_NETDEV_INFO(dev, format, ...) { \
+	if (dev) { \
+		netdev_info((struct net_device *)dev, format, ##__VA_ARGS__); \
 	} \
 }
 
@@ -115,5 +184,21 @@ typedef unsigned int uint_t; /* For use within printf like functions */
 #ifndef ENOTSUP
 #define ENOTSUP		EOPNOTSUPP
 #endif
+
+#include "pfe_hm.h"
+#define NXP_LOG_ERROR(format, ...) pfe_hm_report_error(HM_SRC_DRIVER, HM_EVT_RUNTIME, format, ##__VA_ARGS__)
+#define NXP_LOG_WARNING(format, ...) NXP_LOG_RAW_WARNING(format, ##__VA_ARGS__)
+#define NXP_LOG_INFO(format, ...) NXP_LOG_RAW_INFO(format, ##__VA_ARGS__)
+#define NXP_LOG_DEBUG(format, ...) NXP_LOG_RAW_DEBUG(format, ##__VA_ARGS__)
+
+#define HM_MSG_DEV_ERR(dev, format, ...) pfe_hm_report_dev_error(HM_SRC_PFENG_DEV, HM_EVT_RUNTIME, (void *)dev, format, ##__VA_ARGS__)
+#define HM_MSG_DEV_WARN(dev, format, ...) HM_MSG_RAW_DEV_WARN(dev, format, ##__VA_ARGS__)
+#define HM_MSG_DEV_INFO(dev, format, ...) HM_MSG_RAW_DEV_INFO(dev, format, ##__VA_ARGS__)
+#define HM_MSG_DEV_DBG(dev, format, ...) HM_MSG_RAW_DEV_DBG(dev, format, ##__VA_ARGS__)
+
+#define HM_MSG_NETDEV_ERR(netdev, format, ...) pfe_hm_report_dev_error(HM_SRC_PFENG_NETDEV, HM_EVT_RUNTIME, (void *)netdev, format, ##__VA_ARGS__)
+#define HM_MSG_NETDEV_WARN(netdev, format, ...) HM_MSG_RAW_NETDEV_WARN(netdev, format, ##__VA_ARGS__)
+#define HM_MSG_NETDEV_INFO(netdev, format, ...) HM_MSG_RAW_NETDEV_INFO(netdev, format, ##__VA_ARGS__)
+#define HM_MSG_NETDEV_DBG(netdev, format, ...) HM_MSG_RAW_NETDEV_DBG(netdev, format, ##__VA_ARGS__)
 
 #endif

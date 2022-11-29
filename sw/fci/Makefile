@@ -26,6 +26,7 @@ INCLUDES += -I$(INC_PREFIX)src \
 			-I$(INC_PREFIX)../bpool/public \
 			-I$(INC_PREFIX)../pfe_platform/public \
 			-I$(INC_PREFIX)../pfe_hif_drv/public \
+			-I$(INC_PREFIX)../pfe_platform/public \
 			-I$(INC_PREFIX)../xfci/libfci/public
 
 #Dependencies
@@ -56,6 +57,7 @@ rwildcard = $(wildcard $(addprefix $1/*.,$2)) $(foreach d,$(wildcard $1/*),$(cal
 
 #Source list
 SRCS += src/fci.c
+SRCS += src/fci_hm.c
 ifneq ($(PFE_CFG_PFE_MASTER),0)
 SRCS += src/fci_l2br_domains.c
 SRCS += src/fci_l2br.c

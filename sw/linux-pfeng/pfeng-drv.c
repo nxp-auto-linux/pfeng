@@ -142,7 +142,7 @@ static int pfeng_s32g_set_port_coherency(struct pfeng_priv *priv)
 
 	syscon = ioremap(priv->syscon.start, priv->syscon.end - priv->syscon.start + 1);
 	if(!syscon) {
-		dev_err(dev, "cannot map GPR, aborting (INTF_SEL)\n");
+		HM_MSG_DEV_ERR(dev, "cannot map GPR, aborting (INTF_SEL)\n");
 		return -EIO;
 	}
 
@@ -152,9 +152,9 @@ static int pfeng_s32g_set_port_coherency(struct pfeng_priv *priv)
 
 	val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
 	if ((val & GPR_PFE_COH_EN_HIF_0_3_MASK) == GPR_PFE_COH_EN_HIF_0_3_MASK) {
-		dev_info(dev, "PFE port coherency enabled, mask 0x%x\n", val);
+		HM_MSG_DEV_INFO(dev, "PFE port coherency enabled, mask 0x%x\n", val);
 	} else {
-		dev_err(dev, "Failed to enable port coherency (mask 0x%x)\n", val);
+		HM_MSG_DEV_ERR(dev, "Failed to enable port coherency (mask 0x%x)\n", val);
 		ret = -EINVAL;
 	}
 
@@ -190,14 +190,14 @@ static int pfeng_s32g_set_emac_interfaces(struct pfeng_priv *priv, phy_interface
 
 	syscon = ioremap(priv->syscon.start, priv->syscon.end - priv->syscon.start + 1);
 	if(!syscon) {
-		dev_err(&priv->pdev->dev, "cannot map GPR, aborting (INTF_SEL)\n");
+		HM_MSG_DEV_ERR(&priv->pdev->dev, "cannot map GPR, aborting (INTF_SEL)\n");
 		return -EIO;
 	}
 	/* set up interfaces */
 	val = xlate_to_s32g_intf(0, emac0_intf) | xlate_to_s32g_intf(1, emac1_intf) | xlate_to_s32g_intf(2, emac2_intf);
 	hal_write32(val, syscon + S32G_MAIN_GPR_PFE_EMACX_INTF_SEL);
 
-	dev_info(&priv->pdev->dev, "Interface selected: EMAC0: 0x%x EMAC1: 0x%x EMAC2: 0x%x\n", emac0_intf, emac1_intf, emac2_intf);
+	HM_MSG_DEV_INFO(&priv->pdev->dev, "Interface selected: EMAC0: 0x%x EMAC1: 0x%x EMAC2: 0x%x\n", emac0_intf, emac1_intf, emac2_intf);
 
 	/* power down and up EMACs */
 	hal_write32(GPR_PFE_EMACn_PWR_DWN(0) | GPR_PFE_EMACn_PWR_DWN(1) | GPR_PFE_EMACn_PWR_DWN(2), syscon + S32G_MAIN_GPR_PFE_PWR_CTRL);
@@ -248,7 +248,7 @@ static struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev)
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	priv->ihc_wq = create_singlethread_workqueue("pfeng-ihc");
 	if (!priv->ihc_wq) {
-		dev_err(dev, "Initialize of IHC TX failed\n");
+		HM_MSG_DEV_ERR(dev, "Initialize of IHC TX failed\n");
 		goto err_cfg_alloc;
 	}
 	if (kfifo_alloc(&priv->ihc_tx_fifo, 32, GFP_KERNEL))
@@ -263,30 +263,41 @@ err_cfg_alloc:
 	devm_kfree(dev, priv);
 	return NULL;
 }
-static int pfeng_pfe_reset(struct pfeng_priv *priv)
+
+static int pfeng_pfe_off(struct pfeng_priv *priv)
 {
 	int ret;
 	struct device *dev = &priv->pdev->dev;
 
 	if (!priv->rst) {
-		dev_err(dev, "Partition reset support disabled\n");
+		HM_MSG_DEV_ERR(dev, "Partition reset support disabled\n");
 		return -ENOTSUP;
 	}
 
 	ret = reset_control_assert(priv->rst);
-	if (ret) {
-		dev_err(dev, "Failed to assert PFE reset: %d\n", ret);
+	if (ret)
+		HM_MSG_DEV_ERR(dev, "Failed to assert PFE reset: %d\n", ret);
+
+	return ret;
+}
+
+static int pfeng_pfe_reset(struct pfeng_priv *priv)
+{
+	int ret;
+	struct device *dev = &priv->pdev->dev;
+
+	ret = pfeng_pfe_off(priv);
+	if (ret)
 		return ret;
-	}
 
 	udelay(100);
 
 	ret = reset_control_deassert(priv->rst);
 	if (ret) {
-		dev_err(dev, "Failed to deassert PFE reset: %d\n", ret);
+		HM_MSG_DEV_ERR(dev, "Failed to deassert PFE reset: %d\n", ret);
 		return ret;
 	}
-	dev_info(dev, "PFE controller reset done\n");
+	HM_MSG_DEV_INFO(dev, "PFE controller reset done\n");
 
 	return 0;
 }
@@ -306,11 +317,11 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 
 	ret = pm_runtime_resume_and_get(dev);
 	if (ret < 0) {
-		dev_info(dev, "PM runtime resume returned: %d\n", ret);
+		HM_MSG_DEV_INFO(dev, "PM runtime resume returned: %d\n", ret);
 	}
 
 	if (!priv) {
-		dev_err(dev, "Removal failed. No priv data.\n");
+		HM_MSG_DEV_ERR(dev, "Removal failed. No priv data.\n");
 		return -ENOMEM;
 	}
 
@@ -329,11 +340,16 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	/* PFE platform remove */
 	if (priv->pfe_platform) {
 		if (pfe_platform_remove() != EOK)
-			dev_err(dev, "PFE Platform not stopped successfully\n");
+			HM_MSG_DEV_ERR(dev, "PFE Platform not stopped successfully\n");
 		else {
 			priv->pfe_platform = NULL;
-			dev_info(dev, "PFE Platform stopped\n");
+			HM_MSG_DEV_INFO(dev, "PFE Platform stopped\n");
 		}
+
+		/* PFE Partition shutdown */
+		if (priv->rst)
+			if (!pfeng_pfe_off(priv))
+				dev_info(dev, "PFE controller off\n");
 	}
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
@@ -405,12 +421,12 @@ static int pfeng_validate_emac_speeds(struct pfeng_priv *priv)
 		case SPEED_2500:
 			/* On G2 only EMAC0 can use 2500 */
 			if (id && !priv->on_g3) {
-				dev_warn(&priv->pdev->dev, "Unsupported max speed on EMAC%d: %d\n", id, emac->max_speed);
+				HM_MSG_DEV_WARN(&priv->pdev->dev, "Unsupported max speed on EMAC%d: %d\n", id, emac->max_speed);
 				return -EINVAL;
 			}
 			break;
 		default:
-			dev_warn(&priv->pdev->dev, "Invalid max speed on EMAC%d: %d\n", id, emac->max_speed);
+			HM_MSG_DEV_WARN(&priv->pdev->dev, "Invalid max speed on EMAC%d: %d\n", id, emac->max_speed);
 			return -EINVAL;
 		}
 	}
@@ -443,42 +459,43 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	if (!of_match_device(pfeng_id_table, &pdev->dev))
 		return -ENODEV;
 
-	dev_info(dev, "PFEng ethernet driver loading ...\n");
-	dev_info(dev, "Version: %s\n", PFENG_DRIVER_VERSION);
-	dev_info(dev, "Driver commit hash: %s\n", PFENG_DRIVER_COMMIT_HASH);
+	HM_MSG_DEV_INFO(dev, "PFEng ethernet driver loading ...\n");
+	HM_MSG_DEV_INFO(dev, "Version: %s\n", PFENG_DRIVER_VERSION);
+	HM_MSG_DEV_INFO(dev, "Driver commit hash: %s\n", PFENG_DRIVER_COMMIT_HASH);
 
 	/* Print MULTI-INSATNCE mode (MASTER/SLAVE/disabled) */
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	dev_info(dev, "Multi instance support: Master/mdetect=%s\n", disable_master_detection ? "off" : "on");
+	HM_MSG_DEV_INFO(dev, "Multi instance support: Master/mdetect=%s\n", disable_master_detection ? "off" : "on");
 #else
-	dev_info(dev, "Multi instance support: disabled (standalone)\n");
+	HM_MSG_DEV_INFO(dev, "Multi instance support: disabled (standalone)\n");
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
-	dev_info(dev, "Compiled by: %s\n", __VERSION__);
+	HM_MSG_DEV_INFO(dev, "Compiled by: %s\n", __VERSION__);
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	hal_ip_ready_set(false);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	if (!of_dma_is_coherent(dev->of_node))
-		dev_warn(dev, "DMA coherency disabled - consider impact on device performance\n");
+		HM_MSG_DEV_WARN(dev, "DMA coherency disabled - consider impact on device performance\n");
 
 	/* Attach to reset controller to reset S32G2 partition 2 */
 	rst = devm_reset_control_get(dev, "pfe_part");
 	if (IS_ERR(rst)) {
-		dev_warn(dev, "Warning: Partition reset 'pfe_part' get failed: code %ld\n", PTR_ERR(rst));
+		HM_MSG_DEV_WARN(dev, "Warning: Partition reset 'pfe_part' get failed: code %ld\n", PTR_ERR(rst));
 		rst = NULL;
 	}
 
 	/* Signal driver coherency mask */
 	if (dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32)) != 0) {
-		dev_err(dev, "System does not support DMA, aborting\n");
+		HM_MSG_DEV_ERR(dev, "System does not support DMA, aborting\n");
 		return -EINVAL;
 	}
 
 	/* Allocate driver context with defaults */
 	priv = pfeng_drv_alloc(pdev);
 	if(!priv) {
+		HM_MSG_DEV_ERR(dev, "Driver context allocation failed\n");
 		ret = -ENOMEM;
 		goto err_drv;
 	}
@@ -491,7 +508,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 
 	/* L2bridge default VLAN ID */
 	if (!l2br_vlan_id || l2br_vlan_id > 4095) {
-		dev_err(dev, "Invalid L2Bridge default VLAN ID, used 1\n");
+		HM_MSG_DEV_ERR(dev, "Invalid L2Bridge default VLAN ID, used 1\n");
 		l2br_vlan_id = 1;
 	}
 	if (l2br_vlan_id != 1)
@@ -499,7 +516,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 
 	/* L2bridge vlan stats size */
 	if (l2br_vlan_stats_size < 2 || l2br_vlan_stats_size > 128) {
-		dev_err(dev, "Invalid vlan stats size\n");
+		HM_MSG_DEV_ERR(dev, "Invalid vlan stats size\n");
 		l2br_vlan_stats_size = 20;
 	}
 	if (l2br_vlan_stats_size != 20)
@@ -515,26 +532,26 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	/* PFE_SYS clock */
 	priv->clk_sys = clk_get(dev, "pfe_sys");
 	if (IS_ERR(priv->clk_sys)) {
-		dev_err(dev, "Failed to get pfe_sys clock\n");
+		HM_MSG_DEV_ERR(dev, "Failed to get pfe_sys clock\n");
 		ret = IS_ERR(priv->clk_sys);
 		priv->clk_sys = NULL;
 		goto err_drv;
 	}
 	ret = clk_set_rate(priv->clk_sys, PFE_CLK_SYS_RATE);
 	if (ret) {
-		dev_err(dev, "Failed to set clock 'pfe_sys'. Error: %d\n", ret);
+		HM_MSG_DEV_ERR(dev, "Failed to set clock 'pfe_sys'. Error: %d\n", ret);
 		goto err_drv;
 	}
 	ret = clk_prepare_enable(priv->clk_sys);
 	if (ret) {
-		dev_err(dev, "Failed to enable clock 'pfe_sys'. Error: %d\n", ret);
+		HM_MSG_DEV_ERR(dev, "Failed to enable clock 'pfe_sys'. Error: %d\n", ret);
 		goto err_drv;
 	}
 
 	/* PFE_PE clock */
 	priv->clk_pe = clk_get(dev, "pfe_pe");
 	if (IS_ERR(priv->clk_pe)) {
-		dev_err(dev, "Failed to get pfe_pe clock\n");
+		HM_MSG_DEV_ERR(dev, "Failed to get pfe_pe clock\n");
 		ret = IS_ERR(priv->clk_pe);
 		priv->clk_pe = NULL;
 		goto err_drv;
@@ -542,18 +559,21 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	/* PE clock should be double the frequency of System clock */
 	ret = clk_set_rate(priv->clk_pe, clk_get_rate(priv->clk_sys) * 2);
 	if (ret) {
-		dev_err(dev, "Failed to set clock 'pfe_pe'. Error: %d\n", ret);
+		HM_MSG_DEV_ERR(dev, "Failed to set clock 'pfe_pe'. Error: %d\n", ret);
 		goto err_drv;
 	}
 	ret = clk_prepare_enable(priv->clk_pe);
 	if (ret) {
-		dev_err(dev, "Failed to enable clock 'pfe_pe'. Error: %d\n", ret);
+		HM_MSG_DEV_ERR(dev, "Failed to enable clock 'pfe_pe'. Error: %d\n", ret);
 		goto err_drv;
 	}
-	dev_info(dev, "Clocks: sys=%luMHz pe=%luMHz\n", clk_get_rate(priv->clk_sys) / 1000000, clk_get_rate(priv->clk_pe) / 1000000);
+	HM_MSG_DEV_INFO(dev, "Clocks: sys=%luMHz pe=%luMHz\n", clk_get_rate(priv->clk_sys) / 1000000, clk_get_rate(priv->clk_pe) / 1000000);
 
 	pm_runtime_get_noresume(dev);
-	pm_runtime_set_active(dev);
+	ret = pm_runtime_set_active(dev);
+	if (ret)
+		HM_MSG_DEV_WARN(dev, "Failed to set PM device status\n");
+
 	pm_runtime_enable(dev);
 
 	/* Set correct PFE_EMACs interfaces */
@@ -561,7 +581,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		priv->emac[0].intf_mode,
 		priv->emac[1].intf_mode,
 		priv->emac[2].intf_mode))
-		dev_err(dev, "WARNING: cannot enable power for EMACs\n");
+		HM_MSG_DEV_ERR(dev, "WARNING: cannot enable power for EMACs\n");
 
 	/* PFE Partition reset */
 	priv->rst = rst;
@@ -596,27 +616,27 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		if (emac->tx_clk) {
 			ret = clk_set_rate(emac->tx_clk, clk_rate);
 			if (ret)
-				dev_err(dev, "Failed to set TX clock on EMAC%d for interface %s. Error %d\n", id, phy_modes(emac->intf_mode), ret);
+				HM_MSG_DEV_ERR(dev, "Failed to set TX clock on EMAC%d for interface %s. Error %d\n", id, phy_modes(emac->intf_mode), ret);
 			else {
 				ret = clk_prepare_enable(emac->tx_clk);
 				if (ret)
-					dev_err(dev, "Failed to enable TX clocks on EMAC%d for interface %s. Error %d\n", id, phy_modes(emac->intf_mode), ret);
+					HM_MSG_DEV_ERR(dev, "Failed to enable TX clocks on EMAC%d for interface %s. Error %d\n", id, phy_modes(emac->intf_mode), ret);
 			}
 			if (ret) {
 				devm_clk_put(dev, emac->tx_clk);
 				emac->tx_clk = NULL;
 			} else
-				dev_info(dev, "TX clock on EMAC%d for interface %s installed\n", id, phy_modes(emac->intf_mode));
+				HM_MSG_DEV_INFO(dev, "TX clock on EMAC%d for interface %s installed\n", id, phy_modes(emac->intf_mode));
 		}
 
 		if (emac->rx_clk) {
 			ret = clk_set_rate(emac->rx_clk, clk_rate);
 			if (ret)
-				dev_err(dev, "Failed to set RX clock on EMAC%d for interface %s. Error %d\n", id, phy_modes(emac->intf_mode), ret);
+				HM_MSG_DEV_ERR(dev, "Failed to set RX clock on EMAC%d for interface %s. Error %d\n", id, phy_modes(emac->intf_mode), ret);
 			else {
 				ret = clk_prepare_enable(emac->rx_clk);
 				if (ret) {
-					dev_warn(dev, "Defer enabling of RX clock on EMAC%d for interface %s (ret: %d)\n", id, phy_modes(emac->intf_mode), ret);
+					HM_MSG_DEV_WARN(dev, "Defer enabling of RX clock on EMAC%d for interface %s (ret: %d)\n", id, phy_modes(emac->intf_mode), ret);
 					emac->rx_clk_pending = true;
 				}
 			}
@@ -626,13 +646,13 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 					emac->rx_clk = NULL;
 				}
 			} else
-				dev_info(dev, "RX clock on EMAC%d for interface %s installed\n", id, phy_modes(emac->intf_mode));
+				HM_MSG_DEV_INFO(dev, "RX clock on EMAC%d for interface %s installed\n", id, phy_modes(emac->intf_mode));
 		}
 	}
 
 	ret = oal_mm_init(dev);
 	if (ret) {
-		dev_err(dev, "OAL memory managment init failed\n");
+		HM_MSG_DEV_ERR(dev, "OAL memory managment init failed\n");
 		goto err_drv;
 	}
 
@@ -640,7 +660,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	if (fw_class_name && strlen(fw_class_name))
 		priv->fw_class_name = fw_class_name;
 	if (!priv->fw_class_name || !strlen(priv->fw_class_name)) {
-		dev_err(dev, "CLASS firmware is unknown\n");
+		HM_MSG_DEV_ERR(dev, "CLASS firmware is unknown\n");
 		ret = -EINVAL;
 		goto err_drv;
 	}
@@ -649,7 +669,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	if (fw_util_name && strlen(fw_util_name))
 		priv->fw_util_name = ((strlen(fw_util_name) == 4) && !strncmp(fw_util_name, "NONE", 4)) ? (NULL) : (fw_util_name);
 	if (!priv->fw_util_name || !strlen(priv->fw_util_name)) {
-		dev_info(dev, "UTIL firmware not requested. Disable UTIL\n");
+		HM_MSG_DEV_INFO(dev, "UTIL firmware not requested. Disable UTIL\n");
 		priv->pfe_cfg->enable_util = false;
 	} else
 		priv->pfe_cfg->enable_util = true;
@@ -673,11 +693,14 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 
 	/* Start PFE Platform */
 	ret = pfe_platform_init(priv->pfe_cfg);
-	if (ret)
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "Could not init PFE platform instance. Error %d\n", ret);
 		goto err_drv;
+	}
+
 	priv->pfe_platform = pfe_platform_get_instance();
 	if (!priv->pfe_platform) {
-		dev_err(dev, "Could not get PFE platform instance\n");
+		HM_MSG_DEV_ERR(dev, "Could not get PFE platform instance\n");
 		ret = -EINVAL;
 		goto err_drv;
 	}
@@ -701,18 +724,18 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	priv->clk_ptp_reference = 0U;
 	priv->clk_ptp = clk_get(dev, "pfe_ts");
 	if (IS_ERR(priv->clk_ptp)) {
-		dev_warn(dev, "Failed to get pfe_ts clock. PTP will be disabled.\n");
+		HM_MSG_DEV_WARN(dev, "Failed to get pfe_ts clock. PTP will be disabled.\n");
 		priv->clk_ptp = NULL;
 	} else {
 		ret = clk_set_rate(priv->clk_ptp, PFE_CLK_TS_RATE);
 		if (ret) {
-			dev_warn(dev, "Failed to set pfe_ts clock. PTP will be disabled.\n");
+			HM_MSG_DEV_WARN(dev, "Failed to set pfe_ts clock. PTP will be disabled.\n");
 			priv->clk_ptp = NULL;
 		} else {
 			ret = clk_prepare_enable(priv->clk_ptp);
 			if (ret) {
 				priv->clk_ptp = NULL;
-				dev_err(dev, "Failed to enable clock pfe_ts: %d\n", ret);
+				HM_MSG_DEV_ERR(dev, "Failed to enable clock pfe_ts: %d\n", ret);
 			} else
 				priv->clk_ptp_reference = clk_get_rate(priv->clk_ptp);
 		}
@@ -770,7 +793,7 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 {
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
 
-	dev_info(dev, "Suspending driver\n");
+	HM_MSG_DEV_INFO(dev, "Suspending driver\n");
 
 	priv->in_suspend = true;
 
@@ -792,10 +815,10 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	/* PFE platform remove */
 	if (priv->pfe_platform) {
 		if (pfe_platform_remove() != EOK)
-			dev_err(dev, "PFE Platform not stopped successfully\n");
+			HM_MSG_DEV_ERR(dev, "PFE Platform not stopped successfully\n");
 		else {
 			priv->pfe_platform = NULL;
-			dev_info(dev, "PFE Platform stopped\n");
+			HM_MSG_DEV_INFO(dev, "PFE Platform stopped\n");
 		}
 	}
 
@@ -827,7 +850,7 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
 	int ret;
 
-	dev_info(dev, "Resuming driver\n");
+	HM_MSG_DEV_INFO(dev, "Resuming driver\n");
 
 	/* Set HIF channels coherency */
 	if (of_dma_is_coherent(dev->of_node)) {
@@ -836,31 +859,35 @@ static int pfeng_drv_pm_resume(struct device *dev)
 			return ret;
 	}
 
-	pinctrl_pm_select_default_state(dev);
+	ret = pinctrl_pm_select_default_state(dev);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "Failed to select default pinctrl state\n");
+		return -EINVAL;
+	}
 
 	/* Start clocks */
 	if (!priv->clk_sys) {
-		dev_err(dev, "Main clock 'pfe_sys' disappeared\n");
+		HM_MSG_DEV_ERR(dev, "Main clock 'pfe_sys' disappeared\n");
 		return -ENODEV;
 	}
 	ret = clk_set_rate(priv->clk_sys, PFE_CLK_SYS_RATE);
 	if (ret) {
-		dev_err(dev, "Failed to set clock 'pfe_sys'. Error: %d\n", ret);
+		HM_MSG_DEV_ERR(dev, "Failed to set clock 'pfe_sys'. Error: %d\n", ret);
 		return -EINVAL;
 	}
 	ret = clk_prepare_enable(priv->clk_sys);
 	if (ret) {
-		dev_err(dev, "Failed to enable clock 'pfe_sys'. Error: %d\n", ret);
+		HM_MSG_DEV_ERR(dev, "Failed to enable clock 'pfe_sys'. Error: %d\n", ret);
 		return -EINVAL;
 	}
 	ret = clk_set_rate(priv->clk_pe, clk_get_rate(priv->clk_sys) * 2);
 	if (ret) {
-		dev_err(dev, "Failed to set clock 'pfe_pe'. Error: %d\n", ret);
+		HM_MSG_DEV_ERR(dev, "Failed to set clock 'pfe_pe'. Error: %d\n", ret);
 		return -EINVAL;
 	}
 	ret = clk_prepare_enable(priv->clk_pe);
 	if (ret) {
-		dev_err(dev, "Failed to enable clock 'pfe_pe'. Error: %d\n", ret);
+		HM_MSG_DEV_ERR(dev, "Failed to enable clock 'pfe_pe'. Error: %d\n", ret);
 		return -EINVAL;
 	}
 
@@ -869,30 +896,30 @@ static int pfeng_drv_pm_resume(struct device *dev)
 		priv->emac[0].intf_mode,
 		priv->emac[1].intf_mode,
 		priv->emac[2].intf_mode))
-		dev_err(dev, "WARNING: cannot enable power for EMACs\n");
+		HM_MSG_DEV_ERR(dev, "WARNING: cannot enable power for EMACs\n");
 
 	/* PFE reset */
 	ret = pfeng_pfe_reset(priv);
 	if (ret) {
-		dev_err(dev, "Failed to reset PFE controller\n");
+		HM_MSG_DEV_ERR(dev, "Failed to reset PFE controller\n");
 		goto err_pfe_init;
 	}
 
 	/* Reinit memory */
 	ret = oal_mm_wakeup_reinit();
 	if (ret) {
-		dev_warn(dev, "Failed to re-init PFE memory\n");
+		HM_MSG_DEV_WARN(dev, "Failed to re-init PFE memory\n");
 	}
 
 	/* Start PFE Platform */
 	ret = pfe_platform_init(priv->pfe_cfg);
 	if (ret) {
-		dev_err(dev, "Could not init PFE platform instance. Error %d\n", ret);
+		HM_MSG_DEV_ERR(dev, "Could not init PFE platform instance. Error %d\n", ret);
 		goto err_pfe_init;
 	}
 	priv->pfe_platform = pfe_platform_get_instance();
 	if (!priv->pfe_platform) {
-		dev_err(dev, "Could not get PFE platform instance\n");
+		HM_MSG_DEV_ERR(dev, "Could not get PFE platform instance\n");
 		ret = -EINVAL;
 		goto err_pfe_get;
 	}
@@ -908,13 +935,13 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	if (priv->clk_ptp) {
 		ret = clk_set_rate(priv->clk_ptp, PFE_CLK_TS_RATE);
 		if (ret) {
-			dev_warn(dev, "Failed to set pfe_ts clock. PTP will be disabled.\n");
+			HM_MSG_DEV_WARN(dev, "Failed to set pfe_ts clock. PTP will be disabled.\n");
 			clk_put(priv->clk_ptp);
 			priv->clk_ptp = NULL;
 		} else {
 			ret = clk_prepare_enable(priv->clk_ptp);
 			if (ret) {
-				dev_warn(dev, "Failed to enable clock 'pfe_ts'. PTP will be disabled.\n");
+				HM_MSG_DEV_WARN(dev, "Failed to enable clock 'pfe_ts'. PTP will be disabled.\n");
 				/* Free clock, now is unusable */
 				clk_put(priv->clk_ptp);
 				priv->clk_ptp = NULL;
@@ -950,6 +977,25 @@ SIMPLE_DEV_PM_OPS(pfeng_drv_pm_ops,
 			pfeng_drv_pm_suspend,
 			pfeng_drv_pm_resume);
 
+/**
+ * pfeng_drv_shutdown
+ *
+ * @pdev: platform device pointer
+ * Description: this function calls at shut-down time to quiesce the device
+ */
+static void pfeng_drv_shutdown(struct platform_device *pdev)
+{
+	struct device *dev = &pdev->dev;
+	struct pfeng_priv *priv = dev_get_drvdata(dev);
+
+	pfeng_drv_pm_suspend(dev);
+
+	if (priv && priv->rst)
+		/* PFE Partition shutdown */
+		if (!pfeng_pfe_off(priv))
+			HM_MSG_DEV_INFO(dev, "PFE controller off\n");
+}
+
 /* platform data */
 
 static struct platform_driver pfeng_platform_driver = {
@@ -960,6 +1006,7 @@ static struct platform_driver pfeng_platform_driver = {
 		.pm = &pfeng_drv_pm_ops,
 		.of_match_table = of_match_ptr(pfeng_id_table),
 	},
+	.shutdown = pfeng_drv_shutdown,
 };
 
 module_platform_driver(pfeng_platform_driver);

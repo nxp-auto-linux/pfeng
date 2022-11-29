@@ -639,12 +639,12 @@ errno_t fci_fp_db_create_rule(char_t *name, uint32_t data, uint32_t mask, uint16
     {
         if((0U == ((uint8_t)flags & ((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT))) && (NULL == next_rule))
         {   /* If flags are not FP_FL_REJECT and not FP_FL_ACCEPT we need the next rule name */
-            NXP_LOG_ERROR("Flags FP_FL_ACCEPT and FP_FL_REJECT are not set but next rule is not defined (NULL)\n");
+            NXP_LOG_WARNING("Flags FP_FL_ACCEPT and FP_FL_REJECT are not set but next rule is not defined (NULL)\n");
             ret = EINVAL;
         }
         else if(((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT) == ((uint8_t)flags & ((uint8_t)FP_FL_ACCEPT | (uint8_t)FP_FL_REJECT)))
         {   /* Cannot do both Accept and Reject action */
-            NXP_LOG_ERROR("Both flags FP_FL_ACCEPT and FP_FL_REJECT are set\n");
+            NXP_LOG_WARNING("Both flags FP_FL_ACCEPT and FP_FL_REJECT are set\n");
             ret = EINVAL;
         }
         else
@@ -657,7 +657,7 @@ errno_t fci_fp_db_create_rule(char_t *name, uint32_t data, uint32_t mask, uint16
             /* Check that the name is unique in our database */
             if(NULL != fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_NAME, name, COMMON))
             {   /* Rule with same name found in database */
-                NXP_LOG_ERROR("Rule with name \"%s\" already exists\n", name);
+                NXP_LOG_WARNING("Rule with name \"%s\" already exists\n", name);
                 ret = EEXIST;
             }
             else
@@ -731,7 +731,7 @@ errno_t fci_fp_db_destroy_rule(char_t *name)
         rule = fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_NAME, name, COMMON);
         if(NULL == rule)
         {   /* No such rule */
-            NXP_LOG_ERROR("Rule with name \"%s\" does not exist\n", name);
+            NXP_LOG_WARNING("Rule with name \"%s\" does not exist\n", name);
             ret = ENOENT;
         }
         else
@@ -739,7 +739,7 @@ errno_t fci_fp_db_destroy_rule(char_t *name)
             /* Check that the rule is not in use */
             if(NULL != rule->table)
             {   /* Still in use */
-                NXP_LOG_ERROR("Rule \"%s\" is in use in table \"%s\"\n", name, rule->table->name);
+                NXP_LOG_WARNING("Rule \"%s\" is in use in table \"%s\"\n", name, rule->table->name);
                 ret = EACCES;
             }
             else
@@ -777,7 +777,7 @@ errno_t fci_fp_db_create_table(char_t *name)
         /* Check that the name is unique in our database */
         if(NULL != fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, name))
         {   /* Rule with same name found in database */
-            NXP_LOG_ERROR("Table with name \"%s\" already exists\n", name);
+            NXP_LOG_WARNING("Table with name \"%s\" already exists\n", name);
             ret = EEXIST;
         }
         else
@@ -834,7 +834,7 @@ errno_t fci_fp_db_destroy_table(char_t *name, bool_t force)
         fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, name);
         if(NULL == fp_table)
         {
-            NXP_LOG_ERROR("Table with name \"%s\" does not exist\n", name);
+            NXP_LOG_WARNING("Table with name \"%s\" does not exist\n", name);
             ret = ENOENT;
         }
         else
@@ -844,7 +844,7 @@ errno_t fci_fp_db_destroy_table(char_t *name, bool_t force)
             {   /* Table is still in use */
                 if(FALSE == force)
                 {   /* No override */
-                    NXP_LOG_ERROR("Table \"%s\" is in use\n", name);
+                    NXP_LOG_WARNING("Table \"%s\" is in use\n", name);
                     ret = EACCES;
                 }
                 else
@@ -907,7 +907,7 @@ errno_t fci_fp_db_add_rule_to_table(char_t *table_name, char_t *rule_name, uint1
         rule = fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_NAME, rule_name, COMMON);
         if(NULL == rule)
         {
-            NXP_LOG_ERROR("Rule \"%s\" does not exist\n", rule_name);
+            NXP_LOG_WARNING("Rule \"%s\" does not exist\n", rule_name);
             ret = ENOENT;
         }
         else
@@ -915,7 +915,7 @@ errno_t fci_fp_db_add_rule_to_table(char_t *table_name, char_t *rule_name, uint1
             /* Check that the rule does not belong to any other table */
             if(NULL != rule->table)
             {
-                NXP_LOG_ERROR("Rule \"%s\" is already part of the table \"%s\"\n", rule_name, rule->table->name);
+                NXP_LOG_WARNING("Rule \"%s\" is already part of the table \"%s\"\n", rule_name, rule->table->name);
                 ret = EACCES;
             }
             else
@@ -924,7 +924,7 @@ errno_t fci_fp_db_add_rule_to_table(char_t *table_name, char_t *rule_name, uint1
                 fp_table = fci_fp_table_get_first(&fci_fp_table_db, FP_TABLE_CRIT_NAME, table_name);
                 if(NULL == fp_table)
                 {
-                    NXP_LOG_ERROR("Table \"%s\" does not exist\n", table_name);
+                    NXP_LOG_WARNING("Table \"%s\" does not exist\n", table_name);
                     ret = ENOENT;
                 }
                 else
@@ -1018,7 +1018,7 @@ errno_t fci_fp_db_remove_rule_from_table(char_t *rule_name)
         rule = fci_fp_rule_get_first(&fci_fp_rule_db, FP_RULE_CRIT_NAME, rule_name, COMMON);
         if(NULL == rule)
         {
-            NXP_LOG_ERROR("Rule \"%s\" does not exist\n", rule_name);
+            NXP_LOG_WARNING("Rule \"%s\" does not exist\n", rule_name);
             ret = ENOENT;
         }
         else

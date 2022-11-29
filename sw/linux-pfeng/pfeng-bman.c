@@ -42,8 +42,6 @@ struct pfeng_rx_chnl_pool {
 };
 
 struct pfeng_tx_map {
-
-	void				*va_addr;
 	addr_t				pa_addr;
 	u32				size;
 	struct sk_buff			*skb;
@@ -68,7 +66,7 @@ int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl)
 	/* RX pool */
 	rx_pool = kzalloc(sizeof(*rx_pool), GFP_KERNEL);
 	if (!rx_pool) {
-		dev_err(chnl->dev, "chnl%d: No mem for bman rx_pool\n", pfe_hif_chnl_get_id(chnl->priv));
+		HM_MSG_DEV_ERR(chnl->dev, "chnl%d: No mem for bman rx_pool\n", pfe_hif_chnl_get_id(chnl->priv));
 		return -ENOMEM;
 	}
 
@@ -81,14 +79,14 @@ int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl)
 
 	rx_pool->rx_tbl = kcalloc(rx_pool->depth, sizeof(struct pfeng_rx_map), GFP_KERNEL);
 	if (!rx_pool->rx_tbl) {
-		dev_err(chnl->dev, "chnl%d: failed. No mem\n", rx_pool->id);
+		HM_MSG_DEV_ERR(chnl->dev, "chnl%d: failed. No mem\n", rx_pool->id);
 		goto err;
 	}
 
 	/* TX pool */
 	tx_pool = kzalloc(sizeof(*tx_pool), GFP_KERNEL);
 	if (!tx_pool) {
-		dev_err(chnl->dev, "chnl%d: No mem for bman tx_pool\n", pfe_hif_chnl_get_id(chnl->priv));
+		HM_MSG_DEV_ERR(chnl->dev, "chnl%d: No mem for bman tx_pool\n", pfe_hif_chnl_get_id(chnl->priv));
 		goto err;
 	}
 
@@ -98,7 +96,7 @@ int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl)
 
 	tx_pool->tx_tbl = kcalloc(tx_pool->depth, sizeof(struct pfeng_tx_map), GFP_KERNEL);
 	if (!tx_pool->tx_tbl) {
-		dev_err(chnl->dev, "chnl%d: failed. No mem\n", rx_pool->id);
+		HM_MSG_DEV_ERR(chnl->dev, "chnl%d: failed. No mem\n", rx_pool->id);
 		goto err;
 	}
 
@@ -121,13 +119,12 @@ int pfeng_hif_chnl_txbd_unused(struct pfeng_hif_chnl *chnl)
 	return rd_idx - wr_idx - 1;
 }
 
-void pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_hif_chnl *chnl, void *va_addr, addr_t pa_addr, u32 size, struct sk_buff *skb, u8 flags, int i)
+void pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_hif_chnl *chnl, addr_t pa_addr, u32 size, struct sk_buff *skb, u8 flags, int i)
 {
 	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;
 	int idx = pool->wr_idx;
 
 	idx = (idx + i) & pool->idx_mask;
-	pool->tx_tbl[idx].va_addr = va_addr;
 	pool->tx_tbl[idx].pa_addr = pa_addr;
 	pool->tx_tbl[idx].size = size;
 	pool->tx_tbl[idx].skb = skb;
@@ -278,7 +275,7 @@ static int pfeng_hif_chnl_refill_rx_buffer(struct pfeng_hif_chnl *chnl, struct p
 	/*	Ask for new buffer */
 	if (unlikely(!rx_map->page))
 		if (unlikely(!pfeng_bman_buf_alloc_and_map(pool, rx_map))) {
-			dev_err(chnl->dev, "buffer allocation error\n");
+			HM_MSG_DEV_ERR(chnl->dev, "buffer allocation error\n");
 			return -ENOMEM;
 		}
 
@@ -408,7 +405,7 @@ struct sk_buff *pfeng_hif_chnl_receive_pkt(struct pfeng_hif_chnl *chnl)
 	 * consumer index */
 	skb = pfeng_rx_map_buff_to_skb(chnl->bman.rx_pool, rx_len);
 	if (unlikely(!skb)) {
-		dev_err(chnl->dev, "chnl%d: Rx skb mapping failed\n", chnl->idx);
+		HM_MSG_DEV_ERR(chnl->dev, "chnl%d: Rx skb mapping failed\n", chnl->idx);
 		return NULL;
 	}
 	prefetch(skb->data);

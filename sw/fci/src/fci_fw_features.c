@@ -187,7 +187,7 @@ errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_c
 				default:
 				{
 					/*	Unknown action. Respond with FCI error code. */
-					NXP_LOG_ERROR("FPP_CMD_FW_FEATURE: Unknown action received: 0x%x\n", fp_cmd->action);
+					NXP_LOG_WARNING("FPP_CMD_FW_FEATURE: Unknown action received: 0x%x\n", fp_cmd->action);
 					*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 					ret = EOK;
 					break;
@@ -400,7 +400,7 @@ errno_t fci_fw_features_element_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_fe
 					default:
 					{
 						/*      Unknown action. Respond with FCI error code. */
-						NXP_LOG_ERROR("FPP_CMD_FW_FEATURE: Unknown action received: 0x%x\n", fp_cmd->action);
+						NXP_LOG_WARNING("FPP_CMD_FW_FEATURE: Unknown action received: 0x%x\n", fp_cmd->action);
 						*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 						ret = EOK;
 						break;

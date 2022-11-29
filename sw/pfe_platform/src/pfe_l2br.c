@@ -250,7 +250,7 @@ static void pfe_l2br_update_hw_ll_entry(pfe_l2br_domain_t *domain, uint32_t base
 	/*	Update classifier memory (all PEs) */
 	if (EOK != pfe_bd_write_to_class(domain->bridge, base, &sw_bd))
 	{
-		NXP_LOG_DEBUG("Class memory write failed\n");
+		NXP_LOG_ERROR("Class memory write failed\n");
 	}
 }
 
@@ -293,7 +293,7 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 			ret = pfe_l2br_table_entry_set_action_data(domain->vlan_entry, domain->u.action_data_u64val);
 			if (EOK != ret)
 			{
-				NXP_LOG_DEBUG("Can't set action data: %d\n", ret);
+				NXP_LOG_ERROR("Can't set action data: %d\n", ret);
 				ret = ENOEXEC;
 			}
 			else
@@ -302,7 +302,7 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 				ret = pfe_l2br_table_update_entry(domain->bridge->vlan_table, domain->vlan_entry);
 				if (EOK != ret)
 				{
-					NXP_LOG_DEBUG("Can't update VLAN table entry: %d\n", ret);
+					NXP_LOG_ERROR("Can't update VLAN table entry: %d\n", ret);
 					ret = ENOEXEC;
 				}
 			}
@@ -460,7 +460,7 @@ static errno_t pfe_l2br_config_domain(const pfe_l2br_t *bridge, pfe_l2br_domain_
 	domain->vlan_entry = pfe_l2br_table_entry_create(bridge->vlan_table);
 	if (NULL == domain->vlan_entry)
 	{
-		NXP_LOG_DEBUG("Can't create vlan table entry\n");
+		NXP_LOG_ERROR("Can't create vlan table entry\n");
 		if (EOK != pfe_l2br_domain_destroy(domain))
 		{
 			NXP_LOG_ERROR("Unable to destroy bridge domain\n");
@@ -473,7 +473,7 @@ static errno_t pfe_l2br_config_domain(const pfe_l2br_t *bridge, pfe_l2br_domain_
 		ret = pfe_l2br_table_entry_set_vlan(domain->vlan_entry, domain->vlan);
 		if (EOK != ret)
 		{
-			NXP_LOG_DEBUG("Can't set vlan: %d\n", ret);
+			NXP_LOG_ERROR("Can't set vlan: %d\n", ret);
 			if (EOK != pfe_l2br_domain_destroy(domain))
 			{
 				NXP_LOG_ERROR("Unable to destroy bridge domain\n");
@@ -500,7 +500,7 @@ static errno_t pfe_l2br_config_domain(const pfe_l2br_t *bridge, pfe_l2br_domain_
 			ret = pfe_l2br_table_entry_set_action_data(domain->vlan_entry, domain->u.action_data_u64val);
 			if (EOK != ret)
 			{
-				NXP_LOG_DEBUG("Can't set action data: %d\n", ret);
+				NXP_LOG_ERROR("Can't set action data: %d\n", ret);
 				if (EOK != pfe_l2br_domain_destroy(domain))
 				{
 					NXP_LOG_ERROR("Unable to destroy bridge domain\n");
@@ -512,7 +512,7 @@ static errno_t pfe_l2br_config_domain(const pfe_l2br_t *bridge, pfe_l2br_domain_
 				ret = pfe_l2br_table_add_entry(domain->bridge->vlan_table, domain->vlan_entry);
 				if (EOK != ret)
 				{
-					NXP_LOG_DEBUG("Could not add VLAN table entry: %d\n", ret);
+					NXP_LOG_ERROR("Could not add VLAN table entry: %d\n", ret);
 					if (EOK != pfe_l2br_domain_destroy(domain))
 					{
 						NXP_LOG_ERROR("Unable to destroy bridge domain\n");
@@ -556,14 +556,14 @@ static errno_t pfe_l2br_check_duplicate_configed_domain(pfe_l2br_t *bridge, pfe_
 			/*	Remember the domain instance in global list */
 			if (EOK != oal_mutex_lock(bridge->mutex))
 			{
-				NXP_LOG_DEBUG("Mutex lock failed\n");
+				NXP_LOG_ERROR("Mutex lock failed\n");
 			}
 
 			LLIST_AddAtEnd(&domain->list_entry, &bridge->domains);
 
 			if (EOK != oal_mutex_unlock(bridge->mutex))
 			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
+				NXP_LOG_ERROR("Mutex unlock failed\n");
 			}
 		}
 	}
@@ -603,7 +603,7 @@ errno_t pfe_l2br_domain_create(pfe_l2br_t *bridge, uint16_t vlan)
 
 		if (NULL == domain)
 		{
-			NXP_LOG_DEBUG("malloc() failed\n");
+			NXP_LOG_ERROR("malloc() failed\n");
 			ret = ENOMEM;
 		}
 		else
@@ -619,7 +619,7 @@ errno_t pfe_l2br_domain_create(pfe_l2br_t *bridge, uint16_t vlan)
 			domain->mutex = oal_mm_malloc(sizeof(oal_mutex_t));
 			if (NULL == domain->mutex)
 			{
-				NXP_LOG_DEBUG("Memory allocation failed\n");
+				NXP_LOG_ERROR("Memory allocation failed\n");
 				ret = ENOMEM;
 				if (EOK != pfe_l2br_domain_destroy(domain))
 				{
@@ -668,7 +668,7 @@ static errno_t pfe_l2br_domain_destroy_instance(pfe_l2br_domain_t *domain)
 	/*	Remove the domain instance from global list if it has been added there */
 	if (EOK != oal_mutex_lock(domain->bridge->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	/*	If instance has not been added to the list of domains yet (mainly due to
@@ -689,7 +689,7 @@ static errno_t pfe_l2br_domain_destroy_instance(pfe_l2br_domain_t *domain)
 
 	if (EOK != oal_mutex_unlock(domain->bridge->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	if (NULL != domain->mutex)
@@ -847,7 +847,7 @@ static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
 		domain = oal_mm_malloc(sizeof(pfe_l2br_domain_t));
 		if (NULL == domain)
 		{
-			NXP_LOG_DEBUG("Memory allocation failed\n");
+			NXP_LOG_ERROR("Memory allocation failed\n");
 		}
 		else
 		{
@@ -860,7 +860,7 @@ static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
 			domain->mutex = oal_mm_malloc(sizeof(oal_mutex_t));
 			if (NULL == domain->mutex)
 			{
-				NXP_LOG_DEBUG("Memory allocation failed\n");
+				NXP_LOG_ERROR("Memory allocation failed\n");
 				oal_mm_free(domain);
 				domain = NULL;
 			}
@@ -904,7 +904,7 @@ static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
 
 						if (EOK != oal_mutex_lock(bridge->mutex))
 						{
-							NXP_LOG_DEBUG("Mutex lock failed\n");
+							NXP_LOG_ERROR("Mutex lock failed\n");
 						}
 
 						/*	Remember the domain instance in global list */
@@ -912,7 +912,7 @@ static pfe_l2br_domain_t *pfe_l2br_create_fallback_domain(pfe_l2br_t *bridge)
 
 						if (EOK != oal_mutex_unlock(bridge->mutex))
 						{
-							NXP_LOG_DEBUG("Mutex unlock failed\n");
+							NXP_LOG_ERROR("Mutex unlock failed\n");
 						}
 					}
 				}
@@ -1077,7 +1077,7 @@ errno_t pfe_l2br_domain_add_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *iface, b
 			entry = oal_mm_malloc(sizeof(pfe_l2br_list_entry_t));
 			if (NULL == entry)
 			{
-				NXP_LOG_DEBUG("Malloc failed\n");
+				NXP_LOG_ERROR("Malloc failed\n");
 				ret = ENOMEM;
 			}
 			else
@@ -1093,7 +1093,7 @@ errno_t pfe_l2br_domain_add_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *iface, b
 				ret = pfe_l2br_update_hw_entry(domain);
 				if (EOK != ret)
 				{
-					NXP_LOG_DEBUG("Can't update VLAN table entry: %d\n", ret);
+					NXP_LOG_ERROR("Can't update VLAN table entry: %d\n", ret);
 					oal_mm_free(entry);
 					ret = ENOEXEC;
 				}
@@ -1102,7 +1102,7 @@ errno_t pfe_l2br_domain_add_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *iface, b
 					/*	Remember the interface instance in global list */
 					if (EOK != oal_mutex_lock(domain->mutex))
 					{
-						NXP_LOG_DEBUG("Mutex lock failed\n");
+						NXP_LOG_ERROR("Mutex lock failed\n");
 					}
 
 					entry->ptr = (void *)iface;
@@ -1110,7 +1110,7 @@ errno_t pfe_l2br_domain_add_if(pfe_l2br_domain_t *domain, pfe_phy_if_t *iface, b
 
 					if (EOK != oal_mutex_unlock(domain->mutex))
 					{
-						NXP_LOG_DEBUG("Mutex unlock failed\n");
+						NXP_LOG_ERROR("Mutex unlock failed\n");
 					}
 				}
 			}
@@ -1147,7 +1147,7 @@ errno_t pfe_l2br_domain_del_if(pfe_l2br_domain_t *domain, const pfe_phy_if_t *if
 		/*	Remove the interface instance from global list if it has been added there */
 		if (EOK != oal_mutex_lock(domain->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		LLIST_ForEachRemovable(item, aux, &domain->ifaces)
@@ -1168,7 +1168,7 @@ errno_t pfe_l2br_domain_del_if(pfe_l2br_domain_t *domain, const pfe_phy_if_t *if
 					NXP_LOG_ERROR("VLAN table entry update failed: %d\n", ret);
 					if (EOK != oal_mutex_unlock(domain->mutex))
 					{
-						NXP_LOG_DEBUG("Mutex unlock failed\n");
+						NXP_LOG_ERROR("Mutex unlock failed\n");
 					}
 					ret = ENOEXEC;
 					break;
@@ -1196,7 +1196,7 @@ errno_t pfe_l2br_domain_del_if(pfe_l2br_domain_t *domain, const pfe_phy_if_t *if
 		{
 			if (EOK != oal_mutex_unlock(domain->mutex))
 			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
+				NXP_LOG_ERROR("Mutex unlock failed\n");
 			}
 
 			if (FALSE == match)
@@ -1418,7 +1418,7 @@ static bool_t pfe_l2br_domain_match_if_criterion(const pfe_l2br_domain_t *domain
 				break;
 
 			default:
-				NXP_LOG_ERROR("Unknown criterion\n");
+				NXP_LOG_WARNING("Unknown criterion\n");
 				match = FALSE;
 				break;
 		}
@@ -1485,7 +1485,7 @@ pfe_phy_if_t *pfe_l2br_domain_get_first_if(pfe_l2br_domain_t *domain, pfe_l2br_d
 				break;
 
 			default:
-				NXP_LOG_ERROR("Unknown criterion\n");
+				NXP_LOG_WARNING("Unknown criterion\n");
 				known_crit = FALSE;
 				break;
 		}
@@ -1727,7 +1727,7 @@ static errno_t pfe_l2br_static_add_entry(pfe_l2br_t *bridge, uint16_t vlan, cons
 
 	if (EOK != oal_mutex_lock(bridge->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
@@ -1750,7 +1750,7 @@ static errno_t pfe_l2br_static_add_entry(pfe_l2br_t *bridge, uint16_t vlan, cons
 
 	if (EOK != oal_mutex_unlock(bridge->mutex))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	if (TRUE == match)
@@ -1767,14 +1767,14 @@ static errno_t pfe_l2br_static_add_entry(pfe_l2br_t *bridge, uint16_t vlan, cons
 		{
 			if (EOK != oal_mutex_lock(bridge->mutex))
 			{
-				NXP_LOG_DEBUG("Mutex lock failed\n");
+				NXP_LOG_ERROR("Mutex lock failed\n");
 			}
 
 			LLIST_AddAtEnd(&static_entry->list_entry, &bridge->static_entries);
 
 			if (EOK != oal_mutex_unlock(bridge->mutex))
 			{
-				NXP_LOG_DEBUG("Mutex unlock failed\n");
+				NXP_LOG_ERROR("Mutex unlock failed\n");
 			}
 		}
 	}
@@ -1880,14 +1880,14 @@ errno_t pfe_l2br_static_entry_destroy(pfe_l2br_t *bridge, pfe_l2br_static_entry_
 	{
 		if (EOK != oal_mutex_lock(bridge->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		ret = pfe_l2br_static_entry_destroy_nolock(bridge, static_ent);
 
 		if (EOK != oal_mutex_unlock(bridge->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 	return ret;
@@ -2256,13 +2256,13 @@ pfe_l2br_static_entry_t *pfe_l2br_static_entry_get_first(pfe_l2br_t *bridge, pfe
 				break;
 
 			default:
-				NXP_LOG_DEBUG("Invalid static entry type");
+				NXP_LOG_WARNING("Invalid static entry type");
 				break;
 		}
 
 		if (EOK != oal_mutex_lock(bridge->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
@@ -2285,7 +2285,7 @@ pfe_l2br_static_entry_t *pfe_l2br_static_entry_get_first(pfe_l2br_t *bridge, pfe
 
 		if (EOK != oal_mutex_unlock(bridge->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 
 		if (TRUE != match)
@@ -2317,7 +2317,7 @@ pfe_l2br_static_entry_t *pfe_l2br_static_entry_get_next(pfe_l2br_t *bridge)
 	{
 		if (EOK != oal_mutex_lock(bridge->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		if (bridge->curr_static_ent == &bridge->static_entries)
@@ -2348,7 +2348,7 @@ pfe_l2br_static_entry_t *pfe_l2br_static_entry_get_next(pfe_l2br_t *bridge)
 
 		if (EOK != oal_mutex_unlock(bridge->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 
 		if (TRUE != match)
@@ -2409,7 +2409,7 @@ static bool_t pfe_l2br_static_entry_match_criterion(const pfe_l2br_t *bridge, pf
 				break;
 
 			default:
-				NXP_LOG_ERROR("Unknown criterion\n");
+				NXP_LOG_WARNING("Unknown criterion\n");
 				match = FALSE;
 				break;
 		}
@@ -2443,7 +2443,7 @@ static errno_t pfe_l2br_flush_static_mac_table(pfe_l2br_t *bridge)
 			ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
 			if (EOK != ret)
 			{
-				NXP_LOG_DEBUG("Unable to remove static entry: %d\n", ret);
+				NXP_LOG_ERROR("Unable to remove static entry: %d\n", ret);
 			}
 		}
 	}
@@ -2478,7 +2478,7 @@ static errno_t pfe_l2br_flush_all_mac_table(const pfe_l2br_t *bridge)
 			ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
 			if (EOK != ret)
 			{
-				NXP_LOG_DEBUG("Unable to remove static entry: %d\n", ret);
+				NXP_LOG_ERROR("Unable to remove static entry: %d\n", ret);
 			}
 		}
 	}
@@ -2560,7 +2560,7 @@ static errno_t pfe_l2br_flush(pfe_l2br_t *bridge, pfe_l2br_flush_types type)
 
 		if (EOK != oal_mutex_lock(bridge->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		switch (type)
@@ -2588,7 +2588,7 @@ static errno_t pfe_l2br_flush(pfe_l2br_t *bridge, pfe_l2br_flush_types type)
 
 			default:
 			{
-				NXP_LOG_DEBUG("Invalid flush type");
+				NXP_LOG_WARNING("Invalid flush type");
 				ret = EINVAL;
 				break;
 			}
@@ -2596,7 +2596,7 @@ static errno_t pfe_l2br_flush(pfe_l2br_t *bridge, pfe_l2br_flush_types type)
 
 		if (EOK != oal_mutex_unlock(bridge->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 
 		/*	Release entry storage */
@@ -2687,7 +2687,7 @@ static void pfe_l2br_create_domain(const pfe_class_t *class, pfe_l2br_t **bridge
 	(*bridge)->default_domain = pfe_l2br_create_default_domain(*bridge, def_vlan);
 	if (NULL == (*bridge)->default_domain)
 	{
-		NXP_LOG_DEBUG("Could not create default domain\n");
+		NXP_LOG_ERROR("Could not create default domain\n");
 		(void)pfe_l2br_destroy(*bridge);
 		*bridge = NULL;
 	}
@@ -2697,7 +2697,7 @@ static void pfe_l2br_create_domain(const pfe_class_t *class, pfe_l2br_t **bridge
 		(*bridge)->fallback_domain = pfe_l2br_create_fallback_domain(*bridge);
 		if (NULL == (*bridge)->fallback_domain)
 		{
-			NXP_LOG_DEBUG("Could not create fallback domain\n");
+			NXP_LOG_ERROR("Could not create fallback domain\n");
 			(void)pfe_l2br_destroy(*bridge);
 			*bridge = NULL;
 		}
@@ -2708,7 +2708,7 @@ static void pfe_l2br_create_domain(const pfe_class_t *class, pfe_l2br_t **bridge
 
 			if (EOK != pfe_l2br_set_mac_aging_timeout((*bridge)->class, def_aging_time))
 			{
-				NXP_LOG_DEBUG("Could not set mac aging timeout\n");
+				NXP_LOG_ERROR("Could not set mac aging timeout\n");
 				(void)pfe_l2br_destroy(*bridge);
 				*bridge = NULL;
 			}
@@ -2757,7 +2757,7 @@ pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, uint16_t def_
 
 		if (NULL == bridge)
 		{
-			NXP_LOG_DEBUG("malloc() failed\n");
+			NXP_LOG_ERROR("malloc() failed\n");
 		}
 		else
 		{
@@ -2772,7 +2772,7 @@ pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, uint16_t def_
 			bridge->mutex = oal_mm_malloc(sizeof(oal_mutex_t));
 			if (NULL == bridge->mutex)
 			{
-				NXP_LOG_DEBUG("Memory allocation failed\n");
+				NXP_LOG_ERROR("Memory allocation failed\n");
 				(void)pfe_l2br_destroy(bridge);
 				bridge = NULL;
 			}
@@ -2820,7 +2820,7 @@ errno_t pfe_l2br_destroy(pfe_l2br_t *bridge)
 			}
 			else
 			{
-				NXP_LOG_DEBUG("Could not destroy default domain\n");
+				NXP_LOG_ERROR("Could not destroy default domain\n");
 			}
 		}
 
@@ -2832,7 +2832,7 @@ errno_t pfe_l2br_destroy(pfe_l2br_t *bridge)
 			}
 			else
 			{
-				NXP_LOG_DEBUG("Could not destroy fallback domain\n");
+				NXP_LOG_ERROR("Could not destroy fallback domain\n");
 			}
 		}
 
@@ -2843,14 +2843,14 @@ errno_t pfe_l2br_destroy(pfe_l2br_t *bridge)
 
 		if (EOK != pfe_l2br_destroy_vlan_stats_table(bridge->class, bridge->domain_stats_table_addr))
 		{
-			NXP_LOG_DEBUG("Could not destroy vlan stats\n");
+			NXP_LOG_ERROR("Could not destroy vlan stats\n");
 		}
 
 		if (NULL != bridge->mutex)
 		{
 			if (EOK != oal_mutex_destroy(bridge->mutex))
 			{
-				NXP_LOG_DEBUG("Could not destroy mutex\n");
+				NXP_LOG_ERROR("Could not destroy mutex\n");
 			}
 
 			oal_mm_free(bridge->mutex);
@@ -2961,7 +2961,7 @@ static bool_t pfe_l2br_domain_match_criterion(const pfe_l2br_t *bridge, pfe_l2br
 				break;
 
 			default:
-				NXP_LOG_ERROR("Unknown criterion\n");
+				NXP_LOG_WARNING("Unknown criterion\n");
 				match = FALSE;
 				break;
 		}
@@ -3008,7 +3008,7 @@ pfe_l2br_domain_t *pfe_l2br_get_first_domain(pfe_l2br_t *bridge, pfe_l2br_domain
 				break;
 
 			default:
-				NXP_LOG_ERROR("Unknown criterion\n");
+				NXP_LOG_WARNING("Unknown criterion\n");
 				known_crit = FALSE;
 				break;
 		}
@@ -3296,14 +3296,14 @@ errno_t pfe_l2br_clear_domain_stats(const pfe_l2br_t *bridge, uint8_t vlan_index
 
 		if (EOK != oal_mutex_lock(bridge->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		ret = pfe_class_write_dmem((void *)bridge->class, -1, bridge->domain_stats_table_addr + offset, &stat, sizeof(pfe_ct_vlan_stats_t));
 
 		if (EOK != oal_mutex_unlock(bridge->mutex))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	}
 	return ret;

@@ -103,6 +103,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 
 			if(EOK != ret)
 			{
+				NXP_LOG_ERROR("DB lock failed\n");
 				*fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;
 				ret = EOK;
 			}
@@ -117,7 +118,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						if ((bd_cmd->ucast_hit > 3U) || (bd_cmd->ucast_miss > 3U)
 								|| (bd_cmd->mcast_hit > 3U) || (bd_cmd->mcast_miss > 3U))
 						{
-							NXP_LOG_ERROR("Unsupported action code received\n");
+							NXP_LOG_WARNING("Unsupported action code received\n");
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							ret = EOK;
 							break;
@@ -126,7 +127,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						if (oal_ntohs(bd_cmd->vlan) <= 1U)
 						{
 							/*	0 - fall-back, 1 - default */
-							NXP_LOG_ERROR("VLAN %d is reserved\n", oal_ntohs(bd_cmd->vlan));
+							NXP_LOG_WARNING("VLAN %d is reserved\n", oal_ntohs(bd_cmd->vlan));
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							ret = EOK;
 							break;
@@ -136,7 +137,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						ret = pfe_l2br_domain_create(fci_context->l2_bridge, oal_ntohs(bd_cmd->vlan));
 						if (EPERM == ret)
 						{
-							NXP_LOG_ERROR("Domain %d already created\n", oal_ntohs(bd_cmd->vlan));
+							NXP_LOG_WARNING("Domain %d already created\n", oal_ntohs(bd_cmd->vlan));
 							*fci_ret = FPP_ERR_L2_BD_ALREADY_REGISTERED;
 							ret = EOK;
 							break;
@@ -161,7 +162,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						if ((bd_cmd->ucast_hit > 3U) || (bd_cmd->ucast_miss > 3U)
 								|| (bd_cmd->mcast_hit > 3U) || (bd_cmd->mcast_miss > 3U))
 						{
-							NXP_LOG_ERROR("Unsupported action code received\n");
+							NXP_LOG_WARNING("Unsupported action code received\n");
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							ret = EOK;
 							break;
@@ -172,7 +173,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						if (NULL == domain)
 						{
 							/*	This shall never happen */
-							NXP_LOG_DEBUG("New domain not found\n");
+							NXP_LOG_WARNING("New domain not found\n");
 							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 							ret = ENOENT;
 							goto finalize_domain_registration;
@@ -182,14 +183,14 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						ret = pfe_l2br_domain_set_ucast_action(domain, fci_to_l2br_action[bd_cmd->ucast_hit], fci_to_l2br_action[bd_cmd->ucast_miss]);
 						if (EOK != ret)
 						{
-							NXP_LOG_DEBUG("Could not set uni-cast actions: %d\n", ret);
+							NXP_LOG_WARNING("Could not set uni-cast actions: %d\n", ret);
 							goto finalize_domain_registration;
 						}
 
 						ret = pfe_l2br_domain_set_mcast_action(domain, fci_to_l2br_action[bd_cmd->mcast_hit], fci_to_l2br_action[bd_cmd->mcast_miss]);
 						if (EOK != ret)
 						{
-							NXP_LOG_DEBUG("Could not set multi-cast actions: %d\n", ret);
+							NXP_LOG_WARNING("Could not set multi-cast actions: %d\n", ret);
 							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 							goto finalize_domain_registration;
 						}
@@ -210,7 +211,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 
 								if(EOK != ret)
 								{
-									NXP_LOG_DEBUG("DB was locked in different session, entry wasn't retrieved from DB\n");
+									NXP_LOG_WARNING("DB was locked in different session, entry wasn't retrieved from DB\n");
 									*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
 									break;
 								}
@@ -261,7 +262,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 								else
 								{
 									/*	Interface list contains interface not found in FCI database */
-									NXP_LOG_ERROR("Interface %d not found\n", (int_t)ii);
+									NXP_LOG_WARNING("Interface %d not found\n", (int_t)ii);
 									*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 									ret = EOK;
 									break; /* break the 'for' loop */
@@ -309,7 +310,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						if (oal_ntohs(bd_cmd->vlan) <= 1U)
 						{
 							/*	0 - fall-back, 1 - default */
-							NXP_LOG_ERROR("VLAN %d is reserved\n", oal_ntohs(bd_cmd->vlan));
+							NXP_LOG_WARNING("VLAN %d is reserved\n", oal_ntohs(bd_cmd->vlan));
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							ret = EOK;
 							break;
@@ -319,7 +320,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						domain = pfe_l2br_get_first_domain(fci_context->l2_bridge, L2BD_CRIT_BY_VLAN, (void *)(addr_t)oal_ntohs(bd_cmd->vlan));
 						if (NULL == domain)
 						{
-							NXP_LOG_ERROR("Domain %d not found\n", oal_ntohs(bd_cmd->vlan));
+							NXP_LOG_WARNING("Domain %d not found\n", oal_ntohs(bd_cmd->vlan));
 							*fci_ret = FPP_ERR_L2_BD_NOT_FOUND;
 							ret = EOK;
 						}
@@ -424,7 +425,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 
 					default:
 					{
-						NXP_LOG_ERROR("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", bd_cmd->action);
+						NXP_LOG_WARNING("FPP_CMD_L2_BD: Unknown action received: 0x%x\n", bd_cmd->action);
 						*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 						break;
 					}
@@ -433,7 +434,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 				if (EOK != pfe_if_db_unlock(session_id))
 				{
 					*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
-					NXP_LOG_DEBUG("DB unlock failed\n");
+					NXP_LOG_ERROR("DB unlock failed\n");
 				}
 			}
 
@@ -496,7 +497,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 					/* Check if valid logical interfaces are requested */
 					if (oal_ntohl(br_ent_cmd->forward_list) != (oal_ntohl(br_ent_cmd->forward_list) & valid_if_list))
 					{
-						NXP_LOG_ERROR("Invalid interfaces in forward list\n");
+						NXP_LOG_WARNING("Invalid interfaces in forward list\n");
 						*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 						ret = EOK;
 					}
@@ -527,7 +528,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 					/* Check if valid logical interfaces are requested */
 					if (oal_ntohl(br_ent_cmd->forward_list) != (oal_ntohl(br_ent_cmd->forward_list) & valid_if_list))
 					{
-						NXP_LOG_ERROR("Invalid interfaces in forward list\n");
+						NXP_LOG_WARNING("Invalid interfaces in forward list\n");
 						*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 						ret = EOK;
 					}
@@ -627,7 +628,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 				}
 				default:
 				{
-					NXP_LOG_ERROR("FPP_CMD_L2_STATIC_ENT: Unknown action received: 0x%x\n", br_ent_cmd->action);
+					NXP_LOG_WARNING("FPP_CMD_L2_STATIC_ENT: Unknown action received: 0x%x\n", br_ent_cmd->action);
 					*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 					break;
 				}
@@ -653,7 +654,7 @@ uint32_t fci_l2br_static_entry_get_valid_fw_list(void)
 	ret = pfe_if_db_lock(&session_id);
 	if(EOK != ret)
 	{
-		NXP_LOG_DEBUG("DB lock failed\n");
+		NXP_LOG_ERROR("DB lock failed\n");
 		valid_if_list = 0;
 	}
 	else
@@ -676,7 +677,7 @@ uint32_t fci_l2br_static_entry_get_valid_fw_list(void)
 
 		if (EOK != pfe_if_db_unlock(session_id))
 		{
-			NXP_LOG_DEBUG("DB unlock failed\n");
+			NXP_LOG_ERROR("DB unlock failed\n");
 			valid_if_list = 0;
 		}
 	}
@@ -741,13 +742,13 @@ static errno_t fci_l2br_domain_remove(pfe_l2br_domain_t *domain)
 			/*	Remove from domain */
 			if (EOK != fci_l2br_domain_remove_if(domain, phy_if))
 			{
-				NXP_LOG_WARNING("Interface removal failed\n");
+				NXP_LOG_ERROR("Interface removal failed\n");
 			}
 			else
 			{
 				if (EOK != pfe_l2br_domain_get_vlan(domain, &vlan))
 				{
-					NXP_LOG_DEBUG("Could not get domain VLAN ID\n");
+					NXP_LOG_ERROR("Could not get domain VLAN ID\n");
 				}
 
 				NXP_LOG_INFO("Domain %d: Interface %d removed\n", vlan, pfe_phy_if_get_id(phy_if));

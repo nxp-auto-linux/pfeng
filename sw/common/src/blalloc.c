@@ -340,7 +340,10 @@ errno_t blalloc_alloc_offs(blalloc_t *ctx, size_t size, size_t align, addr_t *ad
 	/* Set initial search position */
 	offset = ctx->start_srch;
 	offset -= (offset % CHUNKS_IN_BYTE); /* Start search at byte boundary to simplify next code */
-	(void)oal_spinlock_lock(&ctx->spinlock);
+	if (EOK != oal_spinlock_lock(&ctx->spinlock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
     /* Go through all bytes in ctx->chunkinfo starting from the one containing first known chunk */
 	for(i = (ctx->start_srch / CHUNKS_IN_BYTE); i < (((ctx->size >> ctx->chunk_size) + CHUNKS_IN_BYTE - 1U) / CHUNKS_IN_BYTE); i++)
 	{
@@ -393,7 +396,10 @@ errno_t blalloc_alloc_offs(blalloc_t *ctx, size_t size, size_t align, addr_t *ad
 				ctx->allocated += needed << ctx->chunk_size;
 				ctx->requested += size;
 				/* Do not forget to unlock spinlock */
-				(void)oal_spinlock_unlock(&ctx->spinlock);
+				if (EOK != oal_spinlock_unlock(&ctx->spinlock))
+				{
+					NXP_LOG_ERROR("Mutex unlock failed\n");
+				}
 				/* Return the chunk offset */
 				*addr = offset << ctx->chunk_size;
 				return EOK;
@@ -403,7 +409,10 @@ errno_t blalloc_alloc_offs(blalloc_t *ctx, size_t size, size_t align, addr_t *ad
 		}
 	}
 	/* Failed */
-	(void)oal_spinlock_unlock(&ctx->spinlock);
+	if (EOK != oal_spinlock_unlock(&ctx->spinlock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 	NXP_LOG_ERROR("Allocation of %u bytes aligned at %u chunks failed\n",(uint_t)size,(uint_t)align_temp);
 	return ENOMEM;
 }
@@ -416,13 +425,19 @@ errno_t blalloc_alloc_offs(blalloc_t *ctx, size_t size, size_t align, addr_t *ad
 */
 void blalloc_free_offs_size(blalloc_t *ctx, addr_t offset, size_t size)
 {
-	(void)oal_spinlock_lock(&ctx->spinlock);
+	if (EOK != oal_spinlock_lock(&ctx->spinlock))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
     clear_bits(ctx->chunkinfo, offset >> ctx->chunk_size, (size + (((size_t)1U << ctx->chunk_size) - (size_t)1U)) >> ctx->chunk_size);
 	if((ctx->start_srch) > (offset >> ctx->chunk_size))
 	{   /* We have new first known empty chunk, remember it */
 		ctx->start_srch = offset >> ctx->chunk_size;
 	}
-	(void)oal_spinlock_unlock(&ctx->spinlock);
+	if (EOK != oal_spinlock_unlock(&ctx->spinlock))
+	{
+		NXP_LOG_ERROR("Mutex unlock failed\n");
+	}
 }
 
 /**

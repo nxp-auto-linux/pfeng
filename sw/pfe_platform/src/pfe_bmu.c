@@ -61,7 +61,7 @@ __attribute__((cold)) errno_t pfe_bmu_isr(pfe_bmu_t *bmu)
 	#ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_lock(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 	#endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -71,7 +71,7 @@ __attribute__((cold)) errno_t pfe_bmu_isr(pfe_bmu_t *bmu)
 	#ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_unlock(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	#endif /* PFE_CFG_PARANOID_IRQ */
 	}
@@ -88,7 +88,7 @@ void pfe_bmu_irq_mask(pfe_bmu_t *bmu)
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&bmu->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -97,7 +97,7 @@ void pfe_bmu_irq_mask(pfe_bmu_t *bmu)
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_unlock(&bmu->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 #endif /* PFE_CFG_PARANOID_IRQ */
 }
@@ -111,7 +111,7 @@ void pfe_bmu_irq_unmask(pfe_bmu_t *bmu)
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_lock(&bmu->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -120,7 +120,7 @@ void pfe_bmu_irq_unmask(pfe_bmu_t *bmu)
 #ifdef PFE_CFG_PARANOID_IRQ
 	if (EOK != oal_mutex_unlock(&bmu->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 #endif /* PFE_CFG_PARANOID_IRQ */
 }
@@ -154,7 +154,11 @@ __attribute__((cold)) pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_
 	{
 		bmu = oal_mm_malloc(sizeof(pfe_bmu_t));
 
-		if(NULL != bmu)
+		if(NULL == bmu)
+		{
+			NXP_LOG_ERROR("Unable to allocate memory\n");
+		}
+		else
 		{
 			(void)memset(bmu, 0, sizeof(pfe_bmu_t));
 			bmu->cbus_base_va = cbus_base_va;
@@ -170,7 +174,7 @@ __attribute__((cold)) pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_
 			/*	Resource protection */
 			if (EOK != oal_mutex_init(&bmu->lock))
 			{
-				NXP_LOG_DEBUG("Mutex initialization failed\n");
+				NXP_LOG_ERROR("Mutex initialization failed\n");
 				oal_mm_free(bmu);
 				bmu = NULL;
 			}
@@ -182,7 +186,7 @@ __attribute__((cold)) pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_
 			#ifdef PFE_CFG_PARANOID_IRQ
 				if (EOK != oal_mutex_lock(&bmu->lock))
 				{
-					NXP_LOG_DEBUG("Mutex lock failed\n");
+					NXP_LOG_ERROR("Mutex lock failed\n");
 				}
 			#endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -192,7 +196,7 @@ __attribute__((cold)) pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_
 			#ifdef PFE_CFG_PARANOID_IRQ
 				if (EOK != oal_mutex_unlock(&bmu->lock))
 				{
-					NXP_LOG_DEBUG("Mutex unlock failed\n");
+					NXP_LOG_ERROR("Mutex unlock failed\n");
 				}
 			#endif /* PFE_CFG_PARANOID_IRQ */
 			}
@@ -221,7 +225,7 @@ __attribute__((cold)) void pfe_bmu_reset(pfe_bmu_t *bmu)
 	#ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_lock(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 	#endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -229,11 +233,11 @@ __attribute__((cold)) void pfe_bmu_reset(pfe_bmu_t *bmu)
 
 		if (ETIMEDOUT == ret)
 		{
-			NXP_LOG_WARNING("BMU reset timed-out\n");
+			NXP_LOG_ERROR("BMU reset timed-out\n");
 		}
 		else if (EOK != ret)
 		{
-			NXP_LOG_WARNING("BMU reset failed: 0x%x\n", ret);
+			NXP_LOG_ERROR("BMU reset failed: 0x%x\n", ret);
 		}
 		else
 		{
@@ -244,7 +248,7 @@ __attribute__((cold)) void pfe_bmu_reset(pfe_bmu_t *bmu)
 	#ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_unlock(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	#endif /* PFE_CFG_PARANOID_IRQ */
 	}
@@ -267,7 +271,7 @@ __attribute__((cold)) void pfe_bmu_enable(pfe_bmu_t *bmu)
 	#ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_lock(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 	#endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -276,7 +280,7 @@ __attribute__((cold)) void pfe_bmu_enable(pfe_bmu_t *bmu)
 	#ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_unlock(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	#endif /* PFE_CFG_PARANOID_IRQ */
 	}
@@ -299,7 +303,7 @@ __attribute__((cold)) void pfe_bmu_disable(pfe_bmu_t *bmu)
 	#ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_lock(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 	#endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -308,7 +312,7 @@ __attribute__((cold)) void pfe_bmu_disable(pfe_bmu_t *bmu)
 	#ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_unlock(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	#endif /* PFE_CFG_PARANOID_IRQ */
 	}
@@ -451,7 +455,7 @@ __attribute__((cold)) void pfe_bmu_destroy(pfe_bmu_t *bmu)
 #ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_lock(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -461,12 +465,12 @@ __attribute__((cold)) void pfe_bmu_destroy(pfe_bmu_t *bmu)
 #ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_unlock(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 
 		if (EOK != oal_mutex_destroy(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex destroy failed\n");
+			NXP_LOG_ERROR("Mutex destroy failed\n");
 		}
 #endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -527,7 +531,7 @@ __attribute__((hot)) uint32_t pfe_bmu_get_err_poll(pfe_bmu_t *bmu)
 	#ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_lock(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 	#endif /* PFE_CFG_PARANOID_IRQ */
 
@@ -537,7 +541,7 @@ __attribute__((hot)) uint32_t pfe_bmu_get_err_poll(pfe_bmu_t *bmu)
 	#ifdef PFE_CFG_PARANOID_IRQ
 		if (EOK != oal_mutex_unlock(&bmu->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 	#endif /* PFE_CFG_PARANOID_IRQ */
 	}

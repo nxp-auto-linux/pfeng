@@ -95,7 +95,7 @@ static bool_t fci_rt_db_match_criterion(fci_rt_db_t *db, const fci_rt_db_entry_t
 
 			default:
 			{
-				NXP_LOG_ERROR("Unknown criterion\n");
+				NXP_LOG_WARNING("Unknown criterion\n");
 				match = FALSE;
 				break;
 			}
@@ -161,6 +161,7 @@ errno_t fci_rt_db_add(fci_rt_db_t *db,  pfe_ip_addr_t *dst_ip,
 			is_new = true;
 			if (NULL == new_entry)
 			{
+				NXP_LOG_ERROR("Unable to allocate memory\n");
 				ret = ENOMEM;
 			}
 			else
@@ -304,7 +305,7 @@ fci_rt_db_entry_t *fci_rt_db_get_first(fci_rt_db_t *db, fci_rt_db_get_criterion_
 
 			default:
 			{
-				NXP_LOG_ERROR("Unknown criterion\n");
+				NXP_LOG_WARNING("Unknown criterion\n");
 				is_unknown_crit = TRUE;
 				break;
 			}

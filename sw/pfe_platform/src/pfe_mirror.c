@@ -66,7 +66,11 @@ static pfe_mirror_db_t *pfe_mirror_create_db(pfe_class_t *class)
 #endif
     {
         db = oal_mm_malloc(sizeof(pfe_mirror_db_t));
-        if(NULL != db)
+        if (NULL == db)
+        {
+            NXP_LOG_ERROR("Unable to allocate memory\n");
+        }
+        else
         {
             (void)memset(db, 0, sizeof(pfe_mirror_db_t));
             db->class = class;
@@ -148,7 +152,7 @@ static pfe_mirror_t *pfe_mirror_db_get_by_crit(pfe_mirror_db_t *db, pfe_mirror_d
                         }
                         break;
                     default :
-                        NXP_LOG_ERROR("Wrong criterion %u\n", crit);
+                        NXP_LOG_WARNING("Wrong criterion %u\n", crit);
                         break;
                 }
                 if(TRUE == match)
@@ -324,7 +328,11 @@ pfe_mirror_t *pfe_mirror_create(const char *name)
             if(NULL == pfe_mirror_db_get_by_crit(pfe_mirror_db, MIRROR_BY_NAME, (void *)name))
             {   /* No such entry in the database, we may add a new one */
                 mirror = oal_mm_malloc(sizeof(pfe_mirror_t) + strlen(name));
-                if(NULL != mirror)
+                if (NULL == mirror)
+                {
+                    NXP_LOG_ERROR("Unable to allocate memory\n");
+                }
+                else
                 {   /* Memory available */
                     (void)memset(mirror, 0, sizeof(pfe_mirror_t));
                     /* Remember input data */

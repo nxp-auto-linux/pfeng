@@ -49,7 +49,7 @@ uint32_t pfe_fp_create_table(pfe_class_t *class, uint16_t rules_count)
     addr = pfe_class_dmem_heap_alloc (class, size);
     if (0U == addr)
     {
-        NXP_LOG_ERROR ("Not enough DMEM memory\n");
+        NXP_LOG_ERROR("Not enough DMEM memory\n");
     }
     else
     {
@@ -60,7 +60,7 @@ uint32_t pfe_fp_create_table(pfe_class_t *class, uint16_t rules_count)
         res = pfe_class_write_dmem (class, -1, addr, (void *)&temp, sizeof (pfe_ct_fp_table_t));
         if (EOK != res)
         {
-            NXP_LOG_ERROR ("Cannot write to DMEM\n");
+            NXP_LOG_ERROR("Cannot write to DMEM\n");
             pfe_class_dmem_heap_free (class, addr);
             addr = 0U;
         }

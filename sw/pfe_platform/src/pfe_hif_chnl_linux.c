@@ -158,7 +158,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_isr(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	/*	Run the low-level ISR to identify and process the interrupt */
@@ -166,7 +166,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_isr(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	/*	Run callbacks for identified interrupts here */
@@ -215,14 +215,14 @@ void pfe_hif_chnl_irq_mask(pfe_hif_chnl_t *chnl)
 {
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	pfe_hif_chnl_cfg_irq_mask(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 }
 
@@ -234,14 +234,14 @@ void pfe_hif_chnl_irq_unmask(pfe_hif_chnl_t *chnl)
 {
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	pfe_hif_chnl_cfg_irq_unmask(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 }
 
@@ -334,6 +334,7 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, u
 
 	if (NULL == chnl)
 	{
+		NXP_LOG_ERROR("Unable to allocate memory\n");
 		return NULL;
 	}
 	else
@@ -376,14 +377,14 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, u
 
 		if (EOK != oal_spinlock_lock(&chnl->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		ret = pfe_hif_chnl_cfg_init(chnl->cbus_base_va, id);
 
 		if (EOK != oal_spinlock_unlock(&chnl->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 
 		if (EOK != ret)
@@ -449,7 +450,7 @@ __attribute__((cold)) errno_t pfe_hif_chnl_tx_enable(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	/*	HIF */
@@ -457,7 +458,7 @@ __attribute__((cold)) errno_t pfe_hif_chnl_tx_enable(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return EOK;
@@ -483,7 +484,7 @@ __attribute__((cold)) void pfe_hif_chnl_tx_disable(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	/*	Stop data transmission */
@@ -491,7 +492,7 @@ __attribute__((cold)) void pfe_hif_chnl_tx_disable(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	if (NULL != chnl->tx_ring)
@@ -526,7 +527,7 @@ __attribute__((cold)) errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	/*	HIF */
@@ -534,7 +535,7 @@ __attribute__((cold)) errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return EOK;
@@ -558,7 +559,7 @@ __attribute__((cold)) void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	/*	Stop data reception */
@@ -566,7 +567,7 @@ __attribute__((cold)) void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 }
 
@@ -634,7 +635,7 @@ errno_t pfe_hif_chnl_set_event_cbk(pfe_hif_chnl_t *chnl, pfe_hif_chnl_event_t ev
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	if ((HIF_CHNL_EVT_TX_IRQ | HIF_CHNL_EVT_RX_IRQ) == event)
@@ -671,7 +672,7 @@ errno_t pfe_hif_chnl_set_event_cbk(pfe_hif_chnl_t *chnl, pfe_hif_chnl_event_t ev
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return ret;
@@ -750,14 +751,14 @@ __attribute__((hot)) void pfe_hif_chnl_tx_irq_mask(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	pfe_hif_chnl_cfg_tx_irq_mask(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 }
 
@@ -778,14 +779,14 @@ __attribute__((hot)) void pfe_hif_chnl_tx_irq_unmask(pfe_hif_chnl_t *chnl)
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	pfe_hif_chnl_cfg_tx_irq_unmask(chnl->cbus_base_va, chnl->id);
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 }
 
@@ -1201,7 +1202,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_release_buf(pfe_hif_chnl_t *chnl, void
 
 	if (unlikely(EOK != oal_spinlock_lock(&chnl->rx_lock)))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	/*	Release the buffer to ring */
@@ -1209,7 +1210,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_release_buf(pfe_hif_chnl_t *chnl, void
 
 	if (unlikely(EOK != oal_spinlock_unlock(&chnl->rx_lock)))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return ret;
@@ -1279,7 +1280,7 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *ch
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	/*	HIF */
@@ -1295,7 +1296,7 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *ch
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return EOK;
@@ -1334,7 +1335,7 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *ch
 
 	if (EOK != oal_spinlock_lock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex lock failed\n");
+		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
 	/*	HIF */
@@ -1350,7 +1351,7 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *ch
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
-		NXP_LOG_DEBUG("Mutex unlock failed\n");
+		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return EOK;
@@ -1784,7 +1785,7 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 
 		if (EOK != oal_spinlock_lock(&chnl->lock))
 		{
-			NXP_LOG_DEBUG("Mutex lock failed\n");
+			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
 		/*	Disable and finalize the channel */
@@ -1794,7 +1795,7 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 
 		if (EOK != oal_spinlock_unlock(&chnl->lock))
 		{
-			NXP_LOG_DEBUG("Mutex unlock failed\n");
+			NXP_LOG_ERROR("Mutex unlock failed\n");
 		}
 
 
@@ -1911,4 +1912,24 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_get_text_statistics(const pfe_hif_ch
 		len += pfe_hif_chnl_dump_ring(chnl, TRUE, TRUE, buf + len, buf_len - len, verb_level);
 
 	return len;
+}
+
+/**
+ * @brief       Check if TX ring in  HIF channel contains less than watermark-specified
+ *              number of free entries
+ * @param[in]   chnl        The channel instance
+ * @return      TRUE if ring contains less than watermark-specified number
+ *              of free entries
+ */
+bool_t pfe_hif_chnl_tx_fifo_is_below_wm(const pfe_hif_chnl_t *chnl)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+    if (unlikely(NULL == chnl))
+    {
+        NXP_LOG_ERROR("NULL argument received\n");
+        return FALSE;
+    }
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+    return pfe_hif_ring_is_below_wm(chnl->tx_ring);
 }

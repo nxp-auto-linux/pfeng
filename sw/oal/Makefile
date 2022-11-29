@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2021 NXP
+#  Copyright 2018-2022 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -23,7 +23,8 @@ INCLUDES += -I$(INC_PREFIX).. \
 			-I$(INC_PREFIX)public \
 			-I$(INC_PREFIX)../hal/public \
 			-I$(INC_PREFIX)../fifo/public \
-			-I$(INC_PREFIX)../common/public
+			-I$(INC_PREFIX)../common/public \
+			-I$(INC_PREFIX)../pfe_platform/public
 
 #Dependencies
 DEPENDENCIES = $(subst -L,,$(subst $(EMPTY) $(EMPTY)-l:,/,$(LIBS)))
