@@ -120,9 +120,9 @@ module_param(disable_master_detection, int, 0644);
 MODULE_PARM_DESC(disable_master_detection, "\t 1 - disable Master detection signalization (default is 0)");
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
-static bool g2_ordered_class_writes = true;
+static bool g2_ordered_class_writes = false;
 module_param(g2_ordered_class_writes, bool, 0644);
-MODULE_PARM_DESC(g2_ordered_class_writes, "\t Enable ordered class writes on S32G2 (default: true)");
+MODULE_PARM_DESC(g2_ordered_class_writes, "\t Enable ordered class writes on S32G2 (default: false)");
 
 static bool g3_rtable_in_lmem = false;
 module_param(g3_rtable_in_lmem , bool, 0644);
