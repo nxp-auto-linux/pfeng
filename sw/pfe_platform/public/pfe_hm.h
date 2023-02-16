@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2022 NXP
+ *  Copyright 2022-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -10,13 +10,13 @@
 #ifndef PFE_HM_H
 #define PFE_HM_H
 
-#define PFE_HM_DESCRIPTION_MAX_LEN 128
+#define PFE_HM_DESCRIPTION_MAX_LEN 256
 #define PFE_HM_QUEUE_LEN 8
 
 typedef enum {
-	HM_INFO,
-	HM_WARNING,
-	HM_ERROR
+	HM_INFO = 0,
+	HM_WARNING = 1,
+	HM_ERROR = 2
 } pfe_hm_type_t;
 
 typedef enum {
@@ -139,25 +139,23 @@ typedef enum {
 } pfe_hm_evt_t;
 
 typedef enum {
-	HM_SRC_UNKNOWN,
-	HM_SRC_DRIVER,
-	HM_SRC_PFENG_DEV,
-	HM_SRC_PFENG_NETDEV,
-	HM_SRC_WDT,
-	HM_SRC_EMAC0,
-	HM_SRC_EMAC1,
-	HM_SRC_EMAC2,
-	HM_SRC_BUS,
-	HM_SRC_PARITY,
-	HM_SRC_FAIL_STOP,
-	HM_SRC_FW_FAIL_STOP,
-	HM_SRC_HOST_FAIL_STOP,
-	HM_SRC_ECC,
-	HM_SRC_PE_CLASS,
-	HM_SRC_PE_UTIL,
-	HM_SRC_PE_TMU,
-	HM_SRC_HIF,
-	HM_SRC_BMU,
+	HM_SRC_UNKNOWN = 0,
+	HM_SRC_DRIVER = 1,
+	HM_SRC_WDT = 2,
+	HM_SRC_EMAC0 = 3,
+	HM_SRC_EMAC1 = 4,
+	HM_SRC_EMAC2 = 5,
+	HM_SRC_BUS = 6,
+	HM_SRC_PARITY = 7,
+	HM_SRC_FAIL_STOP = 8,
+	HM_SRC_FW_FAIL_STOP = 9,
+	HM_SRC_HOST_FAIL_STOP = 10,
+	HM_SRC_ECC = 11,
+	HM_SRC_PE_CLASS = 12,
+	HM_SRC_PE_UTIL = 13,
+	HM_SRC_PE_TMU = 14,
+	HM_SRC_HIF = 15,
+	HM_SRC_BMU = 16,
 } pfe_hm_src_t;
 
 typedef struct {
@@ -173,7 +171,7 @@ typedef void (* pfe_hm_cb_t)(pfe_hm_item_t *item);
 
 errno_t pfe_hm_init(void);
 errno_t pfe_hm_destroy(void);
-void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id, void *dev,
+void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id, pfe_hm_log_t hm_log,
 		const char *format, ...);
 errno_t pfe_hm_get(pfe_hm_item_t *item);
 const char *pfe_hm_get_event_str(pfe_hm_evt_t id);
@@ -182,12 +180,25 @@ bool_t pfe_hm_register_event_cb(pfe_hm_cb_t cb);
 
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
-#define pfe_hm_report_info(src, id, format, ...) pfe_hm_report((src), HM_INFO, (id), NULL,"[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define pfe_hm_report_warning(src, id, format, ...) pfe_hm_report((src), HM_WARNING, (id), NULL, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define pfe_hm_report_error(src, id, format, ...) pfe_hm_report((src), HM_ERROR, (id), NULL, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_info(src, id, format, ...) \
+	pfe_hm_report((src), HM_INFO, (id), (pfe_hm_log_t){.log_type = NXP_LOG_TYPE_PFE}, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_warning(src, id, format, ...) \
+	pfe_hm_report((src), HM_WARNING, (id), (pfe_hm_log_t){.log_type = NXP_LOG_TYPE_PFE}, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_error(src, id, format, ...) \
+	pfe_hm_report((src), HM_ERROR, (id), (pfe_hm_log_t){.log_type = NXP_LOG_TYPE_PFE}, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
 
-#define pfe_hm_report_dev_info(src, id, dev, format, ...) pfe_hm_report((src), HM_INFO, (id), dev,"[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define pfe_hm_report_dev_warning(src, id, dev, format, ...) pfe_hm_report((src), HM_WARNING, (id), dev, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define pfe_hm_report_dev_error(src, id, dev, format, ...) pfe_hm_report((src), HM_ERROR, (id), dev, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_dev_info(src, id, dev, format, ...) \
+	pfe_hm_report((src), HM_INFO, (id), (pfe_hm_log_t){.log_type = NXP_LOG_TYPE_DEV, .log_dev = dev}, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_dev_warning(src, id, dev, format, ...) \
+	pfe_hm_report((src), HM_WARNING, (id), (pfe_hm_log_t){.log_type = NXP_LOG_TYPE_DEV, .log_dev = dev}, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_dev_error(src, id, dev, format, ...) \
+	pfe_hm_report((src), HM_ERROR, (id), (pfe_hm_log_t){.log_type = NXP_LOG_TYPE_DEV, .log_dev = dev}, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+
+#define pfe_hm_report_netdev_info(src, id, dev, format, ...) \
+	pfe_hm_report((src), HM_INFO, (id), (pfe_hm_log_t){.log_type = NXP_LOG_TYPE_NETDEV, .log_netdev = dev}, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_netdev_warning(src, id, dev, format, ...) \
+	pfe_hm_report((src), HM_WARNING, (id), (pfe_hm_log_t){.log_type = NXP_LOG_TYPE_NETDEV, .log_netdev = dev}, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define pfe_hm_report_netdev_error(src, id, dev, format, ...) \
+	pfe_hm_report((src), HM_ERROR, (id), (pfe_hm_log_t){.log_type = NXP_LOG_TYPE_NETDEV, .log_netdev = dev}, "[%s:%d] " format, __FILENAME__, __LINE__, ##__VA_ARGS__)
 
 #endif /* PFE_HM_H */

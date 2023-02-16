@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1819,11 +1819,10 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
  * @param[in]	chnl The client channel instance
  * @param[in]	dump_rx True if RX ring has to be dumped
  * @param[in]	dump_tx True if TX ring has to be dumped
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	size 		Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level, number of data written to the buffer
  */
-__attribute__((cold)) uint32_t pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, char_t *buf, uint32_t size, uint8_t verb_level)
+__attribute__((cold)) uint32_t pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, struct seq_file *seq, uint8_t verb_level)
 {
 	uint32_t len = 0;
 
@@ -1837,12 +1836,12 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl
 
 	if(dump_rx)
 	{
-		len += pfe_hif_ring_dump(chnl->rx_ring, "RX", buf + len, size - len, verb_level);
+		len += pfe_hif_ring_dump(chnl->rx_ring, "RX", seq, verb_level);
 	}
 
 	if(dump_tx)
 	{
-		len += pfe_hif_ring_dump(chnl->tx_ring, "TX", buf + len, size - len, verb_level);
+		len += pfe_hif_ring_dump(chnl->tx_ring, "TX", seq, verb_level);
 	}
 
 	return len;
@@ -1888,15 +1887,12 @@ uint32_t pfe_hif_chnl_get_rx_cnt(const pfe_hif_chnl_t *chnl)
  * @brief		Return HIF channel runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	chnl 		The channel instance
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	buf_len 	Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level, number of data written to the buffer
  * @return		Number of bytes written to the buffe
  */
-__attribute__((cold)) uint32_t pfe_hif_chnl_get_text_statistics(const pfe_hif_chnl_t *chnl, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+__attribute__((cold)) uint32_t pfe_hif_chnl_get_text_statistics(const pfe_hif_chnl_t *chnl, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
-
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
@@ -1906,12 +1902,12 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_get_text_statistics(const pfe_hif_ch
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	/*	HIF */
-	len += pfe_hif_chnl_cfg_get_text_stat(chnl->cbus_base_va, chnl->id, buf, buf_len, verb_level);
+	pfe_hif_chnl_cfg_get_text_stat(chnl->cbus_base_va, chnl->id, seq, verb_level);
 
 	if (verb_level >= 9)
-		len += pfe_hif_chnl_dump_ring(chnl, TRUE, TRUE, buf + len, buf_len - len, verb_level);
+		pfe_hif_chnl_dump_ring(chnl, TRUE, TRUE, seq, verb_level);
 
-	return len;
+	return 0;
 }
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2022 NXP
+ * Copyright 2018-2023 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -44,7 +44,7 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"1.2.0 RC2"
+#define PFENG_DRIVER_VERSION		"1.3.0 RC1"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
@@ -129,11 +129,7 @@ struct pfeng_netif_cfg {
 	struct list_head		lnode;
 	const char			*name;
 	struct device_node		*dn;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
-	u8				*macaddr;
-#else
 	u8				macaddr[ETH_ALEN];
-#endif
 	u8				emac_id;
 	u8				hifs;
 	u32				hifmap;

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -15,22 +15,19 @@
 #include "pfe_emac_csr.h"
 #include "pfe_feature_mgr.h"
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-/* TODO: Remove this macro after ARTD-27720 is finished (AAVB-5221) */
-#define ETH_43_PFE_PROT_MEM_U32            ((uint32)0x00000004UL) 
+#ifndef ETH_HLEN
+#define ETH_HLEN		14U
+#endif
+#ifndef ETH_FCS_LEN
+#define ETH_FCS_LEN		4U
+#endif
+#ifndef VLAN_HLEN
+#define VLAN_HLEN		4U
+#endif
 
-#if (STD_ON == ETH_43_PFE_USER_ACCESS_ALLOWED_AVAILABLE)
-    #define USER_MODE_REG_PROT_ENABLED      (STD_ON)
-    #include "RegLockMacros.h"
-#endif /* (STD_ON == ETH_43_PFE_SET_USER_ACCESS_ALLOWED_AVAILABLE) */
-#endif /*PFE_CFG_TARGET_OS_AUTOSAR*/
-
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CONST_32
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+#define PFE_EMAC_PKT_OVERHEAD	(PFE_MIN_DSA_OVERHEAD + ETH_HLEN + ETH_FCS_LEN)
+#define PFE_EMAC_STD_MAXFRMSZ	(PFE_EMAC_STD_MTU + PFE_EMAC_PKT_OVERHEAD)
+#define PFE_EMAC_JUMBO_MAXFRMSZ	(PFE_EMAC_JUMBO_MTU + PFE_EMAC_PKT_OVERHEAD)
 
 /* Mode conversion table */
 /* usage scope: phy_mode_to_str */
@@ -47,27 +44,11 @@ static const char_t * const phy_mode[] =
         "INVALID",
 };
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CONST_32
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 static inline uint32_t reverse_bits_32(uint32_t u32Data);
 static inline uint32_t crc32_reversed(const uint8_t *const data, const uint32_t len);
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 static inline const char_t* phy_mode_to_str(uint32_t mode);
 static const char *emac_speed_to_str(pfe_emac_speed_t speed);
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 static inline uint32_t reverse_bits_32(uint32_t u32Data)
 {
@@ -110,8 +91,6 @@ static inline uint32_t crc32_reversed(const uint8_t *const data, const uint32_t 
 
 	return reverse_bits_32(~res);
 }
-
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
 /**
  * @brief		Convert EMAC mode to string
@@ -162,30 +141,6 @@ static const char *emac_speed_to_str(pfe_emac_speed_t speed)
 	}
 	return ret;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#if (STD_ON == ETH_43_PFE_USER_ACCESS_ALLOWED_AVAILABLE)
-/**
- * @brief		Set UAA bit in the register protection module while using the usermode functionality
- * @param[in]	base_va The EMAC base address
- */
-void pfe_emac_csr_set_user_mode_allowed(const uint32_t * base_va)
-{
-    SET_USER_ACCESS_ALLOWED((uint32_t)base_va, ETH_43_PFE_PROT_MEM_U32);
-}
-
-/**
- * @brief		Clear UAA bit in the register protection module while using the usermode functionality
- * @param[in]	base_va The EMAC base address
- */
-void pfe_emac_csr_clr_user_mode_allowed(const uint32_t * base_va)
-{
-    CLR_USER_ACCESS_ALLOWED((uint32_t)base_va, ETH_43_PFE_PROT_MEM_U32);
-}
-#endif /*STD_ON == ETH_43_PFE_USER_ACCESS_ALLOWED_AVAILABLE*/
-#endif /*PFE_CFG_TARGET_OS_AUTOSAR*/
 
 /**
  * @brief		HW-specific initialization function
@@ -242,7 +197,8 @@ errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,
 	hal_write32(reg
 			| LARGE_MODE_TIMEOUT(0x2U)
 			| NORMAL_MODE_TIMEOUT(0x2U)
-			| 0x10UL
+			/*	Select according to real CSR clock frequency. S32G: CSR_CLK = 300MHz => 300 ticks */
+			| 0x12CUL
 			, base_va + MAC_FSM_ACT_TIMER);
 	hal_write32(0U
 			| DATA_PARITY_PROTECTION(1U)
@@ -250,7 +206,7 @@ errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,
 			, base_va + MTL_DPP_CONTROL);
 	hal_write32(0U
 			| FSM_PARITY_ENABLE(1U)
-			| FSM_TIMEOUT_ENABLE(0U)
+			| FSM_TIMEOUT_ENABLE(1U)
 			, base_va + MAC_FSM_CONTROL);
 
 	reg = 0U | ARP_OFFLOAD_ENABLE(0U)
@@ -296,11 +252,11 @@ errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,
 	hal_write32(0U, base_va + MTL_TXQ0_OPERATION_MODE);
 	if (TRUE == pfe_feature_mgr_is_available("jumbo_frames"))
 	{
-		hal_write32(GIANT_PACKET_SIZE_LIMIT(9022U), base_va + MAC_EXT_CONFIGURATION);
+		hal_write32(GIANT_PACKET_SIZE_LIMIT(PFE_EMAC_JUMBO_MAXFRMSZ), base_va + MAC_EXT_CONFIGURATION);
 	}
 	else
 	{
-		hal_write32(GIANT_PACKET_SIZE_LIMIT(1522U), base_va + MAC_EXT_CONFIGURATION);
+		hal_write32(GIANT_PACKET_SIZE_LIMIT(PFE_EMAC_STD_MAXFRMSZ), base_va + MAC_EXT_CONFIGURATION);
 	}
 
 	hal_write32(0U, base_va + MAC_TIMESTAMP_CONTROL);
@@ -949,7 +905,7 @@ errno_t pfe_emac_cfg_set_max_frame_length(addr_t base_va, uint32_t len)
 
 	if (je && edvlp)
 	{
-		maxlen = 9026U;
+		maxlen = PFE_EMAC_JUMBO_MAXFRMSZ + VLAN_HLEN;
 	}
 
 	if (!je && s2kp)
@@ -966,24 +922,24 @@ errno_t pfe_emac_cfg_set_max_frame_length(addr_t base_va, uint32_t len)
 
 	if (!je && !s2kp && !gpslce && edvlp)
 	{
-		maxlen = 1526U;
+		maxlen = PFE_EMAC_STD_MAXFRMSZ + VLAN_HLEN;
 	}
 
 	if (je && !edvlp)
 	{
-		maxlen = 9022U;
+		maxlen = PFE_EMAC_JUMBO_MAXFRMSZ;
 	}
 
 	if (!je && !s2kp && gpslce && !edvlp)
 	{
 		reg = hal_read32(base_va + MAC_EXT_CONFIGURATION);
 		maxlen = reg & GIANT_PACKET_SIZE_LIMIT((uint32_t)-1);
-		maxlen += 4U;
+		maxlen += VLAN_HLEN;
 	}
 
 	if (!je && !s2kp && !gpslce && !edvlp)
 	{
-		maxlen = 1522U;
+		maxlen = PFE_EMAC_STD_MAXFRMSZ;
 	}
 
 	if (len > maxlen)
@@ -1238,7 +1194,7 @@ errno_t pfe_emac_cfg_mdio_read22(addr_t base_va, uint8_t pa, uint8_t ra, uint16_
 			| CLAUSE45_ENABLE(0U)
 			| GMII_OPERATION_CMD(GMII_READ)
 			| SKIP_ADDRESS_PACKET(0U)
-			/*	Select according to real CSR clock frequency. S32G: CSR_CLK = XBAR_CLK = 400MHz */
+			/*	Select according to real CSR clock frequency. S32G: CSR_CLK = XBAR_CLK = 300MHz */
 			| CSR_CLOCK_RANGE(CSR_CLK_300_500_MHZ_MDC_CSR_DIV_204)
 			| NUM_OF_TRAILING_CLOCKS(0U)
 			| REG_DEV_ADDR(ra)
@@ -1294,7 +1250,7 @@ errno_t pfe_emac_cfg_mdio_read45(addr_t base_va, uint8_t pa, uint8_t dev, uint16
 			| CLAUSE45_ENABLE(1U)
 			| GMII_OPERATION_CMD(GMII_READ)
 			| SKIP_ADDRESS_PACKET(0U)
-			/*	Select according to real CSR clock frequency. S32G: CSR_CLK = XBAR_CLK = 400MHz */
+			/*	Select according to real CSR clock frequency. S32G: CSR_CLK = XBAR_CLK = 300MHz */
 			| CSR_CLOCK_RANGE(CSR_CLK_300_500_MHZ_MDC_CSR_DIV_204)
 			| NUM_OF_TRAILING_CLOCKS(0U)
 			| REG_DEV_ADDR(dev)
@@ -1345,7 +1301,7 @@ errno_t pfe_emac_cfg_mdio_write22(addr_t base_va, uint8_t pa, uint8_t ra, uint16
 				| CLAUSE45_ENABLE(0U)
 				| GMII_OPERATION_CMD(GMII_WRITE)
 				| SKIP_ADDRESS_PACKET(0U)
-				/*	Select according to real CSR clock frequency. S32G: CSR_CLK = XBAR_CLK = 400MHz */
+				/*	Select according to real CSR clock frequency. S32G: CSR_CLK = XBAR_CLK = 300MHz */
 				| CSR_CLOCK_RANGE(CSR_CLK_300_500_MHZ_MDC_CSR_DIV_204)
 				| NUM_OF_TRAILING_CLOCKS(0U)
 				| REG_DEV_ADDR(ra)
@@ -1389,7 +1345,7 @@ errno_t pfe_emac_cfg_mdio_write45(addr_t base_va, uint8_t pa, uint8_t dev, uint1
 				| CLAUSE45_ENABLE(1U)
 				| GMII_OPERATION_CMD(GMII_WRITE)
 				| SKIP_ADDRESS_PACKET(0U)
-				/*	Select according to real CSR clock frequency. S32G: CSR_CLK = XBAR_CLK = 400MHz */
+				/*	Select according to real CSR clock frequency. S32G: CSR_CLK = XBAR_CLK = 300MHz */
 				| CSR_CLOCK_RANGE(CSR_CLK_300_500_MHZ_MDC_CSR_DIV_204)
 				| NUM_OF_TRAILING_CLOCKS(0U)
 				| REG_DEV_ADDR(dev)
@@ -1432,21 +1388,17 @@ uint32_t pfe_emac_cfg_get_rx_cnt(addr_t base_va)
 	return hal_read32(base_va + RX_PACKETS_COUNT_GOOD_BAD);
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Get EMAC statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
  * 				about the EMAC block.
  * @param[in]	base_va 	Base address of EMAC register space (virtual)
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	size 		Buffer length
+ * @param[in]	seq 		Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_emac_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level)
+uint32_t pfe_emac_cfg_get_text_stat(addr_t base_va, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
 	uint32_t reg;
 	pfe_emac_speed_t speed;
 	pfe_emac_duplex_t duplex;
@@ -1462,162 +1414,160 @@ uint32_t pfe_emac_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, 
 	{
 		/*	Get version */
 		reg = hal_read32(base_va + MAC_VERSION);
-		len += oal_util_snprintf(buf + len, size - len, "SNPVER                    : 0x%x\n", reg & 0xffU);
-		len += oal_util_snprintf(buf + len, size - len, "USERVER                   : 0x%x\n", (reg >> 8) & 0xffU);
+		seq_printf(seq,  "SNPVER                    : 0x%x\n", reg & 0xffU);
+		seq_printf(seq,  "USERVER                   : 0x%x\n", (reg >> 8) & 0xffU);
 
 		reg = hal_read32(base_va + RX_PACKETS_COUNT_GOOD_BAD);
-		len += oal_util_snprintf(buf + len, size - len, "RX_PACKETS_COUNT_GOOD_BAD : 0x%x\n", reg);
+		seq_printf(seq,  "RX_PACKETS_COUNT_GOOD_BAD : 0x%x\n", reg);
 		reg = hal_read32(base_va + TX_PACKET_COUNT_GOOD_BAD);
-		len += oal_util_snprintf(buf + len, size - len, "TX_PACKET_COUNT_GOOD_BAD  : 0x%x\n", reg);
+		seq_printf(seq,  "TX_PACKET_COUNT_GOOD_BAD  : 0x%x\n", reg);
 
 		(void)pfe_emac_cfg_get_link_config(base_va, &speed, &duplex);
 		reg = hal_read32(base_va + MAC_CONFIGURATION);
-		len += oal_util_snprintf(buf + len, size - len, "MAC_CONFIGURATION         : 0x%x [speed: %s]\n", reg, emac_speed_to_str(speed));
+		seq_printf(seq,  "MAC_CONFIGURATION         : 0x%x [speed: %s]\n", reg, emac_speed_to_str(speed));
 
 		reg = (hal_read32(base_va + MAC_HW_FEATURE0) >> 28U) & 0x07U;
-		len += oal_util_snprintf(buf + len, size - len, "ACTPHYSEL(MAC_HW_FEATURE0): %s\n", phy_mode_to_str(reg));
+		seq_printf(seq,  "ACTPHYSEL(MAC_HW_FEATURE0): %s\n", phy_mode_to_str(reg));
 
 		/* Error debugging */
 		if(verb_level >= 8U)
 		{
 			reg = hal_read32(base_va + TX_UNDERFLOW_ERROR_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "TX_UNDERFLOW_ERROR_PACKETS        : 0x%x\n", reg);
+			seq_printf(seq,  "TX_UNDERFLOW_ERROR_PACKETS        : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_SINGLE_COLLISION_GOOD_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "TX_SINGLE_COLLISION_GOOD_PACKETS  : 0x%x\n", reg);
+			seq_printf(seq,  "TX_SINGLE_COLLISION_GOOD_PACKETS  : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_MULTIPLE_COLLISION_GOOD_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "TX_MULTIPLE_COLLISION_GOOD_PACKETS: 0x%x\n", reg);
+			seq_printf(seq,  "TX_MULTIPLE_COLLISION_GOOD_PACKETS: 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_DEFERRED_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "TX_DEFERRED_PACKETS               : 0x%x\n", reg);
+			seq_printf(seq,  "TX_DEFERRED_PACKETS               : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_LATE_COLLISION_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "TX_LATE_COLLISION_PACKETS         : 0x%x\n", reg);
+			seq_printf(seq,  "TX_LATE_COLLISION_PACKETS         : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_EXCESSIVE_COLLISION_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "TX_EXCESSIVE_COLLISION_PACKETS    : 0x%x\n", reg);
+			seq_printf(seq,  "TX_EXCESSIVE_COLLISION_PACKETS    : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_CARRIER_ERROR_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "TX_CARRIER_ERROR_PACKETS          : 0x%x\n", reg);
+			seq_printf(seq,  "TX_CARRIER_ERROR_PACKETS          : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_EXCESSIVE_DEFERRAL_ERROR);
-			len += oal_util_snprintf(buf + len, size - len, "TX_EXCESSIVE_DEFERRAL_ERROR       : 0x%x\n", reg);
+			seq_printf(seq,  "TX_EXCESSIVE_DEFERRAL_ERROR       : 0x%x\n", reg);
 
 			reg = hal_read32(base_va + TX_OSIZE_PACKETS_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_OSIZE_PACKETS_GOOD             : 0x%x\n", reg);
+			seq_printf(seq,  "TX_OSIZE_PACKETS_GOOD             : 0x%x\n", reg);
 
 			reg = hal_read32(base_va + RX_CRC_ERROR_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "RX_CRC_ERROR_PACKETS              : 0x%x\n", reg);
+			seq_printf(seq,  "RX_CRC_ERROR_PACKETS              : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_ALIGNMENT_ERROR_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "RX_ALIGNMENT_ERROR_PACKETS        : 0x%x\n", reg);
+			seq_printf(seq,  "RX_ALIGNMENT_ERROR_PACKETS        : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_RUNT_ERROR_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "RX_RUNT_ERROR_PACKETS             : 0x%x\n", reg);
+			seq_printf(seq,  "RX_RUNT_ERROR_PACKETS             : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_JABBER_ERROR_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "RX_JABBER_ERROR_PACKETS           : 0x%x\n", reg);
+			seq_printf(seq,  "RX_JABBER_ERROR_PACKETS           : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_LENGTH_ERROR_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "RX_LENGTH_ERROR_PACKETS           : 0x%x\n", reg);
+			seq_printf(seq,  "RX_LENGTH_ERROR_PACKETS           : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_OUT_OF_RANGE_TYPE_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "RX_OUT_OF_RANGE_TYPE_PACKETS      : 0x%x\n", reg);
+			seq_printf(seq,  "RX_OUT_OF_RANGE_TYPE_PACKETS      : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_FIFO_OVERFLOW_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "RX_FIFO_OVERFLOW_PACKETS          : 0x%x\n", reg);
+			seq_printf(seq,  "RX_FIFO_OVERFLOW_PACKETS          : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_RECEIVE_ERROR_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "RX_RECEIVE_ERROR_PACKETS          : 0x%x\n", reg);
+			seq_printf(seq,  "RX_RECEIVE_ERROR_PACKETS          : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_RECEIVE_ERROR_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "RX_RECEIVE_ERROR_PACKETS          : 0x%x\n", reg);
+			seq_printf(seq,  "RX_RECEIVE_ERROR_PACKETS          : 0x%x\n", reg);
 
 			reg = hal_read32(base_va + MTL_ECC_ERR_CNTR_STATUS);
-			len += oal_util_snprintf(buf + len, size - len, "MTL_ECC_CORRECTABLE_ERRORS        : 0x%x\n", (reg & 0xffU));
-			len += oal_util_snprintf(buf + len, size - len, "MTL_ECC_UNCORRECTABLE_ERRORS      : 0x%x\n", ((reg >> 16U) & 0xfU));
+			seq_printf(seq,  "MTL_ECC_CORRECTABLE_ERRORS        : 0x%x\n", (reg & 0xffU));
+			seq_printf(seq,  "MTL_ECC_UNCORRECTABLE_ERRORS      : 0x%x\n", ((reg >> 16U) & 0xfU));
 		}
 
 		/* Cast/vlan/flow control */
 		if(verb_level >= 3U)
 		{
 			reg = hal_read32(base_va + TX_UNICAST_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_UNICAST_PACKETS_GOOD_BAD       : 0x%x\n", reg);
+			seq_printf(seq,  "TX_UNICAST_PACKETS_GOOD_BAD       : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_BROADCAST_PACKETS_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_BROADCAST_PACKETS_GOOD         : 0x%x\n", reg);
+			seq_printf(seq,  "TX_BROADCAST_PACKETS_GOOD         : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_BROADCAST_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_BROADCAST_PACKETS_GOOD_BAD     : 0x%x\n", reg);
+			seq_printf(seq,  "TX_BROADCAST_PACKETS_GOOD_BAD     : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_MULTICAST_PACKETS_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_MULTICAST_PACKETS_GOOD         : 0x%x\n", reg);
+			seq_printf(seq,  "TX_MULTICAST_PACKETS_GOOD         : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_MULTICAST_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_MULTICAST_PACKETS_GOOD_BAD     : 0x%x\n", reg);
+			seq_printf(seq,  "TX_MULTICAST_PACKETS_GOOD_BAD     : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_VLAN_PACKETS_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_VLAN_PACKETS_GOOD              : 0x%x\n", reg);
+			seq_printf(seq,  "TX_VLAN_PACKETS_GOOD              : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_PAUSE_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "TX_PAUSE_PACKETS                  : 0x%x\n", reg);
+			seq_printf(seq,  "TX_PAUSE_PACKETS                  : 0x%x\n", reg);
 		}
 
 		if(verb_level >= 4U)
 		{
 			reg = hal_read32(base_va + RX_UNICAST_PACKETS_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_UNICAST_PACKETS_GOOD           : 0x%x\n", reg);
+			seq_printf(seq,  "RX_UNICAST_PACKETS_GOOD           : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_BROADCAST_PACKETS_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_BROADCAST_PACKETS_GOOD         : 0x%x\n", reg);
+			seq_printf(seq,  "RX_BROADCAST_PACKETS_GOOD         : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_MULTICAST_PACKETS_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_MULTICAST_PACKETS_GOOD         : 0x%x\n", reg);
+			seq_printf(seq,  "RX_MULTICAST_PACKETS_GOOD         : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_VLAN_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_VLAN_PACKETS_GOOD_BAD          : 0x%x\n", reg);
+			seq_printf(seq,  "RX_VLAN_PACKETS_GOOD_BAD          : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_PAUSE_PACKETS);
-			len += oal_util_snprintf(buf + len, size - len, "RX_PAUSE_PACKETS                  : 0x%x\n", reg);
+			seq_printf(seq,  "RX_PAUSE_PACKETS                  : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_CONTROL_PACKETS_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_CONTROL_PACKETS_GOOD           : 0x%x\n", reg);
+			seq_printf(seq,  "RX_CONTROL_PACKETS_GOOD           : 0x%x\n", reg);
 		}
 
 		if(verb_level >= 1U)
 		{
 			reg = hal_read32(base_va + TX_OCTET_COUNT_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_OCTET_COUNT_GOOD                : 0x%x\n", reg);
+			seq_printf(seq,  "TX_OCTET_COUNT_GOOD                : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_OCTET_COUNT_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_OCTET_COUNT_GOOD_BAD            : 0x%x\n", reg);
+			seq_printf(seq,  "TX_OCTET_COUNT_GOOD_BAD            : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_64OCTETS_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_64OCTETS_PACKETS_GOOD_BAD       : 0x%x\n", reg);
+			seq_printf(seq,  "TX_64OCTETS_PACKETS_GOOD_BAD       : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_65TO127OCTETS_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_65TO127OCTETS_PACKETS_GOOD_BAD  : 0x%x\n", reg);
+			seq_printf(seq,  "TX_65TO127OCTETS_PACKETS_GOOD_BAD  : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_128TO255OCTETS_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_128TO255OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
+			seq_printf(seq,  "TX_128TO255OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_256TO511OCTETS_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_256TO511OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
+			seq_printf(seq,  "TX_256TO511OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_512TO1023OCTETS_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_512TO1023OCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
+			seq_printf(seq,  "TX_512TO1023OCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
 			reg = hal_read32(base_va + TX_1024TOMAXOCTETS_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_1024TOMAXOCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
+			seq_printf(seq,  "TX_1024TOMAXOCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
 		}
 
 		if(verb_level >= 5U)
 		{
 			reg = hal_read32(base_va + TX_OSIZE_PACKETS_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "TX_OSIZE_PACKETS_GOOD              : 0x%x\n", reg);
+			seq_printf(seq,  "TX_OSIZE_PACKETS_GOOD              : 0x%x\n", reg);
 		}
 
 		if(verb_level >= 2U)
 		{
 			reg = hal_read32(base_va + RX_OCTET_COUNT_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_OCTET_COUNT_GOOD                : 0x%x\n", reg);
+			seq_printf(seq,  "RX_OCTET_COUNT_GOOD                : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_OCTET_COUNT_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_OCTET_COUNT_GOOD_BAD            : 0x%x\n", reg);
+			seq_printf(seq,  "RX_OCTET_COUNT_GOOD_BAD            : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_64OCTETS_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_64OCTETS_PACKETS_GOOD_BAD       : 0x%x\n", reg);
+			seq_printf(seq,  "RX_64OCTETS_PACKETS_GOOD_BAD       : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_65TO127OCTETS_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_65TO127OCTETS_PACKETS_GOOD_BAD  : 0x%x\n", reg);
+			seq_printf(seq,  "RX_65TO127OCTETS_PACKETS_GOOD_BAD  : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_128TO255OCTETS_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_128TO255OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
+			seq_printf(seq,  "RX_128TO255OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_256TO511OCTETS_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_256TO511OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
+			seq_printf(seq,  "RX_256TO511OCTETS_PACKETS_GOOD_BAD : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_512TO1023OCTETS_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_512TO1023OCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
+			seq_printf(seq,  "RX_512TO1023OCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_1024TOMAXOCTETS_PACKETS_GOOD_BAD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_1024TOMAXOCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
+			seq_printf(seq,  "RX_1024TOMAXOCTETS_PACKETS_GOOD_BAD: 0x%x\n", reg);
 		}
 
 		if(verb_level >= 5U)
 		{
 			reg = hal_read32(base_va + RX_OVERSIZE_PACKETS_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_OSIZE_PACKETS_GOOD              : 0x%x\n", reg);
+			seq_printf(seq,  "RX_OSIZE_PACKETS_GOOD              : 0x%x\n", reg);
 			reg = hal_read32(base_va + RX_UNDERSIZE_PACKETS_GOOD);
-			len += oal_util_snprintf(buf + len, size - len, "RX_UNDERSIZE_PACKETS_GOOD          : 0x%x\n", reg);
+			seq_printf(seq,  "RX_UNDERSIZE_PACKETS_GOOD          : 0x%x\n", reg);
 		}
 	}
 
-	return len;
+	return 0;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		Get EMAC statistic in numeric form
@@ -1762,9 +1712,4 @@ errno_t pfe_emac_cfg_isr(addr_t base_va, addr_t cbus_base)
 
 	return EOK;
 }
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2022 NXP
+ *  Copyright 2019-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -125,17 +125,6 @@ static fci_fp_rule_t *fci_fp_rule_get_next(fci_fp_rule_db_t *db, dbase_t dbase);
 static bool_t fci_fp_match_table_by_criterion(fci_fp_table_criterion_t crit, const fci_fp_table_criterion_arg_t *arg, const fci_fp_table_t *fp_table);
 static fci_fp_table_t *fci_fp_table_get_first(fci_fp_table_db_t *db, fci_fp_table_criterion_t crit, void *arg);
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
-static uint32_t fci_fp_print_table(const fci_fp_table_t *fp_table, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-static errno_t fci_fp_get_rule_pos_in_table(const fci_fp_table_t *fp_table, fci_fp_rule_t *rule, uint8_t *pos);
-static uint32_t fci_fp_print_rule(fci_fp_rule_t *rule, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
-
-#if 0
-static fci_fp_table_t *fci_fp_table_get_next(fci_fp_table_db_t *db);
-#endif
 /**
  * @brief        Match rule using given criterion
  * @param[in]    crit Selects criterion
@@ -1444,117 +1433,18 @@ errno_t fci_fp_db_get_table_next_rule(char_t *table_name, fci_fp_rule_info_t *ru
     return ret;
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
-/**
-* @brief Prints a rule in a human readable form
-* @param[in] rule Rule to be printed
-* @param[in] buf Buffer where to put the output
-* @param[in] len Size of the buffer
-* @param[in] verb_level Verbosity level
-* @return Number of characters written into the buffer
-*/
-static uint32_t fci_fp_print_rule(fci_fp_rule_t *rule, char_t *buf, uint32_t buf_len, uint8_t verb_level)
-{
-    uint32_t len = 0U;
-	(void)verb_level;
-
-    len += oal_util_snprintf(buf + len, buf_len - len, "%s = {", rule->name);
-    /* Conditions */
-    if((uint8_t)FP_FL_INVERT == ((uint8_t)rule->flags & (uint8_t)FP_FL_INVERT))
-    {
-        len += oal_util_snprintf(buf + len, buf_len - len, "!");
-    }
-    len += oal_util_snprintf(buf + len, buf_len - len, "(0x%x & 0x%x == ", rule->data, rule->mask);
-    if((uint8_t)FP_FL_L4_OFFSET == ((uint8_t)rule->flags & (uint8_t)FP_FL_L4_OFFSET))
-    {
-        len += oal_util_snprintf(buf + len, buf_len - len, "frame[L4 header + %u] & 0x%x)", rule->offset, rule->mask);
-    }
-    if((uint8_t)FP_FL_L3_OFFSET == ((uint8_t)rule->flags & (uint8_t)FP_FL_L3_OFFSET))
-    {
-        len += oal_util_snprintf(buf + len, buf_len - len, "frame[L3 header + %u] & 0x%x)", rule->offset, rule->mask);
-    }
-    else
-    {
-        len += oal_util_snprintf(buf + len, buf_len - len, "frame[%u] & 0x%x)", rule->offset, rule->mask);
-    }
-    /* Consequences */
-    if((uint8_t)FP_FL_REJECT == ((uint8_t)rule->flags & (uint8_t)FP_FL_REJECT))
-    {
-        len += oal_util_snprintf(buf + len, buf_len - len, "? REJECT : use next rule");
-    }
-    else if((uint8_t)FP_FL_ACCEPT == ((uint8_t)rule->flags & (uint8_t)FP_FL_ACCEPT))
-    {
-        len += oal_util_snprintf(buf + len, buf_len - len, "? ACCEPT : use next rule");
-    }
-    else
-    {
-        len += oal_util_snprintf(buf + len, buf_len - len, "? use rule %s : use next rule", rule->next_rule);
-    }
-    len += oal_util_snprintf(buf + len, buf_len - len, "}\n");
-    return len;
-}
-
-/**
-* @brief Prints table rules in a human readable form
-* @param[in] table Table to be printed
-* @param[in] buf Buffer where to put the output
-* @param[in] len Size of the buffer
-* @param[in] verb_level Verbosity level
-* @return Number of characters written into the buffer
-*/
-static uint32_t fci_fp_print_table(const fci_fp_table_t *fp_table, char_t *buf, uint32_t buf_len, uint8_t verb_level)
-{
-    uint32_t len = 0U;
-    LLIST_t *item;
-    fci_fp_rule_t *rule;
-
-    len += oal_util_snprintf(buf + len, buf_len - len, "%s = {\n", fp_table->name);
-    LLIST_ForEach(item, &fp_table->rules_db.rules)
-    {
-        rule = LLIST_Data(item, fci_fp_rule_t, table_entry);
-        len += fci_fp_print_rule(rule, buf + len, buf_len - len, verb_level);
-    }
-
-    len += oal_util_snprintf(buf + len, buf_len - len, "\n}\n");
-    return len;
-}
-
-/**
-* @brief Prints all tables in a human readable form
-* @param[in] table Table to be printed
-* @param[in] buf Buffer where to put the output
-* @param[in] len Size of the buffer
-* @param[in] verb_level Verbosity level
-* @return Number of characters written into the buffer
-*/
-uint32_t fci_fp_print_tables(char_t *buf, uint32_t buf_len, uint8_t verb_level)
-{
-    const fci_fp_table_t *fp_table;
-    LLIST_t *item;
-    uint32_t len = 0U;
-
-    LLIST_ForEach(item, &fci_fp_table_db.tables)
-    {
-        fp_table = LLIST_Data(item,  fci_fp_table_t, db_entry);
-        len += fci_fp_print_table(fp_table, buf + len, buf_len - len, verb_level);
-    }
-    return len;
-}
-
-uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, struct seq_file *seq, uint8_t verb_level)
 {
     const fci_fp_table_t *fp_table;
     pfe_ct_class_flexi_parser_stats_t *c_stats;
     LLIST_t *item;
-    uint32_t len = 0U;
     uint32_t pe_idx = 0U;
-	(void)temp;
+    (void)temp;
 
     LLIST_ForEach(item, &fci_fp_table_db.tables)
     {
         fp_table = LLIST_Data(item,  fci_fp_table_t, db_entry);
-        len += oal_util_snprintf(buf + len, buf_len - len, "%s = {\n", fp_table->name);
+        seq_printf(seq, "%s = {\n", fp_table->name);
         if (fp_table->dmem_addr != 0U)
         {
             c_stats = oal_mm_malloc(sizeof(pfe_ct_class_flexi_parser_stats_t) * (pfe_class_get_num_of_pes(fp_table->class) + 1U));
@@ -1574,22 +1464,20 @@ uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_le
                 pfe_class_sum_flexi_parser_stats(&c_stats[0], &c_stats[pe_idx + 1U]);
             }
 
-            len += pfe_class_fp_stat_to_str(&c_stats[0U], buf + len, buf_len - len, verb_level);
+            pfe_class_fp_stat_to_str(&c_stats[0U], seq, verb_level);
 
             oal_mm_free(c_stats);
         }
         else
         {
-            len += oal_util_snprintf(buf + len, buf_len - len, "Table not enabled in Firmware\n");
+            seq_printf(seq, "Table not enabled in Firmware\n");
         }
 
-        len += oal_util_snprintf(buf + len, buf_len - len, "\n}\n");
+        seq_printf(seq, "\n}\n");
     }
 
-    return len;
+    return 0;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

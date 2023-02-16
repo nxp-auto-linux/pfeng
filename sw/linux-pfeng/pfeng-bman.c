@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 NXP
+ * Copyright 2020-2023 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -28,8 +28,9 @@ struct pfeng_rx_map {
 };
 
 struct pfeng_rx_chnl_pool {
-	pfe_hif_chnl_t	*chnl;
-	struct device	*dev;
+	struct device			*dev;
+	pfe_hif_chnl_t			*ll_chnl;
+	struct sk_buff			*skb;
 	u32				id;
 	u32				depth;
 
@@ -71,7 +72,7 @@ int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl)
 	}
 
 	chnl->bman.rx_pool = rx_pool;
-	rx_pool->chnl = chnl->priv;
+	rx_pool->ll_chnl = chnl->priv;
 	rx_pool->dev = chnl->dev;
 	rx_pool->id = pfe_hif_chnl_get_id(chnl->priv);
 	rx_pool->depth = PFE_CFG_HIF_RING_LENGTH;
@@ -253,10 +254,6 @@ static void pfeng_bman_free_rx_buffers(struct pfeng_rx_chnl_pool *pool)
 		if (!rx_map->page)
 			continue;
 
-		dma_sync_single_range_for_cpu(pool->dev, rx_map->dma,
-					      rx_map->page_offset,
-					      PFE_RXB_DMA_SIZE, DMA_FROM_DEVICE);
-
 		dma_unmap_page(pool->dev, rx_map->dma, PAGE_SIZE, DMA_FROM_DEVICE);
 
 		__free_page(rx_map->page);
@@ -267,35 +264,33 @@ static void pfeng_bman_free_rx_buffers(struct pfeng_rx_chnl_pool *pool)
 	}
 }
 
-static int pfeng_hif_chnl_refill_rx_buffer(struct pfeng_hif_chnl *chnl, struct pfeng_rx_map *rx_map)
+static int pfeng_hif_chnl_refill_rx_buffer(struct pfeng_rx_chnl_pool *pool, struct pfeng_rx_map *rx_map)
 {
-	struct pfeng_rx_chnl_pool *pool = chnl->bman.rx_pool;
 	int err;
 
 	/*	Ask for new buffer */
 	if (unlikely(!rx_map->page))
 		if (unlikely(!pfeng_bman_buf_alloc_and_map(pool, rx_map))) {
-			HM_MSG_DEV_ERR(chnl->dev, "buffer allocation error\n");
+			HM_MSG_DEV_ERR(pool->dev, "buffer allocation error\n");
 			return -ENOMEM;
 		}
 
 	/* Add new buffer to ring */
-	err = pfe_hif_chnl_supply_rx_buf(chnl->priv, (void *)(rx_map->dma + rx_map->page_offset), PFE_RXB_DMA_SIZE);
+	err = pfe_hif_chnl_supply_rx_buf(pool->ll_chnl, (void *)(rx_map->dma + rx_map->page_offset), PFE_RXB_DMA_SIZE);
 	if (unlikely(err))
 		return err;
 
 	return 0;
 }
 
-static int pfeng_hif_chnl_refill_rx_pool(struct pfeng_hif_chnl *chnl, int count)
+static int pfeng_hif_chnl_refill_rx_pool(struct pfeng_rx_chnl_pool *pool, int count)
 {
-	struct pfeng_rx_chnl_pool *pool = chnl->bman.rx_pool;
 	struct pfeng_rx_map *rx_map;
 	int i, ret = 0;
 
 	for (i = 0; i < count; i++) {
 		rx_map = pfeng_bman_get_rx_map(pool, pool->wr_idx);
-		ret = pfeng_hif_chnl_refill_rx_buffer(chnl, rx_map);
+		ret = pfeng_hif_chnl_refill_rx_buffer(pool, rx_map);
 		if (unlikely(ret))
 			break;
 		/* push rx map */
@@ -327,18 +322,45 @@ static void pfeng_reuse_page(struct pfeng_rx_chnl_pool *pool,
 	pool->alloc_idx++;
 }
 
+static struct pfeng_rx_map *pfeng_get_rx_buff(struct pfeng_rx_chnl_pool *pool, u32 i, u32 size)
+{
+	struct pfeng_rx_map *rx_map = pfeng_bman_get_rx_map(pool, i);
+
+	dma_sync_single_range_for_cpu(pool->dev, rx_map->dma,
+				      rx_map->page_offset,
+				      size, DMA_FROM_DEVICE);
+
+	return rx_map;
+}
+
+static void pfeng_put_rx_buff(struct pfeng_rx_chnl_pool *pool, struct pfeng_rx_map *rx_map, u32 size)
+{
+	if (likely(pfeng_page_reusable(rx_map->page))) {
+		rx_map->page_offset ^= PFE_RXB_TRUESIZE;
+		page_ref_inc(rx_map->page);
+
+		pfeng_reuse_page(pool, rx_map);
+
+		/* dma sync for use by device */
+		dma_sync_single_range_for_device(pool->dev, rx_map->dma,
+						 rx_map->page_offset,
+						 size, DMA_FROM_DEVICE);
+	} else {
+		dma_unmap_page(pool->dev, rx_map->dma, PAGE_SIZE, DMA_FROM_DEVICE);
+	}
+
+	/* drop reference since page has been recycled (@alloc_idx), or unmaped */
+	rx_map->page = NULL;
+}
+
 static struct sk_buff *pfeng_rx_map_buff_to_skb(struct pfeng_rx_chnl_pool *pool, u32 rx_len)
 {
 	struct pfeng_rx_map *rx_map;
 	struct sk_buff *skb;
 	void *va;
 
-	rx_map = pfeng_bman_get_rx_map(pool, pool->rd_idx);
-
 	/* get rx buffer */
-	dma_sync_single_range_for_cpu(pool->dev, rx_map->dma,
-				      rx_map->page_offset,
-				      rx_len, DMA_FROM_DEVICE);
+	rx_map = pfeng_get_rx_buff(pool, pool->rd_idx, rx_len);
 
 	va = page_address(rx_map->page) + rx_map->page_offset;
 	skb = build_skb(va - PFE_RXB_PAD, PFE_RXB_TRUESIZE);
@@ -361,53 +383,66 @@ static struct sk_buff *pfeng_rx_map_buff_to_skb(struct pfeng_rx_chnl_pool *pool,
 	__skb_put(skb, rx_len);
 
 	/* put rx buffer */
-	if (likely(pfeng_page_reusable(rx_map->page))) {
-		rx_map->page_offset ^= PFE_RXB_TRUESIZE;
-		page_ref_inc(rx_map->page);
+	pfeng_put_rx_buff(pool, rx_map, rx_len);
 
-		pfeng_reuse_page(pool, rx_map);
-
-		/* dma sync for use by device */
-		dma_sync_single_range_for_device(pool->dev, rx_map->dma,
-						 rx_map->page_offset,
-						 PFE_RXB_DMA_SIZE,
-						 DMA_FROM_DEVICE);
-	} else {
-		dma_unmap_page(pool->dev, rx_map->dma, PAGE_SIZE, DMA_FROM_DEVICE);
-	}
-
-	/* drop reference as page was reused at alloc_idx, or was unmaped */
-	rx_map->page = NULL;
 	/* pull rx map */
 	pool->rd_idx++;
 
 	return skb;
 }
 
+static void pfeng_rx_add_buff_to_skb(struct pfeng_rx_chnl_pool *pool, u32 rx_len)
+{
+	struct pfeng_rx_map *rx_map;
+
+	/* get rx buffer */
+	rx_map = pfeng_get_rx_buff(pool, pool->rd_idx, rx_len);
+
+	skb_add_rx_frag(pool->skb, skb_shinfo(pool->skb)->nr_frags, rx_map->page,
+			rx_map->page_offset, rx_len, PFE_RXB_TRUESIZE);
+
+	/* put rx buffer */
+	pfeng_put_rx_buff(pool, rx_map, rx_len);
+
+	/* pull rx map */
+	pool->rd_idx++;
+}
+
 struct sk_buff *pfeng_hif_chnl_receive_pkt(struct pfeng_hif_chnl *chnl)
 {
+	struct pfeng_rx_chnl_pool *pool = chnl->bman.rx_pool;
+	bool_t lifm = false;
 	struct sk_buff *skb;
 	void *buf_pa;
 	u32 rx_len;
-	bool_t lifm;
 
-	if (unlikely(pfeng_bman_rx_chnl_pool_unused(chnl->bman.rx_pool) >= PFENG_BMAN_REFILL_THR))
-		pfeng_hif_chnl_refill_rx_pool(chnl, PFENG_BMAN_REFILL_THR);
+	if (unlikely(pfeng_bman_rx_chnl_pool_unused(pool) >= PFENG_BMAN_REFILL_THR))
+		pfeng_hif_chnl_refill_rx_pool(pool, PFENG_BMAN_REFILL_THR);
 
-	/* get received frame info from the RX BD and move to the next BD in the ring */
-	if (EOK != pfe_hif_chnl_rx(chnl->priv, &buf_pa, &rx_len, &lifm))
-	{
-		return NULL;
+	while (!lifm) {
+		/* get frame buffer info from the RX BD and move to the next BD in the ring */
+		if (EOK != pfe_hif_chnl_rx(pool->ll_chnl, &buf_pa, &rx_len, &lifm)) {
+			return NULL;
+		}
+
+		if (!pool->skb) {
+			/* map the corresponding buffer (frame) to an skb and advance
+			 * the pool consumer index, to keep it in sync with the BD ring
+			 * consumer index */
+			skb = pfeng_rx_map_buff_to_skb(pool, rx_len);
+			if (unlikely(!skb)) {
+				HM_MSG_DEV_ERR(chnl->dev, "chnl%d: Rx skb mapping failed\n", chnl->idx);
+				return NULL;
+			}
+
+			pool->skb = skb;
+		} else {
+			pfeng_rx_add_buff_to_skb(pool, rx_len);
+		}
 	}
 
-	/* map the corresponding buffer (frame) to an skb and advance
-	 * the pool consumer index, to keep it in sync with the BD ring
-	 * consumer index */
-	skb = pfeng_rx_map_buff_to_skb(chnl->bman.rx_pool, rx_len);
-	if (unlikely(!skb)) {
-		HM_MSG_DEV_ERR(chnl->dev, "chnl%d: Rx skb mapping failed\n", chnl->idx);
-		return NULL;
-	}
+	skb = pool->skb;
+	pool->skb = NULL;
 	prefetch(skb->data);
 
 	return skb;
@@ -415,12 +450,13 @@ struct sk_buff *pfeng_hif_chnl_receive_pkt(struct pfeng_hif_chnl *chnl)
 
 int pfeng_hif_chnl_fill_rx_buffers(struct pfeng_hif_chnl *chnl)
 {
+	struct pfeng_rx_chnl_pool *pool = chnl->bman.rx_pool;
 	int cnt = 0;
 	int ret;
 
-	while (pfe_hif_chnl_can_accept_rx_buf(chnl->priv)) {
+	while (pfe_hif_chnl_can_accept_rx_buf(pool->ll_chnl)) {
 
-		ret = pfeng_hif_chnl_refill_rx_pool(chnl, 1);
+		ret = pfeng_hif_chnl_refill_rx_pool(pool, 1);
 		if (ret)
 			break;
 		cnt++;

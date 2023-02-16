@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1060,41 +1060,36 @@ uint32_t pfe_hif_chnl_cfg_ltc_get(addr_t base_va, uint32_t channel_id)
  * 				about a HIF channel.
  * @param[in]	base_va 	Base address of channel register space (virtual)
  * @param[in]	channel_id 	Channel identifier
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	size 		Buffer length
+ * @param[in]	seq 		Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level number of data written to the buffer (0:less 1:more)
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_hif_chnl_cfg_get_text_stat(addr_t base_va, uint32_t channel_id, char_t *buf, uint32_t size, uint8_t verb_level)
+uint32_t pfe_hif_chnl_cfg_get_text_stat(addr_t base_va, uint32_t channel_id, struct seq_file *seq, uint8_t verb_level)
 {
-	/*	Fill the buffer with runtime data */
-	uint32_t len = 0U;
 	uint32_t reg;
 
-	(void)verb_level;
-
-	len += oal_util_snprintf(buf + len, size - len, "[CHANNEL %d]\n", channel_id);
+	seq_printf(seq, "[CHANNEL %d]\n", channel_id);
 	reg = hal_read32(base_va + HIF_RX_STATUS_0_CHn(channel_id));
-	len += oal_util_snprintf(buf + len, size - len, "HIF_RX_STATUS_0           : 0x%x\n", reg);
+	seq_printf(seq, "HIF_RX_STATUS_0           : 0x%x\n", reg);
 	reg = hal_read32(base_va + HIF_RX_DMA_STATUS_0_CHn(channel_id));
-	len += oal_util_snprintf(buf + len, size - len, "HIF_RX_DMA_STATUS_0       : 0x%x\n", reg);
+	seq_printf(seq, "HIF_RX_DMA_STATUS_0       : 0x%x\n", reg);
 	reg = hal_read32(base_va + HIF_RX_PKT_CNT0_CHn(channel_id));
-	len += oal_util_snprintf(buf + len, size - len, "HIF_RX_PKT_CNT0           : 0x%x\n", reg);
+	seq_printf(seq, "HIF_RX_PKT_CNT0           : 0x%x\n", reg);
 	reg = hal_read32(base_va + HIF_RX_PKT_CNT1_CHn(channel_id));
-	len += oal_util_snprintf(buf + len, size - len, "HIF_RX_PKT_CNT1           : 0x%x\n", reg);
+	seq_printf(seq, "HIF_RX_PKT_CNT1           : 0x%x\n", reg);
 
 	reg = hal_read32(base_va + HIF_TX_STATUS_0_CHn(channel_id));
-	len += oal_util_snprintf(buf + len, size - len, "HIF_TX_STATUS_0           : 0x%x\n", reg);
+	seq_printf(seq, "HIF_TX_STATUS_0           : 0x%x\n", reg);
 	reg = hal_read32(base_va + HIF_TX_STATUS_1_CHn(channel_id));
-	len += oal_util_snprintf(buf + len, size - len, "HIF_TX_STATUS_1           : 0x%x\n", reg);
+	seq_printf(seq, "HIF_TX_STATUS_1           : 0x%x\n", reg);
 	reg = hal_read32(base_va + HIF_TX_DMA_STATUS_0_CHn(channel_id));
-	len += oal_util_snprintf(buf + len, size - len, "HIF_TX_DMA_STATUS_0       : 0x%x\n", reg);
+	seq_printf(seq, "HIF_TX_DMA_STATUS_0       : 0x%x\n", reg);
 	reg = hal_read32(base_va + HIF_TX_PKT_CNT0_CHn(channel_id));
-	len += oal_util_snprintf(buf + len, size - len, "HIF_TX_PKT_CNT0           : 0x%x\n", reg);
+	seq_printf(seq, "HIF_TX_PKT_CNT0           : 0x%x\n", reg);
 	reg = hal_read32(base_va + HIF_TX_PKT_CNT1_CHn(channel_id));
-	len += oal_util_snprintf(buf + len, size - len, "HIF_TX_PKT_CNT1           : 0x%x\n", reg);
+	seq_printf(seq, "HIF_TX_PKT_CNT1           : 0x%x\n", reg);
 
-	return len;
+	return 0;
 }
 
 /**

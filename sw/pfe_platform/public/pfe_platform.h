@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -11,7 +11,6 @@
 #define SRC_PFE_PLATFORM_H_
 
 #include "pfe_platform_cfg.h"
-#include "pfe_pe.h"
 #include "pfe_gpi.h"
 #include "pfe_bmu.h"
 #include "pfe_class.h"
@@ -96,6 +95,7 @@ typedef struct
 	pfe_emac_mii_mode_t emac_mode[3]; /* MII mode per PFE EMAC */
 	bool_t g2_ordered_class_writes;	/* S32G2 ordered class writes switch */
 	bool_t g3_rtable_in_lmem;	/* allocate the routing table in LMEM for S32G3 */
+	uint8_t emac_ext_ts_mask;	/* The bitmap representing setting of external timestamping mode on EMACs */
 } pfe_platform_config_t;
 
 typedef struct
@@ -160,6 +160,7 @@ typedef struct
 	bool_t fci_created;
 	bool_t g3_rtable_in_lmem;
 	uint32_t pfe_version;
+	uint8_t emac_ext_ts_mask;
 } pfe_platform_t;
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
@@ -182,6 +183,7 @@ pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_
 void pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg);
 #endif
 errno_t pfe_platform_get_fw_versions(const pfe_platform_t *platform, pfe_ct_version_t *class_fw, pfe_ct_version_t *util_fw);
+uint32_t pfe_fw_features_get_text_statistics(const pfe_platform_t *pfe, struct seq_file *seq, uint8_t verb_level);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

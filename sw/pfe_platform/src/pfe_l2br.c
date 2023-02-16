@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -63,6 +63,7 @@ struct __pfe_l2br_tag
 	uint16_t def_vlan;							/*!< Default VLAN */
 	uint32_t dmem_fb_bd_base;					/*!< Address within classifier memory where the fall-back bridge domain structure is located */
 	uint32_t dmem_def_bd_base;					/*!< Address within classifier memory where the default bridge domain structure is located */
+	uint32_t dmem_vlan_hash_base;
 	oal_mutex_t *mutex;							/*!< Mutex protecting shared resources */
 	pfe_l2br_domain_get_crit_t cur_crit;		/*!< Current 'get' criterion (to get domains) */
 	pfe_l2br_static_ent_get_crit_t cur_crit_ent;/*!< Current 'get' criterion (to get static entry) */
@@ -142,6 +143,33 @@ typedef enum
 	PFE_L2BR_FLUSH_LEARNED_MAC
 } pfe_l2br_flush_types;
 
+/**
+ * @brief	Flags for 2-field MAC table entry (flags)
+ */
+typedef enum
+{
+	MAC_VALID_FLAG = (1U << 3),         /*!< MAC_ENTRY_VALID_FLAG */
+	MAC_COL_PTR_VALID_FLAG = (1U << 2), /*!< MAC_ENTRY_COL_PTR_VALID_FLAG */
+	MAC_RESERVED1_FLAG = (1U << 1),     /*!< MAC_ENTRY_RESERVED1_FLAG */
+	MAC_RESERVED2_FLAG = (1U << 0)      /*!< MAC_ENTRY_RESERVED2_FLAG */
+} pfe_l2br_table_entry_flags_t;
+
+/**
+ * @brief	Valid flags for 2-field MAC table entry (pfe_mac2f_table_entry_t.field_valids)
+ */
+typedef enum
+{
+	MAC_ENTRY_MAC_VALID = (1U << 0),   		/*!< (Field1 = MAC Valid)	*/
+	MAC_ENTRY_VLAN_VALID = (1U << 1),   		/*!< (Field2 = VLAN Valid)	*/
+	MAC_ENTRY_RESERVED1_VALID = (1U << 2),   	/*!< RESERVED				*/
+	MAC_ENTRY_RESERVED2_VALID = (1U << 3),   	/*!< RESERVED				*/
+	MAC_ENTRY_RESERVED3_VALID = (1U << 4),   	/*!< RESERVED				*/
+	MAC_ENTRY_RESERVED4_VALID = (1U << 5),	/*!< RESERVED				*/
+	MAC_ENTRY_RESERVED5_VALID = (1U << 6),	/*!< RESERVED				*/
+	MAC_ENTRY_RESERVED6_VALID = (1U << 7),	/*!< RESERVED				*/
+} pfe_l2br_table_entry_valid_bits_t;
+
+
 #define VLAN_STATS_VEC_SIZE 128
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
@@ -207,6 +235,11 @@ static errno_t pfe_bd_write_to_class(const pfe_l2br_t *bridge, uint32_t base, co
 	return ret;
 }
 
+/**
+ * @brief		Write bridge domain structure to classifier memory
+ * @param[in]	domain Pointer to the structure to be written
+ * @param[in]	base Memory location where to write
+ */
 static void pfe_l2br_update_hw_ll_entry(pfe_l2br_domain_t *domain, uint32_t base)
 {
 	pfe_ct_bd_entry_t sw_bd;
@@ -255,6 +288,372 @@ static void pfe_l2br_update_hw_ll_entry(pfe_l2br_domain_t *domain, uint32_t base
 }
 
 /**
+ * @brief		Get hash of a vlan id
+ * @param[in]	vlan_id from witch the hash is computed
+ * @retval		Hash of the vlan id
+ */
+static inline uint8_t fp_l2br_vlan_table_get_hash(uint16_t vlan_id)
+{
+	return (uint8_t)(vlan_id & 0x3FU);
+}
+
+/**
+ * @brief		Write vlan entry to classifier memory
+ * @param[in]	bridge The bridge instance
+ * @param[in]	pos Entry position in vlan table
+ * @param[in]	class_entry Pointer to the structure to be written
+ */
+static void pfe_vlan_write_to_class(const pfe_l2br_t *bridge, uint32_t pos, const l2br_vlan_hash_entry_t *class_entry)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == class_entry) || (NULL == bridge) || (0U == pos)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		if (EOK != pfe_class_write_dmem(bridge->class, -1, (addr_t)(bridge->dmem_vlan_hash_base + pos*sizeof(l2br_vlan_hash_entry_t)), (const void *)class_entry, sizeof(l2br_vlan_hash_entry_t)))
+		{
+			NXP_LOG_ERROR("Class memory write failed\n");
+		}
+	}
+	return;
+}
+
+/**
+ * @brief		Read vlan entry to classifier memory
+ * @param[in]	bridge The bridge instance
+ * @param[in]	pos Entry position in vlan table
+ * @param[out]	class_entry Pointer to the structure to be read
+ */
+static void pfe_vlan_read_from_class(const pfe_l2br_t *bridge, uint32_t pos, l2br_vlan_hash_entry_t *class_entry)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == class_entry) || (NULL == bridge) || (0U == pos)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		if (EOK != pfe_class_read_dmem(bridge->class, 0, class_entry, (addr_t)(bridge->dmem_vlan_hash_base + pos*sizeof(l2br_vlan_hash_entry_t)), sizeof(l2br_vlan_hash_entry_t)))
+		{
+			NXP_LOG_ERROR("Class memory read failed\n");
+		}
+	}
+	return;
+}
+
+/**
+ * @brief		Fill vlan entry based on domain information
+ * @param[in]	domain Pointer to vlan domain entry
+ * @param[out]	entry Pointer to the class structure
+ */
+static void pfe_l2br_vlan_action_to_entry(pfe_l2br_domain_t *domain, l2br_vlan_hash_entry_t *entry)
+{
+	uint64_t tmp64;
+	bool_t need_shift = FALSE;
+
+	entry->vlan = oal_htons(domain->vlan);
+	tmp64 = (1ULL << 63);
+	(void)memcpy(&entry->entry.val, &tmp64, sizeof(uint64_t));
+
+	if (0U == entry->entry.val)
+	{
+		need_shift = TRUE;
+	}
+
+	/*      Convert VLAN table result to fallback domain representation */
+	entry->entry.val = domain->u.action_data.val;
+
+	if (TRUE == need_shift)
+	{
+		tmp64 = (uint64_t)entry->entry.val << 9;
+		(void)memcpy(&entry->entry.val, &tmp64, sizeof(uint64_t));
+	}
+
+	/*      Convert to network endian */
+	tmp64 = cpu_to_be64p((uint64_t *)&entry->entry.val);
+	(void)memcpy(&entry->entry.val, &tmp64, sizeof(uint64_t));
+
+	entry->flags = MAC_VALID_FLAG;
+	entry->field_valids = MAC_ENTRY_VLAN_VALID;
+
+	return;
+}
+
+/**
+ * @brief		Find and update a given vlan domain to vlan class memory.
+ * @param[in]	domain Pointer to vlan domain structure to update.
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ * @retval		ENOENT Vlan is not in class memory
+ */
+errno_t pfe_l2br_update_vlan_hash_entry(pfe_l2br_domain_t *domain)
+{
+	l2br_vlan_hash_entry_t vlan_new_entry, vlan_current_entry;
+	uint8_t pos;
+	errno_t ret = ENOENT;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == domain))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		(void)memset(&vlan_new_entry, 0, sizeof(l2br_vlan_hash_entry_t));
+		(void)memset(&vlan_current_entry, 0, sizeof(l2br_vlan_hash_entry_t));
+
+		pfe_l2br_vlan_action_to_entry(domain, &vlan_new_entry);
+
+		/*Read the entry at the vlan hash position*/
+		pos = fp_l2br_vlan_table_get_hash(domain->vlan);
+		pfe_vlan_read_from_class(domain->bridge, pos, &vlan_current_entry);
+
+		/*If the vlan exists in hash update the entry */
+		if (vlan_current_entry.vlan == vlan_new_entry.vlan)
+		{
+			vlan_current_entry.entry.val = vlan_new_entry.entry.val;
+			vlan_current_entry.flags |= MAC_VALID_FLAG;
+			vlan_current_entry.field_valids |= MAC_ENTRY_VLAN_VALID;
+
+			pfe_vlan_write_to_class(domain->bridge, pos, &vlan_current_entry);
+			ret = EOK;
+		}
+		else
+		{
+			/*entry is full with other entry find a place in collision*/
+			if (vlan_current_entry.flags & MAC_VALID_FLAG)
+			{
+				/*go through all callisions*/
+				while (vlan_current_entry.flags & MAC_COL_PTR_VALID_FLAG)
+				{
+					pos = oal_ntohs(vlan_current_entry.col_ptr);
+					pfe_vlan_read_from_class(domain->bridge, pos, &vlan_current_entry);
+					if (vlan_new_entry.vlan == vlan_current_entry.vlan)
+					{
+						pfe_vlan_write_to_class(domain->bridge, pos, &vlan_new_entry);
+						/*Found the entry in the collision domain*/
+						ret = EOK;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Find the position and add a given vlan domain to vlan class memory.
+ * @param[in]	domain Pointer to vlan domain structure to add.
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ * @retval		EEXIST Vlan already exists in class memory
+ */
+errno_t pfe_l2br_add_vlan_hash_entry(pfe_l2br_domain_t *domain)
+{
+	l2br_vlan_hash_entry_t vlan_new_entry, vlan_current_entry, vlan_tmp_entry;	
+	uint8_t pos, prev_entry_pos, hash_size = 0, coll_space = 0;
+	errno_t  ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == domain))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+
+		(void)memset(&vlan_new_entry, 0, sizeof(l2br_vlan_hash_entry_t));
+		(void)memset(&vlan_current_entry, 0, sizeof(l2br_vlan_hash_entry_t));
+		(void)memset(&vlan_tmp_entry, 0, sizeof(l2br_vlan_hash_entry_t));
+
+		ret = pfe_feature_mgr_table_get_payload("software_vlan_table", FW_FEATURE_TABLE_CONFIG, "size", &hash_size);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Wrong vlan software table config size\n");
+			return ret;
+		}
+
+		ret = pfe_feature_mgr_table_get_payload("software_vlan_table", FW_FEATURE_TABLE_CONFIG, "coll_space", &coll_space);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Wrong vlan software table config collision space\n");
+			return ret;
+		}
+
+		pfe_l2br_vlan_action_to_entry(domain, &vlan_new_entry);
+
+		/*Read the entry at the vlan hash position*/
+		pos = fp_l2br_vlan_table_get_hash(domain->vlan);
+		pfe_vlan_read_from_class(domain->bridge, pos, &vlan_current_entry);
+
+		/*If the vlan exists in hash update the entry */
+		if (vlan_current_entry.vlan == vlan_new_entry.vlan)
+		{
+			ret = EEXIST;
+		}
+		else
+		{
+			/*entry is full with other entry find a place in collision*/
+			if (vlan_current_entry.flags & MAC_VALID_FLAG)
+			{
+				prev_entry_pos = pos;
+				/*go through all callisions*/
+				while (vlan_current_entry.flags & MAC_COL_PTR_VALID_FLAG)
+				{
+					pos = oal_ntohs(vlan_current_entry.col_ptr);
+					prev_entry_pos = pos;
+					pfe_vlan_read_from_class(domain->bridge, pos, &vlan_current_entry);
+					if (vlan_new_entry.vlan == vlan_current_entry.vlan)
+					{
+						/*Found the entry in the collision domain*/
+						ret = EEXIST;
+						break;
+					}
+				}
+
+				if (vlan_new_entry.vlan != vlan_current_entry.vlan)
+				{
+					/*The new entry is not in collision. Find a place to add entry */
+					vlan_tmp_entry = vlan_current_entry;
+
+					if (pos < coll_space)
+					{
+						pos = coll_space;
+						pfe_vlan_read_from_class(domain->bridge, pos, &vlan_tmp_entry);
+					}
+					/*Find the first free postion in the collision*/
+					while (vlan_tmp_entry.flags & MAC_VALID_FLAG) 
+					{
+						pos ++;
+						if (pos >= hash_size)
+						{
+							ret =  ENOMEM;
+							break;
+						}	
+						pfe_vlan_read_from_class(domain->bridge, pos, &vlan_tmp_entry);
+					}
+					if (pos < hash_size)
+					{
+						/*   Write the new entry to pos */
+						pfe_vlan_write_to_class(domain->bridge, pos, &vlan_new_entry);
+
+						/*Update prev vlan id with collision pointer to the new vlan entry*/
+						vlan_current_entry.flags |= MAC_COL_PTR_VALID_FLAG;
+						vlan_current_entry.col_ptr = oal_htons(pos);
+						pfe_vlan_write_to_class(domain->bridge, prev_entry_pos, &vlan_current_entry);
+					}
+				}
+			}
+			else
+			{
+				/*   Write the new entry in hash */
+				pfe_vlan_write_to_class(domain->bridge, pos, &vlan_new_entry);
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Delete a given vlan domain from vlan class memory.
+ * @param[in]	domain Pointer to vlan domain structure to be removed.
+ * @retval		EOK Success
+ * @retval		EINVAL Invalid or missing argument
+ **/
+errno_t pfe_l2br_delete_vlan_hash_entry(pfe_l2br_domain_t *domain)
+{
+	l2br_vlan_hash_entry_t vlan_zero_entry, vlan_current_entry, vlan_prev_entry, vlan_tmp_entry;
+	uint8_t pos, prev_entry_pos, next_entry_pos;
+	bool erase_collision_entry = FALSE;
+	errno_t  ret = EOK;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == domain))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+
+		(void)memset(&vlan_zero_entry, 0, sizeof(l2br_vlan_hash_entry_t));
+		(void)memset(&vlan_current_entry, 0, sizeof(l2br_vlan_hash_entry_t));
+		(void)memset(&vlan_prev_entry, 0, sizeof(l2br_vlan_hash_entry_t));
+		(void)memset(&vlan_tmp_entry, 0, sizeof(l2br_vlan_hash_entry_t));
+
+		pos = fp_l2br_vlan_table_get_hash(domain->vlan);
+		pfe_vlan_read_from_class(domain->bridge, pos, &vlan_current_entry);
+
+		/*If the entry is in hash*/
+		if (domain->vlan == oal_ntohs(vlan_current_entry.vlan))
+		{
+			/*If the entry has collision*/
+			if (vlan_current_entry.flags & MAC_COL_PTR_VALID_FLAG)
+			{
+				next_entry_pos = oal_ntohs(vlan_current_entry.col_ptr);
+				pfe_vlan_read_from_class(domain->bridge, next_entry_pos, &vlan_tmp_entry);
+				erase_collision_entry = TRUE;
+			}
+			/*Write to hash the next collision entry*/
+			pfe_vlan_write_to_class(domain->bridge, pos, &vlan_tmp_entry);
+
+			if (TRUE == erase_collision_entry)
+			{
+				pfe_vlan_write_to_class(domain->bridge, next_entry_pos, &vlan_zero_entry);
+			}
+		}
+		else
+		{
+			/*go through all collisions*/
+			while (vlan_current_entry.flags & MAC_COL_PTR_VALID_FLAG)
+			{
+				prev_entry_pos = pos;
+				vlan_prev_entry = vlan_current_entry;
+
+				pos = oal_ntohs(vlan_current_entry.col_ptr);
+				pfe_vlan_read_from_class(domain->bridge, pos, &vlan_current_entry);
+
+				/* entry found */
+				if (domain->vlan == oal_ntohs(vlan_current_entry.vlan))
+				{
+					/* there is an entry after in collision */
+					if (vlan_current_entry.flags & MAC_COL_PTR_VALID_FLAG)
+					{
+						vlan_prev_entry.col_ptr = vlan_current_entry.col_ptr;
+					}
+					else
+					{
+						vlan_prev_entry.flags = 0;
+						vlan_prev_entry.col_ptr = 0;
+					}
+					/* Update collision pointer on the prev position*/
+					pfe_vlan_write_to_class(domain->bridge, prev_entry_pos, &vlan_prev_entry);
+
+					pfe_vlan_write_to_class(domain->bridge, pos, &vlan_zero_entry);
+					break;
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
  * @brief		Update HW entry according to domain setup
  * @details		Function is intended to propagate domain configuration from host SW instance
  * 				form to PFE HW/FW representation.
@@ -279,6 +678,10 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 		{
 			/*	Update classifier memory (all PEs) */
 			pfe_l2br_update_hw_ll_entry(domain, domain->bridge->dmem_fb_bd_base);
+			if (TRUE == pfe_feature_mgr_is_available("software_vlan_table"))
+			{
+				pfe_l2br_update_vlan_hash_entry(domain);
+			}
 			ret = EOK;
 		}
 		else
@@ -288,6 +691,10 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 			{
 				/*	Update classifier memory (all PEs) */
 				pfe_l2br_update_hw_ll_entry(domain, domain->bridge->dmem_def_bd_base);
+				if (TRUE == pfe_feature_mgr_is_available("software_vlan_table"))
+				{
+					pfe_l2br_update_vlan_hash_entry(domain);
+				}
 			}
 			/*	Update standard or default domain entry */
 			ret = pfe_l2br_table_entry_set_action_data(domain->vlan_entry, domain->u.action_data_u64val);
@@ -298,8 +705,15 @@ static errno_t pfe_l2br_update_hw_entry(pfe_l2br_domain_t *domain)
 			}
 			else
 			{
-				/*	Propagate change to HW table */
-				ret = pfe_l2br_table_update_entry(domain->bridge->vlan_table, domain->vlan_entry);
+				if (TRUE == pfe_feature_mgr_is_available("software_vlan_table"))
+				{
+					ret = pfe_l2br_update_vlan_hash_entry(domain);
+				}
+				else
+				{
+					/*	Propagate change to HW table */
+					ret = pfe_l2br_table_update_entry(domain->bridge->vlan_table, domain->vlan_entry);
+				}
 				if (EOK != ret)
 				{
 					NXP_LOG_ERROR("Can't update VLAN table entry: %d\n", ret);
@@ -508,8 +922,16 @@ static errno_t pfe_l2br_config_domain(const pfe_l2br_t *bridge, pfe_l2br_domain_
 			}
 			else
 			{
-				/*	Add new VLAN table entry */
-				ret = pfe_l2br_table_add_entry(domain->bridge->vlan_table, domain->vlan_entry);
+				if (TRUE == pfe_feature_mgr_is_available("software_vlan_table"))
+				{
+					ret = pfe_l2br_add_vlan_hash_entry(domain);
+				}
+				else
+				{
+					/*	Add new VLAN table entry */
+					ret = pfe_l2br_table_add_entry(domain->bridge->vlan_table, domain->vlan_entry);
+				}
+
 				if (EOK != ret)
 				{
 					NXP_LOG_ERROR("Could not add VLAN table entry: %d\n", ret);
@@ -737,8 +1159,17 @@ errno_t pfe_l2br_domain_destroy(pfe_l2br_domain_t *domain)
 
 		if (NULL != domain->vlan_entry)
 		{
-			/*	Remove entry from the table */
-			ret = pfe_l2br_table_del_entry(domain->bridge->vlan_table, domain->vlan_entry);
+			if (TRUE == pfe_feature_mgr_is_available("software_vlan_table"))
+			{
+				ret = pfe_l2br_delete_vlan_hash_entry(domain);
+			}
+			else
+			{
+
+				/*	Remove entry from the table */
+				ret = pfe_l2br_table_del_entry(domain->bridge->vlan_table, domain->vlan_entry);
+			}
+
 			if (EOK != ret)
 			{
 				NXP_LOG_ERROR("Can't delete entry from VLAN table: %d\n", ret);
@@ -774,6 +1205,7 @@ static pfe_l2br_domain_t *pfe_l2br_create_default_domain(pfe_l2br_t *bridge, uin
 	errno_t             ret;
 	pfe_l2br_domain_t * domain;
 	pfe_ct_class_mmap_t class_mmap;
+	uint32_t vlan_hash_addr;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bridge))
@@ -793,6 +1225,26 @@ static pfe_l2br_domain_t *pfe_l2br_create_default_domain(pfe_l2br_t *bridge, uin
 		{
 
 			bridge->dmem_def_bd_base = oal_ntohl(class_mmap.dmem_def_bd_base);
+
+			if (EOK == pfe_feature_mgr_enable("software_vlan_table"))
+			{
+				ret = pfe_feature_mgr_table_get_payload("software_vlan_table", FW_FEATURE_TABLE_CONFIG, "vlan_hash", (uint8_t*) &vlan_hash_addr);
+				if (EOK == ret)
+				{
+					bridge->dmem_vlan_hash_base = vlan_hash_addr;
+					NXP_LOG_INFO("Software vlan hash table @ p0x%x\n", vlan_hash_addr);
+				}
+				else
+				{
+					/*Fall back to hardware vlan table*/
+					pfe_feature_mgr_disable("software_vlan_table");
+					NXP_LOG_INFO("Hardware vlan hash table\n");
+				}
+			}
+			else
+			{
+				NXP_LOG_INFO("Hardware vlan hash table\n");
+			}
 
 			ret = pfe_l2br_domain_create(bridge, vlan);
 
@@ -3134,20 +3586,16 @@ static errno_t pfe_l2br_set_mac_aging_timeout(pfe_class_t *class, const uint16_t
 	return ret;
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Return L2 Bridge runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	bridge		The L2 Bridge instance
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	buf_len 	Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_l2br_get_text_statistics(const pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_l2br_get_text_statistics(const pfe_l2br_t *bridge, struct seq_file *seq, uint8_t verb_level)
 {
-    uint32_t len = 0U;
     pfe_l2br_table_entry_t *entry;
     pfe_l2br_table_iterator_t* l2t_iter;
     errno_t ret;
@@ -3165,19 +3613,17 @@ uint32_t pfe_l2br_get_text_statistics(const pfe_l2br_t *bridge, char_t *buf, uin
     while (EOK == ret)
     {
         /* Print out the entry */
-        len += pfe_l2br_table_entry_to_str(entry, buf + len, buf_len - len);
+        pfe_l2br_table_entry_to_str(entry, seq);
         count++;
         /* Get the next entry */
         ret = pfe_l2br_table_get_next(bridge->mac_table, l2t_iter, entry);
     }
-    len += oal_util_snprintf(buf + len, buf_len - len, "\n MAC entries count: %u\n", count);
+    seq_printf(seq, "\n MAC entries count: %u\n", count);
     /* Free memory */
     (void)pfe_l2br_table_entry_destroy(entry);
     (void)pfe_l2br_iterator_destroy(l2t_iter);
-    return len;
+    return 0;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief       Get Entry from L2 static entry
@@ -3309,20 +3755,16 @@ errno_t pfe_l2br_clear_domain_stats(const pfe_l2br_t *bridge, uint8_t vlan_index
 	return ret;
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Return L2 Bridge domain(vlan) statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	bridge		The L2 Bridge instance
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	buf_len 	Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_l2br_domain_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_l2br_domain_get_text_statistics(pfe_l2br_t *bridge, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
 	errno_t ret;
 	pfe_ct_vlan_stats_t stats = {0};
 	pfe_l2br_domain_t *domain = NULL;
@@ -3340,15 +3782,13 @@ uint32_t pfe_l2br_domain_get_text_statistics(pfe_l2br_t *bridge, char_t *buf, ui
 			NXP_LOG_ERROR("Get domain statistics failed\n");
 			break;
 		}
-		len += oal_util_snprintf(buf + len, buf_len - len, "Vlan [%4d] ingress: %12d       egress: %12d\n", domain->vlan, oal_ntohl(stats.ingress), oal_ntohl(stats.egress));
-		len += oal_util_snprintf(buf + len, buf_len - len, "      ingress_bytes: %12d egress_bytes: %12d\n", oal_ntohl(stats.ingress_bytes), oal_ntohl(stats.egress_bytes));
+		seq_printf(seq, "Vlan [%4d] ingress: %12d       egress: %12d\n", domain->vlan, oal_ntohl(stats.ingress), oal_ntohl(stats.egress));
+		seq_printf(seq, "      ingress_bytes: %12d egress_bytes: %12d\n", oal_ntohl(stats.ingress_bytes), oal_ntohl(stats.egress_bytes));
 		domain = pfe_l2br_get_next_domain(bridge);
 	}
 
-	return len;
+	return 0;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		Get L2 bridge domain(vlan) statistics

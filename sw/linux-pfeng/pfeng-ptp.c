@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2022 NXP
+ * Copyright 2021-2023 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -30,7 +30,10 @@ int pfeng_ptp_adjfreq(struct ptp_clock_info *ptp, s32 delta)
 
 	ret = pfe_emac_set_ts_freq_adjustment(emac, delta, sgn);
 
-	if (ret != 0){
+	if (ret == EPERM) {
+		HM_MSG_NETDEV_WARN(netif->netdev, "Frequency adjustment failed on EMAC%u\n", netif->cfg->emac_id);
+		ret = -EOPNOTSUPP;
+	} else if (ret != 0){
 		HM_MSG_NETDEV_ERR(netif->netdev, "Frequency adjustment failed (err %d)\n", ret);
 		ret = -EINVAL;
 	}
@@ -59,7 +62,10 @@ int pfeng_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 
 	ret = pfe_emac_adjust_ts_time(emac, sec, nsec, sgn);
 
-	if (ret != 0) {
+	if (ret == EPERM) {
+		HM_MSG_NETDEV_WARN(netif->netdev, "Time adjustment failed on EMAC%u\n", netif->cfg->emac_id);
+		ret = -EOPNOTSUPP;
+	} else if (ret != 0) {
 		HM_MSG_NETDEV_ERR(netif->netdev, "Time adjustment failed (err %d)\n", ret);
 		ret = -EINVAL;
 	}
@@ -103,7 +109,10 @@ int pfeng_ptp_settime64(struct ptp_clock_info *ptp, const struct timespec64 *ts)
 
 	ret = pfe_emac_set_ts_time(emac, sec, ts->tv_nsec, sec_hi);
 
-	if (ret != 0) {
+	if (ret == EPERM) {
+		HM_MSG_NETDEV_WARN(netif->netdev, "Set time failed on EMAC%u\n", netif->cfg->emac_id);
+		ret = -EOPNOTSUPP;
+	} else if (ret != 0) {
 		HM_MSG_NETDEV_ERR(netif->netdev, "Set time failed (err %d)\n", ret);
 		ret = -EINVAL;
 	}
@@ -154,6 +163,7 @@ void pfeng_ptp_register(struct pfeng_netif *netif)
 	struct pfeng_priv *priv = netif->priv;
         pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->emac_id];
 	errno_t ret;
+	bool ext_ts;
 
 	/* Set PTP clock to null in case of error */
 	netif->ptp_clock = NULL;
@@ -165,9 +175,11 @@ void pfeng_ptp_register(struct pfeng_netif *netif)
 	/* Calculate max possible adjustment by controller */
 	pfeng_ptp_prepare_clock_adjustement(netif, priv->clk_ptp_reference);
 
+	/* Get EMAC's timestamping mode external / internal */
+	ext_ts = priv->pfe_platform->emac_ext_ts_mask & (1 << netif->cfg->emac_id);
 	/* Start PTP clock and enable time stamping in platform */
 	ret = pfe_emac_enable_ts(emac, priv->clk_ptp_reference,
-				 priv->clk_ptp_reference / 2LLU);
+				 ext_ts ? 0 : (priv->clk_ptp_reference / 2LLU));
 
 	if(ret) {
 		HM_MSG_DEV_ERR(netif->dev, "Failed to register PTP clock on EMAC%d\n", netif->cfg->emac_id);

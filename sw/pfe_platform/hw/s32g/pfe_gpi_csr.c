@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -660,28 +660,23 @@ uint32_t pfe_gpi_cfg_shp_get_drop_cnt(addr_t base_va, uint8_t id)
 	return hal_read32(base_va + CSR_IGQOS_STAT_SHAPER_DROP_CNT(id));
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Get GPI statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
  * 				about the GPI block.
  * @param[in]	base_va 	Base address of GPI register space (virtual)
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	size 		Buffer length
+ * @param[in]	seq 		Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_gpi_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level)
+uint32_t pfe_gpi_cfg_get_text_stat(addr_t base_va, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
 	uint32_t reg;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL_ADDR == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		len = 0U;
 	}
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
@@ -689,74 +684,72 @@ uint32_t pfe_gpi_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 		/* Debug registers */
 		if(verb_level >= 10U)
 		{
-			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
-			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG1 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG1));
-			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG2 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG2));
-			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG3 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG3));
-			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG4 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG4));
-			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG5 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG5));
-			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_TX_DBUG_REG6 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG6));
-			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_RX_DBUG_REG1 : 0x%x\n", hal_read32(base_va + GPI_RX_DBUG_REG1));
-			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_RX_DBUG_REG2 : 0x%x\n", hal_read32(base_va + GPI_RX_DBUG_REG2));
-			len += (uint32_t)oal_util_snprintf(buf + len, (size_t)size - len, "GPI_FIFO_STATUS  : 0x%x\n", hal_read32(base_va + GPI_FIFO_STATUS));
+			seq_printf(seq, "GPI_FIFO_DEBUG   : 0x%x\n", hal_read32(base_va + GPI_FIFO_DEBUG));
+			seq_printf(seq, "GPI_TX_DBUG_REG1 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG1));
+			seq_printf(seq, "GPI_TX_DBUG_REG2 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG2));
+			seq_printf(seq, "GPI_TX_DBUG_REG3 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG3));
+			seq_printf(seq, "GPI_TX_DBUG_REG4 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG4));
+			seq_printf(seq, "GPI_TX_DBUG_REG5 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG5));
+			seq_printf(seq, "GPI_TX_DBUG_REG6 : 0x%x\n", hal_read32(base_va + GPI_TX_DBUG_REG6));
+			seq_printf(seq, "GPI_RX_DBUG_REG1 : 0x%x\n", hal_read32(base_va + GPI_RX_DBUG_REG1));
+			seq_printf(seq, "GPI_RX_DBUG_REG2 : 0x%x\n", hal_read32(base_va + GPI_RX_DBUG_REG2));
+			seq_printf(seq, "GPI_FIFO_STATUS  : 0x%x\n", hal_read32(base_va + GPI_FIFO_STATUS));
 		}
 
 		/*	Get version */
 		if(verb_level >= 9U)
 		{
 			reg = hal_read32(base_va + GPI_VERSION);
-			len += oal_util_snprintf(buf + len, (size_t)size - len, "Revision             : 0x%x\n", (reg >> 24) & 0xffU);
-			len += oal_util_snprintf(buf + len, (size_t)size - len, "Version              : 0x%x\n", (reg >> 16) & 0xffU);
-			len += oal_util_snprintf(buf + len, (size_t)size - len, "ID                   : 0x%x\n", reg & 0xffffU);
+			seq_printf(seq, "Revision             : 0x%x\n", (reg >> 24) & 0xffU);
+			seq_printf(seq, "Version              : 0x%x\n", (reg >> 16) & 0xffU);
+			seq_printf(seq, "ID                   : 0x%x\n", reg & 0xffffU);
 		}
 
 		/*	Ingress QoS counters */
 		reg = hal_read32(base_va + CSR_IGQOS_QUEUE_STATUS);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS queue status   : 0x%x\n", reg);
+		seq_printf(seq, "IGQOS queue status   : 0x%x\n", reg);
 		reg = hal_read32(base_va + CSR_IGQOS_STAT_CLASS_DROP_CNT);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS CLASS drop cnt : 0x%x\n", reg);
+		seq_printf(seq, "IGQOS CLASS drop cnt : 0x%x\n", reg);
 		reg = hal_read32(base_va + CSR_IGQOS_STAT_LMEM_QUEUE_DROP_CNT);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS LMEM drop cnt  : 0x%x\n", reg);
+		seq_printf(seq, "IGQOS LMEM drop cnt  : 0x%x\n", reg);
 		reg = hal_read32(base_va + CSR_IGQOS_STAT_DMEM_QUEUE_DROP_CNT);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS DMEM drop cnt  : 0x%x\n", reg);
+		seq_printf(seq, "IGQOS DMEM drop cnt  : 0x%x\n", reg);
 		reg = hal_read32(base_va + CSR_IGQOS_STAT_RXF_QUEUE_DROP_CNT);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS RXF drop cnt   : 0x%x\n", reg);
+		seq_printf(seq, "IGQOS RXF drop cnt   : 0x%x\n", reg);
 		reg = pfe_gpi_cfg_shp_get_drop_cnt(base_va, 0);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS SHP0 drop cnt  : 0x%x\n", reg);
+		seq_printf(seq, "IGQOS SHP0 drop cnt  : 0x%x\n", reg);
 		reg = pfe_gpi_cfg_shp_get_drop_cnt(base_va, 1);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS SHP1 drop cnt  : 0x%x\n", reg);
+		seq_printf(seq, "IGQOS SHP1 drop cnt  : 0x%x\n", reg);
 		reg = hal_read32(base_va + CSR_IGQOS_STAT_MANAGED_PACKET_CNT);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS managed pkts   : 0x%x\n", reg);
+		seq_printf(seq, "IGQOS managed pkts   : 0x%x\n", reg);
 		reg = hal_read32(base_va + CSR_IGQOS_STAT_UNMANAGED_PACKET_CNT);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS unmanaged pkts : 0x%x\n", reg);
+		seq_printf(seq, "IGQOS unmanaged pkts : 0x%x\n", reg);
 		reg = hal_read32(base_va + CSR_IGQOS_STAT_RESERVED_PACKET_CNT);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "IGQOS reserved pkts  : 0x%x\n", reg);
+		seq_printf(seq, "IGQOS reserved pkts  : 0x%x\n", reg);
 
 		reg = hal_read32(base_va + GPI_FIFO_STATUS);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "TX Underrun          : 0x%x\n", reg);
+		seq_printf(seq, "TX Underrun          : 0x%x\n", reg);
 		hal_write32(0, base_va + GPI_FIFO_STATUS);
 
 		reg = hal_read32(base_va + GPI_FIFO_DEBUG);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "TX FIFO Packets      : 0x%x\n", reg & 0x1fU);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "RX FIFO Packets      : 0x%x\n", (reg >> 6) & 0x1fU);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "TX FIFO Level        : 0x%x\n", (reg >> 12) & 0xffU);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "RX FIFO Level        : 0x%x\n", (reg >> 20) & 0xffU);
+		seq_printf(seq, "TX FIFO Packets      : 0x%x\n", reg & 0x1fU);
+		seq_printf(seq, "RX FIFO Packets      : 0x%x\n", (reg >> 6) & 0x1fU);
+		seq_printf(seq, "TX FIFO Level        : 0x%x\n", (reg >> 12) & 0xffU);
+		seq_printf(seq, "RX FIFO Level        : 0x%x\n", (reg >> 20) & 0xffU);
 
 		reg = hal_read32(base_va + GPI_DTX_ASEQ);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "ASEQ Length          : 0x%x\n", reg);
+		seq_printf(seq, "ASEQ Length          : 0x%x\n", reg);
 
 		reg = hal_read32(base_va + GPI_EMAC_1588_TIMESTAMP_EN);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "1588 Enable register : 0x%x\n", reg);
+		seq_printf(seq, "1588 Enable register : 0x%x\n", reg);
 
 		reg = hal_read32(base_va + GPI_OVERRUN_DROPCNT);
-		len += oal_util_snprintf(buf + len, (size_t)size - len, "Overrun Drop Counter : 0x%x\n", reg);
+		seq_printf(seq, "Overrun Drop Counter : 0x%x\n", reg);
 		hal_write32(0, base_va + GPI_OVERRUN_DROPCNT);
 	}
 
-	return len;
+	return 0;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

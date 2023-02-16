@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -156,9 +156,7 @@ errno_t pfe_rtable_entry_set_dstif_id(pfe_rtable_entry_t *entry, pfe_ct_phy_if_i
 
 void pfe_rtable_do_timeouts(pfe_rtable_t *rtable);
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-uint32_t pfe_rtable_get_text_statistics(const pfe_rtable_t *rtable, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+uint32_t pfe_rtable_get_text_statistics(const pfe_rtable_t *rtable, struct seq_file *seq, uint8_t verb_level);
 
 errno_t pfe_rtable_get_stats(const pfe_rtable_t *rtable, pfe_ct_conntrack_stats_t *stat, uint8_t conntrack_index);
 

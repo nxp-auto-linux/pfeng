@@ -84,7 +84,7 @@ static fci_core_client_t *fci_core_get_client(fci_core_t *core, uint32_t port_id
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == core))
 	{
-		NXP_LOG_ERROR("NULL argument received\n");
+		NXP_LOG_RAW_ERROR("NULL argument received\n");
 		return NULL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
@@ -112,8 +112,8 @@ static uint8_t fci_core_get_count_of_clients(fci_core_t *core)
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == core))
 	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
+		NXP_LOG_RAW_ERROR("NULL argument received\n");
+		return 0U;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
@@ -213,7 +213,7 @@ void fci_core_fini(void)
 		}
 		if(mutex_lock_interruptible(&GET_FCI_CORE()->clients_lock))
 		{
-			NXP_LOG_WARNING("FCI clients lock failed\n");
+			NXP_LOG_RAW_WARNING("FCI clients lock failed\n");
 			return;
 		}
 		for(ii = 0; ii < FCI_CFG_MAX_CLIENTS; ii++)
@@ -223,7 +223,7 @@ void fci_core_fini(void)
 			{
 				if (EOK != fci_netlink_send(GET_FCI_CORE()->clients[ii].back_port_id, &msg))
 				{
-					NXP_LOG_ERROR("fci_netlink_send failed\n");
+					NXP_LOG_RAW_ERROR("fci_netlink_send failed\n");
 				}
 
 				GET_FCI_CORE()->clients[ii].connected = FALSE;
@@ -342,7 +342,7 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 		{
 			if(mutex_lock_interruptible(&core->clients_lock))
 			{
-				NXP_LOG_ERROR("FCI clients lock failed\n");
+				NXP_LOG_RAW_ERROR("FCI clients lock failed\n");
 				return EAGAIN;
 			}
 
@@ -354,7 +354,7 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 				{
 					if(msg->msg_client_register.port_id == core->clients[ii].back_port_id)
 					{
-						NXP_LOG_ERROR("Client already registered\n");
+						NXP_LOG_RAW_ERROR("Client already registered\n");
 						ret = EPERM;
 						break;
 					}
@@ -372,12 +372,12 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 			{
 				if (FCI_CFG_MAX_CLIENTS == ii)
 				{
-					NXP_LOG_ERROR("Can't register new event listener, storage is full\n");
+					NXP_LOG_RAW_ERROR("Can't register new event listener, storage is full\n");
 					ret = ENOSPC;
 				}
 				else
 				{
-					NXP_LOG_INFO("Listener with port id cmd 0x%x, back 0x%x registered to pos %d\n", core->clients[ii].cmd_port_id,core->clients[ii].back_port_id,ii);
+					NXP_LOG_RAW_INFO("Listener with port id cmd 0x%x, back 0x%x registered to pos %d\n", core->clients[ii].cmd_port_id,core->clients[ii].back_port_id,ii);
 					ret = EOK;
 				}
 			}
@@ -406,7 +406,7 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 		{
 			if(mutex_lock_interruptible(&core->clients_lock))
 			{
-				NXP_LOG_ERROR("FCI clients lock failed\n");
+				NXP_LOG_RAW_ERROR("FCI clients lock failed\n");
 				return EAGAIN;
 			}
 
@@ -427,12 +427,12 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 
 			if (FCI_CFG_MAX_CLIENTS == ii)
 			{
-				NXP_LOG_ERROR("Requested connection ID not found\n");
+				NXP_LOG_RAW_ERROR("Requested connection ID not found\n");
 				ret = ENOENT;
 			}
 			else
 			{
-				NXP_LOG_INFO("Listener with port id cmd 0x%x unregistered from pos %d\n",port_id, ii);
+				NXP_LOG_RAW_INFO("Listener with port id cmd 0x%x unregistered from pos %d\n",port_id, ii);
 				ret = EOK;
 			}
 
@@ -455,7 +455,7 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 			/*	We need to find the client based on cmd port id to be able to pass the client to the lower layers */
 			if(mutex_lock_interruptible(&core->clients_lock))
 			{
-				NXP_LOG_ERROR("FCI clients lock failed\n");
+				NXP_LOG_RAW_ERROR("FCI clients lock failed\n");
 				return EAGAIN;
 			}
 			client = fci_core_get_client(core, port_id);
@@ -503,18 +503,18 @@ static errno_t fci_netlink_send(uint32_t port_id, fci_msg_t *msg)
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == msg))
 	{
-		NXP_LOG_ERROR("NULL argument received\n");
+		NXP_LOG_RAW_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	skb_out = nlmsg_new(msg_size, 0);
 	if (!skb_out) {
-		NXP_LOG_ERROR("Failed to allocate new skb\n");
+		NXP_LOG_RAW_ERROR("Failed to allocate new skb\n");
 		return ENOMEM;
 	}
 
-	NXP_LOG_DEBUG("FCI send netlink message to port_id 0x%x\n",port_id);
+	NXP_LOG_RAW_DEBUG("FCI send netlink message to port_id 0x%x\n",port_id);
 	nlh = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, GFP_ATOMIC);
 	nlh->nlmsg_flags = NLM_F_REQUEST;
 	NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
@@ -523,7 +523,7 @@ static errno_t fci_netlink_send(uint32_t port_id, fci_msg_t *msg)
 	res = nlmsg_unicast(GET_FCI_CORE()->handle, skb_out, port_id);
 
 	if (res < 0) {
-		NXP_LOG_ERROR("Error while sending: %d\n", res);
+		NXP_LOG_RAW_ERROR("Error while sending: %d\n", res);
 	}
 	else
 	{
@@ -571,13 +571,13 @@ errno_t fci_core_client_send(fci_core_client_t *client, fci_msg_t *msg, fci_msg_
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(FALSE == __context.fci_initialized))
 	{
-		NXP_LOG_ERROR("Context not initialized\n");
+		NXP_LOG_RAW_ERROR("Context not initialized\n");
 		return EPERM;
 	}
 
 	if (unlikely(NULL == msg) || unlikely(NULL == rep))
 	{
-		NXP_LOG_ERROR("NULL argument received\n");
+		NXP_LOG_RAW_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
@@ -585,13 +585,13 @@ errno_t fci_core_client_send(fci_core_client_t *client, fci_msg_t *msg, fci_msg_
 	/*	this function could be called from a callback even after the FCI module was destroyed */
 	if (NULL == GET_FCI_CORE())
 	{
-		NXP_LOG_WARNING("Cannot send FCI message (FCI core is NULL)\n");
+		NXP_LOG_RAW_WARNING("Cannot send FCI message (FCI core is NULL)\n");
 		return EINVAL;
 	}
 
 	if(mutex_lock_interruptible(&GET_FCI_CORE()->clients_lock))
 	{
-		NXP_LOG_WARNING("FCI clients lock failed\n");
+		NXP_LOG_RAW_WARNING("FCI clients lock failed\n");
 		return EAGAIN;
 	}
 	
@@ -599,7 +599,7 @@ errno_t fci_core_client_send(fci_core_client_t *client, fci_msg_t *msg, fci_msg_
 	{
 		if (EOK != (ret = fci_netlink_send(client->back_port_id, msg)))
 		{
-			NXP_LOG_ERROR("fci_netlink_send() failed: %d\n", ret);
+			NXP_LOG_RAW_ERROR("fci_netlink_send() failed: %d\n", ret);
 		}
 	}
 
@@ -619,13 +619,13 @@ errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep)
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(FALSE == __context.fci_initialized))
 	{
-		NXP_LOG_ERROR("Context not initialized\n");
+		NXP_LOG_RAW_ERROR("Context not initialized\n");
 		return EPERM;
 	}
 
 	if (unlikely(NULL == msg))
 	{
-		NXP_LOG_ERROR("NULL argument received\n");
+		NXP_LOG_RAW_ERROR("NULL argument received\n");
 		return EINVAL;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
@@ -633,13 +633,13 @@ errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep)
 	/*	this function could be called from a callback even after the FCI module was destroyed */
 	if (NULL == GET_FCI_CORE())
 	{
-		NXP_LOG_WARNING("Cannot send FCI message (FCI core is NULL)\n");
+		NXP_LOG_RAW_WARNING("Cannot send FCI message (FCI core is NULL)\n");
 		return EINVAL;
 	}
 
 	if(mutex_lock_interruptible(&core->clients_lock))
 	{
-		NXP_LOG_WARNING("FCI clients lock failed\n");
+		NXP_LOG_RAW_WARNING("FCI clients lock failed\n");
 		return EAGAIN;
 	}
 
@@ -649,7 +649,7 @@ errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep)
 		{
 			if (EOK != (ret = fci_netlink_send(core->clients[ii].back_port_id, msg)))
 			{
-				NXP_LOG_ERROR("fci_netlink_send() failed: %d\n", ret);
+				NXP_LOG_RAW_ERROR("fci_netlink_send() failed: %d\n", ret);
 			}
 		}
 	}

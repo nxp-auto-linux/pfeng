@@ -46,7 +46,7 @@ static void fci_hm_cb(pfe_hm_item_t *unused)
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(FALSE == fci_context->fci_initialized))
 	{
-		NXP_LOG_ERROR("Context not initialized\n");
+		NXP_LOG_RAW_ERROR("Context not initialized\n");
 		ret = EPERM;
 	}
 	else
@@ -62,7 +62,7 @@ static void fci_hm_cb(pfe_hm_item_t *unused)
 			if (FALSE == fci_context->is_some_client)  /* Consume only if there is someone to send data to. */
 			{
 				ret = EPERM;
-				NXP_LOG_DEBUG("No client to send data to.\n");
+				NXP_LOG_RAW_DEBUG("No client to send data to.\n");
 			}
 			else
 			{
@@ -71,11 +71,11 @@ static void fci_hm_cb(pfe_hm_item_t *unused)
 				{
 					if (ENOENT == ret)
 					{
-						NXP_LOG_DEBUG("No more items in HM database\n");
+						NXP_LOG_RAW_DEBUG("No more items in HM database\n");
 					}
 					else
 					{
-						NXP_LOG_ERROR("Failed to get item from HM database: %d\n", ret);
+						NXP_LOG_RAW_ERROR("Failed to get item from HM database: %d\n", ret);
 					}
 				}
 				else

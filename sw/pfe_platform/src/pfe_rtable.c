@@ -1,7 +1,7 @@
 /* =========================================================================
  *	
  *	Copyright (c) 2019 Imagination Technologies Limited
- *	Copyright 2018-2022 NXP
+ *	Copyright 2018-2023 NXP
  *
  *	SPDX-License-Identifier: GPL-2.0
  *
@@ -3475,20 +3475,16 @@ errno_t pfe_rtable_clear_stats(const pfe_rtable_t *rtable, uint8_t conntrack_ind
 	return ret;
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Return conntrack statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	rtable		The routing table instance
- * @param[in]	buf			Pointer to the buffer to write to
- * @param[in]	buf_len		Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_rtable_get_text_statistics(const pfe_rtable_t *rtable, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_rtable_get_text_statistics(const pfe_rtable_t *rtable, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
 	errno_t ret;
 	pfe_ct_conntrack_stats_t stats = {0};
 	LLIST_t *item;
@@ -3499,13 +3495,9 @@ uint32_t pfe_rtable_get_text_statistics(const pfe_rtable_t *rtable, char_t *buf,
 
 	ret = pfe_rtable_get_stats(rtable, &stats, 0);
 
-	if (EOK != ret)
+	if (EOK == ret)
 	{
-		len = 0U;
-	}
-	else
-	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "Default				  hit: %12lu hit_bytes: %12lu\n", stats.hit, stats.hit_bytes);
+		seq_printf(seq, "Default				  hit: %12u hit_bytes: %12u\n", stats.hit, stats.hit_bytes);
 
 		/*	Protect table accesses */
 		if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
@@ -3531,7 +3523,7 @@ uint32_t pfe_rtable_get_text_statistics(const pfe_rtable_t *rtable, char_t *buf,
 					continue;
 				}
 
-				len += oal_util_snprintf(buf + len, buf_len - len, "Conntrack route_id %2d hit: %12lu hit_bytes: %12lu\n", oal_ntohl(entry->route_id) , stats.hit, stats.hit_bytes);
+				seq_printf(seq, "Conntrack route_id %2d hit: %12u hit_bytes: %12u\n", oal_ntohl(entry->route_id) , stats.hit, stats.hit_bytes);
 			}
 		}
 
@@ -3541,10 +3533,8 @@ uint32_t pfe_rtable_get_text_statistics(const pfe_rtable_t *rtable, char_t *buf,
 		}
 	}
 
-	return len;
+	return 0;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -35,6 +35,7 @@ struct pfe_emac_tag
 	uint32_t o_clk_hz;			/*	IEEE1588 desired output clock */
 	uint32_t adj_ppb;			/*	IEEE1588 frequency adjustment value */
 	bool_t adj_sign;			/*	IEEE1588 frequency adjustment sign (TRUE - positive, FALSE - negative) */
+	bool_t ext_ts;				/*  IEEE1588 external timestamp mode */
 	pfe_gpi_t *gpi;				/* gpi handle, to export gpi services for this emac instance */
 };
 
@@ -49,23 +50,8 @@ typedef struct
 	pfe_drv_id_t owner;	/*	Identification of the driver that owns this entry */
 } pfe_mac_addr_db_entry_t;
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_VAR_INIT_32
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 /* usage scope: pfe_emac_mdio_lock */
 static uint32_t key_seed = 123U;
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_VAR_INIT_32
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 static bool_t pfe_emac_flush_criterion_eval(const pfe_mac_addr_db_entry_t *entry, pfe_emac_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
 static void pfe_emac_addr_db_init(pfe_emac_t *emac);
@@ -645,6 +631,7 @@ errno_t pfe_emac_enable_ts(pfe_emac_t *emac, uint32_t i_clk_hz, uint32_t o_clk_h
 	{
 		emac->i_clk_hz = i_clk_hz;
 		emac->o_clk_hz = o_clk_hz;
+		emac->ext_ts = eclk;
 
 		if (EOK != oal_mutex_lock(&emac->ts_mutex))
 		{
@@ -676,10 +663,18 @@ errno_t pfe_emac_set_ts_freq_adjustment(pfe_emac_t *emac, uint32_t ppb, bool_t s
 		NXP_LOG_ERROR("Mutex lock failed\n");
 	}
 
+	if (TRUE == emac->ext_ts)
+	{
+		NXP_LOG_DEBUG("Cannot adjust timestamping clock frequency on EMAC%u working in external timestamp mode\n", pfe_emac_get_index(emac));
+		ret = EPERM;
+	}
+	else
+	{
 	emac->adj_ppb = ppb;
 	emac->adj_sign = sgn;
 
 	ret = pfe_emac_cfg_adjust_ts_freq(emac->emac_base_va, emac->i_clk_hz, emac->o_clk_hz, ppb, sgn);
+	}
 
 	if (EOK != oal_mutex_unlock(&emac->ts_mutex))
 	{
@@ -798,7 +793,15 @@ errno_t pfe_emac_adjust_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, b
 			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
+		if (TRUE == emac->ext_ts)
+		{
+			NXP_LOG_DEBUG("Cannot adjust timestamping time on EMAC%u working in external timestamp mode\n", pfe_emac_get_index(emac));
+			ret = EPERM;
+		}
+		else
+		{
 		ret = pfe_emac_cfg_adjust_ts_time(emac->emac_base_va, sec, nsec, sgn);
+		}
 
 		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
 		{
@@ -837,7 +840,15 @@ errno_t pfe_emac_set_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, uint
 			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
+		if (TRUE == emac->ext_ts)
+		{
+			NXP_LOG_DEBUG("Cannot set timestamping time on EMAC%u working in external timestamp mode\n", pfe_emac_get_index(emac));
+			ret = EPERM;
+		}
+		else
+		{
 		ret = pfe_emac_cfg_set_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
+		}
 
 		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
 		{
@@ -1992,21 +2003,16 @@ uint32_t pfe_emac_get_tx_cnt(const pfe_emac_t *emac)
 	return tx_cnt;
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Return EMAC runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	gpi 		The EMAC instance
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	size 		Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
-
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == emac))
 	{
@@ -2015,13 +2021,11 @@ uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, char_t *buf, uint3
 	}
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		len += pfe_emac_cfg_get_text_stat(emac->emac_base_va, buf + len, buf_len - len, verb_level);
-	}
-	return len;
-}
 
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+	pfe_emac_cfg_get_text_stat(emac->emac_base_va, seq, verb_level);
+
+	return 0;
+}
 
 /**
  * @brief		Get EMAC statistic in numeric form
@@ -2096,9 +2100,4 @@ void pfe_emac_irq_unmask(pfe_emac_t *emac)
 {
 	(void)emac;
 }
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 

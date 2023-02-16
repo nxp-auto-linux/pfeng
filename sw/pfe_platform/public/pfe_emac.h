@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -12,6 +12,10 @@
 
 #include "pfe_ct.h"
 #include "pfe_gpi.h"
+
+#define PFE_EMAC_STD_MTU	1500U
+#define PFE_EMAC_JUMBO_MTU	9000U
+#define PFE_MIN_DSA_OVERHEAD	4U
 
 typedef enum
 {
@@ -97,13 +101,6 @@ typedef enum __attribute__ ((packed)) {
 	EMAC_CRIT_INVALID,
 } pfe_emac_crit_t;
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 static inline const char_t *
 pfe_emac_mii_mode_to_str(pfe_emac_mii_mode_t mode)
 {
@@ -119,8 +116,6 @@ pfe_emac_mii_mode_to_str(pfe_emac_mii_mode_t mode)
 		return "out-of-range";
 	}
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		Check if given MAC address is zero
@@ -236,9 +231,7 @@ errno_t pfe_emac_get_addr(pfe_emac_t *emac, pfe_mac_addr_t addr);
 errno_t pfe_emac_del_addr(pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 void pfe_emac_destroy(pfe_emac_t *emac);
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, struct seq_file *seq, uint8_t verb_level);
 
 uint32_t pfe_emac_get_rx_cnt(const pfe_emac_t *emac);
 uint32_t pfe_emac_get_tx_cnt(const pfe_emac_t *emac);
@@ -246,10 +239,5 @@ uint32_t pfe_emac_get_stat_value(const pfe_emac_t *emac, uint32_t stat_id);
 errno_t pfe_emac_isr(pfe_emac_t *emac);
 void pfe_emac_irq_mask(pfe_emac_t *emac);
 void pfe_emac_irq_unmask(pfe_emac_t *emac);
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PUBLIC_PFE_EMAC_H_ */

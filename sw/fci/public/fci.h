@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2022 NXP
+ *  Copyright 2017-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -64,9 +64,7 @@ errno_t fci_core_client_send_broadcast(fci_msg_t *msg, fci_msg_t *rep);
 errno_t fci_init(fci_init_info_t *info, const char_t *const identifier);
 void fci_fini(void);
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+uint32_t pfe_fp_get_text_statistics(pfe_fp_t *temp, struct seq_file *seq, uint8_t verb_level);
 
 errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg);	/* This is here because FCI proxy RPC calls need it. */
 

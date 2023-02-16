@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -42,9 +42,7 @@ void *pfe_bmu_get_pa(const pfe_bmu_t *bmu, addr_t va) __attribute__((hot, pure))
 uint32_t pfe_bmu_get_buf_size(const pfe_bmu_t *bmu) __attribute__((cold, pure));
 void pfe_bmu_free_buf(const pfe_bmu_t *bmu, addr_t buffer) __attribute__((hot));
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-uint32_t pfe_bmu_get_text_statistics(const pfe_bmu_t *bmu, char_t *buf, uint32_t buf_len, uint8_t verb_level) __attribute__((cold));
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+uint32_t pfe_bmu_get_text_statistics(const pfe_bmu_t *bmu, struct seq_file *seq, uint8_t verb_level) __attribute__((cold));
 
 void pfe_bmu_destroy(pfe_bmu_t *bmu) __attribute__((cold));
 #ifdef PFE_CFG_PFE_MASTER

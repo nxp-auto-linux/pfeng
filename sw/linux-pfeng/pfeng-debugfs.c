@@ -1,5 +1,5 @@
 /*
- * Copyright 2018,2020-2022 NXP
+ * Copyright 2018,2020-2023 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -11,33 +11,19 @@
 #include "pfe_cfg.h"
 #include "pfeng.h"
 #include "fci.h"
+#include "pfe_platform.h"
 
 #if defined(CONFIG_DEBUG_FS)
 
 static u32 *msg_verbosity_ptr;
 
-#define DEBUGFS_BUF_SIZE 4096
-
 #define CREATE_DEBUGFS_ENTRY_TYPE(ename,var_type)				\
 static int fn_##ename##_debug_show(struct seq_file *seq, void *v)		\
 {										\
 	pfe_##var_type##_t *var_##ename = seq->private;				\
-	char *buf;								\
-	int ret;								\
 										\
-	buf = kzalloc(DEBUGFS_BUF_SIZE, GFP_KERNEL);				\
-	if (!buf) {								\
-		seq_puts(seq, "no memory\n");					\
-		return -ENOMEM;							\
-	}									\
-										\
-	ret = pfe_##ename##_get_text_statistics(var_##ename, buf,		\
-			DEBUGFS_BUF_SIZE, *msg_verbosity_ptr);			\
-										\
-	if (ret)								\
-		seq_puts(seq, buf);						\
-										\
-	kfree(buf);								\
+	pfe_##ename##_get_text_statistics(var_##ename, seq, 			\
+					  *msg_verbosity_ptr);			\
 										\
 	return 0;								\
 }										\
@@ -65,6 +51,7 @@ CREATE_DEBUGFS_ENTRY_TYPE(tmu,tmu);
 CREATE_DEBUGFS_ENTRY_TYPE(util,util);
 CREATE_DEBUGFS_ENTRY_TYPE(fp,fp);
 CREATE_DEBUGFS_ENTRY_TYPE(rtable,rtable);
+CREATE_DEBUGFS_ENTRY_TYPE(fw_features,platform);
 #endif
 CREATE_DEBUGFS_ENTRY_TYPE(hif_chnl,hif_chnl);
 
@@ -150,6 +137,7 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 		ADD_DEBUGFS_ENTRY("emac1", emac, priv->dbgfs, priv->pfe_platform->emac[1], &dsav);
 	if (priv->emac[2].enabled)
 		ADD_DEBUGFS_ENTRY("emac2", emac, priv->dbgfs, priv->pfe_platform->emac[2], &dsav);
+	ADD_DEBUGFS_ENTRY("fw", fw_features, priv->dbgfs, priv->pfe_platform, &dsav);
 #endif
 
 	return 0;

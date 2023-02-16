@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2022 NXP
+ *  Copyright 2017-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -347,14 +347,14 @@ void pfe_class_cfg_reset(addr_t base_va);
 void pfe_class_cfg_enable(addr_t base_va);
 void pfe_class_cfg_disable(addr_t base_va);
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-uint32_t pfe_class_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+uint32_t pfe_class_cfg_get_text_stat(addr_t base_va, struct seq_file *seq, uint8_t verb_level);
 
 errno_t pfe_class_cfg_set_rtable(addr_t base_va, addr_t rtable_pa, uint32_t rtable_len, uint32_t entry_size);
 void pfe_class_cfg_set_def_vlan(addr_t base_va, uint16_t vlan);
 void pfe_class_cfg_rtable_lookup_enable(const addr_t base_va);
 void pfe_class_cfg_rtable_lookup_disable(const addr_t base_va);
+void pfe_class_cfg_bridge_lookup_enable(const addr_t base_va);
+void pfe_class_cfg_bridge_lookup_disable(const addr_t base_va);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

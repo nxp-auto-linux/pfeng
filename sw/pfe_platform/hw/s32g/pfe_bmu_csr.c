@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -293,19 +293,16 @@ void pfe_bmu_cfg_free_buf(addr_t base_va, addr_t buffer)
 	hal_write32((uint32_t)(buffer & 0xffffffffU), base_va + BMU_FREE_CTRL);
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Get BMU statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
  * 				about the BMU block.
  * @param[in]	base_va Base address of BMU register space (virtual)
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	size 		Buffer length
+ * @param[in]	seq 		Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_bmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level)
+uint32_t pfe_bmu_cfg_get_text_stat(addr_t base_va, struct seq_file *seq, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 	uint32_t reg, ii;
@@ -321,48 +318,46 @@ uint32_t pfe_bmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 	{
 		if(verb_level >= 10U)
 		{
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_REM_BUF_CNT     : 0x%x\n", hal_read32(base_va + BMU_REM_BUF_CNT));
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_FREE_ERROR_ADDR : 0x%x\n", hal_read32(base_va + BMU_FREE_ERROR_ADDR));
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_CURR_BUF_CNT    : 0x%x\n", hal_read32(base_va + BMU_CURR_BUF_CNT));
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "BMU_DEBUG_BUS       : 0x%x\n", hal_read32(base_va + BMU_DEBUG_BUS));
+			seq_printf(seq, "BMU_REM_BUF_CNT     : 0x%x\n", hal_read32(base_va + BMU_REM_BUF_CNT));
+			seq_printf(seq, "BMU_FREE_ERROR_ADDR : 0x%x\n", hal_read32(base_va + BMU_FREE_ERROR_ADDR));
+			seq_printf(seq, "BMU_CURR_BUF_CNT    : 0x%x\n", hal_read32(base_va + BMU_CURR_BUF_CNT));
+			seq_printf(seq, "BMU_DEBUG_BUS       : 0x%x\n", hal_read32(base_va + BMU_DEBUG_BUS));
 		}
 
 		if(verb_level >= 9U)
 		{
 			/*	Get version */
 			reg = hal_read32(base_va + BMU_VERSION);
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Revision             : 0x%x\n", (reg >> 24) & 0xffU);
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Version              : 0x%x\n", (reg >> 16) & 0xffU);
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "ID                   : 0x%x\n", reg & 0xffffU);
+			seq_printf(seq, "Revision             : 0x%x\n", (reg >> 24) & 0xffU);
+			seq_printf(seq, "Version              : 0x%x\n", (reg >> 16) & 0xffU);
+			seq_printf(seq, "ID                   : 0x%x\n", reg & 0xffffU);
 		}
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Buffer Base (uc)     : p0x%x\n", (uint32_t)hal_read32(base_va + BMU_UCAST_BASEADDR));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Buffer Size          : 0x%x\n", 1U << hal_read32(base_va + BMU_BUF_SIZE));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Buffers Remaining    : 0x%x\n", hal_read32(base_va + BMU_REM_BUF_CNT));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Buffers Allocated    : 0x%x\n", hal_read32(base_va + BMU_CURR_BUF_CNT));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Low Watermark        : 0x%x\n", hal_read32(base_va + BMU_LOW_WATERMARK));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "High Watermark       : 0x%x\n", hal_read32(base_va + BMU_HIGH_WATERMARK));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "IRQ Threshold (uc)   : 0x%x\n", hal_read32(base_va + BMU_THRES) & 0xffffU);
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Free Error Address   : 0x%x\n", hal_read32(base_va + BMU_FREE_ERROR_ADDR));
+		seq_printf(seq, "Buffer Base (uc)     : p0x%x\n", (uint32_t)hal_read32(base_va + BMU_UCAST_BASEADDR));
+		seq_printf(seq, "Buffer Size          : 0x%x\n", 1U << hal_read32(base_va + BMU_BUF_SIZE));
+		seq_printf(seq, "Buffers Remaining    : 0x%x\n", hal_read32(base_va + BMU_REM_BUF_CNT));
+		seq_printf(seq, "Buffers Allocated    : 0x%x\n", hal_read32(base_va + BMU_CURR_BUF_CNT));
+		seq_printf(seq, "Low Watermark        : 0x%x\n", hal_read32(base_va + BMU_LOW_WATERMARK));
+		seq_printf(seq, "High Watermark       : 0x%x\n", hal_read32(base_va + BMU_HIGH_WATERMARK));
+		seq_printf(seq, "IRQ Threshold (uc)   : 0x%x\n", hal_read32(base_va + BMU_THRES) & 0xffffU);
+		seq_printf(seq, "Free Error Address   : 0x%x\n", hal_read32(base_va + BMU_FREE_ERROR_ADDR));
 		reg = hal_read32(base_va + BMU_BUF_CNT);
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Free Error Count     : 0x%x\n", reg >> 16);
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Active Buffers       : 0x%x\n", reg & 0xffffU);
+		seq_printf(seq, "Free Error Count     : 0x%x\n", reg >> 16);
+		seq_printf(seq, "Active Buffers       : 0x%x\n", reg & 0xffffU);
 
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "IRQ Source           : 0x%x\n", hal_read32(base_va + BMU_INT_SRC));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "IRQ Enable           : 0x%x\n", hal_read32(base_va + BMU_INT_ENABLE));
+		seq_printf(seq, "IRQ Source           : 0x%x\n", hal_read32(base_va + BMU_INT_SRC));
+		seq_printf(seq, "IRQ Enable           : 0x%x\n", hal_read32(base_va + BMU_INT_ENABLE));
 
 		for (ii=0; ii<32U; ii++)
 		{
 			reg = hal_read32(base_va + BMU_MAS0_BUF_CNT + (4U*ii));
 			if (0U != reg)
 			{
-				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "MASTER%02d Count       : 0x%x\n", ii, reg);
+				seq_printf(seq, "MASTER%02d Count       : 0x%x\n", ii, reg);
 			}
 		}
 	}
 	return len;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		BMU error detect in polling

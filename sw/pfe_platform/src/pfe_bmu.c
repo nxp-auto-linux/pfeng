@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -478,36 +478,28 @@ __attribute__((cold)) void pfe_bmu_destroy(pfe_bmu_t *bmu)
 	}
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Return BMU runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	bmu 		The BMU instance
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	buf_len 	Buffer length
+ * @param[in]	seq 		Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-__attribute__((cold)) uint32_t pfe_bmu_get_text_statistics(const pfe_bmu_t *bmu, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+__attribute__((cold)) uint32_t pfe_bmu_get_text_statistics(const pfe_bmu_t *bmu, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
-
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		len = 0U;
 	}
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		len += pfe_bmu_cfg_get_text_stat(bmu->bmu_base_va, buf, buf_len, verb_level);
+		pfe_bmu_cfg_get_text_stat(bmu->bmu_base_va, seq, verb_level);
 	}
-	return len;
+	return 0;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_PFE_MASTER
 /**

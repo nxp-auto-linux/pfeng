@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -38,9 +38,12 @@ struct pfe_classifier_tag
 	blalloc_t *        heap_context;   /* Heap manager context */
 	uint32_t           dmem_heap_base; /* DMEM base address of the heap */
 	oal_mutex_t        mutex;
+	oal_mutex_t        mutex_pe;       /* Shared mutex for CLASS PE cores */
+	bool_t             miflock_pe;     /* Shared 'miflock' diagnostic flag for CLASS PE cores */
 	uint32_t           current_feature;   /* Index of the feature to return by pfe_class_get_feature_next() */
 	pfe_fw_feature_t **fw_features;       /* List of all features*/
 	uint32_t           fw_features_count; /* Number of items in fw_features */
+	uint32_t           phy_if_bitmap_br_modes; /* Bitmap list of PHY interfaces with enabled bridge mode, used to control HW bridge lookup */
 };
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
@@ -52,19 +55,15 @@ static errno_t  pfe_class_dmem_heap_init(pfe_class_t *class);
 static errno_t  pfe_class_load_fw_features(pfe_class_t *class);
 static errno_t  pfe_class_load_fw_process(pfe_class_t *class);
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 static void     pfe_class_alg_stats_endian(pfe_ct_class_algo_stats_t *stat);
 static void     pfe_class_ihc_stats_endian(pfe_ct_class_ihc_stats_t *stat);
 static void     pfe_class_pe_stats_endian(pfe_ct_pe_stats_t *stat);
 static void     pfe_class_sum_pe_algo_stats(pfe_ct_class_algo_stats_t *sum, const pfe_ct_class_algo_stats_t *val);
 static void     pfe_class_sum_pe_ihc_stats(pfe_ct_class_ihc_stats_t *sum, const pfe_ct_class_ihc_stats_t *val);
-static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
-static uint32_t pfe_class_ihc_stat_to_str(const pfe_ct_class_ihc_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
+static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, struct seq_file *seq, uint8_t verb_level);
+static uint32_t pfe_class_ihc_stat_to_str(const pfe_ct_class_ihc_stats_t *stat, struct seq_file *seq, uint8_t verb_level);
 static void pfe_class_cal_total_stats(pfe_class_t *class, pfe_ct_classify_stats_t *total_stat, pfe_ct_classify_stats_t *stats);
 static errno_t pfe_class_create_pe(pfe_class_t *class, addr_t cbus_base_va, uint32_t pe_num);
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief CLASS ISR
@@ -89,47 +88,49 @@ errno_t pfe_class_isr(const pfe_class_t *class)
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		for (i = 0U; i < class->pe_num; i++)
+		/*	Allow safe use of _nolock() functions. We don't call the _memlock()
+		 	here as we don't need to have coherent accesses. */
+		if (EOK != pfe_pe_lock_family(*class->pe))
 		{
-			/*	Allow safe use of _nolock() functions. We don't call the _mem_lock()
-				here as we don't need to have coherent accesses. */
-			if (EOK != pfe_pe_lock(class->pe[i]))
+			NXP_LOG_ERROR("pfe_pe_lock_family() failed\n");
+		}
+		else
+		{
+			for (i = 0U; i < class->pe_num; i++)
 			{
-				NXP_LOG_ERROR("pfe_pe_lock() failed\n");
-			}
-
-			/*	Read and print the error record from each PE */
-			(void)pfe_pe_get_fw_messages_nolock(class->pe[i]);
-			/* Check the PE core for stalled state */
-			(void)pfe_pe_check_stalled_nolock(class->pe[i]);
+				/*	Read and print the error record from each PE */
+				(void)pfe_pe_get_fw_messages_nolock(class->pe[i]);
+				/* Check the PE core for stalled state */
+				(void)pfe_pe_check_stalled_nolock(class->pe[i]);
 
 #ifdef PFE_CFG_FCI_ENABLE
-			/*	Check if there is new message */
-			if (EOK == pfe_pe_get_data_nolock(class->pe[i], &buf))
-			{
-				/*	Provide data to user via FCI */
-				msg.msg_cmd.code   = FPP_CMD_DATA_BUF_AVAIL;
-				msg.msg_cmd.length = buf.len;
+				/*	Check if there is new message */
+				if (EOK == pfe_pe_get_data_nolock(class->pe[i], &buf))
+				{
+					/*	Provide data to user via FCI */
+					msg.msg_cmd.code   = FPP_CMD_DATA_BUF_AVAIL;
+					msg.msg_cmd.length = buf.len;
 
-				if (msg.msg_cmd.length > (uint32_t)sizeof(msg.msg_cmd.payload))
-				{
-					NXP_LOG_ERROR("FCI buffer is too small\n");
-				}
-				else
-				{
-					(void)memcpy(&msg.msg_cmd.payload, buf.payload, buf.len);
-					ret = fci_core_client_send_broadcast(&msg, NULL);
-					if (EOK != ret)
+					if (msg.msg_cmd.length > (uint32_t)sizeof(msg.msg_cmd.payload))
 					{
-						NXP_LOG_ERROR("Can't report data to FCI clients\n");
+						NXP_LOG_ERROR("FCI buffer is too small\n");
+					}
+					else
+					{
+						(void)memcpy(&msg.msg_cmd.payload, buf.payload, buf.len);
+						ret = fci_core_client_send_broadcast(&msg, NULL);
+						if (EOK != ret)
+						{
+							NXP_LOG_ERROR("Can't report data to FCI clients\n");
+						}
 					}
 				}
-			}
 #endif /* PFE_CFG_FCI_ENABLE */
+			}
 
-			if (EOK != pfe_pe_unlock(class->pe[i]))
+			if (EOK != pfe_pe_unlock_family(*class->pe))
 			{
-				NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
+				NXP_LOG_ERROR("pfe_pe_unlock_family() failed\n");
 			}
 		}
 		ret = EOK;
@@ -173,7 +174,7 @@ static errno_t pfe_class_create_pe(pfe_class_t *class, addr_t cbus_base_va, uint
 	/*	Create PEs */
 	for (ii = 0U; ii < pe_num; ii++)
 	{
-		pe = pfe_pe_create(cbus_base_va, PE_TYPE_CLASS, (uint8_t)ii);
+		pe = pfe_pe_create(cbus_base_va, PE_TYPE_CLASS, (uint8_t)ii, &class->mutex_pe, &class->miflock_pe);
 
 		if (NULL == pe)
 		{
@@ -233,6 +234,13 @@ pfe_class_t *pfe_class_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_cl
 				oal_mm_free(class);
 				class = NULL;
 			}
+			else if (EOK != oal_mutex_init(&class->mutex_pe))
+			{
+				NXP_LOG_ERROR("Unable to initialize shared mutex for CLASS PE cores\n");
+				(void)oal_mutex_destroy(&class->mutex);	/* 'mutex_pe' creation failed, but 'mutex' already exists */
+				oal_mm_free(class);
+				class = NULL;
+			}
 			else
 			{
 				if (pe_num > 0U)
@@ -243,6 +251,7 @@ pfe_class_t *pfe_class_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_cl
 					{
 						NXP_LOG_ERROR("Unable to allocate memory\n");
 						(void)oal_mutex_destroy(&class->mutex);
+						(void)oal_mutex_destroy(&class->mutex_pe);
 						oal_mm_free(class);
 						class = NULL;
 					}
@@ -878,6 +887,11 @@ void pfe_class_destroy(pfe_class_t *class)
 			class->heap_context = NULL;
 		}
 
+		if (EOK != oal_mutex_destroy(&class->mutex_pe))
+		{
+			NXP_LOG_ERROR("Could not properly destroy shared mutex for CLASS PE cores\n");
+		}
+
 		if (EOK != oal_mutex_destroy(&class->mutex))
 		{
 			NXP_LOG_ERROR("Could not properly destroy mutex\n");
@@ -1234,12 +1248,11 @@ static void pfe_class_sum_pe_ihc_stats(pfe_ct_class_ihc_stats_t *sum, const pfe_
 /**
  * @brief                  Converts statistics of a logical interface or classification algorithm into a text form
  * @param[in]  stat        Statistics to convert - expected in HOST endian
- * @param[out] buf         Buffer where to write the text
- * @param[in]  buf_len     Buffer length
+ * @param[in]  seq         Pointer to debugfs seq_file
  * @param[in]  verb_level  Verbosity level
  * @return                 Number of bytes written into the output buffer
  */
-static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
+static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, struct seq_file *seq, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 
@@ -1253,10 +1266,10 @@ static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, cha
 	else
 #endif
 	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames processed: %u\n", stat->processed);
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames accepted:  %u\n", stat->accepted);
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames rejected:  %u\n", stat->rejected);
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames discarded: %u\n", stat->discarded);
+		seq_printf(seq, "Frames processed: %u\n", stat->processed);
+		seq_printf(seq, "Frames accepted:  %u\n", stat->accepted);
+		seq_printf(seq, "Frames rejected:  %u\n", stat->rejected);
+		seq_printf(seq, "Frames discarded: %u\n", stat->discarded);
 	}
 	return len;
 }
@@ -1264,12 +1277,11 @@ static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, cha
 /**
  * @brief                 Converts statistics of a logical interface or classification algorithm into a text form
  * @param[in]  stat       Statistics to convert - expected in HOST endian
- * @param[out] buf        Buffer where to write the text
- * @param[in]  buf_len    Buffer length
+ * @param[in]  seq         Pointer to debugfs seq_file
  * @param[in]  verb_level Verbosity level
  * @return                Number of bytes written into the output buffer
  */
-static uint32_t pfe_class_ihc_stat_to_str(const pfe_ct_class_ihc_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
+static uint32_t pfe_class_ihc_stat_to_str(const pfe_ct_class_ihc_stats_t *stat, struct seq_file *seq, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 
@@ -1283,9 +1295,9 @@ static uint32_t pfe_class_ihc_stat_to_str(const pfe_ct_class_ihc_stats_t *stat, 
 	else
 #endif
 	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "  Frames received:    %u\n", stat->rx);
-		len += oal_util_snprintf(buf + len, buf_len - len, "  Frames transmitted: %u\n", stat->tx);
-		len += oal_util_snprintf(buf + len, buf_len - len, "  Frames discarded:   %u\n", stat->discarded);
+		seq_printf(seq, "  Frames received:    %u\n", stat->rx);
+		seq_printf(seq, "  Frames transmitted: %u\n", stat->tx);
+		seq_printf(seq, "  Frames discarded:   %u\n", stat->discarded);
 	}
 	return len;
 }
@@ -1293,12 +1305,11 @@ static uint32_t pfe_class_ihc_stat_to_str(const pfe_ct_class_ihc_stats_t *stat, 
 /**
  * @brief                  Converts statistics of a logical interface or classification algorithm into a text form
  * @param[in]   stat       Statistics to convert - expected in HOST endian
- * @param[out]  buf        Buffer where to write the text
- * @param[in]   buf_len    Buffer length
+ * @param[in]   seq        Pointer to debugfs seq_file
  * @param[in]   verb_level Verbosity level
  * @return                 Number of bytes written into the output buffer
  */
-uint32_t pfe_class_fp_stat_to_str(const pfe_ct_class_flexi_parser_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_class_fp_stat_to_str(const pfe_ct_class_flexi_parser_stats_t *stat, struct seq_file *seq, uint8_t verb_level)
 {
 	uint32_t len = 0U;
 
@@ -1312,8 +1323,8 @@ uint32_t pfe_class_fp_stat_to_str(const pfe_ct_class_flexi_parser_stats_t *stat,
 	else
 #endif
 	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames accepted:  %u\n", stat->accepted);
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames rejected:  %u\n", stat->rejected);
+		seq_printf(seq, "Frames accepted:  %u\n", stat->accepted);
+		seq_printf(seq, "Frames rejected:  %u\n", stat->rejected);
 	}
 	return len;
 }
@@ -1331,36 +1342,39 @@ errno_t pfe_class_put_data(const pfe_class_t *class, pfe_ct_buffer_t *buf)
 	uint32_t ii, tries;
 	errno_t  ret;
 
-	for (ii = 0U; ii < class->pe_num; ii++)
+	/*	Allow safe use of _nolock() functions. We don't call the _memlock()
+		here as we don't need to have coherent accesses. */
+	ret = pfe_pe_lock_family(*class->pe);
+	if (EOK != ret)
 	{
-		/*	Allow safe use of _nolock() functions. We don't call the _mem_lock()
-		 	here as we don't need to have coherent accesses. */
-		if (EOK != pfe_pe_lock(class->pe[ii]))
+		NXP_LOG_ERROR("pfe_pe_lock_family() failed\n");
+	}
+	else
+	{
+		for (ii = 0U; ii < class->pe_num; ii++)
 		{
-			NXP_LOG_ERROR("pfe_pe_lock() failed\n");
-		}
-
-		tries = 0U;
-		do
-		{
-			ret = pfe_pe_put_data_nolock(class->pe[ii], buf);
-			if (EAGAIN == ret)
+			tries = 0U;
+			do
 			{
-				tries++;
-				oal_time_usleep(200U);
-			}
-		} while ((ret == EAGAIN) && (tries < 10U));
+				ret = pfe_pe_put_data_nolock(class->pe[ii], buf);
+				if (EAGAIN == ret)
+				{
+					tries++;
+					oal_time_usleep(200U);
+				}
+			} while ((ret == EAGAIN) && (tries < 10U));
 
-		if (EOK != pfe_pe_unlock(class->pe[ii]))
-		{
-			NXP_LOG_ERROR("pfe_pe_lock() failed\n");
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Unable to update pe %u\n", (uint_t)ii);
+				ret = EBUSY;
+				break;
+			}
 		}
 
-		if (EOK != ret)
+		if (EOK != pfe_pe_unlock_family(*class->pe))
 		{
-			NXP_LOG_ERROR("Unable to update pe %u\n", (uint_t)ii);
-			ret = EBUSY;
-			break;
+			NXP_LOG_ERROR("pfe_pe_unlock_family() failed\n");
 		}
 	}
 
@@ -1472,15 +1486,12 @@ errno_t pfe_class_get_stats(pfe_class_t *class, pfe_ct_classify_stats_t *stat)
  * @brief		Return CLASS runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	class 		The CLASS instance
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	buf_len 	Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_class_get_text_statistics(pfe_class_t *class, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
-
 	pfe_ct_pe_mmap_t        mmap;
 	errno_t                 ret = EOK;
 	uint32_t                ii, j;
@@ -1504,7 +1515,6 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 	if (unlikely(NULL == class))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		len = 0U;
 	}
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
@@ -1517,14 +1527,14 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		/* FW version */
 		if (EOK == pfe_class_get_fw_version(class, &fw_ver))
 		{
-			len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION\t%u.%u.%u (api:%.32s)\n", fw_ver.major, fw_ver.minor, fw_ver.patch, fw_ver.cthdr);
+			seq_printf(seq, "FIRMWARE VERSION\t%u.%u.%u (api:%.32s)\n", fw_ver.major, fw_ver.minor, fw_ver.patch, fw_ver.cthdr);
 		}
 		else
 		{
-			len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION <unknown>\n");
+			seq_printf(seq, "FIRMWARE VERSION <unknown>\n");
 		}
 
-		len += pfe_class_cfg_get_text_stat(class->cbus_base_va, buf + len, buf_len - len, verb_level);
+		pfe_class_cfg_get_text_stat(class->cbus_base_va, seq, verb_level);
 
 		/* Allocate memory to copy the statistics from PEs + one position for sums
 		(having sums separate from data allows to print also per PE details) */
@@ -1555,36 +1565,50 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 			}
 			else
 			{
-
-				/* Lock all PEs - they will stop processing frames and wait. This will
-				ensure data coherence. */
-				for (ii = 0U; ii < class->pe_num; ii++)
+				ret = pfe_pe_lock_family(*class->pe);
+				if (EOK != ret)
 				{
-					ret = pfe_pe_mem_lock(class->pe[ii]);
-					if (EOK != ret)
+					NXP_LOG_ERROR("pfe_pe_lock_family() failed\n");
+					seq_printf(seq, "pfe_pe_lock_family() failed\n");
+				}
+				else
+				{
+					/*	Acquire memlock for all PE cores. They will stop processing frames and wait.
+						This will ensure data coherence. */
+					for (ii = 0U; ii < class->pe_num; ii++)
 					{
-						NXP_LOG_ERROR("PE %u could not be locked\n", (uint_t)ii);
-						len += oal_util_snprintf(buf + len, buf_len - len, "PE %u could not be locked - statistics are not coherent\n", ii);
+						ret = pfe_pe_memlock_acquire_nolock(class->pe[ii]);
+						if (EOK != ret)
+						{
+							NXP_LOG_ERROR("Cannot acquire PE %u memlock\n", (uint_t)ii);
+							seq_printf(seq, "Cannot acquire PE %u memlock - statistics are not coherent\n", ii);
+						}
 					}
-				}
 
-				/* Get PE info per PE
-				- leave 1st position in allocated memory empty for sums */
-				for (ii = 0U; ii < class->pe_num; ii++)
-				{
-					(void)pfe_pe_get_pe_stats_nolock(
-					    class->pe[ii],
-					    oal_ntohl(mmap.class_pe.pe_stats),
-					    &pe_stats[ii + 1U]);
-				}
+					/* Get PE info per PE
+					- leave 1st position in allocated memory empty for sums */
+					for (ii = 0U; ii < class->pe_num; ii++)
+					{
+						(void)pfe_pe_get_pe_stats_nolock(
+							class->pe[ii],
+							oal_ntohl(mmap.class_pe.pe_stats),
+							&pe_stats[ii + 1U]);
+					}
 
-				/* Unlock all PEs */
-				for (ii = 0U; ii < class->pe_num; ii++)
-				{
-					ret = pfe_pe_mem_unlock(class->pe[ii]);
+					/* Release memlock for all PE cores. */
+					for (ii = 0U; ii < class->pe_num; ii++)
+					{
+						ret = pfe_pe_memlock_release_nolock(class->pe[ii]);
+						if (EOK != ret)
+						{
+							NXP_LOG_ERROR("Cannot release PE %u memlock\n", (uint_t)ii);
+						}
+					}
+
+					ret = pfe_pe_unlock_family(*class->pe);
 					if (EOK != ret)
 					{
-						NXP_LOG_ERROR("PE %u could not be unlocked\n", (uint_t)ii);
+						NXP_LOG_ERROR("pfe_pe_unlock_family() failed\n");
 					}
 				}
 
@@ -1620,46 +1644,46 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 				}
 
 				/* Print results */
-				len += oal_util_snprintf(buf + len, buf_len - len, "-- Per PE statistics --\n");
+				seq_printf(seq, "-- Per PE statistics --\n");
 
 				for (ii = 0U; ii < class->pe_num; ii++)
 				{
-					len += oal_util_snprintf(buf + len, buf_len - len, "PE %u Frames processed: %u\n", ii, pe_stats[ii + 1U].processed);
-					len += oal_util_snprintf(buf + len, buf_len - len, "PE %u Frames discarded: %u\n", ii, pe_stats[ii + 1U].discarded);
+					seq_printf(seq, "PE %u Frames processed: %u\n", ii, pe_stats[ii + 1U].processed);
+					seq_printf(seq, "PE %u Frames discarded: %u\n", ii, pe_stats[ii + 1U].discarded);
 				}
 
-				len += oal_util_snprintf(buf + len, buf_len - len, "-- Summary statistics --\n");
-				len += oal_util_snprintf(buf + len, buf_len - len, "Frames processed: %u\n", pe_stats[0].processed);
-				len += oal_util_snprintf(buf + len, buf_len - len, "Frames discarded: %u\n", pe_stats[0].discarded);
+				seq_printf(seq, "-- Summary statistics --\n");
+				seq_printf(seq, "Frames processed: %u\n", pe_stats[0].processed);
+				seq_printf(seq, "Frames discarded: %u\n", pe_stats[0].discarded);
 
 				for (j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)
 				{
-					len += oal_util_snprintf(buf + len, buf_len - len, "Frames with %u replicas: %u\n", j + 1U, pe_stats[0].replicas[j]);
+					seq_printf(seq, "Frames with %u replicas: %u\n", j + 1U, pe_stats[0].replicas[j]);
 				}
 
-				len += oal_util_snprintf(buf + len, buf_len - len, "Frames with HIF_TX_INJECT: %u\n", pe_stats[0].injected);
+				seq_printf(seq, "Frames with HIF_TX_INJECT: %u\n", pe_stats[0].injected);
 
-				len += oal_util_snprintf(buf + len, buf_len - len, "- Flexible router -\n");
-				len += pfe_class_stat_to_str(&c_alg_stats.flexible_router, buf + len, buf_len - len, verb_level);
-				len += oal_util_snprintf(buf + len, buf_len - len, "- IP Router -\n");
-				len += pfe_class_stat_to_str(&c_alg_stats.ip_router, buf + len, buf_len - len, verb_level);
-				len += oal_util_snprintf(buf + len, buf_len - len, "- VLAN Bridge -\n");
-				len += pfe_class_stat_to_str(&c_alg_stats.vlan_bridge, buf + len, buf_len - len, verb_level);
-				len += oal_util_snprintf(buf + len, buf_len - len, "- Logical Interfaces -\n");
-				len += pfe_class_stat_to_str(&c_alg_stats.log_if, buf + len, buf_len - len, verb_level);
-				len += oal_util_snprintf(buf + len, buf_len - len, "- InterHIF -\n");
+				seq_printf(seq, "- Flexible router -\n");
+				pfe_class_stat_to_str(&c_alg_stats.flexible_router, seq, verb_level);
+				seq_printf(seq, "- IP Router -\n");
+				pfe_class_stat_to_str(&c_alg_stats.ip_router, seq, verb_level);
+				seq_printf(seq, "- VLAN Bridge -\n");
+				pfe_class_stat_to_str(&c_alg_stats.vlan_bridge, seq, verb_level);
+				seq_printf(seq, "- Logical Interfaces -\n");
+				pfe_class_stat_to_str(&c_alg_stats.log_if, seq, verb_level);
+				seq_printf(seq, "- InterHIF -\n");
 
 				for (j = 0U; j < ((uint32_t)PFE_PHY_IF_ID_MAX + 1U); j++)
 				{
 					if (0U != (((uint32_t)1U << j) & (uint32_t)HIF_CHANNELS_MASK))
 					{
-						len += oal_util_snprintf(buf + len, buf_len - len, "Interface: %s\n", phyif_name[j]);
-						len += pfe_class_ihc_stat_to_str(&c_alg_stats.hif_to_hif[j], buf + len, buf_len - len, verb_level);
+						seq_printf(seq, "Interface: %s\n", phyif_name[j]);
+						pfe_class_ihc_stat_to_str(&c_alg_stats.hif_to_hif[j], seq, verb_level);
 					}
 				}
 
-				len += oal_util_snprintf(buf + len, buf_len - len, "\nDMEM heap\n---------\n");
-				len += blalloc_get_text_statistics(class->heap_context, buf + len, buf_len - len, verb_level);
+				seq_printf(seq, "\nDMEM heap\n---------\n");
+				blalloc_get_text_statistics(class->heap_context, seq, verb_level);
 
 				/* Free allocated memory */
 				oal_mm_free(pe_stats);
@@ -1667,7 +1691,7 @@ uint32_t pfe_class_get_text_statistics(pfe_class_t *class, char_t *buf, uint32_t
 		}
 	}
 
-	return len;
+	return 0;
 }
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
@@ -1713,6 +1737,58 @@ void pfe_class_rtable_lookup_disable(const pfe_class_t *class)
 {
 	pfe_class_cfg_rtable_lookup_disable(class->cbus_base_va);
 }
+
+/**
+* @brief 		Control HW bridge lookup
+* @param[in] 	class The classifier instance
+* @param[in] 	if_bitmap The bitmap represnting PHY IF
+* @param[in] 	br_mode The bridge mode state of PHY IF
+* @note			HW bridge lookup is enabled with the 1st PHY IF set to bridge mode,
+*				disabled when the last PHY IF bridge mode is unset.
+*/
+void pfe_class_update_hw_bridge_lookup(pfe_class_t *class, uint32_t if_bitmap, bool_t br_mode)
+{
+	uint32_t if_bitmap_br_modes_before;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == class))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		if (EOK != oal_mutex_lock(&class->mutex))
+		{
+			NXP_LOG_ERROR("mutex lock failed\n");
+		}
+
+		if_bitmap_br_modes_before = class->phy_if_bitmap_br_modes;
+		if (TRUE == br_mode)
+		{
+			class->phy_if_bitmap_br_modes |= if_bitmap;
+			if (0U == if_bitmap_br_modes_before)
+			{
+				/* Enable HW bridge lookup */
+				pfe_class_cfg_bridge_lookup_enable(class->cbus_base_va);
+			}
+		}
+		else
+		{
+			class->phy_if_bitmap_br_modes &= ~if_bitmap;
+			if ((0U != if_bitmap_br_modes_before) && (0U == class->phy_if_bitmap_br_modes))
+			{
+				/* Disable HW bridge lookup */
+				pfe_class_cfg_bridge_lookup_disable(class->cbus_base_va);
+			}
+		}
+
+		if (EOK != oal_mutex_unlock(&class->mutex))
+		{
+			NXP_LOG_ERROR("mutex unlock failed\n");
+		}
+	}
+}
+
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

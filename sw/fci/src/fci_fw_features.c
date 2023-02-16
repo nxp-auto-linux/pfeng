@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -13,8 +13,6 @@
 #include "fci_msg.h"
 #include "fci.h"
 #include "fci_internal.h"
-#include "pfe_pe.h"
-#include "pfe_class.h"
 #include "oal.h"
 #include "pfe_feature_mgr.h"
 #include "fci_fw_features.h"
@@ -248,7 +246,7 @@ errno_t fci_fw_features_element_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_fe
 			fp_cmd = (fpp_fw_features_element_cmd_t *)(msg->msg_cmd.payload);
 
 
-			if ((NULL == fp_cmd->fw_feature_name) || fp_cmd->fw_feature_name[0] == '\0')
+			if (fp_cmd->fw_feature_name[0] == '\0')
 			{
 				NXP_LOG_ERROR("Feature invalid name (fpp_fw_features_element_cmd_t)\n");
 				*fci_ret = FPP_ERR_FW_FEATURE_NOT_FOUND;

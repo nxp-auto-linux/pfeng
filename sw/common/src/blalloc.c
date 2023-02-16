@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2022 NXP
+ *  Copyright 2019-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -498,24 +498,20 @@ void blalloc_free_offs(blalloc_t *ctx, addr_t offset)
 
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
 * @brief Reads the memory usage statistics in a text form
 * @param[in] ctx Context
-* @param[out] buf Output text buffer
-* @param[in] buf_len Size of the output text buffer
+* @param[in] seq Pointer to debugfs seq_file
 * @param[in] verb_level Verbosity lever
 * @return Number of characters written into the buffer.
 */
-uint32_t blalloc_get_text_statistics(const blalloc_t *ctx, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t blalloc_get_text_statistics(const blalloc_t *ctx, struct seq_file *seq, uint8_t verb_level)
 {
 	uint_t i, j;               /* Counters */
 	uint_t prev = 0U;          /* Did the used chunk precede this chunk? 1 = yes */
 	uint_t unused_chunks = 0U; /* Count of used chunks */
 	uint_t used_chunks = 0U;   /* Count of unused chunks */
 	uint_t fragments = 0U;     /* Count of holes between chunks */
-	uint32_t len = 0U;         /* Number of characters written into the buf */
 	uint_t byte_count = ((ctx->size >> ctx->chunk_size) + 3U) >> 2U;
 
 	/* Go through all bytes in chunkinfo */
@@ -528,10 +524,10 @@ uint32_t blalloc_get_text_statistics(const blalloc_t *ctx, char_t *buf, uint32_t
 			/* After each 32 bytes (and at start) print out a new line and address */
 			if(0U == (i % 32U))
 			{
-				len += oal_util_snprintf(buf + len, buf_len - len, "\n0x%05x: ", i * 4U * (1U << ctx->chunk_size));
+				seq_printf(seq, "\n0x%05x: ", i * 4U * (1U << ctx->chunk_size));
 			}
 			/* Print current chunkinfo byte */
-			len += oal_util_snprintf(buf + len, buf_len - len, "%02x", bits);
+			seq_printf(seq, "%02x", bits);
 		}
 
 		/* Go through all 2-bits in the current byte */
@@ -556,23 +552,21 @@ uint32_t blalloc_get_text_statistics(const blalloc_t *ctx, char_t *buf, uint32_t
 		}
 	}
 	/* Print out the information */
-	len += oal_util_snprintf(buf + len, buf_len - len, "\n"); /* End previous output */
-	len += oal_util_snprintf(buf + len, buf_len - len, "Free  memory %u bytes (%u chunks)\n", unused_chunks * ((uint_t)1U << ctx->chunk_size), unused_chunks);
-	len += oal_util_snprintf(buf + len, buf_len - len, "Used  memory %u bytes (%u chunks)\n", used_chunks * ((uint_t)1U << ctx->chunk_size), used_chunks);
-	len += oal_util_snprintf(buf + len, buf_len - len, "Total memory %u bytes (%u chunks)\n", (uint_t)ctx->size, byte_count * CHUNKS_IN_BYTE);
-	len += oal_util_snprintf(buf + len, buf_len - len, "Chunk size   %u bytes\n", (1U << ctx->chunk_size));
-	len += oal_util_snprintf(buf + len, buf_len - len, "Fragments    %u\n", fragments);
-	len += oal_util_snprintf(buf + len, buf_len - len, "Dummy chunks %u\n", (uint_t)((byte_count * CHUNKS_IN_BYTE) - (ctx->size >> ctx->chunk_size)));
+	seq_printf(seq, "\n"); /* End previous output */
+	seq_printf(seq, "Free  memory %u bytes (%u chunks)\n", unused_chunks * ((uint_t)1U << ctx->chunk_size), unused_chunks);
+	seq_printf(seq, "Used  memory %u bytes (%u chunks)\n", used_chunks * ((uint_t)1U << ctx->chunk_size), used_chunks);
+	seq_printf(seq, "Total memory %u bytes (%u chunks)\n", (uint_t)ctx->size, byte_count * CHUNKS_IN_BYTE);
+	seq_printf(seq, "Chunk size   %u bytes\n", (1U << ctx->chunk_size));
+	seq_printf(seq, "Fragments    %u\n", fragments);
+	seq_printf(seq, "Dummy chunks %u\n", (uint_t)((byte_count * CHUNKS_IN_BYTE) - (ctx->size >> ctx->chunk_size)));
 	if(verb_level > 0U)
 	{   /* Detailed information requested */
-		len += oal_util_snprintf(buf + len, buf_len - len, "1st free chunk  %u\n", (uint_t)ctx->start_srch);
-		len += oal_util_snprintf(buf + len, buf_len - len, "Bytes requested %u (cumulative)\n", (uint_t)ctx->requested);
-		len += oal_util_snprintf(buf + len, buf_len - len, "Bytes allocated %u (cumulative)\n", (uint_t)ctx->allocated);
+		seq_printf(seq, "1st free chunk  %u\n", (uint_t)ctx->start_srch);
+		seq_printf(seq, "Bytes requested %u (cumulative)\n", (uint_t)ctx->requested);
+		seq_printf(seq, "Bytes allocated %u (cumulative)\n", (uint_t)ctx->allocated);
 	}
-	return len;
+	return 0;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

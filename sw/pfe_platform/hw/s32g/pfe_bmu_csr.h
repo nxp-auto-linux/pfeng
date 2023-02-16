@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -100,9 +100,7 @@ void pfe_bmu_cfg_disable(addr_t base_va);
 void * pfe_bmu_cfg_alloc_buf(addr_t base_va);
 void pfe_bmu_cfg_free_buf(addr_t base_va, addr_t buffer);
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-uint32_t pfe_bmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+uint32_t pfe_bmu_cfg_get_text_stat(addr_t base_va, struct seq_file *seq, uint8_t verb_level);
 
 uint32_t pfe_bmu_cfg_get_err_poll(addr_t base_va);
 

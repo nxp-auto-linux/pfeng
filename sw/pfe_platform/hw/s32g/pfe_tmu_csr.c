@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1822,22 +1822,18 @@ uint8_t pfe_tmu_sch_cfg_get_bound_sched_output(addr_t cbus_base_va, pfe_ct_phy_i
 	return sched_id;
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Get TMU statistics in text form
  * @details		This is a HW-specific function providing detailed text statistics
  * 				about the TMU block.
  * @param[in]	base_va 	Base address of TMU register space (virtual)
- * @param[in]	buf 		Pointer to buffer to be written
- * @param[in]	size 		Buffer length
+ * @param[in]	seq 		Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  *
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_tmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level)
+uint32_t pfe_tmu_cfg_get_text_stat(addr_t base_va, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
 	uint32_t reg, ii;
 	uint8_t prob, queue, zone;
 	uint32_t level, drops, tx;
@@ -1845,40 +1841,40 @@ uint32_t pfe_tmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 	/* Debug registers */
 	if(verb_level >= 10U)
 	{
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_PHY_INQ_PKTPTR  : 0x%x\n", hal_read32(base_va + TMU_PHY_INQ_PKTPTR));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_PHY_INQ_PKTINFO : 0x%x\n", hal_read32(base_va + TMU_PHY_INQ_PKTINFO));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_PHY_INQ_STAT    : 0x%x\n", hal_read32(base_va + TMU_PHY_INQ_STAT));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_TOP     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_TOP));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_PP0     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP0));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_PP1     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP1));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_PP2     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP2));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_PP3     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP3));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_PP4     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP4));
-		len += (uint32_t)oal_util_snprintf(buf + len, size - len, "TMU_DBG_BUS_PP5     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP5));
+		seq_printf(seq, "TMU_PHY_INQ_PKTPTR  : 0x%x\n", hal_read32(base_va + TMU_PHY_INQ_PKTPTR));
+		seq_printf(seq, "TMU_PHY_INQ_PKTINFO : 0x%x\n", hal_read32(base_va + TMU_PHY_INQ_PKTINFO));
+		seq_printf(seq, "TMU_PHY_INQ_STAT    : 0x%x\n", hal_read32(base_va + TMU_PHY_INQ_STAT));
+		seq_printf(seq, "TMU_DBG_BUS_TOP     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_TOP));
+		seq_printf(seq, "TMU_DBG_BUS_PP0     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP0));
+		seq_printf(seq, "TMU_DBG_BUS_PP1     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP1));
+		seq_printf(seq, "TMU_DBG_BUS_PP2     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP2));
+		seq_printf(seq, "TMU_DBG_BUS_PP3     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP3));
+		seq_printf(seq, "TMU_DBG_BUS_PP4     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP4));
+		seq_printf(seq, "TMU_DBG_BUS_PP5     : 0x%x\n", hal_read32(base_va + TMU_DBG_BUS_PP5));
 	}
 
 	if(verb_level >= 9U)
 	{
 		/*	Get version */
 		reg = hal_read32(base_va + TMU_VERSION);
-		len += oal_util_snprintf(buf + len, size - len, "Revision             : 0x%x\n", (reg >> 24) & 0xffU);
-		len += oal_util_snprintf(buf + len, size - len, "Version              : 0x%x\n", (reg >> 16) & 0xffU);
-		len += oal_util_snprintf(buf + len, size - len, "ID                   : 0x%x\n", reg & 0xffffU);
+		seq_printf(seq, "Revision             : 0x%x\n", (reg >> 24) & 0xffU);
+		seq_printf(seq, "Version              : 0x%x\n", (reg >> 16) & 0xffU);
+		seq_printf(seq, "ID                   : 0x%x\n", reg & 0xffffU);
 	}
 
 	reg = hal_read32(base_va + TMU_CTRL);
-	len += oal_util_snprintf(buf + len, size - len, "TMU_CTRL             : 0x%x\n", reg);
+	seq_printf(seq, "TMU_CTRL             : 0x%x\n", reg);
 	reg = hal_read32(base_va + TMU_PHY_INQ_STAT);
-	len += oal_util_snprintf(buf + len, size - len, "TMU_PHY_INQ_STAT     : 0x%x\n", reg);
+	seq_printf(seq, "TMU_PHY_INQ_STAT     : 0x%x\n", reg);
 	reg = hal_read32(base_va + TMU_PHY_INQ_PKTPTR);
-	len += oal_util_snprintf(buf + len, size - len, "TMU_PHY_INQ_PKTPTR   : 0x%x\n", reg);
+	seq_printf(seq, "TMU_PHY_INQ_PKTPTR   : 0x%x\n", reg);
 	reg = hal_read32(base_va + TMU_PHY_INQ_PKTINFO);
-	len += oal_util_snprintf(buf + len, size - len, "TMU_PHY_INQ_PKTINFO  : 0x%x\n", reg);
+	seq_printf(seq, "TMU_PHY_INQ_PKTINFO  : 0x%x\n", reg);
 
 	/*	Print per-queue statistics */
 	for (ii=0U; ii < TLITE_PHYS_CNT; ii++)
 	{
-		len += oal_util_snprintf(buf + len, size - len, "[PHY: %d]\n", (int_t)ii);
+		seq_printf(seq, "[PHY: %d]\n", (int_t)ii);
 		for (queue=0U; queue<TLITE_PHY_QUEUES_CNT; queue++)
 		{
 			/*	Fill level */
@@ -1896,7 +1892,7 @@ uint32_t pfe_tmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 				continue;
 			}
 
-			len += oal_util_snprintf(buf + len, size - len, "  [QUEUE: %d]\n", queue);
+			seq_printf(seq, "  [QUEUE: %d]\n", queue);
 
 			/*	curQ_cfg is @ position 4 per queue */
 			if (EOK != pfe_tmu_cntx_mem_read(base_va, phy_if_id_temp[ii], (8U * queue) + 4U, &reg))
@@ -1910,28 +1906,28 @@ uint32_t pfe_tmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 			{
 				case 0x0U:
 				{
-					len += oal_util_snprintf(buf + len, size - len, "    Mode       : Default\n");
+					seq_printf(seq, "    Mode       : Default\n");
 					break;
 				}
 
 				case 0x1U:
 				{
-					len += oal_util_snprintf(buf + len, size - len, "    Mode       : Tail drop (max: %d)\n", (reg >> 11) & 0x1ffU);
+					seq_printf(seq, "    Mode       : Tail drop (max: %d)\n", (reg >> 11) & 0x1ffU);
 					break;
 				}
 
 				case 0x2U:
 				{
-					len += oal_util_snprintf(buf + len, size - len, "    Mode       : WRED (max: %d, min: %d)\n", (reg >> 11) & 0x1ffU, (reg >> 2) & 0x1ffU);
+					seq_printf(seq, "    Mode       : WRED (max: %d, min: %d)\n", (reg >> 11) & 0x1ffU, (reg >> 2) & 0x1ffU);
 					for (zone=0U; zone<pfe_tmu_q_get_wred_zones(base_va, phy_if_id_temp[ii], queue); zone++)
 					{
 						if (EOK != pfe_tmu_q_get_wred_probability(base_va, phy_if_id_temp[ii], queue, zone, &prob))
 						{
-							len += oal_util_snprintf(buf + len, size - len, "      Zone %d   : ERROR\n", zone);
+							seq_printf(seq, "      Zone %d   : ERROR\n", zone);
 						}
 						else
 						{
-							len += oal_util_snprintf(buf + len, size - len, "      Zone %d   : %d\n", zone, prob);
+							seq_printf(seq, "      Zone %d   : %d\n", zone, prob);
 						}
 					}
 
@@ -1940,20 +1936,18 @@ uint32_t pfe_tmu_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, u
 
 				default:
 				{
-					len += oal_util_snprintf(buf + len, size - len, "    Mode       : ERROR\n");
+					seq_printf(seq, "    Mode       : ERROR\n");
 					break;
 				}
 			}
 
-			len += oal_util_snprintf(buf + len, size - len, "    Fill level : % 8d Drops: % 8d, TX: % 8d\n", level, drops, tx);
+			seq_printf(seq, "    Fill level : % 8d Drops: % 8d, TX: % 8d\n", level, drops, tx);
 		}
 	}
 
 
-	return len;
+	return 0;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -22,43 +22,9 @@
 #define INVALID_FEATURES_BASE 		0xFFFFFFFFU
 #define ALIGNMENT_CHECKMASK			0x3U
 #define ALIGNMENT_PACKEDNUMBER		4U
-/**
- * @brief	Mutex protecting access to common mem_access_* registers
- */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_VAR_CLEARED_UNSPECIFIED
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-static oal_mutex_t mem_access_lock;
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_VAR_CLEARED_UNSPECIFIED
-#include "Eth_43_PFE_MemMap.h"
-
-#define ETH_43_PFE_START_SEC_VAR_INIT_BOOLEAN
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-/* usage scope: pfe_pe_create */
-static bool_t mem_access_lock_init = FALSE;
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_VAR_INIT_BOOLEAN
-#include "Eth_43_PFE_MemMap.h"
-
-#define ETH_43_PFE_START_SEC_VAR_INIT_32
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /* usage scope: pfe_pe_load_firmware*/
 static pfe_ct_pe_mmap_t *tmp_mmap = NULL;
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_VAR_INIT_32
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 typedef enum
 {
@@ -121,8 +87,9 @@ struct pfe_pe_tag
 	pfe_ct_pe_mmap_t *mmap_data;		/* Buffer containing the memory map data */
 
 	/* Mutex */
-	oal_mutex_t lock_mutex;				/* Locking PE API mutex */
-	bool_t miflock;						/* When TRUE then PFE memory interface is locked */
+	oal_mutex_t *lock_mutex;			/* Pointer to shared PE API mutex (provided from PE's parent) */
+	bool_t *miflock;					/* Pointer to diagnostic flag (provided from PE's parent) 
+											When TRUE then PFE memory interface is locked */
 
 	/* Stall detection */
 	uint32_t counter;					/* Latest PE counter value */
@@ -168,7 +135,7 @@ static errno_t pfe_pe_mem_process_lock(pfe_pe_t *pe, PFE_PTR(pfe_ct_pe_misc_cont
 #if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
 static inline const char_t *pfe_pe_get_fw_state_str(pfe_ct_pe_sw_state_t state);
-static uint32_t pfe_pe_get_measurements_nolock(pfe_pe_t *pe, uint32_t count, uint32_t ptr, char_t *buf, uint32_t buf_len, uint8_t verb_level);
+static uint32_t pfe_pe_get_measurements_nolock(pfe_pe_t *pe, uint32_t count, uint32_t ptr, struct seq_file *seq, uint8_t verb_level);
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
@@ -301,9 +268,9 @@ static void pfe_pe_free_mem(pfe_pe_t **pe, uint32_t pe_num)
 
 	for (ii = 0; ii < pe_num; ++ii)
 	{
-		if (EOK != pfe_pe_unlock(pe[ii]))
+		if (EOK != pfe_pe_unlock_family(pe[ii]))
 		{
-			NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
+			NXP_LOG_ERROR("pfe_pe_unlock_family() failed\n");
 		}
 		pe[ii]->mmap_data = NULL;
 
@@ -367,15 +334,17 @@ static bool_t pfe_pe_is_active_nolock(pfe_pe_t *pe)
 
 
 /**
-* @brief Lock PE access
-* @param[in] pe PE which access shall be locked
-* @return EOK if success, error code otherwise
-*/
-errno_t pfe_pe_lock(pfe_pe_t *pe)
+ * @brief		Lock PE access
+ * @warning		Multiple PE cores may share a single mutex+miflock pair, forming a 'family'.
+ *				By locking one PE core of such a 'family', all other family members have to wait.
+ * @param[in]	pe PE whose access shall be locked
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_pe_lock_family(pfe_pe_t *pe)
 {
-	errno_t ret = oal_mutex_lock(&pe->lock_mutex);
+	errno_t ret = oal_mutex_lock(pe->lock_mutex);
 
-	if (unlikely(pe->miflock))
+	if (unlikely(*pe->miflock))
 	{
 		NXP_LOG_ERROR("Lock already indicated.\n");
 	}
@@ -383,27 +352,29 @@ errno_t pfe_pe_lock(pfe_pe_t *pe)
 	if (likely(EOK == ret))
 	{
 		/*	Indicate the 'lock' status */
-		pe->miflock = TRUE;
+		*pe->miflock = TRUE;
 	}
 
 	return ret;
 }
 
 /**
-* @brief Unlock PE access
-* @param[in] pe PE which access shall be unlocked
-* @return EOK if success, error code otherwise
-*/
-errno_t pfe_pe_unlock(pfe_pe_t *pe)
+ * @brief		Unlock PE access
+ * @waring		Multiple PE cores may share a single mutex+miflock pair, forming a 'family'.
+ *				By unlocking one PE core of such a 'family', all other family members are unlocked as well.
+ * @param[in]	pe PE whose access shall be unlocked
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_pe_unlock_family(pfe_pe_t *pe)
 {
 	/*	Indicate the 'unlock' status */
-	pe->miflock = FALSE;
+	*pe->miflock = FALSE;
 
-	return oal_mutex_unlock(&pe->lock_mutex);
+	return oal_mutex_unlock(pe->lock_mutex);
 }
 
 /**
- * @brief		Process to lock PE memory 
+ * @brief		Process to acquire lock of some PE memory
  * @param[in]	pe The PE instance
  * @param[in]	misc_dmem The miscellaneous control command structure
  * @return		EOK if success, error code otherwise
@@ -414,98 +385,80 @@ static errno_t pfe_pe_mem_process_lock(pfe_pe_t *pe, PFE_PTR(pfe_ct_pe_misc_cont
 	pfe_ct_pe_misc_control_t misc_ctrl = {0};
 	uint32_t timeout = 10;
 
-	if (EOK != pfe_pe_lock(pe))
+	/*	Read the misc control structure from DMEM */
+	pfe_pe_memcpy_from_dmem_to_host_32_nolock(
+			pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
+
+	if (0U != misc_ctrl.graceful_stop_request)
 	{
-		NXP_LOG_ERROR("pfe_pe_lock() failed\n");
+		if (0U != misc_ctrl.graceful_stop_confirmation)
+		{
+			NXP_LOG_ERROR("Locking locked memory\n");
+		}
+		else
+		{
+			NXP_LOG_ERROR("Duplicate stop request\n");
+		}
+
 		ret = EPERM;
 	}
 	else
 	{
-			/*	Read the misc control structure from DMEM */
-		pfe_pe_memcpy_from_dmem_to_host_32_nolock(
-				pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
+		/*	Writing the non-zero value triggers the request */
+		misc_ctrl.graceful_stop_request = 0xffU;
+		/*	PE will respond with setting this to non-zero value */
+		misc_ctrl.graceful_stop_confirmation = 0x0U;
+		/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
+		pfe_pe_memcpy_from_host_to_dmem_32_nolock(
+				pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
 
-		if (0U != misc_ctrl.graceful_stop_request)
+		if (FALSE == pfe_pe_is_active_nolock(pe))
 		{
-			if (0U != misc_ctrl.graceful_stop_confirmation)
-			{
-				NXP_LOG_ERROR("Locking locked memory\n");
-			}
-			else
-			{
-				NXP_LOG_ERROR("Duplicate stop request\n");
-			}
-
-			if (EOK != pfe_pe_unlock(pe))
-			{
-				NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
-			}
-
-			ret = EPERM;
+			/*	Access to PE memory is considered to be safe. PE memory interface is locked. */
+			ret = EOK;
 		}
 		else
 		{
-			/*	Writing the non-zero value triggers the request */
-			misc_ctrl.graceful_stop_request = 0xffU;
-			/*	PE will respond with setting this to non-zero value */
-			misc_ctrl.graceful_stop_confirmation = 0x0U;
-			/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
-			pfe_pe_memcpy_from_host_to_dmem_32_nolock(
-					pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
-
-			if (FALSE == pfe_pe_is_active_nolock(pe))
+			ret = EOK;
+			/*	Wait for response */
+			do
 			{
-				/*	Access to PE memories is considered to be safe. PE memory
-					interface is locked. */
-				ret = EOK;
-			}
-			else
-			{
-				ret = EOK;
-				/*	Wait for response */
-				do
+				if (0U == timeout)
 				{
-					if (0U == timeout)
-					{
-						NXP_LOG_ERROR("Timed-out\n");
+					NXP_LOG_ERROR("Timed-out\n");
 
-						/*	Cancel the request */
-						misc_ctrl.graceful_stop_request = 0U;
+					/*	Cancel the request */
+					misc_ctrl.graceful_stop_request = 0U;
 
-						/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
-						pfe_pe_memcpy_from_host_to_dmem_32_nolock(
-								pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
+					/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
+					pfe_pe_memcpy_from_host_to_dmem_32_nolock(
+							pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
 
-						if (EOK != pfe_pe_unlock(pe))
-						{
-							NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
-						}
+					ret = ETIME;
+					break;
+				}
 
-						ret = ETIME;
-						break;
-					}
+				oal_time_usleep(10U);
+				timeout--;
+				pfe_pe_memcpy_from_dmem_to_host_32_nolock(
+						pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
 
-					oal_time_usleep(10U);
-					timeout--;
-					pfe_pe_memcpy_from_dmem_to_host_32_nolock(
-							pe, &misc_ctrl, misc_dmem, sizeof(pfe_ct_pe_misc_control_t));
-
-				} while (0U == misc_ctrl.graceful_stop_confirmation);
-				/*	Access to PE memory interface is locked */
-			}
+			} while (0U == misc_ctrl.graceful_stop_confirmation);
+			/*	Access to PE memory interface is locked */
 		}
 	}
+
 	return ret;
 }
 
 /**
- * @brief		Lock PE memory
- * @details		While locked, the PE can't access internal memory. Invoke the PE graceful
- *				stop request and wait for confirmation. Also lock the PE memory interface.
+ * @brief		Acquire lock of PE memory
+ * @details		While driver has the lock, PE cannot access its own internal memory.
+ *				This is needed if driver wants to interact with given PE memory (read/write).
  * @param[in]	pe The PE instance
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
+errno_t pfe_pe_memlock_acquire_nolock(pfe_pe_t *pe)
 {
 	errno_t ret;
 	PFE_PTR(pfe_ct_pe_misc_control_t) misc_dmem;
@@ -532,13 +485,13 @@ errno_t pfe_pe_mem_lock(pfe_pe_t *pe)
 }
 
 /**
- * @brief		Unlock PE memory
- * @details		While locked, the PE can't access internal memory. Here the memory
- * 				and the memory interface will be unlocked.
+ * @brief		Release lock of PE memory
+ * @details		While driver has the lock, PE cannot access its own internal memory.
+ *				This function releases the lock, allowing PE to resume its operations.
  * @param[in]	pe The PE instance
  * @return		EOK if success, error code otherwise
  */
-errno_t pfe_pe_mem_unlock(pfe_pe_t *pe)
+errno_t pfe_pe_memlock_release_nolock(pfe_pe_t *pe)
 {
 	errno_t ret;
 	PFE_PTR(pfe_ct_pe_misc_control_t) misc_dmem;
@@ -564,12 +517,6 @@ errno_t pfe_pe_mem_unlock(pfe_pe_t *pe)
 			/*	Use 'nolock' variant here. Accessing this data can't lead to conflicts. */
 			pfe_pe_memcpy_from_host_to_dmem_32_nolock(
 					pe, misc_dmem, &misc_ctrl, sizeof(pfe_ct_pe_misc_control_t));
-
-			/*	Unlock access to PE memory interface */
-			if (EOK != pfe_pe_unlock(pe))
-			{
-				NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
-			}
 		}
 	}
 
@@ -710,7 +657,7 @@ static void pfe_pe_fw_memcpy_bulk(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t dst_add
 	}
 
 	/*	Sanity check if we can safely access the memory interface */
-	if (unlikely(!pe->miflock))
+	if (unlikely(!(*pe->miflock)))
 	{
 		NXP_LOG_ERROR("Accessing unlocked PE memory interface (write).\n");
 	}
@@ -774,7 +721,7 @@ static void pfe_pe_fw_memset_bulk(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, 
 	}
 
 	/*	Sanity check if we can safely access the memory interface */
-	if (unlikely(!pe->miflock))
+	if (unlikely(!(*pe->miflock)))
 	{
 		NXP_LOG_ERROR("Accessing unlocked PE memory interface (write).\n");
 	}
@@ -839,7 +786,7 @@ static void pfe_pe_fw_memcpy_single(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t dst_a
 	}
 
 	/*	Sanity check if we can safely access the memory interface */
-	if (unlikely(!pe->miflock))
+	if (unlikely(!(*pe->miflock)))
 	{
 		NXP_LOG_ERROR("Accessing unlocked PE memory interface (write).\n");
 	}
@@ -882,7 +829,7 @@ static void pfe_pe_fw_memset_single(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val
 	}
 
 	/*	Sanity check if we can safely access the memory interface */
-	if (unlikely(!pe->miflock))
+	if (unlikely(!(*pe->miflock)))
 	{
 		NXP_LOG_ERROR("Accessing unlocked PE memory interface (write).\n");
 	}
@@ -966,7 +913,7 @@ static uint32_t pfe_pe_mem_read(pfe_pe_t *pe, pfe_pe_mem_t mem, addr_t addr, uin
 						| PE_IBUS_WREN(0U);
 
 			/*	Sanity check if we can safely access the memory interface */
-			if (unlikely(!pe->miflock))
+			if (unlikely(!(*pe->miflock)))
 			{
 				NXP_LOG_ERROR("Accessing unlocked PE memory interface (read).\n");
 			}
@@ -1040,7 +987,7 @@ static void pfe_pe_mem_write(pfe_pe_t *pe, pfe_pe_mem_t mem, uint32_t val, addr_
 				| PE_IBUS_WREN(bytesel);
 
 		/*	Sanity check if we can safely access the memory interface */
-		if (unlikely(!pe->miflock))
+		if (unlikely(!(*pe->miflock)))
 		{
 			NXP_LOG_ERROR("Accessing unlocked PE memory interface (write).\n");
 		}
@@ -1149,20 +1096,29 @@ static void pfe_pe_memcpy_from_host_to_dmem_32_nolock(
  */
 void pfe_pe_memcpy_from_host_to_dmem_32(pfe_pe_t *pe, addr_t dst_addr, const void *src_ptr, uint32_t len)
 {
-	errno_t ret;
-
-	ret = pfe_pe_mem_lock(pe);
-	if (EOK != ret)
+	if (EOK != pfe_pe_lock_family(pe))
 	{
-		NXP_LOG_ERROR("Memory lock failed\n");
+		NXP_LOG_ERROR("pfe_pe_lock_family() failed\n");
 	}
 	else
 	{
-		pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, dst_addr, src_ptr, len);
-
-		if (EOK != pfe_pe_mem_unlock(pe))
+		if (EOK != pfe_pe_memlock_acquire_nolock(pe))
 		{
-			NXP_LOG_ERROR("Memory unlock failed\n");
+			NXP_LOG_ERROR("Memory lock failed\n");
+		}
+		else
+		{
+			pfe_pe_memcpy_from_host_to_dmem_32_nolock(pe, dst_addr, src_ptr, len);
+
+			if (EOK != pfe_pe_memlock_release_nolock(pe))
+			{
+				NXP_LOG_ERROR("Memory unlock failed\n");
+			}
+		}
+
+		if (EOK != pfe_pe_unlock_family(pe))
+		{
+			NXP_LOG_ERROR("pfe_pe_unlock_family() failed\n");
 		}
 	}
 }
@@ -1233,20 +1189,29 @@ void pfe_pe_memcpy_from_dmem_to_host_32_nolock(pfe_pe_t *pe, void *dst_ptr, addr
  */
 void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst_ptr, addr_t src_addr, uint32_t len)
 {
-	errno_t ret;
-
-	ret = pfe_pe_mem_lock(pe);
-	if (EOK != ret)
+	if (EOK != pfe_pe_lock_family(pe))
 	{
-		NXP_LOG_ERROR("Memory lock failed\n");
+		NXP_LOG_ERROR("pfe_pe_lock_family() failed\n");
 	}
 	else
 	{
-		pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, dst_ptr, src_addr, len);
-
-		if (EOK != pfe_pe_mem_unlock(pe))
+		if (EOK != pfe_pe_memlock_acquire_nolock(pe))
 		{
-			NXP_LOG_ERROR("Memory unlock failed\n");
+			NXP_LOG_ERROR("Memory lock failed\n");
+		}
+		else
+		{
+			pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, dst_ptr, src_addr, len);
+
+			if (EOK != pfe_pe_memlock_release_nolock(pe))
+			{
+				NXP_LOG_ERROR("Memory unlock failed\n");
+			}
+		}
+
+		if (EOK != pfe_pe_unlock_family(pe))
+		{
+			NXP_LOG_ERROR("pfe_pe_unlock_family() failed\n");
 		}
 	}
 }
@@ -1266,60 +1231,81 @@ void pfe_pe_memcpy_from_dmem_to_host_32(pfe_pe_t *pe, void *dst_ptr, addr_t src_
 errno_t pfe_pe_gather_memcpy_from_dmem_to_host_32(pfe_pe_t **pe, int32_t pe_count, void *dst_ptr, addr_t src_addr, uint32_t buffer_len, uint32_t read_len)
 {
 	int32_t ii = 0U;
-	uint8_t mem_lock_error = 0U;
+	uint8_t memlock_error = 0U;
 	errno_t ret = EOK;
 	errno_t ret_store = EOK;
 
-	/* Lock all PEs - they will stop processing frames and wait. This will
-	   ensure data coherence. */
-	for (ii = 0; ii < pe_count; ii++)
+	/* Lock family */
+	ret = pfe_pe_lock_family(*pe);
+	if (EOK != ret)
 	{
-		ret = pfe_pe_mem_lock(pe[ii]);
-		if (EOK != ret)
-		{
-			mem_lock_error++;
-			NXP_LOG_ERROR("Memory lock failed for PE instance %d\n", (int_t)ii);
-		}
+		NXP_LOG_ERROR("pfe_pe_lock_family() failed\n");
 	}
-
-	/* Only read from PEs if all PEs are locked */
-	if (0U == mem_lock_error)
+	else
 	{
-		/* Perform the read from required PEs */
+		/*	Acquire memlock for all PE cores. They will stop processing frames and wait.
+			This will ensure data coherence. */
 		for (ii = 0; ii < pe_count; ii++)
 		{
-			/* Check if there is still memory  */
-			if (buffer_len >= ((read_len * (uint32_t)ii) + read_len))
+			ret = pfe_pe_memlock_acquire_nolock(pe[ii]);
+			if (EOK != ret)
 			{
-				pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe[ii],
-						(void *)((uint8_t*)dst_ptr + (read_len * (uint32_t)ii)),
-							src_addr, read_len);
-			}
-			else
-			{
-				ret = ENOMEM;
-				break;
+				memlock_error++;
+				NXP_LOG_ERROR("Memory lock failed for PE instance %d\n", (int_t)ii);
+
+				/* Save the error */
+				ret_store = ret;
 			}
 		}
-	}
 
-	/* Unlock all PEs */
-	for (ii = 0; ii < pe_count; ii++)
-	{
-		/* Backup return from memcpy */
-		ret_store = ret;
-		ret = pfe_pe_mem_unlock(pe[ii]);
-		if(EOK != ret)
+		/* Only read from PEs if all PEs are locked */
+		if (0U == memlock_error)
 		{
-			NXP_LOG_ERROR("Memory unlock failed\n");
+			/* Perform the read from required PEs */
+			for (ii = 0; ii < pe_count; ii++)
+			{
+				/* Check if there is still memory  */
+				if (buffer_len >= ((read_len * (uint32_t)ii) + read_len))
+				{
+					pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe[ii],
+							(void *)((uint8_t*)dst_ptr + (read_len * (uint32_t)ii)),
+								src_addr, read_len);
+				}
+				else
+				{
+					/* Memory limit reached. Save the error. */
+					ret_store = ENOMEM;
+					break;
+				}
+			}
+		}
 
-			/* Error occurred. Override the return from previous actions. */
+		/* Release memlock for all PE cores. */
+		for (ii = 0; ii < pe_count; ii++)
+		{
+			ret = pfe_pe_memlock_release_nolock(pe[ii]);
+			if(EOK != ret)
+			{
+				NXP_LOG_ERROR("Memory unlock failed\n");
+
+				/* Save the error */
+				ret_store = ret;
+			}
+		}
+		
+		/* Unlock family */
+		ret = pfe_pe_unlock_family(*pe);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("pfe_pe_unlock_family() failed\n");
+
+			/* Save the error */
 			ret_store = ret;
 		}
-	}
 
-	/* Restore return to before unlock */
-	ret = ret_store;
+		/* If there was any error during the whole process, then return it. */
+		ret = ret_store;
+	}
 
 	return ret;
 }
@@ -1738,14 +1724,16 @@ static addr_t pfe_pe_get_elf_sect_load_addr(const ELF_File_t *elf_file, const El
  * @param[in]	cbus_base_va CBUS base address (virtual)
  * @param[in]	type Type of PE to create @see pfe_pe_type_t
  * @param[in]	id PE ID
+ * @param[in]	lock_mutex pointer to mutex of this PE core
+ * @param[in]	miflock pointer to miflock diagnostic flag of this PE core
  * @return		The PE instance or NULL if failed
  */
-pfe_pe_t * pfe_pe_create(addr_t cbus_base_va, pfe_ct_pe_type_t type, uint8_t id)
+pfe_pe_t * pfe_pe_create(addr_t cbus_base_va, pfe_ct_pe_type_t type, uint8_t id, oal_mutex_t *lock_mutex, bool_t *miflock)
 {
 	pfe_pe_t *pe = NULL;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL_ADDR == cbus_base_va))
+	if (unlikely(NULL_ADDR == cbus_base_va) || unlikely(NULL == lock_mutex))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		pe = NULL;
@@ -1769,30 +1757,8 @@ pfe_pe_t * pfe_pe_create(addr_t cbus_base_va, pfe_ct_pe_type_t type, uint8_t id)
 				pe->id = id;
 				pe->fw_msg_section = NULL;
 				pe->mmap_data = NULL;
-				if(EOK != oal_mutex_init(&pe->lock_mutex))
-				{
-					NXP_LOG_ERROR("Mutex init failed\n");
-					oal_mm_free(pe);
-					pe = NULL;
-				}
-
-				if (FALSE == mem_access_lock_init)
-				{
-					if (EOK == oal_mutex_init(&mem_access_lock))
-					{
-						mem_access_lock_init = TRUE;
-					}
-					else
-					{
-						NXP_LOG_ERROR("Mutex (mem_access_lock) init failed\n");
-						if (NULL != pe)
-						{
-							(void)oal_mutex_destroy(&pe->lock_mutex);
-							oal_mm_free(pe);
-							pe = NULL;
-						}
-					}
-				}
+				pe->lock_mutex = lock_mutex;
+				pe->miflock = miflock;
 			}
 		}
 	}
@@ -1926,16 +1892,14 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	for (pe_idx = 0; pe_idx < pe_num; ++pe_idx)
+	ret = pfe_pe_lock_family(*pe);
+	if (EOK != ret)
 	{
-		if (EOK != pfe_pe_lock(pe[pe_idx]))
-		{
-			NXP_LOG_ERROR("pfe_pe_lock() failed\n");
-		}
-		/* TODO unlock if it fails (maybe it doesn't matter  as we fail init anyway ?)*/
+		NXP_LOG_ERROR("pfe_pe_lock_family() failed\n");
+		return ret;
 	}
 
-	ret =  pfe_pe_fw_install_ops(pe, (uint8_t)pe_num);
+	ret = pfe_pe_fw_install_ops(pe, (uint8_t)pe_num);
 	if (EOK != ret)
 	{
 		NXP_LOG_ERROR("Couldn't find PE load operations: %d\n", ret);
@@ -2112,13 +2076,13 @@ errno_t pfe_pe_load_firmware(pfe_pe_t **pe, uint32_t pe_num, const void *elf)
 		return ret;
 	}
 
+	if (EOK != pfe_pe_unlock_family(*pe))
+	{
+		NXP_LOG_ERROR("pfe_pe_unlock_family() failed\n");
+	}
+
 	for (ii = 0; ii < pe_num; ++ii)
 	{
-		if (EOK != pfe_pe_unlock(pe[ii]))
-		{
-			NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
-		}
-
 		/*	Indicate that mmap_data is available */
 		pe[ii]->mmap_data = tmp_mmap;
 
@@ -2213,7 +2177,8 @@ void pfe_pe_destroy(pfe_pe_t **pe, uint32_t pe_num)
 			pe[pe_idx]->fw_feature_section = NULL;
 			pe[pe_idx]->fw_feature_section_size = 0U;
 
-			(void)oal_mutex_destroy(&pe[pe_idx]->lock_mutex);
+			pe[pe_idx]->lock_mutex = NULL;
+			pe[pe_idx]->miflock = NULL;
 			oal_mm_free(pe[pe_idx]);
 
 			pe[pe_idx] = NULL;
@@ -2634,38 +2599,6 @@ errno_t pfe_pe_get_class_algo_stats_nolock(pfe_pe_t *pe, uint32_t addr, pfe_ct_c
 #if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
 /**
- * @brief		Converts statistics of a logical interface or classification algorithm into a text form
- * @param[in]	stat		Statistics to convert
- * @param[out]	buf			Buffer where to write the text
- * @param[in]	buf_len		Buffer length
- * @param[in]	verb_level	Verbosity level
- * @return		Number of bytes written into the output buffer
- */
-uint32_t pfe_pe_stat_to_str(const pfe_ct_class_algo_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
-{
-	uint32_t len = 0U;
-
-	(void)verb_level;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == stat) || (NULL == buf)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		len = 0U;
-	}
-	else
-#endif
-	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames processed: %u\n", oal_ntohl(stat->processed));
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames accepted:  %u\n", oal_ntohl(stat->accepted));
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames rejected:  %u\n", oal_ntohl(stat->rejected));
-		len += oal_util_snprintf(buf + len, buf_len - len, "Frames discarded: %u\n", oal_ntohl(stat->discarded));
-	}
-
-	return len;
-}
-
-/**
  * @brief Translates state pfe_ct_pe_sw_state_t to a string
  * @param[in] state State to be translated
  * @return String representation of the state
@@ -2714,16 +2647,14 @@ static inline const char_t *pfe_pe_get_fw_state_str(pfe_ct_pe_sw_state_t state)
 * @param[in] pe PE which shall be read
 * @param[in] count Number of measurements in the PE memory to be read
 * @param[in] ptr Location of the measurements record in the PE memory
-* @param[in] buf Output text data buffer
-* @param[in] buf_len Size of the output text data buffer
+* @param[in] seq Pointer to debugfs seq_file
 * @param[in] verb_level Verbosity level
 * @return Number of bytes written into the text buffer
 */
-static uint32_t pfe_pe_get_measurements_nolock(pfe_pe_t *pe, uint32_t count, uint32_t ptr, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+static uint32_t pfe_pe_get_measurements_nolock(pfe_pe_t *pe, uint32_t count, uint32_t ptr, struct seq_file *seq, uint8_t verb_level)
 {
 	pfe_ct_measurement_t *m = NULL;
 	uint_t i;
-	uint32_t len = 0U;
 
 	(void)verb_level;
 
@@ -2754,7 +2685,7 @@ static uint32_t pfe_pe_get_measurements_nolock(pfe_pe_t *pe, uint32_t count, uin
                 uint32_t cnt = oal_ntohl(m[i].cnt);
 
                 /* Just print the data without interpreting them */
-                len += oal_util_snprintf(buf + len, buf_len - len,
+                seq_printf(seq,
                         "Measurement %u:\tmin %10u\tmax %10u\tavg %10u\tcnt %10u\n",
                             i, min, max, avg, cnt);
             }
@@ -2764,7 +2695,7 @@ static uint32_t pfe_pe_get_measurements_nolock(pfe_pe_t *pe, uint32_t count, uin
         }
     }
 
-	return len;
+	return 0;
 }
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
@@ -2781,9 +2712,9 @@ pfe_ct_pe_sw_state_t pfe_pe_get_fw_state(pfe_pe_t *pe)
 
 	/*	We don't need coherent data here so only lock the
 	 memory interface without locking the PE memory. */
-	if (EOK != pfe_pe_lock(pe))
+	if (EOK != pfe_pe_lock_family(pe))
 	{
-		NXP_LOG_ERROR("pfe_pe_lock() failed\n");
+		NXP_LOG_ERROR("pfe_pe_lock_family() failed\n");
 	}
 
 	if (pfe_pe_get_state_monitor_nolock(pe, &state_monitor) != EOK)
@@ -2791,9 +2722,9 @@ pfe_ct_pe_sw_state_t pfe_pe_get_fw_state(pfe_pe_t *pe)
 		state_monitor.state = PFE_FW_STATE_UNINIT;
 	}
 
-	if (EOK != pfe_pe_unlock(pe))
+	if (EOK != pfe_pe_unlock_family(pe))
 	{
-		NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
+		NXP_LOG_ERROR("pfe_pe_unlock_family() failed\n");
 	}
 
 	return state_monitor.state;
@@ -2910,58 +2841,70 @@ errno_t pfe_pe_put_data_nolock(pfe_pe_t *pe, pfe_ct_buffer_t *buf)
  * @brief		Return PE runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	pe 			The PE instance
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	buf_len 	Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  *
  */
-uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_pe_get_text_statistics(pfe_pe_t *pe, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
 	pfe_ct_pe_sw_state_monitor_t state_monitor = {0};
-	errno_t ret;
 
 	if (NULL == pe->mmap_data)
 	{
 		return 0U;
 	}
 
-	len += oal_util_snprintf(buf + len, buf_len - len, "\nPE %u\n----\n", pe->id);
-	len += oal_util_snprintf(buf + len, buf_len - len, "- PE state monitor -\n");
+	seq_printf(seq, "\nPE %u\n----\n", pe->id);
+	seq_printf(seq, "- PE state monitor -\n");
 
-	/*	Make the PFE data coherent */
-	ret = pfe_pe_mem_lock(pe);
-	if (EOK != ret)
+	if (EOK != pfe_pe_lock_family(pe))
 	{
-		NXP_LOG_ERROR("Memory lock failed\n");
-		return 0;
+		NXP_LOG_ERROR("pfe_pe_lock_family() failed\n");
+		seq_printf(seq, "pfe_pe_lock_family() failed\n");
+	}
+	else
+	{
+		/*	Make the PFE data coherent */
+		if (EOK != pfe_pe_memlock_acquire_nolock(pe))
+		{
+			NXP_LOG_ERROR("Memory lock failed\n");
+			seq_printf(seq, "Memory lock failed\n");
+		}
+		else
+		{
+			pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &state_monitor,
+					oal_ntohl(pe->mmap_data->common.state_monitor), sizeof(pfe_ct_pe_sw_state_monitor_t));
+
+			seq_printf(seq, "FW State: %u (%s), counter %u\n",
+					state_monitor.state, pfe_pe_get_fw_state_str(state_monitor.state),
+						oal_ntohl(state_monitor.counter));
+
+			/* This is a class PE therefore we may access the specific data */
+			if (0U != oal_ntohl(pe->mmap_data->common.measurement_count))
+			{
+				seq_printf(seq, "- Measurements -\n");
+
+				/* Read processing time measurements */
+				pfe_pe_get_measurements_nolock(pe, oal_ntohl(pe->mmap_data->common.measurement_count),
+						oal_ntohl(pe->mmap_data->common.measurements), seq, verb_level);
+			}
+
+			if (EOK != pfe_pe_memlock_release_nolock(pe))
+			{
+				NXP_LOG_ERROR("Memory unlock failed\n");
+				seq_printf(seq, "Memory unlock failed\n");
+			}
+		}
+
+		if (EOK != pfe_pe_unlock_family(pe))
+		{
+			NXP_LOG_ERROR("pfe_pe_unlock_family() failed\n");
+			seq_printf(seq, "pfe_pe_unlock_family() failed\n");
+		}
 	}
 
-	pfe_pe_memcpy_from_dmem_to_host_32_nolock(pe, &state_monitor,
-			oal_ntohl(pe->mmap_data->common.state_monitor), sizeof(pfe_ct_pe_sw_state_monitor_t));
-
-	len += oal_util_snprintf(buf + len, buf_len - len, "FW State: %u (%s), counter %u\n",
-			state_monitor.state, pfe_pe_get_fw_state_str(state_monitor.state),
-				oal_ntohl(state_monitor.counter));
-
-	/* This is a class PE therefore we may access the specific data */
-	if (0U != oal_ntohl(pe->mmap_data->common.measurement_count))
-	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "- Measurements -\n");
-
-		/* Read processing time measurements */
-		len += pfe_pe_get_measurements_nolock(pe, oal_ntohl(pe->mmap_data->common.measurement_count),
-				oal_ntohl(pe->mmap_data->common.measurements), buf + len, buf_len - len, verb_level);
-	}
-
-	if (EOK != pfe_pe_mem_unlock(pe))
-	{
-		NXP_LOG_ERROR("Memory unlock failed\n");
-		len = 0U;
-	}
-
-	return len;
+	return 0;
 }
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */

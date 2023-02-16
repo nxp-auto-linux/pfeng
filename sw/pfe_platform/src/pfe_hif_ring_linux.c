@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -675,13 +675,12 @@ __attribute__((cold)) static void pfe_hif_ring_invalidate_std(const pfe_hif_ring
  * @details		Dumps particular ring
  * @param[in]	ring The ring instance
  * @param[in]	name The ring name
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	size 		Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level, number of data written to the buffer
  * @return		Number of bytes written to the buffer
  * @note		Must not be preempted by: pfe_hif_ring_enqueue_buf(), pfe_hif_ring_destroy()
  */
-__attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name, char_t *buf, uint32_t size, uint8_t verb_level)
+__attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name, struct seq_file *seq, uint8_t verb_level)
 {
 	uint32_t ii;
 	uint32_t len = 0U;
@@ -695,9 +694,9 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	len += (uint32_t)oal_util_snprintf(buf + len, size - len, "Ring %s: len %d\n", name, RING_LEN);
-	len += (uint32_t)oal_util_snprintf(buf + len, size - len, "  Type: %s\n", ring->is_rx ? "RX" : "TX");
-	len += (uint32_t)oal_util_snprintf(buf + len, size - len, "  Index w/r: %d/%d (%d/%d)\n", ring->write_idx & RING_LEN_MASK, ring->read_idx & RING_LEN_MASK, ring->write_idx, ring->read_idx);
+	seq_printf(seq, "Ring %s: len %d\n", name, RING_LEN);
+	seq_printf(seq, "  Type: %s\n", ring->is_rx ? "RX" : "TX");
+	seq_printf(seq, "  Index w/r: %d/%d (%d/%d)\n", ring->write_idx & RING_LEN_MASK, ring->read_idx & RING_LEN_MASK, ring->write_idx, ring->read_idx);
 
 	if(verb_level >= 8) {
 		/* BD ring */
@@ -707,8 +706,8 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 			pfe_hif_bd_t *bd = &(((pfe_hif_bd_t *)ring->base_va)[ii]);
 			if (0 == ii)
 			{
-				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "  BD va/pa v0x%px/p0x%px\n", ring->base_va, ring->base_pa);
-				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "            pa           idx: bufl:ctrl: status :  data  :  next  :seqn\n");
+				seq_printf(seq, "  BD va/pa v0x%px/p0x%px\n", ring->base_va, ring->base_pa);
+				seq_printf(seq, "            pa           idx: bufl:ctrl: status :  data  :  next  :seqn\n");
 			}
 
 			if ((ring->write_idx & RING_LEN_MASK) == ii)
@@ -724,7 +723,7 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 				idx_str = "";
 			}
 
-			len += (uint32_t)oal_util_snprintf(buf + len, size - len, "    p0x%px%5d: %04x:%04x:%08x:%08x:%04x%s\n",(void *)&((pfe_hif_bd_t *)ring->base_pa)[ii], ii, HIF_RING_BD_W1_BD_BUFFLEN_GET(bd->rsvd_buflen_w1), HIF_RING_BD_W0_BD_CTRL_GET(bd->ctrl_seqnum_w0), bd->data, bd->next, HIF_RING_BD_W0_BD_SEQNUM_GET(bd->ctrl_seqnum_w0), idx_str);
+			seq_printf(seq, "    p0x%px%5d: %04x:%04x:%08x:%08x:%04x%s\n",(void *)&((pfe_hif_bd_t *)ring->base_pa)[ii], ii, HIF_RING_BD_W1_BD_BUFFLEN_GET(bd->rsvd_buflen_w1), HIF_RING_BD_W0_BD_CTRL_GET(bd->ctrl_seqnum_w0), bd->data, bd->next, HIF_RING_BD_W0_BD_SEQNUM_GET(bd->ctrl_seqnum_w0), idx_str);
 		}
 
 		/* WB ring */
@@ -734,8 +733,8 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 				pfe_hif_wb_bd_t *wb = &(((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ii]);
 				if (0 == ii)
 				{
-					len += (uint32_t)oal_util_snprintf(buf + len, size - len, "  WB va/pa v0x%px/p0x%px\n", ring->wb_tbl_base_va, ring->wb_tbl_base_pa);
-					len += (uint32_t)oal_util_snprintf(buf + len, size - len, "    pa:      idx:  ctl: rsvd :bufl:seqn\n");
+					seq_printf(seq, "  WB va/pa v0x%px/p0x%px\n", ring->wb_tbl_base_va, ring->wb_tbl_base_pa);
+					seq_printf(seq, "            pa           idx:  ctl: rsvd :bufl:seqn\n");
 				}
 
 				if ((ring->read_idx & RING_LEN_MASK) == ii)
@@ -747,7 +746,7 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 					idx_str = "";
 				}
 
-				len += (uint32_t)oal_util_snprintf(buf + len, size - len, "    p0x%px%5d: %04x:%06x:%04x:%04x%s\n", (void *)&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_pa)[ii], ii, HIF_RING_BD_W0_BD_CTRL(wb->rsvd_ctrl_w0), HIF_RING_WB_BD_W1_WB_BD_BUFFLEN(wb->seqnum_buflen_w1), HIF_RING_WB_BD_W1_WB_BD_SEQNUM(wb->seqnum_buflen_w1), idx_str);
+				seq_printf(seq, "    p0x%px%5d: %04x:%06x:%04x:%s\n", (void *)&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_pa)[ii], ii, HIF_RING_BD_W0_BD_CTRL(wb->rsvd_ctrl_w0), HIF_RING_WB_BD_W1_WB_BD_BUFFLEN(wb->seqnum_buflen_w1), HIF_RING_WB_BD_W1_WB_BD_SEQNUM(wb->seqnum_buflen_w1), idx_str);
 			}
 		}
 	}

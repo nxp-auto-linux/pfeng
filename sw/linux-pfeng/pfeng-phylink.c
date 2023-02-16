@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 NXP
+ * Copyright 2020-2023 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -34,7 +34,7 @@ static void pfeng_cfg_to_plat(struct pfeng_netif *netif, const struct phylink_li
 
 	switch (state->speed) {
 	default:
-		HM_MSG_NETDEV_ERR(netif->netdev, "Speed not supported\n");
+		HM_MSG_NETDEV_WARN(netif->netdev, "Speed not supported\n");
 		speed_valid = false;
 		return;
 	case SPEED_2500:

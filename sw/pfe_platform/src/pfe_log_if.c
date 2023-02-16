@@ -17,7 +17,6 @@
 #include "pfe_cbus.h"
 #include "pfe_ct.h"
 #include "pfe_log_if.h"
-#include "pfe_pe.h"
 #include "pfe_class.h"
 #include "blalloc.h" /* Block allocator to assign interface IDs */
 #include "pfe_platform_cfg.h"
@@ -2418,7 +2417,10 @@ uint32_t pfe_log_if_get_text_statistics(const pfe_log_if_t *iface, char_t *buf, 
 					printed_rules = TRUE; /* Avoid printing it multiple times*/
 				}
 				len += oal_util_snprintf(buf + len, buf_len - len, "- Statistics from PE %u -\n", i);
-				len += pfe_pe_stat_to_str(&log_if_class.class_stats, buf + len, buf_len - len, verb_level);
+				len += oal_util_snprintf(buf + len, buf_len - len, "Frames processed: %u\n", oal_ntohl(log_if_class.class_stats.processed));
+				len += oal_util_snprintf(buf + len, buf_len - len, "Frames accepted:  %u\n", oal_ntohl(log_if_class.class_stats.accepted));
+				len += oal_util_snprintf(buf + len, buf_len - len, "Frames rejected:  %u\n", oal_ntohl(log_if_class.class_stats.rejected));
+				len += oal_util_snprintf(buf + len, buf_len - len, "Frames discarded: %u\n", oal_ntohl(log_if_class.class_stats.discarded));
 			}
 			++i;
 		}

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2021-2022 NXP
+ *  Copyright 2021-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -110,7 +110,7 @@ errno_t pfe_hw_feature_init_all(const uint32_t *cbus_base, pfe_hw_feature_t **hw
 
 	if (EOK == ret)
 	{
-		feature = pfe_hw_feature_create("jumbo_frames", "Active if we handle jumbo frames", F_NONE, 0);
+		feature = pfe_hw_feature_create("jumbo_frames", "Active if we handle jumbo frames", F_PRESENT, 1);
 		if (NULL != feature)
 		{
 			hw_features[1] = feature;

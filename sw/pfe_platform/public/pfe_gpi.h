@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -185,9 +185,7 @@ void pfe_gpi_enable(const pfe_gpi_t *gpi);
 errno_t pfe_gpi_reset(const pfe_gpi_t *gpi);
 void pfe_gpi_disable(const pfe_gpi_t *gpi);
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-uint32_t pfe_gpi_get_text_statistics(const pfe_gpi_t *gpi, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+uint32_t pfe_gpi_get_text_statistics(const pfe_gpi_t *gpi, struct seq_file *seq, uint8_t verb_level);
 
 void pfe_gpi_destroy(pfe_gpi_t *gpi);
 uint32_t pfe_gpi_cfg_get_sys_clk_mhz(addr_t cbus_base_va);

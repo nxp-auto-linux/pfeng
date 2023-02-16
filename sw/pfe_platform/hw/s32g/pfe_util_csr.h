@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2022 NXP
+ *  Copyright 2017-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -61,9 +61,7 @@
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-uint32_t pfe_util_cfg_get_text_stat(addr_t base_va, char_t *buf, uint32_t size, uint8_t verb_level);
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+uint32_t pfe_util_cfg_get_text_stat(addr_t base_va, struct seq_file *seq, uint8_t verb_level);
 
 errno_t pfe_util_cfg_isr(addr_t base_va);
 

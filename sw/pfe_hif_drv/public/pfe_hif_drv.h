@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -46,10 +46,6 @@
 #else
 #include "pfe_hif_chnl.h"
 #endif
-
-#ifdef PFE_CFG_IEEE1588_SUPPORT
-#include "pfe_hif_ptp.h"
-#endif /* PFE_CFG_IEEE1588_SUPPORT */
 
 #define HIF_STATS
 

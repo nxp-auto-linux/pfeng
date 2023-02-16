@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2022 NXP
+ * Copyright 2019-2023 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -124,9 +124,9 @@ static bool g2_ordered_class_writes = false;
 module_param(g2_ordered_class_writes, bool, 0644);
 MODULE_PARM_DESC(g2_ordered_class_writes, "\t Enable ordered class writes on S32G2 (default: false)");
 
-static bool g3_rtable_in_lmem = false;
+static bool g3_rtable_in_lmem = true;
 module_param(g3_rtable_in_lmem , bool, 0644);
-MODULE_PARM_DESC(g3_rtable_in_lmem , "\t Allocate PFE's Routing Table in local memory on S32G3 (default: false)");
+MODULE_PARM_DESC(g3_rtable_in_lmem , "\t Allocate PFE's Routing Table in local memory on S32G3 (default: true)");
 
 uint32_t get_pfeng_pfe_cfg_master_if(void)
 {

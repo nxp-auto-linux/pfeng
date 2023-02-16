@@ -1,7 +1,7 @@
 /* =========================================================================
  *	
  *	Copyright (c) 2019 Imagination Technologies Limited
- *	Copyright 2018-2022 NXP
+ *	Copyright 2018-2023 NXP
  *
  *	SPDX-License-Identifier: GPL-2.0
  *
@@ -81,6 +81,7 @@ static errno_t pfe_phy_if_set_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags_t
 static errno_t pfe_phy_if_clear_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag);
 static pfe_ct_if_flags_t pfe_phy_if_get_flag_nolock(const pfe_phy_if_t *iface, pfe_ct_if_flags_t flag);
 static errno_t pfe_phy_if_enable_hw_block(const pfe_phy_if_t *iface);
+static void pfe_phy_if_update_op_mode_nolock(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode);
 
 #if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
@@ -333,6 +334,9 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 			{
 				NXP_LOG_DEBUG("%s mac_db is NULL.\n", iface->name);
 			}
+
+			/* Disable HW bridge lookup if the last interface was destroyed */
+			pfe_phy_if_update_op_mode_nolock(iface, IF_OP_DEFAULT);
 
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
@@ -1011,6 +1015,9 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 				NXP_LOG_ERROR("mutex lock failed\n");
 			}
 
+			/* Enable HW bridge lookup if required */
+			pfe_phy_if_update_op_mode_nolock(iface, mode);
+
 			iface->phy_if_class.mode = mode;
 			ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 			if (EOK != ret)
@@ -1027,6 +1034,30 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 	}
 
 	return ret;
+}
+
+/**
+ * @brief		Maintain bridge operational mode
+ * @param[in]	iface The interface instance
+ * @param[in]	mode Mode to be set. See pfe_ct_if_op_mode_t.
+ * @note		Control HW bridge lookup mode based on operational mode of all PHYs.
+ */
+static void pfe_phy_if_update_op_mode_nolock(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
+{
+	uint32_t if_bitmap;
+	bool_t br_mode = FALSE;
+
+	if ((PFE_PHY_IF_ID_EMAC0 <= iface->id) && (PFE_PHY_IF_ID_MAX >= iface->id))
+	{
+		/* Set bitmap based on PHY ID */
+		if_bitmap = (1U << iface->id);
+		if ((IF_OP_VLAN_BRIDGE == mode) || (IF_OP_L2L3_VLAN_BRIDGE == mode))
+		{
+			br_mode = TRUE;
+		}
+
+		pfe_class_update_hw_bridge_lookup(iface->class, if_bitmap, br_mode);
+	}
 }
 
 /**
@@ -1363,6 +1394,9 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 
 		NXP_LOG_DEBUG("Enabling %s\n", iface->name);
 
+		/* Enable HW bridge lookup if required */
+		pfe_phy_if_update_op_mode_nolock(iface, iface->phy_if_class.mode);
+
 		/*	Enable interface instance. Backup flags and write the changes. */
 		tmp = iface->phy_if_class.flags;
 		iface->phy_if_class.flags |= oal_htonl(IF_FL_ENABLED);
@@ -1473,6 +1507,9 @@ static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 						ret = EINVAL;
 					}
 				}
+
+				/* Disable HW bridge lookup if the last interface is disabled */
+				pfe_phy_if_update_op_mode_nolock(iface, IF_OP_DEFAULT);
 			}
 		}
 	}

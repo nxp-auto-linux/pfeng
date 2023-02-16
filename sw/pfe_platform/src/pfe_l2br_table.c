@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -821,7 +821,6 @@ errno_t pfe_l2br_iterator_destroy(const pfe_l2br_table_iterator_t *inst)
  * @brief			Compute hash of the entry.
  * @details			It is assumed that this function uses same algorithms as PFE HW.
  * @param[in]		entry Entry to be hashed
- * @param[out]		hash [passback] Hash of the entry
  * @retval			hash of the entry
  */
 static uint8_t pfe_l2br_entry_get_hash(const pfe_l2br_table_entry_t *entry)
@@ -829,10 +828,10 @@ static uint8_t pfe_l2br_entry_get_hash(const pfe_l2br_table_entry_t *entry)
 	uint16_t hash = 0U;
 	
 	#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == entry) || (NULL == hash))
+	if (unlikely(NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return EINVAL;
+		return 0U;
 	}
 	#endif /* PFE_CFG_NULL_ARG_CHECK */
 
@@ -862,7 +861,7 @@ static void pfe_l2br_iterator_save_macvlan(pfe_l2br_table_iterator_t *l2t_iter, 
 	if (unlikely(NULL == l2t_iter) || (NULL == entry))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
+		return;
 	}
 	#endif /* PFE_CFG_NULL_ARG_CHECK */
 	
@@ -1871,18 +1870,13 @@ __attribute__((pure)) bool_t pfe_l2br_table_entry_is_static(const pfe_l2br_table
 	}
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Convert entry to string representation
  * @param[in]	entry The entry
- * @param[in]	buf Buffer to write the final string to
- * @param[in]	buf_len Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  */
-uint32_t pfe_l2br_table_entry_to_str(const pfe_l2br_table_entry_t *entry, char_t *buf, uint32_t buf_len)
+uint32_t pfe_l2br_table_entry_to_str(const pfe_l2br_table_entry_t *entry, struct seq_file *seq)
 {
-	uint32_t len = 0U;
-
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == entry) || (NULL == buf)))
 	{
@@ -1893,44 +1887,42 @@ uint32_t pfe_l2br_table_entry_to_str(const pfe_l2br_table_entry_t *entry, char_t
 
 	if (PFE_L2BR_TABLE_MAC2F == entry->type)
 	{
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "[MAC+VLAN Table Entry]\n");
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "MAC Address: %02x:%02x:%02x:%02x:%02x:%02x\n",
+		seq_printf(seq, "[MAC+VLAN Table Entry]\n");
+		seq_printf(seq, "MAC Address: %02x:%02x:%02x:%02x:%02x:%02x\n",
 				entry->u.mac2f_entry.mac[0],
 				entry->u.mac2f_entry.mac[1],
 				entry->u.mac2f_entry.mac[2],
 				entry->u.mac2f_entry.mac[3],
 				entry->u.mac2f_entry.mac[4],
 				entry->u.mac2f_entry.mac[5]);
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "VLAN       : 0x%x\n", entry->u.mac2f_entry.vlan);
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "Action Data: 0x%x\n", entry->u.mac2f_entry.action_data);
+		seq_printf(seq, "VLAN       : 0x%x\n", entry->u.mac2f_entry.vlan);
+		seq_printf(seq, "Action Data: 0x%x\n", entry->u.mac2f_entry.action_data);
 #if 0
 		/* Currently not used - action data stores the port information, FW does not have access to port field */
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "Port       : 0x%x\n", entry->u.mac2f_entry.port);
+		seq_printf(seq, "Port       : 0x%x\n", entry->u.mac2f_entry.port);
 #endif
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "Col Ptr    : 0x%x\n", entry->u.mac2f_entry.col_ptr);
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "Flags      : 0x%x\n", entry->u.mac2f_entry.flags);
+		seq_printf(seq, "Col Ptr    : 0x%x\n", entry->u.mac2f_entry.col_ptr);
+		seq_printf(seq, "Flags      : 0x%x\n", entry->u.mac2f_entry.flags);
 	}
 	else if (PFE_L2BR_TABLE_VLAN == entry->type)
 	{
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "[VLAN Table Entry]\n");
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "VLAN       : 0x%x\n", entry->u.vlan_entry.vlan);
+		seq_printf(seq, "[VLAN Table Entry]\n");
+		seq_printf(seq, "VLAN       : 0x%x\n", entry->u.vlan_entry.vlan);
 		/*	Native type used to fix compiler warning */
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "Action Data: 0x%"PRINT64"x\n", (uint64_t)entry->u.vlan_entry.action_data);
+		seq_printf(seq, "Action Data: 0x%"PRINT64"x\n", (uint64_t)entry->u.vlan_entry.action_data);
 #if 0
 		/* Currently not used - action data stores the port information, FW does not have access to port field */
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "Port       : 0x%x\n", entry->u.vlan_entry.port);
+		seq_printf(seq, "Port       : 0x%x\n", entry->u.vlan_entry.port);
 #endif
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "Col Ptr    : 0x%x\n", entry->u.vlan_entry.col_ptr);
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "Flags      : 0x%x\n", entry->u.vlan_entry.flags);
+		seq_printf(seq, "Col Ptr    : 0x%x\n", entry->u.vlan_entry.col_ptr);
+		seq_printf(seq, "Flags      : 0x%x\n", entry->u.vlan_entry.flags);
 	}
 	else
 	{
-		len += (uint32_t)snprintf(buf + len, buf_len - len, "Invalid entry type\n");
+		seq_printf(seq, "Invalid entry type\n");
 	}
-	return len;
+	return 0;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

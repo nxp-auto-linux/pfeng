@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 NXP
+ * Copyright 2020-2023 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -270,7 +270,7 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 		/* get target netdevice */
 		netif = pfeng_phy_if_id_to_netif(chnl, hif_hdr->i_phy_if);
 		if (unlikely(!netif)) {
-			HM_MSG_DEV_ERR(chnl->dev, "Missing netdev for packet from PHYIF#%d\n",
+			HM_MSG_DEV_DBG(chnl->dev, "Missing netdev for packet from PHYIF#%d\n",
 				hif_hdr->i_phy_if);
 			consume_skb(skb);
 			done++;

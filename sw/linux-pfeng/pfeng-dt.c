@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2022 NXP
+ * Copyright 2021-2023 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -117,6 +117,9 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 	int irq, i, ret = 0;
 	u32 propval;
 	char propname[32];
+#ifdef PFE_CFG_PFE_MASTER
+	int emacs;
+#endif /* PFE_CFG_PFE_MASTER */
 
 	/* Get the base address of device */
 	res = platform_get_resource_byname(priv->pdev, IORESOURCE_MEM, PFE_RES_NAME_PFE_CBUS);
@@ -192,6 +195,21 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 		ret = of_property_read_u32(np, "nxp,pfeng-l2br-vlan-stats-size", &propval);
 		if (!ret)
 			pfe_cfg->vlan_stats_size = propval;
+	}
+
+	/* optional: EMACs with external timestamping */
+	emacs = of_property_count_elems_of_size(np, "nxp,pfeng-emac-ts-ext-modes", sizeof(u32));
+	if ((emacs > 0) && (emacs < PFENG_PFE_EMACS)) {
+		for (i = 0; i < emacs; i++) {
+			ret = of_property_read_u32_index(np, "nxp,pfeng-emac-ts-ext-modes", i, &propval);
+			if (ret)
+				continue;
+			if (propval >= PFENG_PFE_EMACS) {
+				HM_MSG_DEV_ERR(dev, "EMAC number %u is invalid, aborting\n", propval);
+				return -EIO;
+			}
+			pfe_cfg->emac_ext_ts_mask |= (1 << propval);
+		}
 	}
 #endif /* PFE_CFG_PFE_MASTER */
 
@@ -276,10 +294,11 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 		HM_MSG_DEV_INFO(dev, "netif name: %s", netif_cfg->name);
 
 		/* MAC eth address */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
-		netif_cfg->macaddr = (u8 *)of_get_mac_address(child);
-		if (netif_cfg->macaddr)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,13,0)
+		if (!IS_ERR_OR_NULL(of_get_mac_address(child))) {
+			memcpy(netif_cfg->macaddr, (u8 *)of_get_mac_address(child), ETH_ALEN);
 			HM_MSG_DEV_INFO(dev, "DT mac addr: %pM", netif_cfg->macaddr);
+		}
 #else
 		if (!of_get_mac_address(child, netif_cfg->macaddr))
 			HM_MSG_DEV_INFO(dev, "DT mac addr: %pM", netif_cfg->macaddr);

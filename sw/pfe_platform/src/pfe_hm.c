@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2022 NXP
+ *  Copyright 2022-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -220,7 +220,7 @@ errno_t pfe_hm_destroy(void)
  * @param[in]	id		ID of the event
  * @param[in]	format	NULL or printf like formatted string
  */
-void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id, void *dev,
+void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id, pfe_hm_log_t hm_log,
 		const char *format, ...)
 {
 	pfe_hm_item_t item;
@@ -247,58 +247,58 @@ void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id, void *
 	item.descr[0] = '\0';
 #endif	/** PFE_CFG_TARGET_OS_AUTOSAR */
 
-	if (HM_SRC_PFENG_DEV == src)
+	if (NXP_LOG_TYPE_DEV == hm_log.log_type)
 	{
 		switch (type)
 		{
 #ifdef PFE_CFG_HM_STRINGS_ENABLED
 			case HM_INFO:
-				HM_MSG_HM_DEV_INFO(dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				HM_MSG_HM_DEV_INFO(hm_log.log_dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
 				break;
 			case HM_WARNING:
-				HM_MSG_HM_DEV_WARN(dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				HM_MSG_HM_DEV_WARN(hm_log.log_dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
 				break;
 			case HM_ERROR:
-				HM_MSG_HM_DEV_ERR(dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				HM_MSG_HM_DEV_ERR(hm_log.log_dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
 				break;
 #else
 			case HM_INFO:
-				HM_MSG_HM_DEV_INFO(dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				HM_MSG_HM_DEV_INFO(hm_log.log_dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
 				break;
 			case HM_WARNING:
-				HM_MSG_HM_DEV_WARN(dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				HM_MSG_HM_DEV_WARN(hm_log.log_dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
 				break;
 			case HM_ERROR:
-				HM_MSG_HM_DEV_ERR(dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				HM_MSG_HM_DEV_ERR(hm_log.log_dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
 				break;
 #endif /* PFE_CFG_HM_STRINGS_ENABLED */
 			default:
 				break;
 		}
 	}
-	else if (HM_SRC_PFENG_NETDEV == src)
+	else if (NXP_LOG_TYPE_NETDEV == hm_log.log_type)
 	{
 		switch (type)
 		{
 #ifdef PFE_CFG_HM_STRINGS_ENABLED
 			case HM_INFO:
-				HM_MSG_HM_NETDEV_INFO(dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				HM_MSG_HM_NETDEV_INFO(hm_log.log_netdev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
 				break;
 			case HM_WARNING:
-				HM_MSG_HM_NETDEV_WARN(dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				HM_MSG_HM_NETDEV_WARN(hm_log.log_netdev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
 				break;
 			case HM_ERROR:
-				HM_MSG_HM_NETDEV_ERR(dev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
+				HM_MSG_HM_NETDEV_ERR(hm_log.log_netdev, "(%s) event %d - %s%s%s", src_str, (int)id, event_str, separator, item.descr);
 				break;
 #else
 			case HM_INFO:
-				HM_MSG_HM_NETDEV_INFO(dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				HM_MSG_HM_NETDEV_INFO(hm_log.log_netdev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
 				break;
 			case HM_WARNING:
-				HM_MSG_HM_NETDEV_WARN(dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				HM_MSG_HM_NETDEV_WARN(hm_log.log_netdev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
 				break;
 			case HM_ERROR:
-				HM_MSG_HM_NETDEV_ERR(dev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
+				HM_MSG_HM_NETDEV_ERR(hm_log.log_netdev, "(%d) event %d%s%s", (int)src, (int)id, separator, item.descr);
 				break;
 #endif /* PFE_CFG_HM_STRINGS_ENABLED */
 			default:

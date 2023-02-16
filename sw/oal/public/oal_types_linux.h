@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -106,37 +106,37 @@ extern int msg_verbosity;
 
 #define HM_MSG_HM_DEV_ERR(dev, format, ...) { \
 	if (dev) { \
-		dev_err((struct device *)dev, format, ##__VA_ARGS__); \
+		dev_err(dev, "ERR: " format, ##__VA_ARGS__); \
 	} \
 }
 
 #define HM_MSG_HM_DEV_WARN(dev, format, ...) { \
 	if (dev) { \
-		dev_warn((struct device *)dev, "ERR: " format, ##__VA_ARGS__); \
+		dev_warn(dev, format, ##__VA_ARGS__); \
 	} \
 }
 
 #define HM_MSG_HM_DEV_INFO(dev, format, ...) { \
 	if (dev) { \
-		dev_info((struct device *)dev, format, ##__VA_ARGS__); \
+		dev_info(dev, format, ##__VA_ARGS__); \
 	} \
 }
 
 #define HM_MSG_HM_NETDEV_ERR(dev, format, ...) { \
 	if (dev) { \
-		netdev_err((struct net_device *)dev, format, ##__VA_ARGS__); \
+		netdev_err(dev, "ERR: " format, ##__VA_ARGS__); \
 	} \
 }
 
 #define HM_MSG_HM_NETDEV_WARN(dev, format, ...) { \
 	if (dev) { \
-		netdev_warn((struct net_device *)dev, "ERR: " format, ##__VA_ARGS__); \
+		netdev_warn(dev, format, ##__VA_ARGS__); \
 	} \
 }
 
 #define HM_MSG_HM_NETDEV_INFO(dev, format, ...) { \
 	if (dev) { \
-		netdev_info((struct net_device *)dev, format, ##__VA_ARGS__); \
+		netdev_info(dev, format, ##__VA_ARGS__); \
 	} \
 }
 
@@ -160,6 +160,20 @@ typedef bool bool_t;
 typedef char char_t;
 typedef int int_t; /* For use within printf like functions that require "int" regardless its size */
 typedef unsigned int uint_t; /* For use within printf like functions */
+
+typedef enum {
+	NXP_LOG_TYPE_PFE,
+	NXP_LOG_TYPE_DEV,
+	NXP_LOG_TYPE_NETDEV
+} pfe_hm_log_type_t;
+
+typedef struct {
+	pfe_hm_log_type_t log_type;
+	union {
+		struct device *log_dev;
+		struct net_device *log_netdev;
+	};
+} pfe_hm_log_t;
 
 #ifndef EOK
 #define EOK 0
@@ -191,12 +205,12 @@ typedef unsigned int uint_t; /* For use within printf like functions */
 #define NXP_LOG_INFO(format, ...) NXP_LOG_RAW_INFO(format, ##__VA_ARGS__)
 #define NXP_LOG_DEBUG(format, ...) NXP_LOG_RAW_DEBUG(format, ##__VA_ARGS__)
 
-#define HM_MSG_DEV_ERR(dev, format, ...) pfe_hm_report_dev_error(HM_SRC_PFENG_DEV, HM_EVT_RUNTIME, (void *)dev, format, ##__VA_ARGS__)
+#define HM_MSG_DEV_ERR(dev, format, ...) pfe_hm_report_dev_error(HM_SRC_DRIVER, HM_EVT_RUNTIME, dev, format, ##__VA_ARGS__)
 #define HM_MSG_DEV_WARN(dev, format, ...) HM_MSG_RAW_DEV_WARN(dev, format, ##__VA_ARGS__)
 #define HM_MSG_DEV_INFO(dev, format, ...) HM_MSG_RAW_DEV_INFO(dev, format, ##__VA_ARGS__)
 #define HM_MSG_DEV_DBG(dev, format, ...) HM_MSG_RAW_DEV_DBG(dev, format, ##__VA_ARGS__)
 
-#define HM_MSG_NETDEV_ERR(netdev, format, ...) pfe_hm_report_dev_error(HM_SRC_PFENG_NETDEV, HM_EVT_RUNTIME, (void *)netdev, format, ##__VA_ARGS__)
+#define HM_MSG_NETDEV_ERR(netdev, format, ...) pfe_hm_report_netdev_error(HM_SRC_DRIVER, HM_EVT_RUNTIME, netdev, format, ##__VA_ARGS__)
 #define HM_MSG_NETDEV_WARN(netdev, format, ...) HM_MSG_RAW_NETDEV_WARN(netdev, format, ##__VA_ARGS__)
 #define HM_MSG_NETDEV_INFO(netdev, format, ...) HM_MSG_RAW_NETDEV_INFO(netdev, format, ##__VA_ARGS__)
 #define HM_MSG_NETDEV_DBG(netdev, format, ...) HM_MSG_RAW_NETDEV_DBG(netdev, format, ##__VA_ARGS__)

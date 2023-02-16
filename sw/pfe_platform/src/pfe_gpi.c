@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1455,25 +1455,19 @@ errno_t pfe_gpi_shp_get_drop_cnt(const pfe_gpi_t *gpi, uint8_t id, uint32_t *cnt
  * @brief		Return GPI runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	gpi 		The GPI instance
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	buf_len 	Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_gpi_get_text_statistics(const pfe_gpi_t *gpi, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_gpi_get_text_statistics(const pfe_gpi_t *gpi, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
 	errno_t  ret = pfe_gpi_null_arg_check_return(gpi, EINVAL);
-	if (ret != EOK)
+	if (ret == EOK)
 	{
-		len = 0U;
-	}
-	else
-	{
-		len += pfe_gpi_cfg_get_text_stat(gpi->gpi_base_va, buf, buf_len, verb_level);
+		pfe_gpi_cfg_get_text_stat(gpi->gpi_base_va, seq, verb_level);
 	}
 
-	return len;
+	return 0;
 }
 
 #endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */

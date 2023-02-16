@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -13,7 +13,6 @@
 
 #include "pfe_platform_cfg.h"
 #include "pfe_cbus.h"
-#include "pfe_pe.h"
 #include "pfe_feature_mgr.h"
 #include "pfe_phy_if.h"
 #include "pfe_tmu.h"
@@ -1697,37 +1696,29 @@ uint8_t pfe_tmu_sch_get_bound_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy
 	return ret;
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Return TMU runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	tmu The TMU instance
- * @param[in]	buf Pointer to buffer to be written
- * @param[in]	buf_len Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_tmu_get_text_statistics(const pfe_tmu_t *tmu, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_tmu_get_text_statistics(const pfe_tmu_t *tmu, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
-
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == tmu))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		len = 0U;
 	}
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		len += pfe_tmu_cfg_get_text_stat(tmu->cbus_base_va, buf, buf_len, verb_level);
+		pfe_tmu_cfg_get_text_stat(tmu->cbus_base_va, seq, verb_level);
 	}
 
-	return len;
+	return 0;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

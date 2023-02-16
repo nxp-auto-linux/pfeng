@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 NXP
+ * Copyright 2020-2023 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -17,6 +17,7 @@
 #include "pfe_cfg.h"
 #include "oal.h"
 #include "pfe_platform.h"
+#include "pfe_feature_mgr.h"
 
 #include "pfeng.h"
 
@@ -416,56 +417,51 @@ static int pfeng_netif_logif_change_mtu(struct net_device *netdev, int mtu)
 	return 0;
 }
 
-static int pfeng_mii_ioctl(struct net_device *netdev, struct ifreq *rq, int cmd)
-{
-	struct pfeng_netif *netif = netdev_priv(netdev);
-	struct mii_ioctl_data *mii = if_mii(rq);
-	u16 val;
-
-	if (netdev->phydev)
-		switch (cmd) {
-		case SIOCGMIIPHY:
-		case SIOCGMIIREG:
-		case SIOCSMIIREG:
-			return phy_mii_ioctl(netdev->phydev, rq, cmd);
-		}
-	else
-		switch (cmd) {
-		case SIOCGMIIREG:
-			val = pfeng_mdio_read(netif->priv->emac[netif->cfg->emac_id].mii_bus, mii->phy_id, mii->reg_num);
-			if (val > -1) {
-				mii->val_out = val;
-				return 0;
-			}
-			return val;
-		case SIOCSMIIREG:
-			return pfeng_mdio_write(netif->priv->emac[netif->cfg->emac_id].mii_bus, mii->phy_id, mii->reg_num, mii->val_in);
-		}
-
-	return -EOPNOTSUPP;
-}
-
 static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, int cmd)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
+	struct mii_ioctl_data *mii = if_mii(rq);
+	int val, phyaddr, phyreg;
 
-	if (!phy_has_hwtstamp(netdev->phydev)) {
-		switch (cmd) {
-		case SIOCSHWTSTAMP:
-			return pfeng_hwts_ioctl_set(netif, rq);
-		case SIOCGHWTSTAMP:
-			return pfeng_hwts_ioctl_get(netif, rq);
-		}
+	if (mdio_phy_id_is_c45(mii->phy_id)) {
+		phyaddr = mdio_phy_id_prtad(mii->phy_id);
+		phyreg = MII_ADDR_C45 | (mdio_phy_id_devad(mii->phy_id) << 16) | mii->reg_num;
+	} else {
+		phyaddr = mii->phy_id;
+		phyreg = mii->reg_num;
 	}
-
-	if (netif->phylink)
-		return phylink_mii_ioctl(netif->phylink, rq, cmd);
 
 	switch (cmd) {
 	case SIOCGMIIPHY:
+		if (!netdev->phydev)
+			return -EOPNOTSUPP;
+		phyaddr = mii->phy_id = netdev->phydev->mdio.addr;
+		fallthrough;
 	case SIOCGMIIREG:
+		if (netdev->phydev)
+			return phy_mii_ioctl(netdev->phydev, rq, cmd);
+		/* If no phydev, use direct MDIO call */
+		val = pfeng_mdio_read(netif->priv->emac[netif->cfg->emac_id].mii_bus, phyaddr, phyreg);
+		if (val > -1) {
+			mii->val_out = val;
+			return 0;
+		}
+		return val;
 	case SIOCSMIIREG:
-		return pfeng_mii_ioctl(netdev, rq, cmd);
+		if (netdev->phydev)
+			return phy_mii_ioctl(netdev->phydev, rq, cmd);
+		/* If no phydev, use direct MDIO call */
+		return pfeng_mdio_write(netif->priv->emac[netif->cfg->emac_id].mii_bus, phyaddr, phyreg, mii->val_in);
+	case SIOCGHWTSTAMP:
+		if (phy_has_hwtstamp(netdev->phydev))
+			return phy_mii_ioctl(netdev->phydev, rq, cmd);
+		else
+			return pfeng_hwts_ioctl_get(netif, rq);
+	case SIOCSHWTSTAMP:
+		if (phy_has_hwtstamp(netdev->phydev))
+			return phy_mii_ioctl(netdev->phydev, rq, cmd);
+		else
+			return pfeng_hwts_ioctl_set(netif, rq);
 	}
 
 	return -EOPNOTSUPP;
@@ -677,7 +673,11 @@ static const struct net_device_ops pfeng_netdev_ops = {
 	.ndo_start_xmit		= pfeng_netif_logif_xmit,
 	.ndo_stop		= pfeng_netif_logif_stop,
 	.ndo_change_mtu		= pfeng_netif_logif_change_mtu,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
+	.ndo_eth_ioctl		= pfeng_netif_logif_ioctl,
+#else
 	.ndo_do_ioctl		= pfeng_netif_logif_ioctl,
+#endif
 	.ndo_set_mac_address	= pfeng_netif_set_mac_address,
 	.ndo_set_rx_mode	= pfeng_netif_set_rx_mode,
 	.ndo_fix_features	= pfeng_netif_fix_features,
@@ -706,7 +706,7 @@ static void pfeng_netif_detach_hifs(struct pfeng_netif *netif)
 			return;
 		}
 		chnl->netifs[netif->cfg->emac_id] = NULL;
-		HM_MSG_NETDEV_ERR(netdev, "Unsubscribe from HIF%u\n", chnl->idx);
+		HM_MSG_NETDEV_INFO(netdev, "Unsubscribe from HIF%u\n", chnl->idx);
 	}
 }
 
@@ -977,8 +977,8 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 		goto err;
 
 	/* Set MAC address */
-	if (netif->cfg->macaddr && is_valid_ether_addr(netif->cfg->macaddr))
-		memcpy(&saddr.sa_data, netif->cfg->macaddr, sizeof(saddr.sa_data));
+	if (is_valid_ether_addr(netif->cfg->macaddr))
+		memcpy(&saddr.sa_data, netif->cfg->macaddr, ARRAY_SIZE(netif->cfg->macaddr));
 	else
 		memset(&saddr.sa_data, 0, sizeof(saddr.sa_data));
 
@@ -1133,7 +1133,16 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 
 	/* MTU ranges */
 	netdev->min_mtu = ETH_MIN_MTU;
-	netdev->max_mtu = ETH_DATA_LEN + VLAN_HLEN; /* account for 8021q DSA tag length, AAVB-3196 */
+
+#ifdef PFE_CFG_PFE_MASTER
+	if (pfe_feature_mgr_is_available("jumbo_frames")) {
+		netdev->max_mtu = PFE_EMAC_JUMBO_MTU + PFE_MIN_DSA_OVERHEAD;
+	} else {
+		netdev->max_mtu = PFE_EMAC_STD_MTU + PFE_MIN_DSA_OVERHEAD; /* account for 8021q DSA tag length */
+	}
+#else
+	netdev->max_mtu = PFE_EMAC_STD_MTU + PFE_MIN_DSA_OVERHEAD; /* account for 8021q DSA tag length */
+#endif
 
 	/* Each packet requires extra buffer for Tx header (metadata) */
 	netdev->needed_headroom = PFENG_TX_PKT_HEADER_SIZE;

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -31,6 +31,8 @@ struct pfe_util_tag
 	uint32_t pe_num;		/*	Number of PEs */
 	pfe_pe_t **pe;			/*	List of particular PEs */
 	oal_mutex_t mutex;
+	oal_mutex_t mutex_pe;	/*	Shared mutex for UTIL PE cores */
+	bool_t miflock_pe;		/*	Shared 'miflock' diagnostic flag for UTIL PE cores */
 	uint32_t current_feature;			/* Index of the feature to return by pfe_util_get_feature_next() */
 	pfe_fw_feature_t **fw_features;		/* List of all features*/
 	uint32_t fw_features_count;			/* Number of items in fw_features */
@@ -214,7 +216,7 @@ static errno_t pfe_util_create_pe(uint32_t pe_num, addr_t cbus_base_va, pfe_util
 	/*	Create PEs */
 	for (count = 0U; count < pe_num; count++)
 	{
-		pe = pfe_pe_create(cbus_base_va, PE_TYPE_UTIL, count);
+		pe = pfe_pe_create(cbus_base_va, PE_TYPE_UTIL, count, &util->mutex_pe, &util->miflock_pe);
 
 		if (NULL == pe)
 		{
@@ -276,6 +278,15 @@ pfe_util_t *pfe_util_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_util
 		oal_mm_free(util);
 		return NULL;
 	}
+
+	if (EOK != oal_mutex_init(&util->mutex_pe))
+	{
+		NXP_LOG_ERROR("Failed to initialize shared mutex for UTIL PE cores\n");
+		(void)oal_mutex_destroy(&util->mutex);	/* 'mutex_pe' creation failed, but 'mutex' already exists */
+		oal_mm_free(util);
+		return NULL;
+	}
+
     /* No need to lock mutex. No other function can be called before
        we return util handle from this function. */
 
@@ -286,6 +297,8 @@ pfe_util_t *pfe_util_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_util
 		if (NULL == util->pe)
 		{
 			NXP_LOG_ERROR("Unable to allocate memory\n");
+			(void)oal_mutex_destroy(&util->mutex);
+			(void)oal_mutex_destroy(&util->mutex_pe);
 			oal_mm_free(util);
 			return NULL;
 		}
@@ -472,6 +485,7 @@ void pfe_util_destroy(pfe_util_t *util)
 		}
 
 		util->pe_num = 0U;
+		(void)oal_mutex_destroy(&util->mutex_pe);
 		(void)oal_mutex_destroy(&util->mutex);
 		oal_mm_free(util);
 	}
@@ -721,25 +735,26 @@ errno_t pfe_util_isr(const pfe_util_t *util)
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		/* Read the error record from each PE */
-		for (count = 0U; count < util->pe_num; count++)
+		/*	Allow safe use of _nolock() functions. We don't call the _memlock()
+			here as we don't need to have coherent accesses. */
+		if (EOK != pfe_pe_lock_family(*util->pe))
 		{
-			/*	Allow safe use of _nolock() functions. We don't call the _mem_lock()
-				here as we don't need to have coherent accesses. */
-			if (EOK != pfe_pe_lock(util->pe[count]))
+			NXP_LOG_ERROR("pfe_pe_lock_family() failed\n");
+		}
+		else
+		{
+			/* Read the error record from each PE */
+			for (count = 0U; count < util->pe_num; count++)
 			{
-				NXP_LOG_ERROR("pfe_pe_lock() failed\n");
+				(void)pfe_pe_get_fw_messages_nolock(util->pe[count]);
+				(void)pfe_pe_check_stalled_nolock(util->pe[count]);
 			}
 
-			(void)pfe_pe_get_fw_messages_nolock(util->pe[count]);
-			(void)pfe_pe_check_stalled_nolock(util->pe[count]);
-
-			if (EOK != pfe_pe_unlock(util->pe[count]))
+			if (EOK != pfe_pe_unlock_family(*util->pe))
 			{
-				NXP_LOG_ERROR("pfe_pe_unlock() failed\n");
+				NXP_LOG_ERROR("pfe_pe_unlock_family() failed\n");
 			}
 		}
-
 		/* Acknowledge interrupt */
 		(void) pfe_util_cfg_isr(util->cbus_base_va);
 
@@ -767,20 +782,16 @@ void pfe_util_irq_unmask(const pfe_util_t *util)
 	(void)util;
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Return UTIL runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
  * @param[in]	util 		The UTIL instance
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	size 		Buffer length
+ * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, char_t *buf, uint32_t buf_len, uint8_t verb_level)
+uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, struct seq_file *seq, uint8_t verb_level)
 {
-	uint32_t len = 0U;
 	uint32_t ii;
 	pfe_ct_version_t fw_ver;
 	pfe_ct_pe_mmap_t mmap;
@@ -789,7 +800,6 @@ uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, char_t *buf, uint3
 	if (unlikely(NULL == buf))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		len = 0U;
 	}
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
@@ -797,70 +807,59 @@ uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, char_t *buf, uint3
 		if (NULL == util)
 		{
 			/* NULL ptr to UTIL is allowed. Driver does not have to load UTIL FW. */
-			len += oal_util_snprintf(buf + len, buf_len - len, "UTIL Firmware not loaded.\n");
+			seq_printf(seq, "UTIL Firmware not loaded.\n");
 		}
 		else
 		{
 			/* FW version */
 			if (EOK == pfe_util_get_fw_version(util, &fw_ver))
 			{
-				len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION\t%u.%u.%u (api:%.32s)\n",
+				seq_printf(seq, "FIRMWARE VERSION\t%u.%u.%u (api:%.32s)\n",
 					fw_ver.major, fw_ver.minor, fw_ver.patch, fw_ver.cthdr);
 			}
 			else
 			{
-				len += oal_util_snprintf(buf + len, buf_len - len, "FIRMWARE VERSION <unknown>\n");
+				seq_printf(seq, "FIRMWARE VERSION <unknown>\n");
 			}
 
-			len += pfe_util_cfg_get_text_stat(util->cbus_base_va, buf + len, buf_len - len, verb_level);
+			pfe_util_cfg_get_text_stat(util->cbus_base_va, seq, verb_level);
 
 			/*	Get PE info per PE */
 			for (ii = 0U; ii < util->pe_num; ii++)
 			{
 				ipsec_state_t state = { 0 };
-				uint32_t text_stat_len = 0U;
 
 				if (EOK == pfe_pe_get_mmap(util->pe[ii], &mmap))
 				{
-					text_stat_len = pfe_pe_get_text_statistics(util->pe[ii], buf + len, buf_len - len, verb_level);
-					if (0U == text_stat_len)
-					{
-						len = 0U;
-						break;
-					}
-					else
-					{
-						len += text_stat_len;
-						/* IPsec statistics */
-						pfe_pe_memcpy_from_dmem_to_host_32(util->pe[ii], &state, oal_ntohl(mmap.util_pe.ipsec_state), sizeof(state));
-						len += oal_util_snprintf(buf + len, buf_len - len, "\nIPsec\n");
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE MU            0x%x\n", oal_ntohl(state.hse_mu));
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE MU Channel    0x%x\n", oal_ntohl(state.hse_mu_chn));
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_OK                         0x%x\n", oal_ntohl(state.response_ok));
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_VERIFY_FAILED              0x%x\n", oal_ntohl(state.verify_failed));
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_INVALID_DATA         0x%x\n", oal_ntohl(state.ipsec_invalid_data));
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_REPLAY_DETECTED      0x%x\n", oal_ntohl(state.ipsec_replay_detected));
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_REPLAY_LATE          0x%x\n", oal_ntohl(state.ipsec_replay_late));
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_SEQNUM_OVERFLOW      0x%x\n", oal_ntohl(state.ipsec_seqnum_overflow));
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_CE_DROP              0x%x\n", oal_ntohl(state.ipsec_ce_drop));
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_TTL_EXCEEDED         0x%x\n", oal_ntohl(state.ipsec_ttl_exceeded));
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_VALID_DUMMY_PAYLOAD  0x%x\n", oal_ntohl(state.ipsec_valid_dummy_payload));
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_HEADER_LEN_OVERFLOW  0x%x\n", oal_ntohl(state.ipsec_header_overflow));
-						len += oal_util_snprintf(buf + len, buf_len - len, "HSE_SRV_RSP_IPSEC_PADDING_CHECK_FAIL   0x%x\n", oal_ntohl(state.ipsec_padding_check_fail));
-						len += oal_util_snprintf(buf + len, buf_len - len, "Code of handled error    0x%x\n", oal_ntohl(state.handled_error_code));
-						len += oal_util_snprintf(buf + len, buf_len - len, "SAId of handled error    0x%x\n", oal_ntohl(state.handled_error_said));
-						len += oal_util_snprintf(buf + len, buf_len - len, "Code of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_code));
-						len += oal_util_snprintf(buf + len, buf_len - len, "SAId of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_said));
-					}
+					pfe_pe_get_text_statistics(util->pe[ii], seq, verb_level);
+
+					/* IPsec statistics */
+					pfe_pe_memcpy_from_dmem_to_host_32(util->pe[ii], &state, oal_ntohl(mmap.util_pe.ipsec_state), sizeof(state));
+					seq_printf(seq, "\nIPsec\n");
+					seq_printf(seq, "HSE MU            0x%x\n", oal_ntohl(state.hse_mu));
+					seq_printf(seq, "HSE MU Channel    0x%x\n", oal_ntohl(state.hse_mu_chn));
+					seq_printf(seq, "HSE_SRV_RSP_OK                         0x%x\n", oal_ntohl(state.response_ok));
+					seq_printf(seq, "HSE_SRV_RSP_VERIFY_FAILED              0x%x\n", oal_ntohl(state.verify_failed));
+					seq_printf(seq, "HSE_SRV_RSP_IPSEC_INVALID_DATA         0x%x\n", oal_ntohl(state.ipsec_invalid_data));
+					seq_printf(seq, "HSE_SRV_RSP_IPSEC_REPLAY_DETECTED      0x%x\n", oal_ntohl(state.ipsec_replay_detected));
+					seq_printf(seq, "HSE_SRV_RSP_IPSEC_REPLAY_LATE          0x%x\n", oal_ntohl(state.ipsec_replay_late));
+					seq_printf(seq, "HSE_SRV_RSP_IPSEC_SEQNUM_OVERFLOW      0x%x\n", oal_ntohl(state.ipsec_seqnum_overflow));
+					seq_printf(seq, "HSE_SRV_RSP_IPSEC_CE_DROP              0x%x\n", oal_ntohl(state.ipsec_ce_drop));
+					seq_printf(seq, "HSE_SRV_RSP_IPSEC_TTL_EXCEEDED         0x%x\n", oal_ntohl(state.ipsec_ttl_exceeded));
+					seq_printf(seq, "HSE_SRV_RSP_IPSEC_VALID_DUMMY_PAYLOAD  0x%x\n", oal_ntohl(state.ipsec_valid_dummy_payload));
+					seq_printf(seq, "HSE_SRV_RSP_IPSEC_HEADER_LEN_OVERFLOW  0x%x\n", oal_ntohl(state.ipsec_header_overflow));
+					seq_printf(seq, "HSE_SRV_RSP_IPSEC_PADDING_CHECK_FAIL   0x%x\n", oal_ntohl(state.ipsec_padding_check_fail));
+					seq_printf(seq, "Code of handled error    0x%x\n", oal_ntohl(state.handled_error_code));
+					seq_printf(seq, "SAId of handled error    0x%x\n", oal_ntohl(state.handled_error_said));
+					seq_printf(seq, "Code of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_code));
+					seq_printf(seq, "SAId of unhandled error  0x%x\n", oal_ntohl(state.unhandled_error_said));
 				}
 			}
 		}
 	}
 
-	return len;
+	return 0;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		Returns firmware versions

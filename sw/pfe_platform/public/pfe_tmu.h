@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -115,9 +115,7 @@ void pfe_tmu_enable(const pfe_tmu_t *tmu);
 void pfe_tmu_reset(const pfe_tmu_t *tmu);
 void pfe_tmu_disable(const pfe_tmu_t *tmu);
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-uint32_t pfe_tmu_get_text_statistics(const pfe_tmu_t *tmu, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
+uint32_t pfe_tmu_get_text_statistics(const pfe_tmu_t *tmu, struct seq_file *seq, uint8_t verb_level);
 
 void pfe_tmu_destroy(const pfe_tmu_t *tmu);
 

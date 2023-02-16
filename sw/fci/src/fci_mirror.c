@@ -13,8 +13,6 @@
 #include "fci_msg.h"
 #include "fci.h"
 #include "fci_internal.h"
-#include "pfe_pe.h"
-#include "pfe_class.h"
 #include "oal.h"
 #include "fci_mirror.h"
 

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -2409,7 +2409,7 @@ static errno_t pfe_platform_create_rtable(pfe_platform_t *platform, const pfe_pl
 
 		if (TRUE == in_lmem && FALSE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
 		{
-			NXP_LOG_WARNING("'g3_rtable_in_lmem' works only on S32G3, ignore option\n");
+			NXP_LOG_DEBUG("'g3_rtable_in_lmem' works only on S32G3, ignore option\n");
 			in_lmem = FALSE;
 		}
 
@@ -2610,6 +2610,32 @@ static void pfe_platform_destroy_util(pfe_platform_t *platform)
 }
 
 /**
+ * @brief		Validate IEEE1588 timestamp sharing between MACs
+ */
+static errno_t pfe_platform_validate_emac_ts_sharing(pfe_platform_t *platform, const pfe_platform_config_t *config)
+{
+	errno_t ret = EOK;
+
+	/* Validate configuration of timestamp sharing between MACs */
+	/* Check if EMAC0 timestamping is shared from GMAC */
+	if (0U != ((1 << PFE_PHY_IF_ID_EMAC0) & config->emac_ext_ts_mask)) {
+		/* In this case both EMAC1 and EMAC2 must have internal timebase */
+		if (0U != (((1 << PFE_PHY_IF_ID_EMAC1) | (1 << PFE_PHY_IF_ID_EMAC2)) & config->emac_ext_ts_mask)) {
+			NXP_LOG_ERROR("Invalid configuration (bitmap: %u) of timestamp sharing between MACs\n", config->emac_ext_ts_mask);
+			ret = EINVAL;
+		}
+	}
+
+	if (EOK == ret)
+	{
+		platform->emac_ext_ts_mask = config->emac_ext_ts_mask;
+		NXP_LOG_INFO("EMAC timestamp external mode bitmap: %u\n", platform->emac_ext_ts_mask);
+	}
+
+	return ret;
+}
+
+/**
  * @brief		Assign EMAC to the platform
  */
 static errno_t pfe_platform_create_emac(pfe_platform_t *platform, const pfe_platform_config_t *config)
@@ -2625,30 +2651,34 @@ static errno_t pfe_platform_create_emac(pfe_platform_t *platform, const pfe_plat
 	}
 	else
 	{
+		ret = pfe_platform_validate_emac_ts_sharing(platform, config);
 
-		/*	EMAC1 */
-		platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC1_BASE_ADDR,
-								config->emac_mode[0], EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
-		if (NULL == platform->emac[0])
+		/*  EMAC1 */
+		if (EOK == ret)
 		{
-			NXP_LOG_ERROR("Couldn't create EMAC1 instance\n");
-			ret = ENODEV;
-		}
-		else
-		{
-			(void)pfe_emac_set_max_frame_length(platform->emac[0], 1522);
-			pfe_emac_enable_rx_flow_control(platform->emac[0]);
-			pfe_emac_enable_broadcast(platform->emac[0]);
+			platform->emac[0] = pfe_emac_create(platform->cbus_baseaddr, CBUS_EMAC1_BASE_ADDR,
+									config->emac_mode[0], EMAC_SPEED_1000_MBPS, EMAC_DUPLEX_FULL);
+			if (NULL == platform->emac[0])
+			{
+				NXP_LOG_ERROR("Couldn't create EMAC1 instance\n");
+				ret = ENODEV;
+			}
+			else
+			{
+				(void)pfe_emac_set_max_frame_length(platform->emac[0], 1522);
+				pfe_emac_enable_rx_flow_control(platform->emac[0]);
+				pfe_emac_enable_broadcast(platform->emac[0]);
 
 #ifdef PFE_CFG_IEEE1588_SUPPORT
-			if (EOK != pfe_emac_enable_ts(platform->emac[0],
-					PFE_CFG_IEEE1588_I_CLK_HZ, PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ))
-			{
-				NXP_LOG_WARNING("EMAC0: Could not configure the timestamping unit\n");
-			}
+				if (EOK != pfe_emac_enable_ts(platform->emac[0],
+						PFE_CFG_IEEE1588_I_CLK_HZ, PFE_CFG_IEEE1588_EMAC0_O_CLK_HZ))
+				{
+					NXP_LOG_WARNING("EMAC0: Could not configure the timestamping unit\n");
+				}
 #endif /* PFE_CFG_IEEE1588_SUPPORT */
 
-			/*	MAC address will be added with phy/log interface */
+				/*	MAC address will be added with phy/log interface */
+			}
 		}
 
 		/*	EMAC2 */
@@ -3558,6 +3588,22 @@ errno_t pfe_platform_soft_reset(const pfe_platform_t *platform)
 }
 
 /**
+ * @brief   Print PFE FW features available on this target. For debug purposes only.
+ */
+static void pfe_platform_print_features(void)
+{
+	const char *feature_name;
+	errno_t ret;
+
+	ret = pfe_feature_mgr_get_first(&feature_name);
+	while (EOK == ret)
+	{
+		NXP_LOG_INFO("FW feature: %s\n", feature_name);
+		ret = pfe_feature_mgr_get_next(&feature_name);
+	}
+}
+
+/**
  * @brief	The platform init function
  * @details	Initializes the PFE HW platform and prepares it for usage according to configuration.
  */
@@ -3704,6 +3750,9 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	{
 		goto exit;
 	}
+
+	/* Log names of all available FW feaures */
+	pfe_platform_print_features();
 
 	/*	GPI */
 	ret = pfe_platform_create_gpi(&pfe, config);
@@ -4005,6 +4054,95 @@ errno_t pfe_platform_get_fw_versions(const pfe_platform_t *platform, pfe_ct_vers
 	}
 
 	return EOK;
+}
+
+/**
+ * @brief               Return FW versions and features in text form
+ * @details             Function writes formatted text into given buffer.
+ * @param[in]   pfe		Pointer to Platform instance
+ * @param[in]   seq		Pointer to debugfs seq_file
+ * @param[in]   verb_level      Verbosity level
+ * @return              Number of bytes written to the buffer
+ */
+uint32_t pfe_fw_features_get_text_statistics(const pfe_platform_t *pfe, struct seq_file *seq, uint8_t verb_level)
+{
+	errno_t ret;
+	const char *feature_name;
+	pfe_ct_version_t fw_ver;
+	uint8_t enabled;
+	(void)(verb_level);
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == seq))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		if (NULL == pfe)
+		{
+			seq_printf(seq, "Can not get information - Platform not initialized\n");
+		}
+		else
+		{
+			seq_printf(seq, "[FIRMWARE VERSION]\n");
+			if (NULL == pfe->classifier)
+			{
+				seq_printf(seq, "Class\tFirmware not loaded\n");
+			}
+			else
+			{
+				ret = pfe_class_get_fw_version(pfe->classifier, &fw_ver);
+				if (EOK == ret)
+				{
+					seq_printf(seq, "Class\t%u.%u.%u (api:%.32s)\n",
+						fw_ver.major, fw_ver.minor, fw_ver.patch, fw_ver.cthdr);
+				}
+				else
+				{
+					seq_printf(seq, "Class\tUnable to get FW version\n");
+				}
+			}
+			if (NULL == pfe->util)
+			{
+				seq_printf(seq, "Util\tFirmware not loaded\n");
+			}
+			else
+			{
+				ret = pfe_util_get_fw_version(pfe->util, &fw_ver);
+				if (EOK == ret)
+				{
+					seq_printf(seq, "Util\t%u.%u.%u (api:%.32s)\n",
+						fw_ver.major, fw_ver.minor, fw_ver.patch, fw_ver.cthdr);
+				}
+				else
+				{
+					seq_printf(seq, "Util\tUnable to get FW version\n");
+				}
+			}
+
+			seq_printf(seq, "[FIRMWARE FEATURE]\n");
+			ret = pfe_feature_mgr_get_first(&feature_name);
+			if (EOK != ret)
+			{
+				seq_printf(seq, "Unable to query list of FW features\n");
+			}
+			while (EOK == ret)
+			{
+				ret = pfe_feature_mgr_get_val(feature_name, &enabled);
+				if (EOK == ret)
+				{
+					seq_printf(seq, "%s:\t%s\n", feature_name, enabled ? "ON" : "OFF");
+				}
+				else
+				{
+					seq_printf(seq, "%s:\tUnable to query feature state\n", feature_name);
+				}
+				ret = pfe_feature_mgr_get_next(&feature_name);
+			}
+		}
+	}
+	return 0U;
 }
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
