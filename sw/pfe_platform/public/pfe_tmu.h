@@ -65,6 +65,7 @@ typedef struct pfe_tmu_phy_cfg_tag pfe_tmu_phy_cfg_t;
 typedef struct
 {
 	uint32_t pe_sys_clk_ratio;		/*	Clock mode ratio for sys_clk and pe_clk */
+	bool_t on_g3;
 } pfe_tmu_cfg_t;
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR

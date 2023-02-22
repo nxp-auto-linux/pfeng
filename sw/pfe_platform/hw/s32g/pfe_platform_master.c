@@ -2463,6 +2463,7 @@ static errno_t pfe_platform_create_tmu(pfe_platform_t *platform)
 	pfe_tmu_cfg_t tmu_cfg =
 	{
 		.pe_sys_clk_ratio = PFE_CFG_CLMODE,
+		.on_g3 = pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3),
 	};
 
 	platform->tmu = pfe_tmu_create(platform->cbus_baseaddr, platform->tmu_pe_count, &tmu_cfg,
