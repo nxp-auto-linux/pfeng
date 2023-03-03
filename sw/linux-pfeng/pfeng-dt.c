@@ -213,32 +213,6 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 	}
 #endif /* PFE_CFG_PFE_MASTER */
 
-	/* IRQ per HIF */
-	for (i = 0; i < PFENG_PFE_HIF_CHANNELS; i++) {
-		ret = of_property_read_u32_index(np, "nxp,pfeng-hif-channels", i, &propval);
-		if (ret)
-			continue;
-		if (propval >= PFENG_PFE_HIF_CHANNELS) {
-			HM_MSG_DEV_ERR(dev, "HIF channel id=%u is invalid, aborting\n", propval);
-			return -EIO;
-		}
-		scnprintf(propname, sizeof(propname), "hif%d", propval);
-		irq = platform_get_irq_byname(priv->pdev, propname);
-		if (irq < 0) {
-			HM_MSG_DEV_ERR(dev, "Cannot find irq resource '%s', aborting\n", propname);
-			return -EIO;
-		}
-		pfe_cfg->irq_vector_hif_chnls[propval] = irq;
-		HM_MSG_DEV_INFO(dev, "irq '%s' : %u\n", propname, irq);
-
-		priv->hif_chnl[propval].refcount = 0;
-		priv->hif_chnl[propval].ihc = false;
-
-		priv->hif_chnl[propval].status = PFENG_HIF_STATUS_REQUESTED;
-		pfe_cfg->hif_chnls_mask |= 1 << propval;
-	}
-	HM_MSG_DEV_INFO(dev, "HIF channels mask: 0x%04x", pfe_cfg->hif_chnls_mask);
-
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	if (of_property_read_u32(np, "nxp,pfeng-ihc-channel", &propval)) {
 		HM_MSG_DEV_ERR(dev, "Invalid IHC hif-channel value");
@@ -304,36 +278,43 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 			HM_MSG_DEV_INFO(dev, "DT mac addr: %pM", netif_cfg->macaddr);
 #endif
 
-		if (of_find_property(child, "nxp,pfeng-netif-mode-aux", NULL))
-				netif_cfg->aux = true;
-
-		if (of_find_property(child, "nxp,pfeng-netif-mode-mgmt-only", NULL))
-				netif_cfg->only_mgmt = true;
-
-		HM_MSG_DEV_INFO(dev, "netif(%s) mode: %s", netif_cfg->name,
-			netif_cfg->only_mgmt ? "mgmt" : netif_cfg->aux ? "aux" : "std");
-
-		if (!netif_cfg->aux) {
-			/* EMAC id */
-			if (!of_find_property(child, "nxp,pfeng-emac-id", NULL)) {
+		/* Phy id */
+		if (of_find_property(child, "nxp,pfeng-netif-mode-aux", NULL)) {
+			/* unused hole in array is used for AUX netdev */
+			netif_cfg->phyif_id = PFE_PHY_IF_ID_AUX;
+			HM_MSG_DEV_INFO(dev, "netif(%s) no linked phyif in AUX mode", netif_cfg->name);
+		} else {
+			ret = of_property_read_u32(child, "nxp,pfeng-emac-id", &id);
+			if (!ret && id <= PFENG_PFE_EMACS) {
+				/* support backward compatibility */
+				HM_MSG_DEV_WARN(dev, "netif(%s) nxp,pfeng-emac-id property is deprecated, please use nxp,pfeng-linked-phyif", netif_cfg->name);
+			} else if (!of_find_property(child, "nxp,pfeng-linked-phyif", NULL)) {
 				HM_MSG_DEV_ERR(dev, "The required EMAC id is missing\n");
 				ret = -EINVAL;
 				goto err;
-			}
-			ret = of_property_read_u32(child, "nxp,pfeng-emac-id", &id);
-			if (ret || id >= PFENG_PFE_EMACS) {
-				HM_MSG_DEV_ERR(dev, "The EMAC id is invalid: %d\n", id);
-				ret = -EINVAL;
-				goto err;
+			} else {
+				ret = of_property_read_u32(child, "nxp,pfeng-linked-phyif", &id);
+				if (ret || id >= PFENG_NETIFS_CNT) {
+					HM_MSG_DEV_ERR(dev, "The linked phyif-id is invalid: %d\n", id);
+					ret = -EINVAL;
+					goto err;
+				}
 			}
 #ifdef PFE_CFG_PFE_SLAVE
 			if (of_find_property(child, "nxp,pfeng-emac-router", NULL))
 				netif_cfg->emac_router = true;
 #endif /* PFE_CFG_PFE_SLAVE */
 
-			netif_cfg->emac_id = id;
-			HM_MSG_DEV_INFO(dev, "netif(%s) EMAC: %u", netif_cfg->name, netif_cfg->emac_id);
+			netif_cfg->phyif_id = id;
+			HM_MSG_DEV_INFO(dev, "netif(%s) linked phyif: %u", netif_cfg->name, netif_cfg->phyif_id);
 		}
+
+		if (of_find_property(child, "nxp,pfeng-netif-mode-mgmt-only", NULL)) {
+			netif_cfg->only_mgmt = true;
+			HM_MSG_DEV_INFO(dev, "netif(%s) mode: mgmt", netif_cfg->name);
+		} else
+			HM_MSG_DEV_INFO(dev, "netif(%s) mode: %s", netif_cfg->name,
+				pfeng_netif_cfg_is_aux(netif_cfg) ? "aux" : "std");
 
 		/* netif HIF channel(s) */
 		hifmap = 0;
@@ -349,6 +330,26 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 				HM_MSG_DEV_ERR(dev, "%pOFn: couldn't read HIF id at index %d, ret=%d\n", np, i, ret);
 				goto err;
 			}
+			if (propval >= PFENG_PFE_HIF_CHANNELS) {
+				HM_MSG_DEV_ERR(dev, "netif(%s) HIF channel id=%u is invalid, aborting\n", netif_cfg->name, propval);
+				goto err;
+			}
+
+			if (!pfe_cfg->irq_vector_hif_chnls[propval]) {
+				/* Get IRQ number */
+				scnprintf(propname, sizeof(propname), "hif%d", propval);
+				irq = platform_get_irq_byname(priv->pdev, propname);
+				if (irq < 0) {
+					HM_MSG_DEV_ERR(dev, "Cannot find irq resource '%s', aborting\n", propname);
+					goto err;
+				}
+				pfe_cfg->irq_vector_hif_chnls[propval] = irq;
+				HM_MSG_DEV_DBG(dev, "irq '%s' : %u\n", propname, irq);
+
+				priv->hif_chnl[propval].status = PFENG_HIF_STATUS_REQUESTED;
+				pfe_cfg->hif_chnls_mask |= 1 << propval;
+			}
+
 			hifmap |= 1 << propval;
 			priv->hif_chnl[propval].refcount++;
 		}
@@ -360,8 +361,8 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 		netif_cfg->dn = of_node_get(child);
 
 #ifdef PFE_CFG_PFE_MASTER
-		if (!netif_cfg->aux) {
-			struct pfeng_emac *emac = &priv->emac[netif_cfg->emac_id];
+		if (pfeng_netif_cfg_has_emac(netif_cfg)) {
+			struct pfeng_emac *emac = &priv->emac[netif_cfg->phyif_id];
 			__maybe_unused struct device_node *phy_handle;
 			phy_interface_t intf_mode;
 
@@ -372,13 +373,13 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 
 			if (pfeng_manged_inband(child)) {
 				emac->link_an = MLO_AN_INBAND;
-				HM_MSG_DEV_INFO(dev, "SGMII AN enabled on EMAC%d\n", netif_cfg->emac_id);
+				HM_MSG_DEV_INFO(dev, "SGMII AN enabled on EMAC%d\n", netif_cfg->phyif_id);
 			}
 
 			emac->phyless = false;
 			phy_handle = of_parse_phandle(child, "phy-handle", 0);
 			if (emac->link_an == MLO_AN_INBAND && !phy_handle) {
-				HM_MSG_DEV_INFO(dev, "EMAC%d PHY less SGMII\n", netif_cfg->emac_id);
+				HM_MSG_DEV_INFO(dev, "EMAC%d PHY less SGMII\n", netif_cfg->phyif_id);
 				emac->phyless = true;
 			}
 
@@ -462,6 +463,8 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 
 		list_add_tail(&netif_cfg->lnode, &priv->netif_cfg_list);
 	} /* foreach PFENG_DT_COMPATIBLE_LOGIF */
+
+	HM_MSG_DEV_INFO(dev, "HIF channels mask: 0x%04x", pfe_cfg->hif_chnls_mask);
 
 	/* Decrement HIF refcount to use simple check for zero */
 	for (i = 0; i < PFENG_PFE_HIF_CHANNELS; i++)

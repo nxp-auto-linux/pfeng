@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2022 NXP
+ * Copyright 2021-2023 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -10,7 +10,6 @@
 
 #include "pfeng.h"
 
-#ifdef PFE_CFG_PFE_MASTER
 static inline int pfeng_hwts_check_dup(struct pfeng_netif *netif,struct pfeng_ts_skb * new_entry)
 {
 	struct list_head *tmp = NULL, *curr = NULL;
@@ -100,6 +99,9 @@ int pfeng_hwts_store_tx_ref(struct pfeng_netif *netif, struct sk_buff *skb)
 		.ref_num = netif->ts_ref_num++ & 0x0FFFU
 	};
 
+	if (!netif->ts_work_on)
+		return -EINVAL;
+
 	/* Send data to worker */
 	ret = kfifo_put(&netif->ts_skb_fifo, ts_skb_entry);
 	if(0 == ret)
@@ -118,6 +120,9 @@ void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, pfe_ct_ets_report_t *etsr)
 	struct pfeng_tx_ts tx_timestamp;
 	int ret = 1;
 
+	if (!netif->ts_work_on)
+		return;
+
 	tx_timestamp.ts.hwtstamp = ns_to_ktime(etsr->ts_sec * 1000000000ULL + etsr->ts_nsec);
 	tx_timestamp.ref_num = ntohs(etsr->ref_num) & 0x0FFFU;
 
@@ -128,36 +133,19 @@ void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, pfe_ct_ets_report_t *etsr)
 	if(0 == ret)
 		HM_MSG_NETDEV_ERR(netif->netdev, "No more memory. Time stamp dropped.\n");
 }
-#else /* PFE_CFG_PFE_MASTER */
-
-void pfeng_hwts_get_rx_ts(struct pfeng_netif *netif, struct sk_buff *skb)
-{
-	/* NOP */
-}
-
-int pfeng_hwts_store_tx_ref(struct pfeng_netif *netif, struct sk_buff *skb)
-{
-	return -ENOMEM;
-}
-
-void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, pfe_ct_ets_report_t *etsr)
-{
-	/* NOP */
-}
-static void pfeng_hwts_work(struct work_struct *work)
-{
-	/* NOP */
-}
-#endif /* else PFE_CFG_PFE_MASTER */
 
 int pfeng_hwts_ioctl_set(struct pfeng_netif *netif, struct ifreq *rq)
 {
 	struct hwtstamp_config cfg = { 0 };
 
+	if (!netif->ts_work_on)
+		return -EINVAL;
+
 	if (copy_from_user(&cfg, rq->ifr_data, sizeof(cfg)))
 		return -EFAULT;
 
-	if(!IS_ENABLED(PFE_CFG_PFE_MASTER) || !netif->priv->clk_ptp_reference)
+	if((IS_ENABLED(PFE_CFG_PFE_MASTER) && !netif->priv->clk_ptp_reference) ||
+		pfeng_netif_is_aux(netif))
 	{
 		netif->tshw_cfg.rx_filter = HWTSTAMP_FILTER_NONE;
 		netif->tshw_cfg.tx_type = HWTSTAMP_TX_OFF;
@@ -191,13 +179,16 @@ int pfeng_hwts_ioctl_set(struct pfeng_netif *netif, struct ifreq *rq)
 
 int pfeng_hwts_ioctl_get(struct pfeng_netif *netif, struct ifreq *rq)
 {
+	if (!netif->ts_work_on)
+		return -EINVAL;
+
 	return copy_to_user(rq->ifr_data, &netif->tshw_cfg, sizeof(netif->tshw_cfg)) ? -EFAULT : 0;
 }
 
 int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct ethtool_ts_info *info)
 {
-	if (!IS_ENABLED(PFE_CFG_PFE_MASTER) ||
-	    !netif->priv->clk_ptp_reference || netif->cfg->aux) {
+	if ((IS_ENABLED(PFE_CFG_PFE_MASTER) && !netif->priv->clk_ptp_reference) ||
+		pfeng_netif_is_aux(netif)) {
 		info->so_timestamping |= SOF_TIMESTAMPING_TX_SOFTWARE |
 					 SOF_TIMESTAMPING_RX_SOFTWARE |
 					 SOF_TIMESTAMPING_SOFTWARE;
@@ -219,14 +210,11 @@ int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct ethtool_ts_info *info)
 
 int pfeng_hwts_init(struct pfeng_netif *netif)
 {
-#ifdef PFE_CFG_PFE_MASTER
-
 	if (kfifo_alloc(&netif->ts_skb_fifo, 32, GFP_KERNEL))
 		return -ENOMEM;
 
 	if (kfifo_alloc(&netif->ts_tx_fifo, 32, GFP_KERNEL))
 		return -ENOMEM;
-#endif /* PFE_CFG_PFE_MASTER */
 
 	/* Initialize for master and slave to have easier cleanup */
 	INIT_LIST_HEAD(&netif->ts_skb_list);

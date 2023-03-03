@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -501,66 +501,6 @@ uint32_t oal_mm_cache_get_line_size(void)
 	return OAL_CACHE_ALLIGN; //oal_cache_context.cache_line_size;
 }
 
-#ifdef PFE_CFG_PFE_MASTER
-static int pfeng_reserved_no_map_region_init(struct device *dev, struct reserved_mem **rmem_out, int rmem_id, int *rmem_idx)
-{
-	struct device_node *mem_node;
-	struct reserved_mem *rmem;
-	void __iomem *base_va;
-	char compatible[32];
-	int idx;
-
-	idx = of_property_match_string(dev->of_node, "memory-region-names", pfeng_res_no_map_name[rmem_id]);
-	if (idx < 0)
-		idx = *rmem_idx;
-
-	mem_node = of_parse_phandle(dev->of_node, "memory-region", idx);
-	if (!mem_node) {
-		dev_warn(dev, "No memory-region found at index %d\n", idx);
-		goto out;
-	}
-
-	scnprintf(compatible, sizeof(compatible), "nxp,s32g-%s", pfeng_res_no_map_name[rmem_id]);
-	if (!of_device_is_compatible(mem_node, compatible)) {
-		/* don't fail probing if node not found */
-		dev_warn(dev, "memory-region: %s node missing\n", compatible);
-		goto out;
-	}
-
-	rmem = of_reserved_mem_lookup(mem_node);
-	if (!rmem) {
-		dev_err(dev, "of_reserved_mem_lookup() returned NULL\n");
-		/* advance rmem iterator */
-		*rmem_idx = idx + 1;
-		goto out;
-	}
-
-	of_node_put(mem_node);
-
-	base_va = devm_ioremap_wc(dev, rmem->base, rmem->size);
-	if (!base_va) {
-		dev_err(dev, "%s mapping failed\n", pfeng_res_no_map_name[rmem_id]);
-		return -EINVAL;
-	}
-
-	memset_io(base_va, 0, rmem->size);
-
-	rmem->priv = base_va;
-	*rmem_out = rmem;
-	/* advance rmem iterator */
-	*rmem_idx = idx + 1;
-
-	dev_info(dev, "assigned reserved memory node %s\n", rmem->name);
-
-	return 0;
-
-out:
-	dev_warn(dev, "fall back to default pool allocation\n");
-	of_node_put(mem_node);
-
-	return 0;
-}
-
 static int pfeng_reserved_bdr_pool_region_init(struct device *dev, struct gen_pool **pool_alloc, int rmem_idx)
 {
 	struct device_node *mem_node;
@@ -628,6 +568,66 @@ out:
 	return 0;
 }
 
+#ifdef PFE_CFG_PFE_MASTER
+static int pfeng_reserved_no_map_region_init(struct device *dev, struct reserved_mem **rmem_out, int rmem_id, int *rmem_idx)
+{
+	struct device_node *mem_node;
+	struct reserved_mem *rmem;
+	void __iomem *base_va;
+	char compatible[32];
+	int idx;
+
+	idx = of_property_match_string(dev->of_node, "memory-region-names", pfeng_res_no_map_name[rmem_id]);
+	if (idx < 0)
+		idx = *rmem_idx;
+
+	mem_node = of_parse_phandle(dev->of_node, "memory-region", idx);
+	if (!mem_node) {
+		dev_warn(dev, "No memory-region found at index %d\n", idx);
+		goto out;
+	}
+
+	scnprintf(compatible, sizeof(compatible), "nxp,s32g-%s", pfeng_res_no_map_name[rmem_id]);
+	if (!of_device_is_compatible(mem_node, compatible)) {
+		/* don't fail probing if node not found */
+		dev_warn(dev, "memory-region: %s node missing\n", compatible);
+		goto out;
+	}
+
+	rmem = of_reserved_mem_lookup(mem_node);
+	if (!rmem) {
+		dev_err(dev, "of_reserved_mem_lookup() returned NULL\n");
+		/* advance rmem iterator */
+		*rmem_idx = idx + 1;
+		goto out;
+	}
+
+	of_node_put(mem_node);
+
+	base_va = devm_ioremap_wc(dev, rmem->base, rmem->size);
+	if (!base_va) {
+		dev_err(dev, "%s mapping failed\n", pfeng_res_no_map_name[rmem_id]);
+		return -EINVAL;
+	}
+
+	memset_io(base_va, 0, rmem->size);
+
+	rmem->priv = base_va;
+	*rmem_out = rmem;
+	/* advance rmem iterator */
+	*rmem_idx = idx + 1;
+
+	dev_info(dev, "assigned reserved memory node %s\n", rmem->name);
+
+	return 0;
+
+out:
+	dev_warn(dev, "fall back to default pool allocation\n");
+	of_node_put(mem_node);
+
+	return 0;
+}
+
 static int pfeng_reserved_dma_shared_pool_region_init(struct device *dev, int *rmem_idx)
 {
 	int idx = of_property_match_string(dev->of_node, "memory-region-names", "pfe-shared-pool");
@@ -645,84 +645,6 @@ static int pfeng_reserved_dma_shared_pool_region_init(struct device *dev, int *r
 	*rmem_idx = idx + 1;
 
 	return 0;
-}
-
-static errno_t __oal_mm_init_master(struct device *dev)
-{
-	struct pfe_reserved_mem *pfe_res_mem;
-	struct gen_pool *pool_alloc = NULL;
-	struct reserved_mem *rmem[PFE_REG_COUNT] = {NULL, NULL};
-	int rmem_idx = 0, i;
-	int ret;
-
-	/* BMU2 and RT regions are required by MASTER only */
-	for (i = 0; i < PFE_REG_COUNT; i++) {
-		ret = pfeng_reserved_no_map_region_init(dev, &rmem[i], i, &rmem_idx);
-		if (ret) {
-			dev_err(dev, "%s reservation failed. Error %d\n",
-				pfeng_res_no_map_name[i], ret);
-			return ret;
-		}
-	}
-
-	ret = pfeng_reserved_dma_shared_pool_region_init(dev, &rmem_idx);
-	if (ret) {
-		dev_err(dev, "shared-dma-pool reservation failed. Error %d\n", ret);
-		return ret;
-	}
-
-	ret = pfeng_reserved_bdr_pool_region_init(dev, &pool_alloc, rmem_idx);
-	if (ret) {
-		dev_err(dev, "BDR pool reservation failed. Error %d\n", ret);
-		goto err_bdr_pool_region_init;
-	}
-
-	if (pool_alloc) {
-		pfe_res_mem = devm_kzalloc(dev, sizeof(*pfe_res_mem), GFP_KERNEL);
-		if (!pfe_res_mem) {
-			ret = -ENOMEM;
-			goto err_alloc;
-		}
-
-		pfe_res_mem->name = PFE_CFG_BD_MEM;
-		pfe_res_mem->pool_alloc = pool_alloc;
-		INIT_LIST_HEAD(&pfe_res_mem->node);
-		list_add(&pfe_res_mem->node, &pfe_reserved_mem_list);
-	}
-
-	for (i = 0; i < PFE_REG_COUNT; i++) {
-		if (!rmem[i])
-			continue;
-
-		pfe_res_mem = devm_kzalloc(dev, sizeof(*pfe_res_mem), GFP_KERNEL);
-		if (!pfe_res_mem) {
-			ret = -ENOMEM;
-			goto err_alloc;
-		}
-
-		pfe_res_mem->name = (i == PFE_REG_RT) ? PFE_CFG_RT_MEM : PFE_CFG_SYS_MEM;
-		pfe_res_mem->map_start_va = rmem[i]->priv;
-		pfe_res_mem->map_start_pa = rmem[i]->base;
-		pfe_res_mem->map_size = rmem[i]->size;
-		INIT_LIST_HEAD(&pfe_res_mem->node);
-		list_add(&pfe_res_mem->node, &pfe_reserved_mem_list);
-	}
-
-	return 0;
-
-err_bdr_pool_region_init:
-err_alloc:
-	of_reserved_mem_device_release(dev);
-
-	return ret;
-}
-
-static void __oal_mm_shutdown_master(struct device *dev)
-{
-	of_reserved_mem_device_release(dev);
-
-	/* reserved_mem list nodes will be released by devm_ */
-	INIT_LIST_HEAD(&pfe_reserved_mem_list);
 }
 
 int __oal_mm_wakeup_reinit(void)
@@ -746,10 +668,85 @@ int __oal_mm_wakeup_reinit(void)
 }
 
 #else
-#define __oal_mm_init_master(dev) 0
-#define __oal_mm_shutdown_master(dev) NULL
 #define __oal_mm_wakeup_reinit() 0
 #endif /* PFE_CFG_PFE_MASTER */
+
+static errno_t __oal_mm_init_regions(struct device *dev)
+{
+	struct pfe_reserved_mem *pfe_res_mem;
+	struct gen_pool *pool_alloc = NULL;
+#ifdef PFE_CFG_PFE_MASTER
+	struct reserved_mem *rmem[PFE_REG_COUNT] = {NULL, NULL};
+	int rmem_idx = 0, i;
+#endif /* PFE_CFG_PFE_MASTER */
+	int ret;
+
+#ifdef PFE_CFG_PFE_MASTER
+	/* BMU2 and RT regions are required by MASTER only */
+	for (i = 0; i < PFE_REG_COUNT; i++) {
+		ret = pfeng_reserved_no_map_region_init(dev, &rmem[i], i, &rmem_idx);
+		if (ret) {
+			dev_err(dev, "%s reservation failed. Error %d\n",
+				pfeng_res_no_map_name[i], ret);
+			return ret;
+		}
+	}
+
+
+	ret = pfeng_reserved_dma_shared_pool_region_init(dev, &rmem_idx);
+	if (ret) {
+		dev_err(dev, "shared-dma-pool reservation failed. Error %d\n", ret);
+		return ret;
+	}
+#endif /* PFE_CFG_PFE_MASTER */
+
+	ret = pfeng_reserved_bdr_pool_region_init(dev, &pool_alloc, 0); // only one reserved reg on slave!
+	if (ret) {
+		dev_err(dev, "BDR pool reservation failed. Error %d\n", ret);
+		goto err_bdr_pool_region_init;
+	}
+
+	if (pool_alloc) {
+		pfe_res_mem = devm_kzalloc(dev, sizeof(*pfe_res_mem), GFP_KERNEL);
+		if (!pfe_res_mem) {
+			ret = -ENOMEM;
+			goto err_alloc;
+		}
+
+		pfe_res_mem->name = PFE_CFG_BD_MEM;
+		pfe_res_mem->pool_alloc = pool_alloc;
+		INIT_LIST_HEAD(&pfe_res_mem->node);
+		list_add(&pfe_res_mem->node, &pfe_reserved_mem_list);
+	}
+
+#ifdef PFE_CFG_PFE_MASTER
+	for (i = 0; i < PFE_REG_COUNT; i++) {
+		if (!rmem[i])
+			continue;
+
+		pfe_res_mem = devm_kzalloc(dev, sizeof(*pfe_res_mem), GFP_KERNEL);
+		if (!pfe_res_mem) {
+			ret = -ENOMEM;
+			goto err_alloc;
+		}
+
+		pfe_res_mem->name = (i == PFE_REG_RT) ? PFE_CFG_RT_MEM : PFE_CFG_SYS_MEM;
+		pfe_res_mem->map_start_va = rmem[i]->priv;
+		pfe_res_mem->map_start_pa = rmem[i]->base;
+		pfe_res_mem->map_size = rmem[i]->size;
+		INIT_LIST_HEAD(&pfe_res_mem->node);
+		list_add(&pfe_res_mem->node, &pfe_reserved_mem_list);
+	}
+#endif /* PFE_CFG_PFE_MASTER */
+
+	return 0;
+
+err_bdr_pool_region_init:
+err_alloc:
+	of_reserved_mem_device_release(dev);
+
+	return ret;
+}
 
 errno_t oal_mm_wakeup_reinit(void)
 {
@@ -761,7 +758,7 @@ errno_t oal_mm_init(const void *devh)
 	struct device *dev = (struct device *)devh;
 	int ret;
 
-	ret = __oal_mm_init_master(dev);
+	ret = __oal_mm_init_regions(dev);
 	if (ret)
 		return ret;
 
@@ -774,7 +771,10 @@ errno_t oal_mm_init(const void *devh)
 
 void oal_mm_shutdown(void)
 {
-	__oal_mm_shutdown_master(__dev);
+	of_reserved_mem_device_release(__dev);
+
+	/* reserved_mem list nodes will be released by devm_ */
+	INIT_LIST_HEAD(&pfe_reserved_mem_list);
 
 	if (!hash_empty(pfe_addr_htable)) {
 		dev_warn(__dev, "Unfreed memory detected\n");

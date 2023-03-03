@@ -95,6 +95,8 @@
 
 #define DUMMY_TX_BUF_LEN		64U
 #define DUMMY_RX_BUF_LEN		2048U
+#define DUMMY_FRAME_INVALID		0
+#define DUMMY_FRAME_IHC_SELF	1
 
 #define BUFFERS_CACHED TRUE
 
@@ -132,7 +134,8 @@ struct __attribute__((aligned(HAL_CACHE_LINE_SIZE))) __pfe_hif_chnl_tag
 static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *chnl, pfe_hif_ring_t *ring) __attribute__((cold));
 static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *chnl, pfe_hif_ring_t *ring) __attribute__((cold));
 static errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl) __attribute__((cold));
-static errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_t *chnl) __attribute__((cold));
+static errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl) __attribute__((cold));
+static errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chnl, uint32_t mode) __attribute__((cold));
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
 static void pfe_hif_chnl_refill_rx_buffers(const pfe_hif_chnl_t *chnl) __attribute__((hot));
@@ -1505,29 +1508,21 @@ __attribute__((hot)) bool_t pfe_hif_chnl_is_tx_dma_active(const pfe_hif_chnl_t *
 }
 
 /**
- * @brief		Flush RX BDP buffer
- * @details		When channel is stopped the fetched BDs are remaining in internal
- * 				buffer and don't get flushed once channel is re-enabled. This
- * 				causes memory corruption when channel driver is stopped and then
- * 				started with other BD rings because HIF is missing possibility
- * 				to reset particular channels separately without affecting the
- * 				other channels.
+ * @brief		Send TX frame
  * @param[in]	chnl The channel instance
+ * @param[in]	mode The frame content mode: DUMMY_FRAME_INVALID or DUMMY_FRAME_IHC_SELF
  * @return		EOK if success, error code otherwise
  */
-static __attribute__((cold)) errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_t *chnl)
+static __attribute__((cold)) errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chnl, uint32_t mode)
 {
-	void *tx_buf_va = NULL, *rx_buf_va = NULL;
-	void *tx_buf_pa, *rx_buf_pa, *buf_pa;
+	void *tx_buf_va = NULL, *tx_buf_pa;
 	pfe_ct_hif_tx_hdr_t *tx_hdr;
-	uint32_t len, ii;
-	bool_t lifm;
 	errno_t ret = EOK;
 
 	tx_buf_va = oal_mm_malloc_contig_aligned_nocache(sizeof(pfe_ct_hif_tx_hdr_t)+DUMMY_TX_BUF_LEN, 8U);
 	if (NULL == tx_buf_va)
 	{
-		NXP_LOG_ERROR("Can't get dummy TX buffer\n");
+		NXP_LOG_ERROR("Can't get dummy TX dummy buffer\n");
 		ret = ENOMEM;
 		goto the_end;
 	}
@@ -1535,10 +1530,66 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_
 	tx_buf_pa = oal_mm_virt_to_phys_contig(tx_buf_va);
 	if (NULL == tx_buf_pa)
 	{
-		NXP_LOG_ERROR("VA to PA conversion failed");
+		NXP_LOG_ERROR("TX dummy buffer VA to PA conversion failed");
 		ret = ENOMEM;
 		goto the_end;
 	}
+
+	tx_hdr = (pfe_ct_hif_tx_hdr_t *)tx_buf_va;
+
+	switch (mode)
+	{
+		case DUMMY_FRAME_INVALID:
+			/* send invalid frame */
+			tx_hdr->e_phy_ifs = 0;
+			tx_hdr->flags = 0;
+			break;
+
+		case DUMMY_FRAME_IHC_SELF:
+			/* send IHC frame to self channel */
+			tx_hdr->e_phy_ifs = oal_htonl(1U << (PFE_PHY_IF_ID_HIF0 + chnl->id));
+			tx_hdr->flags = (pfe_ct_hif_tx_flags_t)(HIF_TX_INJECT|HIF_TX_IHC);
+			tx_hdr->chid = chnl->id;
+			break;
+
+		default:
+			break;
+	}
+
+	ret = pfe_hif_chnl_tx(chnl, tx_buf_pa, tx_buf_va, sizeof(pfe_ct_hif_tx_hdr_t)+DUMMY_TX_BUF_LEN, TRUE);
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Dummy frame TX failed\n");
+	}
+
+the_end:
+	if (NULL != tx_buf_va)
+	{
+		oal_mm_free_contig(tx_buf_va);
+		tx_buf_va = NULL;
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Reset HIF channel FIFOs
+ * @details		When HIF channel is stopped, the prefetched BDs remain active
+ * 				in internal buffers. To gracefuly stop the channel all residues
+ * 				have to be flushed and the rings (both RX and TX, including
+ * 				write-back rings) should be moved to the head of rings, as
+ * 				it is required by Slave driver on start-up. Not doing
+ * 				channel reset ends up in nonfunctional driver, because
+ * 				SW and HW rings are out of sync.
+ * @param[in]	chnl The channel instance
+ * @return		EOK if success, error code otherwise
+ */
+static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl)
+{
+	void *rx_buf_va = NULL, *rx_buf_pa, *buf_pa;
+	uint32_t len, ii;
+	bool_t lifm;
+	errno_t ret = EOK;
 
 	rx_buf_va = oal_mm_malloc_contig_aligned_nocache(DUMMY_RX_BUF_LEN, 8U);
 	if (NULL == rx_buf_va)
@@ -1555,13 +1606,6 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_
 		ret = ENOMEM;
 		goto the_end;
 	}
-
-	tx_hdr = (pfe_ct_hif_tx_hdr_t *)tx_buf_va;
-
-	tx_hdr->e_phy_ifs = oal_htonl(1U << (PFE_PHY_IF_ID_HIF0 + chnl->id));
-
-	tx_hdr->flags = (pfe_ct_hif_tx_flags_t)(HIF_TX_INJECT|HIF_TX_IHC);
-	tx_hdr->chid = chnl->id;
 
 	/*	Activate the channel */
 	pfe_hif_chnl_rx_enable(chnl);
@@ -1581,13 +1625,13 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_
 			{
 				NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
 			}
+			pfe_hif_chnl_rx_dma_start(chnl);
 		}
 
 		/*	Send dummy packet to self HIF channel */
-		if (EOK != pfe_hif_chnl_tx(chnl, tx_buf_pa, tx_buf_va, sizeof(pfe_ct_hif_tx_hdr_t)+DUMMY_TX_BUF_LEN, TRUE))
-		{
-			NXP_LOG_ERROR("Dummy frame TX failed\n");
-		}
+		ret = pfe_hif_chnl_send_frame(chnl, DUMMY_FRAME_IHC_SELF);
+		if (EOK != ret)
+			goto the_end;
 
 		/*	Wait */
 		oal_time_usleep(500U);
@@ -1617,17 +1661,84 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_flush_rx_bd_fifo(pfe_hif_chnl_
 		}
 	}
 
+	/* RX ring reset to the head */
+	ii = pfe_hif_ring_get_len(chnl->rx_ring) - 1;
+	while (FALSE == pfe_hif_ring_is_on_head(chnl->rx_ring))
+	{
+		/*	Provide single RX buffer */
+		if (EOK != pfe_hif_chnl_supply_rx_buf(chnl, rx_buf_pa, DUMMY_RX_BUF_LEN))
+		{
+			NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
+		}
+		pfe_hif_chnl_rx_dma_start(chnl);
+
+		/*	Send dummy packet to self HIF channel */
+		ret = pfe_hif_chnl_send_frame(chnl, DUMMY_FRAME_IHC_SELF);
+		if (EOK != ret) {
+			NXP_LOG_ERROR("Can't send frame\n");
+			goto the_end;
+		}
+
+		/*	Wait */
+		oal_time_usleep(500U);
+
+		/*	Do TX confirmations */
+		while (EOK == pfe_hif_chnl_get_tx_conf(chnl))
+		{
+			;
+		}
+
+		/*	Do plain RX */
+		while (EOK == pfe_hif_ring_dequeue_buf(chnl->rx_ring, &buf_pa, &len, &lifm))
+		{
+			;
+		}
+
+		/*	Decrement timeout counter */
+		if (ii > 0U)
+		{
+			ii--;
+		}
+		else
+		{
+			NXP_LOG_ERROR("RX jump to head timed-out\n");
+			ret = ETIMEDOUT;
+			goto the_end;
+		}
+
+	}
+
+	/* TX ring reset to the head */
+	ii = pfe_hif_ring_get_len(chnl->tx_ring) - 1;
+	while (FALSE == pfe_hif_ring_is_on_head(chnl->tx_ring))
+	{
+		/*	Send invalid packet (to be dropped on Class) */
+		ret = pfe_hif_chnl_send_frame(chnl, DUMMY_FRAME_INVALID);
+		if (EOK != ret) {
+			NXP_LOG_ERROR("Can't send frame\n");
+			goto the_end;
+		}
+
+		/*	Wait */
+		oal_time_usleep(500U);
+
+		/*	Do TX confirmations */
+		while (EOK == pfe_hif_chnl_get_tx_conf(chnl))
+		{
+			;
+		}
+	}
+
 the_end:
+
+	/*	Stop the channel */
+	pfe_hif_chnl_rx_disable(chnl);
+	pfe_hif_chnl_tx_disable(chnl);
+
 	/*	Drain all in case when flush process has somehow failed */
 	while (EOK == pfe_hif_ring_drain_buf(chnl->rx_ring, &buf_pa))
 	{
 		;
-	}
-
-	if (NULL != tx_buf_va)
-	{
-		oal_mm_free_contig(tx_buf_va);
-		tx_buf_va = NULL;
 	}
 
 	if (NULL != rx_buf_va)
@@ -1708,15 +1819,12 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
-			/*	Invalidate the RX ring */
-			pfe_hif_ring_invalidate(chnl->rx_ring);
-
 			/*
 				Here the ring should be empty. Execute HIF channel BDP shutdown
 				procedure to ensure that channel will not keep any content in
-				internal buffers.
+				internal buffers and HW rings are on head.
 			*/
-			if (EOK != pfe_hif_chnl_flush_rx_bd_fifo(chnl))
+			if (EOK != pfe_hif_chnl_reset_fifos(chnl))
 			{
 				NXP_LOG_ERROR("FATAL: Could not flush RX BD FIFO\n");
 			}

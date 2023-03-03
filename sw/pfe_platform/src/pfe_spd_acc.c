@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -218,7 +218,7 @@ errno_t pfe_spd_acc_add_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd
                 ret = pfe_spd_acc_convert_to_rt_entry(entry, rt_entry);
                 if(EOK != ret)
                 {   /* Conversion failure - revert changes */
-                    pfe_rtable_entry_free(rt_entry);
+                    pfe_rtable_entry_free(NULL, rt_entry);
                     blalloc_free_offs_size(pfe_spd_acc_id_pool, id, 1U);
                     /* We can still add entry as not accelerated here */
                 }
@@ -237,7 +237,7 @@ errno_t pfe_spd_acc_add_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd
                         {   /* Failed to set SPD entry */
                             /* Revert the changes */
                             pfe_rtable_del_entry(rtable_ptr, rt_entry);
-                            pfe_rtable_entry_free(rt_entry);
+                            pfe_rtable_entry_free(rtable_ptr, rt_entry);
                             blalloc_free_offs_size(pfe_spd_acc_id_pool, id, 1U);
                             /* No need to try again adding entry as not accelerated because
                                the same function would be called and fail as well */
@@ -252,7 +252,7 @@ errno_t pfe_spd_acc_add_rule(pfe_phy_if_t *phy_if, uint16_t position, pfe_ct_spd
                     else
                     {   /* Failed to add route entry */
                         /* Free the unused entry */
-                        pfe_rtable_entry_free(rt_entry);
+                        pfe_rtable_entry_free(rtable_ptr, rt_entry);
                         /* Free unique ID previously allocated */
                         blalloc_free_offs_size(pfe_spd_acc_id_pool, id, 1U);
                         /* We can still add entry as not accelerated here */
@@ -331,7 +331,7 @@ errno_t pfe_spd_acc_remove_rule(pfe_phy_if_t * phy_if, uint16_t position)
         {
             /* Remove IP route entry and destroy it */
             pfe_rtable_del_entry(rtable_ptr, rt_entry);
-            pfe_rtable_entry_free(rt_entry);
+            pfe_rtable_entry_free(rtable_ptr, rt_entry);
         }
         /* Free the unique identifier */
         blalloc_free_offs_size(pfe_spd_acc_id_pool, entry.id5t, 1U);

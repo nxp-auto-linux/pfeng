@@ -106,6 +106,7 @@ struct pfe_rtable_entry_tag
 	uint32_t curr_timeout;						/*	!< Current timeout value */
 	uint32_t route_id;							/*	!< User-defined route ID */
 	bool_t route_id_valid;						/*	!< If TRUE then 'route_id' is valid */
+	int8_t ref_counter;							/*	!< Count of leased references (pointers) to this entry */
 	void *refptr;								/*	!< User-defined value */
 	pfe_rtable_callback_t callback;				/*	!< User-defined callback function */
 	void *callback_arg;							/*	!< User-defined callback argument */
@@ -180,6 +181,7 @@ static void pfe_rtable_free_stats_index(uint8_t index);
 static errno_t pfe_rtable_destroy_stats_table(pfe_class_t *class, uint32_t table_address);
 static bool_t pfe_rtable_entry_is_duplicate(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
 static errno_t pfe_rtable_add_entry_by_hash(pfe_rtable_t *rtable, uint32_t hash, void **new_phys_entry_va, void **last_phys_entry_va, addr_t *new_phys_entry_pa);
+static void pfe_rtable_entry_free_nolock(pfe_rtable_entry_t *entry, bool_t decrement_reference);
 
 errno_t pfe_rtable_clear_stats(const pfe_rtable_t *rtable, uint8_t conntrack_index);
 #if !defined(PFE_CFG_TARGET_OS_AUTOSAR)
@@ -190,35 +192,37 @@ errno_t pfe_rtable_clear_stats(const pfe_rtable_t *rtable, uint8_t conntrack_ind
 
 static void read_phys_entry_dbus(addr_t phys_entry, pfe_ct_rtable_entry_t *phys_entry_cache)
 {
-	memcpy(phys_entry_cache, (void *)phys_entry, sizeof(*phys_entry_cache));
+	memcpy_fromio(phys_entry_cache, (void __iomem *)phys_entry, sizeof(*phys_entry_cache));
 }
 
 static void write_phys_entry_dbus(addr_t phys_entry, pfe_ct_rtable_entry_t *phys_entry_cache)
 {
-	memcpy((void *)phys_entry, phys_entry_cache, sizeof(*phys_entry_cache));
+	memcpy_toio((void __iomem *)phys_entry, phys_entry_cache, sizeof(*phys_entry_cache));
 }
 
 static void read_phys_entry_cbus(addr_t phys_entry, pfe_ct_rtable_entry_t *phys_entry_cache)
 {
 	uint32_t *data_out = (uint32_t *)phys_entry_cache;
-	uint32_t *data_in = (uint32_t *)phys_entry;
 	int i, words = sizeof(*phys_entry_cache) >> 2;
+	addr_t data_in = phys_entry;
 
 	for (i = 0; i < words; i++)
 	{
-		data_out[i] = oal_ntohl(data_in[i]);
+		data_out[i] = oal_ntohl(hal_read32(data_in));
+		data_in += 4;
 	}
 }
 
 static void write_phys_entry_cbus(addr_t phys_entry, pfe_ct_rtable_entry_t *phys_entry_cache)
 {
-	uint32_t *data_out = (uint32_t *)phys_entry;
 	uint32_t *data_in = (uint32_t *)phys_entry_cache;
 	int i, words = sizeof(*phys_entry_cache) >> 2;
+	addr_t data_out = phys_entry;
 
 	for (i = 0; i < words; i++)
 	{
-		data_out[i] = oal_htonl(data_in[i]);
+		hal_write32(oal_htonl(data_in[i]), data_out);
+		data_out += 4;
 	}
 }
 
@@ -248,7 +252,7 @@ static void pfe_rtable_write_phys_entry(addr_t phys_entry, pfe_ct_rtable_entry_t
 
 static void pfe_rtable_clear_phys_entry(addr_t phys_entry)
 {
-	memset((void *)phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
+	memset_io((void __iomem *)phys_entry, 0, sizeof(pfe_ct_rtable_entry_t));
 }
 
 /**
@@ -645,6 +649,7 @@ pfe_rtable_entry_t *pfe_rtable_entry_create(void)
 			entry->curr_timeout = entry->timeout;
 			entry->route_id = 0U;
 			entry->route_id_valid = FALSE;
+			entry->ref_counter = 0;
 			entry->callback = NULL;
 			entry->callback_arg = NULL;
 			entry->refptr = NULL;
@@ -658,22 +663,88 @@ pfe_rtable_entry_t *pfe_rtable_entry_create(void)
 }
 
 /**
- * @brief		Release routing table entry instance
- * @details		Once the previously created routing table entry instance is not needed
- *				anymore (inserted into the routing table), allocated resources shall
- *				be released using this call.
- * @param[in]	entry Entry instance previously created by pfe_rtable_entry_create()
+ * @brief		Decrement routing table entry refrence counter. Deallocate the entry if no more references.
+ * @details		Internal "_nolock" function. It assumes that routing table mutex is already locked.
+ * @param[in]	entry	Entry instance previously created by pfe_rtable_entry_create()
+ * @param[in]	decrement_ref_counter
+ * 						Flag for reference counter decrement.
+ * 						TRUE : Function decrements ref_counter. This is a normal behavior.
+ * 						FALSE: Function does not decrement ref_counter. This is a special behavior
+ *								for internal routing table contexts where pointer to entry can be 
+ * 								obtained directly, without a need for ref_counter increment.
  */
-void pfe_rtable_entry_free(pfe_rtable_entry_t *entry)
+static void pfe_rtable_entry_free_nolock(pfe_rtable_entry_t *entry, bool_t decrement_ref_counter)
 {
 	if (NULL != entry)
 	{
-		if (NULL != entry->phys_entry_cache)
+		if (TRUE == decrement_ref_counter)
 		{
-			oal_mm_free(entry->phys_entry_cache);
+			entry->ref_counter--;
 		}
 
-		oal_mm_free(entry);
+		if (0 >= entry->ref_counter)
+		{
+			/* Sanity check: Entry is set for deallocation, but is still part of some rtable. THIS SHOULD NEVER HAPPEN */
+			if (NULL != entry->rtable)
+			{
+				NXP_LOG_WARNING("Refused to deallocate RTable entry @ v0x%p, because the entry is still in some RTable.\n", (void *)entry->phys_entry_va);
+			}
+			else
+			{
+				/* If child link exists, then NULLify the link of child entry. This prevents invalid access to deallocated memory through child pointer. */
+				if (NULL != entry->child)
+				{
+					entry->child->child = NULL;
+				}
+
+				/* deallocate intermediate 'physical' entry storage */
+				if (NULL != entry->phys_entry_cache)
+				{
+					oal_mm_free(entry->phys_entry_cache);
+				}
+
+				/* deallocate the entry */
+				oal_mm_free(entry);
+			}
+		}
+	}
+}
+
+/**
+ * @brief		Decrement routing table entry refrence counter. Deallocate the entry if no more references.
+ * @param[in]	rtable	The routing table instance. Needed only for mutex lock.
+ *							Can be NULL if working with standalone routing table entry which
+ *							has never been a part of any routing table. In all other cases,
+ *							provide last routing table which owned the entry.
+ * @param[in]	entry	Entry instance previously created by pfe_rtable_entry_create()
+ *
+ * @important	When code outside of this module obtains pointer to some routing table entry
+ * 				via _get_first()/_get_next() or via _get_child(), then call this function
+ * 				in outside code when the outside code is done working with the entry.
+ */
+void pfe_rtable_entry_free(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
+{
+	if (NULL != entry)
+	{
+		/* protect ref_counter manipulation */
+		if (NULL != rtable)
+		{
+			if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
+			{
+				NXP_LOG_ERROR("Mutex lock failed\n");
+			}
+		}
+
+		pfe_rtable_entry_free_nolock(entry, TRUE);
+
+		/* stop protecting ref_counter manipulation */
+		if (NULL != rtable)
+		{
+			if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+			{
+				NXP_LOG_ERROR("Mutex unlock failed\n");
+			}
+		}
 	}
 }
 
@@ -1847,15 +1918,25 @@ void pfe_rtable_entry_set_child(pfe_rtable_entry_t *entry, pfe_rtable_entry_t *c
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
 		entry->child = child;
+		if (NULL != child)
+		{
+			child->child = entry;
+		}
 	}
 }
 
 /**
  * @brief		Get associated entry
- * @param[in]	entry The routing table entry instance
+ * @details		"_nolock" function. It assumes that routing table mutex is already locked.
+ *				Outside of the routing table module, this function should be called only from
+ *				routing table callbacks.
+ * @param[in]	entry	The routing table entry instance
  * @return		The associated routing table entry linked with the 'entry'. NULL if there is not link.
+ *
+ * @note		When execution thread which called this function finishes working with the provided entry,
+ *				it must call pfe_rtable_entry_free() for the given entry to "release" it.
  */
-pfe_rtable_entry_t *pfe_rtable_entry_get_child(const pfe_rtable_entry_t *entry)
+pfe_rtable_entry_t *pfe_rtable_entry_get_child_nolock(const pfe_rtable_entry_t *entry)
 {
 	pfe_rtable_entry_t *ptr;
 
@@ -1869,6 +1950,47 @@ pfe_rtable_entry_t *pfe_rtable_entry_get_child(const pfe_rtable_entry_t *entry)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
 		ptr = entry->child;
+		if (NULL != ptr)
+		{
+			ptr->ref_counter++;
+		}
+	}
+
+	return ptr;
+}
+
+/**
+ * @brief		Get associated entry
+ * @param[in]	rtable	The routing table instance. Needed only for mutex lock.
+ *							Can be NULL if working with standalone routing table entry which
+ *							has never been a part of any routing table. In all other cases,
+ *							provide last routing table which owned the entry.
+ * @param[in]	entry	The routing table entry instance
+ * @return		The associated routing table entry linked with the 'entry'. NULL if there is not link.
+ *
+ * @note		When execution thread which called this function finishes working with the provided entry,
+ *				it must call pfe_rtable_entry_free() for the given entry to "release" it.
+ */
+pfe_rtable_entry_t *pfe_rtable_entry_get_child(pfe_rtable_t *rtable, const pfe_rtable_entry_t *entry)
+{
+	pfe_rtable_entry_t *ptr;
+
+	if (NULL != rtable)
+	{
+		if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
+	}
+
+	ptr = pfe_rtable_entry_get_child_nolock(entry);
+
+	if (NULL != rtable)
+	{
+		if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+		{
+			NXP_LOG_ERROR("Mutex unlock failed\n");
+		}
 	}
 
 	return ptr;
@@ -2210,6 +2332,7 @@ errno_t pfe_rtable_add_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 		NXP_LOG_INFO("RTable entry added, hash: 0x%x\n", (uint_t)hash);
 
 		entry->rtable = rtable;
+		entry->ref_counter++;
 
 		if (0U == rtable->active_entries_count)
 		{
@@ -2462,6 +2585,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
 	}
 
 	entry->rtable = NULL;
+	entry->ref_counter--;
 
 	if (rtable->active_entries_count > 0U)
 	{
@@ -2483,7 +2607,7 @@ static errno_t pfe_rtable_del_entry_nolock(pfe_rtable_t *rtable, pfe_rtable_entr
  */
 void pfe_rtable_do_timeouts(pfe_rtable_t *rtable)
 {
-	LLIST_t *item;
+	LLIST_t *item, *aux;
 	LLIST_t to_be_removed_list;
 	pfe_rtable_entry_t *entry;
 	uint8_t flags;
@@ -2556,7 +2680,7 @@ void pfe_rtable_do_timeouts(pfe_rtable_t *rtable)
 			}
 		}
 
-		LLIST_ForEach(item, &to_be_removed_list)
+		LLIST_ForEachRemovable(item, aux, &to_be_removed_list)
 		{
 			entry = LLIST_Data(item, pfe_rtable_entry_t, list_to_remove_entry);
 
@@ -2565,6 +2689,10 @@ void pfe_rtable_do_timeouts(pfe_rtable_t *rtable)
 			if (EOK != err)
 			{
 				NXP_LOG_ERROR("Couldn't delete timed-out entry: %d\n", err);
+			}
+			else
+			{
+				pfe_rtable_entry_free_nolock(entry, FALSE);
 			}
 		}
 
@@ -3207,12 +3335,15 @@ static bool_t pfe_rtable_match_criterion(pfe_rtable_get_criterion_t crit, const 
 /**
  * @brief		Get first record from the table matching given criterion
  * @details		Intended to be used with pfe_rtable_get_next
- * @param[in]	rtable The routing table instance
- * @param[in]	crit Get criterion
- * @param[in]	art Pointer to criterion argument. Every value shall to be in HOST endian format.
+ * @param[in]	rtable	The routing table instance
+ * @param[in]	crit	Search criterion
+ * @param[in]	arg		Pointer to criterion argument. Every value shall to be in HOST endian format.
  * @return		The entry or NULL if not found
+ * 
  * @warning		The routing table must be locked for the time the function and its returned entry
  *				is being used since the entry might become asynchronously invalid (timed-out).
+ * @note		When execution thread which called this function finishes working with the provided entry,
+ *				it must call pfe_rtable_entry_free() for the given entry to "release" it.
  */
 pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_criterion_t crit, void *arg)
 {
@@ -3285,6 +3416,7 @@ pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_cr
 					if (TRUE == pfe_rtable_match_criterion(rtable->cur_crit, &rtable->cur_crit_arg, entry))
 					{
 						match = TRUE;
+						entry->ref_counter++;
 						break;
 					}
 				}
@@ -3308,10 +3440,13 @@ pfe_rtable_entry_t *pfe_rtable_get_first(pfe_rtable_t *rtable, pfe_rtable_get_cr
 /**
  * @brief		Get next record from the table
  * @details		Intended to be used with pfe_rtable_get_first.
- * @param[in]	rtable The routing table instance
+ * @param[in]	rtable	The routing table instance
  * @return		The entry or NULL if not found
+ * 
  * @warning		The routing table must be locked for the time the function and its returned entry
  *				is being used since the entry might become asynchronously invalid (timed-out).
+ * @note		When execution thread which called this function finishes working with the provided entry,
+ *				it must call pfe_rtable_entry_free() for the given entry to "release" it.
  */
 pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 {
@@ -3353,6 +3488,7 @@ pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 					if (TRUE == pfe_rtable_match_criterion(rtable->cur_crit, &rtable->cur_crit_arg, entry))
 					{
 						match = TRUE;
+						entry->ref_counter++;
 						break;
 					}
 				}

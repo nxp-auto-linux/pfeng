@@ -16,6 +16,11 @@
 #include "pfeng.h"
 #define PFE_DEFAULT_TX_WORK (PFE_CFG_HIF_RING_LENGTH >> 1)
 
+#define pfeng_priv_for_each_chnl(priv, chnl_idx, chnl)			\
+	for (chnl_idx = 0, chnl = &priv->hif_chnl[chnl_idx];		\
+		chnl_idx < PFENG_PFE_HIF_CHANNELS;			\
+		chnl_idx++, chnl = &priv->hif_chnl[chnl_idx])
+
 static const u32 pfeng_hif_id_to_vlan_rx_flag[] = {
 	HIF_RX_HIF0_VLAN,
 	HIF_RX_HIF1_VLAN,
@@ -23,7 +28,7 @@ static const u32 pfeng_hif_id_to_vlan_rx_flag[] = {
 	HIF_RX_HIF3_VLAN
 };
 
-int pfeng_hif_chnl_stop(struct pfeng_hif_chnl *chnl)
+static int pfeng_hif_chnl_stop(struct pfeng_hif_chnl *chnl)
 {
 	/* Disable channel interrupt */
 	pfe_hif_chnl_irq_mask(chnl->priv);
@@ -37,6 +42,8 @@ int pfeng_hif_chnl_stop(struct pfeng_hif_chnl *chnl)
 
 	/* Disable TX */
 	pfe_hif_chnl_tx_disable(chnl->priv);
+
+	chnl->status = PFENG_HIF_STATUS_ENABLED;
 
 	HM_MSG_DEV_INFO(chnl->dev, "HIF%d stopped\n", chnl->idx);
 
@@ -73,6 +80,30 @@ int pfeng_hif_chnl_start(struct pfeng_hif_chnl *chnl)
 	chnl->status = PFENG_HIF_STATUS_RUNNING;
 
 	HM_MSG_DEV_INFO(chnl->dev, "HIF%d started\n", chnl->idx);
+
+	return 0;
+}
+
+int pfeng_hif_slave_suspend(struct pfeng_priv *priv)
+{
+	struct pfeng_hif_chnl *chnl;
+	int i;
+
+	pfeng_priv_for_each_chnl(priv, i, chnl)
+		if (chnl->status >= PFENG_HIF_STATUS_ENABLED)
+			pfeng_hif_chnl_stop(chnl);
+
+	return 0;
+}
+
+int pfeng_hif_slave_resume(struct pfeng_priv *priv)
+{
+	struct pfeng_hif_chnl *chnl;
+	int i;
+
+	pfeng_priv_for_each_chnl(priv, i, chnl)
+		if (chnl->status >= PFENG_HIF_STATUS_ENABLED)
+			pfeng_hif_chnl_start(chnl);
 
 	return 0;
 }
@@ -283,13 +314,13 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 		 */
 		if (likely(!netif->cfg->only_mgmt)) {
 			/* Accept all traffic */
-		} else if (likely(!chnl->netifs[PFENG_NETIFS_AUX_IDX])) {
+		} else if (likely(!chnl->netifs[PFE_PHY_IF_ID_AUX])) {
 			/* No AUX */
 		} else if (unlikely(hif_hdr->flags & (HIF_RX_PTP | HIF_RX_ETS))) {
 			/* Frame is "management" */
 		} else {
 			/* Frame is "non-management", route to AUX */
-			netif = chnl->netifs[PFENG_NETIFS_AUX_IDX];
+			netif = chnl->netifs[PFE_PHY_IF_ID_AUX];
 		}
 
 		netdev = netif->netdev;

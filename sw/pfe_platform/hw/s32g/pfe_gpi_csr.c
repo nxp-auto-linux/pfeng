@@ -135,6 +135,7 @@ void pfe_gpi_cfg_init(addr_t base_va, const pfe_gpi_cfg_t *cfg)
 		regval |= 0x3U;
 		hal_write32(regval, base_va + GPI_CSR_AXI_WRITE_DONE_ADDR);
 	}
+	hal_write32(0xFFFFFFFFU, base_va + CSR_IGQOS_LRU_TIMER_VALUE);
 }
 
 /**

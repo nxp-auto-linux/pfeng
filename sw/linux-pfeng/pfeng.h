@@ -44,7 +44,7 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"1.3.0 RC1"
+#define PFENG_DRIVER_VERSION		"1.3.0 RC2"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
@@ -71,21 +71,13 @@ static const pfe_ct_phy_if_id_t pfeng_hif_ids[] = {
 	PFE_PHY_IF_ID_HIF3,
 	/* HIF NOCPY is unsupported, the id can be used
 	 * only for addressing master IDEX HIF channel
+	 * or linked HIF netdev
 	 */
 	PFE_PHY_IF_ID_HIF_NOCPY
 };
 
 #define PFENG_PFE_HIF_CHANNELS		(ARRAY_SIZE(pfeng_hif_ids) - 1)
 #define PFENG_PFE_EMACS			(ARRAY_SIZE(pfeng_emac_ids))
-
-/* LOGIF mode variants */
-enum {
-	PFENG_LOGIF_MODE_TX_INJECT,
-	PFENG_LOGIF_MODE_TX_CLASS,
-	PFENG_LOGIF_MODE_RESERVED_1,
-	PFENG_LOGIF_MODE_AUX
-};
-
 
 /* HIF channel mode variants */
 enum {
@@ -130,10 +122,9 @@ struct pfeng_netif_cfg {
 	const char			*name;
 	struct device_node		*dn;
 	u8				macaddr[ETH_ALEN];
-	u8				emac_id;
+	u8				phyif_id;
 	u8				hifs;
 	u32				hifmap;
-	bool				aux;
 	bool				pause_rx;
 	bool				pause_tx;
 #ifdef PFE_CFG_PFE_SLAVE
@@ -190,9 +181,10 @@ struct pfe_hif_drv_tag
 };
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
-/* Count for max 3 EMAC netifs and 1 AUX netif */
-#define PFENG_NETIFS_CNT	PFENG_PFE_EMACS + 1
-#define PFENG_NETIFS_AUX_IDX	PFENG_PFE_EMACS
+/* netif array maps every phy_if to netif */
+#define PFENG_NETIFS_CNT	(PFE_PHY_IF_ID_MAX + 1)
+/* PHY_IF id hole of HIF block is used for AUX */
+#define PFE_PHY_IF_ID_AUX	PFE_PHY_IF_ID_HIF
 
 struct pfeng_rx_chnl_pool;
 struct pfeng_tx_chnl_pool;
@@ -232,12 +224,12 @@ struct pfeng_hif_chnl {
 static inline struct pfeng_netif *pfeng_phy_if_id_to_netif(struct pfeng_hif_chnl *chnl,
 							   pfe_ct_phy_if_id_t phy_if_id)
 {
-	if (likely((phy_if_id >= PFE_PHY_IF_ID_EMAC0 && phy_if_id <= PFE_PHY_IF_ID_EMAC2) &&
-		chnl->netifs[phy_if_id - PFE_PHY_IF_ID_EMAC0])) {
-		return chnl->netifs[phy_if_id - PFE_PHY_IF_ID_EMAC0];
+	if (likely((phy_if_id <= PFE_PHY_IF_ID_MAX) &&
+		chnl->netifs[phy_if_id])) {
+		return chnl->netifs[phy_if_id];
 	}
 
-	return chnl->netifs[PFENG_NETIFS_AUX_IDX];
+	return chnl->netifs[PFE_PHY_IF_ID_AUX];
 }
 
 /* leave out one BD to ensure minimum gap */
@@ -327,22 +319,48 @@ struct pfeng_priv {
 	u32				msg_verbosity;
 };
 
+static inline bool pfeng_netif_cfg_is_aux(struct pfeng_netif_cfg *cfg)
+{
+	return cfg->phyif_id == PFE_PHY_IF_ID_AUX;
+}
+
 static inline bool pfeng_netif_is_aux(struct pfeng_netif *netif)
 {
-	return netif->cfg->aux;
+	return pfeng_netif_cfg_is_aux(netif->cfg);
 }
 
 static inline struct pfeng_emac *__pfeng_netif_get_emac(struct pfeng_netif *netif)
 {
-	return &netif->priv->emac[netif->cfg->emac_id];
+	return &netif->priv->emac[netif->cfg->phyif_id];
+}
+
+static inline bool pfeng_netif_cfg_has_emac(struct pfeng_netif_cfg *cfg)
+{
+	return cfg->phyif_id <= PFE_PHY_IF_ID_EMAC2;
 }
 
 static inline struct pfeng_emac *pfeng_netif_get_emac(struct pfeng_netif *netif)
 {
-	if (pfeng_netif_is_aux(netif))
+	if (!pfeng_netif_cfg_has_emac(netif->cfg))
 		return NULL;
 
 	return __pfeng_netif_get_emac(netif);
+}
+
+static inline pfe_log_if_t *pfeng_netif_get_emac_logif(struct pfeng_netif *netif)
+{
+	if (!pfeng_netif_cfg_has_emac(netif->cfg))
+		return NULL;
+
+	return __pfeng_netif_get_emac(netif)->logif_emac;
+}
+
+static inline pfe_phy_if_t *pfeng_netif_get_emac_phyif(struct pfeng_netif *netif)
+{
+	if (!pfeng_netif_cfg_has_emac(netif->cfg))
+		return NULL;
+
+	return __pfeng_netif_get_emac(netif)->phyif_emac;
 }
 
 /* fw */
@@ -375,6 +393,10 @@ int pfeng_hif_chnl_set_coalesce(struct pfeng_hif_chnl *chnl, struct clk *clk_sys
 void pfeng_ihc_tx_work_handler(struct work_struct *work);
 void pfeng_ihc_rx_work_handler(struct work_struct *work);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+#ifdef PFE_CFG_PFE_SLAVE
+int pfeng_hif_slave_suspend(struct pfeng_priv *priv);
+int pfeng_hif_slave_resume(struct pfeng_priv *priv);
+#endif /* PFE_CFG_PFE_SLAVE */
 
 /* bman */
 int pfeng_bman_pool_create(struct pfeng_hif_chnl *chnl);

@@ -73,7 +73,7 @@ static const hm_string_t hm_evt_strings[] = {
 	{HM_EVT_EMAC_FSM_TX_TIMEOUT, "Tx FSM timeout error"},
 	{HM_EVT_EMAC_FSM_RX_TIMEOUT, "Rx FSM timeout error"},
 	{HM_EVT_EMAC_FSM_APP_TIMEOUT, "APP FSM timeout error"},
-	{HM_EVT_EMAC_FSM_APP_TIMEOUT, "PTP FSM timeout error"},
+	{HM_EVT_EMAC_FSM_PTP_TIMEOUT, "PTP FSM timeout error"},
 
 	{HM_EVT_BUS_MASTER1, "Master1 bus read error"},
 	{HM_EVT_BUS_MASTER2, "Master2 bus write error"},

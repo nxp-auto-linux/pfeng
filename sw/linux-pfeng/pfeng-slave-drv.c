@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2022 NXP
+ * Copyright 2021-2023 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -164,23 +164,6 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	pfeng_mdio_unregister(priv);
 
 	pfeng_dt_release_config(priv);
-
-	/* Free clocks */
-	if (priv->clk_ptp) {
-		clk_disable_unprepare(priv->clk_ptp);
-		clk_put(priv->clk_ptp);
-		priv->clk_ptp = NULL;
-	}
-	if (priv->clk_pe) {
-		clk_disable_unprepare(priv->clk_pe);
-		clk_put(priv->clk_pe);
-		priv->clk_pe = NULL;
-	}
-	if (priv->clk_sys) {
-		clk_disable_unprepare(priv->clk_sys);
-		clk_put(priv->clk_sys);
-		priv->clk_sys = NULL;
-	}
 
 	dev_set_drvdata(dev, NULL);
 
@@ -388,19 +371,66 @@ err_drv:
 /* Slave PM is not supported */
 static int pfeng_drv_pm_suspend(struct device *dev)
 {
-	HM_MSG_DEV_ERR(dev, "Suspending driver is unsupported\n");
+	struct pfeng_priv *priv = dev_get_drvdata(dev);
+
+	HM_MSG_DEV_INFO(dev, "Suspending driver\n");
+
+	priv->in_suspend = true;
+
+	pfeng_debugfs_remove(priv);
+
+	/* MDIO buses */
+	pfeng_mdio_suspend(priv);
+
+	/* NETIFs */
+	pfeng_netif_suspend(priv);
+
+	/* HIFs stop */
+	pfeng_hif_slave_suspend(priv);
+
+	HM_MSG_DEV_INFO(dev, "PFE Platform suspended\n");
 
 	return -ENOTSUP;
 }
 
 static int pfeng_drv_pm_resume(struct device *dev)
 {
+	struct pfeng_priv *priv = dev_get_drvdata(dev);
+
+	HM_MSG_DEV_INFO(dev, "Resuming driver\n");
+
+	/* Create debugfs */
+	pfeng_debugfs_create(priv);
+
+	/* HIFs start */
+	pfeng_hif_slave_resume(priv);
+
+	/* MDIO buses */
+	pfeng_mdio_resume(priv);
+
+	/* Create net interfaces */
+	pfeng_netif_resume(priv);
+
+	priv->in_suspend = false;
+
 	return 0;
 }
 
 SIMPLE_DEV_PM_OPS(pfeng_drv_pm_ops,
 			pfeng_drv_pm_suspend,
 			pfeng_drv_pm_resume);
+
+
+/**
+ * pfeng_drv_shutdown
+ *
+ * @pdev: platform device pointer
+ * Description: this function calls at shut-down time to quiesce the device
+ */
+static void pfeng_drv_shutdown(struct platform_device *pdev)
+{
+	pfeng_drv_remove(pdev);
+}
 
 /* platform data */
 
@@ -412,6 +442,7 @@ static struct platform_driver pfeng_platform_driver = {
 		.pm = &pfeng_drv_pm_ops,
 		.of_match_table = of_match_ptr(pfeng_id_table),
 	},
+	.shutdown = pfeng_drv_shutdown,
 };
 
 module_platform_driver(pfeng_platform_driver);

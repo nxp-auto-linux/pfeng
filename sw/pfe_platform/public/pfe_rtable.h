@@ -117,7 +117,7 @@ uint32_t pfe_rtable_get_size(const pfe_rtable_t *rtable);
 void pfe_rtable_entry_set_ttl_decrement(pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_remove_ttl_decrement(pfe_rtable_entry_t *entry);
 pfe_rtable_entry_t *pfe_rtable_entry_create(void);
-void pfe_rtable_entry_free(pfe_rtable_entry_t *entry);
+void pfe_rtable_entry_free(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry);
 errno_t pfe_rtable_entry_set_5t(pfe_rtable_entry_t *entry, const pfe_5_tuple_t *tuple);
 errno_t pfe_rtable_entry_set_sip(pfe_rtable_entry_t *entry, const pfe_ip_addr_t *ip_addr);
 void pfe_rtable_entry_get_sip(pfe_rtable_entry_t *entry, pfe_ip_addr_t *ip_addr);
@@ -147,7 +147,8 @@ void pfe_rtable_entry_set_callback(pfe_rtable_entry_t *entry, pfe_rtable_callbac
 void pfe_rtable_entry_set_refptr(pfe_rtable_entry_t *entry, void *refptr);
 void *pfe_rtable_entry_get_refptr(pfe_rtable_entry_t *entry);
 void pfe_rtable_entry_set_child(pfe_rtable_entry_t *entry, pfe_rtable_entry_t *child);
-pfe_rtable_entry_t *pfe_rtable_entry_get_child(const pfe_rtable_entry_t *entry);
+pfe_rtable_entry_t *pfe_rtable_entry_get_child_nolock(const pfe_rtable_entry_t *entry);
+pfe_rtable_entry_t *pfe_rtable_entry_get_child(pfe_rtable_t *rtable, const pfe_rtable_entry_t *entry);
 uint8_t pfe_rtable_entry_get_stats_index(const pfe_rtable_entry_t *entry);
 
 void pfe_rtable_entry_set_id5t(pfe_rtable_entry_t *entry, uint32_t id5t);

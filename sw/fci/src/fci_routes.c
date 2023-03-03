@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -69,6 +69,9 @@ static void fci_routes_remove_related_connections(fci_rt_db_entry_t *route)
 			{
 				NXP_LOG_WARNING("Couldn't properly drop a connection: %d\n", ret);
 			}
+
+			/*	Release the entry */
+			pfe_rtable_entry_free(fci_context->rtable, entry);
 
 			entry = pfe_rtable_get_next(fci_context->rtable);
 		}

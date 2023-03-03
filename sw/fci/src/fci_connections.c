@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -453,7 +453,7 @@ static pfe_rtable_entry_t *fci_connections_create_entry(const fci_rt_db_entry_t 
 			if (EOK != pfe_rtable_entry_set_5t(new_entry, tuple))
 			{
 				NXP_LOG_ERROR("Can't set 5 tuple\n");
-				pfe_rtable_entry_free(new_entry);
+				pfe_rtable_entry_free(NULL, new_entry);
 				new_entry = NULL;
 			}
 			else
@@ -476,7 +476,7 @@ static pfe_rtable_entry_t *fci_connections_create_entry(const fci_rt_db_entry_t 
 					if (EOK != pfe_rtable_entry_set_out_sip(new_entry, &tuple_rep->dst_ip))
 					{
 						NXP_LOG_ERROR("Couldn't set output SIP\n");
-						pfe_rtable_entry_free(new_entry);
+						pfe_rtable_entry_free(NULL, new_entry);
 						new_entry = NULL;
 					}
 				}
@@ -490,7 +490,7 @@ static pfe_rtable_entry_t *fci_connections_create_entry(const fci_rt_db_entry_t 
 						if (EOK != pfe_rtable_entry_set_out_dip(new_entry, &tuple_rep->src_ip))
 						{
 							NXP_LOG_ERROR("Couldn't set output DIP\n");
-							pfe_rtable_entry_free(new_entry);
+							pfe_rtable_entry_free(NULL, new_entry);
 							new_entry = NULL;
 						}
 					}
@@ -977,7 +977,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 								NXP_LOG_ERROR("Can't remove route entry\n");
 							}
 
-							pfe_rtable_entry_free(entry);
+							pfe_rtable_entry_free(fci_context->rtable, entry);
 							entry = NULL;
 
 							if (NULL != rep_entry)
@@ -987,7 +987,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 									NXP_LOG_ERROR("Can't remove route entry\n");
 								}
 
-								pfe_rtable_entry_free(rep_entry);
+								pfe_rtable_entry_free(fci_context->rtable, rep_entry);
 								rep_entry = NULL;
 							}
 						}
@@ -1000,7 +1000,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 								NXP_LOG_ERROR("Can't remove route entry\n");
 							}
 
-							pfe_rtable_entry_free(entry);
+							pfe_rtable_entry_free(fci_context->rtable, entry);
 							entry = NULL;
 
 							if (NULL != rep_entry)
@@ -1010,7 +1010,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 									NXP_LOG_ERROR("Can't remove route entry\n");
 								}
 
-								pfe_rtable_entry_free(rep_entry);
+								pfe_rtable_entry_free(fci_context->rtable, rep_entry);
 								rep_entry = NULL;
 							}
 						}
@@ -1040,7 +1040,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 									NXP_LOG_ERROR("Can't remove route entry\n");
 								}
 
-								pfe_rtable_entry_free(entry);
+								pfe_rtable_entry_free(fci_context->rtable, entry);
 								entry = NULL;
 							}
 
@@ -1049,7 +1049,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 								NXP_LOG_ERROR("Can't remove route entry\n");
 							}
 
-							pfe_rtable_entry_free(rep_entry);
+							pfe_rtable_entry_free(fci_context->rtable, rep_entry);
 							rep_entry = NULL;
 						}
 						else
@@ -1091,11 +1091,15 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 					if (NULL != entry)
 					{
 						/*	Get associated entry */
-						rep_entry = pfe_rtable_entry_get_child(entry);
+						rep_entry = pfe_rtable_entry_get_child(fci_context->rtable, entry);
 
 						ret = pfe_rtable_del_entry(fci_context->rtable, entry);
 						if (EOK != ret)
 						{
+							/*	Notify rtable module we are done working with this rtable entry */
+							pfe_rtable_entry_free(fci_context->rtable, entry);
+							entry = NULL;
+
 							NXP_LOG_ERROR("Can't remove route entry: %d\n", ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							break;
@@ -1104,7 +1108,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 						{
 							/*	Release all entry-related resources */
 							NXP_LOG_DEBUG("FPP_CMD_IPVx_CONNTRACK: Entry removed\n");
-							pfe_rtable_entry_free(entry);
+							pfe_rtable_entry_free(fci_context->rtable, entry);
 							entry = NULL;
 							*fci_ret = FPP_ERR_OK;
 						}
@@ -1122,6 +1126,10 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 						ret = pfe_rtable_del_entry(fci_context->rtable, rep_entry);
 						if (EOK != ret)
 						{
+							/*	Notify rtable module we are done working with this rtable entry */
+							pfe_rtable_entry_free(fci_context->rtable, rep_entry);
+							rep_entry = NULL;
+
 							NXP_LOG_ERROR("Can't remove reply route entry: %d\n", ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							break;
@@ -1130,7 +1138,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 						{
 							/*	Release all entry-related resources */
 							NXP_LOG_DEBUG("FPP_CMD_IPVx_CONNTRACK: Entry removed (reply direction)\n");
-							pfe_rtable_entry_free(rep_entry);
+							pfe_rtable_entry_free(fci_context->rtable, rep_entry);
 							rep_entry = NULL;
 							*fci_ret = FPP_ERR_OK;
 						}
@@ -1159,7 +1167,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 
 					NXP_LOG_INFO("UPDATED conntrack, only TTL decrement flag will be updated\n");
 
-					/*      Get entry by 5-tuple */
+					/*	Get entry by 5-tuple */
 					if (TRUE == ipv6)
 					{
 						fci_connections_ipv6_cmd_to_5t(ct6_cmd, &tuple);
@@ -1196,6 +1204,10 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 								pfe_rtable_entry_remove_ttl_decrement(entry);
 							}
 						}
+
+						/*	Notify rtable module we are done working with this rtable entry */
+						pfe_rtable_entry_free(fci_context->rtable, entry);
+						entry = NULL;
 
 						*fci_ret = FPP_ERR_OK;
 						ret = EOK;
@@ -1301,7 +1313,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 					}
 
 					/*	Check if reply direction does exist */
-					rep_entry =  pfe_rtable_entry_get_child(entry);
+					rep_entry = pfe_rtable_entry_get_child(fci_context->rtable, entry);
 					if (NULL == rep_entry)
 					{
 						/*	This means that entry in 'reply' direction has not been requested
@@ -1411,6 +1423,12 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 							ct_reply->sport_reply = oal_htons(tuple.dport);
 						}
 					}
+
+					/*	Notify rtable module we are done working with this rtable entry */
+					pfe_rtable_entry_free(fci_context->rtable, entry);
+					pfe_rtable_entry_free(fci_context->rtable, rep_entry);
+					entry = NULL;
+					rep_entry = NULL;
 
 					*fci_ret = FPP_ERR_OK;
 					ret = EOK;
@@ -1554,6 +1572,10 @@ errno_t fci_connections_ipv4_timeout_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_
 				proto = pfe_rtable_entry_get_proto(entry);
 				timeout = fci_connections_get_default_timeout(proto);
 				pfe_rtable_entry_set_timeout(entry, timeout);
+
+				/*	Notify rtable module we are done working with this rtable entry */
+				pfe_rtable_entry_free(fci_context->rtable, entry);
+
 				entry = pfe_rtable_get_next(fci_context->rtable);
 			}
 
@@ -1674,11 +1696,9 @@ errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry)
 			{
 				NXP_LOG_ERROR("Fatal: Can't remove rtable entry = memory leak\n");
 			}
-			else
-			{
-				/*	Release the entry */
-				pfe_rtable_entry_free(entry);
-			}
+
+			/*	Release (deallocation) of the entry is done by the caller. */
+
 		}
 	}
 
@@ -1697,9 +1717,9 @@ void fci_connections_drop_all(void)
 	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-    if (unlikely(FALSE == fci_context->fci_initialized))
+	if (unlikely(FALSE == fci_context->fci_initialized))
 	{
-    	NXP_LOG_ERROR("Context not initialized\n");
+		NXP_LOG_ERROR("Context not initialized\n");
 	}
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
@@ -1714,6 +1734,9 @@ void fci_connections_drop_all(void)
 			{
 				NXP_LOG_WARNING("Couldn't properly drop a connection: %d\n", ret);
 			}
+
+			/*	Release the entry */
+			pfe_rtable_entry_free(fci_context->rtable, entry);
 
 			entry = pfe_rtable_get_next(fci_context->rtable);
 		}

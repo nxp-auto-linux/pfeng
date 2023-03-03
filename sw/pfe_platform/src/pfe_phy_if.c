@@ -55,21 +55,8 @@ typedef struct
 	LLIST_t iterator;
 } pfe_phy_if_list_entry_t;
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CONST_UNSPECIFIED
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 /* usage scope: pfe_phy_if_flush_mac_addrs */
 static const pfe_emac_crit_t crit_remap_table[4] = {EMAC_CRIT_BY_TYPE, EMAC_CRIT_BY_OWNER, EMAC_CRIT_BY_OWNER_AND_TYPE, EMAC_CRIT_ALL};
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CONST_UNSPECIFIED
-#include "Eth_43_PFE_MemMap.h"
-
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 static errno_t pfe_phy_if_write_to_class_nostats(const pfe_phy_if_t *iface, const pfe_ct_phy_if_t *class_if);
 static errno_t pfe_phy_if_write_to_class(const pfe_phy_if_t *iface, const pfe_ct_phy_if_t *class_if);
@@ -83,11 +70,7 @@ static pfe_ct_if_flags_t pfe_phy_if_get_flag_nolock(const pfe_phy_if_t *iface, p
 static errno_t pfe_phy_if_enable_hw_block(const pfe_phy_if_t *iface);
 static void pfe_phy_if_update_op_mode_nolock(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode);
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 static uint32_t pfe_phy_if_stat_to_str(const pfe_ct_phy_if_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		Write interface structure to classifier memory skipping interface statistics
@@ -143,8 +126,6 @@ static errno_t pfe_phy_if_write_to_class(const pfe_phy_if_t *iface, const pfe_ct
 	return ret;
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Converts statistics of a physical interface or classification algorithm into a text form
  * @param[in]	stat		Statistics to convert
@@ -175,8 +156,6 @@ static uint32_t pfe_phy_if_stat_to_str(const pfe_ct_phy_if_stats_t *stat, char *
 
 	return len;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		Create new physical interface instance
@@ -3360,27 +3339,24 @@ __attribute__((pure)) pfe_ct_phy_if_id_t pfe_phy_if_get_id(const pfe_phy_if_t *i
 /**
  * @brief		Get name
  * @param[in]	iface The interface instance
- * @return		Pointer to interface name string or NULL if not found/failed
+ * @return		Pointer to interface name string or "(unknown)" when called with NULL
  */
-__attribute__((pure)) char_t *pfe_phy_if_get_name(const pfe_phy_if_t *iface)
+__attribute__((pure)) const char_t *pfe_phy_if_get_name(const pfe_phy_if_t *iface)
 {
-	char_t *str;
+	const char_t *str;
 
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		str = NULL;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
+	if (NULL != iface)
 	{
 		str = iface->name;
 	}
+	else
+	{
+		NXP_LOG_WARNING("NULL argument received for pfe_phy_if_get_name\n");
+		str = "(unknown)";
+	}
+
 	return str;
 }
-
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
 
 /**
  * @brief		Return physical interface runtime statistics in text form
@@ -3430,8 +3406,6 @@ uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, 
 	}
 	return len;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		Get statistic values in numeric form
@@ -3487,11 +3461,6 @@ uint32_t pfe_phy_if_get_stat_value(pfe_phy_if_t *iface, uint32_t stat_id)
 	}
 	return ret;
 }
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* ! PFE_CFG_PFE_SLAVE */
 

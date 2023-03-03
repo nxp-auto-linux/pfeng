@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -32,40 +32,12 @@ struct pfe_log_if_tag
 	oal_mutex_t lock;
 };
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_VAR_INIT_32
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 /**
  * @brief	Pool of logical interface IDs. Module-local singleton.
  */
 static blalloc_t *pfe_log_if_id_pool = NULL;
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_VAR_INIT_32
-#include "Eth_43_PFE_MemMap.h"
-
-#define ETH_43_PFE_START_SEC_CONST_32
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-/* usage scope: pfe_log_if_get_name */
-static const char_t * const pfe_log_if_get_name_unknown = "(unknown)";
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CONST_32
-#include "Eth_43_PFE_MemMap.h"
-
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 static errno_t pfe_log_if_read_from_class(const pfe_log_if_t *iface, pfe_ct_log_if_t *class_if, uint32_t pe_idx);
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 static errno_t pfe_log_if_write_to_class_nostats(const pfe_log_if_t *iface, const pfe_ct_log_if_t *class_if);
 static errno_t pfe_log_if_write_to_class(const pfe_log_if_t *iface, const pfe_ct_log_if_t *class_if);
@@ -342,8 +314,6 @@ static errno_t pfe_log_if_match_rule2(pfe_log_if_t *iface, pfe_ct_if_m_rules_t r
 	return ret;
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Read interface structure from classifier memory
  * @param[in]	iface The interface instance
@@ -374,8 +344,6 @@ static errno_t pfe_log_if_read_from_class(const pfe_log_if_t *iface, pfe_ct_log_
 
 	return ret;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 /**
  * @brief		Write interface structure to classifier memory skipping interface statistics
@@ -2286,23 +2254,22 @@ __attribute__((pure)) bool_t pfe_log_if_is_discard(pfe_log_if_t *iface)
 /**
  * @brief		Get interface name
  * @param[in]	iface The interface instance
- * @return		Pointer to name string or NULL if failed/not found
+ * @return		Pointer to name string or "(unknown)" when called with NULL
  */
 __attribute__((pure)) const char_t *pfe_log_if_get_name(const pfe_log_if_t *iface)
 {
 	const char_t *str;
 
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
+	if (NULL != iface)
 	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		str = NULL;
+		str = iface->name;
 	}
 	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		str = ((NULL != iface) ? iface->name : pfe_log_if_get_name_unknown);
+		NXP_LOG_WARNING("NULL argument received for pfe_log_if_get_name\n");
+		str = "(unknown)";
 	}
+
 	return str;
 }
 
@@ -2371,8 +2338,6 @@ errno_t pfe_log_if_get_stats(const pfe_log_if_t *iface, pfe_ct_class_algo_stats_
 	return ret;
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Return logical interface runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
@@ -2428,13 +2393,6 @@ uint32_t pfe_log_if_get_text_statistics(const pfe_log_if_t *iface, char_t *buf, 
 
 	return len;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* ! PFE_CFG_PFE_SLAVE */
 

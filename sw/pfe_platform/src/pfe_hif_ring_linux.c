@@ -189,23 +189,23 @@ __attribute__((cold)) static void pfe_hif_ring_invalidate_std(const pfe_hif_ring
 
 __attribute__((hot)) static inline void inc_write_index_std(pfe_hif_ring_t *ring)
 {
-	ring->write_idx++;
-	ring->wr_bd = &((pfe_hif_bd_t *)ring->base_va)[ring->write_idx & RING_LEN_MASK];
-	ring->wr_wb_bd = &((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ring->write_idx & RING_LEN_MASK];
+	ring->write_idx = (ring->write_idx + 1) & RING_LEN_MASK;
+	ring->wr_bd = &((pfe_hif_bd_t *)ring->base_va)[ring->write_idx];
+	ring->wr_wb_bd = &((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ring->write_idx];
 }
 
 __attribute__((hot)) static inline void dec_write_index_std(pfe_hif_ring_t *ring)
 {
-	ring->write_idx--;
-	ring->wr_bd = &((pfe_hif_bd_t *)ring->base_va)[ring->write_idx & RING_LEN_MASK];
-	ring->wr_wb_bd = &((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ring->write_idx & RING_LEN_MASK];
+	ring->write_idx = (ring->write_idx - 1) & RING_LEN_MASK;
+	ring->wr_bd = &((pfe_hif_bd_t *)ring->base_va)[ring->write_idx];
+	ring->wr_wb_bd = &((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ring->write_idx];
 }
 
 __attribute__((hot)) static inline void inc_read_index_std(pfe_hif_ring_t *ring)
 {
-	ring->read_idx++;
-	ring->rd_bd = &((pfe_hif_bd_t *)ring->base_va)[ring->read_idx & RING_LEN_MASK];
-	ring->rd_wb_bd = &((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ring->read_idx & RING_LEN_MASK];
+	ring->read_idx = (ring->read_idx + 1) & RING_LEN_MASK;
+	ring->rd_bd = &((pfe_hif_bd_t *)ring->base_va)[ring->read_idx];
+	ring->rd_wb_bd = &((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ring->read_idx];
 }
 
 /**
@@ -277,6 +277,25 @@ __attribute__((pure, cold)) uint32_t pfe_hif_ring_get_wb_tbl_len(const pfe_hif_r
 	(void)ring;
 
 	return RING_LEN;
+}
+
+/**
+ * @brief		Check if the ring is on the head
+ * @param[in]	ring The ring instance
+ * @return		TRUE if the ring is on the head
+ * @note		Must not be preempted by: pfe_hif_ring_destroy()
+ */
+__attribute__((pure, hot)) bool_t pfe_hif_ring_is_on_head(const pfe_hif_ring_t *ring)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return FALSE;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	return ring->rd_wb_bd == ring->wb_tbl_base_va;
 }
 
 /**
@@ -685,6 +704,7 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 	uint32_t ii;
 	uint32_t len = 0U;
 	char_t *idx_str;
+	bool_t pr_out;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ring) || (NULL == name)))
@@ -702,28 +722,43 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 		/* BD ring */
 		for (ii=0U; ii<RING_LEN; ii++)
 		{
-
 			pfe_hif_bd_t *bd = &(((pfe_hif_bd_t *)ring->base_va)[ii]);
+
+			pr_out = FALSE;
+
 			if (0 == ii)
 			{
 				seq_printf(seq, "  BD va/pa v0x%px/p0x%px\n", ring->base_va, ring->base_pa);
-				seq_printf(seq, "            pa           idx: bufl:ctrl: status :  data  :  next  :seqn\n");
+				seq_printf(seq, "            pa           idx: bufl:ctrl:  data  :  next  :seqn\n");
+				pr_out = TRUE;
 			}
 
 			if ((ring->write_idx & RING_LEN_MASK) == ii)
 			{
 				idx_str = "<-- WR";
+				pr_out = TRUE;
 			}
 			else if ((ring->read_idx & RING_LEN_MASK) == ii)
 			{
 				idx_str = "<-- RD";
+				pr_out = TRUE;
 			}
 			else
 			{
 				idx_str = "";
 			}
 
-			seq_printf(seq, "    p0x%px%5d: %04x:%04x:%08x:%08x:%04x%s\n",(void *)&((pfe_hif_bd_t *)ring->base_pa)[ii], ii, HIF_RING_BD_W1_BD_BUFFLEN_GET(bd->rsvd_buflen_w1), HIF_RING_BD_W0_BD_CTRL_GET(bd->ctrl_seqnum_w0), bd->data, bd->next, HIF_RING_BD_W0_BD_SEQNUM_GET(bd->ctrl_seqnum_w0), idx_str);
+			if ((ii == 1) || (ii >= (RING_LEN - 2)) ||
+				((ii > 1) && (((ring->read_idx & RING_LEN_MASK) - 1) == ii)) ||
+				((ii < (RING_LEN - 2)) && (((ring->read_idx & RING_LEN_MASK) + 1) == ii)))
+			{
+				pr_out = TRUE;
+			}
+
+			if (TRUE == pr_out)
+			{
+				seq_printf(seq, "    p0x%px%5d: %04x:%04x:%08x:%08x:%04x%s\n",(void *)&((pfe_hif_bd_t *)ring->base_pa)[ii], ii, HIF_RING_BD_W1_BD_BUFFLEN_GET(bd->rsvd_buflen_w1), HIF_RING_BD_W0_BD_CTRL_GET(bd->ctrl_seqnum_w0), bd->data, bd->next, HIF_RING_BD_W0_BD_SEQNUM_GET(bd->ctrl_seqnum_w0), idx_str);
+			}
 		}
 
 		/* WB ring */
@@ -731,22 +766,37 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 			for (ii=0U; ii<RING_LEN; ii++)
 			{
 				pfe_hif_wb_bd_t *wb = &(((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ii]);
+
+				pr_out = FALSE;
+
 				if (0 == ii)
 				{
 					seq_printf(seq, "  WB va/pa v0x%px/p0x%px\n", ring->wb_tbl_base_va, ring->wb_tbl_base_pa);
-					seq_printf(seq, "            pa           idx:  ctl: rsvd :bufl:seqn\n");
+					seq_printf(seq, "            pa           idx:   ctl  : bufl :  seq\n");
+					pr_out = TRUE;
 				}
 
 				if ((ring->read_idx & RING_LEN_MASK) == ii)
 				{
 					idx_str = "<-- RD";
+					pr_out = TRUE;
 				}
 				else
 				{
 					idx_str = "";
 				}
 
-				seq_printf(seq, "    p0x%px%5d: %04x:%06x:%04x:%s\n", (void *)&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_pa)[ii], ii, HIF_RING_BD_W0_BD_CTRL(wb->rsvd_ctrl_w0), HIF_RING_WB_BD_W1_WB_BD_BUFFLEN(wb->seqnum_buflen_w1), HIF_RING_WB_BD_W1_WB_BD_SEQNUM(wb->seqnum_buflen_w1), idx_str);
+				if ((ii == 1) || (ii >= (RING_LEN - 2)) ||
+					((ii > 1) && (((ring->read_idx & RING_LEN_MASK) - 1) == ii)) ||
+					((ii < (RING_LEN - 2)) && (((ring->read_idx & RING_LEN_MASK) + 1) == ii)))
+				{
+					pr_out = TRUE;
+				}
+
+				if (TRUE == pr_out)
+				{
+					seq_printf(seq, "    p0x%px%5d: %04x:%06x:%04x:%s\n", (void *)&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_pa)[ii], ii, HIF_RING_BD_W0_BD_CTRL(wb->rsvd_ctrl_w0), HIF_RING_WB_BD_W1_WB_BD_BUFFLEN(wb->seqnum_buflen_w1), HIF_RING_WB_BD_W1_WB_BD_SEQNUM(wb->seqnum_buflen_w1), idx_str);
+				}
 			}
 		}
 	}

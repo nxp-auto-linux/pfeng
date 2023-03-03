@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -38,22 +38,6 @@ struct pfe_log_if_tag
 	pfe_mac_db_t *mac_db;			/*!< MAC database */
 	oal_mutex_t lock;
 };
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_VAR_INIT_32
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-/* usage scope: pfe_log_if_get_name */
-static const char_t *pfe_log_if_get_name_unknown = "(unknown)";
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_VAR_INIT_32
-#include "Eth_43_PFE_MemMap.h"
-
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 static errno_t pfe_log_if_db_lock(void)
 {
@@ -223,24 +207,20 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 		}
 		else
 		{
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 			if (EOK != oal_mutex_lock(&iface->lock))
 			{
 				NXP_LOG_ERROR("mutex lock failed\n");
 			}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 			/*	Destroy local MAC database */
 			ret = pfe_mac_db_destroy(iface->mac_db);
 			if (EOK != ret)
 			{
 				NXP_LOG_ERROR("unable to destroy MAC database: %d\n", ret);
 			}
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 			if (EOK != oal_mutex_unlock(&iface->lock))
 			{
 				NXP_LOG_ERROR("mutex unlock failed\n");
 			}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 		}
 
 		if (NULL != iface->name)
@@ -593,12 +573,10 @@ errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
 		NXP_LOG_ERROR("mutex lock failed\n");
 	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 	(void)pfe_log_if_db_lock();
 
@@ -624,12 +602,10 @@ errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 	}
 
 	(void)pfe_log_if_db_unlock();
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
 		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	return ret;
 }
 
@@ -657,12 +633,10 @@ errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
 		NXP_LOG_ERROR("mutex lock failed\n");
 	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 	(void)pfe_log_if_db_lock();
 
@@ -691,12 +665,10 @@ errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, 
 	}
 
 	(void)pfe_log_if_db_unlock();
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
 		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	return ret;
 }
 
@@ -737,12 +709,10 @@ errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
 		NXP_LOG_ERROR("mutex lock failed\n");
 	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 	ret = pfe_mac_db_get_first_addr(iface->mac_db, MAC_DB_CRIT_ALL, PFE_TYPE_ANY, PFE_CFG_LOCAL_IF, addr);
 	if(EOK != ret)
@@ -750,12 +720,10 @@ errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
 		NXP_LOG_ERROR("unable to get MAC address: %d\n", ret);
 	}
 
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
 		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 	return ret;
 }
@@ -784,12 +752,10 @@ errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_mac_db_crit_t crit, 
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_lock(&iface->lock))
 	{
 		NXP_LOG_ERROR("mutex lock failed\n");
 	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 	/*	Pass parameters */
 	req.log_if_id = iface->id;
@@ -815,12 +781,10 @@ errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_mac_db_crit_t crit, 
 	}
 
 	(void)pfe_log_if_db_unlock();
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
 		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 	return ret;
 }
 
@@ -1508,19 +1472,23 @@ errno_t pfe_log_if_allmulti_disable(const pfe_log_if_t *iface)
 /**
  * @brief		Get interface name
  * @param[in]	iface The interface instance
- * @return		Pointer to name string or NULL if failed/not found
+ * @return		Pointer to name string or "(unknown)" when called with NULL
  */
 __attribute__((pure)) const char_t *pfe_log_if_get_name(const pfe_log_if_t *iface)
 {
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
+	const char_t *str;
 
-    return ((NULL != iface)? iface->name : pfe_log_if_get_name_unknown);
+	if (NULL != iface)
+	{
+		str = iface->name;
+	}
+	else
+	{
+		NXP_LOG_WARNING("NULL argument received for pfe_log_if_get_name\n");
+		str = "(unknown)";
+	}
+
+	return str;
 }
 
 /**
@@ -1563,8 +1531,6 @@ errno_t pfe_log_if_get_stats(const pfe_log_if_t *iface, pfe_ct_class_algo_stats_
 	return ret;
 }
 
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-
 /**
  * @brief		Return logical interface runtime statistics in text form
  * @details		Function writes formatted text into given buffer.
@@ -1594,13 +1560,6 @@ uint32_t pfe_log_if_get_text_statistics(const pfe_log_if_t *iface, char_t *buf, 
 
 	return len;
 }
-
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PFE_CFG_PFE_SLAVE */
 

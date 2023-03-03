@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -55,7 +55,7 @@ errno_t pfe_phy_if_bind_hif(pfe_phy_if_t *iface, pfe_hif_chnl_t *hif);
 pfe_hif_chnl_t *pfe_phy_if_get_hif(const pfe_phy_if_t *iface);
 errno_t pfe_phy_if_bind_util(pfe_phy_if_t *iface);
 pfe_ct_phy_if_id_t pfe_phy_if_get_id(const pfe_phy_if_t *iface) __attribute__((pure));
-char_t *pfe_phy_if_get_name(const pfe_phy_if_t *iface) __attribute__((pure));
+const char_t *pfe_phy_if_get_name(const pfe_phy_if_t *iface) __attribute__((pure));
 void pfe_phy_if_destroy(pfe_phy_if_t *iface);
 pfe_class_t *pfe_phy_if_get_class(const pfe_phy_if_t *iface) __attribute__((pure));
 errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t block_state);

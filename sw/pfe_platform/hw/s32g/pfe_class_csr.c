@@ -367,6 +367,12 @@ uint32_t pfe_class_cfg_get_text_stat(addr_t base_va, struct seq_file *seq, uint8
 			reg = hal_read32(base_va + CLASS_PE7_DEBUG);
 			seq_printf(seq, "PE7 PC\t0x%x\n", reg & 0xffffU);
 
+			if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+			{
+				seq_printf(seq, "Packets freed by HW: %u\n",
+					hal_read32(base_va + CLASS_PE_CUM_DROP_COUNT_ADDR));
+			}
+
 			/*	Get info per PHY */
 			seq_printf(seq, "[PHY1]\n");
 
