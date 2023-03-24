@@ -38,7 +38,7 @@ struct pfe_phy_if_tag
 	pfe_ct_phy_if_t phy_if_class;
 	LLIST_t log_ifs;
 	oal_mutex_t lock;
-	bool_t is_enabled;
+	uint32_t enable_cnt;
 	pfe_ct_block_state_t block_state; /* Copy of value in phy_if_class for faster access */
 	pfe_mac_db_t *mac_db; /* MAC database */
 	union
@@ -201,7 +201,7 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 		iface->type = PFE_PHY_IF_INVALID;
 		iface->id = id;
 		iface->class = class;
-		iface->is_enabled = FALSE;
+		iface->enable_cnt = 0U;
 		LLIST_Init(&iface->log_ifs);
 
 		iface->mac_db = pfe_mac_db_create();
@@ -301,6 +301,15 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 		}
 		else
 		{
+			if (0U != iface->enable_cnt)
+			{
+				iface->enable_cnt = 0U;
+				ret = pfe_phy_if_disable_nolock(iface);
+				if (EOK != ret)
+				{
+					NXP_LOG_ERROR("%s can't be disabled: %d\n", iface->name, ret);
+				}
+			}
 			if (iface->mac_db != NULL)
 			{
 				ret = pfe_mac_db_destroy(iface->mac_db);
@@ -1070,7 +1079,7 @@ errno_t pfe_phy_if_bind_emac(pfe_phy_if_t *iface, pfe_emac_t *emac)
 			iface->type = PFE_PHY_IF_EMAC;
 			iface->port.emac = emac;
 
-			if (TRUE == iface->is_enabled)
+			if (0U != iface->enable_cnt)
 			{
 				if (EOK != oal_mutex_unlock(&iface->lock))
 				{
@@ -1287,7 +1296,7 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
-		ret = iface->is_enabled;
+		ret = 0U != iface->enable_cnt;
 
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
@@ -1354,7 +1363,7 @@ static errno_t pfe_phy_if_enable_hw_block(const pfe_phy_if_t *iface)
  */
 errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 {
-	errno_t ret;
+	errno_t ret = EOK;
 	pfe_ct_if_flags_t tmp;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1373,41 +1382,49 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 
 		NXP_LOG_DEBUG("Enabling %s\n", iface->name);
 
-		/* Enable HW bridge lookup if required */
-		pfe_phy_if_update_op_mode_nolock(iface, iface->phy_if_class.mode);
-
-		/*	Enable interface instance. Backup flags and write the changes. */
-		tmp = iface->phy_if_class.flags;
-		iface->phy_if_class.flags |= oal_htonl(IF_FL_ENABLED);
-		ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
-		if (EOK != ret)
+		if (0U != iface->enable_cnt)
 		{
-			/*	Failed. Revert flags. */
-			NXP_LOG_ERROR("Phy IF configuration failed\n");
-			iface->phy_if_class.flags = tmp;
+			iface->enable_cnt++;
+			NXP_LOG_DEBUG("Interface %s already enabled\n", iface->name);
 		}
 		else
 		{
-			/*	Mark the interface as enabled */
-			iface->is_enabled = TRUE;
 
-			ret = pfe_phy_if_enable_hw_block(iface);
+			/* Enable HW bridge lookup if required */
+			pfe_phy_if_update_op_mode_nolock(iface, iface->phy_if_class.mode);
 
+			/*	Enable interface instance. Backup flags and write the changes. */
+			tmp = iface->phy_if_class.flags;
+			iface->phy_if_class.flags |= oal_htonl(IF_FL_ENABLED);
+			ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 			if (EOK != ret)
 			{
-				/*	HW configuration failure. Backup flags and disable the instance. */
-				tmp = iface->phy_if_class.flags;
-				iface->phy_if_class.flags &= (pfe_ct_if_flags_t)oal_htonl(~(uint32_t)IF_FL_ENABLED);
-				ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
+				/*	Failed. Revert flags. */
+				NXP_LOG_ERROR("Phy IF configuration failed\n");
+				iface->phy_if_class.flags = tmp;
+			}
+			else
+			{
+				iface->enable_cnt++;
+
+				ret = pfe_phy_if_enable_hw_block(iface);
+
 				if (EOK != ret)
 				{
-					/*	Failed. Revert flags. */
-					NXP_LOG_ERROR("Phy IF configuration failed\n");
-					iface->phy_if_class.flags = tmp;
-				}
-				else
-				{
-					iface->is_enabled = FALSE;
+					/*	HW configuration failure. Backup flags and disable the instance. */
+					tmp = iface->phy_if_class.flags;
+					iface->phy_if_class.flags &= (pfe_ct_if_flags_t)oal_htonl(~(uint32_t)IF_FL_ENABLED);
+					ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
+					if (EOK != ret)
+					{
+						/*	Failed. Revert flags. */
+						NXP_LOG_ERROR("Phy IF configuration failed\n");
+						iface->phy_if_class.flags = tmp;
+					}
+					else
+					{
+						iface->enable_cnt = 0U;
+					}
 				}
 			}
 		}
@@ -1444,6 +1461,12 @@ static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 		{
 			ret = EOK;
 		}
+		else if (1U < iface->enable_cnt)
+		{
+			iface->enable_cnt--;
+			NXP_LOG_DEBUG("Interface %s is still in use, skipping\n", iface->name);
+			ret = EOK;
+		}
 		else
 		{
 			NXP_LOG_DEBUG("Disabling %s\n", iface->name);
@@ -1460,8 +1483,7 @@ static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 			}
 			else
 			{
-				/*	Mark the interface as disabled */
-				iface->is_enabled = FALSE;
+				iface->enable_cnt = 0U;
 
 				/*	Disable also associated HW block */
 				if (NULL == iface->port.instance)

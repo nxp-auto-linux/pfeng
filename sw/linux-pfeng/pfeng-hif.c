@@ -429,21 +429,19 @@ static bool pfeng_hif_chnl_tx_conf(struct pfeng_hif_chnl *chnl, int napi_budget)
 		done++;
 	}
 
-	if (unlikely(chnl->queues_stopped)) {
-		if (pfeng_hif_chnl_txbd_unused(chnl) >= PFE_TXBDS_MAX_NEEDED) {
-			int i;
+	if (pfeng_hif_chnl_txbd_unused(chnl) >= PFE_TXBDS_MAX_NEEDED) {
+		int i;
 
-			for (i = 0; i < PFENG_NETIFS_CNT; i++) {
-				struct pfeng_netif *netif = chnl->netifs[i];
+		for (i = 0; i < PFENG_NETIFS_CNT; i++) {
+			struct pfeng_netif *netif = chnl->netifs[i];
 
-				if (!netif)
-					continue;
+			if (!netif)
+				continue;
 
-				if (unlikely(netif_carrier_ok(netif->netdev) &&
-					     __netif_subqueue_stopped(netif->netdev, 0))) {
-					/* only one queue per netdev used at this point */
+			if (__netif_subqueue_stopped(netif->netdev, 0)) {
+				smp_rmb();
+				if (!test_bit(PFENG_TMU_FULL, &netif->tx_queue_status)) {
 					netif_wake_subqueue(netif->netdev, 0);
-					chnl->queues_stopped = false;
 				}
 			}
 		}

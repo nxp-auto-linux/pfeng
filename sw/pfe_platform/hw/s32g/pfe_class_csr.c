@@ -56,7 +56,7 @@ void pfe_class_cfg_set_config(addr_t base_va, const pfe_class_cfg_t *cfg)
 	if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
 	{
 		regval &= ~AXI_DBUS_BURST_SIZE(0x3ffU);
-		regval |= AXI_DBUS_BURST_SIZE(0x100U);
+		regval |= AXI_DBUS_BURST_SIZE(0x200U);
 		regval |= 0x3U;
 		hal_write32(regval, base_va + CLASS_AXI_CTRL_ADDR);
 	}

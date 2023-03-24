@@ -26,6 +26,19 @@
 #include "hal.h"
 #include "pfeng.h"
 
+/*
+ * S32G soc specific addresses
+ */
+#define S32G_MAIN_GPR_PFE_COH_EN		0x0
+#define GPR_PFE_COH_EN_UTIL			(1 << 5)
+#define GPR_PFE_COH_EN_HIF3			(1 << 4)
+#define GPR_PFE_COH_EN_HIF2			(1 << 3)
+#define GPR_PFE_COH_EN_HIF1			(1 << 2)
+#define GPR_PFE_COH_EN_HIF0			(1 << 1)
+#define GPR_PFE_COH_EN_HIF_0_3_MASK		(GPR_PFE_COH_EN_HIF0 | GPR_PFE_COH_EN_HIF1 | \
+						 GPR_PFE_COH_EN_HIF2 | GPR_PFE_COH_EN_HIF3)
+#define GPR_PFE_COH_EN_DDR			(1 << 0)
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Jan Petrous <jan.petrous@nxp.com>");
 MODULE_DESCRIPTION("PFEng SLAVE driver");
@@ -58,6 +71,15 @@ MODULE_PARM_DESC(disable_master_detection, "\t 1 - disable Master detection, def
 static int ipready_tmout = PFE_CFG_IP_READY_MS_TMOUT;
 module_param(ipready_tmout, int, 0644);
 MODULE_PARM_DESC(ipready_tmout, "\t 0 - nn, timeout for IP-ready, 0 means 'no timeout'");
+
+/* Note: setting HIF port coherency should be done once for A53 domain!
+ *       The recommended way is to use external solution, to not
+ *       get conflict when two A53 Slave instances are trying to manage
+ *       coherency register concurrently
+ */
+static int manage_port_coherency = 0;
+module_param(manage_port_coherency, int, 0644);
+MODULE_PARM_DESC(manage_port_coherency, "\t 1 - enable HIF port coherency management, default is 0");
 
 uint32_t get_pfeng_pfe_cfg_master_if(void)
 {
@@ -109,6 +131,80 @@ err_cfg_alloc:
 	return NULL;
 }
 
+static int pfeng_s32g_set_port_coherency(struct pfeng_priv *priv)
+{
+	struct device *dev = &priv->pdev->dev;
+	void *syscon;
+	int ret = 0;
+	u32 val;
+
+	if (!manage_port_coherency)
+		return 0;
+
+	syscon = ioremap(priv->syscon.start, priv->syscon.end - priv->syscon.start + 1);
+	if(!syscon) {
+		HM_MSG_DEV_ERR(dev, "cannot map GPR, aborting (INTF_SEL)\n");
+		return -EIO;
+	}
+
+	val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
+	if ((val & GPR_PFE_COH_EN_HIF_0_3_MASK) == GPR_PFE_COH_EN_HIF_0_3_MASK) {
+		HM_MSG_DEV_INFO(dev, "PFE port coherency already enabled, mask 0x%x\n", val);
+	} else {
+		val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
+		val |= GPR_PFE_COH_EN_HIF_0_3_MASK;
+		hal_write32(val, syscon + S32G_MAIN_GPR_PFE_COH_EN);
+
+		val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
+		if ((val & GPR_PFE_COH_EN_HIF_0_3_MASK) != GPR_PFE_COH_EN_HIF_0_3_MASK) {
+			HM_MSG_DEV_ERR(dev, "Failed to enable port coherency, mask 0x%x\n", val);
+			ret = -EINVAL;
+		} else
+			HM_MSG_DEV_INFO(dev, "PFE port coherency enabled, mask 0x%x\n", val);
+	}
+
+	iounmap(syscon);
+
+	return ret;
+}
+
+static int pfeng_s32g_clear_port_coherency(struct pfeng_priv *priv)
+{
+	struct device *dev = &priv->pdev->dev;
+	void *syscon;
+	int ret = 0;
+	u32 val;
+
+	if (!manage_port_coherency)
+		return 0;
+
+	syscon = ioremap(priv->syscon.start, priv->syscon.end - priv->syscon.start + 1);
+	if(!syscon) {
+		HM_MSG_DEV_ERR(dev, "cannot map GPR, aborting (INTF_SEL)\n");
+		return -EIO;
+	}
+
+	val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
+	if (!(val & GPR_PFE_COH_EN_HIF_0_3_MASK)) {
+		HM_MSG_DEV_INFO(dev, "PFE port coherency already cleared\n");
+	} else {
+		val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
+		val &= ~GPR_PFE_COH_EN_HIF_0_3_MASK;
+		hal_write32(val, syscon + S32G_MAIN_GPR_PFE_COH_EN);
+
+		val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
+		if (val & GPR_PFE_COH_EN_HIF_0_3_MASK) {
+			HM_MSG_DEV_ERR(dev, "Failed to clear port coherency, mask 0x%x\n", val);
+			ret = -EINVAL;
+		} else
+			HM_MSG_DEV_INFO(dev, "PFE port coherency cleared\n");
+	}
+
+	iounmap(syscon);
+
+	return ret;
+}
+
 /**
  * pfeng_s32g_remove
  *
@@ -155,6 +251,10 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 			HM_MSG_DEV_INFO(dev, "PFE Platform stopped\n");
 		}
 	}
+
+	/* Clear HIF channels coherency */
+	if (of_dma_is_coherent(dev->of_node))
+		pfeng_s32g_clear_port_coherency(priv);
 
 	if (priv->ihc_wq)
 		destroy_workqueue(priv->ihc_wq);
@@ -215,6 +315,13 @@ static int pfeng_drv_deferred_probe(void *arg)
 	if (ret)
 		goto err_drv;
 
+	if (!priv->syscon.start && manage_port_coherency) {
+		HM_MSG_DEV_ERR(dev, "Cannot find syscon resource, aborting\n");
+		manage_port_coherency = 0;
+		ret = -EINVAL;
+		goto err_drv;
+	}
+
 	/* HIF IHC channel number */
 	if (master_ihc_chnl < (HIF_CFG_MAX_CHANNELS + 1))
 		priv->ihc_master_chnl = master_ihc_chnl;
@@ -229,6 +336,13 @@ static int pfeng_drv_deferred_probe(void *arg)
 	if (!priv->ihc_slave_wq) {
 		HM_MSG_DEV_ERR(dev, "Initialize of Slave WQ failed\n");
 		goto err_drv;
+	}
+
+	/* Set HIF channels coherency */
+	if (of_dma_is_coherent(dev->of_node)) {
+		ret = pfeng_s32g_set_port_coherency(priv);
+		if (ret)
+			goto err_drv;
 	}
 
 	pm_runtime_get_noresume(dev);
@@ -246,6 +360,8 @@ static int pfeng_drv_deferred_probe(void *arg)
 		HM_MSG_DEV_ERR(dev, "OAL memory managment init failed\n");
 		goto err_drv;
 	}
+
+	priv->pfe_cfg->lltx_res_tmu_q_id = PFENG_TMU_LLTX_DISABLE_MODE_Q_ID; /* disable LLTX for Slave */
 
 	/* Start PFE Platform */
 	ret = pfe_platform_init(priv->pfe_cfg);
@@ -388,6 +504,10 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	/* HIFs stop */
 	pfeng_hif_slave_suspend(priv);
 
+	/* Clear HIF channels coherency */
+	if (of_dma_is_coherent(dev->of_node))
+		pfeng_s32g_clear_port_coherency(priv);
+
 	HM_MSG_DEV_INFO(dev, "PFE Platform suspended\n");
 
 	return -ENOTSUP;
@@ -398,6 +518,10 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
 
 	HM_MSG_DEV_INFO(dev, "Resuming driver\n");
+
+	/* Set HIF channels coherency */
+	if (of_dma_is_coherent(dev->of_node))
+		pfeng_s32g_set_port_coherency(priv);
 
 	/* Create debugfs */
 	pfeng_debugfs_create(priv);

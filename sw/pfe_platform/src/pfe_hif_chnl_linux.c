@@ -1930,10 +1930,19 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
  * @param[in]	seq			Pointer to debugfs seq_file
  * @param[in]	verb_level 	Verbosity level, number of data written to the buffer
  */
-__attribute__((cold)) uint32_t pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, struct seq_file *seq, uint8_t verb_level)
-{
-	uint32_t len = 0;
 
+static void pfe_seq_print(void *dev, const char *fmt, ...)
+{
+	struct seq_file *seq = (struct seq_file*)dev;
+	va_list args;
+
+	va_start(args, fmt);
+	seq_vprintf(seq, fmt, args);
+	va_end(args);
+}
+
+__attribute__((cold)) void pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, struct seq_file *seq, uint8_t verb_level)
+{
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
 	{
@@ -1942,17 +1951,20 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	if(dump_rx)
+	if (dump_rx)
 	{
-		len += pfe_hif_ring_dump(chnl->rx_ring, "RX", seq, verb_level);
+		pfe_hif_ring_dump(chnl->rx_ring, "RX", seq, pfe_seq_print, verb_level);
 	}
 
-	if(dump_tx)
+	if (dump_tx)
 	{
-		len += pfe_hif_ring_dump(chnl->tx_ring, "TX", seq, verb_level);
+		pfe_hif_ring_dump(chnl->tx_ring, "TX", seq, pfe_seq_print, verb_level);
 	}
+}
 
-	return len;
+__attribute__((cold)) void pfe_hif_chnl_dump_tx_ring_to_ndev(const pfe_hif_chnl_t *chnl, struct net_device *ndev, void (*ndev_print)(void *ndev, const char *fmt, ...))
+{
+	pfe_hif_ring_dump(chnl->tx_ring, "TX ndev", ndev, ndev_print, PFE_CFG_VERBOSITY_LEVEL);
 }
 
 /**
@@ -2012,8 +2024,7 @@ __attribute__((cold)) uint32_t pfe_hif_chnl_get_text_statistics(const pfe_hif_ch
 	/*	HIF */
 	pfe_hif_chnl_cfg_get_text_stat(chnl->cbus_base_va, chnl->id, seq, verb_level);
 
-	if (verb_level >= 9)
-		pfe_hif_chnl_dump_ring(chnl, TRUE, TRUE, seq, verb_level);
+	pfe_hif_chnl_dump_ring(chnl, TRUE, TRUE, seq, verb_level);
 
 	return 0;
 }

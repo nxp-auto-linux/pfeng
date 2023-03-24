@@ -219,7 +219,8 @@ errno_t pfe_hif_chnl_set_rx_irq_coalesce(pfe_hif_chnl_t *chnl, uint32_t frames, 
 bool_t pfe_hif_chnl_is_rx_dma_active(const pfe_hif_chnl_t *chnl) __attribute__((hot));
 bool_t pfe_hif_chnl_is_tx_dma_active(const pfe_hif_chnl_t *chnl) __attribute__((hot));
 uint32_t pfe_hif_chnl_get_id(const pfe_hif_chnl_t *chnl) __attribute__((pure, cold));
-uint32_t pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, struct seq_file *seq, uint8_t verb_level) __attribute__((cold));
+void pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, struct seq_file *seq, uint8_t verb_level) __attribute__((cold));
+void pfe_hif_chnl_dump_tx_ring_to_ndev(const pfe_hif_chnl_t *chnl, struct net_device *ndev, void (*ndev_print)(void *ndev, const char *fmt, ...)) __attribute__((cold));
 uint32_t pfe_hif_chnl_get_tx_cnt(const pfe_hif_chnl_t *chnl);
 uint32_t pfe_hif_chnl_get_rx_cnt(const pfe_hif_chnl_t *chnl);
 

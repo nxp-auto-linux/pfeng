@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -114,7 +114,6 @@ errno_t fci_routes_drop_one(fci_rt_db_entry_t *route);
 void fci_routes_drop_all(void);
 void fci_routes_drop_all_ipv4(void);
 void fci_routes_drop_all_ipv6(void);
-errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry);
 void fci_connections_drop_all(void);
 errno_t fci_connections_set_default_timeout(uint8_t ip_proto, uint32_t timeout);
 uint32_t fci_connections_get_default_timeout(uint8_t ip_proto);

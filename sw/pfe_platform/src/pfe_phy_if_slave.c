@@ -16,11 +16,9 @@
  *				sends requests to master driver which performs the actual
  *				requested operations.
  */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 
-#ifdef PFE_CFG_PFE_SLAVE
 #include "hal.h"
 #include "pfe_platform_cfg.h"
 #include "pfe_ct.h"
@@ -42,9 +40,30 @@ static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_
 
 static errno_t pfe_phy_if_db_lock(void)
 {
-	errno_t ret;
+	/*	Wait 1ms */
+	const uint32_t timeout_step = 1000U;
+	/*	Timeout 1.5s */
+	uint32_t timeout_us = 1500U * 1000U;
+	errno_t ret = EINVAL;
 
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_LOCK, NULL, 0, NULL, 0U);
+	/* Try to lock IF DB */
+	for (; timeout_us > 0U; timeout_us -= timeout_step)
+	{
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_LOCK, NULL, 0, NULL, 0U);
+		if (EOK == ret)
+		{
+			/* Got lock */
+			break;
+		}
+		if (ENOLCK != ret)
+		{
+			/* Got real error */
+			break;
+		}
+
+		oal_time_usleep(timeout_step);
+	}
+
 	if (EOK != ret)
 	{
 		NXP_LOG_WARNING("Unable to lock interface DB: %d\n", ret);
@@ -60,7 +79,7 @@ static errno_t pfe_phy_if_db_unlock(void)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_UNLOCK, NULL, 0, NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_WARNING("Unable to lock interface DB: %d\n", ret);
+		NXP_LOG_WARNING("Unable to unlock interface DB: %d\n", ret);
 	}
 
 	return ret;
@@ -1875,6 +1894,3 @@ uint32_t pfe_phy_if_get_stat_value(pfe_phy_if_t *iface, uint32_t stat_id)
 
 	return stat_val;
 }
-
-#endif /* PFE_CFG_PFE_SLAVE */
-

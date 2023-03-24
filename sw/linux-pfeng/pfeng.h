@@ -44,7 +44,7 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"1.3.0 RC2"
+#define PFENG_DRIVER_VERSION		"1.3.0"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
@@ -99,6 +99,7 @@ enum {
 
 #define PFENG_TX_PKT_HEADER_SIZE	(sizeof(pfe_ct_hif_tx_hdr_t))
 #define PFENG_RX_PKT_HEADER_SIZE	(sizeof(pfe_ct_hif_rx_hdr_t))
+#define PFENG_CSUM_OFF_PKT_LIMIT	3028 /* bytes */
 
 #define PFENG_INT_TIMER_DEFAULT		256 /* usecs */
 
@@ -133,8 +134,28 @@ struct pfeng_netif_cfg {
 	bool				only_mgmt;
 };
 
+enum tx_queue_status {
+	PFENG_TMU_FULL
+};
+
+#define PFENG_TMU_LLTX_DISABLE_MODE_Q_ID	255U
+
+struct pfeng_tmu_q_cfg {
+	u8 q_id;
+	pfe_ct_phy_if_id_t phy_id;
+	u8 q_size; /* cannot exceed 255 */
+	u8 min_thr;
+};
+
+struct pfeng_tmu_q {
+	u32 pkts;
+	u8 cap;
+};
+
 /* net interface private data */
 struct pfeng_netif {
+	struct work_struct		tmu_status_check ____cacheline_aligned_in_smp;
+	unsigned long 			tx_queue_status;
 	struct list_head		lnode;
 	struct device			*dev;
 	struct net_device		*netdev;
@@ -151,6 +172,10 @@ struct pfeng_netif {
 	bool mc_unsynced;
 	bool uc_unsynced;
 
+	pfe_tmu_t 			*tmu; /* fast access to the TMU handle */
+	struct pfeng_tmu_q_cfg 		tmu_q_cfg;
+	struct pfeng_tmu_q 		tmu_q;
+
 	/* PTP/Time stamping*/
 	struct ptp_clock_info           ptp_ops;
 	struct ptp_clock                *ptp_clock;
@@ -161,6 +186,8 @@ struct pfeng_netif {
 	struct list_head                ts_skb_list;
 	uint16_t                        ts_ref_num;
 	bool				ts_work_on;
+	bool				dbg_info_dumped;
+	struct work_struct              ndev_reset_work;
 };
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
@@ -196,7 +223,6 @@ struct pfeng_hif_chnl {
 	pfe_hif_chnl_t			*priv;
 	u8				refcount;
 	bool				ihc;
-	bool				queues_stopped;
 	u8				status;
 	u8				idx;
 	u32				features;
@@ -216,6 +242,7 @@ struct pfeng_hif_chnl {
 
 	pfe_phy_if_t			*phyif_hif;
 	pfe_log_if_t			*logif_hif;
+	refcount_t			logif_hif_count;
 
 	u32				cfg_rx_max_coalesced_frames;
 	u32				cfg_rx_coalesce_usecs;
@@ -409,6 +436,7 @@ void pfeng_hif_chnl_txconf_unroll_map_full(struct pfeng_hif_chnl *chnl, int i);
 void pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_budget);
 int pfeng_hif_chnl_txbd_unused(struct pfeng_hif_chnl *chnl);
 void pfeng_hif_chnl_txconf_update_wr_idx(struct pfeng_hif_chnl *chnl, int count);
+void pfeng_bman_tx_pool_dump(struct pfeng_hif_chnl *chnl, struct net_device *ndev, void (*dbg_print)(void *ndev, const char *fmt, ...));
 
 /* netif */
 int pfeng_netif_create(struct pfeng_priv *priv);

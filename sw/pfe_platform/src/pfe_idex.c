@@ -1,27 +1,19 @@
 /* =========================================================================
- *  Copyright 2019-2022 NXP
+ *  Copyright 2019-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
  * ========================================================================= */
-
 #include "pfe_cfg.h"
 #include "oal.h"
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 #include "linked_list.h"
 #include "pfe_hif_drv.h"
 #include "pfe_hif.h"
 #include "pfe_idex.h"
 #include "pfe_platform_cfg.h"
 
-#if defined(PFE_CFG_TARGET_OS_LINUX)
-    #define IDEX_IS_NOCPY FALSE
-#elif defined(PFE_CFG_TARGET_OS_QNX)
-    #define IDEX_IS_NOCPY (4 == PFE_CFG_LOCAL_IF)
-#else
-    #define IDEX_IS_NOCPY (4 == PFE_CFG_LOCAL_IF_VALUE)
-#endif
+#define IDEX_IS_NOCPY FALSE
 
 /**
  * @brief	IDEX request timeout in seconds
@@ -205,23 +197,8 @@ typedef struct
 	pfe_hif_t *hif;						/*	HIF module, for Master-up signaling */
 } pfe_idex_t;
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_VAR_CLEARED_UNSPECIFIED
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 /*	Local IDEX instance storage */
 static pfe_idex_t pfe_idex = {0};
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_VAR_CLEARED_UNSPECIFIED
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex);
 static void pfe_idex_do_tx_conf(const pfe_hif_drv_client_t *client, const pfe_idex_t *idex);
@@ -505,22 +482,6 @@ static void pfe_idex_do_tx_conf(const pfe_hif_drv_client_t *client, const pfe_id
 	}
 }
 
-#if (defined(PFE_CFG_TARGET_OS_AUTOSAR) && (FALSE == PFE_CFG_HIF_IRQ_ENABLED))
-/**
- * @brief		IHC client polling
- * @details		Called by MainFunction when client-related event happens (packet received, packet
- * 				transmitted).
- */
-void pfe_idex_ihc_poll(void)
-{
-	/*	Run TX routine */
-    pfe_idex_do_tx_conf(pfe_idex.ihc_client, &pfe_idex);
-	/*	Run RX routine */
-    pfe_idex_do_rx(pfe_idex.ihc_client, &pfe_idex);
-
-}
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR && PFE_CFG_HIF_IRQ_ENABLED */
-
 /**
  * @brief		Get request by sequence number
  * @note		Every request can be identified by its unique sequence number.
@@ -722,9 +683,6 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	uint32_t            timeout_us = 1500U * 1000U;
 	/*	Wait 1ms */
 	const uint32_t timeout_step = 1000U;
-#if (defined(PFE_CFG_TARGET_OS_AUTOSAR) && (FALSE == PFE_CFG_HIF_IRQ_ENABLED))
-	pfe_hif_drv_t *hif_drv;
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR && PFE_CFG_HIF_IRQ_ENABLED */
 
 	/*	1.) Create the request instance with room for request payload */
 	req = oal_mm_malloc_contig_aligned_nocache((addr_t)(sizeof(pfe_idex_request_t)) + (addr_t)data_len, 0U);
@@ -795,16 +753,8 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			/*	4.) Block until response is received or timeout occurred. RX and
 		 	 	TX processing is expected to be done asynchronously in
 		 	 	pfe_idex_ihc_handler(). */
-#if (defined(PFE_CFG_TARGET_OS_AUTOSAR) && (FALSE == PFE_CFG_HIF_IRQ_ENABLED))
-			hif_drv = pfe_hif_drv_client_get_drv(idex->ihc_client);
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR && PFE_CFG_HIF_IRQ_ENABLED */
 			for (; timeout_us > 0U; timeout_us -= timeout_step)
 			{
-#if (defined(PFE_CFG_TARGET_OS_AUTOSAR) && (FALSE == PFE_CFG_HIF_IRQ_ENABLED))
-				pfe_hif_drv_tx_job(hif_drv);
-				pfe_hif_drv_rx_job(hif_drv);
-				pfe_idex_ihc_poll();
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR && PFE_CFG_HIF_IRQ_ENABLED */
 				if (IDEX_MASTER_DISCOVERY == type)
 				{
 					NXP_LOG_ERROR("Not implemented\n");
@@ -1330,11 +1280,3 @@ errno_t pfe_idex_set_rpc_ret_val(errno_t retval, void *resp, uint16_t resp_len)
 	}
 	return ret;
 }
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-

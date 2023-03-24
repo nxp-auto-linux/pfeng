@@ -2109,7 +2109,7 @@ __attribute__((pure)) bool_t pfe_l2br_domain_is_fallback(const pfe_l2br_domain_t
  */
 static errno_t pfe_l2br_set_static_entry(const pfe_l2br_t *bridge, uint16_t vlan, const pfe_mac_addr_t mac, uint32_t new_fw_list, pfe_l2br_static_entry_t **static_entry)
 {
-	errno_t ret;
+	errno_t ret = EINVAL;
 
 	(*static_entry)->entry = pfe_l2br_table_entry_create(bridge->mac_table);
 
@@ -2131,24 +2131,28 @@ static errno_t pfe_l2br_set_static_entry(const pfe_l2br_t *bridge, uint16_t vlan
 		if (EOK != pfe_l2br_table_entry_set_vlan((*static_entry)->entry, vlan))
 		{
 			NXP_LOG_ERROR("Couldn't set vlan\n");
+			pfe_l2br_table_entry_destroy((*static_entry)->entry);
 			oal_mm_free(*static_entry);
 			ret = EINVAL;
 		}
 		else if (EOK != pfe_l2br_table_entry_set_mac_addr((*static_entry)->entry, mac))
 		{
 			NXP_LOG_ERROR("Couldn't set mac address\n");
+			pfe_l2br_table_entry_destroy((*static_entry)->entry);
 			oal_mm_free(*static_entry);
 			ret = EINVAL;
 		}
 		else if (EOK != pfe_l2br_table_entry_set_action_data((*static_entry)->entry, (*static_entry)->u.action_data_u64val))
 		{
 			NXP_LOG_ERROR("Couldn't set action data\n");
+			pfe_l2br_table_entry_destroy((*static_entry)->entry);
 			oal_mm_free(*static_entry);
 			ret = EINVAL;
 		}
 		else if (EOK != pfe_l2br_table_add_entry(bridge->mac_table, (*static_entry)->entry))
 		{
 			NXP_LOG_ERROR("Couldn't set action data\n");
+			pfe_l2br_table_entry_destroy((*static_entry)->entry);
 			oal_mm_free(*static_entry);
 			ret	 = EINVAL;
 		}

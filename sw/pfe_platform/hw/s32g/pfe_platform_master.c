@@ -2303,7 +2303,6 @@ static void pfe_platform_destroy_class(pfe_platform_t *platform)
 	}
 }
 
-#if defined(PFE_CFG_L2BRIDGE_ENABLE)
 /**
  * @brief		Assign L2 Bridge to the platform
  */
@@ -2381,7 +2380,6 @@ static void pfe_platform_destroy_l2_bridge(pfe_platform_t *platform)
 		platform->vlantab = NULL;
 	}
 }
-#endif /* PFE_CFG_L2BRIDGE_ENABLE */
 
 #if defined(PFE_CFG_RTABLE_ENABLE)
 
@@ -2954,9 +2952,7 @@ static errno_t pfe_platform_create_fci(pfe_platform_t *platform)
 #if defined(PFE_CFG_RTABLE_ENABLE)
 	fci_init_info.rtable = platform->rtable;
 #endif /* PFE_CFG_RTABLE_ENABLE */
-#if defined(PFE_CFG_L2BRIDGE_ENABLE)
 	fci_init_info.l2_bridge = platform->l2_bridge;
-#endif /* PFE_CFG_L2BRIDGE_ENABLE */
 	fci_init_info.class = platform->classifier;
 	fci_init_info.phy_if_db = platform->phy_if_db;
 	fci_init_info.log_if_db = platform->log_if_db;
@@ -3774,14 +3770,14 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	{
 		goto exit;
 	}
-#ifdef PFE_CFG_FCI_ENABLE
-#if defined(PFE_CFG_L2BRIDGE_ENABLE)
+
 	/*	L2 Bridge. Must be initialized after soft reset. */
 	ret = pfe_platform_create_l2_bridge(&pfe, config);
 	if (EOK != ret)
 	{
 		goto exit;
 	}
+#ifdef PFE_CFG_FCI_ENABLE
 #if defined(PFE_CFG_RTABLE_ENABLE)
 	/*	Routing Table */
 	ret = pfe_platform_create_rtable(&pfe, config);
@@ -3790,7 +3786,6 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 		goto exit;
 	}
 #endif /* PFE_CFG_RTABLE_ENABLE */
-#endif /* PFE_CFG_L2BRIDGE_ENABLE */
 #endif /* PFE_CFG_FCI_ENABLE */
 
 	/*	HIF */
@@ -3949,9 +3944,7 @@ static void pfe_platform_destroy_group1(void)
 #if defined(PFE_CFG_RTABLE_ENABLE)
 	pfe_platform_destroy_rtable(&pfe);
 #endif /* PFE_CFG_RTABLE_ENABLE */
-#if defined(PFE_CFG_L2BRIDGE_ENABLE)
 	pfe_platform_destroy_l2_bridge(&pfe);
-#endif /* PFE_CFG_L2BRIDGE_ENABLE */
 }
 
 static void pfe_platform_destroy_group2(void)

@@ -128,6 +128,10 @@ static bool g3_rtable_in_lmem = true;
 module_param(g3_rtable_in_lmem , bool, 0644);
 MODULE_PARM_DESC(g3_rtable_in_lmem , "\t Allocate PFE's Routing Table in local memory on S32G3 (default: true)");
 
+static int lltx_res_tmu_q_id = 255;
+module_param(lltx_res_tmu_q_id, int, 0644);
+MODULE_PARM_DESC(lltx_res_tmu_q_id, "\t Reserved TMU queue ID for Host lossless Tx (LLTX), range: 0-7; use 255 to disable LLTX (default: 255)");
+
 uint32_t get_pfeng_pfe_cfg_master_if(void)
 {
 	return pfeng_pfe_cfg_master_if;
@@ -690,6 +694,15 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 
 	/* Routing Table allocation option for S32G3 */
 	priv->pfe_cfg->g3_rtable_in_lmem = g3_rtable_in_lmem;
+
+	/* reserved TMU queue ID for lossless Tx (LLTX) */
+	if (lltx_res_tmu_q_id < 0 || (lltx_res_tmu_q_id > 7 && lltx_res_tmu_q_id != PFENG_TMU_LLTX_DISABLE_MODE_Q_ID)) {
+		HM_MSG_DEV_ERR(dev, "Invalid LLTX TMU queue id (%d)\n", lltx_res_tmu_q_id);
+		ret = -EINVAL;
+		goto err_drv;
+	}
+
+	priv->pfe_cfg->lltx_res_tmu_q_id = (u8)lltx_res_tmu_q_id;
 
 	/* Start PFE Platform */
 	ret = pfe_platform_init(priv->pfe_cfg);

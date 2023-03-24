@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2022 NXP
+#  Copyright 2018-2023 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -227,14 +227,12 @@ pfe_platform-y := src/pfe_bmu.o \
 	src/pfe_spd.o \
 	src/pfe_spd_acc.o \
 	src/pfe_mac_db.o \
-	src/pfe_hm.o
+	src/pfe_hm.o \
+	src/pfe_l2br.o \
+	src/pfe_l2br_table.o
 
 ifeq ($(PFE_CFG_RTABLE_ENABLE),1)
     pfe_platform-y += src/pfe_rtable.o
-endif
-ifeq ($(PFE_CFG_L2BRIDGE_ENABLE),1)
-    pfe_platform-y += src/pfe_l2br.o \
-        src/pfe_l2br_table.o
 endif
 endif
 

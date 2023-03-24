@@ -8,6 +8,7 @@
 #include <linux/net.h>
 #include <linux/rtnetlink.h>
 #include <linux/list.h>
+#include <linux/refcount.h>
 #include <linux/clk.h>
 #include <linux/if_vlan.h>
 #include <linux/tcp.h>
@@ -25,6 +26,10 @@
 	for (chnl_idx = 0, chnl = &netif->priv->hif_chnl[chnl_idx];		\
 		chnl_idx < PFENG_PFE_HIF_CHANNELS;				\
 		chnl_idx++, chnl = &netif->priv->hif_chnl[chnl_idx])
+
+#define TMU_RES_Q_MAX_SIZE	0xFFU
+#define TMU_RES_Q_W_FACT	2U
+#define TMU_RES_Q_MIN_TX_THR	8U
 
 typedef struct
 {
@@ -199,6 +204,168 @@ static struct pfeng_hif_chnl *pfeng_netif_map_tx_channel(struct pfeng_netif *net
 	return &netif->priv->hif_chnl[id - 1];
 }
 
+#ifdef PFE_CFG_PFE_MASTER
+static int pfe_get_tmu_pkts_conf(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy_id, u8 tx_queue, u32 *pkts_conf)
+{
+	int ret;
+
+	ret = pfe_tmu_queue_get_tx_count(tmu, phy_id, tx_queue, pkts_conf);
+	if (unlikely(ret != 0)) {
+		*pkts_conf = 0;
+		return -ret;
+	}
+
+	return 0;
+}
+
+static int pfe_get_tmu_fill(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy_id, u8 tx_queue, u8 *fill)
+{
+	u32 level;
+	int ret;
+
+	ret = pfe_tmu_queue_get_fill_level(tmu, phy_id, tx_queue, &level);
+	if (unlikely(ret != 0)) {
+		*fill = 0;
+		return -ret;
+	}
+
+	if (likely(level < U8_MAX)) {
+		*fill = level;
+	} else {
+		*fill = U8_MAX;
+	}
+
+	return 0;
+}
+
+#else
+static int pfe_get_tmu_pkts_conf(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy_id, u8 tx_queue, u32 *pkts_conf)
+{
+	return 0;
+}
+
+static int pfe_get_tmu_fill(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy_id, u8 tx_queue, u8 *fill)
+{
+	return 0;
+}
+
+#endif
+
+static u8 pfeng_tmu_q_window_size(struct pfeng_tmu_q_cfg *cfg)
+{
+	return cfg->q_size >> TMU_RES_Q_W_FACT;
+}
+
+static bool pfeng_tmu_lltx_enabled(struct pfeng_tmu_q_cfg* cfg)
+{
+#ifdef PFE_CFG_PFE_MASTER
+	return cfg->q_id != PFENG_TMU_LLTX_DISABLE_MODE_Q_ID;
+#else
+	return false; /* LLTX disable for Slave (compile time optimization) */
+#endif
+}
+
+static void pfeng_tmu_disable_lltx(struct pfeng_tmu_q_cfg* cfg)
+{
+	cfg->q_id = PFENG_TMU_LLTX_DISABLE_MODE_Q_ID;
+}
+
+static u8 pfeng_tmu_get_q_id(struct pfeng_tmu_q_cfg* cfg)
+{
+	if (likely(pfeng_tmu_lltx_enabled(cfg))) {
+		 return cfg->q_id;
+	} else {
+#ifdef PFE_CFG_HIF_PRIO_CTRL
+		/* Firmware will assign queue/priority */
+		return PFENG_TMU_LLTX_DISABLE_MODE_Q_ID;
+#else
+		return 0;
+#endif
+	}
+}
+
+static bool pfeng_tmu_can_tx(pfe_tmu_t *tmu, struct pfeng_tmu_q_cfg* tmu_q_cfg, struct pfeng_tmu_q *tmu_q)
+{
+	u8 w = pfeng_tmu_q_window_size(tmu_q_cfg);
+	u32 pkts = tmu_q->pkts;
+	u8 fill, cap, delta;
+	bool can_tx = true;
+	u32 pkts_conf;
+	int err;
+
+	if (likely(tmu_q->cap)) {
+		tmu_q->cap--;
+		tmu_q->pkts++;
+		return true;
+	}
+
+	err = pfe_get_tmu_pkts_conf(tmu, tmu_q_cfg->phy_id, tmu_q_cfg->q_id, &pkts_conf);
+	if (unlikely(err != 0)) {
+		return false;
+	}
+
+	delta = (u8)((pkts - pkts_conf) & 0xFFU);
+
+	/*
+	 * External perturbation handling, i.e.:
+	 * - fast-path flow sharing the same queue, causing
+	 *   pkts_conf increase; (1)
+	 * - cumulative errors in 'pkts' due to unexpected drops. (2)
+	 * Re-adjust 'pkts' for robustness.
+	 */
+
+	if (unlikely(pkts_conf > pkts && delta > w)) {
+		pkts = pkts_conf; /* (1) */
+		delta = 0;
+	}
+
+	if (unlikely(pkts > (pkts_conf + w))) {
+		pkts = pkts_conf; /* (2) */
+		delta = 0;
+	}
+
+	cap = w - delta;
+
+	if (unlikely(cap <= tmu_q_cfg->min_thr)) {
+		can_tx = false;
+		goto out;
+	}
+
+	err = pfe_get_tmu_fill(tmu, tmu_q_cfg->phy_id, tmu_q_cfg->q_id, &fill);
+	if (unlikely(err != 0)) {
+		can_tx = false;
+		goto out;
+	}
+
+	if (unlikely(cap > tmu_q_cfg->q_size - delta - fill)) {
+		can_tx = false;
+		goto out;
+	}
+
+	/* store the available capacity for next iterations */
+	tmu_q->cap = cap;
+
+out:
+	tmu_q->pkts = pkts;
+
+	return can_tx;
+}
+
+static void pfeng_tmu_status_check(struct work_struct *work)
+{
+	struct pfeng_netif* netif = container_of(work, struct pfeng_netif, tmu_status_check);
+	bool tmu_full = !pfeng_tmu_can_tx(netif->tmu, &netif->tmu_q_cfg, &netif->tmu_q);
+
+	if (tmu_full) {
+		schedule_work(&netif->tmu_status_check);
+		return;
+	}
+
+	if (test_and_clear_bit(PFENG_TMU_FULL, &netif->tx_queue_status)) {
+		netif_wake_subqueue(netif->netdev, 0);
+	}
+}
+
 static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
@@ -229,7 +396,26 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	/* Check for ring space */
 	if (unlikely(pfeng_hif_chnl_txbd_unused(chnl) < PFE_TXBDS_NEEDED(nfrags + 1))) {
 		netif_stop_subqueue(netdev, skb->queue_mapping);
-		chnl->queues_stopped = true;
+
+		/* mb() to see the txbd ring updates from the NAPI thread after queue stop */
+		smp_mb();
+
+		/* prevent a (unlikely but possible) race condition with the NAPI thread,
+		 * which may have just finished cleaning up the ring
+		 */
+		if (pfeng_hif_chnl_txbd_unused(chnl) >= PFE_TXBDS_MAX_NEEDED) {
+			netif_start_subqueue(netif->netdev, skb->queue_mapping);
+		} else {
+			goto busy_drop;
+		}
+	}
+
+	if (likely(pfeng_tmu_lltx_enabled(&netif->tmu_q_cfg)) &&
+		   !pfeng_tmu_can_tx(netif->tmu, &netif->tmu_q_cfg, &netif->tmu_q)) {
+		set_bit(PFENG_TMU_FULL, &netif->tx_queue_status);
+		smp_wmb();
+		netif_stop_subqueue(netdev, skb->queue_mapping);
+		schedule_work(&netif->tmu_status_check);
 		goto busy_drop;
 	}
 
@@ -244,6 +430,9 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 		skb = skb_new;
 	}
 
+	/* record sw tx timestamp before pushing PFE metadata to skb->data */
+	skb_tx_timestamp(skb);
+
 	skb_push(skb, PFENG_TX_PKT_HEADER_SIZE);
 
 	len = skb_headlen(skb);
@@ -253,12 +442,7 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	memset(tx_hdr, 0, sizeof(*tx_hdr));
 	tx_hdr->chid = chnl->idx;
 
-#ifdef PFE_CFG_HIF_PRIO_CTRL
-	/* Firmware will assign queue/priority */
-	tx_hdr->queue = 255;
-#else
-	tx_hdr->queue = 0;
-#endif /* PFE_CFG_HIF_PRIO_CTRL */
+	tx_hdr->queue = pfeng_tmu_get_q_id(&netif->tmu_q_cfg);
 
 	/* Use correct TX mode */
 	if (unlikely(!pfeng_netif_is_aux(netif))) {
@@ -271,10 +455,12 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	}
 
 	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
-		if (likely(skb->csum_offset == offsetof(struct udphdr, check))) {
+		if (likely(skb->csum_offset == offsetof(struct udphdr, check) &&
+			   pktlen <= PFENG_CSUM_OFF_PKT_LIMIT)) {
 			tx_hdr->flags |= HIF_TX_UDP_CSUM;
 		}
-		else if (likely(skb->csum_offset == offsetof(struct tcphdr, check))) {
+		else if (likely(skb->csum_offset == offsetof(struct tcphdr, check) &&
+				pktlen <= PFENG_CSUM_OFF_PKT_LIMIT)) {
 			tx_hdr->flags |= HIF_TX_TCP_CSUM;
 		} else {
 			skb_checksum_help(skb);
@@ -306,9 +492,6 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 
 	/* store the linear part info */
 	pfeng_hif_chnl_txconf_put_map_frag(chnl, dma, len, skb, PFENG_MAP_PKT_NORMAL, 0);
-
-	/* Software tx time stamp */
-	skb_tx_timestamp(skb);
 
 	/* Put linear part */
 	ret = pfe_hif_chnl_tx(chnl->priv, (void *)dma, skb->data, len, !nfrags);
@@ -365,6 +548,11 @@ static int pfeng_netif_logif_stop(struct net_device *netdev)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 	pfe_phy_if_t *phyif_emac = pfeng_netif_get_emac_phyif(netif);
+
+	if (pfeng_tmu_lltx_enabled(&netif->tmu_q_cfg)) {
+		cancel_work_sync(&netif->tmu_status_check);
+		netif->tx_queue_status = 0;
+	}
 
 	if (phyif_emac) {
 		pfe_phy_if_flush_mac_addrs(phyif_emac, MAC_DB_CRIT_BY_OWNER_AND_TYPE,
@@ -650,6 +838,57 @@ static netdev_features_t pfeng_netif_fix_features(struct net_device *netdev, net
 	return features;
 }
 
+static void pfeng_ndev_print(void *dev, const char *fmt, ...)
+{
+	struct net_device *ndev = (struct net_device *)dev;
+	struct pfeng_netif *netif = netdev_priv(ndev);
+	static char buf[256];
+	va_list args;
+
+	va_start(args, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, args);
+	netif_crit(netif->priv, drv, ndev, "%s", buf);
+	va_end(args);
+}
+
+static void pfeng_netif_tx_timeout(struct net_device *ndev, unsigned int txq)
+{
+	struct netdev_queue *dev_queue = netdev_get_tx_queue(ndev, txq);
+	struct pfeng_netif *netif = netdev_priv(ndev);
+	struct pfeng_hif_chnl *chnl;
+	int i;
+
+	if (netif->dbg_info_dumped)
+		return;
+
+	netif->dbg_info_dumped = true;
+
+	pfeng_ndev_print(ndev, "-----[ Tx queue #%u timed out: debug info start ]-----", txq);
+	pfeng_ndev_print(ndev, "netdev state: 0x%lx, Tx queue state: 0x%lx, pkts: %lu, dropped: %lu (%u ms)",
+			 ndev->state, dev_queue->state, ndev->stats.tx_packets, ndev->stats.tx_dropped,
+			 jiffies_to_msecs(jiffies - dev_trans_start(ndev)));
+
+	pfeng_netif_for_each_chnl(netif, i, chnl) {
+		if (!(netif->cfg->hifmap & (1 << i)))
+			continue;
+
+		pfeng_ndev_print(ndev, "chid: %d, txbd_unused: %d, napi: 0x%lx",
+				 i, pfeng_hif_chnl_txbd_unused(chnl), chnl->napi.state);
+
+		pfeng_bman_tx_pool_dump(chnl, ndev, pfeng_ndev_print);
+
+		pfe_hif_chnl_dump_tx_ring_to_ndev(chnl->priv, ndev, pfeng_ndev_print);
+	}
+
+	pfeng_ndev_print(ndev, "-----[ Tx queue #%u timed out: debug info stop  ]-----", txq);
+
+	if (netif_running(ndev)) {
+		/* try timeout recovery */
+		netif_info(netif->priv, drv, ndev, "Resetting netdevice for Tx queue %d", txq);
+		schedule_work(&netif->ndev_reset_work);
+	}
+}
+
 static const struct net_device_ops pfeng_netdev_ops = {
 	.ndo_open		= pfeng_netif_logif_open,
 	.ndo_start_xmit		= pfeng_netif_logif_xmit,
@@ -663,6 +902,7 @@ static const struct net_device_ops pfeng_netdev_ops = {
 	.ndo_set_mac_address	= pfeng_netif_set_mac_address,
 	.ndo_set_rx_mode	= pfeng_netif_set_rx_mode,
 	.ndo_fix_features	= pfeng_netif_fix_features,
+	.ndo_tx_timeout		= pfeng_netif_tx_timeout,
 };
 
 static void pfeng_netif_detach_hifs(struct pfeng_netif *netif)
@@ -719,7 +959,9 @@ err:
 
 static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 {
-	pfe_log_if_t *logif_emac;
+	pfe_log_if_t *logif;
+	struct pfeng_hif_chnl *chnl;
+	int i;
 
 	if (!netif->netdev)
 		return;
@@ -729,6 +971,7 @@ static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 		netif->priv->lower_ndev = NULL;
 	}
 
+	cancel_work_sync(&netif->ndev_reset_work);
 	unregister_netdev(netif->netdev); /* calls ndo_stop */
 
 #ifdef PFE_CFG_PFE_SLAVE
@@ -741,14 +984,32 @@ static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 #endif /* PFE_CFG_PFE_MASTER */
 
 	/* Stop EMAC logif */
-	logif_emac = pfeng_netif_get_emac_logif(netif);
-	if (logif_emac) {
-		pfe_log_if_disable(logif_emac);
-		if (EOK != pfe_platform_unregister_log_if(netif->priv->pfe_platform, logif_emac))
+	logif = pfeng_netif_get_emac_logif(netif);
+	if (logif) {
+		pfe_log_if_disable(logif);
+		if (EOK != pfe_platform_unregister_log_if(netif->priv->pfe_platform, logif))
 			HM_MSG_NETDEV_WARN(netif->netdev, "Can't unregister EMAC Logif\n");
 		else
-			pfe_log_if_destroy(logif_emac);
+			pfe_log_if_destroy(logif);
 		netif->priv->emac[netif->cfg->phyif_id].logif_emac = NULL;
+	}
+
+	/* Remove created HIF logif(s) */
+	pfeng_netif_for_each_chnl(netif, i, chnl) {
+
+		if (!(netif->cfg->hifmap & (1 << i)))
+			continue;
+
+		logif = chnl->logif_hif;
+		if (logif && refcount_dec_and_test(&chnl->logif_hif_count)) {
+			pfe_log_if_disable(logif);
+			if (EOK != pfe_platform_unregister_log_if(netif->priv->pfe_platform, logif))
+				HM_MSG_NETDEV_WARN(netif->netdev, "Can't unregister HIF Logif\n");
+			else
+				pfe_log_if_destroy(logif);
+
+			chnl->logif_hif = NULL;
+		}
 	}
 
 	HM_MSG_NETDEV_INFO(netif->netdev, "unregisted\n");
@@ -886,9 +1147,12 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 				HM_MSG_NETDEV_ERR(netdev, "Can't register HIF Logif\n");
 				goto err;
 			}
+			refcount_set(&chnl->logif_hif_count, 1);
 			HM_MSG_NETDEV_DBG(netdev, "HIF Logif created: %s @%px\n", hifname, chnl->logif_hif);
-		} else
+		} else {
+			refcount_inc(&chnl->logif_hif_count);
 			HM_MSG_NETDEV_DBG(netdev, "HIF Logif reused: %s @%px\n", hifname, chnl->logif_hif);
+		}
 
 		if (emac) {
 			if (pfeng_netif_is_aux(netif)) {
@@ -935,11 +1199,86 @@ err:
 	return -EINVAL;
 }
 
+#ifdef PFE_CFG_PFE_MASTER
+static u32 pfeng_tmu_get_q_size(struct pfeng_netif *netif)
+{
+	struct pfeng_tmu_q_cfg *cfg = &netif->tmu_q_cfg;
+	u32 min, max;
+	int err;
+
+	err = pfe_tmu_queue_get_mode(netif->tmu, cfg->phy_id, cfg->q_id, &min, &max);
+	if (err) {
+		HM_MSG_NETDEV_ERR(netif->netdev, "TMU queue mode read error for PHY_ID#%u/ Q_ID#%u (err: %d)\n",
+				  cfg->phy_id, cfg->q_id, err);
+		return 0;
+	}
+
+	return max;
+}
+#else
+static u32 pfeng_tmu_get_q_size(struct pfeng_netif *netif)
+{
+	return 0;
+}
+#endif
+
+static void pfeng_netif_tmu_lltx_init(struct pfeng_netif *netif)
+{
+	struct pfeng_tmu_q_cfg *cfg = &netif->tmu_q_cfg;
+	const struct pfeng_priv *priv = netif->priv;
+	struct pfeng_tmu_q *tmu_q = &netif->tmu_q;
+	u8 cap, min_thr;
+	u32 q_size;
+
+	cfg->q_id = (u8)priv->pfe_cfg->lltx_res_tmu_q_id;
+
+	if (!pfeng_tmu_lltx_enabled(cfg))
+		goto out_disabled;
+
+	if (pfeng_netif_is_aux(netif))
+		goto disable_lltx;
+
+	netif->tmu = priv->pfe_platform->tmu;
+	cfg->phy_id = PFE_PHY_IF_ID_EMAC0 + netif->cfg->phyif_id;
+
+	q_size = pfeng_tmu_get_q_size(netif);
+	if (q_size == 0 || q_size > TMU_RES_Q_MAX_SIZE) {
+		HM_MSG_NETDEV_ERR(netif->netdev, "TMU returned invalid size for PHY_ID#%u/ Q_ID#%u (size: %u)\n", cfg->phy_id, cfg->q_id, q_size);
+		goto disable_lltx;
+	}
+
+	cfg->q_size = q_size;
+
+	cap = pfeng_tmu_q_window_size(cfg);
+	min_thr = cap >> TMU_RES_Q_W_FACT;
+	if (min_thr > TMU_RES_Q_MIN_TX_THR)
+		min_thr = TMU_RES_Q_MIN_TX_THR;
+
+	cfg->min_thr = min_thr;
+	tmu_q->cap = cap;
+
+	INIT_WORK(&netif->tmu_status_check, pfeng_tmu_status_check);
+
+	HM_MSG_NETDEV_INFO(netif->netdev, "Host LLTX enabled for TMU PHY_ID#%u/ Q_ID#%u\n",
+			   netif->tmu_q_cfg.phy_id, netif->tmu_q_cfg.q_id);
+
+	return;
+
+disable_lltx:
+	pfeng_tmu_disable_lltx(cfg);
+out_disabled:
+	HM_MSG_NETDEV_INFO(netif->netdev, "Host LLTX disabled\n");
+
+	return;
+}
+
 static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 {
 	struct net_device *netdev = netif->netdev;
 	struct sockaddr saddr;
 	int ret;
+
+	pfeng_netif_tmu_lltx_init(netif);
 
 	/* Set PFE platform phyifs */
 	ret = pfeng_netif_control_platform_ifs(netif);
@@ -964,6 +1303,19 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 #ifdef PFE_CFG_PFE_MASTER
 		pfeng_ptp_register(netif);
 #endif /* PFE_CFG_PFE_MASTER */
+	}
+
+	if (!netif->priv->in_suspend) {
+		ret = register_netdev(netdev);
+		if (ret) {
+			HM_MSG_NETDEV_ERR(netdev, "Error registering the device: %d\n", ret);
+			goto err;
+		}
+
+		/* start without the RUNNING flag, phylink/idex controls it later */
+		netif_carrier_off(netdev);
+
+		HM_MSG_NETDEV_INFO(netdev, "registered\n");
 	}
 
 	return 0;
@@ -1064,6 +1416,24 @@ static int pfeng_netif_register_dsa_notifier(struct pfeng_netif *netif)
 #define pfeng_netif_register_dsa_notifier(netif) 0
 #endif
 
+static void pfeng_reset_ndev(struct work_struct *work)
+{
+	struct pfeng_netif *netif = container_of(work, struct pfeng_netif, ndev_reset_work);
+	struct net_device *ndev = netif->netdev;
+	bool reset = false;
+
+	rtnl_lock();
+	if (netif_running(ndev)) {
+		dev_close(ndev);
+		dev_open(ndev, NULL);
+		reset = true;
+	}
+	rtnl_unlock();
+
+	netif->dbg_info_dumped = false; /* re-arm debug dump */
+	netif_info(netif->priv, drv, ndev, "netdevice reset %s", reset ? "done" : "skipped");
+}
+
 static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, struct pfeng_netif_cfg *netif_cfg)
 {
 	struct device *dev = &priv->pdev->dev;
@@ -1138,23 +1508,13 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 #ifdef PFE_CFG_PFE_MASTER
 	netdev->priv_flags |= IFF_UNICAST_FLT;
 #endif
+	INIT_WORK(&netif->ndev_reset_work, pfeng_reset_ndev);
 
 	ret = pfeng_netif_register_dsa_notifier(netif);
 	if (ret) {
 		HM_MSG_DEV_ERR(dev, "Error registering the DSA notifier: %d\n", ret);
 		goto err_netdev_reg;
 	}
-
-	ret = register_netdev(netdev);
-	if (ret) {
-		HM_MSG_DEV_ERR(dev, "Error registering the device: %d\n", ret);
-		goto err_netdev_reg;
-	}
-
-	/* start without the RUNNING flag, phylink/idex controls it later */
-	netif_carrier_off(netdev);
-
-	HM_MSG_NETDEV_INFO(netdev, "registered\n");
 
 	/* Attach netif to HIF(s) */
 	ret = pfeng_netif_attach_hifs(netif);
@@ -1230,6 +1590,11 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 	if (emac)
 		pfeng_phylink_mac_change(netif, false);
 #endif /* PFE_CFG_PFE_MASTER */
+
+	if (pfeng_tmu_lltx_enabled(&netif->tmu_q_cfg)) {
+		cancel_work_sync(&netif->tmu_status_check);
+		netif->tx_queue_status = 0;
+	}
 
 	netif_device_detach(netif->netdev);
 

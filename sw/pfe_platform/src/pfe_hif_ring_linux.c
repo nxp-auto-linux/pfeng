@@ -224,7 +224,7 @@ __attribute__((pure, hot)) uint32_t pfe_hif_ring_get_fill_level(const pfe_hif_ri
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	return ring->write_idx - ring->read_idx;
+	return (ring->write_idx - ring->read_idx) & RING_LEN_MASK;
 }
 
 /**
@@ -694,17 +694,17 @@ __attribute__((cold)) static void pfe_hif_ring_invalidate_std(const pfe_hif_ring
  * @details		Dumps particular ring
  * @param[in]	ring The ring instance
  * @param[in]	name The ring name
- * @param[in]	seq			Pointer to debugfs seq_file
+ * @param[in]	dev Printing device instance
+ * @param[in]	dev_print Device dependent print method
  * @param[in]	verb_level 	Verbosity level, number of data written to the buffer
  * @return		Number of bytes written to the buffer
  * @note		Must not be preempted by: pfe_hif_ring_enqueue_buf(), pfe_hif_ring_destroy()
  */
-__attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name, struct seq_file *seq, uint8_t verb_level)
+__attribute__((cold)) void pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name, void *dev, void (*dev_print)(void *dev, const char *fmt, ...), uint8_t verb_level)
 {
-	uint32_t ii;
-	uint32_t len = 0U;
 	char_t *idx_str;
 	bool_t pr_out;
+	uint32_t ii;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ring) || (NULL == name)))
@@ -714,11 +714,11 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	seq_printf(seq, "Ring %s: len %d\n", name, RING_LEN);
-	seq_printf(seq, "  Type: %s\n", ring->is_rx ? "RX" : "TX");
-	seq_printf(seq, "  Index w/r: %d/%d (%d/%d)\n", ring->write_idx & RING_LEN_MASK, ring->read_idx & RING_LEN_MASK, ring->write_idx, ring->read_idx);
+	dev_print(dev, "Ring %s: len %d\n", name, RING_LEN);
+	dev_print(dev, "  Type: %s\n", ring->is_rx ? "RX" : "TX");
+	dev_print(dev, "  Index w/r: %d/%d (%d/%d)\n", ring->write_idx & RING_LEN_MASK, ring->read_idx & RING_LEN_MASK, ring->write_idx, ring->read_idx);
 
-	if(verb_level >= 8) {
+	if (verb_level >= PFE_CFG_VERBOSITY_LEVEL) {
 		/* BD ring */
 		for (ii=0U; ii<RING_LEN; ii++)
 		{
@@ -728,8 +728,8 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 
 			if (0 == ii)
 			{
-				seq_printf(seq, "  BD va/pa v0x%px/p0x%px\n", ring->base_va, ring->base_pa);
-				seq_printf(seq, "            pa           idx: bufl:ctrl:  data  :  next  :seqn\n");
+				dev_print(dev, "  BD va/pa v0x%px/p0x%px\n", ring->base_va, ring->base_pa);
+				dev_print(dev, "            pa           idx: bufl:ctrl:  data  :  next  :seqn\n");
 				pr_out = TRUE;
 			}
 
@@ -757,7 +757,7 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 
 			if (TRUE == pr_out)
 			{
-				seq_printf(seq, "    p0x%px%5d: %04x:%04x:%08x:%08x:%04x%s\n",(void *)&((pfe_hif_bd_t *)ring->base_pa)[ii], ii, HIF_RING_BD_W1_BD_BUFFLEN_GET(bd->rsvd_buflen_w1), HIF_RING_BD_W0_BD_CTRL_GET(bd->ctrl_seqnum_w0), bd->data, bd->next, HIF_RING_BD_W0_BD_SEQNUM_GET(bd->ctrl_seqnum_w0), idx_str);
+				dev_print(dev, "    p0x%px%5d: %04x:%04x:%08x:%08x:%04x%s\n",(void *)&((pfe_hif_bd_t *)ring->base_pa)[ii], ii, HIF_RING_BD_W1_BD_BUFFLEN_GET(bd->rsvd_buflen_w1), HIF_RING_BD_W0_BD_CTRL_GET(bd->ctrl_seqnum_w0), bd->data, bd->next, HIF_RING_BD_W0_BD_SEQNUM_GET(bd->ctrl_seqnum_w0), idx_str);
 			}
 		}
 
@@ -771,8 +771,8 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 
 				if (0 == ii)
 				{
-					seq_printf(seq, "  WB va/pa v0x%px/p0x%px\n", ring->wb_tbl_base_va, ring->wb_tbl_base_pa);
-					seq_printf(seq, "            pa           idx:   ctl  : bufl :  seq\n");
+					dev_print(dev, "  WB va/pa v0x%px/p0x%px\n", ring->wb_tbl_base_va, ring->wb_tbl_base_pa);
+					dev_print(dev, "            pa           idx:ctrl: bufl :  seq\n");
 					pr_out = TRUE;
 				}
 
@@ -795,13 +795,11 @@ __attribute__((cold)) uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *n
 
 				if (TRUE == pr_out)
 				{
-					seq_printf(seq, "    p0x%px%5d: %04x:%06x:%04x:%s\n", (void *)&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_pa)[ii], ii, HIF_RING_BD_W0_BD_CTRL(wb->rsvd_ctrl_w0), HIF_RING_WB_BD_W1_WB_BD_BUFFLEN(wb->seqnum_buflen_w1), HIF_RING_WB_BD_W1_WB_BD_SEQNUM(wb->seqnum_buflen_w1), idx_str);
+					dev_print(dev, "    p0x%px%5d: %04x:%06x:%04x:%s\n", (void *)&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_pa)[ii], ii, wb->rsvd_ctrl_w0, HIF_RING_WB_BD_W1_WB_BD_BUFFLEN(wb->seqnum_buflen_w1), HIF_RING_WB_BD_W1_WB_BD_SEQNUM(wb->seqnum_buflen_w1), idx_str);
 				}
 			}
 		}
 	}
-
-	return len;
 }
 
 /**

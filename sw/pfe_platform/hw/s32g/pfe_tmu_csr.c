@@ -14,6 +14,9 @@
 #include "pfe_cbus.h"
 #include "pfe_tmu_csr.h"
 #include "pfe_feature_mgr.h"
+#ifdef PFE_CFG_TARGET_OS_LINUX
+#include <linux/iopoll.h>
+#endif
 
 #ifndef PFE_CBUS_H_
 #error Missing cbus.h
@@ -65,6 +68,15 @@ static uint8_t pfe_tmu_hif_q_to_tmu_q(addr_t cbus_base_va, pfe_ct_phy_if_id_t ph
 #define ETH_43_PFE_START_SEC_CONST_UNSPECIFIED
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
+#ifdef PFE_CFG_TARGET_OS_LINUX
+static DEFINE_SPINLOCK(tmu_lock);
+#define pfe_tmu_spinlock_lock() spin_lock_bh(&tmu_lock)
+#define pfe_tmu_spinlock_unlock() spin_unlock_bh(&tmu_lock)
+#else
+#define pfe_tmu_spinlock_lock()
+#define pfe_tmu_spinlock_unlock()
+#endif /* PFE_CFG_TARGET_OS_LINUX */
 
 /* PHY lookup table */
 static const pfe_ct_phy_if_id_t phy_if_id_temp[TLITE_PHYS_CNT] =
@@ -445,6 +457,8 @@ static errno_t pfe_tmu_cntx_mem_write(addr_t cbus_base_va, pfe_ct_phy_if_id_t ph
 	pfe_ct_phy_if_id_t phy_temp = phy;
 	errno_t ret = EOK;
 
+	pfe_tmu_spinlock_lock();
+
 	hal_write32(0U, cbus_base_va + TMU_CNTX_ACCESS_CTRL);
 
 	switch (phy)
@@ -486,6 +500,8 @@ static errno_t pfe_tmu_cntx_mem_write(addr_t cbus_base_va, pfe_ct_phy_if_id_t ph
 		}
 	}
 
+	pfe_tmu_spinlock_unlock();
+
 	return ret;
 }
 
@@ -503,6 +519,8 @@ static errno_t pfe_tmu_cntx_mem_read(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy
 	uint32_t timeout = 20U;
 	pfe_ct_phy_if_id_t phy_temp = phy;
 	errno_t ret = EOK;
+
+	pfe_tmu_spinlock_lock();
 
 	hal_write32(0U, cbus_base_va + TMU_CNTX_ACCESS_CTRL);
 
@@ -538,6 +556,11 @@ static errno_t pfe_tmu_cntx_mem_read(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy
 		hal_write32((((uint32_t)phy_temp & (uint32_t)0x1fU) << 16U) | (uint32_t)loc, cbus_base_va + TMU_CNTX_ADDR);
 		hal_write32(0x2U, cbus_base_va + TMU_CNTX_CMD);
 
+#ifdef PFE_CFG_TARGET_OS_LINUX
+		ret = readx_poll_timeout_atomic(hal_read32, cbus_base_va + TMU_CNTX_CMD, reg, (reg & 0x4U), 2, 2 * 5 * timeout);
+		*data = hal_read32(cbus_base_va + TMU_CNTX_DATA);
+		ret = -ret;
+#else
 		do
 		{
 			oal_time_usleep(10U);
@@ -553,7 +576,10 @@ static errno_t pfe_tmu_cntx_mem_read(addr_t cbus_base_va, pfe_ct_phy_if_id_t phy
 		{
 			*data = hal_read32(cbus_base_va + TMU_CNTX_DATA);
 		}
+#endif
 	}
+
+	pfe_tmu_spinlock_unlock();
 
 	return ret;
 }

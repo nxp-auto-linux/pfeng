@@ -41,12 +41,33 @@ struct pfe_log_if_tag
 
 static errno_t pfe_log_if_db_lock(void)
 {
-	errno_t ret;
+	/*	Wait 1ms */
+	const uint32_t timeout_step = 1000U;
+	/*	Timeout 1.5s */
+	uint32_t timeout_us = 1500U * 1000U;
+	errno_t ret = EINVAL;
 
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_LOCK, NULL, 0, NULL, 0U);
+	/* Try to lock IF DB */
+	for (; timeout_us > 0U; timeout_us -= timeout_step)
+	{
+		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_LOCK, NULL, 0, NULL, 0U);
+		if (EOK == ret)
+		{
+			/* Got lock */
+			break;
+		}
+		if (ENOLCK != ret)
+		{
+			/* Got real error */
+			break;
+		}
+
+		oal_time_usleep(timeout_step);
+	}
+
 	if (EOK != ret)
 	{
-		NXP_LOG_ERROR("Unable to lock interface DB: %d\n", ret);
+		NXP_LOG_WARNING("Unable to lock interface DB: %d\n", ret);
 	}
 
 	return ret;
@@ -59,7 +80,7 @@ static errno_t pfe_log_if_db_unlock(void)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_UNLOCK, NULL, 0, NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_ERROR("Unable to lock interface DB: %d\n", ret);
+		NXP_LOG_WARNING("Unable to unlock interface DB: %d\n", ret);
 	}
 
 	return ret;

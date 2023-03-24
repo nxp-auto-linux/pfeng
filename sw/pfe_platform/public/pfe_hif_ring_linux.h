@@ -27,6 +27,6 @@ void pfe_hif_ring_invalidate(const pfe_hif_ring_t *ring) __attribute__((cold));
 uint32_t pfe_hif_ring_get_fill_level(const pfe_hif_ring_t *ring) __attribute__((pure, hot));
 bool_t pfe_hif_ring_is_on_head(const pfe_hif_ring_t *ring) __attribute__((pure, hot));
 
-uint32_t pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name, struct seq_file *seq, uint8_t verb_level);
+void pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name, void *dev, void (*dev_print)(void *dev, const char *fmt, ...), uint8_t verb_level);
 
 #endif /* PUBLIC_PFE_HIF_RING_H_ */

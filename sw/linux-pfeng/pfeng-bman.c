@@ -108,6 +108,53 @@ err:
 	return -ENOMEM;
 }
 
+static void pfeng_bman_skb_dump(struct pfeng_tx_chnl_pool *pool, u32 base_idx, struct net_device *ndev, void (*dbg_print)(void *ndev, const char *fmt, ...))
+{
+	struct sk_buff *skb = NULL;
+	u32 idx;
+	int i;
+
+	for (i = 0, idx = base_idx; i < MAX_SKB_FRAGS; i++) {
+		dbg_print(ndev, "%3d: (p0x%llx/v0x%px, %d, 0x%02x),\n", idx,
+			  pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].skb,
+			  pool->tx_tbl[idx].size, pool->tx_tbl[idx].flags);
+
+		if (pool->tx_tbl[idx].skb) {
+			skb = pool->tx_tbl[idx].skb;
+			break;
+		}
+
+		idx = (idx > 0) ? idx - 1 : pool->depth - 1;
+	}
+
+	if (unlikely(i == 0)) {
+		idx = (base_idx > 0) ? base_idx - 1 : pool->depth - 1;
+		dbg_print(ndev, "%3d: (p0x%llx/v0x%px, %d, 0x%02x),\n", idx,
+			  pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].skb,
+			  pool->tx_tbl[idx].size, pool->tx_tbl[idx].flags);
+	}
+
+	if (skb)
+		skb_dump(KERN_ERR, skb, false);
+}
+
+void pfeng_bman_tx_pool_dump(struct pfeng_hif_chnl *chnl, struct net_device *ndev, void (*dbg_print)(void *ndev, const char *fmt, ...))
+{
+	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;
+	u32 rd = READ_ONCE(pool->rd_idx) & pool->idx_mask;
+	u32 wr = READ_ONCE(pool->wr_idx) & pool->idx_mask;
+
+	dbg_print(ndev, "depth: %d, rd: %d, wr: %d,\n", pool->depth, rd, wr);
+
+	dbg_print(ndev, "Write index dump:\n");
+	pfeng_bman_skb_dump(pool, wr, ndev, dbg_print);
+
+	if (rd != wr) {
+		dbg_print(ndev, "Read index dump:\n");
+		pfeng_bman_skb_dump(pool, rd, ndev, dbg_print);
+	}
+}
+
 int pfeng_hif_chnl_txbd_unused(struct pfeng_hif_chnl *chnl)
 {
 	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;

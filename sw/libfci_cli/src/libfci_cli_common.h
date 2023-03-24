@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2023 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -43,7 +43,7 @@
 
 /* app version */
 #define CLI_VERSION_MAJOR   "2"
-#define CLI_VERSION_MINOR   "11"
+#define CLI_VERSION_MINOR   "12"
 #define CLI_VERSION_PATCH   "0"
 #define CLI_VERSION_STRING  CLI_VERSION_MAJOR"."CLI_VERSION_MINOR"."CLI_VERSION_PATCH
 

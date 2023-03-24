@@ -96,7 +96,7 @@ typedef enum
  * 			related event occur. This is prototype of the callback.
  * @see		pfe_rtable_add_entry
  */
-typedef void (* pfe_rtable_callback_t)(void *arg, pfe_rtable_cbk_event_t event);
+typedef void (* pfe_rtable_callback_t)(pfe_rtable_entry_t *entry, pfe_rtable_cbk_event_t event);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_START_SEC_CODE

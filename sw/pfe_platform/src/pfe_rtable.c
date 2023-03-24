@@ -2378,6 +2378,11 @@ errno_t pfe_rtable_del_entry(pfe_rtable_t *rtable, pfe_rtable_entry_t *entry)
 			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
+		if (NULL != entry->callback)
+		{
+			entry->callback(entry, RTABLE_ENTRY_TIMEOUT);
+		}
+
 		ret = pfe_rtable_del_entry_nolock(rtable, entry);
 
 		if (0U == rtable->active_entries_count)
@@ -2671,11 +2676,27 @@ void pfe_rtable_do_timeouts(pfe_rtable_t *rtable)
 					/*	Call user's callback if requested */
 					if (NULL != entry->callback)
 					{
-						entry->callback(entry->callback_arg, RTABLE_ENTRY_TIMEOUT);
+						entry->callback(entry, RTABLE_ENTRY_TIMEOUT);
 					}
 
 					/*	Collect entries to be removed */
 					LLIST_AddAtEnd(&entry->list_to_remove_entry, &to_be_removed_list);
+
+					/* For entries which are part of a bidirectional pair, check the paired partner */
+					if (NULL != entry->child)
+					{
+						/* If paired partner is not yet marked as 'processed', then process it */
+						/* Magic number is a flag for timeout loop to skip this entry if it is later encountered. */
+						if (0xffffffffU != entry->child->timeout)
+						{
+							if (NULL != entry->child->callback)
+							{
+								entry->child->callback(entry->child, RTABLE_ENTRY_TIMEOUT);
+							}
+							LLIST_AddAtEnd(&entry->child->list_to_remove_entry, &to_be_removed_list);
+							entry->child->timeout = 0xffffffffU;  /* mark the paired partner as 'processed' */
+						}
+					}
 				}
 			}
 		}

@@ -1,7 +1,7 @@
 /* =========================================================================
  *  Copyright (C) 2007 Mindspeed Technologies, Inc.
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2022 NXP
+ *  Copyright 2017-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1173,34 +1173,20 @@ traffic--+->| flow table +-->| queues +-->|   shapers   +--+-->processing
 
 #if FALSE == FCI_CFG_FORCE_LEGACY_API
     /**
-	 * @if FCI_EVENTS_IMPLEMENTED
      * @def         FPP_CMD_IPV4_CONNTRACK_CHANGE
-     * @brief       Callback event value for IPv4 conntracks
-     * @details     One of the values the callback registered by @ref fci_register_cb can get in @c fcode
-     *              argument.
      *
-     *              This value indicates IPv4 conntrack event. The payload argument shall be cast to
-     *              @ref fpp_ct_ex_cmd type. Then all addresses, all ports and protocol shall be used to
-     *              identify connection while the @c action item indicates type of event:
-     *              - @ref FPP_ACTION_KEEP_ALIVE: conntrack entry is still active
-     *              - @ref FPP_ACTION_REMOVED: conntrack entry was removed
-     *              - @ref FPP_ACTION_TCP_FIN: TCP FIN or TCP RST packet was received, conntrack was removed
-     * @hideinitializer
-	 * @endif
+     * @brief       FCI event: driver reports status change of some IPv4 conntrack.
+     *
+     * @details     Related data types: fpp_ct_cmd_t
      */
     #define FPP_CMD_IPV4_CONNTRACK_CHANGE   0x0315u
+
     /**
-	 * @if FCI_EVENTS_IMPLEMENTED
      * @def         FPP_CMD_IPV6_CONNTRACK_CHANGE
-     * @brief       Callback event value for IPv6 conntracks
-     * @details     One of the values the callback registered by @ref fci_register_cb can get in @c fcode
-     *              argument.
      *
-     *              This value indicates IPv6 conntrack event. The payload argument shall be cast to
-     *              @ref fpp_ct6_ex_cmd type. Otherwise the event is same as
-     *              @ref FPP_CMD_IPV4_CONNTRACK_CHANGE.
-     * @hideinitializer
-	 * @endif
+     * @brief       FCI event: driver reports status change of some IPv6 conntrack.
+     *
+     * @details     Related data types: fpp_ct6_cmd_t
      */
     #define FPP_CMD_IPV6_CONNTRACK_CHANGE   0x0415u
 #endif /* FCI_CFG_FORCE_LEGACY_API */

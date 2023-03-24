@@ -60,12 +60,15 @@ static errno_t fci_connections_ipv4_cmd_to_entry(const fpp_ct_cmd_t *ct_cmd, pfe
 static errno_t fci_connections_ipv4_cmd_to_rep_entry(const fpp_ct_cmd_t *ct_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface);
 static errno_t fci_connections_ipv6_cmd_to_entry(const fpp_ct6_cmd_t *ct6_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface);
 static errno_t fci_connections_ipv6_cmd_to_rep_entry(const fpp_ct6_cmd_t *ct6_cmd, pfe_rtable_entry_t **entry, pfe_phy_if_t **iface);
+static errno_t fci_connections_entry_to_ipv4_cmd(pfe_rtable_entry_t *entry, pfe_rtable_entry_t *rep_entry, fpp_ct_cmd_t *ct_cmd);
+static errno_t fci_connections_entry_to_ipv6_cmd(pfe_rtable_entry_t *entry, pfe_rtable_entry_t *rep_entry, fpp_ct6_cmd_t *ct6_cmd);
+static void fci_connections_ipv4_cbk(pfe_rtable_entry_t *entry, pfe_rtable_cbk_event_t event);
+static void fci_connections_ipv6_cbk(pfe_rtable_entry_t *entry, pfe_rtable_cbk_event_t event);
 static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, uint16_t *fci_ret, void *reply_buf, uint32_t *reply_len);
 #if (PFE_CFG_VERBOSITY_LEVEL >= 8)
 #ifdef NXP_LOG_ENABLED
 static char_t * fci_connections_ipv4_cmd_to_str(fpp_ct_cmd_t *ct_cmd);
 static char_t * fci_connections_ipv6_cmd_to_str(fpp_ct6_cmd_t *ct6_cmd);
-static char_t * fci_connections_entry_to_str(pfe_rtable_entry_t *entry);
 static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *dip, uint16_t *sport, uint16_t *dport,
 									uint8_t *sip_out, uint8_t *dip_out, uint16_t *sport_out, uint16_t *dport_out, uint8_t *proto);
 
@@ -78,16 +81,6 @@ static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *di
 
 /* usage scope: fci_connections_build_str */
 static char_t fci_connections_build_str_buf[FCI_CONNECTIONS_CFG_MAX_STR_LEN];
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_VAR_CLEARED_8
-#include "Eth_43_PFE_MemMap.h"
-#define ETH_43_PFE_START_SEC_CONST_UNSPECIFIED
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-/* usage scope: fci_connections_entry_to_str */
-static char_t * const fci_connections_entry_to_str_err_str = "Entry-to-string conversion failed";
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CONST_UNSPECIFIED
@@ -242,67 +235,6 @@ static char_t * fci_connections_build_str(bool_t ipv6, uint8_t *sip, uint8_t *di
 	len += snprintf(fci_connections_build_str_buf + len, FCI_CONNECTIONS_CFG_MAX_STR_LEN - len, "\t\tPROTO: %d", *proto);
 
 	return fci_connections_build_str_buf;
-}
-
-/**
- * @brief		Convert routing table entry to a string representation
- * @param[in]	entry The entry
- * @return		Pointer to memory where the output string is located
- */
-static char_t * fci_connections_entry_to_str(pfe_rtable_entry_t *entry)
-{
-	pfe_5_tuple_t tuple;
-	pfe_5_tuple_t tuple_out;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == entry))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return NULL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	if (EOK != pfe_rtable_entry_to_5t(entry, &tuple))
-	{
-		return fci_connections_entry_to_str_err_str;
-	}
-
-	if (EOK != pfe_rtable_entry_to_5t_out(entry, &tuple_out))
-	{
-		return fci_connections_entry_to_str_err_str;
-	}
-
-	tuple.sport = oal_htons(tuple.sport);
-	tuple.dport = oal_htons(tuple.dport);
-	tuple_out.sport = oal_htons(tuple_out.sport);
-	tuple_out.dport = oal_htons(tuple_out.dport);
-
-	if (tuple.src_ip.is_ipv4)
-	{
-		return fci_connections_build_str(FALSE,
-											(uint8_t *)&tuple.src_ip.v4,
-											(uint8_t *)&tuple.dst_ip.v4,
-											&tuple.sport,
-											&tuple.dport,
-											(uint8_t *)&tuple_out.src_ip.v4,
-											(uint8_t *)&tuple_out.dst_ip.v4,
-											&tuple_out.sport,
-											&tuple_out.dport,
-											(uint8_t *)&tuple.proto);
-	}
-	else
-	{
-		return fci_connections_build_str(TRUE,
-											(uint8_t *)&tuple.src_ip.v6,
-											(uint8_t *)&tuple.dst_ip.v6,
-											&tuple.sport,
-											&tuple.dport,
-											(uint8_t *)&tuple_out.src_ip.v6,
-											(uint8_t *)&tuple_out.dst_ip.v6,
-											&tuple_out.sport,
-											&tuple_out.dport,
-											(uint8_t *)&tuple.proto);
-	}
 }
 #endif /* NXP_LOG_ENABLED */
 #endif /* PFE_CFG_VERBOSITY_LEVEL */
@@ -580,6 +512,10 @@ static errno_t fci_connections_ipv4_cmd_to_entry(const fpp_ct_cmd_t *ct_cmd, pfe
 				}
 				else
 				{
+					/*	Set callback */
+					pfe_rtable_entry_set_callback(*entry, fci_connections_ipv4_cbk, NULL);
+
+					/*	Set vlan (if applicable) */
 					if (0U != ct_cmd->vlan)
 					{
 						pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct_cmd->vlan), TRUE);
@@ -659,6 +595,13 @@ static errno_t fci_connections_ipv4_cmd_to_rep_entry(const fpp_ct_cmd_t *ct_cmd,
 				}
 				else
 				{
+					/*	Set callback only if this is a lone reply entry (does not have paired orig entry) */
+					if (0U != (oal_ntohs(ct_cmd->flags) & CTCMD_FLAGS_ORIG_DISABLED))
+					{
+						pfe_rtable_entry_set_callback(*entry, fci_connections_ipv4_cbk, NULL);
+					}
+
+					/*	Set vlan (if applicable) */
 					if (0U != ct_cmd->vlan_reply)
 					{
 						pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct_cmd->vlan_reply), TRUE);
@@ -735,6 +678,10 @@ static errno_t fci_connections_ipv6_cmd_to_entry(const fpp_ct6_cmd_t *ct6_cmd, p
 				}
 				else
 				{
+					/*	Set callback */
+					pfe_rtable_entry_set_callback(*entry, fci_connections_ipv6_cbk, NULL);
+
+					/*	Set vlan (if applicable) */
 					if (0U != ct6_cmd->vlan)
 					{
 						pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct6_cmd->vlan), TRUE);
@@ -813,6 +760,13 @@ static errno_t fci_connections_ipv6_cmd_to_rep_entry(const fpp_ct6_cmd_t *ct6_cm
 				}
 				else
 				{
+					/*	Set callback only if this is a lone reply entry (does not have paired orig entry) */
+					if (0U != (oal_ntohs(ct6_cmd->flags) & CTCMD_FLAGS_ORIG_DISABLED))
+					{
+						pfe_rtable_entry_set_callback(*entry, fci_connections_ipv6_cbk, NULL);
+					}
+
+					/*	Set vlan (if applicable) */
 					if (0U != ct6_cmd->vlan_reply)
 					{
 						pfe_rtable_entry_set_out_vlan(*entry, oal_ntohs(ct6_cmd->vlan_reply), TRUE);
@@ -827,6 +781,406 @@ static errno_t fci_connections_ipv6_cmd_to_rep_entry(const fpp_ct6_cmd_t *ct6_cm
 	}
 
 	return ret;
+}
+
+/**
+ * @brief		Convert data of routing table entry into CT command data (IPv4).
+ * @details		Handles reply direction as well (if reply dir is present).
+ * @param[in]	entry		Pointer to routing table entry.
+ * @param[in]	rep_entry	Pointer to routing table entry in reply direction. Can be NULL.
+ * @param[out]	ct_cmd		Pointer to the command struct whch shall be filled.
+ * @return		EOK if success, error code otherwise
+ */
+static errno_t fci_connections_entry_to_ipv4_cmd(pfe_rtable_entry_t *entry, pfe_rtable_entry_t *rep_entry, fpp_ct_cmd_t *ct_cmd)
+{
+	errno_t ret = EINVAL;
+	fci_t *fci_context = (fci_t *)&__context;
+	pfe_ip_addr_t sip, dip;
+	uint32_t route_id = 0U;
+	pfe_5_tuple_t tuple;
+	pfe_ct_route_actions_t actions;
+	uint16_t vlan;
+	pfe_ct_conntrack_stats_t stats = {0U};
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == entry) || (NULL == ct_cmd)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else if (unlikely(FALSE == fci_context->fci_initialized))
+	{
+		NXP_LOG_ERROR("Context not initialized\n");
+		ret = EPERM;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		/*	Prepare statistics data */
+		ret = pfe_rtable_get_stats(fci_context->rtable, &stats, pfe_rtable_entry_get_stats_index(entry));
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Failed to get routing entry statistics: %d", ret);
+		}
+
+		/*	Build reply structure */
+		pfe_rtable_entry_get_sip(entry, &sip);
+		pfe_rtable_entry_get_dip(entry, &dip);
+		(void)pfe_rtable_entry_get_route_id(entry, &route_id);
+		vlan = pfe_rtable_entry_get_out_vlan(entry);
+
+		/*	Fill basic info */
+		(void)memcpy(&ct_cmd->saddr, &sip.v4, 4);
+		(void)memcpy(&ct_cmd->daddr, &dip.v4, 4);
+		ct_cmd->sport = oal_htons(pfe_rtable_entry_get_sport(entry));
+		ct_cmd->dport = oal_htons(pfe_rtable_entry_get_dport(entry));
+		ct_cmd->vlan = oal_htons(vlan);
+		(void)memcpy(&ct_cmd->saddr_reply, &ct_cmd->daddr, 4);
+		(void)memcpy(&ct_cmd->daddr_reply, &ct_cmd->saddr, 4);
+		ct_cmd->sport_reply = ct_cmd->dport;
+		ct_cmd->dport_reply = ct_cmd->sport;
+		ct_cmd->protocol = oal_ntohs(pfe_rtable_entry_get_proto(entry));
+		ct_cmd->flags = 0U;
+		ct_cmd->route_id = route_id;
+		ct_cmd->stats.hit = oal_htonl(stats.hit);
+		ct_cmd->stats.hit_bytes = oal_htonl(stats.hit_bytes);
+
+		/*	Check if reply direction exists */
+		if (NULL == rep_entry)
+		{
+			/*	This means that entry in 'reply' direction has not been requested
+				so the appropriate flag shall be set to indicate that. */
+			ct_cmd->flags |= oal_htons(CTCMD_FLAGS_REP_DISABLED);
+		}
+		else
+		{
+			/*	Prepare reply direction statistics data */
+			ret = pfe_rtable_get_stats(fci_context->rtable, &stats, pfe_rtable_entry_get_stats_index(rep_entry));
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Failed to get reply routing entry statistics: %d", ret);
+			}
+
+			/*	Prepare reply direction vlan data */
+			vlan = pfe_rtable_entry_get_out_vlan(rep_entry);
+			ct_cmd->vlan_reply = oal_htons(vlan);
+
+			/*	Prepare reply direction statistics data */
+			ct_cmd->stats_reply.hit = oal_htonl(stats.hit);
+			ct_cmd->stats_reply.hit_bytes = oal_htonl(stats.hit_bytes);
+
+			/*	Prepare reply direction route id */
+			pfe_rtable_entry_get_route_id(rep_entry, &route_id);
+			ct_cmd->route_id_reply = route_id;
+		}
+
+		/*
+			Check if some modifications (NAT) are enabled. If so, update the
+			'reply' direction values as defined by the FCI API. Note that
+			modification are enabled when entry is being added. See
+			FPP_ACTION_REGISTER and fci_connections_create_entry().
+		*/
+		actions = pfe_rtable_entry_get_action_flags(entry);
+		if (EOK != pfe_rtable_entry_to_5t_out(entry, &tuple))
+		{
+			NXP_LOG_ERROR("Couldn't get output tuple\n");
+		}
+
+		if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_DEC_TTL))
+		{
+			ct_cmd->flags |= oal_htons(CTCMD_FLAGS_TTL_DECREMENT);
+		}
+
+		if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_SIP_ADDR))
+		{
+			(void)memcpy(&ct_cmd->daddr_reply, &tuple.src_ip.v4, 4);
+		}
+
+		if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_DIP_ADDR))
+		{
+			(void)memcpy(&ct_cmd->saddr_reply, &tuple.dst_ip.v4, 4);
+		}
+
+		if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_SPORT))
+		{
+			ct_cmd->dport_reply = oal_htons(tuple.sport);
+		}
+
+		if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_DPORT))
+		{
+			ct_cmd->sport_reply = oal_htons(tuple.dport);
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Convert data of routing table entry into CT command data (IPv6).
+ * @details		Handles reply direction as well (if reply dir is present).
+ * @param[in]	entry		Pointer to routing table entry.
+ * @param[in]	rep_entry	Pointer to routing table entry in reply direction. Can be NULL.
+ * @param[out]	ct6_cmd		Pointer to the command struct whch shall be filled.
+ * @return		EOK if success, error code otherwise
+ */
+static errno_t fci_connections_entry_to_ipv6_cmd(pfe_rtable_entry_t *entry, pfe_rtable_entry_t *rep_entry, fpp_ct6_cmd_t *ct6_cmd)
+{
+	errno_t ret = EINVAL;
+	fci_t *fci_context = (fci_t *)&__context;
+	pfe_ip_addr_t sip, dip;
+	uint32_t route_id = 0U;
+	pfe_5_tuple_t tuple;
+	pfe_ct_route_actions_t actions;
+	uint16_t vlan;
+	pfe_ct_conntrack_stats_t stats = {0U};
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely((NULL == entry) || (NULL == ct6_cmd)))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else if (unlikely(FALSE == fci_context->fci_initialized))
+	{
+		NXP_LOG_ERROR("Context not initialized\n");
+		ret = EPERM;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		/*	Prepare statistics data */
+		ret = pfe_rtable_get_stats(fci_context->rtable, &stats, pfe_rtable_entry_get_stats_index(entry));
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Failed to get routing entry statistics: %d", ret);
+		}
+
+		/*	Build reply structure */
+		pfe_rtable_entry_get_sip(entry, &sip);
+		pfe_rtable_entry_get_dip(entry, &dip);
+		(void)pfe_rtable_entry_get_route_id(entry, &route_id);
+		vlan = pfe_rtable_entry_get_out_vlan(entry);
+
+		/*	Fill basic info */
+		(void)memcpy(ct6_cmd->saddr, &sip.v6, 16);
+		(void)memcpy(ct6_cmd->daddr, &dip.v6, 16);
+		ct6_cmd->sport = oal_htons(pfe_rtable_entry_get_sport(entry));
+		ct6_cmd->dport = oal_htons(pfe_rtable_entry_get_dport(entry));
+		ct6_cmd->vlan = oal_htons(vlan);
+		(void)memcpy(ct6_cmd->saddr_reply, ct6_cmd->daddr, 16);
+		(void)memcpy(ct6_cmd->daddr_reply, ct6_cmd->saddr, 16);
+		ct6_cmd->sport_reply = ct6_cmd->dport;
+		ct6_cmd->dport_reply = ct6_cmd->sport;
+		ct6_cmd->protocol = oal_ntohs(pfe_rtable_entry_get_proto(entry));
+		ct6_cmd->flags = 0U;
+		ct6_cmd->route_id = route_id;
+		ct6_cmd->stats.hit = oal_htonl(stats.hit);
+		ct6_cmd->stats.hit_bytes = oal_htonl(stats.hit_bytes);
+
+		/*	Check if reply direction exists */
+		if (NULL == rep_entry)
+		{
+			/*	This means that entry in 'reply' direction has not been requested
+				so the appropriate flag shall be set to indicate that. */
+			ct6_cmd->flags |= oal_htons(CTCMD_FLAGS_REP_DISABLED);
+		}
+		else
+		{
+			/*	Prepare reply direction statistics data */
+			ret = pfe_rtable_get_stats(fci_context->rtable, &stats, pfe_rtable_entry_get_stats_index(rep_entry));
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Failed to get reply routing entry statistics: %d", ret);
+			}
+
+			/*	Prepare reply direction vlan data */
+			vlan = pfe_rtable_entry_get_out_vlan(rep_entry);
+			ct6_cmd->vlan_reply = oal_htons(vlan);
+
+			/*	Prepare reply direction statistics data */
+			ct6_cmd->stats_reply.hit = oal_htonl(stats.hit);
+			ct6_cmd->stats_reply.hit_bytes = oal_htonl(stats.hit_bytes);
+
+			/*	Prepare reply direction route id */
+			pfe_rtable_entry_get_route_id(rep_entry, &route_id);
+			ct6_cmd->route_id_reply = route_id;
+		}
+
+		/*
+			Check if some modifications (NAT) are enabled. If so, update the
+			'reply' direction values as defined by the FCI API. Note that
+			modification are enabled when entry is being added. See
+			FPP_ACTION_REGISTER and fci_connections_create_entry().
+		*/
+		actions = pfe_rtable_entry_get_action_flags(entry);
+		if (EOK != pfe_rtable_entry_to_5t_out(entry, &tuple))
+		{
+			NXP_LOG_ERROR("Couldn't get output tuple\n");
+		}
+
+		if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_DEC_TTL))
+		{
+			ct6_cmd->flags |= oal_htons(CTCMD_FLAGS_TTL_DECREMENT);
+		}
+
+		if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_SIP_ADDR))
+		{
+			(void)memcpy(ct6_cmd->daddr_reply, &tuple.src_ip.v6, 16);
+		}
+
+		if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_DIP_ADDR))
+		{
+			(void)memcpy(ct6_cmd->saddr_reply, &tuple.dst_ip.v6, 16);
+		}
+
+		if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_SPORT))
+		{
+			ct6_cmd->dport_reply = oal_htons(tuple.sport);
+		}
+
+		if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_DPORT))
+		{
+			ct6_cmd->sport_reply = oal_htons(tuple.dport);
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Callback for routing table entries (IPv4).
+ * @details		Function prototype of this function must conform to
+ *				routing table callback prototype. See [pfe_rtable.c].
+ * @param[in]	entry	Pointer to affected routing table entry.
+ * @param[out]	event	What happened with the entry.
+ *
+ * @warning		This callback is called from routing table mutex locked context.
+ *				Do NOT call functions that lock routing table mutex in this callback.
+ *				It would cause a deadlock.
+ */
+static void fci_connections_ipv4_cbk(pfe_rtable_entry_t *entry, pfe_rtable_cbk_event_t event)
+{
+	errno_t ret = -1;
+	fci_msg_t msg = {0};
+	fpp_ct_cmd_t *msg_payload = (fpp_ct_cmd_t *)msg.msg_cmd.payload;
+	fci_core_client_t *client = NULL;
+	pfe_rtable_entry_t *rep_entry = NULL;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		/*	FCI-created routing entries use refptr to store FCI client reference */
+		client = (fci_core_client_t *)pfe_rtable_entry_get_refptr(entry);
+		if (NULL == client)
+		{
+			NXP_LOG_DEBUG("NULL refptr. This routing entry was created by a NULL FCI client.\n");
+			return;
+		}
+
+		/*	prepare message general data */
+		msg.type = FCI_MSG_CMD;
+		msg.msg_cmd.code = FPP_CMD_IPV4_CONNTRACK_CHANGE;
+		msg.msg_cmd.length = sizeof(fpp_ct_cmd_t);
+		if (RTABLE_ENTRY_TIMEOUT == event)
+		{
+			msg_payload->action = FPP_ACTION_REMOVED;
+		}
+		else
+		{
+			NXP_LOG_WARNING("Routing entry event %d not mapped to any FCI event action\n.", event);
+			return;
+		}
+
+		/*	prepare message payload data */
+		rep_entry = pfe_rtable_entry_get_child(NULL, entry);  /* NULL is OK. It is assumed the rtable mutex is already locked. */
+		ret = fci_connections_entry_to_ipv4_cmd(entry, rep_entry, msg_payload);
+		pfe_rtable_entry_free(NULL, rep_entry);  /* NULL is OK. It is assumed the rtable mutex is already locked. */
+		if (EOK != ret)
+		{
+			NXP_LOG_WARNING("Can't convert entry to FCI cmd: %d\n", ret);
+			return;
+		}
+
+		/*	send unsolicited FCI event message */
+		ret = fci_core_client_send(client, &msg, NULL);
+		if (EOK != ret)
+		{
+			NXP_LOG_WARNING("Could not notify FCI client.\n");
+		}
+	}
+}
+
+/**
+ * @brief		Callback for routing table entries (IPv6).
+ * @details		Function prototype of this function must conform to
+ *				routing table callback prototype. See [pfe_rtable.c].
+ * @param[in]	entry	Pointer to affected routing table entry.
+ * @param[out]	event	What happened with the entry.
+ *
+ * @warning		This callback is called from routing table mutex locked context.
+ *				Do NOT call functions that lock routing table mutex in this callback.
+ *				It would cause a deadlock.
+ */
+static void fci_connections_ipv6_cbk(pfe_rtable_entry_t *entry, pfe_rtable_cbk_event_t event)
+{
+	errno_t ret = -1;
+	fci_msg_t msg = {0};
+	fpp_ct6_cmd_t *msg_payload = (fpp_ct6_cmd_t *)msg.msg_cmd.payload;
+	fci_core_client_t *client = NULL;
+	pfe_rtable_entry_t *rep_entry = NULL;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == entry))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		/*	FCI-created routing entries use refptr to store FCI client reference */
+		client = (fci_core_client_t *)pfe_rtable_entry_get_refptr(entry);
+		if (NULL == client)
+		{
+			NXP_LOG_DEBUG("NULL refptr. This routing entry was created by a NULL FCI client.\n");
+			return;
+		}
+
+		/*	prepare message general data */
+		msg.type = FCI_MSG_CMD;
+		msg.msg_cmd.code = FPP_CMD_IPV6_CONNTRACK_CHANGE;
+		msg.msg_cmd.length = sizeof(fpp_ct6_cmd_t);
+		if (RTABLE_ENTRY_TIMEOUT == event)
+		{
+			msg_payload->action = FPP_ACTION_REMOVED;
+		}
+		else
+		{
+			NXP_LOG_WARNING("Routing entry event %d not mapped to any FCI event action\n.", event);
+			return;
+		}
+
+		/*	prepare message payload data */
+		rep_entry = pfe_rtable_entry_get_child(NULL, entry);  /* NULL is OK. It is assumed the rtable mutex is already locked. */
+		ret = fci_connections_entry_to_ipv6_cmd(entry, rep_entry, msg_payload);
+		pfe_rtable_entry_free(NULL, rep_entry);  /* NULL is OK. It is assumed the rtable mutex is already locked. */
+		if (EOK != ret)
+		{
+			NXP_LOG_WARNING("Can't convert entry to FCI cmd: %d\n", ret);
+			return;
+		}
+
+		/*	send unsolicited FCI event message */
+		ret = fci_core_client_send(client, &msg, NULL);
+		if (EOK != ret)
+		{
+			NXP_LOG_WARNING("Could not notify FCI client.\n");
+		}
+	}
 }
 
 /**
@@ -846,14 +1200,9 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 	fpp_ct_cmd_t *ct_cmd, *ct_reply;
 	fpp_ct6_cmd_t *ct6_cmd, *ct6_reply;
 	errno_t ret = EOK;
-	pfe_ip_addr_t sip, dip;
-	uint32_t route_id = 0U;
 	pfe_rtable_entry_t *entry = NULL, *rep_entry = NULL;
 	pfe_5_tuple_t tuple;
-	pfe_ct_route_actions_t actions;
 	pfe_phy_if_t *phy_if = NULL, *phy_if_reply = NULL;
-	uint16_t vlan;
-	pfe_ct_conntrack_stats_t stats = {0U};
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == msg) || (NULL == fci_ret) || (NULL == reply_buf) || (NULL == reply_len)))
@@ -963,9 +1312,9 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 					/*	Add entry into the routing table */
 					if (NULL != entry)
 					{
-						/*	Remember that there is an associated entry */
-						pfe_rtable_entry_set_child(entry, rep_entry);
+						/*	Remember the issuing FCI client and the associated reply entry */
 						pfe_rtable_entry_set_refptr(entry, msg->client);
+						pfe_rtable_entry_set_child(entry, rep_entry);
 
 						ret = pfe_rtable_add_entry(fci_context->rtable, entry);
 						if (EEXIST == ret)
@@ -1024,6 +1373,9 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 					/*	Add entry also for reply direction if requested */
 					if (NULL != rep_entry)
 					{
+						/*	Remember the issuing FCI client */
+						pfe_rtable_entry_set_refptr(rep_entry, msg->client);
+
 						ret = pfe_rtable_add_entry(fci_context->rtable, rep_entry);
 						if (EEXIST == ret)
 						{
@@ -1251,177 +1603,22 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 						}
 					}
 
+					/* Get partner of the entry. */
+					rep_entry = pfe_rtable_entry_get_child(fci_context->rtable, entry);
+
 					ct6_reply = (fpp_ct6_cmd_t *)(reply_buf);
 					ct_reply = (fpp_ct_cmd_t *)(reply_buf);
 
-					/*	Set the reply length */
+					/*	Set the reply length + reply data */
 					if (TRUE == ipv6)
 					{
 						*reply_len = sizeof(fpp_ct6_cmd_t);
+						ret = fci_connections_entry_to_ipv6_cmd(entry, rep_entry, ct6_reply);
 					}
 					else
 					{
 						*reply_len = sizeof(fpp_ct_cmd_t);
-					}
-
-					/*	Prepare statistics data */
-					ret = pfe_rtable_get_stats(fci_context->rtable, &stats, pfe_rtable_entry_get_stats_index(entry));
-					if (EOK != ret)
-					{
-						NXP_LOG_ERROR("Failed to get routing entry statistics: %d", ret);
-					}
-
-					/*	Build reply structure */
-					pfe_rtable_entry_get_sip(entry, &sip);
-					pfe_rtable_entry_get_dip(entry, &dip);
-					(void)pfe_rtable_entry_get_route_id(entry, &route_id);
-					vlan = pfe_rtable_entry_get_out_vlan(entry);
-
-					if (TRUE == ipv6)
-					{
-						(void)memcpy(ct6_reply->saddr, &sip.v6, 16);
-						(void)memcpy(ct6_reply->daddr, &dip.v6, 16);
-						ct6_reply->sport = oal_htons(pfe_rtable_entry_get_sport(entry));
-						ct6_reply->dport = oal_htons(pfe_rtable_entry_get_dport(entry));
-						ct6_reply->vlan = oal_htons(vlan);
-						(void)memcpy(ct6_reply->saddr_reply, ct6_reply->daddr, 16);
-						(void)memcpy(ct6_reply->daddr_reply, ct6_reply->saddr, 16);
-						ct6_reply->sport_reply = ct6_reply->dport;
-						ct6_reply->dport_reply = ct6_reply->sport;
-						ct6_reply->protocol = oal_ntohs(pfe_rtable_entry_get_proto(entry));
-						ct6_reply->flags = 0U;
-						ct6_reply->route_id = route_id;
-						ct6_reply->stats.hit = oal_htonl(stats.hit);
-						ct6_reply->stats.hit_bytes = oal_htonl(stats.hit_bytes);
-					}
-					else
-					{
-						(void)memcpy(&ct_reply->saddr, &sip.v4, 4);
-						(void)memcpy(&ct_reply->daddr, &dip.v4, 4);
-						ct_reply->sport = oal_htons(pfe_rtable_entry_get_sport(entry));
-						ct_reply->dport = oal_htons(pfe_rtable_entry_get_dport(entry));
-						ct_reply->vlan = oal_htons(vlan);
-						(void)memcpy(&ct_reply->saddr_reply, &ct_reply->daddr, 4);
-						(void)memcpy(&ct_reply->daddr_reply, &ct_reply->saddr, 4);
-						ct_reply->sport_reply = ct_reply->dport;
-						ct_reply->dport_reply = ct_reply->sport;
-						ct_reply->protocol = oal_ntohs(pfe_rtable_entry_get_proto(entry));
-						ct_reply->flags = 0U;
-						ct_reply->route_id = route_id;
-						ct_reply->stats.hit = oal_htonl(stats.hit);
-						ct_reply->stats.hit_bytes = oal_htonl(stats.hit_bytes);
-					}
-
-					/*	Check if reply direction does exist */
-					rep_entry = pfe_rtable_entry_get_child(fci_context->rtable, entry);
-					if (NULL == rep_entry)
-					{
-						/*	This means that entry in 'reply' direction has not been requested
-							so the appropriate flag shall be set to indicate that. */
-						if (TRUE == ipv6)
-						{
-							ct6_reply->flags |= oal_htons(CTCMD_FLAGS_REP_DISABLED);
-						}
-						else
-						{
-							ct_reply->flags |= oal_htons(CTCMD_FLAGS_REP_DISABLED);
-						}
-					}
-					else
-					{
-						/*	Prepare reply direction statistics data */
-						ret = pfe_rtable_get_stats(fci_context->rtable, &stats, pfe_rtable_entry_get_stats_index(rep_entry));
-						if (EOK != ret)
-						{
-							NXP_LOG_ERROR("Failed to get reply routing entry statistics: %d", ret);
-						}
-
-						/*	Prepare reply direction vlan data */
-						vlan = pfe_rtable_entry_get_out_vlan(rep_entry);
-						if (TRUE == ipv6)
-						{
-							ct6_reply->vlan_reply = oal_htons(vlan);
-							ct6_reply->stats_reply.hit = oal_htonl(stats.hit);
-							ct6_reply->stats_reply.hit_bytes = oal_htonl(stats.hit_bytes);
-						}
-						else
-						{
-							ct_reply->vlan_reply = oal_htons(vlan);
-							ct_reply->stats_reply.hit = oal_htonl(stats.hit);
-							ct_reply->stats_reply.hit_bytes = oal_htonl(stats.hit_bytes);
-						}
-					}
-
-					/*
-						Check if some modifications (NAT) are enabled. If so, update the
-						'reply' direction values as defined by the FCI API. Note that
-						modification are enabled when entry is being added. See
-						FPP_ACTION_REGISTER and fci_connections_create_entry().
-					*/
-					actions = pfe_rtable_entry_get_action_flags(entry);
-					if (EOK != pfe_rtable_entry_to_5t_out(entry, &tuple))
-					{
-						NXP_LOG_ERROR("Couldn't get output tuple\n");
-					}
-
-					if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_DEC_TTL))
-					{
-						if (TRUE == ipv6)
-						{
-							ct6_reply->flags |= oal_htons(CTCMD_FLAGS_TTL_DECREMENT);
-						}
-						else
-						{
-							ct_reply->flags |= oal_htons(CTCMD_FLAGS_TTL_DECREMENT);
-						}
-					}
-
-					if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_SIP_ADDR))
-					{
-						if (TRUE == ipv6)
-						{
-							(void)memcpy(ct6_reply->daddr_reply, &tuple.src_ip.v6, 16);
-						}
-						else
-						{
-							(void)memcpy(&ct_reply->daddr_reply, &tuple.src_ip.v4, 4);
-						}
-					}
-
-					if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_DIP_ADDR))
-					{
-						if (TRUE == ipv6)
-						{
-							(void)memcpy(ct6_reply->saddr_reply, &tuple.dst_ip.v6, 16);
-						}
-						else
-						{
-							(void)memcpy(&ct_reply->saddr_reply, &tuple.dst_ip.v4, 4);
-						}
-					}
-
-					if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_SPORT))
-					{
-						if (TRUE == ipv6)
-						{
-							ct6_reply->dport_reply = oal_htons(tuple.sport);
-						}
-						else
-						{
-							ct_reply->dport_reply = oal_htons(tuple.sport);
-						}
-					}
-
-					if (0U != ((uint32_t)actions & (uint32_t)RT_ACT_CHANGE_DPORT))
-					{
-						if (TRUE == ipv6)
-						{
-							ct6_reply->sport_reply = oal_htons(tuple.dport);
-						}
-						else
-						{
-							ct_reply->sport_reply = oal_htons(tuple.dport);
-						}
+						ret = fci_connections_entry_to_ipv4_cmd(entry, rep_entry, ct_reply);
 					}
 
 					/*	Notify rtable module we are done working with this rtable entry */
@@ -1588,124 +1785,6 @@ errno_t fci_connections_ipv4_timeout_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_
 }
 
 /**
- * @brief		Remove a single connection, inform clients
- * @param[in]	entry The routing table entry to be removed
- * @note		Function is only called within the FCI worker thread context.
- * @note		Must run with route DB protected against concurrent accesses.
- */
-errno_t fci_connections_drop_one(pfe_rtable_entry_t *entry)
-{
-	const fci_t *fci_context = (fci_t *)&__context;
-	fpp_ct_cmd_t *ct_cmd = NULL;
-	fpp_ct6_cmd_t *ct6_cmd = NULL;
-	fci_msg_t msg;
-	fci_core_client_t *client;
-	pfe_5_tuple_t tuple;
-	errno_t ret;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == entry)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ret = EINVAL;
-	}
-	else if (unlikely(FALSE == fci_context->fci_initialized))
-	{
-    	NXP_LOG_ERROR("Context not initialized\n");
-		ret = EPERM;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		ret = pfe_rtable_entry_to_5t(entry, &tuple);
-		if (EOK != ret)
-		{
-			NXP_LOG_ERROR("Can't convert entry to 5 tuple: %d\n", ret);
-		}
-		else
-		{
-			(void)memset(&msg, 0, sizeof(fci_msg_t));
-			msg.type = FCI_MSG_CMD;
-
-			if (TRUE == tuple.src_ip.is_ipv4)
-			{
-		#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
-				/*	IPv4 */
-				NXP_LOG_DEBUG("Removing IPv4 connection:\n%s\n", fci_connections_entry_to_str(entry));
-		#endif /* PFE_CFG_VERBOSITY_LEVEL */
-
-				client = (fci_core_client_t *)pfe_rtable_entry_get_refptr(entry);
-				if (NULL != client)
-				{
-					msg.msg_cmd.code = FPP_CMD_IPV4_CONNTRACK;
-					ct_cmd = (fpp_ct_cmd_t *)msg.msg_cmd.payload;
-					ct_cmd->action = FPP_ACTION_REMOVED;
-
-					(void)memcpy(&ct_cmd->saddr, &tuple.src_ip.v4, 4);
-					(void)memcpy(&ct_cmd->daddr, &tuple.dst_ip.v4, 4);
-					ct_cmd->sport = oal_htons(tuple.sport);
-					ct_cmd->dport = oal_htons(tuple.dport);
-					ct_cmd->protocol = oal_htons(tuple.proto);
-
-					ret = fci_core_client_send(client, &msg, NULL);
-					if (EOK != ret)
-					{
-						NXP_LOG_ERROR("Could not notify FCI client\n");
-					}
-				}
-				else
-				{
-					; /*	No client ID, notification not required */
-				}
-			}
-			else
-			{
-		#if (PFE_CFG_VERBOSITY_LEVEL >= 8)
-				/*	IPv6 */
-				NXP_LOG_DEBUG("Removing IPv6 connection:\n%s\n", fci_connections_entry_to_str(entry));
-		#endif /* PFE_CFG_VERBOSITY_LEVEL */
-
-				client = (fci_core_client_t *)pfe_rtable_entry_get_refptr(entry);
-				if (NULL != client)
-				{
-					msg.msg_cmd.code = FPP_CMD_IPV6_CONNTRACK;
-					ct6_cmd = (fpp_ct6_cmd_t *)msg.msg_cmd.payload;
-					ct6_cmd->action = FPP_ACTION_REMOVED;
-
-					(void)memcpy(&ct6_cmd->saddr[0], &tuple.src_ip.v6, 16);
-					(void)memcpy(&ct6_cmd->daddr[0], &tuple.dst_ip.v6, 16);
-					ct6_cmd->sport = oal_htons(tuple.sport);
-					ct6_cmd->dport = oal_htons(tuple.dport);
-					ct6_cmd->protocol = oal_htons(tuple.proto);
-
-					ret = fci_core_client_send(client, &msg, NULL);
-					if (EOK != ret)
-					{
-						NXP_LOG_ERROR("Could not notify FCI client\n");
-					}
-				}
-				else
-				{
-					; /*	No client ID, notification not required */
-				}
-			}
-
-			/*	Remove entry from the routing table */
-			ret = pfe_rtable_del_entry(fci_context->rtable, entry);
-			if (EOK != ret)
-			{
-				NXP_LOG_ERROR("Fatal: Can't remove rtable entry = memory leak\n");
-			}
-
-			/*	Release (deallocation) of the entry is done by the caller. */
-
-		}
-	}
-
-	return ret;
-}
-
-/**
  * @brief		Remove all connections, inform clients, resolve dependencies
  * @note		Function is only called within the FCI worker thread context.
  * @note		Must run with route DB protected against concurrent accesses.
@@ -1729,7 +1808,7 @@ void fci_connections_drop_all(void)
 		entry = pfe_rtable_get_first(fci_context->rtable, RTABLE_CRIT_ALL, NULL);
 		while (NULL != entry)
 		{
-			ret = fci_connections_drop_one(entry);
+			ret = pfe_rtable_del_entry(fci_context->rtable, entry);
 			if (EOK != ret)
 			{
 				NXP_LOG_WARNING("Couldn't properly drop a connection: %d\n", ret);

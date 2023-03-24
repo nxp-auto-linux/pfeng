@@ -25,10 +25,8 @@
 #endif
 #include "pfe_parity.h"
 #include "pfe_emac.h"
-#if defined(PFE_CFG_L2BRIDGE_ENABLE)
-	#include "pfe_l2br_table.h"
-	#include "pfe_l2br.h"
-#endif /* PFE_CFG_L2BRIDGE_ENABLE */
+#include "pfe_l2br_table.h"
+#include "pfe_l2br.h"
 #include "pfe_phy_if.h"
 #include "pfe_log_if.h"
 #include "pfe_if_db.h"
@@ -96,6 +94,7 @@ typedef struct
 	bool_t g2_ordered_class_writes;	/* S32G2 ordered class writes switch */
 	bool_t g3_rtable_in_lmem;	/* allocate the routing table in LMEM for S32G3 */
 	uint8_t emac_ext_ts_mask;	/* The bitmap representing setting of external timestamping mode on EMACs */
+	u8 lltx_res_tmu_q_id;
 } pfe_platform_config_t;
 
 typedef struct
@@ -131,11 +130,9 @@ typedef struct
 #if defined(PFE_CFG_RTABLE_ENABLE)
 	pfe_rtable_t *rtable;
 #endif /* PFE_CFG_RTABLE_ENABLE */
-#if defined(PFE_CFG_L2BRIDGE_ENABLE)
 	pfe_l2br_table_t *mactab;
 	pfe_l2br_table_t *vlantab;
 	pfe_l2br_t *l2_bridge;
-#endif /* PFE_CFG_L2BRIDGE_ENABLE */
 	pfe_class_t *classifier;
 	pfe_tmu_t *tmu;
 	pfe_util_t *util;

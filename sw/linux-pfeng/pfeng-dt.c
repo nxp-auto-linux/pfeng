@@ -131,8 +131,8 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 	pfe_cfg->cbus_len = res->end - res->start + 1;
 	HM_MSG_DEV_INFO(dev, "Cbus addr 0x%llx size 0x%llx\n", pfe_cfg->cbus_base, pfe_cfg->cbus_len);
 
-#ifdef PFE_CFG_PFE_MASTER
 	/* S32G Main GPRs */
+#ifdef PFE_CFG_PFE_MASTER
 	res = platform_get_resource_byname(priv->pdev, IORESOURCE_MEM, PFE_RES_NAME_S32G_MAIN_GPR);
 	if(unlikely(!res)) {
 		HM_MSG_DEV_ERR(dev, "Cannot find syscon resource by '%s', aborting\n", PFE_RES_NAME_S32G_MAIN_GPR);
@@ -141,7 +141,17 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 	priv->syscon.start = res->start;
 	priv->syscon.end = res->end;
 	HM_MSG_DEV_DBG(dev, "Syscon addr 0x%llx size 0x%llx\n", priv->syscon.start, priv->syscon.end - priv->syscon.start + 1);
+#else
+	/* It's only optional on Slave */
+	res = platform_get_resource_byname(priv->pdev, IORESOURCE_MEM, PFE_RES_NAME_S32G_MAIN_GPR);
+	if(res) {
+		priv->syscon.start = res->start;
+		priv->syscon.end = res->end;
+		HM_MSG_DEV_DBG(dev, "Syscon addr 0x%llx size 0x%llx\n", priv->syscon.start, priv->syscon.end - priv->syscon.start + 1);
+	}
+#endif /* PFE_CFG_PFE_MASTER */
 
+#ifdef PFE_CFG_PFE_MASTER
 	/* Firmware CLASS name */
 	if (of_find_property(np, "nxp,fw-class-name", NULL))
 		if (!of_property_read_string(np, "nxp,fw-class-name", &priv->fw_class_name)) {

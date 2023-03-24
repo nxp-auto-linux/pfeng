@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2022 NXP
+#  Copyright 2018-2023 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -72,8 +72,6 @@ export PFE_CFG_HIF_SEQNUM_CHECK?=0
 export PFE_CFG_BUFFERS_COHERENT?=1
 #Build of rtable feature. 1 - enable, 0 - disable
 export PFE_CFG_RTABLE_ENABLE?=1
-#Build of l2bridge feature. 1 - enable, 0 - disable
-export PFE_CFG_L2BRIDGE_ENABLE?=1
 #Build support for FCI. 1 - enable, 0 - disable
 export PFE_CFG_FCI_ENABLE?=1
 #Build support for thread detecting PFE errors in polling mode. 1 - enable, 0 - disable
@@ -255,10 +253,6 @@ endif
 
 ifneq ($(PFE_CFG_RTABLE_ENABLE),0)
     GLOBAL_CCFLAGS+= -DPFE_CFG_RTABLE_ENABLE
-endif
-
-ifneq ($(PFE_CFG_L2BRIDGE_ENABLE),0)
-    GLOBAL_CCFLAGS+= -DPFE_CFG_L2BRIDGE_ENABLE
 endif
 
 ifneq ($(PFE_CFG_FCI_ENABLE),0)

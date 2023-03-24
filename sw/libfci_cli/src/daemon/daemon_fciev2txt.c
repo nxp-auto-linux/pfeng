@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2023 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -64,6 +64,8 @@ static int fciev_snprintf(char**const pp_rtn_dst, int* p_rtn_dst_ln, const char*
 
 static int fciev_print_ip_route(char** pp_rtn_dst, int* p_rtn_dst_ln, const unsigned short len, const unsigned short* payload);
 static int fciev_print_health_monitor_event(char** pp_rtn_dst, int* p_rtn_dst_ln, const unsigned short len, const unsigned short* payload);
+static int fciev_print_ipv4_conntrack_change(char** pp_rtn_dst, int* p_rtn_dst_ln, const unsigned short len, const unsigned short* payload);
+static int fciev_print_ipv6_conntrack_change(char** pp_rtn_dst, int* p_rtn_dst_ln, const unsigned short len, const unsigned short* payload);
 
 /* ==== PRIVATE FUNCTIONS : aux ============================================ */
 
@@ -90,6 +92,14 @@ static int fciev_print_payload_decoded(char**const pp_rtn_dst, int* p_rtn_dst_ln
             
             case FPP_CMD_HEALTH_MONITOR_EVENT:
                 rtn = fciev_print_health_monitor_event(pp_rtn_dst, p_rtn_dst_ln, len, payload);
+            break;
+            
+            case FPP_CMD_IPV4_CONNTRACK_CHANGE:
+                rtn = fciev_print_ipv4_conntrack_change(pp_rtn_dst, p_rtn_dst_ln, len, payload);
+            break;
+            
+            case FPP_CMD_IPV6_CONNTRACK_CHANGE:
+                rtn = fciev_print_ipv6_conntrack_change(pp_rtn_dst, p_rtn_dst_ln, len, payload);
             break;
             
             default:
@@ -123,6 +133,14 @@ static const char* fciev_fcode2txt(unsigned short fcode)
         
         case FPP_CMD_HEALTH_MONITOR_EVENT:
             p_txt = TXT_STRINGIFY(FPP_CMD_HEALTH_MONITOR_EVENT);
+        break;
+        
+        case FPP_CMD_IPV4_CONNTRACK_CHANGE:
+            p_txt = TXT_STRINGIFY(FPP_CMD_IPV4_CONNTRACK_CHANGE);
+        break;
+        
+        case FPP_CMD_IPV6_CONNTRACK_CHANGE:
+            p_txt = TXT_STRINGIFY(FPP_CMD_IPV6_CONNTRACK_CHANGE);
         break;
         
         default:
@@ -281,6 +299,128 @@ static int fciev_print_health_monitor_event(char** pp_rtn_dst, int* p_rtn_dst_ln
                 p_hm->type, cli_value2txt_hm_type(p_hm->type),
                 p_hm->src, cli_value2txt_hm_src(p_hm->src),
                 p_hm->desc
+           );
+}
+
+/* print decoded FPP_CMD_IPV4_CONNTRACK_CHANGE ; NOTE: non-zero len and non-NULL payload are assumed */
+static int fciev_print_ipv4_conntrack_change(char** pp_rtn_dst, int* p_rtn_dst_ln, const unsigned short len, const unsigned short* payload)
+{
+    UNUSED(len);  /* just to suppress gcc warning */
+    
+    const fpp_ct_cmd_t* p_ct = (fpp_ct_cmd_t*)(payload);
+    
+    const uint32_t s   = demo_ct_ld_get_saddr(p_ct);
+    const uint8_t* p_s = (const uint8_t*)(&s);
+    
+    const uint32_t d   = demo_ct_ld_get_daddr(p_ct);
+    const uint8_t* p_d = (const uint8_t*)(&d);
+    
+    const uint32_t sr   = demo_ct_ld_get_saddr_reply(p_ct);
+    const uint8_t* p_sr = (const uint8_t*)(&sr);
+    
+    const uint32_t dr   = demo_ct_ld_get_daddr_reply(p_ct);
+    const uint8_t* p_dr = (const uint8_t*)(&dr);
+    
+    return fciev_snprintf(pp_rtn_dst, p_rtn_dst_ln,
+                "  action                = %"PRIu16" (%s)\n"
+                "  saddr                 = %"PRIu8".%"PRIu8".%"PRIu8".%"PRIu8"\n"
+                "  daddr                 = %"PRIu8".%"PRIu8".%"PRIu8".%"PRIu8"\n"
+                "  sport                 = %"PRIu16"\n"
+                "  dport                 = %"PRIu16"\n"
+                "  saddr_reply           = %"PRIu8".%"PRIu8".%"PRIu8".%"PRIu8"\n"
+                "  daddr_reply           = %"PRIu8".%"PRIu8".%"PRIu8".%"PRIu8"\n"
+                "  sport_reply           = %"PRIu16"\n"
+                "  dport_reply           = %"PRIu16"\n"
+                "  protocol              = %"PRIu16"\n"
+                "  flags                 = 0x%04"PRIx16"\n"
+                "  route_id              = %"PRIu32"\n"
+                "  route_id_reply        = %"PRIu32"\n"
+                "  vlan                  = %"PRIu16"\n"
+                "  vlan_reply            = %"PRIu16"\n"
+                "  stats.hit             = %"PRIu32"\n"
+                "  stats.hit_bytes       = %"PRIu32"\n"
+                "  stats_reply.hit       = %"PRIu32"\n"
+                "  stats_reply.hit_bytes = %"PRIu32"\n",
+                p_ct->action, fciev_action2txt(p_ct->action),
+                p_s[3],p_s[2],p_s[1],p_s[0],
+                p_d[3],p_d[2],p_d[1],p_d[0],
+                demo_ct_ld_get_sport(p_ct),
+                demo_ct_ld_get_dport(p_ct),
+                p_sr[3],p_sr[2],p_sr[1],p_sr[0],
+                p_dr[3],p_dr[2],p_dr[1],p_dr[0],
+                demo_ct_ld_get_sport_reply(p_ct),
+                demo_ct_ld_get_dport_reply(p_ct),
+                demo_ct_ld_get_protocol(p_ct),
+                demo_ct_ld_get_flags(p_ct),
+                demo_ct_ld_get_route_id(p_ct),
+                demo_ct_ld_get_route_id_reply(p_ct),
+                demo_ct_ld_get_vlan(p_ct),
+                demo_ct_ld_get_vlan_reply(p_ct),
+                demo_ct_ld_get_stt_hit(p_ct),
+                demo_ct_ld_get_stt_hit_bytes(p_ct),
+                demo_ct_ld_get_stt_reply_hit(p_ct),
+                demo_ct_ld_get_stt_reply_hit_bytes(p_ct)
+           );
+}
+
+/* print decoded FPP_CMD_IPV6_CONNTRACK_CHANGE ; NOTE: non-zero len and non-NULL payload are assumed */
+static int fciev_print_ipv6_conntrack_change(char** pp_rtn_dst, int* p_rtn_dst_ln, const unsigned short len, const unsigned short* payload)
+{
+    UNUSED(len);  /* just to suppress gcc warning */
+    
+    const fpp_ct6_cmd_t* p_ct6 = (fpp_ct6_cmd_t*)(payload);
+    
+    const uint32_t* p_s32 = demo_ct6_ld_get_saddr(p_ct6);
+    const uint8_t*  p_s   = (const uint8_t*)(p_s32);
+    
+    const uint32_t* p_d32 = demo_ct6_ld_get_daddr(p_ct6);
+    const uint8_t*  p_d   = (const uint8_t*)(p_d32);
+    
+    const uint32_t* p_sr32 = demo_ct6_ld_get_saddr_reply(p_ct6);
+    const uint8_t*  p_sr   = (const uint8_t*)(p_sr32);
+    
+    const uint32_t* p_dr32 = demo_ct6_ld_get_daddr_reply(p_ct6);
+    const uint8_t*  p_dr   = (const uint8_t*)(p_dr32);
+    
+    return fciev_snprintf(pp_rtn_dst, p_rtn_dst_ln,
+                "  action                = %"PRIu16" (%s)\n"
+                "  saddr                 = %02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8"\n"
+                "  daddr                 = %02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8"\n"
+                "  sport                 = %"PRIu16"\n"
+                "  dport                 = %"PRIu16"\n"
+                "  saddr_reply           = %02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8"\n"
+                "  daddr_reply           = %02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8"\n"
+                "  sport_reply           = %"PRIu16"\n"
+                "  dport_reply           = %"PRIu16"\n"
+                "  protocol              = %"PRIu16"\n"
+                "  flags                 = 0x%04"PRIx16"\n"
+                "  route_id              = %"PRIu32"\n"
+                "  route_id_reply        = %"PRIu32"\n"
+                "  vlan                  = %"PRIu16"\n"
+                "  vlan_reply            = %"PRIu16"\n"
+                "  stats.hit             = %"PRIu32"\n"
+                "  stats.hit_bytes       = %"PRIu32"\n"
+                "  stats_reply.hit       = %"PRIu32"\n"
+                "  stats_reply.hit_bytes = %"PRIu32"\n",
+                p_ct6->action, fciev_action2txt(p_ct6->action),
+                p_s[3],p_s[2],p_s[1],p_s[0], p_s[7],p_s[6],p_s[5],p_s[4], p_s[11],p_s[10],p_s[9],p_s[8], p_s[15],p_s[14],p_s[13],p_s[12],
+                p_d[3],p_d[2],p_d[1],p_d[0], p_d[7],p_d[6],p_d[5],p_d[4], p_d[11],p_d[10],p_d[9],p_d[8], p_d[15],p_d[14],p_d[13],p_d[12],
+                demo_ct6_ld_get_sport(p_ct6),
+                demo_ct6_ld_get_dport(p_ct6),
+                p_sr[3],p_sr[2],p_sr[1],p_sr[0], p_sr[7],p_sr[6],p_sr[5],p_sr[4], p_sr[11],p_sr[10],p_sr[9],p_sr[8], p_sr[15],p_sr[14],p_sr[13],p_sr[12],
+                p_dr[3],p_dr[2],p_dr[1],p_dr[0], p_dr[7],p_dr[6],p_dr[5],p_dr[4], p_dr[11],p_dr[10],p_dr[9],p_dr[8], p_dr[15],p_dr[14],p_dr[13],p_dr[12],
+                demo_ct6_ld_get_sport_reply(p_ct6),
+                demo_ct6_ld_get_dport_reply(p_ct6),
+                demo_ct6_ld_get_protocol(p_ct6),
+                demo_ct6_ld_get_flags(p_ct6),
+                demo_ct6_ld_get_route_id(p_ct6),
+                demo_ct6_ld_get_route_id_reply(p_ct6),
+                demo_ct6_ld_get_vlan(p_ct6),
+                demo_ct6_ld_get_vlan_reply(p_ct6),
+                demo_ct6_ld_get_stt_hit(p_ct6),
+                demo_ct6_ld_get_stt_hit_bytes(p_ct6),
+                demo_ct6_ld_get_stt_reply_hit(p_ct6),
+                demo_ct6_ld_get_stt_reply_hit_bytes(p_ct6)
            );
 }
 

@@ -64,7 +64,7 @@ static void fci_routes_remove_related_connections(fci_rt_db_entry_t *route)
 		entry = pfe_rtable_get_first(fci_context->rtable, RTABLE_CRIT_BY_ROUTE_ID, &route->id);
 		while (NULL != entry)
 		{
-			ret = fci_connections_drop_one(entry);
+			ret = pfe_rtable_del_entry(fci_context->rtable, entry);
 			if (EOK != ret)
 			{
 				NXP_LOG_WARNING("Couldn't properly drop a connection: %d\n", ret);
@@ -378,7 +378,7 @@ errno_t fci_routes_drop_one(fci_rt_db_entry_t *route)
 			ret = fci_core_client_send((fci_core_client_t *)route->refptr, &msg, NULL);
 			if (EOK != ret)
 			{
-				NXP_LOG_ERROR("Could not notify FCI client\n");
+				NXP_LOG_WARNING("Could not notify FCI client\n");
 			}
 		}
 
