@@ -1,6 +1,6 @@
 NXP Software Content Register
 
-Release Name:           PFE-DRV_S32G_A53_LNX_1.3.0
+Release Name:           S32G PFE Linux driver Version 1.3.0
 
 Outgoing License:       GPL-2.0
 
