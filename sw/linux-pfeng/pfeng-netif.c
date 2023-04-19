@@ -1484,7 +1484,7 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 		netdev->max_mtu = PFE_EMAC_STD_MTU + PFE_MIN_DSA_OVERHEAD; /* account for 8021q DSA tag length */
 	}
 #else
-	netdev->max_mtu = PFE_EMAC_STD_MTU + PFE_MIN_DSA_OVERHEAD; /* account for 8021q DSA tag length */
+	netdev->max_mtu = PFE_EMAC_JUMBO_MTU + PFE_MIN_DSA_OVERHEAD; /* account for 8021q DSA tag length */
 #endif
 
 	/* Each packet requires extra buffer for Tx header (metadata) */
