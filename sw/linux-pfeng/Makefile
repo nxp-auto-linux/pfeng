@@ -62,7 +62,7 @@ ifneq ($(PFE_CFG_FCI_ENABLE),0)
 OBJ_DIRS += ../fci
 endif
 
-pfeng-objs-libs := ../pfe_platform/pfe_platform.o ../oal/oal.o ../elf/elf.o ../fifo/fifo.o ../bpool/bpool.o ../common/blalloc.o
+pfeng-objs-libs := ../pfe_platform/pfe_platform.o ../oal/oal.o ../elf/elf.o ../fifo/fifo.o ../bpool/bpool.o ../common/common.o
 
 ifneq ($(PFE_CFG_FCI_ENABLE),0)
 pfeng-objs-libs += ../fci/fci.o

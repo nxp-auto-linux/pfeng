@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2022 NXP
+#  Copyright 2018-2023 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -9,11 +9,7 @@ ifndef KERNELRELEASE
 include ../build_env.mak
 endif
 
-ifeq ($(TARGET_OS),LINUX)
-  ARTIFACT = common.o
-else
-  ARTIFACT = common.a
-endif
+ARTIFACT = common.a
 
 TARGET = $(OUTPUT_DIR)/$(ARTIFACT)
 
@@ -52,7 +48,7 @@ DEPS = -Wp,-MMD,$(@:%.o=%.d),-MT,$@
 rwildcard = $(wildcard $(addprefix $1/*.,$2)) $(foreach d,$(wildcard $1/*),$(call rwildcard,$d,$2))
 
 #Source list
-SRCS = $(call rwildcard, src, c)
+SRCS = src/blalloc.c
 
 #Object files list
 OBJS = $(addprefix $(OUTPUT_DIR)/,$(addsuffix .o, $(basename $(SRCS))))
@@ -91,19 +87,4 @@ rebuild: clean all
 #
 # Linux build
 
-ccflags-y += $(INCLUDES)
-ccflags-y += $(CCFLAGS_pfe)
-ccflags-y += $(GLOBAL_CCFLAGS)
-ccflags-y += -Werror
-
-# note: common.o is not build
-blalloc-y := src/blalloc.o
-
-obj-m += blalloc.o
-
-linux:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` GLOBAL_CCFLAGS="$(GLOBAL_CCFLAGS)" modules
-
-linux-clean:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` clean
-
+include $(M)/../dummy_mod.mak
