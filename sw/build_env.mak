@@ -458,3 +458,5 @@ ifeq ($(TARGET_OS),LINUX)
     export INC_PREFIX=$(PWD)/
 
 endif # TARGET_OS
+
+M ?= .

@@ -1,5 +1,5 @@
 #
-# Copyright 2018-2022 NXP
+# Copyright 2018-2023 NXP
 #
 # SPDX-License-Identifier:     BSD OR GPL-2.0
 #
@@ -71,10 +71,10 @@ endif
 pfeng-objs-core := pfeng-debugfs.o pfeng-hif.o pfeng-bman.o pfeng-netif.o pfeng-ethtool.o pfeng-hwts.o pfeng-dt.o pfeng-mdio.o
 
 ifneq ($(PFE_CFG_PFE_MASTER),0)
-pfeng-objs := $(pfeng-objs-libs) $(pfeng-objs-core) pfeng-drv.o pfeng-fw.o pfeng-phylink.o pfeng-ptp.o
+pfeng-objs := $(pfeng-objs-core) $(pfeng-objs-libs) pfeng-drv.o pfeng-fw.o pfeng-phylink.o pfeng-ptp.o
 obj-m += pfeng.o
 else
-pfeng-slave-objs := $(pfeng-objs-libs) $(pfeng-objs-core) pfeng-slave-drv.o
+pfeng-slave-objs := $(pfeng-objs-core) $(pfeng-objs-libs) pfeng-slave-drv.o
 obj-m += pfeng-slave.o
 endif
 
