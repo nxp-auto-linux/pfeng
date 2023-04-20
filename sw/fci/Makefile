@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2022 NXP
+#  Copyright 2018-2023 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -9,11 +9,7 @@ ifndef KERNELRELEASE
 include ../build_env.mak
 endif
 
-ifeq ($(TARGET_OS),LINUX)
-  ARTIFACT = fci.o
-else
-  ARTIFACT = fci.a
-endif
+ARTIFACT = fci.a
 
 TARGET = $(OUTPUT_DIR)/$(ARTIFACT)
 
@@ -124,19 +120,6 @@ ifdef KERNELRELEASE
 GLOBAL_CCFLAGS+=-D__KERNEL__
 endif
 
-ccflags-y += $(INCLUDES)
 ccflags-y += -Wno-date-time
-ccflags-y += $(CCFLAGS_pfe)
-ccflags-y += $(GLOBAL_CCFLAGS)
-ccflags-y += -Werror
 
-fci-y := $(OBJS)
-
-obj-m += fci.o
-
-linux:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` GLOBAL_CCFLAGS="$(GLOBAL_CCFLAGS)" modules
-
-linux-clean:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` clean
-
+include $(M)/../dummy_mod.mak

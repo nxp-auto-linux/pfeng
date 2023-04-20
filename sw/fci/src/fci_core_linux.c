@@ -32,8 +32,6 @@
 
 #include <linux/rtnetlink.h>
 
-MODULE_LICENSE("GPL");
-
 static bool disable_netlink = false;
 module_param(disable_netlink, bool, 0644);
 MODULE_PARM_DESC(disable_netlink, "\t Do not create netlink socket for FCI communication (default: false)");
