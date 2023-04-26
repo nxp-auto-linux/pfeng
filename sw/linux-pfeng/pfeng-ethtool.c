@@ -197,9 +197,7 @@ static void pfeng_ethtool_complete(struct net_device *netdev)
 
 static const struct ethtool_ops pfeng_ethtool_ops = {
 #ifdef PFE_CFG_PFE_MASTER
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,7,0)
 	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS,
-#endif
 	.get_link = ethtool_op_get_link,
 	.nway_reset = pfeng_ethtool_nway_reset,
 	.get_pauseparam = pfeng_ethtool_get_pauseparam,

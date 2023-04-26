@@ -487,16 +487,4 @@ int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct ethtool_ts_info *info);
 int pfeng_mdio_read(struct mii_bus *bus, int phyaddr, int phyreg);
 int pfeng_mdio_write(struct mii_bus *bus, int phyaddr, int phyreg, u16 phydata);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,9,0)
-static inline int pm_runtime_resume_and_get(struct device *dev)
-{
-	int ret = pm_runtime_get_sync(dev);
-
-	if (ret < 0)
-		pm_runtime_put_noidle(dev);
-
-	return ret;
-}
-#endif
-
 #endif
