@@ -151,14 +151,6 @@ enum
 #error Impossible configuration
 #endif
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	#define TX_BUF_FRAME_OFFSET ((uint16_t)(sizeof(pfe_ct_hif_tx_hdr_t)) \
-								 + (uint16_t)256U \
-								)
-#else
-	#define TX_BUF_FRAME_OFFSET 0U
-#endif
-
 /**
  * @brief	HIF common RX/TX packet flags
  */

@@ -1717,53 +1717,6 @@ static void pfe_platform_destroy_hif(pfe_platform_t *platform)
 	}
 }
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-
-/**
- * @brief		Assign HIF NOCPY to the platform
- */
-static errno_t pfe_platform_create_hif_nocpy(pfe_platform_t *platform)
-{
-    uint16_t lmem_header_size;
-
-	if(PFE_S32G3_VERSION == platform->pfe_version)
-	{   /* S32G3 */
-		lmem_header_size = 48U;
-	}
-	else
-	{   /* S32G2 */
-		lmem_header_size = 112U;
-	}
-
-	platform->hif_nocpy = pfe_hif_nocpy_create(pfe.cbus_baseaddr + CBUS_HIF_NOCPY_BASE_ADDR, platform->bmu[1], lmem_header_size);
-
-	if (NULL == platform->hif_nocpy)
-	{
-		NXP_LOG_ERROR("Couldn't create HIF NOCPY instance\n");
-		return ENODEV;
-	}
-	return EOK;
-}
-
-/**
- * @brief		Release HIF-related resources
- */
-static void pfe_platform_destroy_hif_nocpy(pfe_platform_t *platform)
-{
-	if (NULL != platform->hif_nocpy)
-	{
-		if (NULL != platform->irq_hif_nocpy)
-		{
-			oal_irq_destroy(platform->irq_hif_nocpy);
-			platform->irq_hif_nocpy = NULL;
-		}
-
-		pfe_hif_nocpy_destroy(platform->hif_nocpy);
-		platform->hif_nocpy = NULL;
-	}
-}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-
 /**
  * @brief		Assign BMU to the platform
  */
@@ -3271,9 +3224,6 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 			{.name = "hif1", .id = PFE_PHY_IF_ID_HIF1, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_1)}},
 			{.name = "hif2", .id = PFE_PHY_IF_ID_HIF2, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_2)}},
 			{.name = "hif3", .id = PFE_PHY_IF_ID_HIF3, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_3)}},
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-			{.name = "hifncpy", .id = PFE_PHY_IF_ID_HIF_NOCPY, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_nocpy_get_channel(platform->hif_nocpy, PFE_HIF_CHNL_NOCPY_ID)}},
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 			{.name = NULL, .id = PFE_PHY_IF_ID_INVALID, .mac = {0}, {NULL, NULL, NULL}}
 	};
 
@@ -3795,15 +3745,6 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 		goto exit;
 	}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	/*	HIF NOCPY */
-	ret = pfe_platform_create_hif_nocpy(&pfe);
-	if (EOK != ret)
-	{
-		goto exit;
-	}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-
 	/*	Activate the classifier */
 	pfe_class_enable(pfe.classifier);
 
@@ -3934,9 +3875,6 @@ static void pfe_platform_destroy_group1(void)
 #endif /* PFE_CFG_FCI_ENABLE */
 	pfe_platform_destroy_ifaces(&pfe);
 	pfe_platform_destroy_hif(&pfe);
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	pfe_platform_destroy_hif_nocpy(&pfe);
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	pfe_platform_destroy_gpi(&pfe);
 	pfe_platform_destroy_etgpi(&pfe);
 	pfe_platform_destroy_hgpi(&pfe);

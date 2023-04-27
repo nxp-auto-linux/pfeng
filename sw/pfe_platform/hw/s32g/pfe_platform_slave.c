@@ -1,7 +1,7 @@
 /* =========================================================================
- *  
+ *
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -49,9 +49,6 @@ phy_ifs[] =
         {.name = "hif1", .id = PFE_PHY_IF_ID_HIF1, .mac = {0},},
         {.name = "hif2", .id = PFE_PHY_IF_ID_HIF2, .mac = {0},},
         {.name = "hif3", .id = PFE_PHY_IF_ID_HIF3, .mac = {0},},
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-        {.name = "hifncpy", .id = PFE_PHY_IF_ID_HIF_NOCPY, .mac = {0}},
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
         {.name = NULL, .id = PFE_PHY_IF_ID_INVALID, .mac = {0}}
 };
 
@@ -193,52 +190,6 @@ static void pfe_platform_destroy_hif(pfe_platform_t *platform)
 		platform->hif = NULL;
 	}
 }
-
-
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-/**
- * @brief		Assign HIF NOCPY to the platform
- */
-static errno_t pfe_platform_create_hif_nocpy(pfe_platform_t *platform)
-{
-    uint16_t lmem_header_size;
-
-	if(PFE_S32G3_VERSION == platform->pfe_version)
-	{   /* S32G3 */
-		lmem_header_size = 48U;
-	}
-	else
-	{   /* S32G2 */
-		lmem_header_size = 112U;
-	}
-
-	platform->hif_nocpy = pfe_hif_nocpy_create(pfe.cbus_baseaddr + CBUS_HIF_NOCPY_BASE_ADDR, platform->bmu[1], lmem_header_size);
-
-	if (NULL == platform->hif_nocpy)
-	{
-		NXP_LOG_ERROR("Couldn't create HIF NOCPY instance\n");
-		return ENODEV;
-	}
-	else
-	{
-		pfe_hif_chnl_irq_unmask(pfe_hif_nocpy_get_channel(platform->hif_nocpy, PFE_HIF_CHNL_NOCPY_ID));
-	}
-
-	return EOK;
-}
-
-/**
- * @brief		Release HIF-related resources
- */
-static void pfe_platform_destroy_hif_nocpy(pfe_platform_t *platform)
-{
-	if (platform->hif_nocpy)
-	{
-		pfe_hif_nocpy_destroy(platform->hif_nocpy);
-		platform->hif_nocpy = NULL;
-	}
-}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 /**
  * @brief		Register logical interface
@@ -606,15 +557,6 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 		goto exit;
 	}
 
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	/*	HIF NOCPY */
-	ret = pfe_platform_create_hif_nocpy(&pfe);
-	if (EOK != ret)
-	{
-		goto exit;
-	}
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
-
 #if defined(PFE_CFG_FCI_ENABLE)
 	ret = pfe_platform_create_fci(&pfe);
 	if (EOK != ret)
@@ -654,9 +596,6 @@ errno_t pfe_platform_remove(void)
 #endif /* PFE_CFG_FCI_ENABLE */
 
 	pfe_platform_destroy_hif(&pfe);
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	pfe_platform_destroy_hif_nocpy(&pfe);
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 
 	if (0ULL != pfe.cbus_baseaddr)
 	{

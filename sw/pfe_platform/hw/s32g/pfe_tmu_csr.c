@@ -280,9 +280,6 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 	hal_write32(0x0U, cbus_base_va + TMU_PHY1_TDQ_CTRL);
 	hal_write32(0x0U, cbus_base_va + TMU_PHY2_TDQ_CTRL);
 	hal_write32(0x0U, cbus_base_va + TMU_PHY3_TDQ_CTRL);
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	hal_write32(0x0U, cbus_base_va + TMU_PHY4_TDQ_CTRL);
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	hal_write32(0x0U, cbus_base_va + TMU_PHY5_TDQ_CTRL);	/* UTIL PE */
 
 	/*	Reset */
@@ -294,9 +291,6 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_EGPI3_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY2_INQ_ADDR);
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_HGPI_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY16_INQ_ADDR);
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_HGPI_BASE_ADDR + GPI_INQ_PKTPTR, cbus_base_va + TMU_PHY3_INQ_ADDR);
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + CBUS_HIF_NOCPY_BASE_ADDR + HIF_NOCPY_RX_INQ0_PKTPTR, cbus_base_va + TMU_PHY4_INQ_ADDR);
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	/* The macro UTIL_INQ_PKTPTR already contains the CBUS_UTIL_CSR_BASE_ADDR (difference to above lines) */
 	hal_write32(PFE_CFG_CBUS_PHYS_BASE_ADDR + UTIL_INQ_PKTPTR, cbus_base_va + TMU_PHY5_INQ_ADDR); /* UTIL */
 
@@ -389,9 +383,6 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 		hal_write32(0xfU, cbus_base_va + TMU_PHY2_TDQ_CTRL);
 		hal_write32(0xfU, cbus_base_va + TMU_PHY16_TDQ_CTRL);
 		hal_write32(0xfU, cbus_base_va + TMU_PHY3_TDQ_CTRL);
-	#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-		hal_write32(0xfU, cbus_base_va + TMU_PHY4_TDQ_CTRL);
-	#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 		hal_write32(0xfU, cbus_base_va + TMU_PHY5_TDQ_CTRL);	/* UTIL */
 	}
 

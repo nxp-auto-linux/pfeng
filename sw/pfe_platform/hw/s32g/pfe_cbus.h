@@ -1,7 +1,7 @@
 /* =========================================================================
- *  
+ *
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -43,9 +43,6 @@
 #include "pfe_util_csr.h"
 #include "pfe_gpi_csr.h"
 #include "pfe_hif_csr.h"
-#if !defined(PFE_CFG_TARGET_OS_LINUX)
-#include "pfe_hif_nocpy_csr.h"
-#endif
 #include "pfe_bmu_csr.h"
 #include "pfe_emac_csr.h"
 
