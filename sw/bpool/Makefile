@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2022 NXP
+#  Copyright 2018-2023 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -9,11 +9,7 @@ ifndef KERNELRELEASE
 include ../build_env.mak
 endif
 
-ifeq ($(TARGET_OS),LINUX)
-  ARTIFACT = bpool.o
-else
-  ARTIFACT = bpool.a
-endif
+ARTIFACT = bpool.a
 
 TARGET = $(OUTPUT_DIR)/$(ARTIFACT)
 
@@ -55,7 +51,7 @@ DEPS = -Wp,-MMD,$(@:%.o=%.d),-MT,$@
 rwildcard = $(wildcard $(addprefix $1/*.,$2)) $(foreach d,$(wildcard $1/*),$(call rwildcard,$d,$2))
 
 #Source list
-SRCS = $(call rwildcard, src, c)
+SRCS = src/bpool.c
 
 #Object files list
 OBJS = $(addprefix $(OUTPUT_DIR)/,$(addsuffix .o, $(basename $(SRCS))))
@@ -95,19 +91,4 @@ rebuild: clean all
 #
 # Linux build
 
-ccflags-y += $(INCLUDES)
-ccflags-y += $(CCFLAGS_pfe)
-ccflags-y += $(GLOBAL_CCFLAGS)
-ccflags-y += -Werror
-
-bpool-y := src/bpool.o
-#bpool-y := $(OBJS)
-
-obj-m += bpool.o
-
-linux:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` GLOBAL_CCFLAGS="$(GLOBAL_CCFLAGS)" modules
-
-linux-clean:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` clean
-
+include $(M)/../dummy_mod.mak
