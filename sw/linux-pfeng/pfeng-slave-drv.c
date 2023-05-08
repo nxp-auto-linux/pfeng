@@ -64,6 +64,12 @@ static int master_ihc_chnl = HIF_CFG_MAX_CHANNELS + 1;
 module_param(master_ihc_chnl, int, 0644);
 MODULE_PARM_DESC(master_ihc_chnl, "\t 0 - <max-hif-chn-number>, default read from DT or invalid");
 
+#ifdef PFE_CFG_FCI_ENABLE
+bool disable_netlink = false;
+module_param(disable_netlink, bool, 0644);
+MODULE_PARM_DESC(disable_netlink, "\t Do not create netlink socket for FCI communication (default: false)");
+#endif /* PFE_CFG_FCI_ENABLE */
+
 static int disable_master_detection = 0;
 module_param(disable_master_detection, int, 0644);
 MODULE_PARM_DESC(disable_master_detection, "\t 1 - disable Master detection, default is 0");
