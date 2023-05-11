@@ -87,7 +87,6 @@ SRCS =	src/pfe_bmu.c \
 		src/pfe_emac.c \
 		src/pfe_gpi.c \
 		src/pfe_hif_chnl.c \
-		src/pfe_hif_nocpy.c \
 		src/pfe_hif_ring.c \
 		src/pfe_hif.c \
 		src/pfe_l2br.c \
@@ -121,7 +120,6 @@ SRCS += hw/$(TARGET_HW)/pfe_bmu_csr.c \
 		hw/$(TARGET_HW)/pfe_util_csr.c \
 		hw/$(TARGET_HW)/pfe_class_csr.c \
 		hw/$(TARGET_HW)/pfe_gpi_csr.c \
-		hw/$(TARGET_HW)/pfe_hif_nocpy_csr.c \
 		hw/$(TARGET_HW)/pfe_tmu_csr.c \
 		hw/$(TARGET_HW)/pfe_parity_csr.c \
 		hw/$(TARGET_HW)/pfe_wdt_csr.c \

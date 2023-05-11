@@ -62,8 +62,6 @@ export PFE_CFG_PFE_MASTER?=1
 export PFE_CFG_MASTER_IF?=6
 #Main local host interface to be used for data communication (see pfe_ct_phy_if_id_t)
 export PFE_CFG_LOCAL_IF?=$(PFE_CFG_PFE0_IF)
-#HIF NOCPY support
-export PFE_CFG_HIF_NOCPY_SUPPORT?=1
 #Force TX CSUM calculation on all frames (this forcibly overwrite all IP/TCP/UDP checksums in FW)
 export PFE_CFG_CSUM_ALL_FRAMES?=0
 #HIF sequence number check. 1 - enable, 0 - disable
@@ -170,10 +168,6 @@ ifeq ($(PFE_CFG_PFE_MASTER),0)
     $(warning Slave driver must have multi-instance support enabled)
     PFE_CFG_MULTI_INSTANCE_SUPPORT=1
   endif
-  ifneq ($(PFE_CFG_HIF_NOCPY_SUPPORT),0)
-    $(warning HIF nocpy is not supported in SLAVE mode)
-    PFE_CFG_HIF_NOCPY_SUPPORT=0
-  endif
   ifneq ($(PFE_CFG_IEEE1588_SUPPORT),0)
     $(warning IEEE1588 timer is not supported in SLAVE mode)
     PFE_CFG_IEEE1588_SUPPORT=0
@@ -226,14 +220,6 @@ GLOBAL_CCFLAGS+=-DPFE_CFG_PFE2_IF=$(PFE_CFG_PFE2_IF)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE0_PROMISC=$(PFE_CFG_PFE0_PROMISC)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE1_PROMISC=$(PFE_CFG_PFE1_PROMISC)
 GLOBAL_CCFLAGS+=-DPFE_CFG_PFE2_PROMISC=$(PFE_CFG_PFE2_PROMISC)
-
-ifneq ($(PFE_CFG_HIF_NOCPY_SUPPORT),0)
-  ifeq ($(TARGET_OS),QNX)
-    GLOBAL_CCFLAGS+=-DPFE_CFG_HIF_NOCPY_SUPPORT
-  else
-	#todo Implement HIF NOCPY support on Linux AAVB-2829
-  endif
-endif
 
 ifneq ($(PFE_CFG_HIF_USE_BD_TRIGGER),0)
     GLOBAL_CCFLAGS+= -DPFE_CFG_HIF_USE_BD_TRIGGER

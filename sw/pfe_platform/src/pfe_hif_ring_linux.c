@@ -164,7 +164,6 @@ struct __attribute__((aligned (HAL_CACHE_LINE_SIZE), packed)) pfe_hif_ring_tag
 #endif /* HAL_HANDLE_CACHE */
 	pfe_hif_wb_bd_t *wr_wb_bd;		/*	Pointer to WB BD to be written */
 	bool_t is_rx;				/*	If TRUE then ring is RX ring */
-	bool_t is_nocpy;			/*	If TRUE then ring is HIF NOCPY variant */
 
 	/*	Every 'dequeue' access */
 	uint32_t read_idx;			/*	BD index to be read */
@@ -844,7 +843,6 @@ __attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(bool_t rx)
 	memset(ring, 0, sizeof(pfe_hif_ring_t));
 	ring->base_va = NULL;
 	ring->wb_tbl_base_va = NULL;
-	ring->is_nocpy = FALSE;
 
 	/*	Just a debug check */
 	if (((addr_t)&ring->heavy_data_mark - (addr_t)ring) > HAL_CACHE_LINE_SIZE)

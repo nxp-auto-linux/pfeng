@@ -20,9 +20,6 @@
 #include "pfe_tmu.h"
 #include "pfe_util.h"
 #include "pfe_hif.h"
-#if !defined(PFE_CFG_TARGET_OS_LINUX)
-#include "pfe_hif_nocpy.h"
-#endif
 #include "pfe_parity.h"
 #include "pfe_emac.h"
 #include "pfe_l2br_table.h"
@@ -80,7 +77,6 @@ typedef struct
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 	pfe_ct_phy_if_id_t master_if; /* Interface where master driver is located */
 	uint32_t irq_vector_hif_chnls[HIF_CFG_MAX_CHANNELS];	/* HIF channels IRQ number */
-	uint32_t irq_vector_hif_nocpy;	/* HIF nocopy channel IRQ number */
 	uint32_t irq_vector_upe_gpt; /* UPE + GPT IRQ number */
 	uint32_t irq_vector_safety; /* Safety IRQ number */
 	bool_t enable_util;			/* Shall be UTIL enabled? */
@@ -114,10 +110,6 @@ typedef struct
 	oal_irq_t *irq_bmu;			/* BMU IRQ */
 #endif /* PFE_CFG_BMU_IRQ_ENABLED */
 	uint32_t hif_chnl_count;	/* Number of HIF channels */
-#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-	pfe_hif_nocpy_t *hif_nocpy;	/* The HIF_NOCPY block */
-	oal_irq_t *irq_hif_nocpy;	/* HIF nocopy channel IRQ */
-#endif /* PFE_CFG_HIF_NOCPY_SUPPORT */
 	uint32_t emac_count;
 	uint32_t gpi_count;
 	uint32_t etgpi_count;
