@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 NXP
+ * Copyright 2020-2023 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -154,9 +154,7 @@ int pfeng_mdio_register(struct pfeng_priv *priv)
 		bus->read = pfeng_mdio_read;
 		bus->write = pfeng_mdio_write;
 		bus->parent = dev;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,9,0)
 		bus->probe_capabilities = MDIOBUS_C22_C45;
-#endif
 
 		ret = of_mdiobus_register(bus, priv->emac[i].dn_mdio);
 		if (ret) {

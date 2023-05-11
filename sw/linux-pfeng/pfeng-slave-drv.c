@@ -390,11 +390,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 	if (ret)
 		goto err_drv;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,8,0)
 	dev_pm_set_driver_flags(dev, DPM_FLAG_NO_DIRECT_COMPLETE);
-#else
-	dev_pm_set_driver_flags(dev, DPM_FLAG_NEVER_SKIP);
-#endif
 
 	pm_runtime_put_noidle(dev);
 

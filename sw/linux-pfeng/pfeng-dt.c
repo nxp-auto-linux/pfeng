@@ -30,27 +30,6 @@
 
 #include "pfeng.h"
 
-#ifdef PFE_CFG_PFE_MASTER
-
-static int pfeng_of_get_phy_mode(struct device_node *np, phy_interface_t *mode)
-{
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,5,0)
-	int ret = of_get_phy_mode(np);
-
-	*mode = PHY_INTERFACE_MODE_NA;
-	if (ret > 0) {
-		*mode = ret;
-		ret = 0;
-	}
-
-	return ret;
-#else
-	return of_get_phy_mode(np, mode);
-#endif
-}
-
-#endif /* PFE_CFG_PFE_MASTER */
-
 static int pfeng_of_get_addr(struct device_node *node)
 {
 	const __be32 *valp;
@@ -70,13 +49,6 @@ int pfeng_dt_release_config(struct pfeng_priv *priv)
 	/* Free EMAC clocks */
 	for (id = 0; id < PFENG_PFE_EMACS; id++) {
 		struct pfeng_emac *emac = &priv->emac[id];
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0)
-		struct device *dev = &priv->pdev->dev;
-
-		/* Remove device depeendency for SerDes */
-		if (emac->intf_mode == PHY_INTERFACE_MODE_SGMII && emac->serdes_phy)
-			device_link_remove(dev, &emac->serdes_phy->dev);
-#endif
 
 		/* EMAC RX clk */
 		if (emac->rx_clk) {
@@ -394,7 +366,7 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 			}
 
 			/* Interface mode */
-			ret = pfeng_of_get_phy_mode(child, &intf_mode);
+			ret = of_get_phy_mode(child, &intf_mode);
 			if (ret) {
 				HM_MSG_DEV_WARN(dev, "Failed to read phy-mode\n");
 				/* for non managable interface */
@@ -436,12 +408,6 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 				if (IS_ERR(emac->serdes_phy)) {
 					emac->serdes_phy = NULL;
 					HM_MSG_DEV_ERR(dev, "SerDes PHY for EMAC%d was not found\n", id);
-				} else {
-					/* Add device depeendency for SerDes */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0)
-					if (device_link_add(dev, &emac->serdes_phy->dev, DL_FLAG_STATELESS /*| DL_FLAG_PM_RUNTIME*/))
-						HM_MSG_DEV_ERR(dev, "Failed to enable SerDes PM dependency for EMAC%d\n", id);
-#endif
 				}
 			} else {
 				emac->serdes_phy = NULL;

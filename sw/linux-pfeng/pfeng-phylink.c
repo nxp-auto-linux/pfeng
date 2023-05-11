@@ -180,7 +180,7 @@ static void pfeng_phylink_validate(struct phylink_config *config, unsigned long 
 /**
  * @brief	Read the current link state from the PCS
  */
-static int _pfeng_mac_link_state(struct phylink_config *config, struct phylink_link_state *state)
+static void pfeng_mac_link_state(struct phylink_config *config, struct phylink_link_state *state)
 {
 	struct pfeng_netif *netif = netdev_priv(to_net_dev(config->dev));
 	struct pfeng_emac *emac = &netif->priv->emac[netif->cfg->phyif_id];
@@ -189,7 +189,7 @@ static int _pfeng_mac_link_state(struct phylink_config *config, struct phylink_l
 
 	if (state->interface != PHY_INTERFACE_MODE_SGMII || !emac->xpcs) {
 		HM_MSG_NETDEV_ERR(netif->netdev, "Configuration not supported\n");
-		return -ENOTSUPP;
+		return;
 	}
 
 	emac->xpcs_ops->xpcs_get_state(emac->xpcs, state);
@@ -200,21 +200,7 @@ static int _pfeng_mac_link_state(struct phylink_config *config, struct phylink_l
 		pfeng_cfg_to_plat(netif, state);
 		emac->sgmii_link = state->link;
 	}
-
-	return 0;
 }
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,0)
-static void pfeng_mac_link_state(struct phylink_config *config, struct phylink_link_state *state)
-{
-	_pfeng_mac_link_state(config, state);
-}
-#else /* kernel 5.4 */
-static int pfeng_mac_link_state(struct phylink_config *config, struct phylink_link_state *state)
-{
-	return _pfeng_mac_link_state(config, state);
-}
-#endif
 
 static void pfeng_mac_an_restart(struct phylink_config *config)
 {
@@ -302,7 +288,6 @@ static void pfeng_mac_link_down(struct phylink_config *config, unsigned int mode
 	netif_tx_stop_all_queues(netif->netdev);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,7,0)
 static void pfeng_mac_link_up(struct phylink_config *config,  struct phy_device *phy,
 			      unsigned int mode, phy_interface_t interface, int speed,
 			      int duplex, bool tx_pause, bool rx_pause)
@@ -312,24 +297,10 @@ static void pfeng_mac_link_up(struct phylink_config *config,  struct phy_device 
 	/* Enable Rx and Tx */
 	netif_tx_wake_all_queues(netif->netdev);
 }
-#else
-static void pfeng_mac_link_up(struct phylink_config *config, unsigned int mode,
-			      phy_interface_t interface, struct phy_device *phy)
-{
-	struct pfeng_netif *netif = netdev_priv(to_net_dev(config->dev));
-
-	/* Enable Rx and Tx */
-	netif_tx_wake_all_queues(netif->netdev);
-}
-#endif
 
 static const struct phylink_mac_ops pfeng_phylink_ops = {
 	.validate = pfeng_phylink_validate,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,0)
 	.mac_pcs_get_state = pfeng_mac_link_state,
-#else
-	.mac_link_state = pfeng_mac_link_state,
-#endif
 	.mac_an_restart = pfeng_mac_an_restart,
 	.mac_config = pfeng_mac_config,
 	.mac_link_down = pfeng_mac_link_down,
