@@ -480,7 +480,6 @@ err_drv:
 	return ret;
 }
 
-/* Slave PM is not supported */
 static int pfeng_drv_pm_suspend(struct device *dev)
 {
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
@@ -506,7 +505,7 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 
 	HM_MSG_DEV_INFO(dev, "PFE Platform suspended\n");
 
-	return -ENOTSUP;
+	return 0;
 }
 
 static int pfeng_drv_pm_resume(struct device *dev)
