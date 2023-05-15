@@ -11,8 +11,6 @@
 #include "pfe_cfg.h"
 #include "oal.h"
 
-MODULE_LICENSE("GPL");
-
 #ifdef PFE_CFG_PFE_MASTER
 #include "elf_cfg.h"
 #include "elf.h"

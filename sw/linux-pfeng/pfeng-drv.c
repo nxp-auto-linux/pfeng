@@ -107,12 +107,11 @@ module_param(fci_ownership_mask, int, 0644);
 MODULE_PARM_DESC(fci_ownership_mask, "\t Overrides bitmask of HIF channels that are allowed to take FCI ownership (default 0: all senders allowed)");
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
-/* The following parameter is currently defined in [fci_core_linux.c]: */
-/*
-static bool disable_netlink = false;
+#ifdef PFE_CFG_FCI_ENABLE
+bool disable_netlink = false;
 module_param(disable_netlink, bool, 0644);
 MODULE_PARM_DESC(disable_netlink, "\t Do not create netlink socket for FCI communication (default: false)");
-*/
+#endif /* PFE_CFG_FCI_ENABLE */
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 static int disable_master_detection = 0;

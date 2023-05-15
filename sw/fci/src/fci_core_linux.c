@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2022 NXP
+ *  Copyright 2019-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -32,11 +32,8 @@
 
 #include <linux/rtnetlink.h>
 
-MODULE_LICENSE("GPL");
-
-static bool disable_netlink = false;
-module_param(disable_netlink, bool, 0644);
-MODULE_PARM_DESC(disable_netlink, "\t Do not create netlink socket for FCI communication (default: false)");
+/* The command line parameter is defined in pfeng-drv.c or pfeng-slave-drv.c */
+extern bool disable_netlink;
 
 static errno_t fci_netlink_send(uint32_t port_id, fci_msg_t *msg);
 static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_id);

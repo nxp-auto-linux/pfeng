@@ -1,0 +1,13 @@
+*.a
+*.mod.o
+*.mod.c
+*.mod
+*.cmd
+.tmp_versions
+Module.symvers
+modules.order
+*.o
+*.ko
+.cache.mk
+pfeng.geany
+pfeng.tags

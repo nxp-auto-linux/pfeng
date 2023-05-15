@@ -9,11 +9,7 @@ ifndef KERNELRELEASE
 include ../build_env.mak
 endif
 
-ifeq ($(TARGET_OS),LINUX)
-  ARTIFACT = pfe_platform.o
-else
-  ARTIFACT = pfe_platform.a
-endif
+ARTIFACT = pfe_platform.a
 
 TARGET = $(OUTPUT_DIR)/$(ARTIFACT)
 
@@ -67,9 +63,9 @@ rwildcard = $(wildcard $(addprefix $1/*.,$2)) $(foreach d,$(wildcard $1/*),$(cal
 
 #Source list
 ifeq ($(PFE_CFG_PFE_MASTER),0)
-SRCS =		src/pfe_hif_chnl.c \
+SRCS =		src/pfe_hif_chnl_linux.c \
 		hw/$(TARGET_HW)/pfe_hif_csr.c \
-		src/pfe_hif_ring.c \
+		src/pfe_hif_ring_linux.c \
 		src/pfe_hif.c \
 		src/pfe_idex.c \
 		src/pfe_log_if_slave.c \
@@ -86,8 +82,8 @@ SRCS =	src/pfe_bmu.c \
 		src/pfe_mirror.c \
 		src/pfe_emac.c \
 		src/pfe_gpi.c \
-		src/pfe_hif_chnl.c \
-		src/pfe_hif_ring.c \
+		src/pfe_hif_chnl_linux.c \
+		src/pfe_hif_ring_linux.c \
 		src/pfe_hif.c \
 		src/pfe_l2br.c \
 		src/pfe_l2br_table.c \
@@ -176,99 +172,9 @@ rebuild: clean all
 #
 # Linux build
 
-ccflags-y += $(INCLUDES)
 ccflags-y += -Wno-date-time
 ifneq ($(PFE_CFG_LINUX_TRACE),0)
 ccflags-y += -Og
 endif
-ccflags-y += $(CCFLAGS_pfe)
-ccflags-y += $(GLOBAL_CCFLAGS)
-ccflags-y += -Werror
 
-ifeq ($(PFE_CFG_PFE_MASTER),0)
-pfe_platform-y := src/pfe_hif_chnl_linux.o \
-		src/pfe_hif_ring_linux.o \
-		src/pfe_hif.o \
-		src/pfe_log_if_slave.o \
-		src/pfe_if_db.o \
-		src/pfe_pe.o \
-		src/pfe_phy_if_slave.o \
-		src/pfe_mac_db.o \
-		src/pfe_hm.o \
-		src/pfe_emac_slave.o
-else
-pfe_platform-y := src/pfe_bmu.o \
-	src/pfe_class.o \
-	src/pfe_mirror.o \
-	src/pfe_feature_mgr.o \
-	src/pfe_fw_feature.o \
-	src/pfe_hw_feature.o \
-	src/pfe_fp.o \
-	src/pfe_emac.o \
-	src/pfe_gpi.o \
-	src/pfe_hif.o \
-	src/pfe_hif_chnl_linux.o \
-	src/pfe_hif_ring_linux.o \
-	src/pfe_pe.o \
-	src/pfe_tmu.o \
-	src/pfe_util.o \
-	src/pfe_phy_if.o \
-	src/pfe_log_if.o \
-	src/pfe_if_db.o \
-	src/pfe_wdt.o \
-	src/pfe_parity.o \
-	src/pfe_bus_err.o \
-	src/pfe_fw_fail_stop.o \
-	src/pfe_host_fail_stop.o \
-	src/pfe_fail_stop.o \
-	src/pfe_ecc_err.o \
-	src/pfe_spd.o \
-	src/pfe_spd_acc.o \
-	src/pfe_mac_db.o \
-	src/pfe_hm.o \
-	src/pfe_l2br.o \
-	src/pfe_l2br_table.o
-
-ifeq ($(PFE_CFG_RTABLE_ENABLE),1)
-    pfe_platform-y += src/pfe_rtable.o
-endif
-endif
-
-ifeq ($(PFE_CFG_PFE_MASTER),0)
-pfe_platform-y += hw/$(TARGET_HW)/pfe_hif_csr.o
-else
-pfe_platform-y += src/pfe_bmu.o \
-	hw/$(TARGET_HW)/pfe_bmu_csr.o \
-	hw/$(TARGET_HW)/pfe_emac_csr.o \
-	hw/$(TARGET_HW)/pfe_hif_csr.o \
-	hw/$(TARGET_HW)/pfe_util_csr.o \
-	hw/$(TARGET_HW)/pfe_class_csr.o \
-	hw/$(TARGET_HW)/pfe_gpi_csr.o \
-	hw/$(TARGET_HW)/pfe_tmu_csr.o \
-	hw/$(TARGET_HW)/pfe_wdt_csr.o \
-	hw/$(TARGET_HW)/pfe_parity_csr.o \
-	hw/$(TARGET_HW)/pfe_bus_err_csr.o \
-	hw/$(TARGET_HW)/pfe_fw_fail_stop_csr.o \
-	hw/$(TARGET_HW)/pfe_host_fail_stop_csr.o \
-	hw/$(TARGET_HW)/pfe_fail_stop_csr.o \
-	hw/$(TARGET_HW)/pfe_ecc_err_csr.o
-endif
-
-ifeq ($(PFE_CFG_PFE_MASTER),0)
-pfe_platform-y += hw/$(TARGET_HW)/pfe_platform_slave.o
-else
-pfe_platform-y +=hw/$(TARGET_HW)/pfe_platform_master.o
-endif
-
-ifneq ($(PFE_CFG_MULTI_INSTANCE_SUPPORT),0)
-pfe_platform-y += src/pfe_idex.o
-endif
-
-obj-m += pfe_platform.o
-
-linux:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` GLOBAL_CCFLAGS="$(GLOBAL_CCFLAGS)" modules
-
-linux-clean:
-	make CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` clean
-
+include $(M)/../dummy_mod.mak

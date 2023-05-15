@@ -30,8 +30,6 @@
 #include "oal.h"
 #include "oal_mm.h"
 
-MODULE_LICENSE("GPL");
-
 /* managed memory allocation types */
 enum pfe_kmem_type {
 	PFE_MEM_INVALID = 0,

@@ -1,5 +1,5 @@
 #
-# Copyright 2018-2022 NXP
+# Copyright 2018-2023 NXP
 #
 # SPDX-License-Identifier:     BSD OR GPL-2.0
 #
@@ -62,7 +62,7 @@ ifneq ($(PFE_CFG_FCI_ENABLE),0)
 OBJ_DIRS += ../fci
 endif
 
-pfeng-objs-libs := ../pfe_platform/pfe_platform.o ../oal/oal.o ../elf/elf.o ../fifo/fifo.o ../bpool/bpool.o ../common/blalloc.o
+pfeng-objs-libs := ../pfe_platform/pfe_platform.o ../oal/oal.o ../elf/elf.o ../fifo/fifo.o ../bpool/bpool.o ../common/common.o
 
 ifneq ($(PFE_CFG_FCI_ENABLE),0)
 pfeng-objs-libs += ../fci/fci.o
@@ -71,10 +71,10 @@ endif
 pfeng-objs-core := pfeng-debugfs.o pfeng-hif.o pfeng-bman.o pfeng-netif.o pfeng-ethtool.o pfeng-hwts.o pfeng-dt.o pfeng-mdio.o
 
 ifneq ($(PFE_CFG_PFE_MASTER),0)
-pfeng-objs := $(pfeng-objs-libs) $(pfeng-objs-core) pfeng-drv.o pfeng-fw.o pfeng-phylink.o pfeng-ptp.o
+pfeng-objs := $(pfeng-objs-core) $(pfeng-objs-libs) pfeng-drv.o pfeng-fw.o pfeng-phylink.o pfeng-ptp.o
 obj-m += pfeng.o
 else
-pfeng-slave-objs := $(pfeng-objs-libs) $(pfeng-objs-core) pfeng-slave-drv.o
+pfeng-slave-objs := $(pfeng-objs-core) $(pfeng-objs-libs) pfeng-slave-drv.o
 obj-m += pfeng-slave.o
 endif
 
@@ -91,7 +91,7 @@ libfci-clean:
 
 drv-build:
 	for dir in $(OBJ_DIRS); do (cd $$dir; $(MAKE) $(PLAT_DEFINES) linux || exit 1) || exit 1; done
-	make $(PLAT_DEFINES) -C $(KERNELDIR) M=`pwd` GLOBAL_CCFLAGS="$(GLOBAL_CCFLAGS)" modules
+	$(MAKE) $(PLAT_DEFINES) -C $(KERNELDIR) M=`pwd` GLOBAL_CCFLAGS="$(GLOBAL_CCFLAGS)" modules
 
 drv-clean:
 	for dir in $(OBJ_DIRS); do (cd $$dir; $(MAKE) $(PLAT_DEFINES) linux-clean || exit 1) || exit 1; done

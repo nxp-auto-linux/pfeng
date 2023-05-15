@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2022 NXP
+ *  Copyright 2017-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -11,8 +11,6 @@
 #include "hal.h"
 #include "fifo.h"
 #include "bpool.h"
-
-MODULE_LICENSE("GPL");
 
 /*==================================================================================================
 *                          LOCAL TYPEDEFS (STRUCTURES, UNIONS, ENUMS)

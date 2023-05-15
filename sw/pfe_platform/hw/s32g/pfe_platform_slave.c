@@ -28,8 +28,6 @@
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-MODULE_LICENSE("GPL");
-
 static pfe_platform_t pfe = {.probed = FALSE};
 /* usage scope: pfe_platform_create_hif*/
 static pfe_hif_chnl_id_t ids[HIF_CFG_MAX_CHANNELS] = {HIF_CHNL_0, HIF_CHNL_1, HIF_CHNL_2, HIF_CHNL_3};

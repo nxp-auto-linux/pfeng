@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -12,8 +12,6 @@
 #include "oal_sync.h"
 #include "hal.h"
 #include "fifo.h"
-
-MODULE_LICENSE("GPL");
 
 #define is_power_of_2(n) ((n) && !((n) & ((n) - 1U)))
 
