@@ -187,7 +187,7 @@ int pfeng_hwts_ioctl_get(struct pfeng_netif *netif, struct ifreq *rq)
 int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct ethtool_ts_info *info)
 {
 	if ((IS_ENABLED(PFE_CFG_PFE_MASTER) && !netif->priv->clk_ptp_reference) ||
-		pfeng_netif_is_aux(netif)) {
+		pfeng_netif_is_aux(netif) || !IS_ENABLED(PFE_CFG_PFE_MASTER)) {
 		info->so_timestamping |= SOF_TIMESTAMPING_TX_SOFTWARE |
 					 SOF_TIMESTAMPING_RX_SOFTWARE |
 					 SOF_TIMESTAMPING_SOFTWARE;
