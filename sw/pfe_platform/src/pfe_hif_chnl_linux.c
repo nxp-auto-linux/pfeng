@@ -1360,6 +1360,64 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *ch
 	return EOK;
 }
 
+#ifdef PFE_CFG_PFE_SLAVE
+/**
+ * @brief		Inspect a channel state
+ * @details		Function read channel HW registers to detect the current state of it
+ * @param[in]	chnl The channel instance
+ * @return		EOK Channel is clean, EAGAIN channel has valid set-up for ungraceful
+ * 				reset, EINVAL channel is in unrecorevable state
+ */
+static __attribute__((cold)) errno_t pfe_hif_chnl_inspect_hw_state(pfe_hif_chnl_t *chnl)
+{
+	uint32_t rx_ring_addr, rx_wb_ring_addr, tx_ring_addr, tx_wb_ring_addr, rx_ring_len, tx_ring_len;
+
+	/* Stop the channel */
+	pfe_hif_chnl_cfg_rx_disable(chnl->cbus_base_va, chnl->id);
+	pfe_hif_chnl_cfg_tx_disable(chnl->cbus_base_va, chnl->id);
+	pfe_hif_chnl_cfg_rx_dma_stop(chnl->cbus_base_va, chnl->id);
+	pfe_hif_chnl_cfg_tx_dma_stop(chnl->cbus_base_va, chnl->id);
+
+	/* Detect graceful start (all channel registers are zeroed) */
+	rx_ring_addr = pfe_hif_chnl_cfg_get_rx_bd_ring_addr(chnl->cbus_base_va, chnl->id);
+	rx_wb_ring_addr = pfe_hif_chnl_cfg_get_rx_wb_table_addr(chnl->cbus_base_va, chnl->id);
+	tx_ring_addr = pfe_hif_chnl_cfg_get_tx_bd_ring_addr(chnl->cbus_base_va, chnl->id);
+	tx_wb_ring_addr = pfe_hif_chnl_cfg_get_tx_wb_table_addr(chnl->cbus_base_va, chnl->id);
+	if (0 == rx_ring_addr && 0 == rx_wb_ring_addr && 0 == tx_ring_addr && 0 == tx_wb_ring_addr)
+	{
+		NXP_LOG_INFO("HIF%d is in clean state\n", chnl->id);
+		return EOK;
+	}
+	if (0 == rx_ring_addr || 0 == rx_wb_ring_addr || 0 == tx_ring_addr || 0 == tx_wb_ring_addr)
+	{
+		NXP_LOG_ERROR("HIF%d has incomplete set-up. Ungraceful reset cannot be provided.\n", chnl->id);
+		return EINVAL;
+	}
+
+	/* Channel state verification continues: verify rings sizes */
+	rx_ring_len = pfe_hif_chnl_cfg_get_rx_wb_table_len(chnl->cbus_base_va, chnl->id);
+	tx_ring_len = pfe_hif_chnl_cfg_get_tx_wb_table_len(chnl->cbus_base_va, chnl->id);
+	if (pfe_hif_ring_get_len(chnl->rx_ring) != rx_ring_len || pfe_hif_ring_get_len(chnl->tx_ring) != tx_ring_len)
+	{
+		NXP_LOG_ERROR("HIF%d rings sizes differ from default. Ungraceful reset cannot be used\n", chnl->id);
+		return EINVAL;
+	}
+
+	NXP_LOG_DEBUG("HIF%d has valid set-up: RX: BD p0x%08x WB p0x%08x len %d, TX: BD p0x%08x WB p0x%08x len %d\n", chnl->id, rx_ring_addr, rx_wb_ring_addr, rx_ring_len, tx_ring_addr, tx_wb_ring_addr, tx_ring_len);
+
+	return EAGAIN;
+}
+#endif /* PFE_CFG_PFE_SLAVE */
+
+static __attribute__((cold)) errno_t pfe_hif_chnl_ungraceful_reset(pfe_hif_chnl_t * chnl)
+{
+	errno_t ret = EINVAL;
+
+	/* unsupported */
+
+	return ret;
+}
+
 /**
  * @brief		Initialize a channel
  * @details		Function prepares the HIF channel according to user-supplied parameters.
@@ -1371,6 +1429,7 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *ch
 static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 {
 	pfe_hif_ring_t *tx_ring, *rx_ring;
+	errno_t status;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -1380,8 +1439,16 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
-#endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
+#ifdef PFE_CFG_PFE_SLAVE
+	/* Slave: Check the HIF channel state */
+	status = pfe_hif_chnl_inspect_hw_state(chnl);
+	if (EINVAL == status)
+	{
+		goto free_and_fail;
+	}
+#else
+	status = EOK;
+#endif
 
 	if (NULL != chnl->rx_ring)
 	{
@@ -1422,6 +1489,15 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 	{
 		/*	Bind TX BD ring to channel */
 		if (EOK != pfe_hif_chnl_set_tx_ring(chnl, tx_ring))
+		{
+			goto free_and_fail;
+		}
+	}
+
+	if (EAGAIN == status)
+	{
+		/* Process ungraceful HIF reset procedure */
+		if (EOK != pfe_hif_chnl_ungraceful_reset(chnl))
 		{
 			goto free_and_fail;
 		}
