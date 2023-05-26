@@ -7,6 +7,7 @@
 ccflags-y += $(INCLUDES)
 ccflags-y += $(CCFLAGS_pfe)
 ccflags-y += $(GLOBAL_CCFLAGS)
+ccflags-y += -Werror
 
 linux::
 	$(MAKE) CROSS_COMPILE=$(PLATFORM)-  ARCH=$(ARCH) -C $(KERNELDIR) M=`pwd` GLOBAL_CCFLAGS="$(GLOBAL_CCFLAGS)" modules
