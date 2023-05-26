@@ -1823,6 +1823,15 @@ the_end:
 		rx_buf_va = NULL;
 	}
 
+	if (EOK == ret)
+	{
+		/*	Clear channel registers to signalize graceful shutdown */
+		pfe_hif_chnl_cfg_set_rx_bd_ring_addr(chnl->cbus_base_va, chnl->id, (void *)0LU);
+		pfe_hif_chnl_cfg_set_rx_wb_table(chnl->cbus_base_va, chnl->id, (void *)0LU, 0U);
+		pfe_hif_chnl_cfg_set_tx_bd_ring_addr(chnl->cbus_base_va, chnl->id, (void *)0LU);
+		pfe_hif_chnl_cfg_set_tx_wb_table(chnl->cbus_base_va, chnl->id, (void *)0LU, 0U);
+	}
+
 	return ret;
 }
 
