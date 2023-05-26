@@ -131,8 +131,8 @@ struct __attribute__((aligned(HAL_CACHE_LINE_SIZE))) __pfe_hif_chnl_tag
 #endif
 };
 
-static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *chnl, pfe_hif_ring_t *ring) __attribute__((cold));
-static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *chnl, pfe_hif_ring_t *ring) __attribute__((cold));
+static errno_t pfe_hif_chnl_bind_rx_ring(pfe_hif_chnl_t *chnl) __attribute__((cold));
+static errno_t pfe_hif_chnl_bind_tx_ring(pfe_hif_chnl_t *chnl) __attribute__((cold));
 static errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl) __attribute__((cold));
 static errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl) __attribute__((cold));
 static errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chnl, uint32_t mode) __attribute__((cold));
@@ -1255,17 +1255,17 @@ __attribute__((hot)) errno_t pfe_hif_chnl_supply_rx_buf(const pfe_hif_chnl_t *ch
  * @details		Configure RX buffer descriptor ring address of the channel.
  * 				This binds channel with a RX BD ring.
  * @param[in]	chnl The channel instance
- * @param[in]	ring The ring instance
  * @retval		EOK Success
  * @retval		EFAULT Invalid ring instance
  */
-__attribute__((cold)) static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *chnl, pfe_hif_ring_t *ring)
+__attribute__((cold)) static errno_t pfe_hif_chnl_bind_rx_ring(pfe_hif_chnl_t *chnl)
 {
+	pfe_hif_ring_t *ring = chnl->rx_ring;
 	void *rx_ring_pa, *wb_tbl_pa;
 	uint32_t wb_tbl_len;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == chnl) || (NULL == ring)))
+	if (unlikely((NULL == chnl)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -1295,8 +1295,6 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *ch
 		pfe_hif_chnl_cfg_set_rx_wb_table(chnl->cbus_base_va, chnl->id, wb_tbl_pa, wb_tbl_len);
 	}
 
-	chnl->rx_ring = ring;
-
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
 		NXP_LOG_ERROR("Mutex unlock failed\n");
@@ -1310,17 +1308,17 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *ch
  * @details		Configure TX buffer descriptor ring address of the channel.
  * 				This binds channel with a TX BD ring.
  * @param[in]	chnl The channel instance
- * @param[in]	ring The ring instance
  * @retval		EOK Success
  * @retval		EFAULT Invalid ring instance
  */
-__attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *chnl, pfe_hif_ring_t *ring)
+__attribute__((cold)) static errno_t pfe_hif_chnl_bind_tx_ring(pfe_hif_chnl_t *chnl)
 {
+	pfe_hif_ring_t *ring = chnl->tx_ring;
 	void *tx_ring_pa, *wb_tbl_pa;
 	uint32_t wb_tbl_len;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == chnl) || (NULL == ring)))
+	if (unlikely((NULL == chnl)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -1349,8 +1347,6 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *ch
 		wb_tbl_len = pfe_hif_ring_get_wb_tbl_len(ring);
 		pfe_hif_chnl_cfg_set_tx_wb_table(chnl->cbus_base_va, chnl->id, wb_tbl_pa, wb_tbl_len);
 	}
-
-	chnl->tx_ring = ring;
 
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
@@ -1409,6 +1405,47 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_inspect_hw_state(pfe_hif_chnl_
 }
 #endif /* PFE_CFG_PFE_SLAVE */
 
+/**
+ * @brief		Validate a BDR set-up
+ * @details		Function reads channel HW registers and compares the set-up of BD rings
+ * @param[in]	chnl The channel instance
+ * @return		TRUE if new allocated BD rings occupy the same memory regions as were
+ * 				left in channel registers
+ */
+static __attribute__((cold)) bool_t pfe_hif_chnl_validate_bdr_setup(pfe_hif_chnl_t *chnl)
+{
+	uint32_t rx_ring_addr, rx_wb_ring_addr, tx_ring_addr, tx_wb_ring_addr;
+
+	rx_ring_addr = pfe_hif_chnl_cfg_get_rx_bd_ring_addr(chnl->cbus_base_va, chnl->id);
+	rx_wb_ring_addr = pfe_hif_chnl_cfg_get_rx_wb_table_addr(chnl->cbus_base_va, chnl->id);
+	tx_ring_addr = pfe_hif_chnl_cfg_get_tx_bd_ring_addr(chnl->cbus_base_va, chnl->id);
+	tx_wb_ring_addr = pfe_hif_chnl_cfg_get_tx_wb_table_addr(chnl->cbus_base_va, chnl->id);
+
+	if (rx_ring_addr != (uint32_t)(addr_t)pfe_hif_ring_get_base_pa(chnl->rx_ring))
+	{
+		NXP_LOG_ERROR("HIF%d ungraceful check: RX BD addr differs\n", chnl->id);
+		return FALSE;
+	}
+	if (rx_wb_ring_addr != (uint32_t)(addr_t)pfe_hif_ring_get_wb_tbl_pa(chnl->rx_ring))
+	{
+		NXP_LOG_ERROR("HIF%d ungraceful check: RX WB addr differs\n", chnl->id);
+		return FALSE;
+	}
+	if (tx_ring_addr != (uint32_t)(addr_t)pfe_hif_ring_get_base_pa(chnl->tx_ring))
+	{
+		NXP_LOG_ERROR("HIF%d ungraceful check: TX BD addr differs\n", chnl->id);
+		return FALSE;
+	}
+	if (tx_wb_ring_addr != (uint32_t)(addr_t)pfe_hif_ring_get_wb_tbl_pa(chnl->tx_ring))
+	{
+		NXP_LOG_ERROR("HIF%d ungraceful check: TX WB addr differs\n", chnl->id);
+		return FALSE;
+	}
+	NXP_LOG_DEBUG("HIF%d has equal memory setup\n", chnl->id);
+
+	return TRUE;
+}
+
 static __attribute__((cold)) errno_t pfe_hif_chnl_ungraceful_reset(pfe_hif_chnl_t * chnl)
 {
 	errno_t ret = EINVAL;
@@ -1428,7 +1465,6 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_ungraceful_reset(pfe_hif_chnl_
  */
 static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 {
-	pfe_hif_ring_t *tx_ring, *rx_ring;
 	errno_t status;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -1457,19 +1493,11 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 		goto free_and_fail;
 	}
 
-	rx_ring = pfe_hif_ring_create(TRUE, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
-	if (NULL == rx_ring)
+	chnl->rx_ring = pfe_hif_ring_create(TRUE, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
+	if (NULL == chnl->rx_ring)
 	{
 		NXP_LOG_ERROR("Couldn't create RX BD ring\n");
 		goto free_and_fail;
-	}
-	else
-	{
-		/*	Bind RX BD ring to channel */
-		if (EOK != pfe_hif_chnl_set_rx_ring(chnl, rx_ring))
-		{
-			goto free_and_fail;
-		}
 	}
 
 	if (NULL != chnl->tx_ring)
@@ -1479,25 +1507,39 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 		goto free_and_fail;
 	}
 
-	tx_ring = pfe_hif_ring_create(FALSE, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
-	if (NULL == tx_ring)
+	chnl->tx_ring = pfe_hif_ring_create(FALSE, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
+	if (NULL == chnl->tx_ring)
 	{
 		NXP_LOG_ERROR("Couldn't create TX BD ring\n");
 		goto free_and_fail;
 	}
-	else
+
+	/* NOTE: until now the new allocated BDRs must not be set to the channel HW */
+
+	if (EAGAIN == status)
 	{
-		/*	Bind TX BD ring to channel */
-		if (EOK != pfe_hif_chnl_set_tx_ring(chnl, tx_ring))
+		/* Slave only way supporting ungraceful HIF reset */
+
+		if (FALSE == pfe_hif_chnl_validate_bdr_setup(chnl))
+		{
+			goto free_and_fail;
+		}
+
+		/* Process ungraceful HIF reset procedure */
+		if (EOK != pfe_hif_chnl_ungraceful_reset(chnl))
 		{
 			goto free_and_fail;
 		}
 	}
-
-	if (EAGAIN == status)
+	else
 	{
-		/* Process ungraceful HIF reset procedure */
-		if (EOK != pfe_hif_chnl_ungraceful_reset(chnl))
+		/*	Bind TX BD ring to channel */
+		if (EOK != pfe_hif_chnl_bind_tx_ring(chnl))
+		{
+			goto free_and_fail;
+		}
+		/*	Bind RX BD ring to channel */
+		if (EOK != pfe_hif_chnl_bind_rx_ring(chnl))
 		{
 			goto free_and_fail;
 		}
