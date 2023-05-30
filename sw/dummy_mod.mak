@@ -6,6 +6,7 @@
 
 ccflags-y += $(INCLUDES)
 ccflags-y += $(CCFLAGS_pfe)
+ccflags-y += $(CFLAGS_MODULE)
 ccflags-y += $(GLOBAL_CCFLAGS)
 ccflags-y += -Werror
 
