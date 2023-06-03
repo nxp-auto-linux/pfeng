@@ -135,7 +135,8 @@ static errno_t pfe_hif_chnl_bind_rx_ring(pfe_hif_chnl_t *chnl) __attribute__((co
 static errno_t pfe_hif_chnl_bind_tx_ring(pfe_hif_chnl_t *chnl) __attribute__((cold));
 static errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl) __attribute__((cold));
 static errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl) __attribute__((cold));
-static errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chnl, uint32_t mode) __attribute__((cold));
+static void pfe_hif_chnl_free_dummy_frame(void *frame);
+static errno_t pfe_hif_chnl_send_dummy_frame(pfe_hif_chnl_t *chnl, uint32_t mode, void **frame) __attribute__((cold));
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
 static void pfe_hif_chnl_refill_rx_buffers(const pfe_hif_chnl_t *chnl) __attribute__((hot));
@@ -1626,12 +1627,22 @@ __attribute__((hot)) bool_t pfe_hif_chnl_is_tx_dma_active(const pfe_hif_chnl_t *
 }
 
 /**
+ * @brief		Release the TX dummy frame
+ * @param[in]	frame The frame content, created by pfe_hif_chnl_send_dummy_frame()
+ */
+static __attribute__((cold)) void pfe_hif_chnl_free_dummy_frame(void *frame)
+{
+	oal_mm_free_contig(frame);
+}
+
+/**
  * @brief		Send TX frame
  * @param[in]	chnl The channel instance
- * @param[in]	mode The frame content mode: DUMMY_FRAME_INVALID or DUMMY_FRAME_IHC_SELF
+ * @param[in]	mode The frame type: DUMMY_FRAME_INVALID or DUMMY_FRAME_IHC_SELF
+ * @param[out]	frame The frame content, must be freed by pfe_hif_chnl_free_dummy_frame()
  * @return		EOK if success, error code otherwise
  */
-static __attribute__((cold)) errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chnl, uint32_t mode)
+static __attribute__((cold)) errno_t pfe_hif_chnl_send_dummy_frame(pfe_hif_chnl_t *chnl, uint32_t mode, void **frame)
 {
 	void *tx_buf_va = NULL, *tx_buf_pa;
 	pfe_ct_hif_tx_hdr_t *tx_hdr;
@@ -1642,7 +1653,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chn
 	{
 		NXP_LOG_ERROR("Can't get dummy TX dummy buffer\n");
 		ret = ENOMEM;
-		goto the_end;
+		goto err_end;
 	}
 
 	tx_buf_pa = oal_mm_virt_to_phys_contig(tx_buf_va);
@@ -1650,7 +1661,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chn
 	{
 		NXP_LOG_ERROR("TX dummy buffer VA to PA conversion failed");
 		ret = ENOMEM;
-		goto the_end;
+		goto err_end;
 	}
 
 	tx_hdr = (pfe_ct_hif_tx_hdr_t *)tx_buf_va;
@@ -1675,17 +1686,21 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chn
 	}
 
 	ret = pfe_hif_chnl_tx(chnl, tx_buf_pa, tx_buf_va, sizeof(pfe_ct_hif_tx_hdr_t)+DUMMY_TX_BUF_LEN, TRUE);
-	if (EOK != ret)
+	if (EOK == ret)
 	{
-		NXP_LOG_ERROR("Dummy frame TX failed\n");
+		goto the_end;
 	}
 
-the_end:
+	NXP_LOG_ERROR("Dummy frame TX failed\n");
+err_end:
 	if (NULL != tx_buf_va)
 	{
 		oal_mm_free_contig(tx_buf_va);
 		tx_buf_va = NULL;
 	}
+
+the_end:
+	*frame = tx_buf_va;
 
 	return ret;
 }
@@ -1704,7 +1719,7 @@ the_end:
  */
 static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl)
 {
-	void *rx_buf_va = NULL, *rx_buf_pa, *buf_pa;
+	void *rx_buf_va = NULL, *rx_buf_pa, *buf_pa, *frame;
 	uint32_t len, ii;
 	bool_t lifm;
 	errno_t ret = EOK;
@@ -1747,7 +1762,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *ch
 		}
 
 		/*	Send dummy packet to self HIF channel */
-		ret = pfe_hif_chnl_send_frame(chnl, DUMMY_FRAME_IHC_SELF);
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_IHC_SELF, &frame);
 		if (EOK != ret)
 			goto the_end;
 
@@ -1755,10 +1770,11 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *ch
 		oal_time_usleep(500U);
 
 		/*	Do TX confirmations */
-		while (EOK == pfe_hif_chnl_get_tx_conf(chnl))
+		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
-			;
+			oal_time_usleep(100U);
 		}
+		pfe_hif_chnl_free_dummy_frame(frame);
 
 		/*	Do plain RX */
 		while (EOK == pfe_hif_ring_dequeue_buf(chnl->rx_ring, &buf_pa, &len, &lifm))
@@ -1791,7 +1807,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *ch
 		pfe_hif_chnl_rx_dma_start(chnl);
 
 		/*	Send dummy packet to self HIF channel */
-		ret = pfe_hif_chnl_send_frame(chnl, DUMMY_FRAME_IHC_SELF);
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_IHC_SELF, &frame);
 		if (EOK != ret) {
 			NXP_LOG_ERROR("Can't send frame\n");
 			goto the_end;
@@ -1801,10 +1817,11 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *ch
 		oal_time_usleep(500U);
 
 		/*	Do TX confirmations */
-		while (EOK == pfe_hif_chnl_get_tx_conf(chnl))
+		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
-			;
+			oal_time_usleep(100U);
 		}
+		pfe_hif_chnl_free_dummy_frame(frame);
 
 		/*	Do plain RX */
 		while (EOK == pfe_hif_ring_dequeue_buf(chnl->rx_ring, &buf_pa, &len, &lifm))
@@ -1831,7 +1848,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *ch
 	while (FALSE == pfe_hif_ring_is_on_head(chnl->tx_ring))
 	{
 		/*	Send invalid packet (to be dropped on Class) */
-		ret = pfe_hif_chnl_send_frame(chnl, DUMMY_FRAME_INVALID);
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_INVALID, &frame);
 		if (EOK != ret) {
 			NXP_LOG_ERROR("Can't send frame\n");
 			goto the_end;
@@ -1841,10 +1858,11 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *ch
 		oal_time_usleep(500U);
 
 		/*	Do TX confirmations */
-		while (EOK == pfe_hif_chnl_get_tx_conf(chnl))
+		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
-			;
+			oal_time_usleep(100U);
 		}
+		pfe_hif_chnl_free_dummy_frame(frame);
 	}
 
 the_end:
