@@ -1,5 +1,5 @@
 /* =========================================================================
- *  
+ *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2023 NXP
  *
@@ -279,6 +279,119 @@ __attribute__((pure, cold)) uint32_t pfe_hif_ring_get_wb_tbl_len(const pfe_hif_r
 }
 
 /**
+ * @brief		Invalidate the explicit entry in the ring
+ * @param[in]	ring The ring instance
+ * @param[in]	index The position in the ring
+ */
+__attribute__((cold)) void pfe_hif_ring_invalidate_direct(const pfe_hif_ring_t *ring, uint32_t index)
+{
+        /* Clear BD enable flag */
+        (&((pfe_hif_bd_t *)ring->base_va)[index])->ctrl_seqnum_w0 &= ~HIF_RING_BD_W0_DESC_EN;
+
+        /* Reset the write-back descriptor */
+        (&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[index])->seqnum_buflen_w1 |= HIF_RING_WB_BD_W1_WB_BD_SEQNUM(0xffffU);
+        (&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[index])->rsvd_ctrl_w0 |= HIF_RING_WB_BD_W0_DESC_EN;
+}
+
+/**
+ * @brief		Revalidate the explicit entry in the ring
+ * @param[in]	ring The ring instance
+ * @param[in]	index The position in the ring
+ * @note		It is expected that BD has valid set-up
+ */
+__attribute__((cold)) void pfe_hif_ring_revalidate_direct(const pfe_hif_ring_t *ring, uint32_t index)
+{
+        /* Set BD enable flag */
+        (&((pfe_hif_bd_t *)ring->base_va)[index])->ctrl_seqnum_w0 |= HIF_RING_BD_W0_DESC_EN;
+
+        /* Set the write-back descriptor */
+        (&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[index])->rsvd_ctrl_w0 &= ~HIF_RING_WB_BD_W0_DESC_EN;
+}
+
+/**
+ * @brief		Set ring to explicit position
+ * @param[in]	ring The ring instance
+ * @param[in]	index The new position of the ring
+ * @return		0 if OK
+ */
+__attribute__((cold)) errno_t pfe_hif_ring_force_index(pfe_hif_ring_t *ring, uint32_t index)
+{
+	uint32_t offset;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == ring))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	offset = index % RING_LEN;
+
+	ring->read_idx = offset;
+	ring->rd_bd = &((pfe_hif_bd_t *)ring->base_va)[ring->read_idx & RING_LEN_MASK];
+	ring->rd_wb_bd = &((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ring->read_idx & RING_LEN_MASK];
+
+	ring->write_idx = offset;
+	ring->wr_bd = ring->rd_bd;
+	ring->wr_wb_bd = ring->rd_wb_bd;
+
+	return 0;
+}
+
+/**
+ * @brief		Search for valid entry in WB ring
+ * @param[in]	ring The ring instance
+ * @param[in]	valid TRUE if searhing for valid entry, FALSE otherwise
+ * @param[out]	index The position of found entry in the ring
+ * @return		TRUE if found
+ * @note		Requires invalidated all entries before search
+ */
+__attribute__((cold)) errno_t pfe_hif_ring_find_wb_entry(pfe_hif_ring_t *ring, bool_t valid, uint32_t *index)
+{
+	pfe_hif_wb_bd_t *wb;
+	bool_t flag = FALSE;
+	uint32_t ii;
+
+	for (ii = 0U; ii < RING_LEN; ii++)
+	{
+		wb = &(((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ii]);
+
+		/* valid entry: WB BD must be DISABLED. The entry was processed by HW */
+		if (TRUE == valid)
+		{
+			if (0U == (wb->rsvd_ctrl_w0 & HIF_RING_WB_BD_W0_DESC_EN))
+			{
+				*index = ii;
+				return EOK;
+			}
+		}
+
+		/* invalid entry: WB BD must be ENABLED. The entry was not touched by HW
+		 * 		  For invalid ssearch we need to detect first valid entry
+		 * 		  and only then search for invalid. Reason: Invalid search
+		 * 		  is used on RX ring, which can contain multiple (cached)
+		 * 		  entries.
+		 */
+		if (FALSE == valid)
+		{
+			if ((TRUE == flag) && (0U != (wb->rsvd_ctrl_w0 & HIF_RING_WB_BD_W0_DESC_EN)))
+			{
+				*index = ii;
+				return EOK;
+			}
+			if ((FALSE == flag) && (0U == (wb->rsvd_ctrl_w0 & HIF_RING_WB_BD_W0_DESC_EN)))
+			{
+				/* Found first valid entry, now we can find invalid one */
+				flag = TRUE;
+			}
+		}
+	}
+
+	return ENOENT;
+}
+
+/**
  * @brief		Check if the ring is on the head
  * @param[in]	ring The ring instance
  * @return		TRUE if the ring is on the head
@@ -367,7 +480,7 @@ static inline errno_t pfe_hif_ring_enqueue_buf_std(pfe_hif_ring_t *ring, const v
 	tmp_ctrl_seq_w0 = ring->wr_bd->ctrl_seqnum_w0;
 	if (unlikely(0U != (tmp_ctrl_seq_w0 & HIF_RING_BD_W0_DESC_EN)))
 	{
-		NXP_LOG_ERROR("Can't insert buffer since the BD entry is already used\n");
+		NXP_LOG_ERROR("Can't insert buffer to %s ring since the BD entry #%d is already used\n", ring->is_rx? "RX" : "TX", ring->write_idx);
 		return EIO;
 	}
 	else

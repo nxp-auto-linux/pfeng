@@ -1,5 +1,5 @@
 /* =========================================================================
- *  
+ *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2023 NXP
  *
@@ -1442,17 +1442,400 @@ static __attribute__((cold)) bool_t pfe_hif_chnl_validate_bdr_setup(pfe_hif_chnl
 		NXP_LOG_ERROR("HIF%d ungraceful check: TX WB addr differs\n", chnl->id);
 		return FALSE;
 	}
-	NXP_LOG_DEBUG("HIF%d has equal memory setup\n", chnl->id);
+	NXP_LOG_INFO("HIF%d ungraceful check: hw/memory setup passed\n", chnl->id);
 
 	return TRUE;
 }
 
+static __attribute__((cold)) errno_t pfe_hif_chnl_find_tx(pfe_hif_chnl_t * chnl)
+{
+	int ii, ring_len, tx_idx = -1;
+	void *buf_pa, *frame;
+	errno_t ret = ENOENT;
+
+	ring_len = pfe_hif_ring_get_len(chnl->tx_ring);
+
+	pfe_hif_chnl_tx_enable(chnl);
+
+	for (ii = 0; ii < ring_len; ii++)
+	{
+		/* Send invalid packet(s) (to be dropped on Class) */
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_INVALID, &frame);
+		if (EOK != ret) {
+			NXP_LOG_ERROR("Can't send frame\n");
+			goto end;
+
+		}
+
+		/* Wait */
+		oal_time_usleep(500U);
+
+		pfe_hif_chnl_free_dummy_frame(frame);
+
+		/* Find valid WB entry. It indicates the current position of TX ring */
+		ret = pfe_hif_ring_find_wb_entry(chnl->tx_ring, TRUE, &tx_idx);
+		if (EOK == ret)
+		{
+			NXP_LOG_DEBUG("TX index found for HIF%d: %d\n", chnl->id, tx_idx);
+			break;
+		}
+
+		/* The index was not here, so invalidate current BD */
+		pfe_hif_ring_invalidate_direct(chnl->tx_ring, ii);
+	}
+
+	if (ENOENT == ret)
+	{
+		NXP_LOG_ERROR("TX index not found for HIF%d.\n", chnl->id);
+		goto end;
+	}
+
+	/* Found index, drain all fed TX buffers */
+	ii++;
+	while (EOK == pfe_hif_ring_drain_buf(chnl->tx_ring, &buf_pa))
+	{
+		ii--;
+	}
+	if (0U != ii)
+	{
+		NXP_LOG_DEBUG("Undraineed TX frames: %d\n", ii);
+	}
+
+	pfe_hif_ring_invalidate_direct(chnl->tx_ring, tx_idx);
+	pfe_hif_ring_force_index(chnl->tx_ring, tx_idx + 1);
+
+end:
+	pfe_hif_chnl_tx_disable(chnl);
+
+	return ret;
+
+}
+
+static __attribute__((cold)) errno_t pfe_hif_chnl_find_rx(pfe_hif_chnl_t * chnl)
+{
+	int ii, ring_len, rx_idx = -1;
+	void *buf_va = NULL, *buf_pa, *frame;
+	errno_t ret = ENOENT;
+
+	ring_len = pfe_hif_ring_get_len(chnl->rx_ring);
+
+	if (TRUE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
+	{
+		/* To fit in RX hunter method we used (which is based on cached BD(s))
+		 * provide one BD and let BDP do cache it.
+		 * We need two steps to cover the whole buffer, first with even BDs
+		 * and if not succeede then switch to odd BDs.
+		 */
+
+		/* Alloc one frame buffer */
+		buf_va = oal_mm_malloc_contig_aligned_nocache(DUMMY_RX_BUF_LEN, 8U);
+		if (NULL == buf_va)
+		{
+			NXP_LOG_ERROR("Can't get dummy RX buffer\n");
+			ret = ENOMEM;
+			goto end;
+		}
+
+		buf_pa = oal_mm_virt_to_phys_contig(buf_va);
+		if (NULL == buf_pa)
+		{
+			NXP_LOG_ERROR("VA to PA conversion failed");
+			ret = ENOMEM;
+			goto end;
+		}
+
+		for (ii = 0; ii < ring_len; ii++)
+		{
+			ret = pfe_hif_chnl_supply_rx_buf(chnl, buf_pa, DUMMY_RX_BUF_LEN);
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
+				goto end;
+			}
+		}
+
+		/* First step: even BDs */
+		for (ii = 1U; ii < ring_len; ii += 2U)
+		{
+			pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
+		}
+
+		/* Instruct BDP to fetch BD */
+		pfe_hif_chnl_rx_enable(chnl);
+		pfe_hif_chnl_rx_dma_start(chnl);
+
+		oal_time_usleep(500U);
+
+		pfe_hif_chnl_rx_disable(chnl);
+
+		if (TRUE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
+		{
+			/* Second step: odd BDs (in case when even BDs try was not sucessful */
+			pfe_hif_ring_force_index(chnl->rx_ring, 0);
+
+			for (ii = 0U; ii < ring_len; ii += 2U)
+			{
+				/* Invalidate odd BD */
+				pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
+				/* Revalidate back even BD */
+				pfe_hif_ring_revalidate_direct(chnl->rx_ring, ii + 1U);
+			}
+
+			/* Instruct BDP to fetch BD */
+			pfe_hif_chnl_rx_enable(chnl);
+			pfe_hif_chnl_rx_dma_start(chnl);
+
+			oal_time_usleep(500U);
+
+			pfe_hif_chnl_rx_disable(chnl);
+
+			if (TRUE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
+			{
+				/* Something got wrong */
+				NXP_LOG_ERROR("HIF%d is not able to cache BD\n", chnl->id);
+				ret = EINVAL;
+				goto end;
+			}
+		}
+
+		pfe_hif_ring_force_index(chnl->rx_ring, 0);
+		/* Clean ring */
+		for (ii = 0U; ii < ring_len; ii++)
+		{
+			pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
+		}
+	}
+
+	/* Requires clean RX ring, with default WB BD control words (value: 0x200) */
+
+	/* Start RX DMA */
+	pfe_hif_chnl_tx_enable(chnl);
+	pfe_hif_chnl_rx_enable(chnl);
+
+	/* Empty cached BDs first */
+	while(FALSE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
+	{
+		/* Send dummy packet to self HIF channel */
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_IHC_SELF, &frame);
+		if (EOK != ret)
+			goto end;
+
+		/* Wait */
+		oal_time_usleep(500U);
+
+		/* Do TX confirmations */
+		ret = pfe_hif_chnl_get_tx_conf(chnl);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Can't get TX confirmation\n");
+			goto end;
+		}
+		pfe_hif_chnl_free_dummy_frame(frame);
+	}
+
+	/* Find invalid WB entry. It indicates the current (stop) position of RX ring
+	 * NOTE: it can also wrap around.
+	 */
+	if (EOK != pfe_hif_ring_find_wb_entry(chnl->rx_ring, FALSE, &rx_idx))
+	{
+		/* Something got wrong */
+		NXP_LOG_ERROR("HIF%d is not able to find correct WB entry\n", chnl->id);
+		ret = EINVAL;
+		goto end;
+	}
+	NXP_LOG_DEBUG("Found RX index: %d\n", rx_idx);
+
+	pfe_hif_ring_force_index(chnl->rx_ring, rx_idx);
+
+end:
+	pfe_hif_chnl_tx_disable(chnl);
+	pfe_hif_chnl_rx_disable(chnl);
+
+	if (NULL != buf_va)
+	{
+		oal_mm_free_contig(buf_va);
+	}
+
+	return ret;
+}
+
+static __attribute__((cold)) errno_t pfe_hif_chnl_rx_to_head(pfe_hif_chnl_t * chnl)
+{
+	int ii, ring_len;
+	void *buf_va = NULL, *buf_pa, *frame;
+	bool_t lifm;
+	errno_t ret = ENOENT;
+
+	/* Alloc one frame buffer */
+	buf_va = oal_mm_malloc_contig_aligned_nocache(DUMMY_RX_BUF_LEN, 8U);
+	if (NULL == buf_va)
+	{
+		NXP_LOG_ERROR("Can't get dummy RX buffer\n");
+		ret = ENOMEM;
+		goto end;
+	}
+
+	buf_pa = oal_mm_virt_to_phys_contig(buf_va);
+	if (NULL == buf_pa)
+	{
+		NXP_LOG_ERROR("VA to PA conversion failed");
+		ret = ENOMEM;
+		goto end;
+	}
+
+	ring_len = pfe_hif_ring_get_len(chnl->rx_ring);
+
+	/* Start RX DMA */
+	pfe_hif_chnl_tx_enable(chnl);
+	pfe_hif_chnl_rx_enable(chnl);
+
+	ii = 0;
+	while (FALSE == pfe_hif_ring_is_on_head(chnl->rx_ring) && (ring_len > ii))
+	{
+		/* Fill one buffer only */
+		ret = pfe_hif_chnl_supply_rx_buf(chnl, buf_pa, DUMMY_RX_BUF_LEN);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
+			goto end;
+		}
+		pfe_hif_chnl_rx_dma_start(chnl);
+
+		/* Send dummy packet to self HIF channel */
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_IHC_SELF, &frame);
+		if (EOK != ret)
+			goto end;
+
+		/* Wait */
+		oal_time_usleep(500U);
+
+		/* Do TX confirmations */
+		ret = pfe_hif_chnl_get_tx_conf(chnl);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
+			goto end;
+		}
+		pfe_hif_chnl_free_dummy_frame(frame);
+
+		/* Do plain RX */
+		ret = pfe_hif_ring_dequeue_plain(chnl->rx_ring, &lifm);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Can't get RX buffer dequeued\n");
+			goto end;
+		}
+
+		ii++;
+	}
+
+	if (ring_len <= ii)
+	{
+		NXP_LOG_ERROR("Can't reach RX ring head\n");
+		ret = EINVAL;
+	}
+	for (ii = 0; ii < ring_len; ii++)
+		pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
+
+end:
+	pfe_hif_chnl_tx_disable(chnl);
+	pfe_hif_chnl_rx_disable(chnl);
+
+	if (NULL != buf_va)
+	{
+		oal_mm_free_contig(buf_va);
+	}
+
+	return ret;
+}
+
+static __attribute__((cold)) errno_t pfe_hif_chnl_tx_to_head(pfe_hif_chnl_t * chnl)
+{
+	int ii, ring_len;
+	void *frame;
+	errno_t ret = ENOENT;
+
+	ring_len = pfe_hif_ring_get_len(chnl->tx_ring);
+
+	/* Start TX DMA */
+	pfe_hif_chnl_tx_enable(chnl);
+
+	ii = 0;
+	while (FALSE == pfe_hif_ring_is_on_head(chnl->tx_ring) && (ring_len > ii))
+	{
+		/* Send invalid packet (to be dropped on Class) */
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_INVALID, &frame);
+		if (EOK != ret)
+			goto end;
+
+		/* Wait */
+		oal_time_usleep(500U);
+
+		/* Do TX confirmations */
+		ret = pfe_hif_chnl_get_tx_conf(chnl);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Can't read TX confirmation\n");
+			goto end;
+		}
+		pfe_hif_chnl_free_dummy_frame(frame);
+
+		ii++;
+	}
+
+	if (ring_len <= ii)
+	{
+		NXP_LOG_ERROR("Can't reach TX ring head\n");
+		ret = EINVAL;
+	}
+
+end:
+	pfe_hif_chnl_tx_disable(chnl);
+
+	for (ii = 0; ii < ring_len; ii++)
+		pfe_hif_ring_invalidate_direct(chnl->tx_ring, ii);
+
+	return ret;
+}
+
 static __attribute__((cold)) errno_t pfe_hif_chnl_ungraceful_reset(pfe_hif_chnl_t * chnl)
 {
-	errno_t ret = EINVAL;
+	errno_t ret;
 
-	/* unsupported */
+	/* Find TX index first */
+	ret = pfe_hif_chnl_find_tx(chnl);
+	if (EOK != ret)
+	{
+		goto end;
+	}
+	NXP_LOG_INFO("HIF%d ungraceful reset: stage 1 (tx finder) passed\n", chnl->id);
 
+	/* Next find RX index */
+	ret = pfe_hif_chnl_find_rx(chnl);
+	if (EOK != ret)
+	{
+		goto end;
+	}
+	NXP_LOG_INFO("HIF%d ungraceful reset: stage 2 (rx finder) passed\n", chnl->id);
+
+	/* Move to RX head first */
+	ret = pfe_hif_chnl_rx_to_head(chnl);
+	if (EOK != ret)
+	{
+		goto end;
+	}
+	NXP_LOG_INFO("HIF%d ungraceful reset: stage 3 (rx to head) passed\n", chnl->id);
+
+	/* Next move to TX index */
+	ret = pfe_hif_chnl_tx_to_head(chnl);
+	if (EOK != ret)
+	{
+		goto end;
+	}
+	NXP_LOG_INFO("HIF%d ungraceful reset: stage 4 (tx to head) passed\n", chnl->id);
+	NXP_LOG_INFO("HIF%d ungraceful reset: finished\n", chnl->id);
+
+end:
 	return ret;
 }
 
@@ -1532,18 +1915,16 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 			goto free_and_fail;
 		}
 	}
-	else
+
+	/*	Bind TX BD ring to channel */
+	if (EOK != pfe_hif_chnl_bind_tx_ring(chnl))
 	{
-		/*	Bind TX BD ring to channel */
-		if (EOK != pfe_hif_chnl_bind_tx_ring(chnl))
-		{
-			goto free_and_fail;
-		}
-		/*	Bind RX BD ring to channel */
-		if (EOK != pfe_hif_chnl_bind_rx_ring(chnl))
-		{
-			goto free_and_fail;
-		}
+		goto free_and_fail;
+	}
+	/*	Bind RX BD ring to channel */
+	if (EOK != pfe_hif_chnl_bind_rx_ring(chnl))
+	{
+		goto free_and_fail;
 	}
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
@@ -1969,6 +2350,7 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 				procedure to ensure that channel will not keep any content in
 				internal buffers and HW rings are on head.
 			*/
+
 			if (EOK != pfe_hif_chnl_reset_fifos(chnl))
 			{
 				NXP_LOG_ERROR("FATAL: Could not flush RX BD FIFO\n");
