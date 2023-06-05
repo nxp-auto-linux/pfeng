@@ -2098,7 +2098,7 @@ the_end:
  * @param[in]	chnl The channel instance
  * @return		EOK if success, error code otherwise
  */
-static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl)
+static __attribute__((cold, unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl)
 {
 	void *rx_buf_va = NULL, *rx_buf_pa, *buf_pa, *frame;
 	uint32_t len, ii;
@@ -2351,10 +2351,14 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 				internal buffers and HW rings are on head.
 			*/
 
+#ifndef PFENG_TEST_DISABLE_HIF_GRACEFUL_RESET
 			if (EOK != pfe_hif_chnl_reset_fifos(chnl))
 			{
 				NXP_LOG_ERROR("FATAL: Could not flush RX BD FIFO\n");
 			}
+#else
+			NXP_LOG_INFO("WARNING: HIF%d graceful reset was skipped\n", chnl->id);
+#endif
 		}
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
