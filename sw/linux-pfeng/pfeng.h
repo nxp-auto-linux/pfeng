@@ -366,9 +366,14 @@ static inline bool pfeng_netif_cfg_has_emac(struct pfeng_netif_cfg *cfg)
 	return cfg->phyif_id <= PFE_PHY_IF_ID_EMAC2;
 }
 
+static inline bool pfeng_netif_has_emac(struct pfeng_netif *netif)
+{
+	return pfeng_netif_cfg_has_emac(netif->cfg);
+}
+
 static inline struct pfeng_emac *pfeng_netif_get_emac(struct pfeng_netif *netif)
 {
-	if (!pfeng_netif_cfg_has_emac(netif->cfg))
+	if (!pfeng_netif_has_emac(netif))
 		return NULL;
 
 	return __pfeng_netif_get_emac(netif);
@@ -376,7 +381,7 @@ static inline struct pfeng_emac *pfeng_netif_get_emac(struct pfeng_netif *netif)
 
 static inline pfe_log_if_t *pfeng_netif_get_emac_logif(struct pfeng_netif *netif)
 {
-	if (!pfeng_netif_cfg_has_emac(netif->cfg))
+	if (!pfeng_netif_has_emac(netif))
 		return NULL;
 
 	return __pfeng_netif_get_emac(netif)->logif_emac;
@@ -384,7 +389,7 @@ static inline pfe_log_if_t *pfeng_netif_get_emac_logif(struct pfeng_netif *netif
 
 static inline pfe_phy_if_t *pfeng_netif_get_emac_phyif(struct pfeng_netif *netif)
 {
-	if (!pfeng_netif_cfg_has_emac(netif->cfg))
+	if (!pfeng_netif_has_emac(netif))
 		return NULL;
 
 	return __pfeng_netif_get_emac(netif)->phyif_emac;

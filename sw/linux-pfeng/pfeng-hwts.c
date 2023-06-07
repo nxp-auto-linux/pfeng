@@ -144,8 +144,7 @@ int pfeng_hwts_ioctl_set(struct pfeng_netif *netif, struct ifreq *rq)
 	if (copy_from_user(&cfg, rq->ifr_data, sizeof(cfg)))
 		return -EFAULT;
 
-	if((IS_ENABLED(PFE_CFG_PFE_MASTER) && !netif->priv->clk_ptp_reference) ||
-		pfeng_netif_is_aux(netif))
+	if ((IS_ENABLED(PFE_CFG_PFE_MASTER) && !netif->priv->clk_ptp_reference))
 	{
 		netif->tshw_cfg.rx_filter = HWTSTAMP_FILTER_NONE;
 		netif->tshw_cfg.tx_type = HWTSTAMP_TX_OFF;
