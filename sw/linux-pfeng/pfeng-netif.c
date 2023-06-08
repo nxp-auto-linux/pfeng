@@ -593,6 +593,9 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 	struct mii_ioctl_data *mii = if_mii(rq);
 	int val, phyaddr, phyreg;
 
+	if (pfeng_netif_is_aux(netif))
+		return -EOPNOTSUPP;
+
 	if (mdio_phy_id_is_c45(mii->phy_id)) {
 		phyaddr = mdio_phy_id_prtad(mii->phy_id);
 		phyreg = MII_ADDR_C45 | (mdio_phy_id_devad(mii->phy_id) << 16) | mii->reg_num;
@@ -603,11 +606,15 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 
 	switch (cmd) {
 	case SIOCGMIIPHY:
-		if (!netdev->phydev)
+		if (!pfeng_netif_has_emac(netif) || !netdev->phydev)
 			return -EOPNOTSUPP;
+
 		phyaddr = mii->phy_id = netdev->phydev->mdio.addr;
 		fallthrough;
 	case SIOCGMIIREG:
+		if (!pfeng_netif_has_emac(netif))
+			return -EOPNOTSUPP;
+
 		if (netdev->phydev)
 			return phy_mii_ioctl(netdev->phydev, rq, cmd);
 		/* If no phydev, use direct MDIO call */
@@ -618,6 +625,9 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 		}
 		return val;
 	case SIOCSMIIREG:
+		if (!pfeng_netif_has_emac(netif))
+			return -EOPNOTSUPP;
+
 		if (netdev->phydev)
 			return phy_mii_ioctl(netdev->phydev, rq, cmd);
 		/* If no phydev, use direct MDIO call */
