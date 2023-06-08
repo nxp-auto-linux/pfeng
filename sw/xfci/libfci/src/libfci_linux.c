@@ -1,6 +1,6 @@
 /* =========================================================================
  *  Copyright (C) 2007 Mindspeed Technologies, Inc.
- *  Copyright 2017-2022 NXP
+ *  Copyright 2017-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -211,27 +211,29 @@ int fci_register_cb(FCI_CLIENT *client, fci_cb_retval_t (*event_cb)(unsigned sho
 					goto close_and_exit;
 				}
 
-				if (0U != (nlh->nlmsg_len - NLMSG_LENGTH(0)))
+				if (sizeof(fci_msg_t) <= (nlh->nlmsg_len - NLMSG_LENGTH(0)))
 				{
+					/*
+					 * WARNING:
+					 * In reply_msg, only ret_code member is initialized.
+					 * All other members are uninitialized.
+					 */
 					reply_msg = NLMSG_DATA(nlh);
-					if (0 != reply_msg->msg_cmd.length)
-					{
-						err = reply_msg->ret_code;
-						if (EOK != err)
-						{
-							/* Registration failed */
-							FCILIB_PRINTF(FCILIB_ERR, "Registration failed. %d received.\n", err);					
-							goto close_and_exit;
-						}
-						else
-						{
-							FCILIB_PRINTF(FCILIB_PRINT, "Client registered successfully.\n");
-						}
+					err = reply_msg->ret_code;
+
+					if (err != EOK) {
+						/* Registration failed */
+						FCILIB_PRINTF(FCILIB_ERR,
+									"Registration failed. %d received.\n", err);
+						goto close_and_exit;
+					} else {
+						FCILIB_PRINTF(FCILIB_PRINT,
+									"Client registered successfully.\n");
 					}
 				}
 				else
 				{
-					FCILIB_PRINTF(FCILIB_ERR, "Zero response length.\n");
+					FCILIB_PRINTF(FCILIB_ERR, "Incorrect response length.\n");
 					err = -ENOBUFS;
 					goto close_and_exit;
 				}
