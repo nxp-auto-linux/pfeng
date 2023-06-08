@@ -633,15 +633,21 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 		/* If no phydev, use direct MDIO call */
 		return pfeng_mdio_write(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg, mii->val_in);
 	case SIOCGHWTSTAMP:
+#ifdef PFE_CFG_PFE_MASTER
 		if (phy_has_hwtstamp(netdev->phydev))
 			return phy_mii_ioctl(netdev->phydev, rq, cmd);
 		else
 			return pfeng_hwts_ioctl_get(netif, rq);
+#endif
+	break;
 	case SIOCSHWTSTAMP:
+#ifdef PFE_CFG_PFE_MASTER
 		if (phy_has_hwtstamp(netdev->phydev))
 			return phy_mii_ioctl(netdev->phydev, rq, cmd);
 		else
 			return pfeng_hwts_ioctl_set(netif, rq);
+#endif
+	break;
 	}
 
 	return -EOPNOTSUPP;
@@ -1024,14 +1030,14 @@ static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 
 	HM_MSG_NETDEV_INFO(netif->netdev, "unregisted\n");
 
-	if (!pfeng_netif_is_aux(netif)) {
 #ifdef PFE_CFG_PFE_MASTER
+	if (!pfeng_netif_is_aux(netif)) {
 		pfeng_ptp_unregister(netif);
-#endif /* PFE_CFG_PFE_MASTER */
 
 		/* Release timestamp memory */
 		pfeng_hwts_release(netif);
 	}
+#endif /* PFE_CFG_PFE_MASTER */
 
 	/* Detach netif from HIF(s) */
 	pfeng_netif_detach_hifs(netif);
@@ -1303,6 +1309,7 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 
 	pfeng_netif_set_mac_address(netdev, (void *)&saddr);
 
+#ifdef PFE_CFG_PFE_MASTER
 	if (!pfeng_netif_is_aux(netif)) {
 		/* Init hw timestamp */
 		ret = pfeng_hwts_init(netif);
@@ -1310,10 +1317,9 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 			HM_MSG_NETDEV_ERR(netdev, "Cannot initialize timestamping: %d\n", ret);
 			goto err;
 		}
-#ifdef PFE_CFG_PFE_MASTER
 		pfeng_ptp_register(netif);
-#endif /* PFE_CFG_PFE_MASTER */
 	}
+#endif /* PFE_CFG_PFE_MASTER */
 
 	if (!netif->priv->in_suspend) {
 		ret = register_netdev(netdev);
