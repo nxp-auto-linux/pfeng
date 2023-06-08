@@ -509,11 +509,6 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, const char_t *name)
 		if (EOK != pfe_log_if_write_to_class(iface, &iface->log_if_class))
 		{
 			NXP_LOG_ERROR("Could not update DMEM (%s)\n", iface->name);
-
-			if (EOK != pfe_phy_if_del_log_if(parent, iface))
-			{
-				NXP_LOG_ERROR("Could not delete %s from %s\n", iface->name, pfe_phy_if_get_name(parent));
-			}
 			pfe_class_dmem_heap_free(iface->class, iface->dmem_base);
 			(void)pfe_mac_db_destroy(iface->mac_db);
 			oal_mm_free(iface->name);
