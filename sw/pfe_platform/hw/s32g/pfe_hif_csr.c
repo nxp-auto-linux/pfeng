@@ -560,6 +560,10 @@ void pfe_hif_chnl_cfg_tx_disable(addr_t base_va, uint32_t channel_id)
 	}
 	else
 	{
+	#if (FALSE == PFE_HIF_CFG_USE_BD_POLLING)
+		pfe_hif_chnl_cfg_tx_dma_stop(base_va, channel_id);
+	#endif /* PFE_HIF_CFG_USE_BD_POLLING */
+
 		reg = hal_read32(base_va + HIF_CTRL_CHn(channel_id));
 		reg &= ~(TX_DMA_ENABLE|TX_BDP_POLL_CNTR_EN);
 		hal_write32(reg, base_va + HIF_CTRL_CHn(channel_id));
@@ -615,6 +619,10 @@ void pfe_hif_chnl_cfg_rx_disable(addr_t base_va, uint32_t channel_id)
 	}
 	else
 	{
+	#if (FALSE == PFE_HIF_CFG_USE_BD_POLLING)
+		pfe_hif_chnl_cfg_rx_dma_stop(base_va, channel_id);
+	#endif /* PFE_HIF_CFG_USE_BD_POLLING */
+
 		reg = hal_read32(base_va + HIF_CTRL_CHn(channel_id));
 		reg &= ~(RX_DMA_ENABLE|RX_BDP_POLL_CNTR_EN);
 		hal_write32(reg, base_va + HIF_CTRL_CHn(channel_id));
@@ -639,6 +647,21 @@ void pfe_hif_chnl_cfg_rx_dma_start(addr_t base_va, uint32_t channel_id)
 }
 
 /**
+ * @brief		Stop RX DMA
+ * @param[in]	base_va Base address of HIF channel register space (virtual)
+ * @param[in]	channel_id Channel identifier
+ */
+void pfe_hif_chnl_cfg_rx_dma_stop(addr_t base_va, uint32_t channel_id)
+{
+#if (FALSE == PFE_HIF_CFG_USE_BD_POLLING)
+	hal_write32(0, base_va + HIF_RX_CHn_START(channel_id));
+#else
+    (void)base_va;
+    (void)channel_id;
+#endif /* PFE_HIF_CFG_USE_BD_POLLING */
+}
+
+/**
  * @brief		Trigger TX DMA
  * @param[in]	base_va Base address of HIF channel register space (virtual)
  * @param[in]	channel_id Channel identifier
@@ -647,6 +670,21 @@ void pfe_hif_chnl_cfg_tx_dma_start(addr_t base_va, uint32_t channel_id)
 {
 #if (FALSE == PFE_HIF_CFG_USE_BD_POLLING)
 	hal_write32(TX_BDP_CH_START, base_va + HIF_TX_CHn_START(channel_id));
+#else
+    (void)base_va;
+    (void)channel_id;
+#endif /* PFE_HIF_CFG_USE_BD_POLLING */
+}
+
+/**
+ * @brief		Stop TX DMA
+ * @param[in]	base_va Base address of HIF channel register space (virtual)
+ * @param[in]	channel_id Channel identifier
+ */
+void pfe_hif_chnl_cfg_tx_dma_stop(addr_t base_va, uint32_t channel_id)
+{
+#if (FALSE == PFE_HIF_CFG_USE_BD_POLLING)
+	hal_write32(0, base_va + HIF_TX_CHn_START(channel_id));
 #else
     (void)base_va;
     (void)channel_id;
@@ -753,6 +791,36 @@ void pfe_hif_chnl_cfg_tx_irq_unmask(addr_t base_va, uint32_t channel_id)
 			| BDP_CSR_TX_CBD_CH_INT_EN
 			| BDP_CSR_TX_PKT_CH_INT_EN
 				, base_va + HIF_CHn_INT_EN(channel_id));
+}
+
+uint32_t pfe_hif_chnl_cfg_get_rx_bd_ring_addr(addr_t base_va, uint32_t channel_id)
+{
+	return hal_read32(base_va + HIF_RX_BDP_RD_LOW_ADDR_CHn(channel_id));
+}
+
+uint32_t pfe_hif_chnl_cfg_get_rx_wb_table_addr(addr_t base_va, uint32_t channel_id)
+{
+	return hal_read32(base_va + HIF_RX_BDP_WR_LOW_ADDR_CHn(channel_id));
+}
+
+uint32_t pfe_hif_chnl_cfg_get_rx_wb_table_len(addr_t base_va, uint32_t channel_id)
+{
+	return hal_read32(base_va + HIF_RX_WRBK_BD_CHn_BUFFER_SIZE(channel_id));
+}
+
+uint32_t pfe_hif_chnl_cfg_get_tx_bd_ring_addr(addr_t base_va, uint32_t channel_id)
+{
+	return hal_read32(base_va + HIF_TX_BDP_RD_LOW_ADDR_CHn(channel_id));
+}
+
+uint32_t pfe_hif_chnl_cfg_get_tx_wb_table_addr(addr_t base_va, uint32_t channel_id)
+{
+	return hal_read32(base_va + HIF_TX_BDP_WR_LOW_ADDR_CHn(channel_id));
+}
+
+uint32_t pfe_hif_chnl_cfg_get_tx_wb_table_len(addr_t base_va, uint32_t channel_id)
+{
+	return hal_read32(base_va + HIF_TX_WRBK_BD_CHn_BUFFER_SIZE(channel_id));
 }
 
 /**

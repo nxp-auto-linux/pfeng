@@ -1,5 +1,5 @@
 /* =========================================================================
- *  
+ *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2023 NXP
  *
@@ -26,6 +26,10 @@ bool_t pfe_hif_ring_is_below_wm(const pfe_hif_ring_t *ring) __attribute__((pure,
 void pfe_hif_ring_invalidate(const pfe_hif_ring_t *ring) __attribute__((cold));
 uint32_t pfe_hif_ring_get_fill_level(const pfe_hif_ring_t *ring) __attribute__((pure, hot));
 bool_t pfe_hif_ring_is_on_head(const pfe_hif_ring_t *ring) __attribute__((pure, hot));
+errno_t pfe_hif_ring_find_wb_entry(pfe_hif_ring_t *ring, bool_t valid, uint32_t *index);
+void pfe_hif_ring_invalidate_direct(const pfe_hif_ring_t *ring, uint32_t index);
+void pfe_hif_ring_revalidate_direct(const pfe_hif_ring_t *ring, uint32_t index);
+errno_t pfe_hif_ring_force_index(pfe_hif_ring_t *ring, uint32_t index);
 
 void pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name, void *dev, void (*dev_print)(void *dev, const char *fmt, ...), uint8_t verb_level);
 

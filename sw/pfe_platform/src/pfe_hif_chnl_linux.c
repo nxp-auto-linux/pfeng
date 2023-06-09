@@ -1,5 +1,5 @@
 /* =========================================================================
- *  
+ *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2023 NXP
  *
@@ -131,11 +131,12 @@ struct __attribute__((aligned(HAL_CACHE_LINE_SIZE))) __pfe_hif_chnl_tag
 #endif
 };
 
-static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *chnl, pfe_hif_ring_t *ring) __attribute__((cold));
-static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *chnl, pfe_hif_ring_t *ring) __attribute__((cold));
+static errno_t pfe_hif_chnl_bind_rx_ring(pfe_hif_chnl_t *chnl) __attribute__((cold));
+static errno_t pfe_hif_chnl_bind_tx_ring(pfe_hif_chnl_t *chnl) __attribute__((cold));
 static errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl) __attribute__((cold));
 static errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl) __attribute__((cold));
-static errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chnl, uint32_t mode) __attribute__((cold));
+static void pfe_hif_chnl_free_dummy_frame(void *frame);
+static errno_t pfe_hif_chnl_send_dummy_frame(pfe_hif_chnl_t *chnl, uint32_t mode, void **frame) __attribute__((cold));
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
 static void pfe_hif_chnl_refill_rx_buffers(const pfe_hif_chnl_t *chnl) __attribute__((hot));
@@ -1255,17 +1256,17 @@ __attribute__((hot)) errno_t pfe_hif_chnl_supply_rx_buf(const pfe_hif_chnl_t *ch
  * @details		Configure RX buffer descriptor ring address of the channel.
  * 				This binds channel with a RX BD ring.
  * @param[in]	chnl The channel instance
- * @param[in]	ring The ring instance
  * @retval		EOK Success
  * @retval		EFAULT Invalid ring instance
  */
-__attribute__((cold)) static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *chnl, pfe_hif_ring_t *ring)
+__attribute__((cold)) static errno_t pfe_hif_chnl_bind_rx_ring(pfe_hif_chnl_t *chnl)
 {
+	pfe_hif_ring_t *ring = chnl->rx_ring;
 	void *rx_ring_pa, *wb_tbl_pa;
 	uint32_t wb_tbl_len;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == chnl) || (NULL == ring)))
+	if (unlikely((NULL == chnl)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -1295,8 +1296,6 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *ch
 		pfe_hif_chnl_cfg_set_rx_wb_table(chnl->cbus_base_va, chnl->id, wb_tbl_pa, wb_tbl_len);
 	}
 
-	chnl->rx_ring = ring;
-
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
 		NXP_LOG_ERROR("Mutex unlock failed\n");
@@ -1310,17 +1309,17 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_rx_ring(pfe_hif_chnl_t *ch
  * @details		Configure TX buffer descriptor ring address of the channel.
  * 				This binds channel with a TX BD ring.
  * @param[in]	chnl The channel instance
- * @param[in]	ring The ring instance
  * @retval		EOK Success
  * @retval		EFAULT Invalid ring instance
  */
-__attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *chnl, pfe_hif_ring_t *ring)
+__attribute__((cold)) static errno_t pfe_hif_chnl_bind_tx_ring(pfe_hif_chnl_t *chnl)
 {
+	pfe_hif_ring_t *ring = chnl->tx_ring;
 	void *tx_ring_pa, *wb_tbl_pa;
 	uint32_t wb_tbl_len;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == chnl) || (NULL == ring)))
+	if (unlikely((NULL == chnl)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return EINVAL;
@@ -1350,14 +1349,494 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *ch
 		pfe_hif_chnl_cfg_set_tx_wb_table(chnl->cbus_base_va, chnl->id, wb_tbl_pa, wb_tbl_len);
 	}
 
-	chnl->tx_ring = ring;
-
 	if (EOK != oal_spinlock_unlock(&chnl->lock))
 	{
 		NXP_LOG_ERROR("Mutex unlock failed\n");
 	}
 
 	return EOK;
+}
+
+#ifdef PFE_CFG_PFE_SLAVE
+/**
+ * @brief		Inspect a channel state
+ * @details		Function read channel HW registers to detect the current state of it
+ * @param[in]	chnl The channel instance
+ * @return		EOK Channel is clean, EAGAIN channel has valid set-up for ungraceful
+ * 				reset, EINVAL channel is in unrecorevable state
+ */
+static __attribute__((cold)) errno_t pfe_hif_chnl_inspect_hw_state(pfe_hif_chnl_t *chnl)
+{
+	uint32_t rx_ring_addr, rx_wb_ring_addr, tx_ring_addr, tx_wb_ring_addr, rx_ring_len, tx_ring_len;
+
+	/* Stop the channel */
+	pfe_hif_chnl_cfg_rx_disable(chnl->cbus_base_va, chnl->id);
+	pfe_hif_chnl_cfg_tx_disable(chnl->cbus_base_va, chnl->id);
+	pfe_hif_chnl_cfg_rx_dma_stop(chnl->cbus_base_va, chnl->id);
+	pfe_hif_chnl_cfg_tx_dma_stop(chnl->cbus_base_va, chnl->id);
+
+	/* Detect graceful start (all channel registers are zeroed) */
+	rx_ring_addr = pfe_hif_chnl_cfg_get_rx_bd_ring_addr(chnl->cbus_base_va, chnl->id);
+	rx_wb_ring_addr = pfe_hif_chnl_cfg_get_rx_wb_table_addr(chnl->cbus_base_va, chnl->id);
+	tx_ring_addr = pfe_hif_chnl_cfg_get_tx_bd_ring_addr(chnl->cbus_base_va, chnl->id);
+	tx_wb_ring_addr = pfe_hif_chnl_cfg_get_tx_wb_table_addr(chnl->cbus_base_va, chnl->id);
+	if (0 == rx_ring_addr && 0 == rx_wb_ring_addr && 0 == tx_ring_addr && 0 == tx_wb_ring_addr)
+	{
+		NXP_LOG_INFO("HIF%d is in clean state\n", chnl->id);
+		return EOK;
+	}
+	if (0 == rx_ring_addr || 0 == rx_wb_ring_addr || 0 == tx_ring_addr || 0 == tx_wb_ring_addr)
+	{
+		NXP_LOG_ERROR("HIF%d has incomplete set-up. Ungraceful reset cannot be provided.\n", chnl->id);
+		return EINVAL;
+	}
+
+	/* Channel state verification continues: verify rings sizes */
+	rx_ring_len = pfe_hif_chnl_cfg_get_rx_wb_table_len(chnl->cbus_base_va, chnl->id);
+	tx_ring_len = pfe_hif_chnl_cfg_get_tx_wb_table_len(chnl->cbus_base_va, chnl->id);
+	if (pfe_hif_ring_get_len(chnl->rx_ring) != rx_ring_len || pfe_hif_ring_get_len(chnl->tx_ring) != tx_ring_len)
+	{
+		NXP_LOG_ERROR("HIF%d rings sizes differ from default. Ungraceful reset cannot be used\n", chnl->id);
+		return EINVAL;
+	}
+
+	NXP_LOG_DEBUG("HIF%d has valid set-up: RX: BD p0x%08x WB p0x%08x len %d, TX: BD p0x%08x WB p0x%08x len %d\n", chnl->id, rx_ring_addr, rx_wb_ring_addr, rx_ring_len, tx_ring_addr, tx_wb_ring_addr, tx_ring_len);
+
+	return EAGAIN;
+}
+#endif /* PFE_CFG_PFE_SLAVE */
+
+/**
+ * @brief		Validate a BDR set-up
+ * @details		Function reads channel HW registers and compares the set-up of BD rings
+ * @param[in]	chnl The channel instance
+ * @return		TRUE if new allocated BD rings occupy the same memory regions as were
+ * 				left in channel registers
+ */
+static __attribute__((cold)) bool_t pfe_hif_chnl_validate_bdr_setup(pfe_hif_chnl_t *chnl)
+{
+	uint32_t rx_ring_addr, rx_wb_ring_addr, tx_ring_addr, tx_wb_ring_addr;
+
+	rx_ring_addr = pfe_hif_chnl_cfg_get_rx_bd_ring_addr(chnl->cbus_base_va, chnl->id);
+	rx_wb_ring_addr = pfe_hif_chnl_cfg_get_rx_wb_table_addr(chnl->cbus_base_va, chnl->id);
+	tx_ring_addr = pfe_hif_chnl_cfg_get_tx_bd_ring_addr(chnl->cbus_base_va, chnl->id);
+	tx_wb_ring_addr = pfe_hif_chnl_cfg_get_tx_wb_table_addr(chnl->cbus_base_va, chnl->id);
+
+	if (rx_ring_addr != (uint32_t)(addr_t)pfe_hif_ring_get_base_pa(chnl->rx_ring))
+	{
+		NXP_LOG_ERROR("HIF%d ungraceful check: RX BD addr differs\n", chnl->id);
+		return FALSE;
+	}
+	if (rx_wb_ring_addr != (uint32_t)(addr_t)pfe_hif_ring_get_wb_tbl_pa(chnl->rx_ring))
+	{
+		NXP_LOG_ERROR("HIF%d ungraceful check: RX WB addr differs\n", chnl->id);
+		return FALSE;
+	}
+	if (tx_ring_addr != (uint32_t)(addr_t)pfe_hif_ring_get_base_pa(chnl->tx_ring))
+	{
+		NXP_LOG_ERROR("HIF%d ungraceful check: TX BD addr differs\n", chnl->id);
+		return FALSE;
+	}
+	if (tx_wb_ring_addr != (uint32_t)(addr_t)pfe_hif_ring_get_wb_tbl_pa(chnl->tx_ring))
+	{
+		NXP_LOG_ERROR("HIF%d ungraceful check: TX WB addr differs\n", chnl->id);
+		return FALSE;
+	}
+	NXP_LOG_INFO("HIF%d ungraceful check: hw/memory setup passed\n", chnl->id);
+
+	return TRUE;
+}
+
+static __attribute__((cold)) errno_t pfe_hif_chnl_find_tx(pfe_hif_chnl_t * chnl)
+{
+	int ii, ring_len, tx_idx = -1;
+	void *buf_pa, *frame;
+	errno_t ret = ENOENT;
+
+	ring_len = pfe_hif_ring_get_len(chnl->tx_ring);
+
+	pfe_hif_chnl_tx_enable(chnl);
+
+	for (ii = 0; ii < ring_len; ii++)
+	{
+		/* Send invalid packet(s) (to be dropped on Class) */
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_INVALID, &frame);
+		if (EOK != ret) {
+			NXP_LOG_ERROR("Can't send frame\n");
+			goto end;
+
+		}
+
+		/* Wait */
+		oal_time_usleep(500U);
+
+		pfe_hif_chnl_free_dummy_frame(frame);
+
+		/* Find valid WB entry. It indicates the current position of TX ring */
+		ret = pfe_hif_ring_find_wb_entry(chnl->tx_ring, TRUE, &tx_idx);
+		if (EOK == ret)
+		{
+			NXP_LOG_DEBUG("TX index found for HIF%d: %d\n", chnl->id, tx_idx);
+			break;
+		}
+
+		/* The index was not here, so invalidate current BD */
+		pfe_hif_ring_invalidate_direct(chnl->tx_ring, ii);
+	}
+
+	if (ENOENT == ret)
+	{
+		NXP_LOG_ERROR("TX index not found for HIF%d.\n", chnl->id);
+		goto end;
+	}
+
+	/* Found index, drain all fed TX buffers */
+	ii++;
+	while (EOK == pfe_hif_ring_drain_buf(chnl->tx_ring, &buf_pa))
+	{
+		ii--;
+	}
+	if (0U != ii)
+	{
+		NXP_LOG_DEBUG("Undraineed TX frames: %d\n", ii);
+	}
+
+	pfe_hif_ring_invalidate_direct(chnl->tx_ring, tx_idx);
+	pfe_hif_ring_force_index(chnl->tx_ring, tx_idx + 1);
+
+end:
+	pfe_hif_chnl_tx_disable(chnl);
+
+	return ret;
+
+}
+
+static __attribute__((cold)) errno_t pfe_hif_chnl_find_rx(pfe_hif_chnl_t * chnl)
+{
+	int ii, ring_len, rx_idx = -1;
+	void *buf_va = NULL, *buf_pa, *frame;
+	errno_t ret = ENOENT;
+
+	ring_len = pfe_hif_ring_get_len(chnl->rx_ring);
+
+	if (TRUE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
+	{
+		/* To fit in RX hunter method we used (which is based on cached BD(s))
+		 * provide one BD and let BDP do cache it.
+		 * We need two steps to cover the whole buffer, first with even BDs
+		 * and if not succeede then switch to odd BDs.
+		 */
+
+		/* Alloc one frame buffer */
+		buf_va = oal_mm_malloc_contig_aligned_nocache(DUMMY_RX_BUF_LEN, 8U);
+		if (NULL == buf_va)
+		{
+			NXP_LOG_ERROR("Can't get dummy RX buffer\n");
+			ret = ENOMEM;
+			goto end;
+		}
+
+		buf_pa = oal_mm_virt_to_phys_contig(buf_va);
+		if (NULL == buf_pa)
+		{
+			NXP_LOG_ERROR("VA to PA conversion failed");
+			ret = ENOMEM;
+			goto end;
+		}
+
+		for (ii = 0; ii < ring_len; ii++)
+		{
+			ret = pfe_hif_chnl_supply_rx_buf(chnl, buf_pa, DUMMY_RX_BUF_LEN);
+			if (EOK != ret)
+			{
+				NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
+				goto end;
+			}
+		}
+
+		/* First step: even BDs */
+		for (ii = 1U; ii < ring_len; ii += 2U)
+		{
+			pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
+		}
+
+		/* Instruct BDP to fetch BD */
+		pfe_hif_chnl_rx_enable(chnl);
+		pfe_hif_chnl_rx_dma_start(chnl);
+
+		oal_time_usleep(500U);
+
+		pfe_hif_chnl_rx_disable(chnl);
+
+		if (TRUE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
+		{
+			/* Second step: odd BDs (in case when even BDs try was not sucessful */
+			pfe_hif_ring_force_index(chnl->rx_ring, 0);
+
+			for (ii = 0U; ii < ring_len; ii += 2U)
+			{
+				/* Invalidate odd BD */
+				pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
+				/* Revalidate back even BD */
+				pfe_hif_ring_revalidate_direct(chnl->rx_ring, ii + 1U);
+			}
+
+			/* Instruct BDP to fetch BD */
+			pfe_hif_chnl_rx_enable(chnl);
+			pfe_hif_chnl_rx_dma_start(chnl);
+
+			oal_time_usleep(500U);
+
+			pfe_hif_chnl_rx_disable(chnl);
+
+			if (TRUE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
+			{
+				/* Something got wrong */
+				NXP_LOG_ERROR("HIF%d is not able to cache BD\n", chnl->id);
+				ret = EINVAL;
+				goto end;
+			}
+		}
+
+		pfe_hif_ring_force_index(chnl->rx_ring, 0);
+		/* Clean ring */
+		for (ii = 0U; ii < ring_len; ii++)
+		{
+			pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
+		}
+	}
+
+	/* Requires clean RX ring, with default WB BD control words (value: 0x200) */
+
+	/* Start RX DMA */
+	pfe_hif_chnl_tx_enable(chnl);
+	pfe_hif_chnl_rx_enable(chnl);
+
+	/* Empty cached BDs first */
+	while(FALSE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
+	{
+		/* Send dummy packet to self HIF channel */
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_IHC_SELF, &frame);
+		if (EOK != ret)
+			goto end;
+
+		/* Wait */
+		oal_time_usleep(500U);
+
+		/* Do TX confirmations */
+		ret = pfe_hif_chnl_get_tx_conf(chnl);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Can't get TX confirmation\n");
+			goto end;
+		}
+		pfe_hif_chnl_free_dummy_frame(frame);
+	}
+
+	/* Find invalid WB entry. It indicates the current (stop) position of RX ring
+	 * NOTE: it can also wrap around.
+	 */
+	if (EOK != pfe_hif_ring_find_wb_entry(chnl->rx_ring, FALSE, &rx_idx))
+	{
+		/* Something got wrong */
+		NXP_LOG_ERROR("HIF%d is not able to find correct WB entry\n", chnl->id);
+		ret = EINVAL;
+		goto end;
+	}
+	NXP_LOG_DEBUG("Found RX index: %d\n", rx_idx);
+
+	pfe_hif_ring_force_index(chnl->rx_ring, rx_idx);
+
+end:
+	pfe_hif_chnl_tx_disable(chnl);
+	pfe_hif_chnl_rx_disable(chnl);
+
+	if (NULL != buf_va)
+	{
+		oal_mm_free_contig(buf_va);
+	}
+
+	return ret;
+}
+
+static __attribute__((cold)) errno_t pfe_hif_chnl_rx_to_head(pfe_hif_chnl_t * chnl)
+{
+	int ii, ring_len;
+	void *buf_va = NULL, *buf_pa, *frame;
+	bool_t lifm;
+	errno_t ret = ENOENT;
+
+	/* Alloc one frame buffer */
+	buf_va = oal_mm_malloc_contig_aligned_nocache(DUMMY_RX_BUF_LEN, 8U);
+	if (NULL == buf_va)
+	{
+		NXP_LOG_ERROR("Can't get dummy RX buffer\n");
+		ret = ENOMEM;
+		goto end;
+	}
+
+	buf_pa = oal_mm_virt_to_phys_contig(buf_va);
+	if (NULL == buf_pa)
+	{
+		NXP_LOG_ERROR("VA to PA conversion failed");
+		ret = ENOMEM;
+		goto end;
+	}
+
+	ring_len = pfe_hif_ring_get_len(chnl->rx_ring);
+
+	/* Start RX DMA */
+	pfe_hif_chnl_tx_enable(chnl);
+	pfe_hif_chnl_rx_enable(chnl);
+
+	ii = 0;
+	while (FALSE == pfe_hif_ring_is_on_head(chnl->rx_ring) && (ring_len > ii))
+	{
+		/* Fill one buffer only */
+		ret = pfe_hif_chnl_supply_rx_buf(chnl, buf_pa, DUMMY_RX_BUF_LEN);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
+			goto end;
+		}
+		pfe_hif_chnl_rx_dma_start(chnl);
+
+		/* Send dummy packet to self HIF channel */
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_IHC_SELF, &frame);
+		if (EOK != ret)
+			goto end;
+
+		/* Wait */
+		oal_time_usleep(500U);
+
+		/* Do TX confirmations */
+		ret = pfe_hif_chnl_get_tx_conf(chnl);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
+			goto end;
+		}
+		pfe_hif_chnl_free_dummy_frame(frame);
+
+		/* Do plain RX */
+		ret = pfe_hif_ring_dequeue_plain(chnl->rx_ring, &lifm);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Can't get RX buffer dequeued\n");
+			goto end;
+		}
+
+		ii++;
+	}
+
+	if (ring_len <= ii)
+	{
+		NXP_LOG_ERROR("Can't reach RX ring head\n");
+		ret = EINVAL;
+	}
+	for (ii = 0; ii < ring_len; ii++)
+		pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
+
+end:
+	pfe_hif_chnl_tx_disable(chnl);
+	pfe_hif_chnl_rx_disable(chnl);
+
+	if (NULL != buf_va)
+	{
+		oal_mm_free_contig(buf_va);
+	}
+
+	return ret;
+}
+
+static __attribute__((cold)) errno_t pfe_hif_chnl_tx_to_head(pfe_hif_chnl_t * chnl)
+{
+	int ii, ring_len;
+	void *frame;
+	errno_t ret = ENOENT;
+
+	ring_len = pfe_hif_ring_get_len(chnl->tx_ring);
+
+	/* Start TX DMA */
+	pfe_hif_chnl_tx_enable(chnl);
+
+	ii = 0;
+	while (FALSE == pfe_hif_ring_is_on_head(chnl->tx_ring) && (ring_len > ii))
+	{
+		/* Send invalid packet (to be dropped on Class) */
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_INVALID, &frame);
+		if (EOK != ret)
+			goto end;
+
+		/* Wait */
+		oal_time_usleep(500U);
+
+		/* Do TX confirmations */
+		ret = pfe_hif_chnl_get_tx_conf(chnl);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Can't read TX confirmation\n");
+			goto end;
+		}
+		pfe_hif_chnl_free_dummy_frame(frame);
+
+		ii++;
+	}
+
+	if (ring_len <= ii)
+	{
+		NXP_LOG_ERROR("Can't reach TX ring head\n");
+		ret = EINVAL;
+	}
+
+end:
+	pfe_hif_chnl_tx_disable(chnl);
+
+	for (ii = 0; ii < ring_len; ii++)
+		pfe_hif_ring_invalidate_direct(chnl->tx_ring, ii);
+
+	return ret;
+}
+
+static __attribute__((cold)) errno_t pfe_hif_chnl_ungraceful_reset(pfe_hif_chnl_t * chnl)
+{
+	errno_t ret;
+
+	/* Find TX index first */
+	ret = pfe_hif_chnl_find_tx(chnl);
+	if (EOK != ret)
+	{
+		goto end;
+	}
+	NXP_LOG_INFO("HIF%d ungraceful reset: stage 1 (tx finder) passed\n", chnl->id);
+
+	/* Next find RX index */
+	ret = pfe_hif_chnl_find_rx(chnl);
+	if (EOK != ret)
+	{
+		goto end;
+	}
+	NXP_LOG_INFO("HIF%d ungraceful reset: stage 2 (rx finder) passed\n", chnl->id);
+
+	/* Move to RX head first */
+	ret = pfe_hif_chnl_rx_to_head(chnl);
+	if (EOK != ret)
+	{
+		goto end;
+	}
+	NXP_LOG_INFO("HIF%d ungraceful reset: stage 3 (rx to head) passed\n", chnl->id);
+
+	/* Next move to TX index */
+	ret = pfe_hif_chnl_tx_to_head(chnl);
+	if (EOK != ret)
+	{
+		goto end;
+	}
+	NXP_LOG_INFO("HIF%d ungraceful reset: stage 4 (tx to head) passed\n", chnl->id);
+	NXP_LOG_INFO("HIF%d ungraceful reset: finished\n", chnl->id);
+
+end:
+	return ret;
 }
 
 /**
@@ -1370,7 +1849,7 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_set_tx_ring(pfe_hif_chnl_t *ch
  */
 static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 {
-	pfe_hif_ring_t *tx_ring, *rx_ring;
+	errno_t status;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -1380,8 +1859,16 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-#if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
-#endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
+#ifdef PFE_CFG_PFE_SLAVE
+	/* Slave: Check the HIF channel state */
+	status = pfe_hif_chnl_inspect_hw_state(chnl);
+	if (EINVAL == status)
+	{
+		goto free_and_fail;
+	}
+#else
+	status = EOK;
+#endif
 
 	if (NULL != chnl->rx_ring)
 	{
@@ -1390,19 +1877,11 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 		goto free_and_fail;
 	}
 
-	rx_ring = pfe_hif_ring_create(TRUE, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
-	if (NULL == rx_ring)
+	chnl->rx_ring = pfe_hif_ring_create(TRUE, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
+	if (NULL == chnl->rx_ring)
 	{
 		NXP_LOG_ERROR("Couldn't create RX BD ring\n");
 		goto free_and_fail;
-	}
-	else
-	{
-		/*	Bind RX BD ring to channel */
-		if (EOK != pfe_hif_chnl_set_rx_ring(chnl, rx_ring))
-		{
-			goto free_and_fail;
-		}
 	}
 
 	if (NULL != chnl->tx_ring)
@@ -1412,19 +1891,40 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 		goto free_and_fail;
 	}
 
-	tx_ring = pfe_hif_ring_create(FALSE, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
-	if (NULL == tx_ring)
+	chnl->tx_ring = pfe_hif_ring_create(FALSE, (PFE_HIF_CHNL_NOCPY_ID == chnl->id));
+	if (NULL == chnl->tx_ring)
 	{
 		NXP_LOG_ERROR("Couldn't create TX BD ring\n");
 		goto free_and_fail;
 	}
-	else
+
+	/* NOTE: until now the new allocated BDRs must not be set to the channel HW */
+
+	if (EAGAIN == status)
 	{
-		/*	Bind TX BD ring to channel */
-		if (EOK != pfe_hif_chnl_set_tx_ring(chnl, tx_ring))
+		/* Slave only way supporting ungraceful HIF reset */
+
+		if (FALSE == pfe_hif_chnl_validate_bdr_setup(chnl))
 		{
 			goto free_and_fail;
 		}
+
+		/* Process ungraceful HIF reset procedure */
+		if (EOK != pfe_hif_chnl_ungraceful_reset(chnl))
+		{
+			goto free_and_fail;
+		}
+	}
+
+	/*	Bind TX BD ring to channel */
+	if (EOK != pfe_hif_chnl_bind_tx_ring(chnl))
+	{
+		goto free_and_fail;
+	}
+	/*	Bind RX BD ring to channel */
+	if (EOK != pfe_hif_chnl_bind_rx_ring(chnl))
+	{
+		goto free_and_fail;
 	}
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
@@ -1508,12 +2008,22 @@ __attribute__((hot)) bool_t pfe_hif_chnl_is_tx_dma_active(const pfe_hif_chnl_t *
 }
 
 /**
+ * @brief		Release the TX dummy frame
+ * @param[in]	frame The frame content, created by pfe_hif_chnl_send_dummy_frame()
+ */
+static __attribute__((cold)) void pfe_hif_chnl_free_dummy_frame(void *frame)
+{
+	oal_mm_free_contig(frame);
+}
+
+/**
  * @brief		Send TX frame
  * @param[in]	chnl The channel instance
- * @param[in]	mode The frame content mode: DUMMY_FRAME_INVALID or DUMMY_FRAME_IHC_SELF
+ * @param[in]	mode The frame type: DUMMY_FRAME_INVALID or DUMMY_FRAME_IHC_SELF
+ * @param[out]	frame The frame content, must be freed by pfe_hif_chnl_free_dummy_frame()
  * @return		EOK if success, error code otherwise
  */
-static __attribute__((cold)) errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chnl, uint32_t mode)
+static __attribute__((cold)) errno_t pfe_hif_chnl_send_dummy_frame(pfe_hif_chnl_t *chnl, uint32_t mode, void **frame)
 {
 	void *tx_buf_va = NULL, *tx_buf_pa;
 	pfe_ct_hif_tx_hdr_t *tx_hdr;
@@ -1524,7 +2034,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chn
 	{
 		NXP_LOG_ERROR("Can't get dummy TX dummy buffer\n");
 		ret = ENOMEM;
-		goto the_end;
+		goto err_end;
 	}
 
 	tx_buf_pa = oal_mm_virt_to_phys_contig(tx_buf_va);
@@ -1532,7 +2042,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chn
 	{
 		NXP_LOG_ERROR("TX dummy buffer VA to PA conversion failed");
 		ret = ENOMEM;
-		goto the_end;
+		goto err_end;
 	}
 
 	tx_hdr = (pfe_ct_hif_tx_hdr_t *)tx_buf_va;
@@ -1557,17 +2067,21 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_send_frame(pfe_hif_chnl_t *chn
 	}
 
 	ret = pfe_hif_chnl_tx(chnl, tx_buf_pa, tx_buf_va, sizeof(pfe_ct_hif_tx_hdr_t)+DUMMY_TX_BUF_LEN, TRUE);
-	if (EOK != ret)
+	if (EOK == ret)
 	{
-		NXP_LOG_ERROR("Dummy frame TX failed\n");
+		goto the_end;
 	}
 
-the_end:
+	NXP_LOG_ERROR("Dummy frame TX failed\n");
+err_end:
 	if (NULL != tx_buf_va)
 	{
 		oal_mm_free_contig(tx_buf_va);
 		tx_buf_va = NULL;
 	}
+
+the_end:
+	*frame = tx_buf_va;
 
 	return ret;
 }
@@ -1584,9 +2098,9 @@ the_end:
  * @param[in]	chnl The channel instance
  * @return		EOK if success, error code otherwise
  */
-static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl)
+static __attribute__((cold, unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl)
 {
-	void *rx_buf_va = NULL, *rx_buf_pa, *buf_pa;
+	void *rx_buf_va = NULL, *rx_buf_pa, *buf_pa, *frame;
 	uint32_t len, ii;
 	bool_t lifm;
 	errno_t ret = EOK;
@@ -1629,7 +2143,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *ch
 		}
 
 		/*	Send dummy packet to self HIF channel */
-		ret = pfe_hif_chnl_send_frame(chnl, DUMMY_FRAME_IHC_SELF);
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_IHC_SELF, &frame);
 		if (EOK != ret)
 			goto the_end;
 
@@ -1637,10 +2151,11 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *ch
 		oal_time_usleep(500U);
 
 		/*	Do TX confirmations */
-		while (EOK == pfe_hif_chnl_get_tx_conf(chnl))
+		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
-			;
+			oal_time_usleep(100U);
 		}
+		pfe_hif_chnl_free_dummy_frame(frame);
 
 		/*	Do plain RX */
 		while (EOK == pfe_hif_ring_dequeue_buf(chnl->rx_ring, &buf_pa, &len, &lifm))
@@ -1673,7 +2188,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *ch
 		pfe_hif_chnl_rx_dma_start(chnl);
 
 		/*	Send dummy packet to self HIF channel */
-		ret = pfe_hif_chnl_send_frame(chnl, DUMMY_FRAME_IHC_SELF);
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_IHC_SELF, &frame);
 		if (EOK != ret) {
 			NXP_LOG_ERROR("Can't send frame\n");
 			goto the_end;
@@ -1683,10 +2198,11 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *ch
 		oal_time_usleep(500U);
 
 		/*	Do TX confirmations */
-		while (EOK == pfe_hif_chnl_get_tx_conf(chnl))
+		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
-			;
+			oal_time_usleep(100U);
 		}
+		pfe_hif_chnl_free_dummy_frame(frame);
 
 		/*	Do plain RX */
 		while (EOK == pfe_hif_ring_dequeue_buf(chnl->rx_ring, &buf_pa, &len, &lifm))
@@ -1713,7 +2229,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *ch
 	while (FALSE == pfe_hif_ring_is_on_head(chnl->tx_ring))
 	{
 		/*	Send invalid packet (to be dropped on Class) */
-		ret = pfe_hif_chnl_send_frame(chnl, DUMMY_FRAME_INVALID);
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_INVALID, &frame);
 		if (EOK != ret) {
 			NXP_LOG_ERROR("Can't send frame\n");
 			goto the_end;
@@ -1723,10 +2239,11 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *ch
 		oal_time_usleep(500U);
 
 		/*	Do TX confirmations */
-		while (EOK == pfe_hif_chnl_get_tx_conf(chnl))
+		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
-			;
+			oal_time_usleep(100U);
 		}
+		pfe_hif_chnl_free_dummy_frame(frame);
 	}
 
 the_end:
@@ -1745,6 +2262,15 @@ the_end:
 	{
 		oal_mm_free_contig(rx_buf_va);
 		rx_buf_va = NULL;
+	}
+
+	if (EOK == ret)
+	{
+		/*	Clear channel registers to signalize graceful shutdown */
+		pfe_hif_chnl_cfg_set_rx_bd_ring_addr(chnl->cbus_base_va, chnl->id, (void *)0LU);
+		pfe_hif_chnl_cfg_set_rx_wb_table(chnl->cbus_base_va, chnl->id, (void *)0LU, 0U);
+		pfe_hif_chnl_cfg_set_tx_bd_ring_addr(chnl->cbus_base_va, chnl->id, (void *)0LU);
+		pfe_hif_chnl_cfg_set_tx_wb_table(chnl->cbus_base_va, chnl->id, (void *)0LU, 0U);
 	}
 
 	return ret;
@@ -1824,10 +2350,15 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 				procedure to ensure that channel will not keep any content in
 				internal buffers and HW rings are on head.
 			*/
+
+#ifndef PFENG_TEST_DISABLE_HIF_GRACEFUL_RESET
 			if (EOK != pfe_hif_chnl_reset_fifos(chnl))
 			{
 				NXP_LOG_ERROR("FATAL: Could not flush RX BD FIFO\n");
 			}
+#else
+			NXP_LOG_INFO("WARNING: HIF%d graceful reset was skipped\n", chnl->id);
+#endif
 		}
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
