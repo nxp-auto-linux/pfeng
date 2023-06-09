@@ -790,6 +790,14 @@ err_drv:
 
 /* PM support */
 
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+static int pfeng_drv_pm_suspend_nosup(struct device *dev)
+{
+	HM_MSG_DEV_WARN(dev, "PFE Master driver PM suspend not supported\n");
+	return -EOPNOTSUPP;
+}
+#endif
+
 /**
  * pfeng_pm_suspend
  * @dev: device pointer
@@ -982,7 +990,11 @@ err_pfe_init:
 }
 
 SIMPLE_DEV_PM_OPS(pfeng_drv_pm_ops,
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+			pfeng_drv_pm_suspend_nosup,
+#else
 			pfeng_drv_pm_suspend,
+#endif
 			pfeng_drv_pm_resume);
 
 /**
