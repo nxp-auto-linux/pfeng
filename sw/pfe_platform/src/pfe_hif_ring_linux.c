@@ -45,33 +45,33 @@
 #define HIF_RING_BD_W0_BD_SEQNUM_MASK		(0xFFFFU)
 #define HIF_RING_BD_W0_BD_SEQNUM_OFFSET		(0U)
 #define HIF_RING_BD_W0_BD_CTRL_MASK			(0xFFFFU)
-#define HIF_RING_BD_W0_BD_CTRL_OFFSET		(15U)
+#define HIF_RING_BD_W0_BD_CTRL_OFFSET		(16U)
 
 #define HIF_RING_BD_W0_BD_SEQNUM(seqnum)	\
 		(((seqnum) & HIF_RING_BD_W0_BD_SEQNUM_MASK)	<< \
 					 HIF_RING_BD_W0_BD_SEQNUM_OFFSET)
-#define HIF_RING_BD_W0_BD_SEQNUM_GET(seqnum)	\
-		(((seqnum) >> HIF_RING_BD_W0_BD_SEQNUM_OFFSET) & \
+#define HIF_RING_BD_W0_BD_SEQNUM_GET(w0)	\
+		(((w0) >> HIF_RING_BD_W0_BD_SEQNUM_OFFSET) & \
 					  HIF_RING_BD_W0_BD_SEQNUM_MASK)
 
 #define HIF_RING_BD_W0_BD_CTRL(ctrl)	\
 		(((ctrl) & HIF_RING_BD_W0_BD_CTRL_MASK)	<< \
 					 HIF_RING_BD_W0_BD_CTRL_OFFSET)
-#define HIF_RING_BD_W0_BD_CTRL_GET(ctrl)	\
-		(((ctrl) >> HIF_RING_BD_W0_BD_CTRL_OFFSET) & \
+#define HIF_RING_BD_W0_BD_CTRL_GET(w0)	\
+		(((w0) >> HIF_RING_BD_W0_BD_CTRL_OFFSET) & \
 					  HIF_RING_BD_W0_BD_CTRL_MASK)
 
 /* Buffer descriptor WORD1 */
 #define HIF_RING_BD_W1_BD_BUFFLEN_MASK		(0xFFFFU)
 #define HIF_RING_BD_W1_BD_BUFFLEN_OFFSET	(0U)
 #define HIF_RING_BD_W1_BD_RSVD_STAT_MASK	(0xFFFFU)
-#define HIF_RING_BD_W1_BD_RSVD_STAT_OFFSET	(15U)
+#define HIF_RING_BD_W1_BD_RSVD_STAT_OFFSET	(16U)
 
 #define HIF_RING_BD_W1_BD_BUFFLEN(buflen)	\
 		(((buflen) & HIF_RING_BD_W1_BD_BUFFLEN_MASK)	<< \
 					 HIF_RING_BD_W1_BD_BUFFLEN_OFFSET)
-#define HIF_RING_BD_W1_BD_BUFFLEN_GET(buflen)	\
-		(((buflen) >> HIF_RING_BD_W1_BD_BUFFLEN_OFFSET) & \
+#define HIF_RING_BD_W1_BD_BUFFLEN_GET(w1)	\
+		(((w1) >> HIF_RING_BD_W1_BD_BUFFLEN_OFFSET) & \
 					  HIF_RING_BD_W1_BD_BUFFLEN_MASK)
 
 #define HIF_RING_BD_W1_BD_RSVD_STAT(stat)	\
@@ -91,7 +91,7 @@
 #define HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_MASK	(0xFFFFU)
 #define HIF_RING_WB_BD_W1_WB_BD_SEQNUM_MASK		(0xFFFFU)
 #define HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_OFFSET	(0U)
-#define HIF_RING_WB_BD_W1_WB_BD_SEQNUM_OFFSET	(15U)
+#define HIF_RING_WB_BD_W1_WB_BD_SEQNUM_OFFSET	(16U)
 
 #define HIF_RING_WB_BD_W1_WB_BD_BUFFLEN(buflen)	\
 		(((buflen) & HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_MASK)	<< \
@@ -100,11 +100,11 @@
 		(((seqnum) & HIF_RING_WB_BD_W1_WB_BD_SEQNUM_MASK)	<< \
 				HIF_RING_WB_BD_W1_WB_BD_SEQNUM_OFFSET)
 
-#define HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_GET(buflen)	\
-		(((buflen) >> HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_OFFSET) & \
+#define HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_GET(w1)	\
+		(((w1) >> HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_OFFSET) & \
 					  HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_MASK)
-#define HIF_RING_WB_BD_W1_WB_BD_SEQNUM_GET(seqnum)	\
-		(((seqnum) >> HIF_RING_WB_BD_W1_WB_BD_SEQNUM_OFFSET) & \
+#define HIF_RING_WB_BD_W1_WB_BD_SEQNUM_GET(w1)	\
+		(((w1) >> HIF_RING_WB_BD_W1_WB_BD_SEQNUM_OFFSET) & \
 					  HIF_RING_WB_BD_W1_WB_BD_SEQNUM_MASK)
 
 /**
@@ -869,7 +869,9 @@ __attribute__((cold)) void pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name,
 
 			if (TRUE == pr_out)
 			{
-				dev_print(dev, "    p0x%px%5d: %04x:%04x:%08x:%08x:%04x%s\n",(void *)&((pfe_hif_bd_t *)ring->base_pa)[ii], ii, HIF_RING_BD_W1_BD_BUFFLEN_GET(bd->rsvd_buflen_w1), HIF_RING_BD_W0_BD_CTRL_GET(bd->ctrl_seqnum_w0), bd->data, bd->next, HIF_RING_BD_W0_BD_SEQNUM_GET(bd->ctrl_seqnum_w0), idx_str);
+				dev_print(dev, "    p0x%px%5d: %04x:%04x:%08x:%08x:%04x%s\n",(void *)&((pfe_hif_bd_t *)ring->base_pa)[ii], ii,
+					  HIF_RING_BD_W1_BD_BUFFLEN_GET(bd->rsvd_buflen_w1), HIF_RING_BD_W0_BD_CTRL_GET(bd->ctrl_seqnum_w0),
+					  bd->data, bd->next, HIF_RING_BD_W0_BD_SEQNUM_GET(bd->ctrl_seqnum_w0), idx_str);
 			}
 		}
 
@@ -884,7 +886,7 @@ __attribute__((cold)) void pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name,
 				if (0 == ii)
 				{
 					dev_print(dev, "  WB va/pa v0x%px/p0x%px\n", ring->wb_tbl_base_va, ring->wb_tbl_base_pa);
-					dev_print(dev, "            pa           idx:ctrl: bufl :  seq\n");
+					dev_print(dev, "            pa           idx: ctrl:bufl:seqn\n");
 					pr_out = TRUE;
 				}
 
@@ -907,7 +909,8 @@ __attribute__((cold)) void pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name,
 
 				if (TRUE == pr_out)
 				{
-					dev_print(dev, "    p0x%px%5d: %04x:%06x:%04x:%s\n", (void *)&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_pa)[ii], ii, wb->rsvd_ctrl_w0, HIF_RING_WB_BD_W1_WB_BD_BUFFLEN(wb->seqnum_buflen_w1), HIF_RING_WB_BD_W1_WB_BD_SEQNUM(wb->seqnum_buflen_w1), idx_str);
+					dev_print(dev, "    p0x%px%5d: %04x:%04x:%04x%s\n", (void *)&((pfe_hif_wb_bd_t *)ring->wb_tbl_base_pa)[ii], ii, wb->rsvd_ctrl_w0,
+						  HIF_RING_WB_BD_W1_WB_BD_BUFFLEN_GET(wb->seqnum_buflen_w1), HIF_RING_WB_BD_W1_WB_BD_SEQNUM_GET(wb->seqnum_buflen_w1), idx_str);
 				}
 			}
 		}
