@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2021-2022 NXP
+ *  Copyright 2021-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -367,6 +367,7 @@ errno_t pfe_mac_db_get_first_addr(pfe_mac_db_t *db, pfe_mac_db_crit_t crit, pfe_
 	errno_t ret = EOK;
 	const pfe_mac_db_list_entry_t *entry = NULL;
 	LLIST_t *item;
+	bool_t found_match = FALSE;
 
 	if (EOK != oal_mutex_lock(&db->lock))
 	{
@@ -386,13 +387,14 @@ errno_t pfe_mac_db_get_first_addr(pfe_mac_db_t *db, pfe_mac_db_crit_t crit, pfe_
 			{
 				if (TRUE == pfe_mac_db_criterion_eval(entry, crit, type, owner))
 				{
+					found_match = TRUE;
 					break;
 				}
 			}
 		}
 	}
 
-	if (NULL != entry)
+	if ((NULL != entry) && (found_match != FALSE))
 	{
 		(void) memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
 		db->iterator = item->prNext;
@@ -426,6 +428,7 @@ errno_t pfe_mac_db_get_next_addr(pfe_mac_db_t *db, pfe_mac_addr_t addr)
 	errno_t ret = EOK;
 	const pfe_mac_db_list_entry_t *entry = NULL;
 	LLIST_t *item;
+	bool_t found_match = FALSE;
 
 	if (EOK != oal_mutex_lock(&db->lock))
 	{
@@ -441,13 +444,14 @@ errno_t pfe_mac_db_get_next_addr(pfe_mac_db_t *db, pfe_mac_addr_t addr)
 		{
 			if (TRUE == pfe_mac_db_criterion_eval(entry, db->crit.crit, db->crit.type, db->crit.owner))
 			{
+				found_match = TRUE;
 				break;
 			}
 		}
 		db->iterator = db->iterator->prNext;
 	}
 
-	if (NULL != entry)
+	if ((NULL != entry) && (found_match != FALSE))
 	{
 		(void) memcpy(addr, entry->addr, sizeof(pfe_mac_addr_t));
 		db->iterator = item->prNext;
