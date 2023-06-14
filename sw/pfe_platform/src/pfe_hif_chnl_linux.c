@@ -397,7 +397,8 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, u
 			goto free_and_fail;
 		}
 
-		(void) pfe_hif_chnl_init(chnl);
+		if (EOK != pfe_hif_chnl_init(chnl))
+			goto free_and_fail;
 	}
 
 	return chnl;
