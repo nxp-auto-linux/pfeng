@@ -2479,7 +2479,7 @@ __attribute__((cold)) void pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bo
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
+		return;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
