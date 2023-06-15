@@ -772,14 +772,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 					}
 				}
 
-				if (FALSE == oal_irq_in_atomic())
-				{
-					oal_time_usleep(timeout_step);
-				}
-				else
-				{
-					oal_time_udelay(timeout_step);
-				}
+				oal_time_udelay(timeout_step);
 			}
 
 			if (0U == timeout_us)
