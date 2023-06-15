@@ -499,17 +499,19 @@ static pfe_idex_request_t *pfe_idex_request_get_by_id(pfe_idex_seqnum_t seqnum)
 	const pfe_idex_t *idex = (pfe_idex_t *)&pfe_idex;
 	LLIST_t *item;
 	pfe_idex_request_t *req = NULL;
+	bool_t found = false;
 
 	LLIST_ForEach(item, &idex->req_list)
 	{
 		req = LLIST_Data(item, pfe_idex_request_t, linked.config.list_entry);
 		if (seqnum == req->seqnum)
 		{
+			found = true;
 			break;
 		}
 	}
 
-	return req;
+	return found ? req : NULL;
 }
 
 /**
