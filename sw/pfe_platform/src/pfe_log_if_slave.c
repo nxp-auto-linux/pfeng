@@ -56,11 +56,6 @@ static errno_t pfe_log_if_db_lock(void)
 			/* Got lock */
 			break;
 		}
-		if (ENOLCK != ret)
-		{
-			/* Got real error */
-			break;
-		}
 
 		oal_time_usleep(timeout_step);
 	}
