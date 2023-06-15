@@ -1407,7 +1407,6 @@ uint32_t pfe_emac_cfg_get_text_stat(addr_t base_va, struct seq_file *seq, uint8_
 	if (unlikely(NULL_ADDR == base_va))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		len = 0U;
 	}
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */

@@ -1878,7 +1878,7 @@ __attribute__((pure)) bool_t pfe_l2br_table_entry_is_static(const pfe_l2br_table
 uint32_t pfe_l2br_table_entry_to_str(const pfe_l2br_table_entry_t *entry, struct seq_file *seq)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == entry) || (NULL == buf)))
+	if (unlikely((NULL == entry) || (NULL == seq)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		return 0U;

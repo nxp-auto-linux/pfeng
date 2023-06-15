@@ -797,7 +797,7 @@ uint32_t pfe_util_get_text_statistics(const pfe_util_t *util, struct seq_file *s
 	pfe_ct_pe_mmap_t mmap;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == buf))
+	if (unlikely((NULL == util) || (NULL == seq)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 	}

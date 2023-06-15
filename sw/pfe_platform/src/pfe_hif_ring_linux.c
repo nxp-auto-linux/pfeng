@@ -822,7 +822,7 @@ __attribute__((cold)) void pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name,
 	if (unlikely((NULL == ring) || (NULL == name)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0;
+		return;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
