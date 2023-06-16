@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -138,8 +138,6 @@ errno_t oal_irq_unmask(oal_irq_t *irq);
  * @return		The IRQ ID associated with the instance or -1 if failed
  */
 int32_t oal_irq_get_id(const oal_irq_t *irq);
-
-bool_t oal_irq_in_atomic(void);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE
