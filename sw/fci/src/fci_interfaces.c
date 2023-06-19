@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -451,6 +451,15 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 					if(ret != EOK)
 					{
 						*fci_ret = FPP_ERR_IF_ENTRY_NOT_FOUND;
+						break;
+					}
+
+					/* Do not allow simultaneous use of IPv4 and IPv6 match rules. */
+					if (((uint32_t)(FPP_IF_MATCH_SIP  | FPP_IF_MATCH_DIP)  & oal_ntohl(if_cmd->match)) &&
+						((uint32_t)(FPP_IF_MATCH_SIP6 | FPP_IF_MATCH_DIP6) & oal_ntohl(if_cmd->match)))
+					{
+						/* FCI command requested unfulfillable action. Respond with FCI error code. */
+						*fci_ret = FPP_ERR_IF_MATCH_UPDATE_FAILED;
 						break;
 					}
 
