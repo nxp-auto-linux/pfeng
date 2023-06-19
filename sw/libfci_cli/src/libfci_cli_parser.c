@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2023 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -4351,7 +4351,9 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
             case FPP_ERR_IF_MATCH_UPDATE_FAILED:
                 p_txt_errname = TXT_ERR_NAME(FPP_ERR_IF_MATCH_UPDATE_FAILED);
                 p_txt_errmsg  = TXT_ERR_INDENT "Failed to update logical interface match rules.\n"
-                                TXT_ERR_INDENT "Maybe incompatible versions of libFCI and driver?\n";
+                                TXT_ERR_INDENT "If the command uses SIP/DIP/SIP6/DIP6, then make sure SIP/DIP match rules are not used together with SIP6/DIP6 rules.\n"
+                                TXT_ERR_INDENT "It is forbidden to use both IPv4 and IPv6 match rules in one logical interface.\n"
+                                TXT_ERR_INDENT "If the command seems OK but still fails, then maybe incompatible versions of libFCI and driver?\n";
             break;
             
             case FPP_ERR_IF_NOT_SUPPORTED:
