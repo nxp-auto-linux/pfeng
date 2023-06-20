@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -454,6 +454,15 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 						break;
 					}
 
+					/* Do not allow simultaneous use of IPv4 and IPv6 match rules. */
+					if (((uint32_t)(FPP_IF_MATCH_SIP  | FPP_IF_MATCH_DIP)  & oal_ntohl(if_cmd->match)) &&
+						((uint32_t)(FPP_IF_MATCH_SIP6 | FPP_IF_MATCH_DIP6) & oal_ntohl(if_cmd->match)))
+					{
+						/* FCI command requested unfulfillable action. Respond with FCI error code. */
+						*fci_ret = FPP_ERR_IF_MATCH_UPDATE_FAILED;
+						break;
+					}
+
 					/* Fix endians of FP tables */
 					args.fp0_table = oal_ntohl(args.fp0_table);
 					args.fp1_table = oal_ntohl(args.fp1_table);
@@ -852,7 +861,17 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 					reply_buf->arguments.dport = args.dport;
 					reply_buf->arguments.proto = args.proto;
 					reply_buf->arguments.hif_cookie = args.hif_cookie;
-					(void)memcpy(&reply_buf->arguments.ipv, &args.ipv, sizeof(reply_buf->arguments.ipv));
+
+					/* Copy IPv4 or IPv6 addresses, based on data from logical interface instance. */
+					if ((uint32_t)(FPP_IF_MATCH_SIP6 | FPP_IF_MATCH_DIP6) & (uint32_t)rules)
+					{
+						memcpy(&reply_buf->arguments.ipv.v6, &args.ipv.v6, sizeof(reply_buf->arguments.ipv.v6));
+					}
+					else
+					{
+						memcpy(&reply_buf->arguments.ipv.v4, &args.ipv.v4, sizeof(reply_buf->arguments.ipv.v4));
+					}
+
 					(void)memcpy(reply_buf->arguments.smac, args.smac, 6U);
 					(void)memcpy(reply_buf->arguments.dmac, args.dmac, 6U);
 
