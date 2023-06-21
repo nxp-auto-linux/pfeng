@@ -1,48 +1,66 @@
 NXP Software Content Register
 
 Release Name:           S32G PFE Linux driver Version 1.4.0
+Description:            PFE Linux driver source code release package for S32G2 and S32G3 SOC
+Date:                   29.06.2023
 
 Outgoing License:       GPL-2.0
 
-Package:                PFE-DRV_S32G_A53_LNX
+PFE-DRV_S32G_A53_LNX
     Description:        The PFE Linux driver
     Version:            1.4.0
+    Author:             NXP
+    Home Page:          https://github.com/nxp-auto-linux/pfeng
     License:            GPL-2.0
     Format:             source code
-    Release Location:   GITHUB
+    Location:           GITHUB
 
-Component:              LINUX_PFENG
-    Location:           sw/linux-pfeng/
+LINUX_PFENG
     Description:        Linux NAPI ethernet driver
+    Author:             NXP
     License:            GPL-2.0
+    Format:             source code
+    Location:           sw/linux-pfeng/
 
-Component:              PFE_PLATFORM
+PFE_PLATFORM
+    Description:        PFE platform
+    Author:             NXP
+    License:            GPL-2.0
+    Format:             source code
     Location:           sw/pfe_platform/
                         sw/pfe_hif_drv/
-    Description:        PFE platform
-    License:            GPL-2.0
 
-Component:              SUPPORT_LIBS
+SUPPORT_LIBS
+    Description:        PFE platform dependant libraries
+    Author:             NXP
+    License:            GPL-2.0
+    Format:             source code
     Location:           sw/bpool/
                         sw/common/
                         sw/elf/
                         sw/hal/
                         sw/oal/
                         sw/fifo/
-    Description:        PFE platform dependant library
-    License:            GPL-2.0
 
-Component:              FCI
+FCI
+    Description:        Fast control interface library
+    Author:             NXP
+    License:            GPL-2.0
+    Format:             source code
     Location:           sw/fci/
                         sw/xfci/
-    Description:        Fast control interface library
-    License:            GPL-2.0
 
-Component:              ct_assert.h
+ct_assert.h
     Description:        Compile-time assert implementation
+    Author:             Pádraig Brady et al. (see http://comments.pixelbeat.org/programming/gcc/static_assert.html?all=1), NXP
+    Home Page:          https://www.pixelbeat.org/programming/gcc/static_assert.html
     License:            GNU All-Permissive License
+    Format:             source code
+    Location:           sw/common/public
 
-Component:              LIBFCI_CLI
-    Location:           sw/libfci_cli/
+LIBFCI_CLI
     Description:        Example FCI config tool
+    Author:             NXP
     License:            BSD-3
+    Format:             source code
+    Location:           sw/libfci_cli/
