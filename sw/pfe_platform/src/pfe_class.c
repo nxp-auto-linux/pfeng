@@ -1258,7 +1258,7 @@ static uint32_t pfe_class_stat_to_str(const pfe_ct_class_algo_stats_t *stat, str
 
 	(void)verb_level;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == stat) || (NULL == buf)))
+	if (unlikely((NULL == stat) || (NULL == seq)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		len = 0U;
@@ -1287,7 +1287,7 @@ static uint32_t pfe_class_ihc_stat_to_str(const pfe_ct_class_ihc_stats_t *stat, 
 
 	(void)verb_level;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == stat) || (NULL == buf)))
+	if (unlikely((NULL == stat) || (NULL == seq)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		len = 0U;
@@ -1315,7 +1315,7 @@ uint32_t pfe_class_fp_stat_to_str(const pfe_ct_class_flexi_parser_stats_t *stat,
 
 	(void)verb_level;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == stat) || (NULL == buf)))
+	if (unlikely((NULL == stat) || (NULL == seq)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		len = 0U;

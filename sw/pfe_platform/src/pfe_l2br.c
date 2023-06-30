@@ -309,7 +309,6 @@ static void pfe_vlan_write_to_class(const pfe_l2br_t *bridge, uint32_t pos, cons
 	if (unlikely((NULL == class_entry) || (NULL == bridge) || (0U == pos)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		ret = EINVAL;
 	}
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
@@ -334,7 +333,6 @@ static void pfe_vlan_read_from_class(const pfe_l2br_t *bridge, uint32_t pos, l2b
 	if (unlikely((NULL == class_entry) || (NULL == bridge) || (0U == pos)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		ret = EINVAL;
 	}
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */

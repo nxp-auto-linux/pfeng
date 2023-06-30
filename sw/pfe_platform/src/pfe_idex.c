@@ -499,17 +499,19 @@ static pfe_idex_request_t *pfe_idex_request_get_by_id(pfe_idex_seqnum_t seqnum)
 	const pfe_idex_t *idex = (pfe_idex_t *)&pfe_idex;
 	LLIST_t *item;
 	pfe_idex_request_t *req = NULL;
+	bool_t found = false;
 
 	LLIST_ForEach(item, &idex->req_list)
 	{
 		req = LLIST_Data(item, pfe_idex_request_t, linked.config.list_entry);
 		if (seqnum == req->seqnum)
 		{
+			found = true;
 			break;
 		}
 	}
 
-	return req;
+	return found ? req : NULL;
 }
 
 /**
@@ -557,7 +559,7 @@ static errno_t pfe_idex_request_finalize(pfe_idex_seqnum_t seqnum, void *resp_bu
 		}
 
 		/*	3.) Mark request as completed */
-		req->state = IDEX_REQ_STATE_COMPLETED;
+		writeb(IDEX_REQ_STATE_COMPLETED, &req->state);
 	}
 
 	if (EOK != oal_mutex_unlock(&idex->req_list_lock))
@@ -597,7 +599,7 @@ static errno_t pfe_idex_request_set_state(pfe_idex_seqnum_t seqnum, pfe_idex_req
 	else
 	{
 		/*	2.) Set new state */
-		req->state = state;
+		writeb(state, &req->state);
 	}
 
 	if (EOK != oal_mutex_unlock(&idex->req_list_lock))
@@ -703,7 +705,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 		req->type = type;
 		req->dst_phy_id = dst_phy;
 		req->linked.config.timeout = IDEX_CFG_REQ_TIMEOUT_SEC;
-		req->state = IDEX_REQ_STATE_NEW;
+		writeb(IDEX_REQ_STATE_NEW, &req->state);
 		req->linked.config.resp_buf = resp;
 		req->linked.config.resp_buf_len = resp_len;
 
@@ -763,22 +765,14 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 				{
 					/*	This is blocking type. We must wait until the request
 				 	is completed. */
-					if (IDEX_REQ_STATE_COMPLETED == req->state)
+					if (IDEX_REQ_STATE_COMPLETED == readb(&req->state))
 					{
 						ret = EOK;
 						break;
 					}
 				}
 
-				/*	Wait a bit */
-				if (FALSE == oal_irq_in_atomic())
-				{
-					oal_time_usleep(timeout_step);
-				}
-				else
-				{
-					oal_time_udelay(timeout_step);
-				}
+				oal_time_udelay(timeout_step);
 			}
 
 			if (0U == timeout_us)
@@ -786,13 +780,13 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 				NXP_LOG_ERROR("IDEX request %u timed-out\n", (uint_t)oal_ntohl(req->seqnum));
 #ifdef IDEX_CFG_VERY_VERBOSE
 
-				if (IDEX_REQ_STATE_COMMITTED == req->state)
+				if (IDEX_REQ_STATE_COMMITTED == readb(&req->state))
 				{
 					NXP_LOG_DEBUG("Request %u not transmitted or not responded\n", (uint_t)oal_ntohl(req->seqnum));
 				}
 				else
 				{
-					NXP_LOG_DEBUG("Request %u state is: %d\n", (uint_t)oal_ntohl(req->seqnum), req->state);
+					NXP_LOG_DEBUG("Request %u state is: %d\n", (uint_t)oal_ntohl(req->seqnum), readb(&req->state));
 				}
 #endif /* IDEX_CFG_VERY_VERBOSE */
 				ret = ETIMEDOUT;

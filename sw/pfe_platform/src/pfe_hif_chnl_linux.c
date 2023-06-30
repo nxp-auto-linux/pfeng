@@ -397,7 +397,8 @@ __attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, u
 			goto free_and_fail;
 		}
 
-		(void) pfe_hif_chnl_init(chnl);
+		if (EOK != pfe_hif_chnl_init(chnl))
+			goto free_and_fail;
 	}
 
 	return chnl;
@@ -2478,7 +2479,7 @@ __attribute__((cold)) void pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bo
 	if (unlikely(NULL == chnl))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		return 0U;
+		return;
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 

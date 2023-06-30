@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2021-2022 NXP
+ *  Copyright 2021-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1451,7 +1451,7 @@ static errno_t pfe_feature_mgr_table_cfg_next(const char *feature_name, const ch
 	errno_t				ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (NULL == feature_name || NULL == feature_table_name)
+	if (NULL == feature_name || NULL == table_el_name || NULL == *table_el_name)
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		ret = EINVAL;
@@ -1863,7 +1863,7 @@ errno_t pfe_feature_mgr_table_get_payload(const char *feature_name, uint8_t tabl
 	errno_t ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (NULL == feature_name || NULL == table_el_name || NULL == count)
+	if (NULL == feature_name || NULL == table_el_name || NULL == payload)
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 		ret = EINVAL;

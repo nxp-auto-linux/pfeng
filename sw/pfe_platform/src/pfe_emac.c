@@ -2017,7 +2017,6 @@ uint32_t pfe_emac_get_text_statistics(const pfe_emac_t *emac, struct seq_file *s
 	if (unlikely(NULL == emac))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
-		len = 0U;
 	}
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */

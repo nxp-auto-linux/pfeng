@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2022 NXP
+ *  Copyright 2019-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -63,7 +63,7 @@ errno_t oal_job_drain(const oal_job_t *job)
 		return FALSE;
 	}
 
-	if (unlikely((NULL == job->mbox) || (NULL == job->thread)))
+	if (unlikely((NULL == job) || (NULL == job->queue)))
 	{
 		return FALSE;
 	}

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -338,11 +338,6 @@ int32_t oal_irq_get_id(const oal_irq_t *irq)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
 	return irq->id;
-}
-
-bool_t oal_irq_in_atomic()
-{
-	return in_atomic();
 }
 
 /** @}*/
