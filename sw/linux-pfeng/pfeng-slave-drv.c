@@ -386,6 +386,15 @@ static int pfeng_drv_deferred_probe(void *arg)
 	/* Create debugfs */
 	pfeng_debugfs_create(priv);
 
+	/* Prepare PTP clock */
+	priv->clk_ptp_reference = 0U;
+	priv->clk_ptp = clk_get(dev, "pfe_ts");
+	if (IS_ERR(priv->clk_ptp)) {
+		HM_MSG_DEV_WARN(dev, "Failed to get pfe_ts clock. PTP will be disabled.\n");
+		priv->clk_ptp = NULL;
+	} else
+		priv->clk_ptp_reference = clk_get_rate(priv->clk_ptp);
+
 	/* Create HIFs */
 	ret = pfeng_hif_create(priv);
 	if (ret)
