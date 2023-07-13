@@ -603,19 +603,12 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 						for(index = 0U; (uint32_t)PFE_PHY_IF_ID_INVALID > index;  ++index)
 						{
 
-		#if defined(PFE_CFG_HIF_NOCPY_SUPPORT)
-							if((uint32_t)PFE_PHY_IF_ID_HIF == index)
-							{
-								/* Skip currently not used interfaces */
-								continue;
-							}
-		#else
+							/* Linux PFE Driver does not implement HIF NOCPY. This is by design. */
 							if(((uint32_t)PFE_PHY_IF_ID_HIF == index) || ((uint32_t)PFE_PHY_IF_ID_HIF_NOCPY == index))
 							{
 								/* Skip currently not used interfaces */
 								continue;
 							}
-		#endif
 
 							/* For each bit in egress mask search if the phy if exists */
 							ret = pfe_if_db_get_first(fci_context->phy_if_db, fci_context->if_session_id, IF_DB_CRIT_BY_ID, (void *)(addr_t)index, &entry);
