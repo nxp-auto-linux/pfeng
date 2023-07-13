@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2022 NXP
+ *  Copyright 2022,2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -11,39 +11,31 @@
 
 #include "linked_list.h"
 #include "pfe_platform_cfg.h"
-//#include "pfe_emac_csr.h"
 #include "pfe_cbus.h"
+#include "pfe_emac_csr.h"
 #include "pfe_emac.h"
 #include "pfe_idex.h" /* The RPC provider */
 #include "pfe_platform_rpc.h" /* The RPC codes and data structures */
 
 struct pfe_emac_tag
 {
-	addr_t cbus_base_va;		/*	CBUS base virtual address */
-	addr_t emac_base_offset;	/*	MAC base offset within CBUS space */
-
+	addr_t cbus_base_va;			/*	CBUS base virtual address */
+	addr_t emac_base_offset;		/*	MAC base offset within CBUS space */
+	addr_t emac_base_va;			/*	MAC base address (virtual) */
 	oal_mutex_t mutex;			/*	Mutex */
 	bool_t mdio_locked;			/*	If TRUE then MDIO access is locked and 'mdio_key' is valid */
 	uint32_t mdio_key;
-};
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_VAR_INIT_32
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+	oal_mutex_t ts_mutex;		/*	Mutex protecting IEEE1588 resources */
+	uint32_t i_clk_hz;			/*	IEEE1588 input clock */
+	uint32_t o_clk_hz;			/*	IEEE1588 desired output clock */
+	uint32_t adj_ppb;			/*	IEEE1588 frequency adjustment value */
+	bool_t adj_sign;			/*	IEEE1588 frequency adjustment sign (TRUE - positive, FALSE - negative) */
+	bool_t ext_ts;				/*  IEEE1588 external timestamp mode */
+};
 
 /* usage scope: pfe_emac_mdio_lock */
 static uint32_t key_seed = 123U;
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_VAR_INIT_32
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /**
  * @brief		Create new EMAC instance
@@ -75,12 +67,24 @@ pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_
 			(void)memset(emac, 0, sizeof(pfe_emac_t));
 			emac->cbus_base_va = cbus_base_va;
 			emac->emac_base_offset = emac_base;
+			emac->emac_base_va = (emac->cbus_base_va + emac->emac_base_offset);
 
 			if (EOK != oal_mutex_init(&emac->mutex))
 			{
 				NXP_LOG_ERROR("Mutex init failed\n");
 				oal_mm_free(emac);
 				emac = NULL;
+			}
+			else
+			{
+
+				if (EOK != oal_mutex_init(&emac->ts_mutex))
+				{
+					NXP_LOG_ERROR("TS mutex init failed\n");
+					(void)oal_mutex_destroy(&emac->mutex);
+					oal_mm_free(emac);
+					emac = NULL;
+				}
 			}
 		}
 	}
@@ -593,8 +597,258 @@ errno_t pfe_emac_mdio_write45(pfe_emac_t *emac, uint8_t pa, uint8_t dev, uint16_
 	return ret;
 }
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+/* Direct time synchronization */
+
+/**
+ * @brief		Enable timestamping
+ * @param[in]	emac The EMAC instance
+ * @param[in]	i_clk_hz Input reference clock frequency (Hz) when internal timer is
+ * 					   used. The timer ticks with 1/clk_hz period. If zero then external
+ * 					   clock reference is used.
+ * @param[in]	o_clk_hz Desired output clock frequency. This one will be used to
+ * 						 increment IEEE1588 system time. Directly impacts the timer
+ * 						 accuracy and must be less than i_clk_hz. If zero then external
+ * 						 clock reference is used.
+ */
+errno_t pfe_emac_enable_ts(pfe_emac_t *emac, uint32_t i_clk_hz, uint32_t o_clk_hz)
+{
+	errno_t ret;
+	bool_t eclk = (i_clk_hz == 0U) || (o_clk_hz == 0U);
+
+	if (!eclk && (i_clk_hz <= o_clk_hz))
+	{
+		NXP_LOG_ERROR("Invalid clock configuration\n");
+		ret = EINVAL;
+	}
+	else
+	{
+		emac->i_clk_hz = i_clk_hz;
+		emac->o_clk_hz = o_clk_hz;
+		emac->ext_ts = eclk;
+
+		if (EOK != oal_mutex_lock(&emac->ts_mutex))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
+
+		ret = pfe_emac_cfg_enable_ts(emac->emac_base_va, eclk, i_clk_hz, o_clk_hz);
+
+		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
+	}
+	return ret;
+}
+
+/**
+ * @brief		Adjust timestamping clock frequency to compensate drift
+ * @param[in]	emac The EMAC instance
+ * @param[in]	ppb Frequency change in [ppb]
+ * @param[in]	pos The ppb sign. If TRUE then the value is positive, else it is negative
+ */
+errno_t pfe_emac_set_ts_freq_adjustment(pfe_emac_t *emac, uint32_t ppb, bool_t sgn)
+{
+	errno_t ret;
+
+	if (EOK != oal_mutex_lock(&emac->ts_mutex))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
+
+	if (TRUE == emac->ext_ts)
+	{
+		NXP_LOG_DEBUG("Cannot adjust timestamping clock frequency on EMAC%u working in external timestamp mode\n", pfe_emac_get_index(emac));
+		ret = EPERM;
+	}
+	else
+	{
+	emac->adj_ppb = ppb;
+	emac->adj_sign = sgn;
+
+	ret = pfe_emac_cfg_adjust_ts_freq(emac->emac_base_va, emac->i_clk_hz, emac->o_clk_hz, ppb, sgn);
+	}
+
+	if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+	{
+		NXP_LOG_ERROR("Mutex lock failed\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief			Get current adjustment value
+ * @param[in]		emac The EMAC instance
+ * @param[in,out]	ppb Pointer where the current adjustment value in ppb shall be written
+ * @param[in,out]	sgn Pointer where the sign flag shall be written (TRUE means that
+ * 					the 'ppb' is positive, FALSE means it is nagative)
+ * @return			EOK if success, error code otherwise
+ */
+errno_t pfe_emac_get_ts_freq_adjustment(pfe_emac_t *emac, uint32_t *ppb, bool_t *sgn)
+{
+	errno_t ret;
+	if ((NULL == ppb) || (NULL == sgn))
+	{
+		ret = EINVAL;
+	}
+	else
+	{
+		if (EOK != oal_mutex_lock(&emac->ts_mutex))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
+
+		*ppb = emac->adj_ppb;
+		*sgn = emac->adj_sign;
+
+		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
+		ret = EOK;
+	}
+	return ret;
+}
+
+/**
+ * @brief			Get current time
+ * @param[in]		emac THe EMAC instance
+ * @param[in,out]	sec Pointer where seconds value shall be written
+ * @param[in,out]	nsec Pointer where nano-seconds value shall be written
+ * @param[in,out]	sec_hi Pointer where higher-word-seconds value shall be written
+ * @return			EOK if success, error code otherwise
+ */
+errno_t pfe_emac_get_ts_time(pfe_emac_t *emac, uint32_t *sec, uint32_t *nsec, uint16_t *sec_hi)
+{
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		if ((NULL == sec) || (NULL == nsec) || (NULL == sec_hi))
+		{
+			ret = EINVAL;
+		}
+		else
+		{
+			if (EOK != oal_mutex_lock(&emac->ts_mutex))
+			{
+				NXP_LOG_ERROR("Mutex lock failed\n");
+			}
+
+			pfe_emac_cfg_get_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
+
+			if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+			{
+				NXP_LOG_ERROR("Mutex lock failed\n");
+			}
+			ret = EOK;
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Adjust current time
+ * @details		Current timer value will be adjusted by adding or subtracting the
+ * 				desired value.
+ * @param[in]	emac The EMAC instance
+ * @param[in]	sec Seconds
+ * @param[in]	nsec NanoSeconds
+ * @param[in]	sgn Sign of the adjustment. If TRUE then the adjustment will be positive
+ * 					('sec' and 'nsec' will be added to the current time. If FALSE then the
+ * 					adjustment will be negative ('sec' and 'nsec' will be subtracted from
+ *					the current time).
+ */
+errno_t pfe_emac_adjust_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, bool_t sgn)
+{
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		if (EOK != oal_mutex_lock(&emac->ts_mutex))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
+
+		if (TRUE == emac->ext_ts)
+		{
+			NXP_LOG_DEBUG("Cannot adjust timestamping time on EMAC%u working in external timestamp mode\n", pfe_emac_get_index(emac));
+			ret = EPERM;
+		}
+		else
+		{
+		ret = pfe_emac_cfg_adjust_ts_time(emac->emac_base_va, sec, nsec, sgn);
+		}
+
+		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Set current time
+ * @details		Funcion will set new system time. Current timer value
+ * 				will be overwritten with the desired value.
+ * @param[in]	emac The EMAC instance
+ * @param[in]	sec New seconds value
+ * @param[in]	nsec New nano-seconds value
+ * @param[in]	sec_hi New higher-word-seconds value
+ * @return		EOK if success, error code otherwise
+ */
+errno_t pfe_emac_set_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, uint16_t sec_hi)
+{
+	errno_t ret;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == emac))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		if (EOK != oal_mutex_lock(&emac->ts_mutex))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
+
+		if (TRUE == emac->ext_ts)
+		{
+			NXP_LOG_DEBUG("Cannot set timestamping time on EMAC%u working in external timestamp mode\n", pfe_emac_get_index(emac));
+			ret = EPERM;
+		}
+		else
+		{
+		ret = pfe_emac_cfg_set_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
+		}
+
+		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
+		{
+			NXP_LOG_ERROR("Mutex lock failed\n");
+		}
+	}
+
+	return ret;
+}
 
