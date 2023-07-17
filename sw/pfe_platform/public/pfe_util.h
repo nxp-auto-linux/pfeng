@@ -16,6 +16,7 @@ typedef struct
 {
 	uint32_t pe_sys_clk_ratio;		/*	Clock mode ratio for sys_clk and pe_clk */
 	bool_t on_g3;
+	uint32_t interrupt;
 } pfe_util_cfg_t;
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
@@ -39,6 +40,7 @@ errno_t pfe_util_get_fw_version(const pfe_util_t *util, pfe_ct_version_t *ver);
 errno_t pfe_util_get_feature(const pfe_util_t *util, pfe_fw_feature_t **feature, const char *name);
 errno_t pfe_util_get_feature_first(pfe_util_t *util, pfe_fw_feature_t **feature);
 errno_t pfe_util_get_feature_next(pfe_util_t *util, pfe_fw_feature_t **feature);
+errno_t pfe_util_isr_register_cbk(pfe_util_t *util, void *handler, void *data);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

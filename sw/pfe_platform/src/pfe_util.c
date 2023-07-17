@@ -36,6 +36,9 @@ struct pfe_util_tag
 	uint32_t current_feature;			/* Index of the feature to return by pfe_util_get_feature_next() */
 	pfe_fw_feature_t **fw_features;		/* List of all features*/
 	uint32_t fw_features_count;			/* Number of items in fw_features */
+	oal_irq_t *irq;			/* Util interrupt */
+	oal_irq_handler_t user_handler; /* Registered interrupt handler */
+	void *user_data;		/* Data for interrupt handler */
 };
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
@@ -46,6 +49,70 @@ struct pfe_util_tag
 static errno_t pfe_util_read_dmem(void *util_p, int32_t pe_idx, void *dst_ptr, addr_t src_addr, uint32_t len);
 static errno_t pfe_util_write_dmem(void *util_p, int32_t pe_idx, addr_t dst_addr, const void *src_ptr, uint32_t len);
 static bool_t pfe_util_check_new_fw_features(pfe_util_t *util, errno_t *ret, uint32_t features_idx);
+
+/**
+ * @brief		Handle interrupt from UTIL
+ * @param[in]	data Pointer to data for interrupt handler
+ * @return		TRUE interrupt is handled, FALSE interrupt not handled
+ */
+static bool_t pfe_util_isr_handler(void *data)
+{
+	pfe_util_t *util = data;
+	bool_t ret = FALSE;
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == data)
+	{
+		NXP_LOG_ERROR("NULL argument\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (NULL != util->user_handler)
+	{
+		ret =  util->user_handler(util->user_data);
+	}
+	else
+	{
+		NXP_LOG_ERROR("Util interrupt was not handled\n");
+		ret = FALSE;
+	}
+
+	/* Acknowledge interrupt */
+	(void) pfe_util_cfg_isr(util->cbus_base_va);
+
+	return ret;
+}
+
+/**
+ * @brief		Register UTIL ISR callback
+ * @param[in]	util The UTIL instance
+ * @param[in]	handler Registered interrupt handler
+ * @param[in]	data Pointer to data for interrupt handler
+ * @return		EOK callback registered, EINVAL callback not registered
+ */
+errno_t pfe_util_isr_register_cbk(pfe_util_t *util, void *handler, void *data)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (NULL == util)
+	{
+		NXP_LOG_ERROR("NULL argument\n");
+		return EINVAL;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	if (NULL == util->user_handler)
+	{
+		util->user_handler = handler;
+		util->user_data = data;
+	} 
+	else
+	{
+		NXP_LOG_ERROR("UTIL callback registration error: already registered\n");
+		return EINVAL;
+	}
+
+	return EOK;
+}
 
 /**
  * @brief		Get the features of the util PE block.
@@ -321,6 +388,22 @@ pfe_util_t *pfe_util_create(addr_t cbus_base_va, uint32_t pe_num, const pfe_util
 		pfe_util_set_config(util, cfg);
 	}
 
+	util->user_handler = NULL;
+	util->irq = oal_irq_create(cfg->interrupt, (oal_irq_flags_t)0, "PFE UTIL IRQ");
+	if (NULL != util->irq)
+	{
+		if (EOK != oal_irq_add_handler(util->irq, &pfe_util_isr_handler, util, NULL))
+		{
+			oal_irq_destroy(util->irq);
+			util->irq = NULL;
+			NXP_LOG_ERROR("Couldn't attach to UTIL IRQ %d\n", cfg->interrupt);
+		}
+	}
+	else
+	{
+		NXP_LOG_ERROR("Couldn't create UTIL IRQ %d\n", cfg->interrupt);
+	}
+
 	return util;
 }
 
@@ -461,6 +544,12 @@ void pfe_util_destroy(pfe_util_t *util)
 
 	if (NULL != util)
 	{
+		if (NULL != util->irq)
+		{
+			oal_irq_destroy(util->irq);
+			util->irq = NULL;
+		}
+
 		pfe_pe_destroy(util->pe, util->pe_num);
 
 		if (NULL != util->pe)
