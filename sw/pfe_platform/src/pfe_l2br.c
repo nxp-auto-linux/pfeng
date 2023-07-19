@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1993,26 +1993,29 @@ pfe_phy_if_t *pfe_l2br_domain_get_next_if(pfe_l2br_domain_t *domain)
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		if (domain->cur_item == &domain->ifaces)
+		if (FALSE == LLIST_IsEmpty(&domain->ifaces))
 		{
-			/*	No more entries */
-			phy_if = NULL;
-		}
-		else
-		{
-			while (domain->cur_item != &domain->ifaces)
+			if (domain->cur_item == &domain->ifaces)
 			{
-				/*	Get data */
-				entry = LLIST_Data(domain->cur_item, pfe_l2br_list_entry_t, list_entry);
-				phy_if = (pfe_phy_if_t *)entry->ptr;
-
-				/*	Remember current item to know where to start later */
-				domain->cur_item = domain->cur_item->prNext;
-
-				if (true == pfe_l2br_domain_match_if_criterion(domain, phy_if))
+				/*	No more entries */
+				phy_if = NULL;
+			}
+			else
+			{
+				while (domain->cur_item != &domain->ifaces)
 				{
-					match = TRUE;
-					break;
+					/*	Get data */
+					entry = LLIST_Data(domain->cur_item, pfe_l2br_list_entry_t, list_entry);
+					phy_if = (pfe_phy_if_t *)entry->ptr;
+
+					/*	Remember current item to know where to start later */
+					domain->cur_item = domain->cur_item->prNext;
+
+					if (true == pfe_l2br_domain_match_if_criterion(domain, phy_if))
+					{
+						match = TRUE;
+						break;
+					}
 				}
 			}
 		}
@@ -2774,27 +2777,30 @@ pfe_l2br_static_entry_t *pfe_l2br_static_entry_get_next(pfe_l2br_t *bridge)
 			NXP_LOG_ERROR("Mutex lock failed\n");
 		}
 
-		if (bridge->curr_static_ent == &bridge->static_entries)
+		if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
 		{
-			/*	No more entries */
-			static_ent = NULL;
-		}
-		else
-		{
-			while (bridge->curr_static_ent != &bridge->static_entries)
+			if (bridge->curr_static_ent == &bridge->static_entries)
 			{
-				/*	Get data */
-				static_ent = LLIST_Data(bridge->curr_static_ent, pfe_l2br_static_entry_t, list_entry);
-
-				/*	Remember current item to know where to start later */
-				bridge->curr_static_ent = bridge->curr_static_ent->prNext;
-
-				if (NULL != static_ent)
+				/*	No more entries */
+				static_ent = NULL;
+			}
+			else
+			{
+				while (bridge->curr_static_ent != &bridge->static_entries)
 				{
-					if (true == pfe_l2br_static_entry_match_criterion(bridge, static_ent))
+					/*	Get data */
+					static_ent = LLIST_Data(bridge->curr_static_ent, pfe_l2br_static_entry_t, list_entry);
+
+					/*	Remember current item to know where to start later */
+					bridge->curr_static_ent = bridge->curr_static_ent->prNext;
+
+					if (NULL != static_ent)
 					{
-						match = TRUE;
-						break;
+						if (true == pfe_l2br_static_entry_match_criterion(bridge, static_ent))
+						{
+							match = TRUE;
+							break;
+						}
 					}
 				}
 			}
@@ -3514,27 +3520,30 @@ pfe_l2br_domain_t *pfe_l2br_get_next_domain(pfe_l2br_t *bridge)
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		if (bridge->curr_domain == &bridge->domains)
+		if (FALSE == LLIST_IsEmpty(&bridge->domains))
 		{
-			/*	No more entries */
-			domain = NULL;
-		}
-		else
-		{
-			while (bridge->curr_domain != &bridge->domains)
+			if (bridge->curr_domain == &bridge->domains)
 			{
-				/*	Get data */
-				domain = LLIST_Data(bridge->curr_domain, pfe_l2br_domain_t, list_entry);
-
-				/*	Remember current item to know where to start later */
-				bridge->curr_domain = bridge->curr_domain->prNext;
-
-				if (NULL != domain)
+				/*	No more entries */
+				domain = NULL;
+			}
+			else
+			{
+				while (bridge->curr_domain != &bridge->domains)
 				{
-					if (true == pfe_l2br_domain_match_criterion(bridge, domain))
+					/*	Get data */
+					domain = LLIST_Data(bridge->curr_domain, pfe_l2br_domain_t, list_entry);
+
+					/*	Remember current item to know where to start later */
+					bridge->curr_domain = bridge->curr_domain->prNext;
+
+					if (NULL != domain)
 					{
-						match = TRUE;
-						break;
+						if (true == pfe_l2br_domain_match_criterion(bridge, domain))
+						{
+							match = TRUE;
+							break;
+						}
 					}
 				}
 			}

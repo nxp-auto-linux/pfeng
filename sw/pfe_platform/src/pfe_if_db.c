@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2022 NXP
+ *  Copyright 2017-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1020,30 +1020,33 @@ errno_t pfe_if_db_get_next(pfe_if_db_t *db, uint32_t session_id, pfe_if_db_entry
 		else
 		{
 			entry = NULL;
-			if (db->cur_item == &db->theList)
+			if (FALSE == LLIST_IsEmpty(&db->theList))
 			{
-				/*	No more entries */
-			}
-			else
-			{
-				while (db->cur_item != &db->theList)
+				if (db->cur_item == &db->theList)
 				{
-					/*	Get data */
-					entry = LLIST_Data(db->cur_item, pfe_if_db_entry_t, list_member);
-
-					/*	Remember current item to know where to start later */
-					db->cur_item = db->cur_item->prNext;
-
-					if (NULL != entry)
+					/*	No more entries */
+				}
+				else
+				{
+					while (db->cur_item != &db->theList)
 					{
-						if (TRUE == pfe_if_db_match_criterion(db, db->cur_crit, &db->cur_crit_arg, entry))
+						/*	Get data */
+						entry = LLIST_Data(db->cur_item, pfe_if_db_entry_t, list_member);
+
+						/*	Remember current item to know where to start later */
+						db->cur_item = db->cur_item->prNext;
+
+						if (NULL != entry)
 						{
-							break;
-						}
-						else
-						{
-							/* clean entry to not get it false positive */
-							entry = NULL;
+							if (TRUE == pfe_if_db_match_criterion(db, db->cur_crit, &db->cur_crit_arg, entry))
+							{
+								break;
+							}
+							else
+							{
+								/* clean entry to not get it false positive */
+								entry = NULL;
+							}
 						}
 					}
 				}
