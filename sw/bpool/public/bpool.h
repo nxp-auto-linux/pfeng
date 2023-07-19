@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2022 NXP
+ *  Copyright 2017-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -82,7 +82,7 @@ typedef struct __attribute__((aligned(HAL_CACHE_LINE_SIZE)))
 	uint32_t buffer_raw_size;	/*	Per-buffer size */
 	uint32_t buffer_align;		/*	Alignment per-buffer */
 	uint32_t buffer_num;		/*	Number of buffers in the pool */
-	void *free_fifo;		    /*	Here all the free buffers are stored */
+	volatile void *free_fifo;	/*	Here all the free buffers are stored */
 	oal_mutex_t fifo_lock;		/*	Mutex protecting the FIFO */
 } bpool_t;
 

@@ -73,7 +73,7 @@ __attribute__((cold)) fifo_t * fifo_create(const uint32_t depth)
 		fifo->data = oal_mm_malloc_contig_aligned_cache(sizeof(void *) * depth, HAL_CACHE_LINE_SIZE);
 		if (unlikely(NULL == fifo->data))
 		{
-			oal_mm_free(fifo);
+			oal_mm_free((void *)fifo);
 			fifo = NULL;
 		}
 	}
@@ -91,7 +91,7 @@ __attribute__((cold)) void fifo_destroy(fifo_t *const fifo)
 			fifo->data = NULL;
 		}
 
-		oal_mm_free_contig(fifo);
+		oal_mm_free_contig((void *)fifo);
 	}
 }
 

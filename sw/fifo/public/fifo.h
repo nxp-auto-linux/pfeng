@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -20,7 +20,7 @@ struct __attribute__((aligned(HAL_CACHE_LINE_SIZE))) fifo_tag
 	void **data;
 };
 
-typedef struct fifo_tag fifo_t;
+typedef volatile struct fifo_tag fifo_t;
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_START_SEC_CODE
