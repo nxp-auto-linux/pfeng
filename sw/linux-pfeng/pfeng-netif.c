@@ -1365,6 +1365,7 @@ static int pfeng_netif_event(struct notifier_block *nb,
 
 	switch (event) {
 	case NETDEV_CHANGEUPPER:
+	case NETDEV_UP:
 		if (info->linking) {
 			struct pfeng_netif *netif = netdev_priv(ndev);
 			struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
