@@ -335,6 +335,7 @@ struct pfeng_priv {
 	u8				local_drv_id;
 	bool				in_suspend;
 	bool				on_g3;
+	u8				hif_phc_emac_id;
 
 	struct notifier_block		upper_notifier;
 	struct net_device		*lower_ndev;

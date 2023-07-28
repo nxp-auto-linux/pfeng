@@ -13,15 +13,44 @@
 
 #define PTP_DEBUG(n, f, ...)
 
+static errno_t pfeng_ptp_get_phc_emac_id(struct pfeng_netif *netif, u32 *phc_emac_id)
+{
+	/* select proper PHC */
+	switch (netif->cfg->phyif_id) {
+	case PFE_PHY_IF_ID_EMAC0:
+	case PFE_PHY_IF_ID_EMAC1:
+	case PFE_PHY_IF_ID_EMAC2:
+		*phc_emac_id = netif->cfg->phyif_id;
+		break;
+	case PFE_PHY_IF_ID_HIF0:
+	case PFE_PHY_IF_ID_HIF1:
+	case PFE_PHY_IF_ID_HIF2:
+	case PFE_PHY_IF_ID_HIF3:
+		*phc_emac_id = netif->priv->hif_phc_emac_id;
+		break;
+	default:
+		/* only AUX should come here */
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 int pfeng_ptp_adjfreq(struct ptp_clock_info *ptp, s32 delta)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
-        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->phyif_id];
+	pfe_emac_t *emac;
 	bool_t sgn = TRUE;
+	u32 phc_emac_id;
 	errno_t ret = 0;
 
+	if (pfeng_ptp_get_phc_emac_id(netif, &phc_emac_id))
+		return -ENODEV;
+
 	PTP_DEBUG(netif->netdev, "%s, delta %d\n",__func__, delta);
+
+	emac = priv->pfe_platform->emac[phc_emac_id];
 
 	if (delta < 0) {
 		delta = -delta;
@@ -31,7 +60,7 @@ int pfeng_ptp_adjfreq(struct ptp_clock_info *ptp, s32 delta)
 	ret = pfe_emac_set_ts_freq_adjustment(emac, delta, sgn);
 
 	if (ret == EPERM) {
-		HM_MSG_NETDEV_WARN(netif->netdev, "Frequency adjustment failed on EMAC%u\n", netif->cfg->phyif_id);
+		HM_MSG_NETDEV_WARN(netif->netdev, "Frequency adjustment failed on EMAC%u\n", phc_emac_id);
 		ret = -EOPNOTSUPP;
 	} else if (ret != 0){
 		HM_MSG_NETDEV_ERR(netif->netdev, "Frequency adjustment failed (err %d)\n", ret);
@@ -45,10 +74,16 @@ int pfeng_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
-        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->phyif_id];
+	pfe_emac_t *emac;
 	errno_t ret = 0;
 	bool_t sgn = TRUE;
 	uint32_t sec = 0, nsec = 0;
+	u32 phc_emac_id;
+
+	if (pfeng_ptp_get_phc_emac_id(netif, &phc_emac_id))
+		return -ENODEV;
+
+	emac = priv->pfe_platform->emac[phc_emac_id];
 
 	PTP_DEBUG(netif->netdev, "%s, delta %lld\n",__func__, delta);
 
@@ -63,7 +98,7 @@ int pfeng_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	ret = pfe_emac_adjust_ts_time(emac, sec, nsec, sgn);
 
 	if (ret == EPERM) {
-		HM_MSG_NETDEV_WARN(netif->netdev, "Time adjustment failed on EMAC%u\n", netif->cfg->phyif_id);
+		HM_MSG_NETDEV_WARN(netif->netdev, "Time adjustment failed on EMAC%u\n", phc_emac_id);
 		ret = -EOPNOTSUPP;
 	} else if (ret != 0) {
 		HM_MSG_NETDEV_ERR(netif->netdev, "Time adjustment failed (err %d)\n", ret);
@@ -77,12 +112,19 @@ int pfeng_ptp_gettime64(struct ptp_clock_info *ptp, struct timespec64 *ts)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
-        pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->phyif_id];
+	pfe_emac_t *emac;
 	uint32_t sec = 0, nsec = 0;
 	uint16_t sec_hi = 0;
 	errno_t ret;
+	u32 phc_emac_id;
+
+	if (pfeng_ptp_get_phc_emac_id(netif, &phc_emac_id))
+		return -ENODEV;
+
+	emac = priv->pfe_platform->emac[phc_emac_id];
 
 	ret = pfe_emac_get_ts_time(emac, &sec, &nsec, &sec_hi);
+
 	ts->tv_nsec = nsec;
 	ts->tv_sec = ((uint64_t)sec_hi << 32U) + sec;
 
@@ -100,17 +142,23 @@ int pfeng_ptp_settime64(struct ptp_clock_info *ptp, const struct timespec64 *ts)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
-	pfe_emac_t *emac = priv->pfe_platform->emac[netif->cfg->phyif_id];
+	pfe_emac_t *emac;
 	errno_t ret;
 	uint32_t sec = (uint64_t)ts->tv_sec & 0x00000000FFFFFFFFU;
 	uint16_t sec_hi = (uint16_t)(ts->tv_sec >> 32);
+	u32 phc_emac_id;
+
+	if (pfeng_ptp_get_phc_emac_id(netif, &phc_emac_id))
+		return -ENODEV;
+
+	emac = priv->pfe_platform->emac[phc_emac_id];
 
 	PTP_DEBUG(netif->netdev, "%s, s %lld ns %ld \n",__func__, ts->tv_sec, ts->tv_nsec);
 
 	ret = pfe_emac_set_ts_time(emac, sec, ts->tv_nsec, sec_hi);
 
 	if (ret == EPERM) {
-		HM_MSG_NETDEV_WARN(netif->netdev, "Set time failed on EMAC%u\n", netif->cfg->phyif_id);
+		HM_MSG_NETDEV_WARN(netif->netdev, "Set time failed on EMAC%u\n", phc_emac_id);
 		ret = -EOPNOTSUPP;
 	} else if (ret != 0) {
 		HM_MSG_NETDEV_ERR(netif->netdev, "Set time failed (err %d)\n", ret);
@@ -161,14 +209,16 @@ static void pfeng_ptp_prepare_clock_adjustement(struct pfeng_netif *netif, unsig
 void pfeng_ptp_register(struct pfeng_netif *netif)
 {
 	struct pfeng_priv *priv = netif->priv;
-        pfe_emac_t *emac;
+	pfe_emac_t *emac;
 	errno_t ret;
 	bool ext_ts;
+	u32 phc_emac_id;
 
-	if (!pfeng_netif_cfg_has_emac(netif->cfg))
+	if (pfeng_ptp_get_phc_emac_id(netif, &phc_emac_id))
+		/* no PHC, valid only for AUX */
 		return;
 
-        emac = priv->pfe_platform->emac[netif->cfg->phyif_id];
+	emac = priv->pfe_platform->emac[phc_emac_id];
 
 	/* Set PTP clock to null in case of error */
 	netif->ptp_clock = NULL;
@@ -181,13 +231,13 @@ void pfeng_ptp_register(struct pfeng_netif *netif)
 	pfeng_ptp_prepare_clock_adjustement(netif, priv->clk_ptp_reference);
 
 	/* Get EMAC's timestamping mode external / internal */
-	ext_ts = priv->pfe_platform->emac_ext_ts_mask & (1 << netif->cfg->phyif_id);
+	ext_ts = priv->pfe_platform->emac_ext_ts_mask & (1 << phc_emac_id);
 	/* Start PTP clock and enable time stamping in platform */
 	ret = pfe_emac_enable_ts(emac, priv->clk_ptp_reference,
 				 ext_ts ? 0 : (priv->clk_ptp_reference / 2LLU));
 
 	if(ret) {
-		HM_MSG_DEV_ERR(netif->dev, "Failed to register PTP clock on EMAC%d\n", netif->cfg->phyif_id);
+		HM_MSG_DEV_ERR(netif->dev, "Failed to register PTP clock on EMAC%d\n", phc_emac_id);
 		return;
 	}
 
@@ -196,9 +246,9 @@ void pfeng_ptp_register(struct pfeng_netif *netif)
 	netif->ptp_clock = ptp_clock_register(&netif->ptp_ops, netif->dev);
 
 	if (IS_ERR(netif->ptp_clock))
-		HM_MSG_NETDEV_ERR(netif->netdev, "Failed to register PTP clock on EMAC%d\n", netif->cfg->phyif_id);
+		HM_MSG_NETDEV_ERR(netif->netdev, "Failed to register PTP clock on EMAC%d\n", phc_emac_id);
 	else if (netif->ptp_clock)
-		HM_MSG_NETDEV_INFO(netif->netdev, "Registered PTP HW clock successfully on EMAC%d\n", netif->cfg->phyif_id);
+		HM_MSG_NETDEV_INFO(netif->netdev, "Registered PTP HW clock successfully on EMAC%d\n", phc_emac_id);
 }
 
 void pfeng_ptp_unregister(struct pfeng_netif *netif)
@@ -206,6 +256,6 @@ void pfeng_ptp_unregister(struct pfeng_netif *netif)
 	if (netif->ptp_clock) {
 		ptp_clock_unregister(netif->ptp_clock);
 		netif->ptp_clock = NULL;
-		HM_MSG_NETDEV_INFO(netif->netdev, "Unregistered PTP HW clock successfully on EMAC%d\n", netif->cfg->phyif_id);
+		HM_MSG_NETDEV_INFO(netif->netdev, "Unregistered PTP HW clock successfully on EMAC%d\n", netif->priv->hif_phc_emac_id);
 	}
 }
