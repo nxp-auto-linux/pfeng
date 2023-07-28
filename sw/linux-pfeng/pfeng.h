@@ -335,6 +335,7 @@ struct pfeng_priv {
 	u8				local_drv_id;
 	bool				in_suspend;
 	bool				on_g3;
+	u8				hif_phc_emac_id;
 
 	struct notifier_block		upper_notifier;
 	struct net_device		*lower_ndev;
@@ -467,7 +468,6 @@ void pfeng_ptp_unregister(struct pfeng_netif *netif);
 int pfeng_hwts_init(struct pfeng_netif *netif);
 void pfeng_hwts_release(struct pfeng_netif *netif);
 
-#ifdef PFE_CFG_PFE_MASTER
 static inline void pfeng_hwts_skb_set_rx_ts(struct skb_shared_hwtstamps *hwts, u32 rx_timestamp_s, u32 rx_timestamp_ns)
 {
 	u64 nanos = 0ULL;
@@ -477,12 +477,6 @@ static inline void pfeng_hwts_skb_set_rx_ts(struct skb_shared_hwtstamps *hwts, u
 	nanos += rx_timestamp_s * 1000000000ULL;
 	hwts->hwtstamp = ns_to_ktime(nanos);
 }
-#else
-static inline void pfeng_hwts_skb_set_rx_ts(struct skb_shared_hwtstamps *hwts, u32 rx_timestamp_s, u32 rx_timestamp_ns)
-{
-	/* NOP */
-}
-#endif
 
 void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, pfe_ct_ets_report_t *etsr);
 int pfeng_hwts_store_tx_ref(struct pfeng_netif *netif, struct sk_buff *skb);

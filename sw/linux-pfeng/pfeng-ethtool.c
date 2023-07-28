@@ -198,7 +198,6 @@ static void pfeng_ethtool_complete(struct net_device *netdev)
 static const struct ethtool_ops pfeng_ethtool_ops = {
 #ifdef PFE_CFG_PFE_MASTER
 	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS,
-	.get_link = ethtool_op_get_link,
 	.nway_reset = pfeng_ethtool_nway_reset,
 	.get_pauseparam = pfeng_ethtool_get_pauseparam,
 	.set_pauseparam = pfeng_ethtool_set_pauseparam,
@@ -209,6 +208,7 @@ static const struct ethtool_ops pfeng_ethtool_ops = {
 	.begin = pfeng_ethtool_begin,
 	.complete = pfeng_ethtool_complete,
 #endif
+	.get_link = ethtool_op_get_link,
 	.get_drvinfo = pfeng_ethtool_getdrvinfo,
 	.get_ts_info = pfeng_ethtool_get_ts_info,
 };

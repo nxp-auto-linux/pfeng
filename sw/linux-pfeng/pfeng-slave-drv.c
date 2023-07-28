@@ -87,6 +87,10 @@ static int manage_port_coherency = 0;
 module_param(manage_port_coherency, int, 0644);
 MODULE_PARM_DESC(manage_port_coherency, "\t 1 - enable HIF port coherency management, default is 0");
 
+static int hif_phc_emac = -1;
+module_param(hif_phc_emac, int, 0644);
+MODULE_PARM_DESC(hif_phc_emac, "\t (default EMAC0");
+
 uint32_t get_pfeng_pfe_cfg_master_if(void)
 {
 	/* Needed for compilation */
@@ -385,6 +389,19 @@ static int pfeng_drv_deferred_probe(void *arg)
 
 	/* Create debugfs */
 	pfeng_debugfs_create(priv);
+
+	/* Prepare PTP clock */
+	priv->clk_ptp_reference = 0U;
+	priv->clk_ptp = clk_get(dev, "pfe_ts");
+	if (IS_ERR(priv->clk_ptp)) {
+		HM_MSG_DEV_WARN(dev, "Failed to get pfe_ts clock. PTP will be disabled.\n");
+		priv->clk_ptp = NULL;
+	} else
+		priv->clk_ptp_reference = clk_get_rate(priv->clk_ptp);
+
+	/* PHC for hif2hif */
+	if (hif_phc_emac < PFENG_PFE_EMACS)
+		priv->hif_phc_emac_id = hif_phc_emac;
 
 	/* Create HIFs */
 	ret = pfeng_hif_create(priv);

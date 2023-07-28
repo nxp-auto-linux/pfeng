@@ -1,5 +1,5 @@
 /* =========================================================================
- *  
+ *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2023 NXP
  *
@@ -28,6 +28,8 @@
 #define PFE_EMAC_PKT_OVERHEAD	(PFE_MIN_DSA_OVERHEAD + ETH_HLEN + ETH_FCS_LEN)
 #define PFE_EMAC_STD_MAXFRMSZ	(PFE_EMAC_STD_MTU + PFE_EMAC_PKT_OVERHEAD)
 #define PFE_EMAC_JUMBO_MAXFRMSZ	(PFE_EMAC_JUMBO_MTU + PFE_EMAC_PKT_OVERHEAD)
+
+#ifdef PFE_CFG_PFE_MASTER
 
 /* Mode conversion table */
 /* usage scope: phy_mode_to_str */
@@ -329,369 +331,6 @@ uint8_t pfe_emac_cfg_get_index(addr_t emac_base, addr_t cbus_base)
 	}
 
 	return idx;
-}
-
-/**
- * @brief		Enable timestamping
- * @param[in]	base_va Base address
- * @param[in]	eclk TRUE means to use external clock reference (chain)
- * @param[in]	i_clk_hz Reference clock frequency
- * @param[in]	o_clk_hz Requested nominal output frequency
- * @param[in]	en TRUE means ENABLE, FALSE means DISABLE
- */
-errno_t pfe_emac_cfg_enable_ts(addr_t base_va, bool_t eclk, uint32_t i_clk_hz, uint32_t o_clk_hz)
-{
-	uint64_t val = 1000000000000ULL;
-	uint32_t ss = 0U, sns = 0U;
-	uint32_t regval, ii;
-	errno_t ret;
-
-	hal_write32(0U
-			| EXTERNAL_TIME(eclk)
-			| SELECT_PTP_PACKETS(0x1U)
-			| PTP_OVER_IPV4(1U)
-			| PTP_OVER_IPV6(1U)
-			| PTP_OVER_ETH(1U)
-			| PTPV2(1U)
-			| DIGITAL_ROLLOVER(1U)
-			| FINE_UPDATE(1U)
-			| ENABLE_TIMESTAMP(1U)
-			| ENABLE_TIMESTAMP_FOR_All(1U), base_va + MAC_TIMESTAMP_CONTROL);
-	regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
-
-	if (eclk == TRUE)
-	{
-		NXP_LOG_INFO("IEEE1588: Using external timestamp input\n");
-		ret = EOK;
-	}
-	else
-	{
-		/*	Get output period [ns] */
-		ss = (val / 1000ULL) / o_clk_hz;
-
-		/*	Get sub-nanosecond part */
-		sns = (val / (uint64_t)o_clk_hz) - (((val / 1000ULL) / (uint64_t)o_clk_hz) * 1000ULL);
-
-		NXP_LOG_INFO("IEEE1588: Input Clock: %uHz, Output: %uHz, Accuracy: %u.%uns\n", (uint_t)i_clk_hz, (uint_t)o_clk_hz, (uint_t)ss, (uint_t)sns);
-
-		if (0U == (regval & DIGITAL_ROLLOVER(1)))
-		{
-			/*	Binary roll-over, 0.465ns accuracy */
-			ss = (ss * 1000U) / 465U;
-		}
-
-		sns = (sns * 256U) / 1000U;
-
-		/*	Set 'increment' values */
-		hal_write32(((uint32_t)ss << 16U) | ((uint32_t)sns << 8U), base_va + MAC_SUB_SECOND_INCREMENT);
-
-		/*	Set initial 'addend' value */
-		hal_write32(((uint64_t)o_clk_hz << 32U) / (uint64_t)i_clk_hz, base_va + MAC_TIMESTAMP_ADDEND);
-
-		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
-		hal_write32(regval | UPDATE_ADDEND(1), base_va + MAC_TIMESTAMP_CONTROL);
-		ii = 0U;
-		do
-		{
-			regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
-			oal_time_usleep(100U);
-			if (((regval & UPDATE_ADDEND(1)) != 0U) && (ii < 10U))
-			{
-				++ii;
-			}
-			else
-			{
-				break;
-			}
-		} while (TRUE);
-
-		if (ii >= 10U)
-		{
-			ret = ETIME;
-		}
-		else
-		{
-			ret = EOK;
-		}
-
-		if (EOK == ret)
-		{
-			/*	Set 'update' values */
-			hal_write32(0U, base_va + MAC_STSU);
-			hal_write32(0U, base_va + MAC_STNSU);
-
-			regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
-			regval |= INITIALIZE_TIMESTAMP(1);
-			hal_write32(regval, base_va + MAC_TIMESTAMP_CONTROL);
-
-			ii = 0U;
-			do
-			{
-				regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
-				oal_time_usleep(100U);
-				if (((regval & INITIALIZE_TIMESTAMP(1)) != 0U) && (ii < 10U))
-				{
-					++ii;
-				}
-				else
-				{
-					break;
-				}
-			} while (TRUE);
-
-			if (ii >= 10U)
-			{
-				ret = ETIME;
-			}
-		}
-	}
-
-	return ret;
-}
-
-/**
- * @brief	Disable timestamping
- */
-void pfe_emac_cfg_disable_ts(addr_t base_va)
-{
-	hal_write32(0U, base_va + MAC_TIMESTAMP_CONTROL);
-}
-
-/**
- * @brief		Adjust timestamping clock frequency
- * @param[in]	base_va Base address
- * @param[in]	ppb Frequency change in [ppb]
- * @param[in]	sgn If TRUE then 'ppb' is positive, else it is negative
- */
-errno_t pfe_emac_cfg_adjust_ts_freq(addr_t base_va, uint32_t i_clk_hz, uint32_t o_clk_hz, uint32_t ppb, bool_t sgn)
-{
-	uint32_t nil, delta, regval, ii;
-	errno_t ret;
-
-	/*	Nil drift addend: 1^32 / (o_clk_hz / i_clk_hz) */
-	nil = (uint32_t)(((uint64_t)o_clk_hz << 32U) / (uint64_t)i_clk_hz);
-
-	/*	delta = x * ppb * 0.000000001 */
-	delta = (uint32_t)(((uint64_t)nil * (uint64_t)ppb) / 1000000000ULL);
-
-	/*	Adjust the 'addend' */
-	if (sgn)
-	{
-		if (((uint64_t)nil + (uint64_t)delta) > 0xffffffffULL)
-		{
-			NXP_LOG_WARNING("IEEE1588: Frequency adjustment out of positive range\n");
-			regval = 0xffffffffU;
-		}
-		else
-		{
-			regval = nil + delta;
-		}
-	}
-	else
-	{
-		if (delta > nil)
-		{
-			NXP_LOG_WARNING("IEEE1588: Frequency adjustment out of negative range\n");
-			regval = 0U;
-		}
-		else
-		{
-			regval = nil - delta;
-		}
-	}
-
-	/*	Update the 'addend' value */
-	hal_write32(regval, base_va + MAC_TIMESTAMP_ADDEND);
-
-	/*	Request update 'addend' value */
-	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
-	hal_write32(regval | UPDATE_ADDEND(1), (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
-
-	/*	Wait for completion */
-	ii = 0U;
-	do
-	{
-		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
-		oal_time_usleep(100U);
-		if (((regval & UPDATE_ADDEND(1)) != 0U) && (ii < 10U))
-		{
-			++ii;
-		}
-		else
-		{
-			break;
-		}
-	} while (TRUE);
-
-	if (ii >= 10U)
-	{
-		ret = ETIME;
-	}
-	else
-	{
-		ret = EOK;
-	}
-
-	return ret;
-}
-
-/**
- * @brief			Get system time
- * @param[in]		base_va Base address
- * @param[in,out]	sec Seconds
- * @param[in,out]	nsec NanoSeconds
- * @param[in,out]	sec_hi Higher Word Seconds
- */
-void pfe_emac_cfg_get_ts_time(addr_t base_va, uint32_t *sec, uint32_t *nsec, uint16_t *sec_hi)
-{
-	uint32_t sec_tmp;
-
-	*sec = hal_read32(base_va + MAC_SYSTEM_TIME_SECONDS);
-	do {
-		sec_tmp = *sec;
-		*nsec = hal_read32(base_va + MAC_SYSTEM_TIME_NANOSECONDS);
-		*sec_hi = (uint16_t)hal_read32(base_va + MAC_STS_HIGHER_WORD);
-		*sec = hal_read32(base_va + MAC_SYSTEM_TIME_SECONDS);
-	} while (*sec != sec_tmp);
-}
-
-/**
- * @brief		Set system time
- * @details		Current time will be overwritten with the desired value
- * @param[in]	base_va Base address
- * @param[in]	sec Seconds
- * @param[in]	nsec NanoSeconds
- * @param[in]	sec_hi Higher Word Seconds
- */
-errno_t pfe_emac_cfg_set_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec, uint16_t sec_hi)
-{
-	uint32_t regval, ii;
-	errno_t ret;
-
-	if (nsec > 0x7fffffffU)
-	{
-		ret = EINVAL;
-	}
-	else
-	{
-		hal_write32(sec, base_va + MAC_STSU);
-		hal_write32(nsec, base_va + MAC_STNSU);
-		hal_write32(sec_hi, base_va + MAC_STS_HIGHER_WORD);
-
-		/*	Initialize time */
-		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
-		regval |= INITIALIZE_TIMESTAMP(1);
-		hal_write32(regval, base_va + MAC_TIMESTAMP_CONTROL);
-
-		/*	Wait for completion */
-		ii = 0U;
-		do
-		{
-			regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
-			oal_time_usleep(100U);
-			if (((regval & INITIALIZE_TIMESTAMP(1)) != 0U) && (ii < 10U))
-			{
-				++ii;
-			}
-			else
-			{
-				break;
-			}
-		} while (TRUE);
-
-		if (ii >= 10U)
-		{
-			ret = ETIME;
-		}
-		else
-		{
-			ret = EOK;
-		}
-	}
-
-	return ret;
-}
-
-/**
- * @brief		Adjust system time
- * @param[in]	base_va Base address
- * @param[in]	sec Seconds
- * @param[in]	nsec NanoSeconds
- * @param[in]	sgn Sing of the adjustment (TRUE - positive, FALSE - negative)
- */
-errno_t pfe_emac_cfg_adjust_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec, bool_t sgn)
-{
-	uint32_t regval, ii;
-	uint32_t nsec_temp = nsec;
-	int32_t sec_temp = sec;
-	errno_t ret;
-
-	if (nsec_temp > 0x7fffffffU)
-	{
-		ret = EINVAL;
-	}
-	else
-	{
-		ret = EOK;
-
-		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
-
-		if (!sgn)
-		{
-			if (0U != (regval & DIGITAL_ROLLOVER(1)))
-			{
-				nsec_temp = 1000000000U - nsec;
-			}
-			else
-			{
-				nsec_temp = (1UL << 31U) - nsec;
-			}
-
-			sec_temp = -sec_temp;
-		}
-
-		if (0U != (regval & DIGITAL_ROLLOVER(1)))
-		{
-			if (nsec_temp > 0x3b9ac9ffU)
-			{
-				ret = EINVAL;
-			}
-		}
-
-		if (EOK == ret)
-		{
-			hal_write32(sec_temp, base_va + MAC_STSU);
-			hal_write32(ADDSUB(!sgn) | nsec_temp, base_va + MAC_STNSU);
-
-			/*	Trigger the update */
-			regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
-			regval |= UPDATE_TIMESTAMP(1);
-			hal_write32(regval, base_va + MAC_TIMESTAMP_CONTROL);
-
-			/*	Wait for completion */
-			ii = 0U;
-			do
-			{
-				regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
-				oal_time_usleep(100U);
-				if (((regval & UPDATE_TIMESTAMP(1)) != 0U) && (ii < 10U))
-				{
-					++ii;
-				}
-				else
-				{
-					break;
-				}
-			} while (TRUE);
-
-			if (ii >= 10U)
-			{
-				ret = ETIME;
-			}
-		}
-	}
-
-	return ret;
 }
 
 void pfe_emac_cfg_tx_disable(addr_t base_va)
@@ -1712,3 +1351,367 @@ errno_t pfe_emac_cfg_isr(addr_t base_va, addr_t cbus_base)
 	return EOK;
 }
 
+#endif /* PFE_CFG_PFE_MASTER */
+
+/**
+ * @brief		Enable timestamping
+ * @param[in]	base_va Base address
+ * @param[in]	eclk TRUE means to use external clock reference (chain)
+ * @param[in]	i_clk_hz Reference clock frequency
+ * @param[in]	o_clk_hz Requested nominal output frequency
+ * @param[in]	en TRUE means ENABLE, FALSE means DISABLE
+ */
+errno_t pfe_emac_cfg_enable_ts(addr_t base_va, bool_t eclk, uint32_t i_clk_hz, uint32_t o_clk_hz)
+{
+	uint64_t val = 1000000000000ULL;
+	uint32_t ss = 0U, sns = 0U;
+	uint32_t regval, ii;
+	errno_t ret;
+
+	hal_write32(0U
+			| EXTERNAL_TIME(eclk)
+			| SELECT_PTP_PACKETS(0x1U)
+			| PTP_OVER_IPV4(1U)
+			| PTP_OVER_IPV6(1U)
+			| PTP_OVER_ETH(1U)
+			| PTPV2(1U)
+			| DIGITAL_ROLLOVER(1U)
+			| FINE_UPDATE(1U)
+			| ENABLE_TIMESTAMP(1U)
+			| ENABLE_TIMESTAMP_FOR_All(1U), base_va + MAC_TIMESTAMP_CONTROL);
+	regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
+
+	if (eclk == TRUE)
+	{
+		NXP_LOG_INFO("IEEE1588: Using external timestamp input\n");
+		ret = EOK;
+	}
+	else
+	{
+		/*	Get output period [ns] */
+		ss = (val / 1000ULL) / o_clk_hz;
+
+		/*	Get sub-nanosecond part */
+		sns = (val / (uint64_t)o_clk_hz) - (((val / 1000ULL) / (uint64_t)o_clk_hz) * 1000ULL);
+
+		NXP_LOG_INFO("IEEE1588: Input Clock: %uHz, Output: %uHz, Accuracy: %u.%uns\n", (uint_t)i_clk_hz, (uint_t)o_clk_hz, (uint_t)ss, (uint_t)sns);
+
+		if (0U == (regval & DIGITAL_ROLLOVER(1)))
+		{
+			/*	Binary roll-over, 0.465ns accuracy */
+			ss = (ss * 1000U) / 465U;
+		}
+
+		sns = (sns * 256U) / 1000U;
+
+		/*	Set 'increment' values */
+		hal_write32(((uint32_t)ss << 16U) | ((uint32_t)sns << 8U), base_va + MAC_SUB_SECOND_INCREMENT);
+
+		/*	Set initial 'addend' value */
+		hal_write32(((uint64_t)o_clk_hz << 32U) / (uint64_t)i_clk_hz, base_va + MAC_TIMESTAMP_ADDEND);
+
+		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
+		hal_write32(regval | UPDATE_ADDEND(1), base_va + MAC_TIMESTAMP_CONTROL);
+		ii = 0U;
+		do
+		{
+			regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
+			oal_time_usleep(100U);
+			if (((regval & UPDATE_ADDEND(1)) != 0U) && (ii < 10U))
+			{
+				++ii;
+			}
+			else
+			{
+				break;
+			}
+		} while (TRUE);
+
+		if (ii >= 10U)
+		{
+			ret = ETIME;
+		}
+		else
+		{
+			ret = EOK;
+		}
+
+		if (EOK == ret)
+		{
+			/*	Set 'update' values */
+			hal_write32(0U, base_va + MAC_STSU);
+			hal_write32(0U, base_va + MAC_STNSU);
+
+			regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
+			regval |= INITIALIZE_TIMESTAMP(1);
+			hal_write32(regval, base_va + MAC_TIMESTAMP_CONTROL);
+
+			ii = 0U;
+			do
+			{
+				regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
+				oal_time_usleep(100U);
+				if (((regval & INITIALIZE_TIMESTAMP(1)) != 0U) && (ii < 10U))
+				{
+					++ii;
+				}
+				else
+				{
+					break;
+				}
+			} while (TRUE);
+
+			if (ii >= 10U)
+			{
+				ret = ETIME;
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief	Disable timestamping
+ */
+void pfe_emac_cfg_disable_ts(addr_t base_va)
+{
+	hal_write32(0U, base_va + MAC_TIMESTAMP_CONTROL);
+}
+
+/**
+ * @brief		Adjust timestamping clock frequency
+ * @param[in]	base_va Base address
+ * @param[in]	ppb Frequency change in [ppb]
+ * @param[in]	sgn If TRUE then 'ppb' is positive, else it is negative
+ */
+errno_t pfe_emac_cfg_adjust_ts_freq(addr_t base_va, uint32_t i_clk_hz, uint32_t o_clk_hz, uint32_t ppb, bool_t sgn)
+{
+	uint32_t nil, delta, regval, ii;
+	errno_t ret;
+
+	/*	Nil drift addend: 1^32 / (o_clk_hz / i_clk_hz) */
+	nil = (uint32_t)(((uint64_t)o_clk_hz << 32U) / (uint64_t)i_clk_hz);
+
+	/*	delta = x * ppb * 0.000000001 */
+	delta = (uint32_t)(((uint64_t)nil * (uint64_t)ppb) / 1000000000ULL);
+
+	/*	Adjust the 'addend' */
+	if (sgn)
+	{
+		if (((uint64_t)nil + (uint64_t)delta) > 0xffffffffULL)
+		{
+			NXP_LOG_WARNING("IEEE1588: Frequency adjustment out of positive range\n");
+			regval = 0xffffffffU;
+		}
+		else
+		{
+			regval = nil + delta;
+		}
+	}
+	else
+	{
+		if (delta > nil)
+		{
+			NXP_LOG_WARNING("IEEE1588: Frequency adjustment out of negative range\n");
+			regval = 0U;
+		}
+		else
+		{
+			regval = nil - delta;
+		}
+	}
+
+	/*	Update the 'addend' value */
+	hal_write32(regval, base_va + MAC_TIMESTAMP_ADDEND);
+
+	/*	Request update 'addend' value */
+	regval = hal_read32((addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+	hal_write32(regval | UPDATE_ADDEND(1), (addr_t)base_va + MAC_TIMESTAMP_CONTROL);
+
+	/*	Wait for completion */
+	ii = 0U;
+	do
+	{
+		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
+		oal_time_usleep(100U);
+		if (((regval & UPDATE_ADDEND(1)) != 0U) && (ii < 10U))
+		{
+			++ii;
+		}
+		else
+		{
+			break;
+		}
+	} while (TRUE);
+
+	if (ii >= 10U)
+	{
+		ret = ETIME;
+	}
+	else
+	{
+		ret = EOK;
+	}
+
+	return ret;
+}
+
+/**
+ * @brief			Get system time
+ * @param[in]		base_va Base address
+ * @param[in,out]	sec Seconds
+ * @param[in,out]	nsec NanoSeconds
+ * @param[in,out]	sec_hi Higher Word Seconds
+ */
+void pfe_emac_cfg_get_ts_time(addr_t base_va, uint32_t *sec, uint32_t *nsec, uint16_t *sec_hi)
+{
+	uint32_t sec_tmp;
+
+	*sec = hal_read32(base_va + MAC_SYSTEM_TIME_SECONDS);
+	do {
+		sec_tmp = *sec;
+		*nsec = hal_read32(base_va + MAC_SYSTEM_TIME_NANOSECONDS);
+		*sec_hi = (uint16_t)hal_read32(base_va + MAC_STS_HIGHER_WORD);
+		*sec = hal_read32(base_va + MAC_SYSTEM_TIME_SECONDS);
+	} while (*sec != sec_tmp);
+}
+
+/**
+ * @brief		Set system time
+ * @details		Current time will be overwritten with the desired value
+ * @param[in]	base_va Base address
+ * @param[in]	sec Seconds
+ * @param[in]	nsec NanoSeconds
+ * @param[in]	sec_hi Higher Word Seconds
+ */
+errno_t pfe_emac_cfg_set_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec, uint16_t sec_hi)
+{
+	uint32_t regval, ii;
+	errno_t ret;
+
+	if (nsec > 0x7fffffffU)
+	{
+		ret = EINVAL;
+	}
+	else
+	{
+		hal_write32(sec, base_va + MAC_STSU);
+		hal_write32(nsec, base_va + MAC_STNSU);
+		hal_write32(sec_hi, base_va + MAC_STS_HIGHER_WORD);
+
+		/*	Initialize time */
+		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
+		regval |= INITIALIZE_TIMESTAMP(1);
+		hal_write32(regval, base_va + MAC_TIMESTAMP_CONTROL);
+
+		/*	Wait for completion */
+		ii = 0U;
+		do
+		{
+			regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
+			oal_time_usleep(100U);
+			if (((regval & INITIALIZE_TIMESTAMP(1)) != 0U) && (ii < 10U))
+			{
+				++ii;
+			}
+			else
+			{
+				break;
+			}
+		} while (TRUE);
+
+		if (ii >= 10U)
+		{
+			ret = ETIME;
+		}
+		else
+		{
+			ret = EOK;
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Adjust system time
+ * @param[in]	base_va Base address
+ * @param[in]	sec Seconds
+ * @param[in]	nsec NanoSeconds
+ * @param[in]	sgn Sing of the adjustment (TRUE - positive, FALSE - negative)
+ */
+errno_t pfe_emac_cfg_adjust_ts_time(addr_t base_va, uint32_t sec, uint32_t nsec, bool_t sgn)
+{
+	uint32_t regval, ii;
+	uint32_t nsec_temp = nsec;
+	int32_t sec_temp = sec;
+	errno_t ret;
+
+	if (nsec_temp > 0x7fffffffU)
+	{
+		ret = EINVAL;
+	}
+	else
+	{
+		ret = EOK;
+
+		regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
+
+		if (!sgn)
+		{
+			if (0U != (regval & DIGITAL_ROLLOVER(1)))
+			{
+				nsec_temp = 1000000000U - nsec;
+			}
+			else
+			{
+				nsec_temp = (1UL << 31U) - nsec;
+			}
+
+			sec_temp = -sec_temp;
+		}
+
+		if (0U != (regval & DIGITAL_ROLLOVER(1)))
+		{
+			if (nsec_temp > 0x3b9ac9ffU)
+			{
+				ret = EINVAL;
+			}
+		}
+
+		if (EOK == ret)
+		{
+			hal_write32(sec_temp, base_va + MAC_STSU);
+			hal_write32(ADDSUB(!sgn) | nsec_temp, base_va + MAC_STNSU);
+
+			/*	Trigger the update */
+			regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
+			regval |= UPDATE_TIMESTAMP(1);
+			hal_write32(regval, base_va + MAC_TIMESTAMP_CONTROL);
+
+			/*	Wait for completion */
+			ii = 0U;
+			do
+			{
+				regval = hal_read32(base_va + MAC_TIMESTAMP_CONTROL);
+				oal_time_usleep(100U);
+				if (((regval & UPDATE_TIMESTAMP(1)) != 0U) && (ii < 10U))
+				{
+					++ii;
+				}
+				else
+				{
+					break;
+				}
+			} while (TRUE);
+
+			if (ii >= 10U)
+			{
+				ret = ETIME;
+			}
+		}
+	}
+
+	return ret;
+}

@@ -75,7 +75,8 @@ SRCS =		src/pfe_hif_chnl_linux.c \
 		src/pfe_mac_db.c \
 		src/pfe_hm.c \
 		src/pfe_mac_db.c \
-		src/pfe_emac_slave.c
+		src/pfe_emac_slave.c \
+		hw/$(TARGET_HW)/pfe_emac_csr.c
 else
 SRCS =	src/pfe_bmu.c \
 		src/pfe_class.c \
