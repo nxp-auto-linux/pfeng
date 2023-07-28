@@ -87,6 +87,10 @@ static int manage_port_coherency = 0;
 module_param(manage_port_coherency, int, 0644);
 MODULE_PARM_DESC(manage_port_coherency, "\t 1 - enable HIF port coherency management, default is 0");
 
+static int hif_phc_emac = -1;
+module_param(hif_phc_emac, int, 0644);
+MODULE_PARM_DESC(hif_phc_emac, "\t (default EMAC0");
+
 uint32_t get_pfeng_pfe_cfg_master_if(void)
 {
 	/* Needed for compilation */
@@ -394,6 +398,10 @@ static int pfeng_drv_deferred_probe(void *arg)
 		priv->clk_ptp = NULL;
 	} else
 		priv->clk_ptp_reference = clk_get_rate(priv->clk_ptp);
+
+	/* PHC for hif2hif */
+	if (hif_phc_emac < PFENG_PFE_EMACS)
+		priv->hif_phc_emac_id = hif_phc_emac;
 
 	/* Create HIFs */
 	ret = pfeng_hif_create(priv);
