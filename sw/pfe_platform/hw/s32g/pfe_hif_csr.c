@@ -1054,17 +1054,22 @@ errno_t pfe_hif_chnl_cfg_set_rx_irq_coalesce(addr_t base_va, uint32_t channel_id
 	}
 	else
 	{
+		/* Frame based coalescing */
 		if (0U < frames)
 		{
-			/* Frame based coalescing is unsupported on S32G2 silicon */
-			ret = EINVAL;
+			/* Enable frame-based coalescing */
+			/* NOTE: Frame based coalescing is unsupported on S32G2 silicon */
+			hal_write32(cycles, base_va + HIF_ABS_FRAME_COUNT_CHn(channel_id));
+			hal_write32(HIF_INT_COAL_FRAME_ENABLE, base_va + HIF_INT_COAL_EN_CHn(channel_id));
+			ret = EOK;
 		}
-		else
-		{
 
-			/* Enable time-based coalescing */
-			hal_write32(HIF_INT_COAL_TIME_ENABLE, base_va + HIF_INT_COAL_EN_CHn(channel_id));
+		/* Timer-based coalescing */
+		if (0U < cycles)
+		{
+			/* Enable timer-based coalescing */
 			hal_write32(cycles, base_va + HIF_ABS_INT_TIMER_CHn(channel_id));
+			hal_write32(HIF_INT_COAL_TIME_ENABLE, base_va + HIF_INT_COAL_EN_CHn(channel_id));
 			ret = EOK;
 		}
 	}
