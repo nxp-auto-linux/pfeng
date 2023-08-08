@@ -257,6 +257,16 @@ static int pfeng_ihc_dispatch_rx_msg(struct pfeng_hif_chnl *chnl, struct sk_buff
 
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
+static inline void pfeng_hwts_skb_set_rx_ts(struct skb_shared_hwtstamps *hwts, u32 rx_timestamp_s, u32 rx_timestamp_ns)
+{
+	u64 nanos = 0ULL;
+
+	memset(hwts, 0, sizeof(*hwts));
+	nanos = rx_timestamp_ns;
+	nanos += rx_timestamp_s * 1000000000ULL;
+	hwts->hwtstamp = ns_to_ktime(nanos);
+}
+
 /**
  * @brief	Process HIF channel receive
  * @details	Read HIF channel data
@@ -483,7 +493,7 @@ int pfeng_hif_chnl_set_coalesce(struct pfeng_hif_chnl *chnl, struct clk *clk_sys
 	u32 cycles;
 	int ret;
 
-	cycles = usecs * (DIV_ROUND_UP(clk_get_rate(clk_sys), USEC_PER_SEC));
+	cycles = usecs * (DIV_ROUND_UP(pfeng_clk_sys_get_rate(clk_sys), USEC_PER_SEC));
 
 	ret = pfe_hif_chnl_set_rx_irq_coalesce(chnl->priv, 0, cycles);
 	if (!ret) {

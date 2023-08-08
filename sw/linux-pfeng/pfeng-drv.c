@@ -54,12 +54,6 @@
 /* Major IP version for cut2.0 */
 #define PFE_IP_MAJOR_VERSION_CUT2		2
 
-/* PFE SYS CLK is 300MHz */
-#define PFE_CLK_SYS_RATE			300000000
-
-/* PFE TS CLK is 200MHz */
-#define PFE_CLK_TS_RATE				200000000
-
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Jan Petrous <jan.petrous@nxp.com>");
 MODULE_DESCRIPTION("PFEng driver");

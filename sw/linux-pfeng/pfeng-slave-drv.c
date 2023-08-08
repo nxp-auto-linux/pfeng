@@ -332,6 +332,13 @@ static int pfeng_drv_deferred_probe(void *arg)
 		goto err_drv;
 	}
 
+	/* PFE_SYS clock */
+	priv->clk_sys = clk_get(dev, "pfe_sys");
+	if (IS_ERR(priv->clk_sys)) {
+		dev_warn(dev, "Failed to get pfe_sys clock, using default value (%d)\n", PFE_CLK_SYS_RATE);
+		priv->clk_sys = NULL;
+	}
+
 	/* HIF IHC channel number */
 	if (master_ihc_chnl < (HIF_CFG_MAX_CHANNELS + 1))
 		priv->ihc_master_chnl = master_ihc_chnl;

@@ -114,6 +114,7 @@ static int pfeng_ethtool_nway_reset(struct net_device *netdev)
 
 	return phylink_ethtool_nway_reset(netif->phylink);
 }
+#endif /* PFE_CFG_PFE_MASTER */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
 static int pfeng_get_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec)
@@ -134,7 +135,7 @@ static int pfeng_get_coalesce(struct net_device *netdev, struct ethtool_coalesce
 		return -ret;
 
 	ec->rx_max_coalesced_frames = frames;
-	ec->rx_coalesce_usecs = DIV_ROUND_UP(cycles, DIV_ROUND_UP(clk_get_rate(netif->priv->clk_sys), USEC_PER_SEC));
+	ec->rx_coalesce_usecs = DIV_ROUND_UP(cycles, DIV_ROUND_UP(pfeng_clk_sys_get_rate(netif->priv->clk_sys), USEC_PER_SEC));
 
 	return 0;
 }
@@ -193,21 +194,20 @@ static void pfeng_ethtool_complete(struct net_device *netdev)
 
 	pm_runtime_put(&netif->priv->pdev->dev);
 }
-#endif
 
 static const struct ethtool_ops pfeng_ethtool_ops = {
 #ifdef PFE_CFG_PFE_MASTER
-	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS,
 	.nway_reset = pfeng_ethtool_nway_reset,
 	.get_pauseparam = pfeng_ethtool_get_pauseparam,
 	.set_pauseparam = pfeng_ethtool_set_pauseparam,
 	.get_link_ksettings = pfeng_ethtool_get_link_ksettings,
 	.set_link_ksettings = pfeng_ethtool_set_link_ksettings,
+#endif
+	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS,
 	.get_coalesce = pfeng_get_coalesce,
 	.set_coalesce = pfeng_set_coalesce,
 	.begin = pfeng_ethtool_begin,
 	.complete = pfeng_ethtool_complete,
-#endif
 	.get_link = ethtool_op_get_link,
 	.get_drvinfo = pfeng_ethtool_getdrvinfo,
 	.get_ts_info = pfeng_ethtool_get_ts_info,
@@ -218,8 +218,8 @@ void pfeng_ethtool_init(struct net_device *netdev)
 	netdev->ethtool_ops = &pfeng_ethtool_ops;
 }
 
-#ifdef PFE_CFG_PFE_MASTER
 int pfeng_ethtool_params_save(struct pfeng_netif *netif) {
+#ifdef PFE_CFG_PFE_MASTER
 	struct net_device *netdev = netif->netdev;
 	struct ethtool_pauseparam epp;
 
@@ -229,6 +229,7 @@ int pfeng_ethtool_params_save(struct pfeng_netif *netif) {
 	pfeng_ethtool_get_pauseparam(netdev, &epp);
 	netif->cfg->pause_tx = epp.tx_pause;
 	netif->cfg->pause_rx = epp.rx_pause;
+#endif
 
 	return 0;
 }
@@ -237,7 +238,7 @@ int pfeng_ethtool_params_restore(struct pfeng_netif *netif) {
 	struct net_device *netdev = netif->netdev;
 	struct pfeng_hif_chnl *chnl;
 	struct ethtool_coalesce ec;
-	struct ethtool_pauseparam epp;
+	__maybe_unused struct ethtool_pauseparam epp;
 	int ret, idx = ffs(netif->cfg->hifmap) - 1;
 
 	/* Coalesce */
@@ -249,6 +250,7 @@ int pfeng_ethtool_params_restore(struct pfeng_netif *netif) {
 	if (ret)
 		HM_MSG_NETDEV_WARN(netdev, "Coalescing not restored\n");
 
+#ifdef PFE_CFG_PFE_MASTER
 	/* Pause */
 	epp.tx_pause = netif->cfg->pause_tx;
 	epp.rx_pause = netif->cfg->pause_rx;
@@ -256,15 +258,7 @@ int pfeng_ethtool_params_restore(struct pfeng_netif *netif) {
 	ret = pfeng_ethtool_set_pauseparam(netdev, &epp);
 	if (ret)
 		HM_MSG_NETDEV_WARN(netdev, "Pause not restored\n");
-
-	return 0;
-}
-#else
-int pfeng_ethtool_params_save(struct pfeng_netif *netif) {
-	return 0;
-}
-
-int pfeng_ethtool_params_restore(struct pfeng_netif *netif) {
-	return 0;
-}
 #endif
+
+	return 0;
+}
