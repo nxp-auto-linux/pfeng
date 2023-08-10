@@ -539,8 +539,7 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 		NXP_LOG_INFO("PFE CBUS p0x%p mapped @ v0x%"PRINTADDR_T"\n", (void *)config->cbus_base, pfe.cbus_baseaddr);
 	}
 
-    pfe.pfe_version = *(uint32_t*)(void*)((addr_t)pfe.cbus_baseaddr + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_VERSION);
-	NXP_LOG_INFO("HW version 0x%x\n", (uint_t)pfe.pfe_version);
+	pfe.on_g3 = config->on_g3;
 
 	/* Health monitor */
 	ret = pfe_hm_init();
