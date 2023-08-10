@@ -147,13 +147,8 @@ static int __pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coales
 	int ret = 0;
 	u32 idx;
 
-	/* Right now we only support two modes:
-	 * 1) disabled coalescing
-	 * 2) time-triggered coalescing
-	 *
-	 * Note: Frame count triggered coalescing is not supported on S32G2 silicon
-	 */
-	if (ec->rx_max_coalesced_frames > 0 && ec->rx_coalesce_usecs == 0) {
+	/* Note: Frame count triggered coalescing is not supported on S32G2 silicon */
+	if (ec->rx_max_coalesced_frames > 0 && ec->rx_coalesce_usecs == 0 && !netif->priv->on_g3) {
 		HM_MSG_NETDEV_ERR(netif->netdev, "Frame based coalescing is unsupported\n");
 		return -EINVAL;
 	}
@@ -164,7 +159,7 @@ static int __pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coales
 			continue;
 
 		chnl = &netif->priv->hif_chnl[idx];
-		ret = pfeng_hif_chnl_set_coalesce(chnl, netif->priv->clk_sys, ec->rx_coalesce_usecs, 0);
+		ret = pfeng_hif_chnl_set_coalesce(chnl, netif->priv->clk_sys, ec->rx_coalesce_usecs, ec->rx_max_coalesced_frames);
 		if (ret)
 			break;
 	}
@@ -195,7 +190,7 @@ static void pfeng_ethtool_complete(struct net_device *netdev)
 	pm_runtime_put(&netif->priv->pdev->dev);
 }
 
-static const struct ethtool_ops pfeng_ethtool_ops = {
+static const struct ethtool_ops pfeng_ethtool_ops_g2 = {
 #ifdef PFE_CFG_PFE_MASTER
 	.nway_reset = pfeng_ethtool_nway_reset,
 	.get_pauseparam = pfeng_ethtool_get_pauseparam,
@@ -213,9 +208,32 @@ static const struct ethtool_ops pfeng_ethtool_ops = {
 	.get_ts_info = pfeng_ethtool_get_ts_info,
 };
 
+static const struct ethtool_ops pfeng_ethtool_ops_g3 = {
+#ifdef PFE_CFG_PFE_MASTER
+	.nway_reset = pfeng_ethtool_nway_reset,
+	.get_pauseparam = pfeng_ethtool_get_pauseparam,
+	.set_pauseparam = pfeng_ethtool_set_pauseparam,
+	.get_link_ksettings = pfeng_ethtool_get_link_ksettings,
+	.set_link_ksettings = pfeng_ethtool_set_link_ksettings,
+#endif
+	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS | ETHTOOL_COALESCE_RX_MAX_FRAMES,
+	.get_coalesce = pfeng_get_coalesce,
+	.set_coalesce = pfeng_set_coalesce,
+	.begin = pfeng_ethtool_begin,
+	.complete = pfeng_ethtool_complete,
+	.get_link = ethtool_op_get_link,
+	.get_drvinfo = pfeng_ethtool_getdrvinfo,
+	.get_ts_info = pfeng_ethtool_get_ts_info,
+};
+
 void pfeng_ethtool_init(struct net_device *netdev)
 {
-	netdev->ethtool_ops = &pfeng_ethtool_ops;
+	struct pfeng_netif *netif = netdev_priv(netdev);
+
+	if (netif->priv->on_g3)
+		netdev->ethtool_ops = &pfeng_ethtool_ops_g3;
+	else
+		netdev->ethtool_ops = &pfeng_ethtool_ops_g2;
 }
 
 int pfeng_ethtool_params_save(struct pfeng_netif *netif) {
