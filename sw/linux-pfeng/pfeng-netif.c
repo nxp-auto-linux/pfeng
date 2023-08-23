@@ -1552,13 +1552,14 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 	}
 
 	return netif;
-#endif /* PFE_CFG_PFE_SLAVE */
+#else
 
 	ret = pfeng_netif_logif_init_second_stage(netif);
 	if (ret)
 		goto err_netdev_reg;
 
 	return netif;
+#endif
 
 err_netdev_reg:
 	pfeng_netif_logif_remove(netif);
