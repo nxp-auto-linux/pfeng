@@ -349,46 +349,52 @@ __attribute__((cold)) errno_t pfe_hif_ring_force_index(pfe_hif_ring_t *ring, uin
  */
 __attribute__((cold)) errno_t pfe_hif_ring_find_wb_entry(pfe_hif_ring_t *ring, bool_t valid, uint32_t *index)
 {
+	uint32_t valid_id, invalid_id, ii;
 	pfe_hif_wb_bd_t *wb;
-	bool_t flag = FALSE;
-	uint32_t ii;
 
 	for (ii = 0U; ii < RING_LEN; ii++)
 	{
 		wb = &(((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[ii]);
 
 		/* valid entry: WB BD must be DISABLED. The entry was processed by HW */
-		if (TRUE == valid)
+		if (0U == (wb->rsvd_ctrl_w0 & HIF_RING_WB_BD_W0_DESC_EN))
 		{
-			if (0U == (wb->rsvd_ctrl_w0 & HIF_RING_WB_BD_W0_DESC_EN))
-			{
-				*index = ii;
-				return EOK;
-			}
-		}
-
-		/* invalid entry: WB BD must be ENABLED. The entry was not touched by HW
-		 * 		  For invalid ssearch we need to detect first valid entry
-		 * 		  and only then search for invalid. Reason: Invalid search
-		 * 		  is used on RX ring, which can contain multiple (cached)
-		 * 		  entries.
-		 */
-		if (FALSE == valid)
-		{
-			if ((TRUE == flag) && (0U != (wb->rsvd_ctrl_w0 & HIF_RING_WB_BD_W0_DESC_EN)))
-			{
-				*index = ii;
-				return EOK;
-			}
-			if ((FALSE == flag) && (0U == (wb->rsvd_ctrl_w0 & HIF_RING_WB_BD_W0_DESC_EN)))
-			{
-				/* Found first valid entry, now we can find invalid one */
-				flag = TRUE;
-			}
+			valid_id = ii;
+			break;
 		}
 	}
 
-	return ENOENT;
+	if (RING_LEN == ii)
+		return ENOENT; /* not found */
+
+	if (TRUE == valid)
+	{
+		*index = valid_id;
+		return EOK;
+	}
+
+	for (ii = 0U; ii < RING_LEN; ii++)
+	{
+
+		invalid_id = (ii + valid_id + 1) % RING_LEN;
+		wb = &(((pfe_hif_wb_bd_t *)ring->wb_tbl_base_va)[invalid_id]);
+
+		/* invalid entry: WB BD must be ENABLED. The entry was not touched by HW
+		 *                For invalid search we need to detect first valid entry
+		 *                and only then search for invalid. Reason: Invalid search
+		 *                is used on RX ring, which can contain multiple (cached)
+		 *                entries.
+		 */
+		if ((0U != (wb->rsvd_ctrl_w0 & HIF_RING_WB_BD_W0_DESC_EN)))
+			break;
+	}
+
+	if (RING_LEN == ii)
+		return ENOENT; /* not found */
+
+	*index = invalid_id;
+
+	return EOK;
 }
 
 /**

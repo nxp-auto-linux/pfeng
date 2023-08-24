@@ -1665,7 +1665,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_rx_to_head(pfe_hif_chnl_t * ch
 	int ii, ring_len;
 	void *buf_va = NULL, *buf_pa, *frame;
 	bool_t lifm;
-	errno_t ret = ENOENT;
+	errno_t ret = EOK;
 
 	/* Alloc one frame buffer */
 	buf_va = oal_mm_malloc_contig_aligned_nocache(DUMMY_RX_BUF_LEN, 8U);
@@ -1754,7 +1754,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_tx_to_head(pfe_hif_chnl_t * ch
 {
 	int ii, ring_len;
 	void *frame;
-	errno_t ret = ENOENT;
+	errno_t ret = EOK;
 
 	ring_len = pfe_hif_ring_get_len(chnl->tx_ring);
 
