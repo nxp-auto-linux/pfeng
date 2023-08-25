@@ -267,9 +267,7 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 	errno_t ret = EOK;
 	uint32_t regval;
 
-	(void)cfg;
-
-	if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+	if (TRUE == cfg->on_g3)
 	{
 		regval = hal_read32(cbus_base_va + TMU_TEQ_CTRL);
 		regval |= 0x4U;
@@ -299,69 +297,75 @@ errno_t pfe_tmu_cfg_init(addr_t cbus_base_va, const pfe_tmu_cfg_t *cfg)
 	{
 		/* NOTE: Do not access the direct registers here it may result in bus fault.*/
 
-		/*	Initialize HW schedulers. Invalidate all inputs. */
-		pfe_tmu_sch_cfg_init(cbus_base_va, phy_if_id_temp[ii], 0U);
-		pfe_tmu_sch_cfg_init(cbus_base_va, phy_if_id_temp[ii], 1U);
-
-		/*	Initialize shapers. Make sure they are not connected. */
-		pfe_tmu_shp_cfg_init(cbus_base_va, phy_if_id_temp[ii], 0U);
-		pfe_tmu_shp_cfg_init(cbus_base_va, phy_if_id_temp[ii], 1U);
-		pfe_tmu_shp_cfg_init(cbus_base_va, phy_if_id_temp[ii], 2U);
-		pfe_tmu_shp_cfg_init(cbus_base_va, phy_if_id_temp[ii], 3U);
-
-		/*	Set default topology:
-			 - All shapers are disabled and not associated with any queue
-			 - Scheduler 0 is not used
-			 - Queue[n]->SCH1.input[n]
-		*/
-		for (queue = 0U; queue < (uint8_t)TLITE_PHY_QUEUES_CNT; queue++)
+		/* TDQ and SHP address range for PHY5(Util) does not exist on G2 */
+		if ((TRUE == cfg->on_g3) || ((FALSE == cfg->on_g3) && (PFE_PHY_IF_ID_UTIL != phy_if_id_temp[ii])))
 		{
-			/*	Scheduler 1 */
-			ret = pfe_tmu_sch_cfg_bind_queue(cbus_base_va, phy_if_id_temp[ii], 1U, queue, queue);
-			if (EOK != ret)
-			{
-				NXP_LOG_ERROR("Can't bind queue to scheduler: %d\n", ret);
-				ret = ENOEXEC;
-				break;
-			}
-		}
+			/*	Initialize HW schedulers. Invalidate all inputs. */
+			pfe_tmu_sch_cfg_init(cbus_base_va, phy_if_id_temp[ii], 0U);
+			pfe_tmu_sch_cfg_init(cbus_base_va, phy_if_id_temp[ii], 1U);
 
-		if (EOK == ret)
-		{
-			ret = pfe_tmu_sch_cfg_set_rate_mode(cbus_base_va, phy_if_id_temp[ii], 1U, RATE_MODE_DATA_RATE);
-			if (EOK != ret)
+			/*	Initialize shapers. Make sure they are not connected. */
+			pfe_tmu_shp_cfg_init(cbus_base_va, phy_if_id_temp[ii], 0U);
+			pfe_tmu_shp_cfg_init(cbus_base_va, phy_if_id_temp[ii], 1U);
+			pfe_tmu_shp_cfg_init(cbus_base_va, phy_if_id_temp[ii], 2U);
+			pfe_tmu_shp_cfg_init(cbus_base_va, phy_if_id_temp[ii], 3U);
+
+			/*	Set default topology:
+				 - All shapers are disabled and not associated with any queue
+				 - Scheduler 0 is not used
+				 - Queue[n]->SCH1.input[n]
+			*/
+			for (queue = 0U; queue < (uint8_t)TLITE_PHY_QUEUES_CNT; queue++)
 			{
-				NXP_LOG_ERROR("Could not set scheduler 1 rate mode: %d\n", ret);
-				ret = ENOEXEC;
-			}
-			else
-			{
-				ret = pfe_tmu_sch_cfg_set_algo(cbus_base_va, phy_if_id_temp[ii], 1U, SCHED_ALGO_RR);
+				/*	Scheduler 1 */
+				ret = pfe_tmu_sch_cfg_bind_queue(cbus_base_va, phy_if_id_temp[ii], 1U, queue, queue);
 				if (EOK != ret)
 				{
-					NXP_LOG_ERROR("Could not set scheduler 1 algo: %d\n", ret);
+					NXP_LOG_ERROR("Can't bind queue to scheduler: %d\n", ret);
+					ret = ENOEXEC;
+					break;
+				}
+			}
+
+			if (EOK == ret)
+			{
+				ret = pfe_tmu_sch_cfg_set_rate_mode(cbus_base_va, phy_if_id_temp[ii], 1U, RATE_MODE_DATA_RATE);
+				if (EOK != ret)
+				{
+					NXP_LOG_ERROR("Could not set scheduler 1 rate mode: %d\n", ret);
 					ret = ENOEXEC;
 				}
 				else
 				{
-					/*	Set default queue mode */
-					for (queue = 0U; queue < (uint8_t)TLITE_PHY_QUEUES_CNT; queue++)
+					ret = pfe_tmu_sch_cfg_set_algo(cbus_base_va, phy_if_id_temp[ii], 1U, SCHED_ALGO_RR);
+					if (EOK != ret)
 					{
-						if((uint32_t)PFE_PHY_IF_ID_HIF == ii)
-						{   /* HIF - special case for ERR051211 workaround */
-							ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, TLITE_HIF_MAX_Q_SIZE);
-						}
-						else
-						{   /* Other */
-							ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, TLITE_MAX_Q_SIZE);
-						}
-
-						if (EOK != ret)
-						{
-							NXP_LOG_ERROR("Can't set default queue mode: %d\n", ret);
-							break;
-						}
+						NXP_LOG_ERROR("Could not set scheduler 1 algo: %d\n", ret);
+						ret = ENOEXEC;
 					}
+				}
+			}
+
+		}
+
+		if (EOK == ret)
+		{
+			/*	Set default queue mode */
+			for (queue = 0U; queue < (uint8_t)TLITE_PHY_QUEUES_CNT; queue++)
+			{
+				if((uint32_t)PFE_PHY_IF_ID_HIF == ii)
+				{   /* HIF - special case for ERR051211 workaround */
+					ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, TLITE_HIF_MAX_Q_SIZE);
+				}
+				else
+				{   /* Other */
+					ret = pfe_tmu_q_mode_set_tail_drop(cbus_base_va, phy_if_id_temp[ii], queue, TLITE_MAX_Q_SIZE);
+				}
+
+				if (EOK != ret)
+				{
+					NXP_LOG_ERROR("Can't set default queue mode: %d\n", ret);
+					break;
 				}
 			}
 		}
