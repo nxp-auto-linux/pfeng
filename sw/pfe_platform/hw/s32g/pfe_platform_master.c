@@ -1881,7 +1881,7 @@ static errno_t pfe_platform_create_gpi(pfe_platform_t *platform, const pfe_platf
 	}
 	else
 	{
-		if(PFE_S32G3_VERSION == platform->pfe_version)
+		if(platform->on_g3)
 		{   /* S32G3 */
 			gpi_cfg_tmp.lmem_header_size = 48U;
 			aseq_len = 0x10U;
@@ -1984,7 +1984,7 @@ static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
 	}
 	else
 	{
-		if(PFE_S32G3_VERSION == platform->pfe_version)
+		if(platform->on_g3)
 		{   /* S32G3 */
 			gpi_cfg_tmp.lmem_header_size = 48U;
 			aseq_len = 0x10U;
@@ -2085,7 +2085,7 @@ static errno_t pfe_platform_create_hgpi(pfe_platform_t *platform)
 	}
 	else
 	{
-		if(PFE_S32G3_VERSION == platform->pfe_version)
+		if(platform->on_g3)
 		{   /* S32G3 */
 			hgpi_cfg.lmem_header_size = 48U;
 			aseq_len = 0x10U;
@@ -2158,7 +2158,7 @@ static errno_t pfe_platform_create_class(pfe_platform_t *platform, const pfe_pla
 
 	if (FALSE != conf->g2_ordered_class_writes)
 	{
-		if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+		if (platform->on_g3)
 		{
 			NXP_LOG_WARNING("The option 'g2_ordered_class_writes' has no effect on S32G3\n");
 		}
@@ -2182,7 +2182,7 @@ static errno_t pfe_platform_create_class(pfe_platform_t *platform, const pfe_pla
 	else
 	{
 
-		if(PFE_S32G3_VERSION == platform->pfe_version)
+		if(platform->on_g3)
 		{   /* S32G3 */
 			class_cfg.lmem_header_size = 48U;
 			class_cfg.ro_header_size = 512U;
@@ -2356,7 +2356,7 @@ static errno_t pfe_platform_create_rtable(pfe_platform_t *platform, const pfe_pl
 		platform->rtable_size = (config->rtable_hash_size + config->rtable_collision_size) * pfe_rtable_get_entry_size();
 		in_lmem = config->g3_rtable_in_lmem;
 
-		if (TRUE == in_lmem && FALSE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+		if (TRUE == in_lmem && !platform->on_g3)
 		{
 			NXP_LOG_DEBUG("'g3_rtable_in_lmem' works only on S32G3, ignore option\n");
 			in_lmem = FALSE;
@@ -2502,7 +2502,7 @@ static errno_t pfe_platform_create_util(pfe_platform_t *platform)
 	pfe_util_cfg_t util_cfg =
 	{
 		.pe_sys_clk_ratio = PFE_CFG_CLMODE,
-		.on_g3 = pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3),
+		.on_g3 = platform->on_g3,
 	};
 
 	platform->util = pfe_util_create(platform->cbus_baseaddr, platform->util_pe_count, &util_cfg);
@@ -2751,7 +2751,7 @@ static errno_t pfe_platform_create_pfe_errors(pfe_platform_t *platform, const pf
 		}
 	}
 
-	if (EOK == ret && TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+	if (EOK == ret && platform->on_g3)
 	{
 		/*	Bus Errors */
 		platform->bus_err = pfe_bus_err_create(platform->cbus_baseaddr, CBUS_GLOBAL_CSR_BASE_ADDR);
@@ -2826,7 +2826,7 @@ static errno_t pfe_platform_create_pfe_errors(pfe_platform_t *platform, const pf
 
 		pfe_wdt_irq_unmask(platform->wdt);
 
-		if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+		if (platform->on_g3)
 		{
 			pfe_bus_err_irq_unmask(platform->bus_err);
 
@@ -3470,22 +3470,16 @@ errno_t pfe_platform_soft_reset(const pfe_platform_t *platform)
 {
 	addr_t addr_gen, addr_dbug;
 	uint32_t regval;
-	bool_t run_on_g3 = FALSE;
 	uint32_t timeout = 1000U;
 	errno_t ret = EOK;
 
 	(void)platform;
 
-	if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
-	{
-		run_on_g3 = TRUE;
-	}
-
 	addr_gen = (addr_t)(pfe.cbus_baseaddr) + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_SYS_GENERIC_CONTROL;
 	regval = hal_read32(addr_gen);
 
 	/* Clear the soft reset done */
-	if (TRUE == run_on_g3)
+	if (platform->on_g3)
 	{
 		regval |= WSP_SYS_GEN_SOFT_RST_DONE_CLR_MASK_G3;
 		hal_write32(regval, addr_gen);
@@ -3497,7 +3491,7 @@ errno_t pfe_platform_soft_reset(const pfe_platform_t *platform)
 	regval |= WSP_SYS_GEN_SOFT_RST_BIT;
 	hal_write32(regval, addr_gen);
 
-	if (TRUE == run_on_g3)
+	if (platform->on_g3)
 	{
 		/* Wait for soft reset done */
 		addr_dbug = (addr_t)(pfe.cbus_baseaddr) + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_DBUG_BUS1_G3;
@@ -3578,10 +3572,6 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 		NXP_LOG_INFO("PFE CBUS p0x%"PRINTADDR_T" mapped @ v0x%"PRINTADDR_T" (0x%"PRINTADDR_T" bytes)\n", config->cbus_base, pfe.cbus_baseaddr, config->cbus_len);
 	}
 
-	/* Get PFE Version */
-	pfe.pfe_version = *(uint32_t*)(void*)((addr_t)pfe.cbus_baseaddr + CBUS_GLOBAL_CSR_BASE_ADDR + WSP_VERSION);
-	NXP_LOG_INFO("HW version 0x%x\n", (uint_t)pfe.pfe_version);
-
 	/* Initialize the features */
 	ret = pfe_feature_mgr_init((void *)pfe.cbus_baseaddr);
 	if (EOK != ret)
@@ -3590,7 +3580,10 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 		goto exit;
 	}
 
-	if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+	/* Get PFE Version */
+	pfe.on_g3 = pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3);
+
+	if (pfe.on_g3)
 	{
 		NXP_LOG_WARNING("Fail-Stop mode disabled\n");
 		addr = (void *)(CBUS_GLOBAL_CSR_BASE_ADDR + WSP_FAIL_STOP_MODE_INT_EN + (addr_t)(pfe.cbus_baseaddr));
@@ -3608,7 +3601,7 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 		*ii = 0U;
 	}
 
-	if (TRUE == pfe_feature_mgr_is_available(PFE_HW_FEATURE_RUN_ON_G3))
+	if (pfe.on_g3)
 	{
 		addr = (uint32_t*)(void*)((addr_t)pfe.cbus_baseaddr + CBUS_ROUTE_LMEM_ADDR);
 		for (ii = addr; ((addr_t)ii - (addr_t)addr) < CBUS_ROUTE_LMEM_SIZE; ++ii)

@@ -80,6 +80,7 @@ typedef struct
 	uint32_t irq_vector_upe_gpt; /* UPE + GPT IRQ number */
 	uint32_t irq_vector_safety; /* Safety IRQ number */
 	bool_t enable_util;			/* Shall be UTIL enabled? */
+	bool_t on_g3;				/* Only for Slave: passed externally detected value */
 	bool_t disable_master_detect;	/* Shall be Master-detect disabled? */
 	pfe_ct_phy_if_id_t local_hif; /* ID of the local interface */
 	uint32_t rtable_hash_size;	/* Size (number of entries) of hash area within routing table */
@@ -148,7 +149,7 @@ typedef struct
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 	bool_t fci_created;
 	bool_t g3_rtable_in_lmem;
-	uint32_t pfe_version;
+	bool_t on_g3;
 	uint8_t emac_ext_ts_mask;
 } pfe_platform_t;
 

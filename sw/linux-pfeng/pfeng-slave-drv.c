@@ -332,6 +332,13 @@ static int pfeng_drv_deferred_probe(void *arg)
 		goto err_drv;
 	}
 
+	/* PFE_SYS clock */
+	priv->clk_sys = clk_get(dev, "pfe_sys");
+	if (IS_ERR(priv->clk_sys)) {
+		dev_warn(dev, "Failed to get pfe_sys clock, using default value (%d)\n", PFE_CLK_SYS_RATE);
+		priv->clk_sys = NULL;
+	}
+
 	/* HIF IHC channel number */
 	if (master_ihc_chnl < (HIF_CFG_MAX_CHANNELS + 1))
 		priv->ihc_master_chnl = master_ihc_chnl;
@@ -437,6 +444,30 @@ err_drv:
 }
 
 /**
+ * pfeng_drv_soc_is_g3
+ *
+ * @dev: device pointer
+ *
+ * Description: This probing function tries to detect S32G3 SoC.
+ * In case no S32G3 nor S32G2 is detected, the default is S32G2.
+ * The detection depends on valid DT, it checks compatibility
+ * string for head node.
+ *
+ */
+static bool pfeng_drv_soc_is_g3(struct device *dev)
+{
+	struct device_node *node = of_find_node_by_path("/");
+
+	if (of_device_is_compatible(node, "nxp,s32g3"))
+		return true;
+
+	if (!of_device_is_compatible(node, "nxp,s32g2"))
+		dev_warn(dev, "Silicon detection failed. Defaulting to S32G2\n");
+
+	return false;
+}
+
+/**
  * pfeng_drv_probe
  *
  * @pdev: platform device pointer
@@ -487,6 +518,10 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		goto err_drv;
 	}
 	dev_set_drvdata(dev, priv);
+
+	/* Detect S32G3 */
+	priv->on_g3 = pfeng_drv_soc_is_g3(dev);
+	priv->pfe_cfg->on_g3 = pfeng_drv_soc_is_g3(dev);
 
 	if (!disable_master_detection) {
 		priv->deferred_probe_task = kthread_run(pfeng_drv_deferred_probe, priv, "pfe-probe-task");

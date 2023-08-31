@@ -51,6 +51,12 @@
 
 #define PFENG_DRIVER_COMMIT_HASH	"M4_DRIVER_COMMIT_HASH"
 
+/* PFE SYS CLK is 300MHz */
+#define PFE_CLK_SYS_RATE		300000000
+
+/* PFE TS CLK is 200MHz */
+#define PFE_CLK_TS_RATE			200000000
+
 static const pfe_ct_phy_if_id_t pfeng_emac_ids[] = {
 	PFE_PHY_IF_ID_EMAC0,
 	PFE_PHY_IF_ID_EMAC1,
@@ -468,14 +474,12 @@ void pfeng_ptp_unregister(struct pfeng_netif *netif);
 int pfeng_hwts_init(struct pfeng_netif *netif);
 void pfeng_hwts_release(struct pfeng_netif *netif);
 
-static inline void pfeng_hwts_skb_set_rx_ts(struct skb_shared_hwtstamps *hwts, u32 rx_timestamp_s, u32 rx_timestamp_ns)
+static inline unsigned long pfeng_clk_sys_get_rate(struct clk *clk)
 {
-	u64 nanos = 0ULL;
+	if (!clk)
+		return PFE_CLK_SYS_RATE;
 
-	memset(hwts, 0, sizeof(*hwts));
-	nanos = rx_timestamp_ns;
-	nanos += rx_timestamp_s * 1000000000ULL;
-	hwts->hwtstamp = ns_to_ktime(nanos);
+	return clk_get_rate(clk);
 }
 
 void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, pfe_ct_ets_report_t *etsr);
