@@ -105,11 +105,6 @@ typedef struct __attribute__((aligned(HAL_CACHE_LINE_SIZE)))
 #endif /* BPOOL_CFG_MEM_BUF_WATCH */
 } bpool_rx_buf_t;
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 /**
  * @brief		Returns buffer size of any buffer in the bpool
  * @param[in]	pool The bpool instance
@@ -349,11 +344,6 @@ errno_t bpool_get_fill_level(bpool_t *pool, uint32_t *fill_level) __attribute__(
 uint32_t bpool_get_depth(const bpool_t *pool) __attribute__((pure, hot));
 errno_t bpool_destroy(bpool_t * pool) __attribute__((cold));
 errno_t bpool_clear(bpool_t * pool) __attribute__((cold));
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* SRC_BPOOL_H_ */
 
