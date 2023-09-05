@@ -495,7 +495,7 @@ int pfeng_hif_chnl_set_coalesce(struct pfeng_hif_chnl *chnl, struct clk *clk_sys
 
 	cycles = usecs * (DIV_ROUND_UP(pfeng_clk_sys_get_rate(clk_sys), USEC_PER_SEC));
 
-	ret = pfe_hif_chnl_set_rx_irq_coalesce(chnl->priv, 0, cycles);
+	ret = pfe_hif_chnl_set_rx_irq_coalesce(chnl->priv, frames, cycles);
 	if (!ret) {
 		chnl->cfg_rx_max_coalesced_frames = frames;
 		chnl->cfg_rx_coalesce_usecs = usecs;
