@@ -1610,13 +1610,11 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 
 	rtnl_lock();
 
-	if (emac) {
-		/* Save EMAC pause */
-		pfeng_ethtool_params_save(netif);
+	pfeng_ethtool_params_save(netif);
 
+	if (emac)
 		/* Disable EMAC */
 		pfe_log_if_disable(emac->logif_emac);
-	}
 
 #ifdef PFE_CFG_PFE_MASTER
 	/* Stop PHY */
@@ -1779,10 +1777,10 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 		/* Restore RX mode: promisc & UC/MC addresses */
 		pfeng_netif_set_rx_mode(netdev);
 #endif
-
-		/* Restore EMAC pause and coalesce */
-		pfeng_ethtool_params_restore(netif);
 	}
+
+	/* Restore EMAC pause and coalesce */
+	pfeng_ethtool_params_restore(netif);
 
 #ifdef PFE_CFG_PFE_SLAVE
 	netif_carrier_on(netdev);
