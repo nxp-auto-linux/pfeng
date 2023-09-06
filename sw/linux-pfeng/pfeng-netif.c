@@ -1595,6 +1595,7 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 {
 	struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
 	struct pfeng_hif_chnl *chnl;
+	pfe_log_if_t *logif;
 	int i;
 
 #ifdef PFE_CFG_PFE_MASTER
@@ -1632,6 +1633,17 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 #endif /* PFE_CFG_PFE_MASTER */
 
 	rtnl_unlock();
+
+	/* Free EMAC logif */
+	logif = pfeng_netif_get_emac_logif(netif);
+	if (logif) {
+		pfe_log_if_disable(logif);
+		if (EOK != pfe_platform_unregister_log_if(netif->priv->pfe_platform, logif))
+			HM_MSG_NETDEV_WARN(netif->netdev, "Can't unregister EMAC Logif\n");
+		else
+			pfe_log_if_destroy(logif);
+		netif->priv->emac[netif->cfg->phyif_id].logif_emac = NULL;
+	}
 
 	/* Reset attached HIF PhyIfs */
 	pfeng_netif_for_each_chnl(netif, i, chnl) {
