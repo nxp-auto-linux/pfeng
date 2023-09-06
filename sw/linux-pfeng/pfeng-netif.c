@@ -1303,17 +1303,18 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 
 	pfeng_netif_set_mac_address(netdev, (void *)&saddr);
 
-	if (!pfeng_netif_is_aux(netif)) {
-		/* Init hw timestamp */
-		ret = pfeng_hwts_init(netif);
-		if (ret) {
-			HM_MSG_NETDEV_ERR(netdev, "Cannot initialize timestamping: %d\n", ret);
-			goto err;
-		}
-		pfeng_ptp_register(netif);
-	}
-
 	if (!netif->priv->in_suspend) {
+
+		if (!pfeng_netif_is_aux(netif)) {
+			/* Init hw timestamp */
+			ret = pfeng_hwts_init(netif);
+			if (ret) {
+				HM_MSG_NETDEV_ERR(netdev, "Cannot initialize timestamping: %d\n", ret);
+				goto err;
+			}
+			pfeng_ptp_register(netif);
+		}
+
 		ret = register_netdev(netdev);
 		if (ret) {
 			HM_MSG_NETDEV_ERR(netdev, "Error registering the device: %d\n", ret);
@@ -1735,8 +1736,9 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 		}
 	}
 
-	ret = pfeng_netif_logif_init_second_stage(netif);
 #endif /* PFE_CFG_PFE_MASTER */
+
+	ret = pfeng_netif_logif_init_second_stage(netif);
 
 	/* start HIF channel(s) */
 	pfeng_netif_for_each_chnl(netif, i, chnl) {
