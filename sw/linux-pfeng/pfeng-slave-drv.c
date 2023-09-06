@@ -590,6 +590,7 @@ static int pfeng_drv_deferred_resume(void *arg)
 {
 	struct device *dev = (struct device *)arg;
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
+	int loops = ipready_tmout * 10; /* sleep is 100 usec */
 	int ret;
 
 	ret = pinctrl_pm_select_default_state(dev);
@@ -604,7 +605,31 @@ static int pfeng_drv_deferred_resume(void *arg)
 		HM_MSG_DEV_WARN(dev, "Failed to re-init PFE memory\n");
 	}
 
-//FIXME: IP-Ready
+	/* Detect controller state */
+	if (priv->deferred_probe_task) {
+		HM_MSG_DEV_INFO(dev, "Wait for PFE controller UP ...\n");
+
+		while(1) {
+
+			if(kthread_should_stop())
+				do_exit(0);
+
+			if (hal_ip_ready_get())
+				break;
+
+			if (ipready_tmout && !loops--) {
+				/* Timed out */
+				HM_MSG_DEV_ERR(dev, "PFE controller UP timed out\n");
+				priv->deferred_probe_task = NULL;
+				do_exit(0);
+			}
+
+			usleep_range(100, 500);
+		}
+
+		HM_MSG_DEV_INFO(dev, "PFE controller UP detected\n");
+	} else
+		HM_MSG_DEV_INFO(dev, "PFE controller state detection skipped\n");
 
 	/* Start PFE Platform */
 	ret = pfe_platform_init(priv->pfe_cfg);
