@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -20,12 +20,7 @@ struct __attribute__((aligned(HAL_CACHE_LINE_SIZE))) fifo_tag
 	void **data;
 };
 
-typedef struct fifo_tag fifo_t;
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+typedef volatile struct fifo_tag fifo_t;
 
 static inline errno_t fifo_put(fifo_t *const fifo, void *const ptr)
 {
@@ -92,10 +87,5 @@ void fifo_clear(fifo_t *const fifo) __attribute__((cold));
 void * fifo_peek(const fifo_t * const fifo, uint32_t num) __attribute__((hot));
 errno_t fifo_get_fill_level(const fifo_t *const fifo, uint32_t *fill_level) __attribute__((hot));
 errno_t fifo_get_free_space(const fifo_t *const fifo, uint32_t *free_space) __attribute__((hot));
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* SRC_fifo_H_ */
