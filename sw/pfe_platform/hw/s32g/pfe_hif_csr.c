@@ -1045,6 +1045,7 @@ errno_t pfe_hif_chnl_cfg_get_rx_irq_coalesce(addr_t base_va, uint32_t channel_id
 errno_t pfe_hif_chnl_cfg_set_rx_irq_coalesce(addr_t base_va, uint32_t channel_id, uint32_t frames, uint32_t cycles)
 {
 	errno_t ret;
+	uint32_t reg;
 
 	/* Disable coalescing */
 	hal_write32(0x0U, base_va + HIF_INT_COAL_EN_CHn(channel_id));
@@ -1063,7 +1064,7 @@ errno_t pfe_hif_chnl_cfg_set_rx_irq_coalesce(addr_t base_va, uint32_t channel_id
 		{
 			/* Enable frame-based coalescing */
 			/* NOTE: Frame based coalescing is unsupported on S32G2 silicon */
-			hal_write32(cycles, base_va + HIF_ABS_FRAME_COUNT_CHn(channel_id));
+			hal_write32(frames, base_va + HIF_ABS_FRAME_COUNT_CHn(channel_id));
 			hal_write32(HIF_INT_COAL_FRAME_ENABLE, base_va + HIF_INT_COAL_EN_CHn(channel_id));
 			ret = EOK;
 		}
@@ -1073,7 +1074,8 @@ errno_t pfe_hif_chnl_cfg_set_rx_irq_coalesce(addr_t base_va, uint32_t channel_id
 		{
 			/* Enable timer-based coalescing */
 			hal_write32(cycles, base_va + HIF_ABS_INT_TIMER_CHn(channel_id));
-			hal_write32(HIF_INT_COAL_TIME_ENABLE, base_va + HIF_INT_COAL_EN_CHn(channel_id));
+			reg = hal_read32(base_va + HIF_INT_COAL_EN_CHn(channel_id));
+			hal_write32(HIF_INT_COAL_TIME_ENABLE | reg, base_va + HIF_INT_COAL_EN_CHn(channel_id));
 			ret = EOK;
 		}
 	}
