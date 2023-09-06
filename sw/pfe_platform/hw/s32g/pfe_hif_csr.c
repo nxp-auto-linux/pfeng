@@ -498,10 +498,14 @@ errno_t pfe_hif_cfg_init(addr_t base_va)
  */
 void pfe_hif_cfg_fini(addr_t base_va)
 {
+#ifdef PFE_CFG_PFE_MASTER
 	/*	Disable HIF interrupts */
 	hal_write32(0U, base_va + HIF_ERR_INT_EN);
 	hal_write32(0U, base_va + HIF_TX_FIFO_ERR_INT_EN);
 	hal_write32(0U, base_va + HIF_RX_FIFO_ERR_INT_EN);
+#else
+	(void)base_va;	/* suppress gcc warning */
+#endif
 }
 
 /**
