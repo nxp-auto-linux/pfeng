@@ -476,6 +476,9 @@ pfe_emac_t *pfe_emac_create(addr_t cbus_base_va, addr_t emac_base, pfe_emac_mii_
 					/*	Initialize the MAC address DB */
 					pfe_emac_addr_db_init(emac);
 
+            		/* ERR050221: to ensure parity_en is set before any registers READ to MAC */
+            		pfe_emac_cfg_pre_init(emac->emac_base_va);
+
 					/*	Disable the HW */
 					pfe_emac_disable(emac);
 
