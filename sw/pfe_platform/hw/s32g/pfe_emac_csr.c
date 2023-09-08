@@ -145,6 +145,16 @@ static const char *emac_speed_to_str(pfe_emac_speed_t speed)
 }
 
 /**
+ * @brief       HW-specific pre-initialization function related to ERR050221
+ *              This function should be called before any READ of MAC registers
+ * @param[in]   base_va Base address of MAC register space (virtual)
+ */
+void pfe_emac_cfg_pre_init(addr_t base_va)
+{
+    hal_write32(0x1U, base_va + MTL_DPP_CONTROL);
+}
+
+/**
  * @brief		HW-specific initialization function
  * @param[in]	base_va Base address of MAC register space (virtual)
  * @param[in]	mode MII mode to be configured @see pfe_emac_mii_mode_t
@@ -178,7 +188,6 @@ errno_t pfe_emac_cfg_init(addr_t base_va, pfe_emac_mii_mode_t mode,
 			| PROMISCUOUS_MODE(0U)
 			, base_va + MAC_PACKET_FILTER);
 
-	hal_write32(0x1U, base_va + MTL_DPP_CONTROL);
 	reg = hal_read32(base_va + MAC_Q0_TX_FLOW_CTRL);
 	reg &= ~TX_FLOW_CONTROL_ENABLE(1U);
 	hal_write32(reg, base_va + MAC_Q0_TX_FLOW_CTRL);
