@@ -555,7 +555,27 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	pfeng_netif_suspend(priv);
 
 	/* HIFs stop */
-	pfeng_hif_slave_suspend(priv);
+	pfeng_hif_remove(priv);
+
+	/* PFE platform remove */
+	if (priv->pfe_platform) {
+		if (pfe_platform_remove() != EOK)
+			HM_MSG_DEV_ERR(dev, "PFE Platform not stopped successfully\n");
+		else {
+			priv->pfe_platform = NULL;
+			HM_MSG_DEV_INFO(dev, "PFE Platform stopped\n");
+		}
+	}
+
+	pinctrl_pm_select_sleep_state(dev);
+
+	/* Stop clocks */
+	if (priv->clk_ptp) {
+		clk_disable_unprepare(priv->clk_ptp);
+	}
+	if (priv->clk_sys) {
+		clk_disable_unprepare(priv->clk_sys);
+	}
 
 	/* Clear HIF channels coherency */
 	if (of_dma_is_coherent(dev->of_node))
@@ -566,9 +586,99 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	return 0;
 }
 
+static int pfeng_drv_deferred_resume(void *arg)
+{
+	struct device *dev = (struct device *)arg;
+	struct pfeng_priv *priv = dev_get_drvdata(dev);
+	int loops = ipready_tmout * 10; /* sleep is 100 usec */
+	int ret;
+
+	ret = pinctrl_pm_select_default_state(dev);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "Failed to select default pinctrl state\n");
+		return -EINVAL;
+	}
+
+	/* Reinit memory */
+	ret = oal_mm_wakeup_reinit();
+	if (ret) {
+		HM_MSG_DEV_WARN(dev, "Failed to re-init PFE memory\n");
+	}
+
+	/* Detect controller state */
+	if (priv->deferred_probe_task) {
+		HM_MSG_DEV_INFO(dev, "Wait for PFE controller UP ...\n");
+
+		while(1) {
+
+			if(kthread_should_stop())
+				do_exit(0);
+
+			if (hal_ip_ready_get())
+				break;
+
+			if (ipready_tmout && !loops--) {
+				/* Timed out */
+				HM_MSG_DEV_ERR(dev, "PFE controller UP timed out\n");
+				priv->deferred_probe_task = NULL;
+				do_exit(0);
+			}
+
+			usleep_range(100, 500);
+		}
+
+		HM_MSG_DEV_INFO(dev, "PFE controller UP detected\n");
+	} else
+		HM_MSG_DEV_INFO(dev, "PFE controller state detection skipped\n");
+
+	/* Start PFE Platform */
+	ret = pfe_platform_init(priv->pfe_cfg);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "Could not init PFE platform instance. Error %d\n", ret);
+		goto err_pfe_init;
+	}
+	priv->pfe_platform = pfe_platform_get_instance();
+	if (!priv->pfe_platform) {
+		HM_MSG_DEV_ERR(dev, "Could not get PFE platform instance\n");
+		ret = -EINVAL;
+		goto err_pfe_get;
+	}
+
+	/* Create debugfs */
+	pfeng_debugfs_create(priv);
+
+	/* Create HIFs */
+	ret = pfeng_hif_create(priv);
+	if (ret)
+		goto err_drv;
+
+	/* Create net interfaces */
+	ret = pfeng_netif_resume(priv);
+	if (ret)
+		goto err_drv;
+
+	/* MDIO buses */
+	pfeng_mdio_resume(priv);
+
+	priv->in_suspend = false;
+
+err_drv:
+err_pfe_get:
+err_pfe_init:
+
+	if (priv->deferred_probe_task) {
+		priv->deferred_probe_task = NULL;
+		do_exit(0);
+	}
+
+	return 0;
+
+}
+
 static int pfeng_drv_pm_resume(struct device *dev)
 {
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
+	int ret = 0;
 
 	HM_MSG_DEV_INFO(dev, "Resuming driver\n");
 
@@ -576,21 +686,34 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	if (of_dma_is_coherent(dev->of_node))
 		pfeng_s32g_set_port_coherency(priv);
 
-	/* Create debugfs */
-	pfeng_debugfs_create(priv);
+	/* Start clocks */
+	ret = clk_prepare_enable(priv->clk_sys);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "Failed to enable clock 'pfe_sys'. Error: %d\n", ret);
+		return -EINVAL;
+	}
+	ret = clk_prepare_enable(priv->clk_ptp);
+	priv->clk_ptp = clk_get(dev, "pfe_ts");
+	if (ret) {
+		HM_MSG_DEV_WARN(dev, "Failed to get pfe_ts clock. PTP will be disabled.\n");
+		priv->clk_ptp = NULL;
+	} else
+		priv->clk_ptp_reference = clk_get_rate(priv->clk_ptp);
 
-	/* HIFs start */
-	pfeng_hif_slave_resume(priv);
+	if (!disable_master_detection) {
+		priv->deferred_probe_task = kthread_run(pfeng_drv_deferred_resume, dev, "pfe-resume-task");
+		if (IS_ERR(priv->deferred_probe_task)) {
+			ret = PTR_ERR(priv->deferred_probe_task);
+			priv->deferred_probe_task = NULL;
+			HM_MSG_DEV_ERR(dev, "Master detection task failed to start: %d\n", ret);
+			goto err_deferr;
+		}
+	} else
+		ret = pfeng_drv_deferred_resume(priv);
 
-	/* MDIO buses */
-	pfeng_mdio_resume(priv);
+err_deferr:
 
-	/* Create net interfaces */
-	pfeng_netif_resume(priv);
-
-	priv->in_suspend = false;
-
-	return 0;
+	return ret;
 }
 
 SIMPLE_DEV_PM_OPS(pfeng_drv_pm_ops,

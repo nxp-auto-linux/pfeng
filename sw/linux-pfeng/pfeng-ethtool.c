@@ -269,13 +269,15 @@ int pfeng_ethtool_params_restore(struct pfeng_netif *netif) {
 		HM_MSG_NETDEV_WARN(netdev, "Coalescing not restored\n");
 
 #ifdef PFE_CFG_PFE_MASTER
-	/* Pause */
-	epp.tx_pause = netif->cfg->pause_tx;
-	epp.rx_pause = netif->cfg->pause_rx;
-	epp.autoneg = AUTONEG_DISABLE;
-	ret = pfeng_ethtool_set_pauseparam(netdev, &epp);
-	if (ret)
-		HM_MSG_NETDEV_WARN(netdev, "Pause not restored\n");
+	if (pfeng_netif_get_emac(netif)) {
+		/* Pause */
+		epp.tx_pause = netif->cfg->pause_tx;
+		epp.rx_pause = netif->cfg->pause_rx;
+		epp.autoneg = AUTONEG_DISABLE;
+		ret = pfeng_ethtool_set_pauseparam(netdev, &epp);
+		if (ret)
+			HM_MSG_NETDEV_WARN(netdev, "Pause not restored\n");
+	}
 #endif
 
 	return 0;

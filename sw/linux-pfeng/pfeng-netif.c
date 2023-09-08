@@ -1303,17 +1303,18 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 
 	pfeng_netif_set_mac_address(netdev, (void *)&saddr);
 
-	if (!pfeng_netif_is_aux(netif)) {
-		/* Init hw timestamp */
-		ret = pfeng_hwts_init(netif);
-		if (ret) {
-			HM_MSG_NETDEV_ERR(netdev, "Cannot initialize timestamping: %d\n", ret);
-			goto err;
-		}
-		pfeng_ptp_register(netif);
-	}
-
 	if (!netif->priv->in_suspend) {
+
+		if (!pfeng_netif_is_aux(netif)) {
+			/* Init hw timestamp */
+			ret = pfeng_hwts_init(netif);
+			if (ret) {
+				HM_MSG_NETDEV_ERR(netdev, "Cannot initialize timestamping: %d\n", ret);
+				goto err;
+			}
+			pfeng_ptp_register(netif);
+		}
+
 		ret = register_netdev(netdev);
 		if (ret) {
 			HM_MSG_NETDEV_ERR(netdev, "Error registering the device: %d\n", ret);
@@ -1594,6 +1595,7 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 {
 	struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
 	struct pfeng_hif_chnl *chnl;
+	pfe_log_if_t *logif;
 	int i;
 
 #ifdef PFE_CFG_PFE_MASTER
@@ -1610,13 +1612,11 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 
 	rtnl_lock();
 
-	if (emac) {
-		/* Save EMAC pause */
-		pfeng_ethtool_params_save(netif);
+	pfeng_ethtool_params_save(netif);
 
+	if (emac)
 		/* Disable EMAC */
 		pfe_log_if_disable(emac->logif_emac);
-	}
 
 #ifdef PFE_CFG_PFE_MASTER
 	/* Stop PHY */
@@ -1633,6 +1633,17 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 #endif /* PFE_CFG_PFE_MASTER */
 
 	rtnl_unlock();
+
+	/* Free EMAC logif */
+	logif = pfeng_netif_get_emac_logif(netif);
+	if (logif) {
+		pfe_log_if_disable(logif);
+		if (EOK != pfe_platform_unregister_log_if(netif->priv->pfe_platform, logif))
+			HM_MSG_NETDEV_WARN(netif->netdev, "Can't unregister EMAC Logif\n");
+		else
+			pfe_log_if_destroy(logif);
+		netif->priv->emac[netif->cfg->phyif_id].logif_emac = NULL;
+	}
 
 	/* Reset attached HIF PhyIfs */
 	pfeng_netif_for_each_chnl(netif, i, chnl) {
@@ -1737,8 +1748,9 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 		}
 	}
 
-	ret = pfeng_netif_logif_init_second_stage(netif);
 #endif /* PFE_CFG_PFE_MASTER */
+
+	ret = pfeng_netif_logif_init_second_stage(netif);
 
 	/* start HIF channel(s) */
 	pfeng_netif_for_each_chnl(netif, i, chnl) {
@@ -1779,10 +1791,10 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 		/* Restore RX mode: promisc & UC/MC addresses */
 		pfeng_netif_set_rx_mode(netdev);
 #endif
-
-		/* Restore EMAC pause and coalesce */
-		pfeng_ethtool_params_restore(netif);
 	}
+
+	/* Restore EMAC pause and coalesce */
+	pfeng_ethtool_params_restore(netif);
 
 #ifdef PFE_CFG_PFE_SLAVE
 	netif_carrier_on(netdev);

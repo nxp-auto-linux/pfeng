@@ -637,7 +637,6 @@ static void pfeng_hif_idex_release(struct pfeng_priv *priv)
 	priv->ihc_enabled = false;
 
 	if (chnl->ihc) {
-		chnl->ihc = false;
 		priv->ihc_chnl = NULL;
 		pfe_idex_fini();
 		HM_MSG_DEV_INFO(&priv->pdev->dev, "IDEX RPC released. HIF IHC support disabled\n");

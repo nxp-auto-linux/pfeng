@@ -645,6 +645,8 @@ static int pfeng_reserved_dma_shared_pool_region_init(struct device *dev, int *r
 	return 0;
 }
 
+#endif /* PFE_CFG_PFE_MASTER */
+
 int __oal_mm_wakeup_reinit(void)
 {
 	struct pfe_reserved_mem *res_mem = NULL;
@@ -664,10 +666,6 @@ int __oal_mm_wakeup_reinit(void)
 
 	return 0;
 }
-
-#else
-#define __oal_mm_wakeup_reinit() 0
-#endif /* PFE_CFG_PFE_MASTER */
 
 static errno_t __oal_mm_init_regions(struct device *dev)
 {
