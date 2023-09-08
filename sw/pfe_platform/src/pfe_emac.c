@@ -633,17 +633,11 @@ errno_t pfe_emac_enable_ts(pfe_emac_t *emac, uint32_t i_clk_hz, uint32_t o_clk_h
 		emac->o_clk_hz = o_clk_hz;
 		emac->ext_ts = eclk;
 
-		if (EOK != oal_mutex_lock(&emac->ts_mutex))
-		{
-			NXP_LOG_ERROR("Mutex lock failed\n");
-		}
+		oal_mutex_lock_sleep(&emac->ts_mutex);
 
 		ret = pfe_emac_cfg_enable_ts(emac->emac_base_va, eclk, i_clk_hz, o_clk_hz);
 
-		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
-		{
-			NXP_LOG_ERROR("Mutex lock failed\n");
-		}
+		oal_mutex_unlock(&emac->ts_mutex);
 	}
 	return ret;
 }
@@ -658,10 +652,7 @@ errno_t pfe_emac_set_ts_freq_adjustment(pfe_emac_t *emac, uint32_t ppb, bool_t s
 {
 	errno_t ret;
 
-	if (EOK != oal_mutex_lock(&emac->ts_mutex))
-	{
-		NXP_LOG_ERROR("Mutex lock failed\n");
-	}
+	oal_mutex_lock_sleep(&emac->ts_mutex);
 
 	if (TRUE == emac->ext_ts)
 	{
@@ -670,16 +661,12 @@ errno_t pfe_emac_set_ts_freq_adjustment(pfe_emac_t *emac, uint32_t ppb, bool_t s
 	}
 	else
 	{
-	emac->adj_ppb = ppb;
-	emac->adj_sign = sgn;
-
-	ret = pfe_emac_cfg_adjust_ts_freq(emac->emac_base_va, emac->i_clk_hz, emac->o_clk_hz, ppb, sgn);
+		emac->adj_ppb = ppb;
+		emac->adj_sign = sgn;
+		ret = pfe_emac_cfg_adjust_ts_freq(emac->emac_base_va, emac->i_clk_hz, emac->o_clk_hz, ppb, sgn);
 	}
 
-	if (EOK != oal_mutex_unlock(&emac->ts_mutex))
-	{
-		NXP_LOG_ERROR("Mutex lock failed\n");
-	}
+	oal_mutex_unlock(&emac->ts_mutex);
 
 	return ret;
 }
@@ -701,18 +688,12 @@ errno_t pfe_emac_get_ts_freq_adjustment(pfe_emac_t *emac, uint32_t *ppb, bool_t 
 	}
 	else
 	{
-		if (EOK != oal_mutex_lock(&emac->ts_mutex))
-		{
-			NXP_LOG_ERROR("Mutex lock failed\n");
-		}
+		oal_mutex_lock_sleep(&emac->ts_mutex);
 
 		*ppb = emac->adj_ppb;
 		*sgn = emac->adj_sign;
 
-		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
-		{
-			NXP_LOG_ERROR("Mutex lock failed\n");
-		}
+		oal_mutex_unlock(&emac->ts_mutex);
 		ret = EOK;
 	}
 	return ret;
@@ -745,17 +726,11 @@ errno_t pfe_emac_get_ts_time(pfe_emac_t *emac, uint32_t *sec, uint32_t *nsec, ui
 		}
 		else
 		{
-			if (EOK != oal_mutex_lock(&emac->ts_mutex))
-			{
-				NXP_LOG_ERROR("Mutex lock failed\n");
-			}
+			oal_mutex_lock_sleep(&emac->ts_mutex);
 
 			pfe_emac_cfg_get_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
 
-			if (EOK != oal_mutex_unlock(&emac->ts_mutex))
-			{
-				NXP_LOG_ERROR("Mutex lock failed\n");
-			}
+			oal_mutex_unlock(&emac->ts_mutex);
 			ret = EOK;
 		}
 	}
@@ -788,10 +763,7 @@ errno_t pfe_emac_adjust_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, b
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		if (EOK != oal_mutex_lock(&emac->ts_mutex))
-		{
-			NXP_LOG_ERROR("Mutex lock failed\n");
-		}
+		oal_mutex_lock_sleep(&emac->ts_mutex);
 
 		if (TRUE == emac->ext_ts)
 		{
@@ -800,13 +772,10 @@ errno_t pfe_emac_adjust_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, b
 		}
 		else
 		{
-		ret = pfe_emac_cfg_adjust_ts_time(emac->emac_base_va, sec, nsec, sgn);
+			ret = pfe_emac_cfg_adjust_ts_time(emac->emac_base_va, sec, nsec, sgn);
 		}
 
-		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
-		{
-			NXP_LOG_ERROR("Mutex lock failed\n");
-		}
+		oal_mutex_unlock(&emac->ts_mutex);
 	}
 
 	return ret;
@@ -835,10 +804,7 @@ errno_t pfe_emac_set_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, uint
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		if (EOK != oal_mutex_lock(&emac->ts_mutex))
-		{
-			NXP_LOG_ERROR("Mutex lock failed\n");
-		}
+		oal_mutex_lock_sleep(&emac->ts_mutex);
 
 		if (TRUE == emac->ext_ts)
 		{
@@ -847,13 +813,10 @@ errno_t pfe_emac_set_ts_time(pfe_emac_t *emac, uint32_t sec, uint32_t nsec, uint
 		}
 		else
 		{
-		ret = pfe_emac_cfg_set_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
+			ret = pfe_emac_cfg_set_ts_time(emac->emac_base_va, sec, nsec, sec_hi);
 		}
 
-		if (EOK != oal_mutex_unlock(&emac->ts_mutex))
-		{
-			NXP_LOG_ERROR("Mutex lock failed\n");
-		}
+		oal_mutex_unlock(&emac->ts_mutex);
 	}
 
 	return ret;

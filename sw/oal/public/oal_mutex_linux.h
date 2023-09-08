@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2020 NXP
+ *  Copyright 2018-2020,2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -78,6 +78,19 @@ again:
 		goto again;
 	}
 	return EOK;
+}
+
+static inline void oal_mutex_lock_sleep(oal_mutex_t *mutex)
+{
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == mutex))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		return;
+	}
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+
+	mutex_lock(mutex);
 }
 
 static inline errno_t oal_mutex_unlock(oal_mutex_t *mutex)
