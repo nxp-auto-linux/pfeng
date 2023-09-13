@@ -244,9 +244,11 @@ int pfeng_ethtool_params_save(struct pfeng_netif *netif) {
 	/* Coalesce (saved in pfeng_hif_chnl_set_coalesce()) */
 
 	/* Pause */
-	pfeng_ethtool_get_pauseparam(netdev, &epp);
-	netif->cfg->pause_tx = epp.tx_pause;
-	netif->cfg->pause_rx = epp.rx_pause;
+	if (pfeng_netif_get_emac(netif)) {
+		pfeng_ethtool_get_pauseparam(netdev, &epp);
+		netif->cfg->pause_tx = epp.tx_pause;
+		netif->cfg->pause_rx = epp.rx_pause;
+	}
 #endif
 
 	return 0;
