@@ -1295,11 +1295,14 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 	if (ret)
 		goto err;
 
-	/* Set MAC address */
-	if (is_valid_ether_addr(netif->cfg->macaddr))
-		memcpy(&saddr.sa_data, netif->cfg->macaddr, ARRAY_SIZE(netif->cfg->macaddr));
-	else
-		memset(&saddr.sa_data, 0, sizeof(saddr.sa_data));
+	/* Prepare MAC address */
+	if (!netif->priv->in_suspend) {
+		if (is_valid_ether_addr(netif->cfg->macaddr))
+			memcpy(&saddr.sa_data, netif->cfg->macaddr, ARRAY_SIZE(netif->cfg->macaddr));
+		else
+			memset(&saddr.sa_data, 0, sizeof(saddr.sa_data));
+	} else
+		memcpy(&saddr.sa_data, netdev->dev_addr, sizeof(saddr.sa_data));
 
 	pfeng_netif_set_mac_address(netdev, (void *)&saddr);
 
