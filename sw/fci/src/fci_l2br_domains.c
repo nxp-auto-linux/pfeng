@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -87,7 +87,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 	{
 		if (*reply_len < sizeof(fpp_l2_bd_cmd_t))
 		{
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_l2_bd_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_l2_bd_cmd_t)\n");
 			ret = EINVAL;
 		}
 		else
@@ -103,7 +103,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 
 			if(EOK != ret)
 			{
-				NXP_LOG_ERROR("DB lock failed\n");
+				NXP_LOG_WARNING("DB lock failed\n");
 				*fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;
 				ret = EOK;
 			}
@@ -144,7 +144,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 						}
 						else if (EOK != ret)
 						{
-							NXP_LOG_ERROR("Domain creation failed: %d\n", ret);
+							NXP_LOG_WARNING("Domain creation failed: %d\n", ret);
 							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 							break;
 						}
@@ -477,7 +477,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 	{
 		if (*reply_len < sizeof(fpp_l2_static_ent_cmd_t))
 		{
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_l2_static_ent_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_l2_static_ent_cmd_t)\n");
 			ret = EINVAL;
 		}
 		else
@@ -516,7 +516,7 @@ errno_t fci_l2br_static_entry_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_stat
 						}
 						else
 						{
-							NXP_LOG_ERROR("Static entry %02x:%02x:%02x:%02x:%02x:%02x wasn't added to vlan %d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], oal_ntohs(br_ent_cmd->vlan));
+							NXP_LOG_WARNING("Static entry %02x:%02x:%02x:%02x:%02x:%02x wasn't added to vlan %d\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], oal_ntohs(br_ent_cmd->vlan));
 							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 						}
 					}
@@ -654,7 +654,7 @@ uint32_t fci_l2br_static_entry_get_valid_fw_list(void)
 	ret = pfe_if_db_lock(&session_id);
 	if(EOK != ret)
 	{
-		NXP_LOG_ERROR("DB lock failed\n");
+		NXP_LOG_WARNING("DB lock failed\n");
 		valid_if_list = 0;
 	}
 	else

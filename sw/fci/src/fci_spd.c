@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -66,7 +66,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
     {
         if (*reply_len < sizeof(fpp_spd_cmd_t))
         {
-            NXP_LOG_ERROR("Buffer length does not match expected value (fpp_spd_cmd_t)\n");
+            NXP_LOG_WARNING("Buffer length does not match expected value (fpp_spd_cmd_t)\n");
             ret = EINVAL;
         }
         else
@@ -94,7 +94,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
                 if (EOK != ret)
                 {
                     *fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;
-                    NXP_LOG_ERROR("DB lock failed\n");
+                    NXP_LOG_WARNING("DB lock failed\n");
                 }
                 else
                 {

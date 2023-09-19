@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2022 NXP
+ *  Copyright 2017-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -214,7 +214,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 
 						if (sizeof(buf.payload) < fci_buf->len)
 						{
-							NXP_LOG_ERROR("Put buffer is too small\n");
+							NXP_LOG_WARNING("Put buffer is too small\n");
 							ret = EINVAL;
 							fci_ret = FPP_ERR_INTERNAL_FAILURE;
 						}
@@ -227,7 +227,7 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 							ret = pfe_class_put_data(fci_context->class, &buf);
 							if (EOK != ret)
 							{
-								NXP_LOG_ERROR("pfe_class_buf_put() failed: %d\n", ret);
+								NXP_LOG_WARNING("pfe_class_buf_put() failed: %d\n", ret);
 								fci_ret = FPP_ERR_INTERNAL_FAILURE;
 							}
 						}

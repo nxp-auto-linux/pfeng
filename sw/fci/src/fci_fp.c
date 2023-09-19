@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2022 NXP
+ *  Copyright 2019-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -122,7 +122,7 @@ errno_t fci_fp_table_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_table_cmd_t *
         /* Important to initialize to avoid buffer overflows */
         if (*reply_len < sizeof(fpp_fp_table_cmd_t))
         {
-            NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fp_table_cmd_t)\n");
+            NXP_LOG_WARNING("Buffer length does not match expected value (fpp_fp_table_cmd_t)\n");
             ret = EINVAL;
         }
         else
@@ -264,7 +264,7 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
     {
         if (*reply_len < sizeof(fpp_fp_rule_cmd_t))
         {
-            NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fp_rule_cmd_t)\n");
+            NXP_LOG_WARNING("Buffer length does not match expected value (fpp_fp_rule_cmd_t)\n");
             ret = EINVAL;
         }
         else
@@ -289,7 +289,7 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
                         case FP_NEXT_RULE:
                             break;
                         default:
-                            NXP_LOG_ERROR("Impossible happened\n");
+                            NXP_LOG_WARNING("Impossible happened\n");
                             *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
                             ret = EINVAL;
                     }
@@ -306,7 +306,7 @@ errno_t fci_fp_rule_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fp_rule_cmd_t *re
                                 flags |= FP_FL_L4_OFFSET;
                                 break;
                             default:
-                                NXP_LOG_ERROR("Impossible happened\n");
+                                NXP_LOG_WARNING("Impossible happened\n");
                                 *fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
                                 ret = EINVAL;
                         }

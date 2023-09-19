@@ -64,7 +64,7 @@ errno_t fci_fw_features_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_features_c
 		{
 
 			/*	Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fw_features_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_fw_features_cmd_t)\n");
 			*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 			ret = EINVAL;
 		}
@@ -234,7 +234,7 @@ errno_t fci_fw_features_element_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_fe
 		if (*reply_len < sizeof(fpp_fw_features_element_cmd_t))
 		{
 			/*      Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_fw_features_element_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_fw_features_element_cmd_t)\n");
 			*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 			ret = EINVAL;
 		}
@@ -248,7 +248,7 @@ errno_t fci_fw_features_element_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_fw_fe
 
 			if (fp_cmd->fw_feature_name[0] == '\0')
 			{
-				NXP_LOG_ERROR("Feature invalid name (fpp_fw_features_element_cmd_t)\n");
+				NXP_LOG_WARNING("Feature invalid name (fpp_fw_features_element_cmd_t)\n");
 				*fci_ret = FPP_ERR_FW_FEATURE_NOT_FOUND;
 				ret = EOK;
 			}

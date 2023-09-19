@@ -261,7 +261,7 @@ static void fci_recv_msg(struct sk_buff *skb)
 
 	if (unlikely(NULL == skb))
 	{
-		NXP_LOG_ERROR("no skb received\n");
+		NXP_LOG_WARNING("no skb received\n");
 		return;
 	}
 
@@ -280,7 +280,7 @@ static void fci_recv_msg(struct sk_buff *skb)
 	nlh = (struct nlmsghdr *)skb->data;
 	if (unlikely(!nlh))
 	{
-		NXP_LOG_ERROR("Message error: no netlink data\n");
+		NXP_LOG_WARNING("Message error: no netlink data\n");
 		return;
 	}
 
@@ -288,7 +288,7 @@ static void fci_recv_msg(struct sk_buff *skb)
 	msg = (fci_msg_t *)nlmsg_data(nlh);
 	if (unlikely(!msg))
 	{
-		NXP_LOG_ERROR("Message error: payload is NULL\n");
+		NXP_LOG_WARNING("Message error: payload is NULL\n");
 		return;
 	}
 
@@ -305,7 +305,7 @@ static void fci_recv_msg(struct sk_buff *skb)
 
 		if (EOK != fci_netlink_send(port_id,&rep_msg))
 		{
-			NXP_LOG_ERROR("fci_netlink_send failed\n");
+			NXP_LOG_WARNING("fci_netlink_send failed\n");
 		}
 		mutex_unlock(&GET_FCI_CORE()->lock);
 	}
@@ -473,7 +473,7 @@ static errno_t fci_handle_msg(fci_msg_t *msg, fci_msg_t *rep_msg, uint32_t port_
 
 		default:
 		{
-			NXP_LOG_ERROR("Unknown FCI message: %d\n", msg->type);
+			NXP_LOG_WARNING("Unknown FCI message: %d\n", msg->type);
 			ret = EINVAL;
 
 			break;
