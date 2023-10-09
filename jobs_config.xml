@@ -3,6 +3,7 @@
 	<job name="pfe_linux_fallback">
 		<repository name="pfe_linux" priority="1">
 			<path>sw/\b</path>
+			<path>jobs_config.xml</path>
 			<param type="PR_BRANCH_FROM" name="PULL_REQUEST_FROM_DRIVER_BRANCH" />
 			<param type="PR_BRANCH_TO" name="PULL_REQUEST_TO_DRIVER_BRANCH" />
 			<param type="fixed" name="PULL_REQUEST_FROM_FIRMWARE_BRANCH" value="PULL_REQUEST_FROM_FIRMWARE_BRANCH" />
@@ -22,6 +23,7 @@
 	<job name="pfe_ms_mcal_linux_top">
 		<repository name="pfe_linux" priority="1">
 			<path>sw/\b</path>
+			<path>jobs_config.xml</path>
 			<param type="PR_BRANCH_FROM" name="PULL_REQUEST_FROM_SLAVE_DRIVER_BRANCH" />
 			<param type="PR_BRANCH_TO" name="PULL_REQUEST_TO_SLAVE_DRIVER_BRANCH" />
 			<param type="fixed" name="PULL_REQUEST_FROM_FIRMWARE_BRANCH" value="PULL_REQUEST_FROM_FIRMWARE_BRANCH" />
@@ -50,6 +52,7 @@
 	<job name="linux_pfe_s32g_platform_tests">
 		<repository name="pfe_linux" priority="2">
 			<path>sw/\b</path>
+			<path>jobs_config.xml</path>
 			<param type="PR_BRANCH_FROM" name="PULL_REQUEST_FROM_DRIVER_BRANCH" />
 			<param type="PR_BRANCH_TO" name="PULL_REQUEST_TO_DRIVER_BRANCH" />
 			<param type="fixed" name="PULL_REQUEST_FROM_FIRMWARE_BRANCH" value="PULL_REQUEST_FROM_FIRMWARE_BRANCH" />
@@ -75,6 +78,7 @@
 	<job name="pfe_linux_checkpatch">
 		<repository name="pfe_linux" priority="2">
 			<path>sw/\b</path>
+			<path>jobs_config.xml</path>
 			<param type="PR_BRANCH_FROM" name="PULL_REQUEST_FROM_DRIVER_BRANCH" />
 			<param type="PR_BRANCH_TO" name="PULL_REQUEST_TO_DRIVER_BRANCH" />
 			<param type="fixed" name="LINUX_BRANCH" value="LINUX_BRANCH" />
