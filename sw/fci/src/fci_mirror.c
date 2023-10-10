@@ -1,5 +1,5 @@
  /* =========================================================================
- *  Copyright 2021-2022 NXP
+ *  Copyright 2021-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -67,7 +67,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 		if (*reply_len < sizeof(fpp_mirror_cmd_t))
 		{
 			/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_mirror_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_mirror_cmd_t)\n");
 			*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 			ret = EINVAL;
 		}
@@ -99,7 +99,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 					if (NULL == mirror)
 					{
 						/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
-						NXP_LOG_ERROR("Cannot create mirror '%s'\n", mirror_cmd->name);
+						NXP_LOG_WARNING("Cannot create mirror '%s'\n", mirror_cmd->name);
 						*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 						ret = EPERM;
 						break;

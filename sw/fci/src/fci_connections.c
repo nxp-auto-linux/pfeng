@@ -384,7 +384,7 @@ static pfe_rtable_entry_t *fci_connections_create_entry(const fci_rt_db_entry_t 
 			/*	Set 5-tuple */
 			if (EOK != pfe_rtable_entry_set_5t(new_entry, tuple))
 			{
-				NXP_LOG_ERROR("Can't set 5 tuple\n");
+				NXP_LOG_WARNING("Can't set 5 tuple\n");
 				pfe_rtable_entry_free(NULL, new_entry);
 				new_entry = NULL;
 			}
@@ -407,7 +407,7 @@ static pfe_rtable_entry_t *fci_connections_create_entry(const fci_rt_db_entry_t 
 					/*	SADDR need to be changed to DADDR_REPLY */
 					if (EOK != pfe_rtable_entry_set_out_sip(new_entry, &tuple_rep->dst_ip))
 					{
-						NXP_LOG_ERROR("Couldn't set output SIP\n");
+						NXP_LOG_WARNING("Couldn't set output SIP\n");
 						pfe_rtable_entry_free(NULL, new_entry);
 						new_entry = NULL;
 					}
@@ -421,7 +421,7 @@ static pfe_rtable_entry_t *fci_connections_create_entry(const fci_rt_db_entry_t 
 						/*	DADDR need to be changed to SADDR_REPLY */
 						if (EOK != pfe_rtable_entry_set_out_dip(new_entry, &tuple_rep->src_ip))
 						{
-							NXP_LOG_ERROR("Couldn't set output DIP\n");
+							NXP_LOG_WARNING("Couldn't set output DIP\n");
 							pfe_rtable_entry_free(NULL, new_entry);
 							new_entry = NULL;
 						}
@@ -494,7 +494,7 @@ static errno_t fci_connections_ipv4_cmd_to_entry(const fpp_ct_cmd_t *ct_cmd, pfe
 			route = fci_rt_db_get_first(&fci_context->route_db, RT_DB_CRIT_BY_ID, (const void *)&ct_cmd->route_id);
 			if (NULL == route)
 			{
-				NXP_LOG_ERROR("No such route (0x%x)\n", (uint_t)ct_cmd->route_id);
+				NXP_LOG_WARNING("No such route (0x%x)\n", (uint_t)ct_cmd->route_id);
 				ret = EINVAL;
 			}
 			else
@@ -507,7 +507,7 @@ static errno_t fci_connections_ipv4_cmd_to_entry(const fpp_ct_cmd_t *ct_cmd, pfe
 				*entry = fci_connections_create_entry(route, tuple, tuple_rep);
 				if (NULL == *entry)
 				{
-					NXP_LOG_ERROR("Couldn't create routing rule\n");
+					NXP_LOG_WARNING("Couldn't create routing rule\n");
 					ret = EINVAL;
 				}
 				else
@@ -577,7 +577,7 @@ static errno_t fci_connections_ipv4_cmd_to_rep_entry(const fpp_ct_cmd_t *ct_cmd,
 			route = fci_rt_db_get_first(&fci_context->route_db, RT_DB_CRIT_BY_ID, (const void *)&ct_cmd->route_id_reply);
 			if (NULL == route)
 			{
-				NXP_LOG_ERROR("No such route (0x%x)\n", (uint_t)oal_ntohl(ct_cmd->route_id_reply));
+				NXP_LOG_WARNING("No such route (0x%x)\n", (uint_t)oal_ntohl(ct_cmd->route_id_reply));
 				ret = EINVAL;
 			}
 			else
@@ -590,7 +590,7 @@ static errno_t fci_connections_ipv4_cmd_to_rep_entry(const fpp_ct_cmd_t *ct_cmd,
 				*entry = fci_connections_create_entry(route, tuple, tuple_rep);
 				if (NULL == *entry)
 				{
-					NXP_LOG_ERROR("Couldn't create 'reply' routing rule\n");
+					NXP_LOG_WARNING("Couldn't create 'reply' routing rule\n");
 					ret = EINVAL;
 				}
 				else
@@ -660,7 +660,7 @@ static errno_t fci_connections_ipv6_cmd_to_entry(const fpp_ct6_cmd_t *ct6_cmd, p
 			route = fci_rt_db_get_first(&fci_context->route_db, RT_DB_CRIT_BY_ID, (const void *)&ct6_cmd->route_id);
 			if (NULL == route)
 			{
-				NXP_LOG_ERROR("No such route (0x%x)\n", (uint_t)ct6_cmd->route_id);
+				NXP_LOG_WARNING("No such route (0x%x)\n", (uint_t)ct6_cmd->route_id);
 				ret = EINVAL;
 			}
 			else
@@ -673,7 +673,7 @@ static errno_t fci_connections_ipv6_cmd_to_entry(const fpp_ct6_cmd_t *ct6_cmd, p
 				*entry = fci_connections_create_entry(route, tuple, tuple_rep);
 				if (NULL == *entry)
 				{
-					NXP_LOG_ERROR("Couldn't create routing rule\n");
+					NXP_LOG_WARNING("Couldn't create routing rule\n");
 					ret =  EINVAL;
 				}
 				else
@@ -742,7 +742,7 @@ static errno_t fci_connections_ipv6_cmd_to_rep_entry(const fpp_ct6_cmd_t *ct6_cm
 			route = fci_rt_db_get_first(&fci_context->route_db, RT_DB_CRIT_BY_ID, (const void *)&ct6_cmd->route_id_reply);
 			if (NULL == route)
 			{
-				NXP_LOG_ERROR("No such route (0x%x)\n", (uint_t)oal_ntohl(ct6_cmd->route_id_reply));
+				NXP_LOG_WARNING("No such route (0x%x)\n", (uint_t)oal_ntohl(ct6_cmd->route_id_reply));
 				ret = EINVAL;
 			}
 			else
@@ -755,7 +755,7 @@ static errno_t fci_connections_ipv6_cmd_to_rep_entry(const fpp_ct6_cmd_t *ct6_cm
 				*entry = fci_connections_create_entry(route, tuple, tuple_rep);
 				if (NULL == *entry)
 				{
-					NXP_LOG_ERROR("Couldn't create 'reply' routing rule\n");
+					NXP_LOG_WARNING("Couldn't create 'reply' routing rule\n");
 					ret = EINVAL;
 				}
 				else
@@ -1323,7 +1323,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 							*fci_ret = FPP_ERR_RT_ENTRY_ALREADY_REGISTERED;
 							if (EOK != pfe_rtable_del_entry(fci_context->rtable, entry))
 							{
-								NXP_LOG_ERROR("Can't remove route entry\n");
+								NXP_LOG_WARNING("Can't remove route entry\n");
 							}
 
 							pfe_rtable_entry_free(fci_context->rtable, entry);
@@ -1333,7 +1333,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 							{
 								if (EOK != pfe_rtable_del_entry(fci_context->rtable, rep_entry))
 								{
-									NXP_LOG_ERROR("Can't remove route entry\n");
+									NXP_LOG_WARNING("Can't remove route entry\n");
 								}
 
 								pfe_rtable_entry_free(fci_context->rtable, rep_entry);
@@ -1342,11 +1342,11 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 						}
 						else if (EOK != ret)
 						{
-							NXP_LOG_ERROR("FPP_CMD_IPVx_CONNTRACK: Can't add entry: %d\n", ret);
+							NXP_LOG_WARNING("FPP_CMD_IPVx_CONNTRACK: Can't add entry: %d\n", ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							if (EOK != pfe_rtable_del_entry(fci_context->rtable, entry))
 							{
-								NXP_LOG_ERROR("Can't remove route entry\n");
+								NXP_LOG_WARNING("Can't remove route entry\n");
 							}
 
 							pfe_rtable_entry_free(fci_context->rtable, entry);
@@ -1356,7 +1356,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 							{
 								if (EOK != pfe_rtable_del_entry(fci_context->rtable, rep_entry))
 								{
-									NXP_LOG_ERROR("Can't remove route entry\n");
+									NXP_LOG_WARNING("Can't remove route entry\n");
 								}
 
 								pfe_rtable_entry_free(fci_context->rtable, rep_entry);
@@ -1383,13 +1383,13 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 						}
 						else if (EOK != ret)
 						{
-							NXP_LOG_ERROR("FPP_CMD_IPVx_CONNTRACK: Can't add reply entry: %d\n", ret);
+							NXP_LOG_WARNING("FPP_CMD_IPVx_CONNTRACK: Can't add reply entry: %d\n", ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							if (NULL != entry)
 							{
 								if (EOK != pfe_rtable_del_entry(fci_context->rtable, entry))
 								{
-									NXP_LOG_ERROR("Can't remove route entry\n");
+									NXP_LOG_WARNING("Can't remove route entry\n");
 								}
 
 								pfe_rtable_entry_free(fci_context->rtable, entry);
@@ -1398,7 +1398,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 
 							if (EOK != pfe_rtable_del_entry(fci_context->rtable, rep_entry))
 							{
-								NXP_LOG_ERROR("Can't remove route entry\n");
+								NXP_LOG_WARNING("Can't remove route entry\n");
 							}
 
 							pfe_rtable_entry_free(fci_context->rtable, rep_entry);
@@ -1452,7 +1452,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 							pfe_rtable_entry_free(fci_context->rtable, entry);
 							entry = NULL;
 
-							NXP_LOG_ERROR("Can't remove route entry: %d\n", ret);
+							NXP_LOG_WARNING("Can't remove route entry: %d\n", ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							break;
 						}
@@ -1482,7 +1482,7 @@ static errno_t fci_connections_ipvx_ct_cmd(bool_t ipv6, const fci_msg_t *msg, ui
 							pfe_rtable_entry_free(fci_context->rtable, rep_entry);
 							rep_entry = NULL;
 
-							NXP_LOG_ERROR("Can't remove reply route entry: %d\n", ret);
+							NXP_LOG_WARNING("Can't remove reply route entry: %d\n", ret);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 							break;
 						}
@@ -1740,7 +1740,7 @@ errno_t fci_connections_ipv4_timeout_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_
 	{
 		if (*reply_len < sizeof(fpp_timeout_cmd_t))
 		{
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_timeout_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_timeout_cmd_t)\n");
 			ret = EINVAL;
 		}
 		else

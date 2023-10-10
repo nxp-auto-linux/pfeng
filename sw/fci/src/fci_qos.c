@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -91,14 +91,14 @@ static pfe_phy_if_t *fci_get_phy_if_by_name(char_t *name)
 	ret = pfe_if_db_lock(&sid);
 	if (EOK != ret)
 	{
-		NXP_LOG_ERROR("Could not lock interface DB: %d\n", ret);
+		NXP_LOG_WARNING("Could not lock interface DB: %d\n", ret);
 	}
 	else
 	{
 		ret = pfe_if_db_get_first(fci->phy_if_db, sid, IF_DB_CRIT_BY_NAME, name, &entry);
 		if (EOK != ret)
 		{
-			NXP_LOG_ERROR("Interface DB query failed: %d\n", ret);
+			NXP_LOG_WARNING("Interface DB query failed: %d\n", ret);
 		}
 
 		if(NULL != entry)
@@ -149,7 +149,7 @@ errno_t fci_qos_queue_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_queue_cmd_t
 	{
 		if (*reply_len < sizeof(fpp_qos_queue_cmd_t))
 		{
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_qos_queue_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_qos_queue_cmd_t)\n");
 			ret = EINVAL;
 		}
 		else
@@ -431,7 +431,7 @@ errno_t fci_qos_scheduler_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_schedul
 	{
 		if (*reply_len < sizeof(fpp_qos_scheduler_cmd_t))
 		{
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_qos_scheduler_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_qos_scheduler_cmd_t)\n");
 			ret = EINVAL;
 		}
 		else
@@ -770,7 +770,7 @@ errno_t fci_qos_shaper_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_qos_shaper_cmd
 	{
 		if (*reply_len < sizeof(fpp_qos_shaper_cmd_t))
 		{
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_qos_shaper_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_qos_shaper_cmd_t)\n");
 			ret = EINVAL;
 		}
 		else
@@ -1056,7 +1056,7 @@ static errno_t fci_validate_cmd_params(const fci_msg_t *msg, uint16_t *fci_ret, 
 		(void)reply_buf;
 		if (*reply_len < cmd_len)
 		{
-			NXP_LOG_ERROR("Buffer length does not match command lenght\n");
+			NXP_LOG_WARNING("Buffer length does not match command lenght\n");
 			ret = EINVAL;
 		}
 	}

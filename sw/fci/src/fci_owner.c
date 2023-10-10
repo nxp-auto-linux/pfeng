@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2022 NXP
+ *  Copyright 2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -109,7 +109,7 @@ errno_t fci_owner_session_cmd(pfe_ct_phy_if_id_t sender, uint32_t code, uint16_t
 			if (EOK != ret)
 			{
 				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
-				NXP_LOG_ERROR("Can't get FCI lock for sender: %d error: %d\n", sender, ret);
+				NXP_LOG_WARNING("Can't get FCI lock for sender: %d error: %d\n", sender, ret);
 			}
 
 			break;
@@ -121,7 +121,7 @@ errno_t fci_owner_session_cmd(pfe_ct_phy_if_id_t sender, uint32_t code, uint16_t
 			if (EOK != ret)
 			{
 				*fci_ret = FPP_ERR_INTERNAL_FAILURE;
-				NXP_LOG_ERROR("Can't release FCI lock for sender: %d error: %d\n", sender, ret);
+				NXP_LOG_WARNING("Can't release FCI lock for sender: %d error: %d\n", sender, ret);
 			}
 
 			break;
@@ -129,7 +129,7 @@ errno_t fci_owner_session_cmd(pfe_ct_phy_if_id_t sender, uint32_t code, uint16_t
 
 		default:
 		{
-			NXP_LOG_ERROR("Unknown FCI lock/unlock command: 0x%x sender: %d\n", (uint_t)code, sender);
+			NXP_LOG_WARNING("Unknown FCI lock/unlock command: 0x%x sender: %d\n", (uint_t)code, sender);
 			*fci_ret = FPP_ERR_UNKNOWN_ACTION;
 			break;
 		}

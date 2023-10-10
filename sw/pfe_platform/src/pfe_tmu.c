@@ -460,14 +460,14 @@ errno_t pfe_tmu_check_queue(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8_
 	pcfg = pfe_tmu_cfg_get_phy_config(phy);
 	if (NULL == pcfg)
 	{
-		NXP_LOG_ERROR("Invalid phy: %d\n", phy);
+		NXP_LOG_WARNING("Invalid phy: %d\n", phy);
 		ret = EINVAL;
 	}
 	else
 	{
 		if ((queue >= pcfg->q_cnt) && (queue != PFE_TMU_INVALID_QUEUE))
 		{
-			NXP_LOG_ERROR("Invalid queue ID (%d). PHY %d implements %d queues\n",
+			NXP_LOG_WARNING("Invalid queue ID (%d). PHY %d implements %d queues\n",
 					queue, phy, pcfg->q_cnt);
 			ret = ENOENT;
 		}
@@ -497,14 +497,14 @@ errno_t pfe_tmu_check_scheduler(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, ui
 	pcfg = pfe_tmu_cfg_get_phy_config(phy);
 	if (NULL == pcfg)
 	{
-		NXP_LOG_ERROR("Invalid phy: %d\n", (int_t)phy);
+		NXP_LOG_WARNING("Invalid phy: %d\n", (int_t)phy);
 		ret = EINVAL;
 	}
 	else
 	{
 		if (sch >= pcfg->sch_cnt)
 		{
-			NXP_LOG_ERROR("Invalid scheduler ID (%d). PHY %d implements %d schedulers\n",
+			NXP_LOG_WARNING("Invalid scheduler ID (%d). PHY %d implements %d schedulers\n",
 					sch, phy, pcfg->sch_cnt);
 			ret = ENOENT;
 		}
@@ -534,14 +534,14 @@ errno_t pfe_tmu_check_shaper(const pfe_tmu_t *tmu, pfe_ct_phy_if_id_t phy, uint8
 	pcfg = pfe_tmu_cfg_get_phy_config(phy);
 	if (NULL == pcfg)
 	{
-		NXP_LOG_ERROR("Invalid phy: %d\n", (int_t)phy);
+		NXP_LOG_WARNING("Invalid phy: %d\n", (int_t)phy);
 		ret = EINVAL;
 	}
 	else
 	{
 		if (shp >= pcfg->shp_cnt)
 		{
-			NXP_LOG_ERROR("Invalid shaper ID (%d). PHY %d implements %d shapers\n",
+			NXP_LOG_WARNING("Invalid shaper ID (%d). PHY %d implements %d shapers\n",
 					shp, phy, pcfg->shp_cnt);
 			ret = ENOENT;
 		}

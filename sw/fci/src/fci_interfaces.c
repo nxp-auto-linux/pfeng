@@ -255,7 +255,7 @@ errno_t fci_interfaces_session_cmd(uint32_t code, uint16_t *fci_ret)
 				if (EOK != pfe_if_db_lock(&fci_context->if_session_id))
 				{
 					*fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;
-					NXP_LOG_ERROR("DB lock failed\n");
+					NXP_LOG_WARNING("DB lock failed\n");
 				}
 				break;
 			}
@@ -265,7 +265,7 @@ errno_t fci_interfaces_session_cmd(uint32_t code, uint16_t *fci_ret)
 				if (EOK != pfe_if_db_unlock(fci_context->if_session_id))
 				{
 					*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
-					NXP_LOG_ERROR("DB unlock failed due to incorrect session ID\n");
+					NXP_LOG_WARNING("DB unlock failed due to incorrect session ID\n");
 				}
 				break;
 			}
@@ -324,7 +324,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 	{
 		if (*reply_len < sizeof(fpp_log_if_cmd_t))
 		{
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_if_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_if_cmd_t)\n");
 			ret = EINVAL;
 		}
 		else
@@ -481,7 +481,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 					}
 					else
 					{
-						NXP_LOG_ERROR("Dropping of all match rules on logical interface %s failed !!\n",  pfe_log_if_get_name(log_if));
+						NXP_LOG_WARNING("Dropping of all match rules on logical interface %s failed !!\n",  pfe_log_if_get_name(log_if));
 						*fci_ret = FPP_ERR_IF_MATCH_UPDATE_FAILED;
 					}
 					/* Clear the storage for queues to be destroyed */
@@ -578,7 +578,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 
 							if(EOK != ret)
 							{
-								NXP_LOG_ERROR("Updating single rule on logical interface %s failed !!\n",  pfe_log_if_get_name(log_if));
+								NXP_LOG_WARNING("Updating single rule on logical interface %s failed !!\n",  pfe_log_if_get_name(log_if));
 								*fci_ret = FPP_ERR_IF_MATCH_UPDATE_FAILED;
 							}
 						}
@@ -648,7 +648,7 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 							}
 							else
 							{
-								NXP_LOG_ERROR("Egress %u on %s is not set because it doesn't exist\n", (uint_t)index,  pfe_log_if_get_name(log_if));
+								NXP_LOG_WARNING("Egress %u on %s is not set because it doesn't exist\n", (uint_t)index,  pfe_log_if_get_name(log_if));
 
 								/* Error in input do not continue */
 								*fci_ret = FPP_ERR_IF_EGRESS_DOESNT_EXIST;
@@ -946,7 +946,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 	{
 		if (*reply_len < sizeof(fpp_phy_if_cmd_t))
 		{
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_if_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_if_cmd_t)\n");
 			ret = EINVAL;
 		}
 		else
@@ -1300,7 +1300,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 						if (EOK != ret)
 						{
 							/* FCI command requested unfulfillable action. Respond with FCI error code. */
-							NXP_LOG_ERROR("Incorrect session ID detected\n");
+							NXP_LOG_WARNING("Incorrect session ID detected\n");
 							*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
 							ret = EOK;
 							break;
@@ -1481,7 +1481,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 						if (EOK != ret)
 						{
 							/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
-							NXP_LOG_ERROR("Incorrect session ID detected\n");
+							NXP_LOG_WARNING("Incorrect session ID detected\n");
 							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 							break;
 						}
@@ -1560,7 +1560,7 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 		if (*reply_len < sizeof(fpp_if_mac_cmd_t))
 		{
 			/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_if_mac_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_if_mac_cmd_t)\n");
 			*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 			ret = EINVAL;
 		}

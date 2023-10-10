@@ -1126,7 +1126,7 @@ errno_t fci_fp_db_push_table_to_hw(pfe_class_t *class, char_t *table_name)
                         next_rule = fci_fp_rule_get_first(&fp_table->rules_db, FP_RULE_CRIT_NAME, rule->next_rule, TABLE);
                         if(NULL == next_rule)
                         {   /* Failed - cannot proceed */
-                            NXP_LOG_ERROR("Referenced rule \"%s\" is not part of the table \"%s\"\n", rule->next_rule, table_name);
+                            NXP_LOG_WARNING("Referenced rule \"%s\" is not part of the table \"%s\"\n", rule->next_rule, table_name);
                             pfe_fp_destroy_table(class, fp_table->dmem_addr);
                             fp_table->dmem_addr = 0U;
                             ret = ENOENT;
@@ -1134,7 +1134,7 @@ errno_t fci_fp_db_push_table_to_hw(pfe_class_t *class, char_t *table_name)
                         }
                         if(EOK != fci_fp_get_rule_pos_in_table(fp_table, next_rule, &pos))
                         {   /* Failed - cannot proceed */
-                            NXP_LOG_ERROR("Referenced rule \"%s\" is not part of the table \"%s\"\n", rule->next_rule, table_name);
+                            NXP_LOG_WARNING("Referenced rule \"%s\" is not part of the table \"%s\"\n", rule->next_rule, table_name);
                             pfe_fp_destroy_table(class, fp_table->dmem_addr);
                             fp_table->dmem_addr = 0U;
                             ret = ENOENT;

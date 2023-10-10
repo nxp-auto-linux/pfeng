@@ -119,7 +119,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 	{
 		if (*reply_len < sizeof(fpp_rt_cmd_t))
 		{
-			NXP_LOG_ERROR("Buffer length does not match expected value (fpp_rt_cmd_t)\n");
+			NXP_LOG_WARNING("Buffer length does not match expected value (fpp_rt_cmd_t)\n");
 			ret = EINVAL;
 		}
 		else
@@ -165,7 +165,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 					}
 					else
 					{
-						NXP_LOG_ERROR("FPP_CMD_IP_ROUTE: DB lock failed\n");
+						NXP_LOG_WARNING("FPP_CMD_IP_ROUTE: DB lock failed\n");
 					}
 
 					if (NULL == if_entry)
@@ -186,7 +186,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 						{
 							if(EOK != pfe_phy_if_get_mac_addr_first(phy_if, src_mac, MAC_DB_CRIT_ALL, PFE_TYPE_ANY, PFE_CFG_LOCAL_IF))
 							{
-								NXP_LOG_ERROR("FPP_CMD_IP_ROUTE: Get the first MAC address from mac addr db failed\n");
+								NXP_LOG_WARNING("FPP_CMD_IP_ROUTE: Get the first MAC address from mac addr db failed\n");
 							}
 						}
 						else
@@ -210,7 +210,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 					}
 					else if (EOK != ret)
 					{
-						NXP_LOG_ERROR("FPP_CMD_IP_ROUTE: Can't add route entry: %d\n", ret);
+						NXP_LOG_WARNING("FPP_CMD_IP_ROUTE: Can't add route entry: %d\n", ret);
 						*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;
 						break;
 					}
@@ -424,7 +424,7 @@ void fci_routes_drop_all(void)
 			ret = fci_routes_drop_one(entry);
 			if (EOK != ret)
 			{
-				NXP_LOG_ERROR("Couldn't properly drop a route: %d\n", ret);
+				NXP_LOG_DEBUG("Couldn't properly drop a route: %d\n", ret);
 			}
 
 			entry = fci_rt_db_get_next(&fci_context->route_db);
@@ -461,7 +461,7 @@ void fci_routes_drop_all_ipv4(void)
 				ret = fci_routes_drop_one(entry);
 				if (EOK != ret)
 				{
-					NXP_LOG_ERROR("Couldn't properly drop a route: %d\n", ret);
+					NXP_LOG_DEBUG("Couldn't properly drop a route: %d\n", ret);
 				}
 			}
 
@@ -499,7 +499,7 @@ void fci_routes_drop_all_ipv6(void)
 				ret = fci_routes_drop_one(entry);
 				if (EOK != ret)
 				{
-					NXP_LOG_ERROR("Couldn't properly drop a route: %d\n", ret);
+					NXP_LOG_DEBUG("Couldn't properly drop a route: %d\n", ret);
 				}
 			}
 
