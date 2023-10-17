@@ -476,13 +476,9 @@ static int pfeng_hif_chnl_poll(struct napi_struct *napi, int budget)
 		return budget;
 
 	if (likely(napi_complete_done(napi, work_done))) {
-
 		/* Enable interrupts */
 		pfe_hif_chnl_rx_irq_unmask(chnl->priv);
 		pfe_hif_chnl_tx_irq_unmask(chnl->priv);
-
-		/* Trigger the RX DMA */
-		pfe_hif_chnl_rx_dma_start(chnl->priv);
 	}
 
 	return work_done;
