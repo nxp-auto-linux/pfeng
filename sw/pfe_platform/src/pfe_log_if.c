@@ -1613,33 +1613,6 @@ errno_t pfe_log_if_enable(pfe_log_if_t *iface)
 		{
 			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
-
-		if (EOK == ret)
-		{
-			/*	Enable the underlying physical interface */
-			ret = pfe_phy_if_enable(iface->parent);
-			if (EOK != ret)
-			{
-				/*	Revert */
-				if (EOK != oal_mutex_lock(&iface->lock))
-				{
-					NXP_LOG_ERROR("mutex lock failed\n");
-				}
-
-				tmp = iface->log_if_class.flags;
-				iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & (oal_htonl(~(uint32_t)IF_FL_ENABLED)));
-				ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
-				if (EOK != ret)
-				{
-					NXP_LOG_ERROR("Could not revert DMEM change\n");
-				}
-
-				if (EOK != oal_mutex_unlock(&iface->lock))
-				{
-					NXP_LOG_ERROR("mutex unlock failed\n");
-				}
-			}
-		}
 	}
 
 	return ret;
@@ -1687,33 +1660,6 @@ errno_t pfe_log_if_disable(pfe_log_if_t *iface)
 		if (EOK != oal_mutex_unlock(&iface->lock))
 		{
 			NXP_LOG_ERROR("mutex unlock failed\n");
-		}
-
-		if (EOK == ret)
-		{
-			/*	Disable the underlying physical interface */
-			ret = pfe_phy_if_disable(iface->parent);
-			if (EOK != ret)
-			{
-				/*	Revert */
-				if (EOK != oal_mutex_lock(&iface->lock))
-				{
-					NXP_LOG_ERROR("mutex lock failed\n");
-				}
-
-				tmp = iface->log_if_class.flags;
-				iface->log_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp | oal_htonl(IF_FL_ENABLED));
-				ret = pfe_log_if_write_to_class_nostats(iface, &iface->log_if_class);
-				if (EOK != ret)
-				{
-					NXP_LOG_ERROR("Could not revert DMEM change\n");
-				}
-
-				if (EOK != oal_mutex_unlock(&iface->lock))
-				{
-					NXP_LOG_ERROR("mutex unlock failed\n");
-				}
-			}
 		}
 	}
 
