@@ -245,7 +245,6 @@ struct pfeng_hif_chnl {
 	} bman;
 
 	pfe_phy_if_t			*phyif_hif;
-	pfe_log_if_t			*logif_hif;
 	refcount_t			logif_hif_count;
 
 	u32				cfg_rx_max_coalesced_frames;
@@ -300,7 +299,6 @@ struct pfeng_emac {
 	bool				sgmii_link;
 
 	pfe_phy_if_t			*phyif_emac;
-	pfe_log_if_t			*logif_emac;
 };
 
 /* driver private data */
@@ -378,14 +376,6 @@ static inline struct pfeng_emac *pfeng_netif_get_emac(struct pfeng_netif *netif)
 		return NULL;
 
 	return __pfeng_netif_get_emac(netif);
-}
-
-static inline pfe_log_if_t *pfeng_netif_get_emac_logif(struct pfeng_netif *netif)
-{
-	if (!pfeng_netif_has_emac(netif))
-		return NULL;
-
-	return __pfeng_netif_get_emac(netif)->logif_emac;
 }
 
 static inline pfe_phy_if_t *pfeng_netif_get_emac_phyif(struct pfeng_netif *netif)

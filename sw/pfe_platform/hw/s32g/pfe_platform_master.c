@@ -3174,6 +3174,7 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 {
 	int32_t ii;
 	pfe_phy_if_t *phy_if = NULL;
+	pfe_log_if_t *log_if = NULL;
 	uint32_t session_id = 0U;
 	pfe_if_db_entry_t *entry = NULL;
 	errno_t ret = EOK;
@@ -3203,6 +3204,17 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 	};
 
 	/*	Create interface databases */
+
+	if (NULL == platform->log_if_db)
+	{
+		platform->log_if_db = pfe_if_db_create(PFE_IF_DB_LOG);
+		if (NULL == platform->log_if_db)
+		{
+			NXP_LOG_ERROR("Can't create logical interface DB\n");
+			return ENODEV;
+		}
+	}
+
 	if (NULL == platform->phy_if_db)
 	{
 		platform->phy_if_db = pfe_if_db_create(PFE_IF_DB_PHY);
@@ -3312,9 +3324,43 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 					/*	Register in platform */
 					if (EOK != pfe_platform_register_phy_if(platform, session_id, phy_if))
 					{
-						NXP_LOG_ERROR("Could not register %s\n", pfe_phy_if_get_name(phy_if));
+						NXP_LOG_ERROR("Could not register PHY_IF %s\n", pfe_phy_if_get_name(phy_if));
 						pfe_phy_if_destroy(phy_if);
 						phy_if = NULL;
+						ret = ENODEV;
+						break;
+					}
+
+					/*	Add default LOG_IF */
+					log_if = pfe_log_if_create(phy_if, phy_ifs[ii].name);
+					if (NULL == log_if)
+					{
+						NXP_LOG_ERROR("Couldn't create LOG_IF for %s\n", phy_ifs[ii].name);
+						ret = ENODEV;
+						break;
+					}
+
+					if (EOK != pfe_if_db_add(platform->log_if_db, session_id, log_if, PFE_CFG_LOCAL_IF))
+					{
+						NXP_LOG_ERROR("Could not register LOG_IF for %s\n", pfe_phy_if_get_name(phy_if));
+						pfe_log_if_destroy(log_if);
+						log_if = NULL;
+						ret = ENODEV;
+						break;
+					}
+
+					/* Enable default LOG_IF */
+					ret = pfe_log_if_promisc_enable(log_if);
+					if (EOK == ret)
+					{
+						ret = pfe_log_if_enable(log_if);
+					}
+
+					if (EOK != ret)
+					{
+						NXP_LOG_ERROR("Could not enable LOG_IF for %s\n", pfe_phy_if_get_name(phy_if));
+						pfe_log_if_destroy(log_if);
+						log_if = NULL;
 						ret = ENODEV;
 						break;
 					}
@@ -3324,19 +3370,6 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 			if (EOK != pfe_if_db_unlock(session_id))
 			{
 				NXP_LOG_ERROR("DB unlock failed\n");
-			}
-		}
-	}
-
-	if(EOK == ret)
-	{
-		if (NULL == platform->log_if_db)
-		{
-			pfe.log_if_db = pfe_if_db_create(PFE_IF_DB_LOG);
-			if (NULL == pfe.log_if_db)
-			{
-				NXP_LOG_ERROR("Can't create logical interface DB\n");
-				ret = ENODEV;
 			}
 		}
 	}
