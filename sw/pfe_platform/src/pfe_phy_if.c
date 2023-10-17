@@ -1,5 +1,5 @@
 /* =========================================================================
- *	
+ *
  *	Copyright (c) 2019 Imagination Technologies Limited
  *	Copyright 2018-2024 NXP
  *
@@ -918,6 +918,39 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 	}
 
 	return ret;
+}
+
+pfe_log_if_t *pfe_phy_if_get_default_log_if(pfe_phy_if_t *iface)
+{
+	pfe_log_if_t *log_if = NULL;
+	const pfe_phy_if_list_entry_t *tmp_entry;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_ERROR("mutex lock failed\n");
+		}
+
+		if (TRUE != LLIST_IsEmpty(&iface->log_ifs))
+		{
+			tmp_entry = LLIST_Data(iface->log_ifs.prNext, pfe_phy_if_list_entry_t, iterator);
+			log_if = tmp_entry->log_if;
+		}
+
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_ERROR("mutex unlock failed\n");
+		}
+	}
+
+	return log_if;
 }
 
 /**
