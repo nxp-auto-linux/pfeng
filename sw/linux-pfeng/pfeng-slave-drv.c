@@ -26,19 +26,6 @@
 #include "hal.h"
 #include "pfeng.h"
 
-/*
- * S32G soc specific addresses
- */
-#define S32G_MAIN_GPR_PFE_COH_EN		0x0
-#define GPR_PFE_COH_EN_UTIL			(1 << 5)
-#define GPR_PFE_COH_EN_HIF3			(1 << 4)
-#define GPR_PFE_COH_EN_HIF2			(1 << 3)
-#define GPR_PFE_COH_EN_HIF1			(1 << 2)
-#define GPR_PFE_COH_EN_HIF0			(1 << 1)
-#define GPR_PFE_COH_EN_HIF_0_3_MASK		(GPR_PFE_COH_EN_HIF0 | GPR_PFE_COH_EN_HIF1 | \
-						 GPR_PFE_COH_EN_HIF2 | GPR_PFE_COH_EN_HIF3)
-#define GPR_PFE_COH_EN_DDR			(1 << 0)
-
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Jan Petrous <jan.petrous@nxp.com>");
 MODULE_DESCRIPTION("PFEng SLAVE driver");
@@ -141,80 +128,6 @@ err_cfg_alloc:
 	return NULL;
 }
 
-static int pfeng_s32g_set_port_coherency(struct pfeng_priv *priv)
-{
-	struct device *dev = &priv->pdev->dev;
-	void *syscon;
-	int ret = 0;
-	u32 val;
-
-	if (!manage_port_coherency)
-		return 0;
-
-	syscon = ioremap(priv->syscon.start, priv->syscon.end - priv->syscon.start + 1);
-	if(!syscon) {
-		HM_MSG_DEV_ERR(dev, "cannot map GPR, aborting (INTF_SEL)\n");
-		return -EIO;
-	}
-
-	val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
-	if ((val & GPR_PFE_COH_EN_HIF_0_3_MASK) == GPR_PFE_COH_EN_HIF_0_3_MASK) {
-		HM_MSG_DEV_INFO(dev, "PFE port coherency already enabled, mask 0x%x\n", val);
-	} else {
-		val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
-		val |= GPR_PFE_COH_EN_HIF_0_3_MASK;
-		hal_write32(val, syscon + S32G_MAIN_GPR_PFE_COH_EN);
-
-		val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
-		if ((val & GPR_PFE_COH_EN_HIF_0_3_MASK) != GPR_PFE_COH_EN_HIF_0_3_MASK) {
-			HM_MSG_DEV_ERR(dev, "Failed to enable port coherency, mask 0x%x\n", val);
-			ret = -EINVAL;
-		} else
-			HM_MSG_DEV_INFO(dev, "PFE port coherency enabled, mask 0x%x\n", val);
-	}
-
-	iounmap(syscon);
-
-	return ret;
-}
-
-static int pfeng_s32g_clear_port_coherency(struct pfeng_priv *priv)
-{
-	struct device *dev = &priv->pdev->dev;
-	void *syscon;
-	int ret = 0;
-	u32 val;
-
-	if (!manage_port_coherency)
-		return 0;
-
-	syscon = ioremap(priv->syscon.start, priv->syscon.end - priv->syscon.start + 1);
-	if(!syscon) {
-		HM_MSG_DEV_ERR(dev, "cannot map GPR, aborting (INTF_SEL)\n");
-		return -EIO;
-	}
-
-	val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
-	if (!(val & GPR_PFE_COH_EN_HIF_0_3_MASK)) {
-		HM_MSG_DEV_INFO(dev, "PFE port coherency already cleared\n");
-	} else {
-		val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
-		val &= ~GPR_PFE_COH_EN_HIF_0_3_MASK;
-		hal_write32(val, syscon + S32G_MAIN_GPR_PFE_COH_EN);
-
-		val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
-		if (val & GPR_PFE_COH_EN_HIF_0_3_MASK) {
-			HM_MSG_DEV_ERR(dev, "Failed to clear port coherency, mask 0x%x\n", val);
-			ret = -EINVAL;
-		} else
-			HM_MSG_DEV_INFO(dev, "PFE port coherency cleared\n");
-	}
-
-	iounmap(syscon);
-
-	return ret;
-}
-
 /**
  * pfeng_s32g_remove
  *
@@ -263,8 +176,8 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	}
 
 	/* Clear HIF channels coherency */
-	if (of_dma_is_coherent(dev->of_node))
-		pfeng_s32g_clear_port_coherency(priv);
+	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency)
+		pfeng_gpr_clear_port_coherency(priv);
 
 	if (priv->ihc_wq)
 		destroy_workqueue(priv->ihc_wq);
@@ -292,6 +205,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 	struct pfeng_priv *priv = (struct pfeng_priv *)arg;
 	struct device *dev = &priv->pdev->dev;
 	int loops = ipready_tmout * 10; /* sleep is 100 usec */
+	bool ip_ready = false;
 	int ret;
 
 	/* Detect controller state */
@@ -303,7 +217,10 @@ static int pfeng_drv_deferred_probe(void *arg)
 			if(kthread_should_stop())
 				do_exit(0);
 
-			if (hal_ip_ready_get())
+			if (pfeng_gpr_ip_ready_get(dev, &ip_ready))
+				HM_MSG_DEV_ERR(dev, "Failed to get IP ready state\n");
+
+			if (ip_ready)
 				break;
 
 			if (ipready_tmout && !loops--) {
@@ -356,8 +273,8 @@ static int pfeng_drv_deferred_probe(void *arg)
 	}
 
 	/* Set HIF channels coherency */
-	if (of_dma_is_coherent(dev->of_node)) {
-		ret = pfeng_s32g_set_port_coherency(priv);
+	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency) {
+		ret = pfeng_gpr_set_port_coherency(priv);
 		if (ret)
 			goto err_drv;
 	}
@@ -492,6 +409,13 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	if (!of_match_device(pfeng_id_table, &pdev->dev))
 		return -ENODEV;
 
+	ret = pfeng_gpr_check_nvmem_cells(dev);
+	if (ret) {
+		if (ret != EPROBE_DEFER)
+			HM_MSG_DEV_ERR(dev, "NVMEM cells check failed\n");
+		return ret;
+	}
+
 	HM_MSG_DEV_INFO(dev, "PFEng ethernet driver loading ...\n");
 	HM_MSG_DEV_INFO(dev, "Version: %s\n", PFENG_DRIVER_VERSION);
 	HM_MSG_DEV_INFO(dev, "Driver commit hash: %s\n", PFENG_DRIVER_COMMIT_HASH);
@@ -578,8 +502,8 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	}
 
 	/* Clear HIF channels coherency */
-	if (of_dma_is_coherent(dev->of_node))
-		pfeng_s32g_clear_port_coherency(priv);
+	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency)
+		pfeng_gpr_clear_port_coherency(priv);
 
 	HM_MSG_DEV_INFO(dev, "PFE Platform suspended\n");
 
@@ -591,6 +515,7 @@ static int pfeng_drv_deferred_resume(void *arg)
 	struct device *dev = (struct device *)arg;
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
 	int loops = ipready_tmout * 10; /* sleep is 100 usec */
+	bool ip_ready = false;
 	int ret;
 
 	ret = pinctrl_pm_select_default_state(dev);
@@ -614,7 +539,10 @@ static int pfeng_drv_deferred_resume(void *arg)
 			if(kthread_should_stop())
 				do_exit(0);
 
-			if (hal_ip_ready_get())
+			if (pfeng_gpr_ip_ready_get(dev, &ip_ready))
+				HM_MSG_DEV_ERR(dev, "Failed to get IP ready state\n");
+
+			if (ip_ready)
 				break;
 
 			if (ipready_tmout && !loops--) {
@@ -683,8 +611,8 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	HM_MSG_DEV_INFO(dev, "Resuming driver\n");
 
 	/* Set HIF channels coherency */
-	if (of_dma_is_coherent(dev->of_node))
-		pfeng_s32g_set_port_coherency(priv);
+	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency)
+		pfeng_gpr_set_port_coherency(priv);
 
 	/* Start clocks */
 	ret = clk_prepare_enable(priv->clk_sys);
