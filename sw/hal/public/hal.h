@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -137,63 +137,6 @@
 #define ETH_43_PFE_START_SEC_CODE
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-/**
- * @brief Control register
- * @note The register which is used for Master-detect signalization
- * @warning We hijacked GPR:GENCTRL3 register, using 16 higher bits,
- *          low 16 bits remains untouched for security reason
- */
-#define PFE_IP_READY_CTRL_REG	(0x4007CAECU)
-#define CTRL_REG_LEN			4U
-
-#define BIT_IP_READY			16U
-#define IP_READY				((uint32_t)1U << BIT_IP_READY)
-
-/**
- * @brief Set IP-ready flag
- */
-__attribute__((unused)) static void hal_ip_ready_set(bool_t on)
-{
-	uint32_t *ctrlreg = (uint32_t *)oal_mm_dev_map((void *)PFE_IP_READY_CTRL_REG, CTRL_REG_LEN);
-	uint32_t val;
-
-	if (NULL != ctrlreg)
-	{
-		val = hal_read32(ctrlreg);
-		if (TRUE == on)
-		{
-			val |= IP_READY;
-		}
-		else
-		{
-			val &= ~IP_READY;
-		}
-		hal_write32(val, ctrlreg);
-
-		(void)oal_mm_dev_unmap(ctrlreg, CTRL_REG_LEN);
-	}
-}
-
-/**
- * @brief Return status of IP-ready flag
- * @return True if IP-ready
- */
-__attribute__((unused)) static bool_t hal_ip_ready_get(void)
-{
-	uint32_t *ctrlreg = (uint32_t *)oal_mm_dev_map((void *)PFE_IP_READY_CTRL_REG, CTRL_REG_LEN);
-	uint32_t val = 0U;
-
-	if (NULL != ctrlreg)
-	{
-		val = hal_read32(ctrlreg);
-		val &= IP_READY;
-
-		(void)oal_mm_dev_unmap(ctrlreg, CTRL_REG_LEN);
-	}
-
-	return (0U != val);
-}
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE
