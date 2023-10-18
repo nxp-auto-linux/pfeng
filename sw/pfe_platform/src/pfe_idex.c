@@ -13,8 +13,6 @@
 #include "pfe_idex.h"
 #include "pfe_platform_cfg.h"
 
-#define IDEX_IS_NOCPY FALSE
-
 /**
  * @brief	IDEX request timeout in seconds
  */
@@ -436,7 +434,6 @@ static void pfe_idex_do_tx_conf(const pfe_hif_drv_client_t *client, const pfe_id
 
 				NXP_LOG_DEBUG("Request %u transmitted\n", (uint_t)oal_ntohl(req_header->seqnum));
 		#endif /* IDEX_CFG_VERBOSE */
-		#if (FALSE == IDEX_IS_NOCPY)
 				if (NULL == idex->txc_free_cbk)
 				{
 					oal_mm_free_contig(ref_ptr);
@@ -445,9 +442,6 @@ static void pfe_idex_do_tx_conf(const pfe_hif_drv_client_t *client, const pfe_id
 				{
 					idex->txc_free_cbk(ref_ptr);
 				}
-		#else
-				(void)idex;
-		#endif
 				break;
 			}
 
@@ -458,7 +452,6 @@ static void pfe_idex_do_tx_conf(const pfe_hif_drv_client_t *client, const pfe_id
 
 				NXP_LOG_DEBUG("Response %u transmitted\n", (uint_t)oal_ntohl(resp_header->seqnum));
 		#endif /* IDEX_CFG_VERBOSE */
-		#if (FALSE == IDEX_IS_NOCPY)
 				if (NULL == idex->txc_free_cbk)
 				{
 					oal_mm_free_contig(ref_ptr);
@@ -467,9 +460,6 @@ static void pfe_idex_do_tx_conf(const pfe_hif_drv_client_t *client, const pfe_id
 				{
 					idex->txc_free_cbk(ref_ptr);
 				}
-		#else
-				(void)idex;
-		#endif
 				break;
 			}
 
@@ -830,119 +820,57 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 	errno_t                  ret;
 	hif_drv_sg_list_t        sg_list = { 0U };
 	uint16_t                 data_len_tmp = data_len;
-#if (TRUE == IDEX_IS_NOCPY)
-	pfe_hif_drv_t * hif_drv;
-	pfe_hif_chnl_t *hif_chnl;
-	uint16_t        buf_offset;
-#endif /* IDEX_IS_NOCPY */
 
 	/*	Get IDEX frame buffer */
-#if (TRUE == IDEX_IS_NOCPY)
-	hif_drv = pfe_hif_drv_client_get_drv(pfe_idex.ihc_client);
-	if (NULL == hif_drv)
+	idex_hdr = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_TX_MEM, (addr_t)(sizeof(pfe_idex_frame_header_t)) + (addr_t)data_len_tmp, 0U);
+	if (NULL == idex_hdr)
 	{
-		NXP_LOG_ERROR("Get hif_drv instance associated with the client failed\n");
-		ret = ENOENT;
+		NXP_LOG_ERROR("Memory allocation failed\n");
+		ret = ENOMEM;
 	}
 	else
 	{
-		hif_chnl = pfe_hif_drv_get_chnl(hif_drv);
-		if (NULL == hif_chnl)
+		idex_hdr_pa = oal_mm_virt_to_phys_contig(idex_hdr);
+		if (NULL == idex_hdr_pa)
 		{
-			NXP_LOG_ERROR("Get channel associated with the hif_drv instance failed\n");
-			ret = ENOENT;
+			NXP_LOG_ERROR("VA to PA conversion failed\n");
+			oal_mm_free_contig(idex_hdr);
+			ret = ENOMEM;
 		}
 		else
 		{
-			idex_hdr = (pfe_idex_frame_header_t *)pfe_hif_chnl_bmu_alloc_buf_va(hif_chnl);
-#else
-	idex_hdr = oal_mm_malloc_contig_named_aligned_nocache(
-	    PFE_CFG_TX_MEM,
-	    (addr_t)(sizeof(pfe_idex_frame_header_t)) + (addr_t)data_len_tmp,
-	    0U);
-#endif /* IDEX_IS_NOCPY */
-			if (NULL == idex_hdr)
+			/*	Fill the header */
+			idex_hdr->dst_phy_if = dst_phy;
+			idex_hdr->type = type;
+
+			/*	Add payload */
+			payload = (void *)((addr_t)idex_hdr + sizeof(pfe_idex_frame_header_t));
+			(void)memcpy(payload, data, data_len_tmp);
+
+			/*	Build SG list
+                TODO: The SG list could be used as reference to all buffers and used to
+                release them within TX confirmation task when used as 'ref_ptr' argument of
+                ..._ihc_sg_pkt() instead of idex_hdr. */
+			sg_list.size = 1U;
+			sg_list.dst_phy = dst_phy;
+			sg_list.items[0].data_va = idex_hdr;
+			sg_list.items[0].data_pa = idex_hdr_pa;
+			sg_list.items[0].len = (uint32_t)(sizeof(pfe_idex_frame_header_t)) + (uint32_t)data_len_tmp;
+
+			/*	Send it out */
+			ret = pfe_hif_drv_client_xmit_sg_pkt(pfe_idex.ihc_client, 0U, &sg_list, (void *)idex_hdr);
+			if (EOK != ret)
 			{
-				NXP_LOG_ERROR("Memory allocation failed\n");
-				ret = ENOMEM;
+				NXP_LOG_ERROR("IDEX frame TX failed. Err %u\n", ret);
+				oal_mm_free_contig(idex_hdr);
 			}
 			else
 			{
-#if (TRUE == IDEX_IS_NOCPY)
-				idex_hdr_pa = pfe_hif_chnl_bmu_get_buf_pa(hif_chnl, (addr_t)idex_hdr);
-				if (NULL == idex_hdr_pa)
-				{
-					NXP_LOG_ERROR("VA to PA conversion failed\n");
-					pfe_hif_chnl_bmu_free_buf(hif_chnl, (addr_t)idex_hdr);
-					ret = ENOMEM;
-				}
-				else
-				{
-#else
-					idex_hdr_pa = oal_mm_virt_to_phys_contig(idex_hdr);
-					if (NULL == idex_hdr_pa)
-					{
-						NXP_LOG_ERROR("VA to PA conversion failed\n");
-						oal_mm_free_contig(idex_hdr);
-						ret = ENOMEM;
-					}
-					else
-#endif /* IDEX_IS_NOCPY */
-					{
-						/*	Fill the header */
-						idex_hdr->dst_phy_if = dst_phy;
-						idex_hdr->type = type;
-						/* TX buffer for HIF NOCPY is allocated directly from BMU2.
-                    The whole IDEX frame needs to fit into it, so the IDEX header and payload are copied into the TX buffer. */
-#if (TRUE == IDEX_IS_NOCPY)
-						buf_offset = pfe_hif_chnl_get_lmem_hdr_size(hif_chnl) + 256U + sizeof(pfe_ct_hif_tx_hdr_t);
-						(void)memcpy((void *)((addr_t)idex_hdr + buf_offset), idex_hdr, sizeof(pfe_idex_frame_header_t));
-#endif /* IDEX_IS_NOCPY */
-
-						/*	Add payload */
-						payload = (void *)((addr_t)idex_hdr + sizeof(pfe_idex_frame_header_t));
-#if (TRUE == IDEX_IS_NOCPY)
-						(void)memcpy((void *)((addr_t)payload + buf_offset), data, data_len_tmp);
-						data_len_tmp = data_len + sizeof(pfe_ct_hif_tx_hdr_t);
-#else
-			(void)memcpy(payload, data, data_len_tmp);
-#endif /* IDEX_IS_NOCPY */
-
-						/*	Build SG list
-                        TODO: The SG list could be used as reference to all buffers and used to
-                        release them within TX confirmation task when used as 'ref_ptr' argument of
-                        ..._ihc_sg_pkt() instead of idex_hdr. */
-						sg_list.size = 1U;
-						sg_list.dst_phy = dst_phy;
-						sg_list.items[0].data_va = idex_hdr;
-						sg_list.items[0].data_pa = idex_hdr_pa;
-						sg_list.items[0].len = (uint32_t)(sizeof(pfe_idex_frame_header_t)) + (uint32_t)data_len_tmp;
-
-						/*	Send it out */
-						ret = pfe_hif_drv_client_xmit_sg_pkt(pfe_idex.ihc_client, 0U, &sg_list, (void *)idex_hdr);
-						if (EOK != ret)
-						{
-							NXP_LOG_ERROR("IDEX frame TX failed. Err %u\n", ret);
-#if (TRUE == IDEX_IS_NOCPY)
-							pfe_hif_chnl_bmu_free_buf(hif_chnl, (addr_t)idex_hdr);
-#else
-				oal_mm_free_contig(idex_hdr);
-#endif /* IDEX_IS_NOCPY */
-						}
-						else
-						{
-							/*	Frame transmitted. Will be released once TX confirmation is received. */
-							;
-						}
-					}
-#if (TRUE == IDEX_IS_NOCPY)
-				}
-#endif
+				/*	Frame transmitted. Will be released once TX confirmation is received. */
+				;
 			}
-#if (TRUE == IDEX_IS_NOCPY)
 		}
 	}
-#endif
 
 	return ret;
 }
