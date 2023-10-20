@@ -651,6 +651,7 @@ static int pfeng_hif_idex_create(struct pfeng_priv *priv, int idx)
 	int ret = 0;
 
 	/* Install IDEX support */
+	priv->ihc_chnl = ihc_chnl;
 	ret = pfe_idex_init(&ihc_chnl->hif_drv,
 			  pfeng_hif_ids[priv->ihc_master_chnl],
 			  priv->pfe_platform->hif,
@@ -659,14 +660,14 @@ static int pfeng_hif_idex_create(struct pfeng_priv *priv, int idx)
 
 	if (!ret) {
 		priv->ihc_enabled = true;
-		priv->ihc_chnl = ihc_chnl;
-		HM_MSG_DEV_INFO(dev, "IDEX RPC installed\n");
+		HM_MSG_DEV_INFO(dev, "IDEX RPC installed on HIF%d\n", idx);
 		return 0;
 	}
 
 	HM_MSG_DEV_ERR(dev, "Can't initialize IDEX, HIF IHC support disabled.\n");
 	ihc_chnl->ihc = false;
 	priv->ihc_enabled = false;
+	priv->ihc_chnl = NULL;
 	return -ENODEV;
 }
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
