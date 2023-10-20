@@ -410,6 +410,14 @@ void pfeng_fw_free(struct pfeng_priv *priv);
 int pfeng_dt_create_config(struct pfeng_priv *priv);
 int pfeng_dt_release_config(struct pfeng_priv *priv);
 
+/* gpr */
+int pfeng_gpr_check_nvmem_cells(struct device *dev);
+int pfeng_gpr_set_port_coherency(struct pfeng_priv *priv);
+int pfeng_gpr_clear_port_coherency(struct pfeng_priv *priv);
+int pfeng_gpr_set_emac_interfaces(struct pfeng_priv *priv);
+int pfeng_gpr_ip_ready_get(struct device *dev, bool *is_on);
+int pfeng_gpr_ip_ready_set(struct device *dev, bool on);
+
 /* debugfs */
 int pfeng_debugfs_create(struct pfeng_priv *priv);
 void pfeng_debugfs_remove(struct pfeng_priv *priv);

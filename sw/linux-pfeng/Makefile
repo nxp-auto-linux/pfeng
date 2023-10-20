@@ -68,7 +68,7 @@ ifneq ($(PFE_CFG_FCI_ENABLE),0)
 pfeng-objs-libs += ../fci/fci.o
 endif
 
-pfeng-objs-core := pfeng-debugfs.o pfeng-hif.o pfeng-bman.o pfeng-netif.o pfeng-ethtool.o pfeng-hwts.o pfeng-dt.o pfeng-mdio.o pfeng-ptp.o
+pfeng-objs-core := pfeng-debugfs.o pfeng-hif.o pfeng-bman.o pfeng-netif.o pfeng-ethtool.o pfeng-hwts.o pfeng-dt.o pfeng-mdio.o pfeng-ptp.o pfeng-gpr.o
 
 ifneq ($(PFE_CFG_PFE_MASTER),0)
 pfeng-objs := $(pfeng-objs-core) $(pfeng-objs-libs) pfeng-drv.o pfeng-fw.o pfeng-phylink.o

@@ -27,30 +27,6 @@
 #include "pfeng.h"
 #include "pfe_feature_mgr.h"
 
-/*
- * S32G soc specific addresses
- */
-#define S32G_MAIN_GPR_PFE_COH_EN		0x0
-#define S32G_MAIN_GPR_PFE_PWR_CTRL		0x20
-#define GPR_PFE_COH_EN_UTIL			(1 << 5)
-#define GPR_PFE_COH_EN_HIF3			(1 << 4)
-#define GPR_PFE_COH_EN_HIF2			(1 << 3)
-#define GPR_PFE_COH_EN_HIF1			(1 << 2)
-#define GPR_PFE_COH_EN_HIF0			(1 << 1)
-#define GPR_PFE_COH_EN_HIF_0_3_MASK		(GPR_PFE_COH_EN_HIF0 | GPR_PFE_COH_EN_HIF1 | \
-						 GPR_PFE_COH_EN_HIF2 | GPR_PFE_COH_EN_HIF3)
-#define GPR_PFE_COH_EN_DDR			(1 << 0)
-#define S32G_MAIN_GPR_PFE_EMACX_INTF_SEL	0x4
-#define GPR_PFE_EMACn_PWR_ACK(n)		(1 << (9 + n)) /* RD Only */
-#define GPR_PFE_EMACn_PWR_ISO(n)		(1 << (6 + n))
-#define GPR_PFE_EMACn_PWR_DWN(n)		(1 << (3 + n))
-#define GPR_PFE_EMACn_PWR_CLAMP(n)		(1 << (0 + n))
-#define GPR_PFE_EMAC_IF_MII			(1)
-#define GPR_PFE_EMAC_IF_RMII			(9)
-#define GPR_PFE_EMAC_IF_RGMII			(2)
-#define GPR_PFE_EMAC_IF_SGMII			(0)
-#define GPR_PFE_EMACn_IF(n,i)			(i << (n * 4))
-
 /* Major IP version for cut2.0 */
 #define PFE_IP_MAJOR_VERSION_CUT2		2
 
@@ -132,82 +108,6 @@ MODULE_PARM_DESC(hif_phc_emac, "\t (default EMAC0");
 uint32_t get_pfeng_pfe_cfg_master_if(void)
 {
 	return pfeng_pfe_cfg_master_if;
-}
-
-static int pfeng_s32g_set_port_coherency(struct pfeng_priv *priv)
-{
-	struct device *dev = &priv->pdev->dev;
-	void *syscon;
-	int ret = 0;
-	u32 val;
-
-	syscon = ioremap(priv->syscon.start, priv->syscon.end - priv->syscon.start + 1);
-	if(!syscon) {
-		HM_MSG_DEV_ERR(dev, "cannot map GPR, aborting (INTF_SEL)\n");
-		return -EIO;
-	}
-
-	val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
-	val |= GPR_PFE_COH_EN_HIF_0_3_MASK;
-	hal_write32(val, syscon + S32G_MAIN_GPR_PFE_COH_EN);
-
-	val = hal_read32(syscon + S32G_MAIN_GPR_PFE_COH_EN);
-	if ((val & GPR_PFE_COH_EN_HIF_0_3_MASK) == GPR_PFE_COH_EN_HIF_0_3_MASK) {
-		HM_MSG_DEV_INFO(dev, "PFE port coherency enabled, mask 0x%x\n", val);
-	} else {
-		HM_MSG_DEV_ERR(dev, "Failed to enable port coherency (mask 0x%x)\n", val);
-		ret = -EINVAL;
-	}
-
-	iounmap(syscon);
-	return ret;
-}
-
-static unsigned int xlate_to_s32g_intf(unsigned int n, phy_interface_t intf)
-{
-	switch(intf) {
-		default: /* SGMII is the default */
-		case PHY_INTERFACE_MODE_SGMII:
-			return GPR_PFE_EMACn_IF(n, GPR_PFE_EMAC_IF_SGMII);
-
-		case PHY_INTERFACE_MODE_RGMII:
-		case PHY_INTERFACE_MODE_RGMII_ID:
-		case PHY_INTERFACE_MODE_RGMII_RXID:
-		case PHY_INTERFACE_MODE_RGMII_TXID:
-			return GPR_PFE_EMACn_IF(n, GPR_PFE_EMAC_IF_RGMII);
-
-		case PHY_INTERFACE_MODE_RMII:
-			return GPR_PFE_EMACn_IF(n, GPR_PFE_EMAC_IF_RMII);
-
-		case PHY_INTERFACE_MODE_MII:
-			return GPR_PFE_EMACn_IF(n, GPR_PFE_EMAC_IF_MII);
-	}
-}
-
-static int pfeng_s32g_set_emac_interfaces(struct pfeng_priv *priv, phy_interface_t emac0_intf, phy_interface_t emac1_intf, phy_interface_t emac2_intf)
-{
-	void *syscon;
-	u32 val;
-
-	syscon = ioremap(priv->syscon.start, priv->syscon.end - priv->syscon.start + 1);
-	if(!syscon) {
-		HM_MSG_DEV_ERR(&priv->pdev->dev, "cannot map GPR, aborting (INTF_SEL)\n");
-		return -EIO;
-	}
-	/* set up interfaces */
-	val = xlate_to_s32g_intf(0, emac0_intf) | xlate_to_s32g_intf(1, emac1_intf) | xlate_to_s32g_intf(2, emac2_intf);
-	hal_write32(val, syscon + S32G_MAIN_GPR_PFE_EMACX_INTF_SEL);
-
-	HM_MSG_DEV_INFO(&priv->pdev->dev, "Interface selected: EMAC0: 0x%x EMAC1: 0x%x EMAC2: 0x%x\n", emac0_intf, emac1_intf, emac2_intf);
-
-	/* power down and up EMACs */
-	hal_write32(GPR_PFE_EMACn_PWR_DWN(0) | GPR_PFE_EMACn_PWR_DWN(1) | GPR_PFE_EMACn_PWR_DWN(2), syscon + S32G_MAIN_GPR_PFE_PWR_CTRL);
-	usleep_range(100, 500);
-	hal_write32(0, syscon + S32G_MAIN_GPR_PFE_PWR_CTRL);
-
-	iounmap(syscon);
-
-	return 0;
 }
 
 static struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev)
@@ -327,7 +227,11 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	}
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	hal_ip_ready_set(false);
+	ret = pfeng_gpr_ip_ready_set(dev, false);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "Failed to signal IP not ready: %d\n", ret);
+		return ret;
+	}
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	/* Remove debugfs directory */
@@ -460,6 +364,13 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	if (!of_match_device(pfeng_id_table, &pdev->dev))
 		return -ENODEV;
 
+	ret = pfeng_gpr_check_nvmem_cells(dev);
+	if (ret) {
+		if (ret != EPROBE_DEFER)
+			HM_MSG_DEV_ERR(dev, "NVMEM cells check failed\n");
+		return ret;
+	}
+
 	HM_MSG_DEV_INFO(dev, "PFEng ethernet driver loading ...\n");
 	HM_MSG_DEV_INFO(dev, "Version: %s\n", PFENG_DRIVER_VERSION);
 	HM_MSG_DEV_INFO(dev, "Driver commit hash: %s\n", PFENG_DRIVER_COMMIT_HASH);
@@ -474,7 +385,11 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	HM_MSG_DEV_INFO(dev, "Compiled by: %s\n", __VERSION__);
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	hal_ip_ready_set(false);
+	ret = pfeng_gpr_ip_ready_set(dev, false);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "Failed to signal IP not ready: %d\n", ret);
+		return ret;
+	}
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	if (!of_dma_is_coherent(dev->of_node))
@@ -525,7 +440,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 
 	/* Set HIF channels coherency */
 	if (of_dma_is_coherent(dev->of_node)) {
-		ret = pfeng_s32g_set_port_coherency(priv);
+		ret = pfeng_gpr_set_port_coherency(priv);
 		if (ret)
 			goto err_drv;
 	}
@@ -578,10 +493,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	pm_runtime_enable(dev);
 
 	/* Set correct PFE_EMACs interfaces */
-	if(pfeng_s32g_set_emac_interfaces(priv,
-		priv->emac[0].intf_mode,
-		priv->emac[1].intf_mode,
-		priv->emac[2].intf_mode))
+	if (pfeng_gpr_set_emac_interfaces(priv))
 		HM_MSG_DEV_ERR(dev, "WARNING: cannot enable power for EMACs\n");
 
 	/* PFE Partition reset */
@@ -724,7 +636,11 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 		goto err_drv;
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	hal_ip_ready_set(true);
+	ret = pfeng_gpr_ip_ready_set(dev, true);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "Failed to signal IP ready: %d\n", ret);
+		return ret;
+	}
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	/* Create debugfs */
@@ -816,7 +732,8 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	priv->in_suspend = true;
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	hal_ip_ready_set(false);
+	if (pfeng_gpr_ip_ready_set(dev, false))
+		HM_MSG_DEV_ERR(dev, "Failed to signal IP not ready\n");
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	pfeng_debugfs_remove(priv);
@@ -872,7 +789,7 @@ static int pfeng_drv_pm_resume(struct device *dev)
 
 	/* Set HIF channels coherency */
 	if (of_dma_is_coherent(dev->of_node)) {
-		ret = pfeng_s32g_set_port_coherency(priv);
+		ret = pfeng_gpr_set_port_coherency(priv);
 		if (ret)
 			return ret;
 	}
@@ -910,10 +827,7 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	}
 
 	/* Set correct PFE_EMACs interfaces */
-	if(pfeng_s32g_set_emac_interfaces(priv,
-		priv->emac[0].intf_mode,
-		priv->emac[1].intf_mode,
-		priv->emac[2].intf_mode))
+	if (pfeng_gpr_set_emac_interfaces(priv))
 		HM_MSG_DEV_ERR(dev, "WARNING: cannot enable power for EMACs\n");
 
 	/* PFE reset */
@@ -943,7 +857,8 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	}
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	hal_ip_ready_set(true);
+	if (pfeng_gpr_ip_ready_set(dev, true))
+		HM_MSG_DEV_ERR(dev, "Failed to signal IP ready\n");
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	/* Create debugfs */

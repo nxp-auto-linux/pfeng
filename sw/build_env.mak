@@ -58,6 +58,8 @@ export PFE_CFG_PFE2_PROMISC?=1
 export PFE_CFG_MULTI_INSTANCE_SUPPORT?=0
 #Master/Slave variant switch
 export PFE_CFG_PFE_MASTER?=1
+#Use NVMEM cells for accessing GPRs instead of direct register access. 1 - enable, 0 - disable.
+export PFE_CFG_USE_NVMEM?=0
 #Host interface identifying the 'master' driver location (see pfe_ct_phy_if_id_t)
 export PFE_CFG_MASTER_IF?=6
 #Main local host interface to be used for data communication (see pfe_ct_phy_if_id_t)
@@ -210,6 +212,10 @@ ifneq ($(PFE_CFG_PFE_MASTER),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_PFE_MASTER
 else
     GLOBAL_CCFLAGS+=-DPFE_CFG_PFE_SLAVE
+endif
+
+ifneq ($(PFE_CFG_USE_NVMEM),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_USE_NVMEM
 endif
 
 GLOBAL_CCFLAGS+=-DPFE_CFG_MASTER_IF=$(PFE_CFG_MASTER_IF)
