@@ -463,8 +463,11 @@ struct sk_buff *pfeng_hif_chnl_receive_pkt(struct pfeng_hif_chnl *chnl)
 	void *buf_pa;
 	u32 rx_len;
 
-	if (unlikely(pfeng_bman_rx_chnl_pool_unused(pool) >= PFENG_BMAN_REFILL_THR))
+	if (unlikely(pfeng_bman_rx_chnl_pool_unused(pool) >= PFENG_BMAN_REFILL_THR)) {
 		pfeng_hif_chnl_refill_rx_pool(pool, PFENG_BMAN_REFILL_THR);
+		/* Re-trigger the RX DMA */
+		pfe_hif_chnl_rx_dma_start(pool->ll_chnl);
+	}
 
 	while (!lifm) {
 		/* get frame buffer info from the RX BD and move to the next BD in the ring */
