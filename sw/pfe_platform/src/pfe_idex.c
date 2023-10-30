@@ -395,11 +395,13 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 							/* Duplicated request received, only resend last response */
 							if(client->seqnum == seqnum)
 							{
-								NXP_LOG_DEBUG("IDEX Duplicated RPC request seqnum received - %u", (uint_t)seqnum);
+								NXP_LOG_DEBUG("IDEX Duplicated RPC request seqnum received: seqnum=%u, phy_id=%u", (uint_t)seqnum, client->phy_id);
 								if(client->response != NULL)
 								{
-									if(EOK != pfe_idex_send_response(client->phy_id, IDEX_RPC, seqnum,
-											client->response, sizeof(pfe_idex_msg_rpc_t) + client->response->plen))
+									/*	Resend last saved IDEX frame */
+									ret = pfe_idex_send_frame(client->phy_id, IDEX_FRAME_CTRL_RESPONSE, client->response,
+												(uint16_t)sizeof(pfe_idex_response_t) + (uint16_t)oal_ntohs(client->response->plen));
+									if (EOK != ret)
 									{
 										NXP_LOG_WARNING("Problem to resend RPC response PHY: %u", client->phy_id);
 									}
@@ -673,12 +675,10 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	if(server->version >= IDEX_VERSION_2)
 	{
 		resend_count = PFE_CFG_IDEX_RESEND_COUNT;
-		timeout_ms = PFE_CFG_IDEX_RESEND_TIME;
 	}
 	else
 	{
 		resend_count = 1;
-		timeout_ms = PFE_CFG_IDEX_RESEND_TIME;
 	}
 
 	/*	Create the request instance with room for request payload */
@@ -723,7 +723,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			TX processing is expected to be done asynchronously in pfe_idex_ihc_handler(). */
 
 		/*	Wait 1ms between every check */
-		for (; timeout_ms > 0U; timeout_ms -= 1)
+		for (timeout_ms = PFE_CFG_IDEX_RESEND_TIME; timeout_ms > 0U; timeout_ms -= 1)
 		{
 			/*	Check the status of request */
 			if (IDEX_REQ_STATE_COMPLETED == request->state)
@@ -744,6 +744,8 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 				oal_time_udelay(1000U);
 			}
 		}
+
+		NXP_LOG_DEBUG("IDEX RESENDING REQUEST seqnum=%d counter=%d state=%d", server->seqnum, sending_counter, request->state);
 	}
 
 	/*	Sending was not succesfull, timeout occured */
@@ -1098,7 +1100,7 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, const void *buf, u
 	if (EOK != ret)
 	{
 		/*	Transport error */
-		NXP_LOG_WARNING("RPC transport failed: %d", ret);
+		NXP_LOG_ERROR("RPC transport failed: %d", ret);
 	}
 	else
 	{
