@@ -44,7 +44,7 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"1.5.0"
+#define PFENG_DRIVER_VERSION		"1.6.0"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
