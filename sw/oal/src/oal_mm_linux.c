@@ -259,7 +259,7 @@ static void *__oal_mm_reserved_mem_alloc_htable(struct gen_pool *pool_alloc, con
 	hnode->type = PFE_MEM_RESERVED_ALLOC;
 	hnode->addr = vaddr;
 	hnode->size = size;
-	hnode->phys_addr = virt_to_phys(vaddr);
+	hnode->phys_addr = gen_pool_virt_to_phys(pool_alloc, (unsigned long)vaddr);
 	hash_add(pfe_addr_htable, &hnode->node, (uint64_t)vaddr);
 
 	return vaddr;
@@ -499,12 +499,27 @@ uint32_t oal_mm_cache_get_line_size(void)
 	return OAL_CACHE_ALLIGN; //oal_cache_context.cache_line_size;
 }
 
+static int init_io_region(struct reserved_mem *rmem)
+{
+	void __iomem *base_va;
+
+	base_va = ioremap_wc(rmem->base, rmem->size);
+	if (!base_va)
+		return -EINVAL;
+
+	memset_io(base_va, 0, rmem->size);
+
+	iounmap(base_va);
+	return 0;
+}
+
 static int pfeng_reserved_bdr_pool_region_init(struct device *dev, struct gen_pool **pool_alloc, int rmem_idx)
 {
 	struct device_node *mem_node;
 	struct reserved_mem *rmem;
 	struct gen_pool *p;
 	void *base;
+	bool nomap;
 	int idx;
 	int ret;
 
@@ -530,7 +545,15 @@ static int pfeng_reserved_bdr_pool_region_init(struct device *dev, struct gen_po
 		goto out;
 	}
 
+	nomap = of_find_property(mem_node, "no-map", NULL) != NULL;
+
 	of_node_put(mem_node);
+
+	if (nomap && init_io_region(rmem)) {
+		dev_err(dev, "failed to init reserved region %s @ phys addr: 0x%llx\n",
+			rmem->name, rmem->base);
+		return -EINVAL;
+	}
 
 	base = devm_memremap(dev, rmem->base, rmem->size, MEMREMAP_WB);
 	if (!base) {
@@ -545,7 +568,7 @@ static int pfeng_reserved_bdr_pool_region_init(struct device *dev, struct gen_po
 		return -EINVAL;
 	}
 
-	ret = gen_pool_add(p, (unsigned long)base, rmem->size, -1);
+	ret = gen_pool_add_owner(p, (unsigned long)base, rmem->base, rmem->size, -1, NULL);
 	if (ret) {
 		dev_err(dev, "gen pool add failed\n");
 		memunmap(base);
