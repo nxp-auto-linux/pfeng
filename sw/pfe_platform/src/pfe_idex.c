@@ -715,8 +715,8 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 		if (EOK != ret)
 		{
 			/*	Sending of request failed. Should return ERROR */
-			NXP_LOG_WARNING("IDEX request %d TX failed", request->seqnum);
-			return ret;
+			NXP_LOG_ERROR("IDEX request %d TX failed", request->seqnum);
+			goto end_sending;
 		}
 
 		/*	Block until response is received or timeout occurred. RX and
@@ -735,6 +735,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			else if (IDEX_REQ_STATE_INVALID == request->state)
 			{
 				/* Request failed */
+				NXP_LOG_ERROR("IDEX request %d TX in invalid state", request->seqnum);
 				ret = EFAULT;
 				goto end_sending;
 			}
@@ -751,13 +752,16 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	/*	Sending was not succesfull, timeout occured */
 	if (0U == timeout_ms || resend_count == sending_counter)
 	{
-		NXP_LOG_WARNING("IDEX request %u timed-out, retransmitted %u times", (uint_t)oal_ntohl(request->seqnum), sending_counter);
+		NXP_LOG_ERROR("IDEX request %u timed-out, retransmitted %u times", (uint_t)oal_ntohl(request->seqnum), sending_counter);
 		ret = ETIMEDOUT;
 	}
 
 end_sending:
-	/*	End of sending, increment seqnum */
-	server->seqnum += 1;
+	if (EOK == ret)
+	{
+		/*	End of sending, increment seqnum */
+		server->seqnum += 1;
+	}
 	oal_mm_free_contig(request);
 	server->request = NULL;
 
