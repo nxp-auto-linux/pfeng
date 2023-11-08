@@ -1,5 +1,5 @@
 /* =========================================================================
- *  
+ *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2023 NXP
  *
@@ -41,11 +41,7 @@
 
 #include "pfe_ct.h"
 #include "pfe_log_if.h"
-#if defined(PFE_CFG_TARGET_OS_LINUX)
 #include "pfe_hif_chnl_linux.h"
-#else
-#include "pfe_hif_chnl.h"
-#endif
 
 #define HIF_STATS
 
@@ -114,11 +110,7 @@ enum
  * @brief	If TRUE the TX confirmation procedure will be executed within deferred job.
  * 			If FALSE the TX confirmation will be executed with every pfe_hif_drv_client_xmit call.
  */
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-	#define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		TRUE
-#else
-	#define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		FALSE
-#endif
+#define HIF_CFG_DETACH_TX_CONFIRMATION_JOB		FALSE
 
 /**
  * @def	    HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION
@@ -126,11 +118,7 @@ enum
  * 			TX interrupt/event. If FALSE the TX confirmation job will be triggered
  * 			from within the pfe_hif_drv_client_xmit call.
  */
-#if defined(PFE_CFG_TARGET_OS_AUTOSAR)
-	#define	HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION	TRUE
-#else
-	#define	HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION	FALSE
-#endif
+#define	HIF_CFG_IRQ_TRIGGERED_TX_CONFIRMATION	FALSE
 
 /**
  * @def		HIF_CFG_DETACH_RX_JOB
@@ -233,11 +221,6 @@ typedef struct pfe_hif_drv_tag pfe_hif_drv_t;
 typedef struct pfe_hif_pkt_tag pfe_hif_pkt_t;
 typedef errno_t (* pfe_hif_drv_client_event_handler)(pfe_hif_drv_client_t *client, void *arg, uint32_t event, uint32_t qno);
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 pfe_hif_drv_t *pfe_hif_drv_create(pfe_hif_chnl_t *channel);
 void pfe_hif_drv_destroy(pfe_hif_drv_t *hif_drv);
 errno_t pfe_hif_drv_init(pfe_hif_drv_t *hif_drv);
@@ -267,6 +250,8 @@ pfe_hif_drv_client_t * pfe_hif_drv_aux_client_register(
 			uint32_t rxq_depth, pfe_hif_drv_client_event_handler handler, void *priv);
 #endif /*PFE_CFG_MC_HIF*/
 
+void pfe_hif_drv_set_idex_resend_cfg(pfe_hif_drv_t *hif_drv, const uint32_t idex_resend_count, const uint32_t idex_resend_time);
+void pfe_hif_drv_get_idex_resend_cfg(const pfe_hif_drv_t *hif_drv, uint32_t *idex_resend_count, uint32_t *idex_resend_time);
 
 /*	HIF client */
 pfe_hif_drv_client_t * pfe_hif_drv_client_register(
@@ -279,9 +264,6 @@ void *pfe_hif_drv_client_get_priv(const pfe_hif_drv_client_t *client);
 void pfe_hif_drv_client_unregister(pfe_hif_drv_client_t *client);
 void pfe_hif_drv_client_rx_done(const pfe_hif_drv_client_t *client);
 void pfe_hif_drv_client_tx_done(const pfe_hif_drv_client_t *client);
-#if defined(PFE_CFG_TARGET_OS_AUTOSAR) && defined(PFE_CFG_IEEE1588_SUPPORT)
-void pfe_hif_drv_client_ptp_ts_db_tick_iteration(pfe_hif_drv_client_t *client);
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR && PFE_CFG_IEEE1588_SUPPORT */
 
 /*	Packet transmission */
 errno_t pfe_hif_drv_client_xmit_pkt(pfe_hif_drv_client_t *client, uint32_t queue, void *data_pa, void *data_va, uint32_t len, void *ref_ptr);
@@ -511,10 +493,7 @@ static inline pfe_ct_phy_if_id_t pfe_hif_pkt_get_ingress_phy_id(const pfe_hif_pk
 	return pkt->i_phy_if;
 }
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+
 
 #endif /* PFE_HIF_DRV_H_ */
 

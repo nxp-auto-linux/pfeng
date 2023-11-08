@@ -211,6 +211,8 @@ struct pfe_hif_drv_client_tag
 struct pfe_hif_drv_tag
 {
 	pfe_hif_drv_client_t		*ihc_client;
+	uint32_t			idex_resend_count;
+	uint32_t 			idex_resend_time;
 };
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
@@ -335,6 +337,8 @@ struct pfeng_priv {
 	struct task_struct		*deferred_probe_task;
 	struct workqueue_struct		*ihc_slave_wq;
 #endif /* PFE_CFG_PFE_SLAVE */
+	uint32_t			idex_resend_count;
+	uint32_t 			idex_resend_time;
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 	struct pfeng_emac		emac[PFENG_PFE_EMACS];
 	struct resource			syscon;

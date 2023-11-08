@@ -150,6 +150,18 @@ static irqreturn_t pfeng_hif_chnl_direct_isr(int irq, void *arg)
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 
+void pfe_hif_drv_set_idex_resend_cfg(pfe_hif_drv_t *hif_drv, const uint32_t idex_resend_count, const uint32_t idex_resend_time)
+{
+	hif_drv->idex_resend_count = idex_resend_count;
+	hif_drv->idex_resend_time = idex_resend_time;
+}
+
+void pfe_hif_drv_get_idex_resend_cfg(const pfe_hif_drv_t *hif_drv, uint32_t *idex_resend_count, uint32_t *idex_resend_time)
+{
+	*idex_resend_count = hif_drv->idex_resend_count;
+	*idex_resend_time = hif_drv->idex_resend_time;
+}
+
 static int pfe_hif_drv_ihc_put_pkt(pfe_hif_drv_client_t *client, void *data, uint32_t len, void *ref)
 {
 	struct pfeng_hif_chnl *chnl = container_of(client, struct pfeng_hif_chnl, ihc_client);
@@ -648,6 +660,7 @@ static int pfeng_hif_idex_create(struct pfeng_priv *priv, int idx)
 
 	/* Install IDEX support */
 	priv->ihc_chnl = ihc_chnl;
+	pfe_hif_drv_set_idex_resend_cfg(&ihc_chnl->hif_drv, priv->idex_resend_count, priv->idex_resend_time);
 	ret = pfe_idex_init(&ihc_chnl->hif_drv,
 			  pfeng_hif_ids[priv->ihc_master_chnl],
 			  priv->pfe_platform->hif,
