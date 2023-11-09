@@ -20,20 +20,6 @@
 #define IDEX_RESET_RPC_ID	0xFFFFFFFF
 
 /**
- * @brief	IDEX request timeout in milliseconds between resending
- */
-#ifndef PFE_CFG_IDEX_RESEND_TIME
-#define PFE_CFG_IDEX_RESEND_TIME	100U
-#endif
-
-/**
- * @brief	IDEX request resend times
- */
-#ifndef PFE_CFG_IDEX_RESEND_COUNT
-#define PFE_CFG_IDEX_RESEND_COUNT	5U
-#endif
-
-/**
  * @brief		IDEX sequence number type
  */
 typedef uint32_t pfe_idex_seqnum_t;
@@ -231,6 +217,8 @@ typedef struct
 	pfe_remote_client_t clients[IDEX_MAX_CLIENTS];	/*	Server has information about every client */
 	oal_mutex_t rpc_req_lock;			/*	Requests mutex blocking communication */
 	bool_t rpc_req_lock_init;			/*	Flag indicating that mutex is initialized */
+	uint32_t resend_count;				/*	Transport retransmission count, configuration value */
+	uint32_t resend_time;				/*	Transport retransmission time, configuration value */
 } pfe_idex_t;
 
 /*	Local IDEX instance storage */
@@ -674,7 +662,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	/*	If we have version 2 or RESET message, try to resend multiple times	*/
 	if(server->version >= IDEX_VERSION_2)
 	{
-		resend_count = PFE_CFG_IDEX_RESEND_COUNT;
+		resend_count = pfe_idex.resend_count;
 	}
 	else
 	{
@@ -715,15 +703,15 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 		if (EOK != ret)
 		{
 			/*	Sending of request failed. Should return ERROR */
-			NXP_LOG_WARNING("IDEX request %d TX failed", request->seqnum);
-			return ret;
+			NXP_LOG_ERROR("IDEX request %d TX failed", request->seqnum);
+			goto end_sending;
 		}
 
 		/*	Block until response is received or timeout occurred. RX and
 			TX processing is expected to be done asynchronously in pfe_idex_ihc_handler(). */
 
 		/*	Wait 1ms between every check */
-		for (timeout_ms = PFE_CFG_IDEX_RESEND_TIME; timeout_ms > 0U; timeout_ms -= 1)
+		for (timeout_ms = pfe_idex.resend_time; timeout_ms > 0U; timeout_ms -= 1)
 		{
 			/*	Check the status of request */
 			if (IDEX_REQ_STATE_COMPLETED == request->state)
@@ -735,6 +723,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			else if (IDEX_REQ_STATE_INVALID == request->state)
 			{
 				/* Request failed */
+				NXP_LOG_ERROR("IDEX request %d TX in invalid state", request->seqnum);
 				ret = EFAULT;
 				goto end_sending;
 			}
@@ -751,13 +740,16 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	/*	Sending was not succesfull, timeout occured */
 	if (0U == timeout_ms || resend_count == sending_counter)
 	{
-		NXP_LOG_WARNING("IDEX request %u timed-out, retransmitted %u times", (uint_t)oal_ntohl(request->seqnum), sending_counter);
+		NXP_LOG_ERROR("IDEX request %u timed-out, retransmitted %u times", (uint_t)oal_ntohl(request->seqnum), sending_counter);
 		ret = ETIMEDOUT;
 	}
 
 end_sending:
-	/*	End of sending, increment seqnum */
-	server->seqnum += 1;
+	if (EOK == ret)
+	{
+		/*	End of sending, increment seqnum */
+		server->seqnum += 1;
+	}
 	oal_mm_free_contig(request);
 	server->request = NULL;
 
@@ -902,6 +894,7 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 #error Impossible configuration
 #endif /* PFE_CFG_PFE_MASTER/PFE_CFG_PFE_SLAVE */
 
+	pfe_hif_drv_get_idex_resend_cfg(hif_drv, &idex->resend_count, &idex->resend_time);
 	idex->txc_free_cbk = txcf_cbk;
 
 	/*	Create mutex */
@@ -914,7 +907,6 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 	}
 
 	idex->rpc_req_lock_init = TRUE;
-
 
 	/*	Register IHC client */
 	idex->ihc_client = pfe_hif_drv_ihc_client_register(hif_drv, &pfe_idex_ihc_handler, NULL);
@@ -961,7 +953,7 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 
 			if (IDEX_VERSION_2 == idex->server.version)
 			{
-				NXP_LOG_INFO("IDEX: v2 protocol used\n");
+				NXP_LOG_INFO("IDEX: v2 protocol used, ResendCfg:count=%d,time=%d\n", idex->resend_count, idex->resend_time);
 			}
 			else
 			{
