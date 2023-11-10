@@ -1520,45 +1520,72 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_find_rx(pfe_hif_chnl_t * chnl)
 
 	ring_len = pfe_hif_ring_get_len(chnl->rx_ring);
 
+	if (FALSE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
+	{
+		/* We are not allowed to use BDs cached from previous driver run */
+		NXP_LOG_ERROR("Detected invalid state of RX BDP: invalid BDs\n");
+		ret = EINVAL;
+		goto end;
+	}
+
+	/* To fit in RX hunter method we used (which is based on cached BD(s))
+	 * provide one BD and let BDP do cache it.
+	 * We need two steps to cover the whole buffer, first with even BDs
+	 * and if not succeede then switch to odd BDs.
+	 */
+
+	/* Alloc one frame buffer */
+	buf_va = oal_mm_malloc_contig_aligned_nocache(DUMMY_RX_BUF_LEN, 8U);
+	if (NULL == buf_va)
+	{
+		NXP_LOG_ERROR("Can't get dummy RX buffer\n");
+		ret = ENOMEM;
+		goto end;
+	}
+
+	buf_pa = oal_mm_virt_to_phys_contig(buf_va);
+	if (NULL == buf_pa)
+	{
+		NXP_LOG_ERROR("VA to PA conversion failed");
+		ret = ENOMEM;
+		goto end;
+	}
+
+	for (ii = 0; ii < ring_len; ii++)
+	{
+		ret = pfe_hif_chnl_supply_rx_buf(chnl, buf_pa, DUMMY_RX_BUF_LEN);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
+			goto end;
+		}
+	}
+
+	/* First step: even BDs */
+	for (ii = 1U; ii < ring_len; ii += 2U)
+	{
+		pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
+	}
+
+	/* Instruct BDP to fetch BD */
+	pfe_hif_chnl_rx_enable(chnl);
+	pfe_hif_chnl_rx_dma_start(chnl);
+
+	oal_time_usleep(500U);
+
+	pfe_hif_chnl_rx_disable(chnl);
+
 	if (TRUE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
 	{
-		/* To fit in RX hunter method we used (which is based on cached BD(s))
-		 * provide one BD and let BDP do cache it.
-		 * We need two steps to cover the whole buffer, first with even BDs
-		 * and if not succeede then switch to odd BDs.
-		 */
+		/* Second step: odd BDs (in case when even BDs try was not sucessful */
+		pfe_hif_ring_force_index(chnl->rx_ring, 0);
 
-		/* Alloc one frame buffer */
-		buf_va = oal_mm_malloc_contig_aligned_nocache(DUMMY_RX_BUF_LEN, 8U);
-		if (NULL == buf_va)
+		for (ii = 0U; ii < ring_len; ii += 2U)
 		{
-			NXP_LOG_ERROR("Can't get dummy RX buffer\n");
-			ret = ENOMEM;
-			goto end;
-		}
-
-		buf_pa = oal_mm_virt_to_phys_contig(buf_va);
-		if (NULL == buf_pa)
-		{
-			NXP_LOG_ERROR("VA to PA conversion failed");
-			ret = ENOMEM;
-			goto end;
-		}
-
-		for (ii = 0; ii < ring_len; ii++)
-		{
-			ret = pfe_hif_chnl_supply_rx_buf(chnl, buf_pa, DUMMY_RX_BUF_LEN);
-			if (EOK != ret)
-			{
-				NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
-				goto end;
-			}
-		}
-
-		/* First step: even BDs */
-		for (ii = 1U; ii < ring_len; ii += 2U)
-		{
+			/* Invalidate odd BD */
 			pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
+			/* Revalidate back even BD */
+			pfe_hif_ring_revalidate_direct(chnl->rx_ring, ii + 1U);
 		}
 
 		/* Instruct BDP to fetch BD */
@@ -1571,40 +1598,18 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_find_rx(pfe_hif_chnl_t * chnl)
 
 		if (TRUE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
 		{
-			/* Second step: odd BDs (in case when even BDs try was not sucessful */
-			pfe_hif_ring_force_index(chnl->rx_ring, 0);
-
-			for (ii = 0U; ii < ring_len; ii += 2U)
-			{
-				/* Invalidate odd BD */
-				pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
-				/* Revalidate back even BD */
-				pfe_hif_ring_revalidate_direct(chnl->rx_ring, ii + 1U);
-			}
-
-			/* Instruct BDP to fetch BD */
-			pfe_hif_chnl_rx_enable(chnl);
-			pfe_hif_chnl_rx_dma_start(chnl);
-
-			oal_time_usleep(500U);
-
-			pfe_hif_chnl_rx_disable(chnl);
-
-			if (TRUE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
-			{
-				/* Something got wrong */
-				NXP_LOG_ERROR("HIF%d is not able to cache BD\n", chnl->id);
-				ret = EINVAL;
-				goto end;
-			}
+			/* Something got wrong */
+			NXP_LOG_ERROR("HIF%d is not able to cache BD\n", chnl->id);
+			ret = EINVAL;
+			goto end;
 		}
+	}
 
-		pfe_hif_ring_force_index(chnl->rx_ring, 0);
-		/* Clean ring */
-		for (ii = 0U; ii < ring_len; ii++)
-		{
-			pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
-		}
+	pfe_hif_ring_force_index(chnl->rx_ring, 0);
+	/* Clean ring */
+	for (ii = 0U; ii < ring_len; ii++)
+	{
+		pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
 	}
 
 	/* Requires clean RX ring, with default WB BD control words (value: 0x200) */
