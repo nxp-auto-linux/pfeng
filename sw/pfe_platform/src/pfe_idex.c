@@ -495,18 +495,21 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 								/*	Copy payload */
 								(void)memcpy((void *)((addr_t)rpc_msg + sizeof(pfe_idex_msg_rpc_t)),
 											(void *)((addr_t)rpc_resp + sizeof(pfe_idex_msg_rpc_t)), payload_length);
+
+								rpc_msg->rpc_id = (uint32_t)oal_ntohl(rpc_resp->rpc_id);
+								rpc_msg->rpc_ret = (uint32_t)oal_ntohl(rpc_resp->rpc_ret);
+								rpc_msg->plen = payload_length;
+
+								server->request->state = IDEX_REQ_STATE_COMPLETED;
 							}
 							else
 							{
+								/*	Don't send response if there is no room for required payload */
 								NXP_LOG_WARNING("RPC Response buffer is too small! %u < %u", payload_length, rpc_msg->plen);
+								server->request->state = IDEX_REQ_STATE_INVALID;
+								break;
 							}
-
-							rpc_msg->rpc_id = (uint32_t)oal_ntohl(rpc_resp->rpc_id);
-							rpc_msg->rpc_ret = (uint32_t)oal_ntohl(rpc_resp->rpc_ret);
-							rpc_msg->plen = payload_length;
 						}
-
-						server->request->state = IDEX_REQ_STATE_COMPLETED;
 
 						break;
 					}/* IDEX_RPC RESPONSE */
