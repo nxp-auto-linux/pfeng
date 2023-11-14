@@ -289,12 +289,6 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 {
 	pfe_hif_pkt_t *pkt;
 	pfe_idex_frame_header_t *idex_header;
-	pfe_idex_request_t *idex_req;
-	pfe_idex_response_t *idex_resp;
-	pfe_remote_client_t* client;
-	pfe_remote_server_t* server;
-	pfe_idex_seqnum_t seqnum;
-	errno_t ret;
 	pfe_ct_phy_if_id_t i_phy_id;
 
 	while (TRUE)
@@ -315,14 +309,25 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 		/*	IDEX frames originate from HIF channels exclusively */
 		if((i_phy_id < PFE_PHY_IF_ID_HIF0 || i_phy_id > PFE_PHY_IF_ID_HIF3) && i_phy_id != PFE_PHY_IF_ID_HIF_NOCPY)
 		{
-			NXP_LOG_WARNING("IDEX: Allien IDEX frame type 0x%x with PHY_IF %d", idex_header->type, i_phy_id);
-			break;
+#ifdef PFE_CFG_PFE_SLAVE
+			if (i_phy_id != pfe_idex.remote.server.phy_id)
+#endif /* PFE_CFG_PFE_SLAVE */
+			{
+				NXP_LOG_WARNING("IDEX: Allien IDEX frame type 0x%x with PHY_IF %d", idex_header->type, i_phy_id);
+				break;
+			}
 		}
 
 		switch (idex_header->type)
 		{
+#ifdef PFE_CFG_PFE_MASTER
 			case IDEX_FRAME_CTRL_REQUEST:
 			{
+				pfe_idex_request_t *idex_req;
+				pfe_remote_client_t* client;
+				pfe_idex_seqnum_t seqnum;
+				errno_t ret;
+
 				/*	Received frame is IDEX request */
 				idex_req = (pfe_idex_request_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
 				seqnum = (pfe_idex_seqnum_t)oal_ntohl(idex_req->seqnum);
@@ -443,8 +448,13 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 				break;
 			} /* IDEX_FRAME_CTRL_REQUEST */
 
+#else
+
 			case IDEX_FRAME_CTRL_RESPONSE:
 			{
+				pfe_idex_response_t *idex_resp;
+				pfe_remote_server_t* server;
+
 				/*	Get response header */
 				idex_resp = (pfe_idex_response_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
 
@@ -524,11 +534,12 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 
 				break;
 			} /* IDEX_FRAME_CTRL_RESPONSE */
+#endif /* PFE_CFG_PFE_MASTER/SLAVE */
 
 			default:
 			{
 				/*	Unknown frame */
-				NXP_LOG_WARNING("Unknown IDEX frame received\n");
+				NXP_LOG_WARNING("Unknown IDEX frame ctrl type 0x%x received\n", idex_header->type);
 				break;
 			}
 		} /* switch */
