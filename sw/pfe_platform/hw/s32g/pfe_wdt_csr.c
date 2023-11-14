@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -198,8 +198,8 @@ void pfe_wdt_cfg_init(addr_t base_va)
 	/*	Enable ALL particular watchdogs */
 	hal_write32(0xFFFFFFU, base_va + CLASS_WDT_INT_EN);
 	hal_write32(0xFU, base_va + UPE_WDT_INT_EN);
-	hal_write32(0x1FFU, base_va + HGPI_WDT_INT_EN);
-	hal_write32(0xFU, base_va + HIF_WDT_INT_EN);
+	hal_write32(0x0ABU, base_va + HGPI_WDT_INT_EN); /* Mask false positive bits */
+	hal_write32(0xCU, base_va + HIF_WDT_INT_EN);	/* Mask false positive bits */
 	hal_write32(0xFFFFFFU, base_va + TLITE_WDT_INT_EN);
 	hal_write32(0x3FU, base_va + HNCPY_WDT_INT_EN);
 	hal_write32(0xFU, base_va + BMU1_WDT_INT_EN);
