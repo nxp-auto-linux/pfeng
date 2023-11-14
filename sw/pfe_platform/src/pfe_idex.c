@@ -222,6 +222,17 @@ typedef struct
 	bool_t rpc_req_lock_init;			/*	Flag indicating that mutex is initialized */
 	uint32_t resend_count;				/*	Transport retransmission count, configuration value */
 	uint32_t resend_time;				/*	Transport retransmission time, configuration value */
+	struct {
+		uint64_t rx_count;
+		uint64_t rx_aliens;
+		uint64_t rx_dups;
+		uint64_t rx_unknowns;
+		uint64_t rx_fails;
+		uint64_t tx_count;
+		uint64_t tx_retries;
+		uint32_t tx_max_retries;
+		uint32_t tx_skips;
+	} stats;
 } pfe_idex_t;
 
 /*	Local IDEX instance storage */
@@ -301,6 +312,8 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 			break;
 		}
 
+		pfe_idex.stats.rx_count++;
+
 		/*	Get RX packet payload. Also skip HIF header. */
 		idex_header = (pfe_idex_frame_header_t *)((addr_t)pfe_hif_pkt_get_data(pkt) + sizeof(pfe_ct_hif_rx_hdr_t));
 
@@ -314,6 +327,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 #endif /* PFE_CFG_PFE_SLAVE */
 			{
 				NXP_LOG_WARNING("IDEX: Allien IDEX frame type 0x%x with PHY_IF %d", idex_header->type, i_phy_id);
+				pfe_idex.stats.rx_aliens++;
 				break;
 			}
 		}
@@ -355,6 +369,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 															+ sizeof(pfe_idex_msg_rpc_t)))
 						{
 							NXP_LOG_WARNING("Invalid RPC request message length");
+							pfe_idex.stats.rx_fails++;
 							break;
 						}
 
@@ -392,6 +407,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 							if(client->seqnum == seqnum)
 							{
 								NXP_LOG_DEBUG("IDEX Duplicated RPC request seqnum received: seqnum=%u, phy_id=%u", (uint_t)seqnum, client->phy_id);
+								pfe_idex.stats.rx_dups++;
 								if(client->response != NULL)
 								{
 									/*	Resend last saved IDEX frame */
@@ -414,6 +430,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 							else
 							{
 								NXP_LOG_WARNING("Wrong sequence number %u", (uint_t)seqnum);
+								pfe_idex.stats.rx_fails++;
 								break;
 							}
 						}
@@ -441,6 +458,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 					default:
 					{
 						NXP_LOG_WARNING("Unknown IDEX request type received: 0x%x\n", idex_req->type);
+						pfe_idex.stats.rx_unknowns++;
 						break;
 					}
 				}
@@ -648,6 +666,10 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
 		{
 			NXP_LOG_WARNING("IDEX response TX failed\n");
 		}
+		else
+		{
+			pfe_idex.stats.tx_count++;
+		}
 
 		/*	Save response in case of not successful delivery */
 		idex_current_client->response = resp;
@@ -723,6 +745,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			NXP_LOG_ERROR("IDEX request %d TX failed", request->seqnum);
 			goto end_sending;
 		}
+		pfe_idex.stats.tx_count++;
 
 		/*	Block until response is received or timeout occurred. RX and
 			TX processing is expected to be done asynchronously in pfe_idex_ihc_handler(). */
@@ -751,7 +774,14 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			}
 		}
 
-		NXP_LOG_DEBUG("IDEX RESENDING REQUEST seqnum=%d counter=%d state=%d", server->seqnum, sending_counter, request->state);
+		NXP_LOG_DEBUG("IDEX RESENDING REQUEST seqnum=%d counter=%d state=%d", server->seqnum, sending_counter + 1, request->state);
+
+		/*	IDEX protocol stats */
+		pfe_idex.stats.tx_retries++;
+		if (pfe_idex.stats.tx_max_retries < (sending_counter + 1))
+		{
+			pfe_idex.stats.tx_max_retries = sending_counter + 1;
+		}
 	}
 
 	/*	Sending was not succesfull, timeout occured */
@@ -796,6 +826,7 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 
 	if (FALSE == pfe_idex.is_up)
 	{
+		pfe_idex.stats.tx_skips++;
 		return EINVAL;
 	}
 
@@ -1233,4 +1264,25 @@ errno_t pfe_idex_set_rpc_ret_val(errno_t retval, void *resp, uint16_t resp_len)
 void pfe_idex_down(void)
 {
 	pfe_idex.is_up = FALSE;
+}
+
+/**
+ * @brief               Return IDEX runtime statistics in text form
+ * @param[in]   seq                     Pointer to debugfs seq_file
+ * @param[in]   verb_level      Verbosity level, number of data written to the buffer
+ * @return              Number of bytes written to the buffe
+ */
+__attribute__((cold)) void pfe_idex_get_text_statistics(struct seq_file *seq, uint8_t verb_level)
+{
+        seq_printf(seq, "rx_count:       %llu\n", pfe_idex.stats.rx_count);
+        seq_printf(seq, "rx_aliens:      %llu\n", pfe_idex.stats.rx_aliens);
+        seq_printf(seq, "rx_dups:        %llu\n", pfe_idex.stats.rx_dups);
+        seq_printf(seq, "rx_unknowns:    %llu\n", pfe_idex.stats.rx_unknowns);
+        seq_printf(seq, "rx_fails:       %llu\n", pfe_idex.stats.rx_fails);
+        seq_printf(seq, "tx_count:       %llu\n", pfe_idex.stats.tx_count);
+#ifdef PFE_CFG_PFE_SLAVE
+        seq_printf(seq, "tx_retries:     %llu\n", pfe_idex.stats.tx_retries);
+        seq_printf(seq, "tx_max_retries: %u\n", pfe_idex.stats.tx_max_retries);
+        seq_printf(seq, "tx_skips:       %u\n", pfe_idex.stats.tx_skips);
+#endif /* PFE_CFG_PFE_SLAVE */
 }

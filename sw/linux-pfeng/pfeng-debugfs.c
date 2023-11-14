@@ -91,6 +91,28 @@ static int pfeng_debugfs_single_open_version(struct inode *inode, struct file *f
 	return single_open(file, pfeng_debugfs_seq_show_version, NULL);
 }
 
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+static int pfeng_debugfs_single_open_idex(struct inode *inode, struct file *file);
+
+static const struct file_operations pfeng_idex_fops = {
+	.open		= pfeng_debugfs_single_open_idex,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+static int pfeng_debugfs_seq_show_idex(struct seq_file *s, void *v)
+{
+	pfe_idex_get_text_statistics(s, *msg_verbosity_ptr);
+	return 0;
+}
+
+static int pfeng_debugfs_single_open_idex(struct inode *inode, struct file *file)
+{
+	return single_open(file, pfeng_debugfs_seq_show_idex, NULL);
+}
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
 int pfeng_debugfs_create(struct pfeng_priv *priv)
 {
 	struct device *dev = &priv->pdev->dev;
@@ -113,6 +135,9 @@ int pfeng_debugfs_create(struct pfeng_priv *priv)
 	}
 
 	debugfs_create_file("drv_version", S_IRUSR, priv->dbgfs, NULL, &pfeng_version_fops);
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	debugfs_create_file("idex", S_IRUSR, priv->dbgfs, NULL, &pfeng_idex_fops);
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 #ifdef PFE_CFG_PFE_MASTER
 	ADD_DEBUGFS_ENTRY("class", class, priv->dbgfs, priv->pfe_platform->classifier, &dsav);
