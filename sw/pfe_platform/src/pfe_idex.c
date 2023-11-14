@@ -213,6 +213,7 @@ typedef struct
 	void *rpc_cbk_arg;					/*	RPC callback argument */
 	pfe_hif_t *hif;						/*	HIF module, for Master-up signaling */
 	bool_t is_server;					/*	IDEX is acting as server when TRUE	*/
+	bool_t is_up;						/*	TRUE if HIF connection is UP */
 	union {
 		pfe_remote_server_t server;			/*	Client has Server information */
 		pfe_remote_client_t clients[IDEX_MAX_CLIENTS];	/*	Server has information about every client */
@@ -755,8 +756,13 @@ end_sending:
 		/*	End of sending, increment seqnum */
 		server->seqnum += 1;
 	}
-	oal_mm_free_contig(request);
+	else
+	{
+		/* Send was unsuccessful, mark connection down */
+		pfe_idex.is_up = FALSE;
+	}
 	server->request = NULL;
+	oal_mm_free_contig(request);
 
 	return ret;
 }
@@ -776,6 +782,11 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 	errno_t ret;
 	hif_drv_sg_list_t sg_list = { 0U };
 	uint16_t data_len_tmp = data_len;
+
+	if (FALSE == pfe_idex.is_up)
+	{
+		return EINVAL;
+	}
 
 	/*	Get IDEX frame buffer */
 	idex_hdr = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_TX_MEM, (addr_t)(sizeof(pfe_idex_frame_header_t)) + (addr_t)data_len_tmp, 0U);
@@ -929,11 +940,14 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 #ifdef PFE_CFG_PFE_MASTER
 			/*	Mark MASTER with ready flag */
 			pfe_hif_set_master_up(hif);
+			idex->is_up = TRUE;
 
 #elif defined(PFE_CFG_PFE_SLAVE)
 
 			/*	Send RESET request message to server */
 			pfe_idex_msg_reset_t rst_msg;
+
+			idex->is_up = TRUE;
 
 			rst_msg.seqnum = (uint32_t)oal_htonl(idex->remote.server.seqnum);
 			rst_msg.version = IDEX_VERSION_2;
@@ -979,6 +993,8 @@ void pfe_idex_fini(void)
 {
 	pfe_idex_t *idex = &pfe_idex;
 	uint8_t i;
+
+	idex->is_up = FALSE;
 
 #ifdef PFE_CFG_PFE_MASTER
 	pfe_hif_clear_master_up(idex->hif);
@@ -1198,4 +1214,12 @@ errno_t pfe_idex_set_rpc_ret_val(errno_t retval, void *resp, uint16_t resp_len)
 		oal_mm_free(rpc_resp);
 	}
 	return ret;
+}
+
+/**
+ * @brief		Mark IDEX communication channel as DOWN
+ */
+void pfe_idex_down(void)
+{
+	pfe_idex.is_up = FALSE;
 }
