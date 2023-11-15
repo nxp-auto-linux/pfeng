@@ -244,7 +244,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex);
 static void pfe_idex_do_tx_conf(const pfe_hif_drv_client_t *client, const pfe_idex_t *idex);
 static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_response_type_t type, pfe_idex_seqnum_t seqnum, const void *data, uint16_t data_len);
 static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_type_t type, const void *data, uint16_t data_len);
-static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_request_type_t type, const void *data, uint16_t data_len);
+static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_request_type_t type, const uint32_t resend_count, const void *data, uint16_t data_len);
 static errno_t pfe_idex_ihc_handler(pfe_hif_drv_client_t *client, void *arg, uint32_t event, uint32_t qno);
 static errno_t pfe_idex_set_rpc_cbk(pfe_idex_rpc_cbk_t cbk, void *arg);
 
@@ -683,30 +683,20 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
  * 				Slave will create IDEX request and send it to Master
  * 				Function is waiting for response with Pooling mode on request status *
  * @param[in]	dst_phy Destination physical interface ID
+ * @param[in]	resend_count Number of retries for sending request
  * @param[in]	type Request type
  * @param[in]	data Request payload buffer
  * @param[in]	data_len Request payload length in number of bytes
  * @return		EOK if success, error code otherwise
  */
-static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_request_type_t type, const void *data, uint16_t data_len)
+static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_request_type_t type, const uint32_t resend_count, const void *data, uint16_t data_len)
 {
 	pfe_remote_server_t	*server = (pfe_remote_server_t*)&pfe_idex.remote.server;
 	void *				payload;
 	uint32_t			timeout_ms;
-	uint8_t				resend_count;
-	uint8_t				sending_counter;
+	uint32_t			sending_counter;
 	pfe_idex_request_t *request;
 	errno_t				ret;
-
-	/*	If we have version 2 or RESET message, try to resend multiple times	*/
-	if(server->version >= IDEX_VERSION_2)
-	{
-		resend_count = pfe_idex.resend_count;
-	}
-	else
-	{
-		resend_count = 1;
-	}
 
 	/*	Create the request instance with room for request payload */
 	request = oal_mm_malloc_contig_aligned_nocache((addr_t)(sizeof(pfe_idex_request_t)) + (addr_t)data_len, 0U);
@@ -1122,6 +1112,8 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, const void *buf, u
 	/*	Allocate memory for request and also response */
 	pfe_idex_msg_rpc_t *msg_req = (pfe_idex_msg_rpc_t *)oal_mm_malloc((addr_t)request_buf_size);
 	pfe_idex_msg_rpc_t *msg_resp = (pfe_idex_msg_rpc_t *)oal_mm_malloc((addr_t)response_buf_size);
+	/*	If we have version 2 or RESET request message, try to resend multiple times */
+	const uint32_t resend_count = ((pfe_idex.remote.server.version >= IDEX_VERSION_2) || (id == IDEX_RESET_RPC_ID)) ? pfe_idex.resend_count : 1U;
 
 	if (NULL == msg_req || NULL == msg_resp)
 	{
@@ -1151,7 +1143,7 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, const void *buf, u
 				id, pfe_idex.remote.server.seqnum, dst_phy, buf_len);
 
 	/*	This one is BLOCKING function */
-	ret = pfe_idex_request_send(dst_phy, IDEX_RPC, msg_req, request_buf_size);
+	ret = pfe_idex_request_send(dst_phy, IDEX_RPC, resend_count, msg_req, request_buf_size);
 	if (EOK != ret)
 	{
 		/*	Transport error */
