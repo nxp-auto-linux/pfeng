@@ -147,7 +147,7 @@ static struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev)
 #endif /* PFE_CFG_RTABLE_ENABLE */
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	priv->ihc_wq = create_singlethread_workqueue("pfeng-ihc");
+	priv->ihc_wq = alloc_ordered_workqueue("pfeng-ihc", 0);
 	if (!priv->ihc_wq) {
 		HM_MSG_DEV_ERR(dev, "Initialize of IHC TX failed\n");
 		goto err_cfg_alloc;

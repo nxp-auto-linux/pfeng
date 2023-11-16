@@ -278,7 +278,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 	}
 
 	/* Slave requires deferred worker */
-	priv->ihc_slave_wq = create_singlethread_workqueue("pfeng-slave-init");
+	priv->ihc_slave_wq = alloc_ordered_workqueue("pfeng-slave-init", 0);
 	if (!priv->ihc_slave_wq) {
 		HM_MSG_DEV_ERR(dev, "Initialize of Slave WQ failed\n");
 		goto err_drv;
