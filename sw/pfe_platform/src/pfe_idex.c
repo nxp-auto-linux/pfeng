@@ -695,6 +695,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	void *				payload;
 	uint32_t			timeout_ms;
 	uint32_t			sending_counter;
+	uint32_t			resend_time;
 	pfe_idex_request_t *request;
 	errno_t				ret;
 
@@ -740,8 +741,18 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 		/*	Block until response is received or timeout occurred. RX and
 			TX processing is expected to be done asynchronously in pfe_idex_ihc_handler(). */
 
+		/* Progressive retry delay: Fist 3 tries are send after 5ms delay, then use user defined value */
+		if (3U > sending_counter)
+		{
+			resend_time = 5;
+		}
+		else
+		{
+			resend_time = pfe_idex.resend_time;
+		}
+
 		/*	Wait 1ms between every check */
-		for (timeout_ms = pfe_idex.resend_time; timeout_ms > 0U; timeout_ms -= 1)
+		for (timeout_ms = resend_time; timeout_ms > 0U; timeout_ms -= 1)
 		{
 			/*	Check the status of request */
 			if (IDEX_REQ_STATE_COMPLETED == request->state)
