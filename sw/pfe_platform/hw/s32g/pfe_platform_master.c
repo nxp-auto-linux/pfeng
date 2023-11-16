@@ -2496,13 +2496,14 @@ static void pfe_platform_destroy_tmu(pfe_platform_t *platform)
 /**
  * @brief		Assign UTIL to the platform
  */
-static errno_t pfe_platform_create_util(pfe_platform_t *platform)
+static errno_t pfe_platform_create_util(pfe_platform_t *platform, const pfe_platform_config_t *platform_cfg)
 {
 	errno_t ret;
 	pfe_util_cfg_t util_cfg =
 	{
 		.pe_sys_clk_ratio = PFE_CFG_CLMODE,
 		.on_g3 = platform->on_g3,
+		.interrupt = platform_cfg->irq_vector_upe_gpt,
 	};
 
 	platform->util = pfe_util_create(platform->cbus_baseaddr, platform->util_pe_count, &util_cfg);
@@ -3665,7 +3666,7 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	if(config->enable_util)
 	{
 		/*	UTIL */
-		ret = pfe_platform_create_util(&pfe);
+		ret = pfe_platform_create_util(&pfe, config);
 		if (EOK != ret)
 		{
 			goto exit;
