@@ -221,7 +221,7 @@ typedef struct
 	oal_mutex_t rpc_req_lock;			/*	Requests mutex blocking communication */
 	bool_t rpc_req_lock_init;			/*	Flag indicating that mutex is initialized */
 	uint32_t resend_count;				/*	Transport retransmission count, configuration value */
-	uint32_t resend_time;				/*	Transport retransmission time, configuration value */
+	uint32_t resend_delay;				/*	Transport retransmission delay, configuration value */
 	struct {
 		uint64_t rx_count;
 		uint64_t rx_aliens;
@@ -695,7 +695,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	void *				payload;
 	uint32_t			timeout_ms;
 	uint32_t			sending_counter;
-	uint32_t			resend_time;
+	uint32_t			resend_delay;
 	pfe_idex_request_t *request;
 	errno_t				ret;
 
@@ -744,15 +744,15 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 		/* Progressive retry delay: Fist 3 tries are send after 5ms delay, then use user defined value */
 		if (3U > sending_counter)
 		{
-			resend_time = 5;
+			resend_delay = 5;
 		}
 		else
 		{
-			resend_time = pfe_idex.resend_time;
+			resend_delay = pfe_idex.resend_delay;
 		}
 
 		/*	Wait 1ms between every check */
-		for (timeout_ms = resend_time; timeout_ms > 0U; timeout_ms -= 1)
+		for (timeout_ms = resend_delay; timeout_ms > 0U; timeout_ms -= 1)
 		{
 			/*	Check the status of request */
 			if (IDEX_REQ_STATE_COMPLETED == request->state)
@@ -953,7 +953,7 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 #error Impossible configuration
 #endif /* PFE_CFG_PFE_MASTER/PFE_CFG_PFE_SLAVE */
 
-	pfe_hif_drv_get_idex_resend_cfg(hif_drv, &idex->resend_count, &idex->resend_time);
+	pfe_hif_drv_get_idex_resend_cfg(hif_drv, &idex->resend_count, &idex->resend_delay);
 	idex->txc_free_cbk = txcf_cbk;
 
 	/*	Create mutex */
@@ -1015,7 +1015,7 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 
 			if (IDEX_VERSION_2 == idex->remote.server.version)
 			{
-				NXP_LOG_INFO("IDEX: v2 protocol used, ResendCfg:count=%d,time=%d\n", idex->resend_count, idex->resend_time);
+				NXP_LOG_INFO("IDEX: v2 protocol used, Resend:count=%d,delay=%dms\n", idex->resend_count, idex->resend_delay);
 			}
 			else
 			{

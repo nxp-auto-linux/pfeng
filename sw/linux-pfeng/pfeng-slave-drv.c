@@ -82,9 +82,9 @@ static int idex_resend_count = PFE_CFG_IDEX_RESEND_COUNT;
 module_param(idex_resend_count, int, 0644);
 MODULE_PARM_DESC(idex_resend_count, "\t IDEX transport retransmission count (default is " __stringify(PFE_CFG_IDEX_RESEND_COUNT) ")");
 
-static int idex_resend_time = PFE_CFG_IDEX_RESEND_TIME;
-module_param(idex_resend_time, int, 0644);
-MODULE_PARM_DESC(idex_resend_time, "\t IDEX transport retransmission time in ms (default is " __stringify(PFE_CFG_IDEX_RESEND_TIME) " ms)");
+static int idex_resend_delay = PFE_CFG_IDEX_RESEND_TIME;
+module_param(idex_resend_delay, int, 0644);
+MODULE_PARM_DESC(idex_resend_delay, "\t IDEX transport retransmission delay in ms (default is " __stringify(PFE_CFG_IDEX_RESEND_TIME) " ms)");
 
 uint32_t get_pfeng_pfe_cfg_master_if(void)
 {
@@ -121,7 +121,7 @@ static struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev)
 
 	/* IDEX transport retransmission setup */
 	priv->idex_resend_count = idex_resend_count;
-	priv->idex_resend_time = idex_resend_time;
+	priv->idex_resend_delay = idex_resend_delay;
 
 	priv->ihc_wq = create_singlethread_workqueue("pfeng-ihc-slave");
 	if (!priv->ihc_wq) {
