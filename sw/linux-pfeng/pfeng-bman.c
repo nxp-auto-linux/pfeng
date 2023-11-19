@@ -522,6 +522,7 @@ void pfeng_bman_pool_destroy(struct pfeng_hif_chnl *chnl)
 
 	if (rx_pool) {
 		if(rx_pool->rx_tbl) {
+			pfe_hif_chnl_reset_fifos(chnl->priv);
 			pfeng_bman_free_rx_buffers(rx_pool);
 			kfree(rx_pool->rx_tbl);
 			rx_pool->rx_tbl = NULL;

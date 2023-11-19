@@ -134,7 +134,6 @@ struct __attribute__((aligned(HAL_CACHE_LINE_SIZE))) __pfe_hif_chnl_tag
 static errno_t pfe_hif_chnl_bind_rx_ring(pfe_hif_chnl_t *chnl) __attribute__((cold));
 static errno_t pfe_hif_chnl_bind_tx_ring(pfe_hif_chnl_t *chnl) __attribute__((cold));
 static errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl) __attribute__((cold));
-static errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl) __attribute__((cold));
 static void pfe_hif_chnl_free_dummy_frame(void *frame);
 static errno_t pfe_hif_chnl_send_dummy_frame(pfe_hif_chnl_t *chnl, uint32_t mode, void **frame) __attribute__((cold));
 
@@ -2104,7 +2103,7 @@ the_end:
  * @param[in]	chnl The channel instance
  * @return		EOK if success, error code otherwise
  */
-static __attribute__((cold, unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl)
+__attribute__((cold, unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl)
 {
 	void *rx_buf_va = NULL, *rx_buf_pa, *buf_pa, *frame;
 	uint32_t len, ii;
@@ -2351,20 +2350,6 @@ __attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 
 #endif /* PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED */
 
-			/*
-				Here the ring should be empty. Execute HIF channel BDP shutdown
-				procedure to ensure that channel will not keep any content in
-				internal buffers and HW rings are on head.
-			*/
-
-#ifndef PFENG_TEST_DISABLE_HIF_GRACEFUL_RESET
-			if (EOK != pfe_hif_chnl_reset_fifos(chnl))
-			{
-				NXP_LOG_ERROR("FATAL: Could not flush RX BD FIFO\n");
-			}
-#else
-			NXP_LOG_INFO("WARNING: HIF%d graceful reset was skipped\n", chnl->id);
-#endif
 		}
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
