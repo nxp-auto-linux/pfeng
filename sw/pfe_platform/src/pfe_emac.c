@@ -56,7 +56,7 @@ static uint32_t key_seed = 123U;
 static bool_t pfe_emac_flush_criterion_eval(const pfe_mac_addr_db_entry_t *entry, pfe_emac_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
 static void pfe_emac_addr_db_init(pfe_emac_t *emac);
 static errno_t pfe_emac_addr_db_add(pfe_emac_t *emac, const pfe_mac_addr_t addr, bool_t in_hash_grp, uint32_t data, pfe_drv_id_t owner);
-static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(const pfe_emac_t *emac, uint32_t hash);
+static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(const pfe_emac_t *emac, uint32_t hash, uint32_t hw_mask);
 static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_addr(const pfe_emac_t *emac, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 static errno_t pfe_emac_addr_db_del_entry(const pfe_emac_t *emac, pfe_mac_addr_db_entry_t *entry);
 static void pfe_emac_addr_db_drop_all(const pfe_emac_t *emac);
@@ -333,9 +333,11 @@ static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_get_first(const pfe_emac_t *ema
  * @details		Access to the shared resources => needs to be called within the critical section!
  * @param[in]	emac The EMAC instance
  * @param[in]	hash The hash to search
+ * @param[in]	hw_mask A mask to select the hash bits that are actually used by the HW device that stores
+ *			the hashed MAC addresses
  * @return		The DB entry if found or NULL if address is not present
  */
-static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(const pfe_emac_t *emac, uint32_t hash)
+static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(const pfe_emac_t *emac, uint32_t hash, uint32_t hw_mask)
 {
 	pfe_mac_addr_db_entry_t *entry = NULL;
 	LLIST_t *                curItem;
@@ -353,7 +355,7 @@ static pfe_mac_addr_db_entry_t *pfe_emac_addr_db_find_by_hash(const pfe_emac_t *
 		LLIST_ForEach(curItem, &emac->mac_addr_list)
 		{
 			entry = LLIST_Data(curItem, pfe_mac_addr_db_entry_t, iterator);
-			if (entry->hash == hash)
+			if ((entry->hash & hw_mask) == (hash & hw_mask))
 			{
 				match = TRUE;
 				break;
@@ -1371,7 +1373,7 @@ static errno_t pfe_emac_del_addr_nolock(pfe_emac_t *emac, const pfe_mac_addr_t a
 				if (TRUE == local_entry.in_hash_grp)
 				{
 					/*	Check if the hash group the address belongs to contains another addresses */
-					if (NULL != pfe_emac_addr_db_find_by_hash(emac, local_entry.hash))
+					if (NULL != pfe_emac_addr_db_find_by_hash(emac, local_entry.hash, EMAC_CFG_ADDR_HASH_MASK))
 					{
 						/*	Hash group contains more addresses. Keep the HW configured. */
 						;

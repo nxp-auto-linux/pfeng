@@ -303,6 +303,8 @@
  */
 #define EMAC_CFG_INDIVIDUAL_ADDR_SLOTS_COUNT	8U
 
+#define EMAC_CFG_ADDR_HASH_MASK 0xfc000000U
+
 /* Default Tx time between frame control pkts */
 #define DEFAULT_PAUSE_QUANTA                   0xF000U
 

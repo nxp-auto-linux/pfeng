@@ -665,7 +665,7 @@ void pfe_emac_cfg_set_hash_group(addr_t base_va, uint32_t hash, bool_t en)
 	 * The remaining 5 bits reveals information on the position to set in the corresponding register
 	 */
 
-	val = (hash & 0xfc000000U) >> 26U;                /* Upper 6 bits of CRC result */
+	val = (hash & EMAC_CFG_ADDR_HASH_MASK) >> 26U;    /* only the EMAC_CFG_ADDR_HASH_MASK (6) bits of the CRC result are used */
 	hash_table_idx = ((uint8_t)val & 0x20U) >> 5U;    /* MSB represents Hash table register index (0/1) */
 	pos = ((uint8_t)val & 0x1fU);                     /* Remaining 5 bits illustrates the bit to set in corresponding register  */
 
