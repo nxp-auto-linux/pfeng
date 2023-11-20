@@ -1705,6 +1705,14 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_rx_to_head(pfe_hif_chnl_t * ch
 			NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
 			goto end;
 		}
+
+		/*
+		 * practice shows that dsb(st) here insures the required timing in this
+		 * particular case: when dma_start() is called immediately after the
+		 * next Rx BD is made available
+		 */
+		wmb();
+
 		pfe_hif_chnl_rx_dma_start(chnl);
 
 		/* Send dummy packet to self HIF channel */
