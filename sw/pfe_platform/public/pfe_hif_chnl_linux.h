@@ -207,6 +207,7 @@ bool_t pfe_hif_chnl_tx_fifo_is_below_wm(const pfe_hif_chnl_t *chnl);
 pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, uint32_t id, const pfe_bmu_t *bmu) __attribute__((cold));
 errno_t pfe_hif_chnl_isr(pfe_hif_chnl_t *chnl) __attribute__((hot));
 void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl) __attribute__((cold));
+errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl) __attribute__((cold));
 errno_t pfe_hif_chnl_set_event_cbk(pfe_hif_chnl_t *chnl, pfe_hif_chnl_event_t event, pfe_hif_chnl_cbk_t cbk, void *arg);
 void pfe_hif_chnl_irq_mask(pfe_hif_chnl_t *chnl);
 void pfe_hif_chnl_irq_unmask(pfe_hif_chnl_t *chnl);
