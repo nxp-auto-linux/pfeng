@@ -105,16 +105,6 @@ static int hif_phc_emac = -1;
 module_param(hif_phc_emac, int, 0644);
 MODULE_PARM_DESC(hif_phc_emac, "\t (default EMAC0");
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-static int idex_resend_count = PFE_CFG_IDEX_RESEND_COUNT;
-module_param(idex_resend_count, int, 0644);
-MODULE_PARM_DESC(idex_resend_count, "\t IDEX transport retransmission count (default is " __stringify(PFE_CFG_IDEX_RESEND_COUNT) ")");
-
-static int idex_resend_time = PFE_CFG_IDEX_RESEND_TIME;
-module_param(idex_resend_time, int, 0644);
-MODULE_PARM_DESC(idex_resend_time, "\t IDEX transport retransmission time in ms (default is " __stringify(PFE_CFG_IDEX_RESEND_TIME) " ms)");
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
 uint32_t get_pfeng_pfe_cfg_master_if(void)
 {
 	return pfeng_pfe_cfg_master_if;
@@ -157,7 +147,7 @@ static struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev)
 #endif /* PFE_CFG_RTABLE_ENABLE */
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	priv->ihc_wq = create_singlethread_workqueue("pfeng-ihc");
+	priv->ihc_wq = alloc_ordered_workqueue("pfeng-ihc", 0);
 	if (!priv->ihc_wq) {
 		HM_MSG_DEV_ERR(dev, "Initialize of IHC TX failed\n");
 		goto err_cfg_alloc;
@@ -606,10 +596,6 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	/* Set FCI ownership permission mask */
 	if (fci_ownership_mask)
 		priv->pfe_cfg->hif_fci_owner_chnls_mask = fci_ownership_mask;
-
-	/* IDEX transport retransmission setup */
-	priv->idex_resend_count = idex_resend_count;
-	priv->idex_resend_time = idex_resend_time;
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	/* Provide switch value for S32G2 ordered class writes */

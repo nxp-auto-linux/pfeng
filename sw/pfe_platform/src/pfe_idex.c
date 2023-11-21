@@ -212,13 +212,27 @@ typedef struct
 	pfe_idex_rpc_cbk_t rpc_cbk;			/*	Callback to be called in case of RPC requests */
 	void *rpc_cbk_arg;					/*	RPC callback argument */
 	pfe_hif_t *hif;						/*	HIF module, for Master-up signaling */
-	bool_t idex_is_server;				/*	IDEX is acting as server when TRUE	*/
-	pfe_remote_server_t server;			/*	Client has Server information */
-	pfe_remote_client_t clients[IDEX_MAX_CLIENTS];	/*	Server has information about every client */
+	bool_t is_server;					/*	IDEX is acting as server when TRUE	*/
+	bool_t is_up;						/*	TRUE if HIF connection is UP */
+	union {
+		pfe_remote_server_t server;			/*	Client has Server information */
+		pfe_remote_client_t clients[IDEX_MAX_CLIENTS];	/*	Server has information about every client */
+	} remote;
 	oal_mutex_t rpc_req_lock;			/*	Requests mutex blocking communication */
 	bool_t rpc_req_lock_init;			/*	Flag indicating that mutex is initialized */
 	uint32_t resend_count;				/*	Transport retransmission count, configuration value */
-	uint32_t resend_time;				/*	Transport retransmission time, configuration value */
+	uint32_t resend_delay;				/*	Transport retransmission delay, configuration value */
+	struct {
+		uint64_t rx_count;
+		uint64_t rx_aliens;
+		uint64_t rx_dups;
+		uint64_t rx_unknowns;
+		uint64_t rx_fails;
+		uint64_t tx_count;
+		uint64_t tx_retries;
+		uint32_t tx_max_retries;
+		uint32_t tx_skips;
+	} stats;
 } pfe_idex_t;
 
 /*	Local IDEX instance storage */
@@ -230,7 +244,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *client, pfe_idex_t *idex);
 static void pfe_idex_do_tx_conf(const pfe_hif_drv_client_t *client, const pfe_idex_t *idex);
 static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_response_type_t type, pfe_idex_seqnum_t seqnum, const void *data, uint16_t data_len);
 static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_type_t type, const void *data, uint16_t data_len);
-static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_request_type_t type, const void *data, uint16_t data_len);
+static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_request_type_t type, const uint32_t resend_count, const void *data, uint16_t data_len);
 static errno_t pfe_idex_ihc_handler(pfe_hif_drv_client_t *client, void *arg, uint32_t event, uint32_t qno);
 static errno_t pfe_idex_set_rpc_cbk(pfe_idex_rpc_cbk_t cbk, void *arg);
 
@@ -286,12 +300,6 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 {
 	pfe_hif_pkt_t *pkt;
 	pfe_idex_frame_header_t *idex_header;
-	pfe_idex_request_t *idex_req;
-	pfe_idex_response_t *idex_resp;
-	pfe_remote_client_t* client;
-	pfe_remote_server_t* server;
-	pfe_idex_seqnum_t seqnum;
-	errno_t ret;
 	pfe_ct_phy_if_id_t i_phy_id;
 
 	while (TRUE)
@@ -304,6 +312,8 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 			break;
 		}
 
+		pfe_idex.stats.rx_count++;
+
 		/*	Get RX packet payload. Also skip HIF header. */
 		idex_header = (pfe_idex_frame_header_t *)((addr_t)pfe_hif_pkt_get_data(pkt) + sizeof(pfe_ct_hif_rx_hdr_t));
 
@@ -312,19 +322,31 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 		/*	IDEX frames originate from HIF channels exclusively */
 		if((i_phy_id < PFE_PHY_IF_ID_HIF0 || i_phy_id > PFE_PHY_IF_ID_HIF3) && i_phy_id != PFE_PHY_IF_ID_HIF_NOCPY)
 		{
-			NXP_LOG_WARNING("IDEX: Allien IDEX frame type 0x%x with PHY_IF %d", idex_header->type, i_phy_id);
-			break;
+#ifdef PFE_CFG_PFE_SLAVE
+			if (i_phy_id != pfe_idex.remote.server.phy_id)
+#endif /* PFE_CFG_PFE_SLAVE */
+			{
+				NXP_LOG_WARNING("IDEX: Allien IDEX frame type 0x%x with PHY_IF %d", idex_header->type, i_phy_id);
+				pfe_idex.stats.rx_aliens++;
+				break;
+			}
 		}
 
 		switch (idex_header->type)
 		{
+#ifdef PFE_CFG_PFE_MASTER
 			case IDEX_FRAME_CTRL_REQUEST:
 			{
+				pfe_idex_request_t *idex_req;
+				pfe_remote_client_t* client;
+				pfe_idex_seqnum_t seqnum;
+				errno_t ret;
+
 				/*	Received frame is IDEX request */
 				idex_req = (pfe_idex_request_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
 				seqnum = (pfe_idex_seqnum_t)oal_ntohl(idex_req->seqnum);
 				/*	Current client which we are communicating with */
-				client = &idex->clients[i_phy_id - PFE_PHY_IF_ID_HIF0];
+				client = &idex->remote.clients[i_phy_id - PFE_PHY_IF_ID_HIF0];
 				client->phy_id = i_phy_id;
 
 				/*	Save current IDEX client reference to global pointer */
@@ -347,6 +369,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 															+ sizeof(pfe_idex_msg_rpc_t)))
 						{
 							NXP_LOG_WARNING("Invalid RPC request message length");
+							pfe_idex.stats.rx_fails++;
 							break;
 						}
 
@@ -384,6 +407,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 							if(client->seqnum == seqnum)
 							{
 								NXP_LOG_DEBUG("IDEX Duplicated RPC request seqnum received: seqnum=%u, phy_id=%u", (uint_t)seqnum, client->phy_id);
+								pfe_idex.stats.rx_dups++;
 								if(client->response != NULL)
 								{
 									/*	Resend last saved IDEX frame */
@@ -406,6 +430,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 							else
 							{
 								NXP_LOG_WARNING("Wrong sequence number %u", (uint_t)seqnum);
+								pfe_idex.stats.rx_fails++;
 								break;
 							}
 						}
@@ -433,6 +458,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 					default:
 					{
 						NXP_LOG_WARNING("Unknown IDEX request type received: 0x%x\n", idex_req->type);
+						pfe_idex.stats.rx_unknowns++;
 						break;
 					}
 				}
@@ -440,12 +466,17 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 				break;
 			} /* IDEX_FRAME_CTRL_REQUEST */
 
+#else
+
 			case IDEX_FRAME_CTRL_RESPONSE:
 			{
+				pfe_idex_response_t *idex_resp;
+				pfe_remote_server_t* server;
+
 				/*	Get response header */
 				idex_resp = (pfe_idex_response_t *)((addr_t)idex_header + sizeof(pfe_idex_frame_header_t));
 
-				server = &idex->server;
+				server = &idex->remote.server;
 
 				switch (idex_resp->type)
 				{
@@ -493,18 +524,21 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 								/*	Copy payload */
 								(void)memcpy((void *)((addr_t)rpc_msg + sizeof(pfe_idex_msg_rpc_t)),
 											(void *)((addr_t)rpc_resp + sizeof(pfe_idex_msg_rpc_t)), payload_length);
+
+								rpc_msg->rpc_id = (uint32_t)oal_ntohl(rpc_resp->rpc_id);
+								rpc_msg->rpc_ret = (uint32_t)oal_ntohl(rpc_resp->rpc_ret);
+								rpc_msg->plen = payload_length;
+
+								server->request->state = IDEX_REQ_STATE_COMPLETED;
 							}
 							else
 							{
+								/*	Don't send response if there is no room for required payload */
 								NXP_LOG_WARNING("RPC Response buffer is too small! %u < %u", payload_length, rpc_msg->plen);
+								server->request->state = IDEX_REQ_STATE_INVALID;
+								break;
 							}
-
-							rpc_msg->rpc_id = (uint32_t)oal_ntohl(rpc_resp->rpc_id);
-							rpc_msg->rpc_ret = (uint32_t)oal_ntohl(rpc_resp->rpc_ret);
-							rpc_msg->plen = payload_length;
 						}
-
-						server->request->state = IDEX_REQ_STATE_COMPLETED;
 
 						break;
 					}/* IDEX_RPC RESPONSE */
@@ -518,11 +552,12 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 
 				break;
 			} /* IDEX_FRAME_CTRL_RESPONSE */
+#endif /* PFE_CFG_PFE_MASTER/SLAVE */
 
 			default:
 			{
 				/*	Unknown frame */
-				NXP_LOG_WARNING("Unknown IDEX frame received\n");
+				NXP_LOG_WARNING("Unknown IDEX frame ctrl type 0x%x received\n", idex_header->type);
 				break;
 			}
 		} /* switch */
@@ -631,6 +666,10 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
 		{
 			NXP_LOG_WARNING("IDEX response TX failed\n");
 		}
+		else
+		{
+			pfe_idex.stats.tx_count++;
+		}
 
 		/*	Save response in case of not successful delivery */
 		idex_current_client->response = resp;
@@ -644,30 +683,21 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
  * 				Slave will create IDEX request and send it to Master
  * 				Function is waiting for response with Pooling mode on request status *
  * @param[in]	dst_phy Destination physical interface ID
+ * @param[in]	resend_count Number of retries for sending request
  * @param[in]	type Request type
  * @param[in]	data Request payload buffer
  * @param[in]	data_len Request payload length in number of bytes
  * @return		EOK if success, error code otherwise
  */
-static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_request_type_t type, const void *data, uint16_t data_len)
+static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_request_type_t type, const uint32_t resend_count, const void *data, uint16_t data_len)
 {
-	pfe_remote_server_t	*server = (pfe_remote_server_t*)&pfe_idex.server;
+	pfe_remote_server_t	*server = (pfe_remote_server_t*)&pfe_idex.remote.server;
 	void *				payload;
 	uint32_t			timeout_ms;
-	uint8_t				resend_count;
-	uint8_t				sending_counter;
+	uint32_t			sending_counter;
+	uint32_t			resend_delay;
 	pfe_idex_request_t *request;
 	errno_t				ret;
-
-	/*	If we have version 2 or RESET message, try to resend multiple times	*/
-	if(server->version >= IDEX_VERSION_2)
-	{
-		resend_count = pfe_idex.resend_count;
-	}
-	else
-	{
-		resend_count = 1;
-	}
 
 	/*	Create the request instance with room for request payload */
 	request = oal_mm_malloc_contig_aligned_nocache((addr_t)(sizeof(pfe_idex_request_t)) + (addr_t)data_len, 0U);
@@ -706,12 +736,23 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			NXP_LOG_ERROR("IDEX request %d TX failed", request->seqnum);
 			goto end_sending;
 		}
+		pfe_idex.stats.tx_count++;
 
 		/*	Block until response is received or timeout occurred. RX and
 			TX processing is expected to be done asynchronously in pfe_idex_ihc_handler(). */
 
+		/* Progressive retry delay: Fist 3 tries are send after 5ms delay, then use user defined value */
+		if (3U > sending_counter)
+		{
+			resend_delay = 5;
+		}
+		else
+		{
+			resend_delay = pfe_idex.resend_delay;
+		}
+
 		/*	Wait 1ms between every check */
-		for (timeout_ms = pfe_idex.resend_time; timeout_ms > 0U; timeout_ms -= 1)
+		for (timeout_ms = resend_delay; timeout_ms > 0U; timeout_ms -= 1)
 		{
 			/*	Check the status of request */
 			if (IDEX_REQ_STATE_COMPLETED == request->state)
@@ -734,7 +775,14 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			}
 		}
 
-		NXP_LOG_DEBUG("IDEX RESENDING REQUEST seqnum=%d counter=%d state=%d", server->seqnum, sending_counter, request->state);
+		NXP_LOG_DEBUG("IDEX RESENDING REQUEST seqnum=%d counter=%d state=%d", server->seqnum, sending_counter + 1, request->state);
+
+		/*	IDEX protocol stats */
+		pfe_idex.stats.tx_retries++;
+		if (pfe_idex.stats.tx_max_retries < (sending_counter + 1))
+		{
+			pfe_idex.stats.tx_max_retries = sending_counter + 1;
+		}
 	}
 
 	/*	Sending was not succesfull, timeout occured */
@@ -750,8 +798,13 @@ end_sending:
 		/*	End of sending, increment seqnum */
 		server->seqnum += 1;
 	}
-	oal_mm_free_contig(request);
+	else
+	{
+		/* Send was unsuccessful, mark connection down */
+		pfe_idex.is_up = FALSE;
+	}
 	server->request = NULL;
+	oal_mm_free_contig(request);
 
 	return ret;
 }
@@ -771,6 +824,12 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 	errno_t ret;
 	hif_drv_sg_list_t sg_list = { 0U };
 	uint16_t data_len_tmp = data_len;
+
+	if (FALSE == pfe_idex.is_up)
+	{
+		pfe_idex.stats.tx_skips++;
+		return EINVAL;
+	}
 
 	/*	Get IDEX frame buffer */
 	idex_hdr = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_TX_MEM, (addr_t)(sizeof(pfe_idex_frame_header_t)) + (addr_t)data_len_tmp, 0U);
@@ -875,18 +934,18 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 	/*	IDEX is in Server mode */
 	NXP_LOG_INFO("IDEX-master @ interface %d", master);
 
-	idex->idex_is_server = TRUE;
+	idex->is_server = TRUE;
 	idex->hif = hif;
 
 #elif defined(PFE_CFG_PFE_SLAVE)
 	/* IDEX is Client	*/
 	NXP_LOG_INFO("IDEX-slave @ master-interface %d", master);
 
-	idex->idex_is_server = FALSE;
+	idex->is_server = FALSE;
 	/*	Set init seqnum to 0	*/
-	idex->server.seqnum = 0;
-	idex->server.phy_id = master;
-	idex->server.version = IDEX_VERSION_1;
+	idex->remote.server.seqnum = 0;
+	idex->remote.server.phy_id = master;
+	idex->remote.server.version = IDEX_VERSION_1;
 
 	/* Not used argument variable */
 	(void)hif;
@@ -894,7 +953,7 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 #error Impossible configuration
 #endif /* PFE_CFG_PFE_MASTER/PFE_CFG_PFE_SLAVE */
 
-	pfe_hif_drv_get_idex_resend_cfg(hif_drv, &idex->resend_count, &idex->resend_time);
+	pfe_hif_drv_get_idex_resend_cfg(hif_drv, &idex->resend_count, &idex->resend_delay);
 	idex->txc_free_cbk = txcf_cbk;
 
 	/*	Create mutex */
@@ -924,17 +983,20 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 #ifdef PFE_CFG_PFE_MASTER
 			/*	Mark MASTER with ready flag */
 			pfe_hif_set_master_up(hif);
+			idex->is_up = TRUE;
 
 #elif defined(PFE_CFG_PFE_SLAVE)
 
 			/*	Send RESET request message to server */
 			pfe_idex_msg_reset_t rst_msg;
 
-			rst_msg.seqnum = (uint32_t)oal_htonl(idex->server.seqnum);
+			idex->is_up = TRUE;
+
+			rst_msg.seqnum = (uint32_t)oal_htonl(idex->remote.server.seqnum);
 			rst_msg.version = IDEX_VERSION_2;
 
 			NXP_LOG_DEBUG("IDEX: RESET Request sending: seqnum=%u, version=%u, phy_id=%u",
-										(uint_t)idex->server.seqnum, rst_msg.version, master);
+										(uint_t)idex->remote.server.seqnum, rst_msg.version, master);
 
 			/*	Sending RESET request. This is blocking communication	*/
 			ret = pfe_idex_rpc(master, IDEX_RESET_RPC_ID, &rst_msg, sizeof(pfe_idex_msg_reset_t), &rst_msg, sizeof(pfe_idex_msg_reset_t));
@@ -946,14 +1008,14 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 			}
 			else
 			{
-				idex->server.version = rst_msg.version;
+				idex->remote.server.version = rst_msg.version;
 				NXP_LOG_DEBUG("IDEX: RESET Response received: seqnum=%u, version=%u",
-										(uint_t)idex->server.seqnum, rst_msg.version);
+										(uint_t)idex->remote.server.seqnum, rst_msg.version);
 			}
 
-			if (IDEX_VERSION_2 == idex->server.version)
+			if (IDEX_VERSION_2 == idex->remote.server.version)
 			{
-				NXP_LOG_INFO("IDEX: v2 protocol used, ResendCfg:count=%d,time=%d\n", idex->resend_count, idex->resend_time);
+				NXP_LOG_INFO("IDEX: v2 protocol used, Resend:count=%d,delay=%dms\n", idex->resend_count, idex->resend_delay);
 			}
 			else
 			{
@@ -975,6 +1037,8 @@ void pfe_idex_fini(void)
 	pfe_idex_t *idex = &pfe_idex;
 	uint8_t i;
 
+	idex->is_up = FALSE;
+
 #ifdef PFE_CFG_PFE_MASTER
 	pfe_hif_clear_master_up(idex->hif);
 	idex->hif = NULL;
@@ -991,14 +1055,14 @@ void pfe_idex_fini(void)
 	}
 
 	/*	Free IDEX Server buffer for every client response */
-	if(idex->idex_is_server == TRUE)
+	if(idex->is_server == TRUE)
 	{
 		for(i = 0; i < IDEX_MAX_CLIENTS; i++)
 		{
-			if(idex->clients[i].response != NULL)
+			if(idex->remote.clients[i].response != NULL)
 			{
-				oal_mm_free_contig(idex->clients[i].response);
-				idex->clients[i].response = NULL;
+				oal_mm_free_contig(idex->remote.clients[i].response);
+				idex->remote.clients[i].response = NULL;
 			}
 		}
 	}
@@ -1027,9 +1091,9 @@ errno_t pfe_idex_master_rpc(uint32_t id, const void *buf, uint16_t buf_len, void
 	const pfe_idex_t *idex = &pfe_idex;
 
 	/* RPC message can be sent to Master only from IDEX client */
-	if(idex->idex_is_server == FALSE)
+	if(idex->is_server == FALSE)
 	{
-		return pfe_idex_rpc(idex->server.phy_id, id, buf, buf_len, resp, resp_len);
+		return pfe_idex_rpc(idex->remote.server.phy_id, id, buf, buf_len, resp, resp_len);
 	}
 	else
 	{
@@ -1059,6 +1123,8 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, const void *buf, u
 	/*	Allocate memory for request and also response */
 	pfe_idex_msg_rpc_t *msg_req = (pfe_idex_msg_rpc_t *)oal_mm_malloc((addr_t)request_buf_size);
 	pfe_idex_msg_rpc_t *msg_resp = (pfe_idex_msg_rpc_t *)oal_mm_malloc((addr_t)response_buf_size);
+	/*	If we have version 2 or RESET request message, try to resend multiple times */
+	const uint32_t resend_count = ((pfe_idex.remote.server.version >= IDEX_VERSION_2) || (id == IDEX_RESET_RPC_ID)) ? pfe_idex.resend_count : 1U;
 
 	if (NULL == msg_req || NULL == msg_resp)
 	{
@@ -1078,17 +1144,17 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, const void *buf, u
 
 	/*	Set buffer for expected RPC response */
 	msg_resp->plen = resp_len;
-	pfe_idex.server.rpc_msg = msg_resp;
+	pfe_idex.remote.server.rpc_msg = msg_resp;
 
 	/*	Copy data to payload of request message */
 	payload = (void *)((addr_t)msg_req + sizeof(pfe_idex_msg_rpc_t));
 	(void)memcpy(payload, buf, buf_len);
 
 	NXP_LOG_DEBUG("IDEX: RPC Request sending: cmd=%u, seqnum=%u, phy_id=%u, size:%u",
-				id, pfe_idex.server.seqnum, dst_phy, buf_len);
+				id, pfe_idex.remote.server.seqnum, dst_phy, buf_len);
 
 	/*	This one is BLOCKING function */
-	ret = pfe_idex_request_send(dst_phy, IDEX_RPC, msg_req, request_buf_size);
+	ret = pfe_idex_request_send(dst_phy, IDEX_RPC, resend_count, msg_req, request_buf_size);
 	if (EOK != ret)
 	{
 		/*	Transport error */
@@ -1129,7 +1195,7 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, const void *buf, u
 
 	oal_mm_free(msg_req);
 	oal_mm_free(msg_resp);
-	pfe_idex.server.rpc_msg = NULL;
+	pfe_idex.remote.server.rpc_msg = NULL;
 
 	/*	Unlock mutex and unblock driver	*/
 	if (EOK != oal_mutex_unlock(&pfe_idex.rpc_req_lock))
@@ -1193,4 +1259,33 @@ errno_t pfe_idex_set_rpc_ret_val(errno_t retval, void *resp, uint16_t resp_len)
 		oal_mm_free(rpc_resp);
 	}
 	return ret;
+}
+
+/**
+ * @brief		Mark IDEX communication channel as DOWN
+ */
+void pfe_idex_down(void)
+{
+	pfe_idex.is_up = FALSE;
+}
+
+/**
+ * @brief               Return IDEX runtime statistics in text form
+ * @param[in]   seq                     Pointer to debugfs seq_file
+ * @param[in]   verb_level      Verbosity level, number of data written to the buffer
+ * @return              Number of bytes written to the buffe
+ */
+__attribute__((cold)) void pfe_idex_get_text_statistics(struct seq_file *seq, uint8_t verb_level)
+{
+        seq_printf(seq, "rx_count:       %llu\n", pfe_idex.stats.rx_count);
+        seq_printf(seq, "rx_aliens:      %llu\n", pfe_idex.stats.rx_aliens);
+        seq_printf(seq, "rx_dups:        %llu\n", pfe_idex.stats.rx_dups);
+        seq_printf(seq, "rx_unknowns:    %llu\n", pfe_idex.stats.rx_unknowns);
+        seq_printf(seq, "rx_fails:       %llu\n", pfe_idex.stats.rx_fails);
+        seq_printf(seq, "tx_count:       %llu\n", pfe_idex.stats.tx_count);
+#ifdef PFE_CFG_PFE_SLAVE
+        seq_printf(seq, "tx_retries:     %llu\n", pfe_idex.stats.tx_retries);
+        seq_printf(seq, "tx_max_retries: %u\n", pfe_idex.stats.tx_max_retries);
+        seq_printf(seq, "tx_skips:       %u\n", pfe_idex.stats.tx_skips);
+#endif /* PFE_CFG_PFE_SLAVE */
 }
