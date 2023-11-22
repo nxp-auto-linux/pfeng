@@ -232,6 +232,11 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 		HM_MSG_DEV_ERR(dev, "Failed to signal IP not ready: %d\n", ret);
 		return ret;
 	}
+
+	/* Stop IHC RX/TX works */
+	cancel_work_sync(&priv->ihc_rx_work);
+	cancel_work_sync(&priv->ihc_tx_work);
+	flush_workqueue(priv->ihc_wq);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 	/* Remove debugfs directory */
@@ -412,8 +417,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	priv = pfeng_drv_alloc(pdev);
 	if(!priv) {
 		HM_MSG_DEV_ERR(dev, "Driver context allocation failed\n");
-		ret = -ENOMEM;
-		goto err_drv;
+		return -ENOMEM;
 	}
 	dev_set_drvdata(dev, priv);
 
