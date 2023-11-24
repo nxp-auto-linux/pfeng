@@ -175,6 +175,11 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	/* Remove netifs */
 	pfeng_netif_remove(priv);
 
+	/* Stop IHC RX/TX works */
+	cancel_work_sync(&priv->ihc_rx_work);
+	cancel_work_sync(&priv->ihc_tx_work);
+	flush_workqueue(priv->ihc_wq);
+
 	pfeng_hif_remove(priv);
 
 	/* PFE platform remove */
@@ -356,14 +361,15 @@ static int pfeng_drv_deferred_probe(void *arg)
 	/* Create MDIO buses */
 	pfeng_mdio_register(priv);
 
-	if (priv->deferred_probe_task) {
-		priv->deferred_probe_task = NULL;
-		do_exit(0);
+err_drv:
+
+	if (ret) {
+		/* Stop IHC RX/TX works */
+		cancel_work_sync(&priv->ihc_rx_work);
+		cancel_work_sync(&priv->ihc_tx_work);
+		flush_workqueue(priv->ihc_wq);
 	}
 
-	return 0;
-
-err_drv:
 	if (priv->deferred_probe_task) {
 		priv->deferred_probe_task = NULL;
 		do_exit(0);
@@ -450,8 +456,7 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	priv = pfeng_drv_alloc(pdev);
 	if(!priv) {
 		HM_MSG_DEV_ERR(dev, "Driver context allocation failed\n");
-		ret = -ENOMEM;
-		goto err_drv;
+		return -ENOMEM;
 	}
 	dev_set_drvdata(dev, priv);
 
@@ -468,9 +473,16 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 			goto err_drv;
 		}
 	} else
-		ret = pfeng_drv_deferred_probe(priv);
+		return pfeng_drv_deferred_probe(priv);
 
 err_drv:
+	if (ret) {
+		/* Stop IHC RX/TX works */
+		cancel_work_sync(&priv->ihc_rx_work);
+		cancel_work_sync(&priv->ihc_tx_work);
+		flush_workqueue(priv->ihc_wq);
+	}
+
 	return ret;
 }
 
