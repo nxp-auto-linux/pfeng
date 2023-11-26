@@ -432,10 +432,13 @@ static errno_t pfe_platform_create_fci(pfe_platform_t *platform)
 /**
  * @brief		Release FCI-related resources
  */
-static void pfe_platform_destroy_fci(pfe_platform_t *platform)
+void pfe_platform_destroy_fci(pfe_platform_t *platform)
 {
-	fci_fini();
-	platform->fci_created = FALSE;
+	if (TRUE == platform->fci_created)
+	{
+		fci_fini();
+		platform->fci_created = FALSE;
+	}
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */

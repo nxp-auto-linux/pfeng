@@ -169,6 +169,9 @@ errno_t pfe_platform_unregister_log_if(const pfe_platform_t *platform, pfe_log_i
 pfe_log_if_t *pfe_platform_get_log_if_by_id(const pfe_platform_t *platform, uint8_t id);
 pfe_log_if_t *pfe_platform_get_log_if_by_name(const pfe_platform_t *platform, char_t *name);
 pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_ct_phy_if_id_t id);
+#if defined(PFE_CFG_FCI_ENABLE)
+void pfe_platform_destroy_fci(pfe_platform_t *platform);
+#endif
 #if defined(PFE_CFG_MULTI_INSTANCE_SUPPORT)
 void pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg);
 #endif
