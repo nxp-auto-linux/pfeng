@@ -198,6 +198,7 @@ typedef struct
 	pfe_idex_seqnum_t seqnum;			/*	Current sequence number */
 	pfe_idex_version_t version;			/*	IDEX version, for backward compability */
 	pfe_ct_phy_if_id_t phy_id;			/*	Physical interface of the server */
+	oal_mutex_t lock;					/*	Concurrency lock for request/response tasks */
 	pfe_idex_request_t *request;		/*	Current IDEX request */
 	pfe_idex_msg_rpc_t *rpc_msg;		/*	Current IDEX RPC message response */
 } pfe_remote_server_t;
@@ -498,7 +499,6 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 						}
 
 						/*	Response on RCP request. Finalize the associated request message */
-						rpc_msg = server->rpc_msg;
 						rpc_resp = (pfe_idex_msg_rpc_t*)((addr_t)idex_resp + sizeof(pfe_idex_response_t));
 
 						seqnum = (uint32_t)oal_ntohl(idex_resp->seqnum);
@@ -507,15 +507,20 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 						NXP_LOG_DEBUG("IDEX: RPC Response received: cmd=%u, return=%u, plen=%u, seqnum=%u, phy_id=%u",
 								(uint32_t)oal_ntohl(rpc_resp->rpc_id), (uint32_t)oal_ntohl(rpc_resp->rpc_ret), payload_length, (uint_t)seqnum, i_phy_id);
 
+						oal_mutex_lock_sleep(&server->lock);
+
 						/*	Sequence number in response must be the same as in request */
 						if(server->version >= IDEX_VERSION_2 && server->seqnum != seqnum)
 						{
 							NXP_LOG_WARNING("IDEX: Wrong sequence number in RPC response: %u!=%u", (uint_t)seqnum, (uint_t)server->seqnum);
 							server->request->state = IDEX_REQ_STATE_INVALID;
 							break;
+							oal_mutex_unlock(&server->lock);
+							continue;
 						}
 
 						/*	If there is waiting RPC request buffer, copy data to it and continue */
+						rpc_msg = server->rpc_msg;
 						if (NULL != rpc_msg)
 						{
 							/*	In rpc_msg->plen is temporarily saved buffer length */
@@ -536,9 +541,10 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 								/*	Don't send response if there is no room for required payload */
 								NXP_LOG_WARNING("RPC Response buffer is too small! %u < %u", payload_length, rpc_msg->plen);
 								server->request->state = IDEX_REQ_STATE_INVALID;
-								break;
 							}
 						}
+
+						oal_mutex_unlock(&server->lock);
 
 						break;
 					}/* IDEX_RPC RESPONSE */
@@ -707,6 +713,8 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 		return ENOMEM;
 	}
 
+	oal_mutex_lock_sleep(&server->lock);
+
 	/*	Only initialize header, payload will be added below */
 	(void)memset((void *)request, 0, sizeof(pfe_idex_request_t));
 
@@ -721,6 +729,8 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	(void)memcpy(payload, data, data_len);
 
 	server->request = request;
+
+	oal_mutex_unlock(&server->lock);
 
 	/*	Mark request as commited and start sending */
 	request->state = IDEX_REQ_STATE_COMMITTED;
@@ -793,6 +803,8 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	}
 
 end_sending:
+	oal_mutex_lock_sleep(&server->lock);
+
 	if (EOK == ret)
 	{
 		/*	End of sending, increment seqnum */
@@ -805,6 +817,8 @@ end_sending:
 	}
 	server->request = NULL;
 	oal_mm_free_contig(request);
+
+	oal_mutex_unlock(&server->lock);
 
 	return ret;
 }
@@ -964,6 +978,13 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 		pfe_idex_fini();
 		return ret;
 	}
+	ret = oal_mutex_init(&idex->remote.server.lock);
+	if (EOK != ret)
+	{
+		NXP_LOG_ERROR("Mutex init failed");
+		pfe_idex_fini();
+		return ret;
+	}
 
 	idex->rpc_req_lock_init = TRUE;
 
@@ -1069,6 +1090,7 @@ void pfe_idex_fini(void)
 
 	if (TRUE == idex->rpc_req_lock_init)
 	{
+		(void)oal_mutex_destroy(&idex->remote.server.lock);
 		(void)oal_mutex_destroy(&idex->rpc_req_lock);
 		idex->rpc_req_lock_init = FALSE;
 	}
@@ -1133,10 +1155,7 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, const void *buf, u
 	}
 
 	/*	Blocking RCP communication for all threads during processing */
-	if (EOK != oal_mutex_lock(&pfe_idex.rpc_req_lock))
-	{
-		NXP_LOG_ERROR("Mutex lock failed");
-	}
+	oal_mutex_lock_sleep(&pfe_idex.rpc_req_lock);
 
 	msg_req->rpc_id = (uint32_t)oal_htonl(id);
 	msg_req->plen = (uint16_t)oal_htons(buf_len);
