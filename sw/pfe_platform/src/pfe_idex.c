@@ -512,9 +512,15 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 						/*	Sequence number in response must be the same as in request */
 						if(server->version >= IDEX_VERSION_2 && server->seqnum != seqnum)
 						{
-							NXP_LOG_WARNING("IDEX: Wrong sequence number in RPC response: %u!=%u", (uint_t)seqnum, (uint_t)server->seqnum);
-							server->request->state = IDEX_REQ_STATE_INVALID;
-							break;
+							NXP_LOG_WARNING("IDEX: Wrong sequence number in RPC response: %u!=%u. Skipped", (uint_t)seqnum, (uint_t)server->seqnum);
+							if (server->seqnum > seqnum)
+							{
+								pfe_idex.stats.rx_dups++;
+							}
+							else
+							{
+								pfe_idex.stats.rx_fails++;
+							}
 							oal_mutex_unlock(&server->lock);
 							continue;
 						}
@@ -541,6 +547,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 								/*	Don't send response if there is no room for required payload */
 								NXP_LOG_WARNING("RPC Response buffer is too small! %u < %u", payload_length, rpc_msg->plen);
 								server->request->state = IDEX_REQ_STATE_INVALID;
+								pfe_idex.stats.rx_fails++;
 							}
 						}
 
@@ -672,10 +679,6 @@ static errno_t pfe_idex_send_response(pfe_ct_phy_if_id_t dst_phy, pfe_idex_respo
 		{
 			NXP_LOG_WARNING("IDEX response TX failed\n");
 		}
-		else
-		{
-			pfe_idex.stats.tx_count++;
-		}
 
 		/*	Save response in case of not successful delivery */
 		idex_current_client->response = resp;
@@ -746,7 +749,6 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 			NXP_LOG_ERROR("IDEX request %d TX failed", request->seqnum);
 			goto end_sending;
 		}
-		pfe_idex.stats.tx_count++;
 
 		/*	Block until response is received or timeout occurred. RX and
 			TX processing is expected to be done asynchronously in pfe_idex_ihc_handler(). */
@@ -891,7 +893,7 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 			else
 			{
 				/*	Frame transmitted. Will be released once TX confirmation is received. */
-				;
+				pfe_idex.stats.tx_count++;
 			}
 		}
 	}
@@ -1185,6 +1187,7 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, const void *buf, u
 		if (id != msg_resp->rpc_id)
 		{
 			NXP_LOG_WARNING("RPC response ID does not match the request %u != %u", id, msg_req->rpc_id);
+			pfe_idex.stats.rx_fails++;
 			ret = EINVAL;
 		}
 		else
