@@ -1,5 +1,5 @@
 /* =========================================================================
- *  
+ *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2023 NXP
  *
@@ -11,7 +11,6 @@
 #include "pfe_cfg.h"
 #include "oal.h"
 
-#ifdef PFE_CFG_PFE_MASTER
 #include "elf_cfg.h"
 #include "elf.h"
 
@@ -35,39 +34,12 @@
 #include "fci.h"
 #endif /* PFE_CFG_FCI_ENABLE */
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_VAR_INIT_UNSPECIFIED
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 static pfe_platform_t pfe = {.probed = FALSE};
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_VAR_INIT_UNSPECIFIED
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_VAR_CLEARED_8
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 /* usage scope: pfe_platform_idex_rpc_cbk case PFE_PLATFORM_RPC_PFE_LOG_IF_CREATE */
 static char_t namebuf[16];
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_VAR_CLEARED_8
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /**
  * @brief		BMU interrupt service routine
@@ -1527,7 +1499,7 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				break;
 			}
-			
+
 			case (uint32_t)PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE:
 			{
 				pfe_platform_rpc_pfe_phy_if_get_stat_value_arg_t *rpc_arg = (pfe_platform_rpc_pfe_phy_if_get_stat_value_arg_t *)buf;
@@ -2929,10 +2901,13 @@ static errno_t pfe_platform_create_fci(pfe_platform_t *platform)
 /**
  * @brief		Release FCI-related resources
  */
-static void pfe_platform_destroy_fci(pfe_platform_t *platform)
+void pfe_platform_destroy_fci(pfe_platform_t *platform)
 {
-	fci_fini();
-	platform->fci_created = FALSE;
+	if (TRUE == platform->fci_created)
+	{
+		fci_fini();
+		platform->fci_created = FALSE;
+	}
 }
 #endif /* PFE_CFG_FCI_ENABLE */
 
@@ -4068,11 +4043,3 @@ uint32_t pfe_fw_features_get_text_statistics(const pfe_platform_t *pfe, struct s
 	}
 	return 0U;
 }
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-#endif /*PFE_CFG_PFE_MASTER*/
-

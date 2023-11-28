@@ -180,6 +180,12 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	cancel_work_sync(&priv->ihc_tx_work);
 	flush_workqueue(priv->ihc_wq);
 
+#ifdef PFE_CFG_FCI_ENABLE
+	if (priv->pfe_platform) {
+		pfe_platform_destroy_fci(priv->pfe_platform);
+	}
+#endif /* PFE_CFG_FCI_ENABLE */
+
 	pfeng_hif_remove(priv);
 
 	/* PFE platform remove */

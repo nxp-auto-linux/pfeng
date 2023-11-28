@@ -1,5 +1,5 @@
 /* =========================================================================
- *  
+ *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright 2018-2023 NXP
  *
@@ -153,11 +153,6 @@ typedef struct
 	uint8_t emac_ext_ts_mask;
 } pfe_platform_t;
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 pfe_fw_t *pfe_fw_load(char_t *class_fw_name, char_t *util_fw_name);
 errno_t pfe_platform_init(const pfe_platform_config_t *config);
 errno_t pfe_platform_create_ifaces(pfe_platform_t *platform);
@@ -169,15 +164,13 @@ errno_t pfe_platform_unregister_log_if(const pfe_platform_t *platform, pfe_log_i
 pfe_log_if_t *pfe_platform_get_log_if_by_id(const pfe_platform_t *platform, uint8_t id);
 pfe_log_if_t *pfe_platform_get_log_if_by_name(const pfe_platform_t *platform, char_t *name);
 pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_ct_phy_if_id_t id);
+#if defined(PFE_CFG_FCI_ENABLE)
+void pfe_platform_destroy_fci(pfe_platform_t *platform);
+#endif
 #if defined(PFE_CFG_MULTI_INSTANCE_SUPPORT)
 void pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *buf, uint16_t buf_len, void *arg);
 #endif
 errno_t pfe_platform_get_fw_versions(const pfe_platform_t *platform, pfe_ct_version_t *class_fw, pfe_ct_version_t *util_fw);
 uint32_t pfe_fw_features_get_text_statistics(const pfe_platform_t *pfe, struct seq_file *seq, uint8_t verb_level);
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* SRC_PFE_PLATFORM_H_ */

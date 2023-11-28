@@ -11,7 +11,6 @@
 #include "pfe_cfg.h"
 #include "oal.h"
 
-#ifdef PFE_CFG_PFE_SLAVE
 #include "hal.h"
 #include "pfe_cbus.h"
 #include "pfe_platform_cfg.h"
@@ -22,11 +21,6 @@
 #ifdef PFE_CFG_FCI_ENABLE
 #include "fci.h"
 #endif /* PFE_CFG_FCI_ENABLE */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_VAR_INIT_UNSPECIFIED
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 static pfe_platform_t pfe = {.probed = FALSE};
 /* usage scope: pfe_platform_create_hif*/
@@ -49,14 +43,6 @@ phy_ifs[] =
         {.name = "hif3", .id = PFE_PHY_IF_ID_HIF3, .mac = {0},},
         {.name = NULL, .id = PFE_PHY_IF_ID_INVALID, .mac = {0}}
 };
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_VAR_INIT_UNSPECIFIED
-#include "Eth_43_PFE_MemMap.h"
-
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 /**
  * @brief		IDEX RPC callback
@@ -432,10 +418,13 @@ static errno_t pfe_platform_create_fci(pfe_platform_t *platform)
 /**
  * @brief		Release FCI-related resources
  */
-static void pfe_platform_destroy_fci(pfe_platform_t *platform)
+void pfe_platform_destroy_fci(pfe_platform_t *platform)
 {
-	fci_fini();
-	platform->fci_created = FALSE;
+	if (TRUE == platform->fci_created)
+	{
+		fci_fini();
+		platform->fci_created = FALSE;
+	}
 }
 
 #endif /* PFE_CFG_FCI_ENABLE */
@@ -718,11 +707,3 @@ pfe_platform_t * pfe_platform_get_instance(void)
 		return NULL;
 	}
 }
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
-#endif /*PFE_CFG_PFE_SLAVE*/
-
