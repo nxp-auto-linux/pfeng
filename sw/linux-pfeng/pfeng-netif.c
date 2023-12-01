@@ -1653,23 +1653,15 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 		if (!(netif->cfg->hifmap & (1 << i)))
 			continue;
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-		/* Skip in case of IHC channel */
-		if (!chnl->ihc)
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-		{
-#ifdef PFE_CFG_PFE_MASTER
-			/* On Standalone/Master we disable HIF logif instances */
+		if (chnl->logif_hif) {
+			pfe_log_if_disable(chnl->logif_hif);
+			if (EOK != pfe_platform_unregister_log_if(netif->priv->pfe_platform, chnl->logif_hif))
+				HM_MSG_NETDEV_WARN(netif->netdev, "Can't unregister HIF Logif\n");
+			else
+				pfe_log_if_destroy(chnl->logif_hif);
+			chnl->logif_hif = NULL;
+			/* Mark also HIF PHY_IF as removed */
 			chnl->phyif_hif = NULL;
-			if (chnl->logif_hif) {
-				pfe_log_if_disable(chnl->logif_hif);
-				chnl->logif_hif = NULL;
-			}
-#else
-			/* On Slave we only stop HIF instances */
-			if (chnl->logif_hif)
-				pfe_log_if_disable(chnl->logif_hif);
-#endif /* PFE_CFG_PFE_MASTER */
 		}
 	}
 
