@@ -667,7 +667,7 @@ static int pfeng_drv_pm_resume(struct device *dev)
 			goto err_deferr;
 		}
 	} else
-		ret = pfeng_drv_deferred_resume(priv);
+		ret = pfeng_drv_deferred_resume(dev);
 
 err_deferr:
 
