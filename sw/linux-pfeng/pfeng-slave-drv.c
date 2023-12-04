@@ -495,6 +495,7 @@ err_drv:
 static int pfeng_drv_pm_suspend(struct device *dev)
 {
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
+	int ret;
 
 	HM_MSG_DEV_INFO(dev, "Suspending driver\n");
 
@@ -503,19 +504,29 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	pfeng_debugfs_remove(priv);
 
 	/* MDIO buses */
-	pfeng_mdio_suspend(priv);
+	ret = pfeng_mdio_suspend(priv);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "PFE mdio not suspended successfully\n");
+		goto err_drv;
+	}
 
 	/* NETIFs */
-	pfeng_netif_suspend(priv);
+	ret = pfeng_netif_suspend(priv);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "PFE netif not suspended successfully\n");
+		goto err_drv;
+	}
 
 	/* HIFs stop */
 	pfeng_hif_remove(priv);
 
 	/* PFE platform remove */
 	if (priv->pfe_platform) {
-		if (pfe_platform_remove() != EOK)
+		ret = pfe_platform_remove();
+		if (ret != EOK) {
 			HM_MSG_DEV_ERR(dev, "PFE Platform not stopped successfully\n");
-		else {
+			goto err_drv;
+		} else {
 			priv->pfe_platform = NULL;
 			HM_MSG_DEV_INFO(dev, "PFE Platform stopped\n");
 		}
@@ -538,6 +549,9 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	HM_MSG_DEV_INFO(dev, "PFE Platform suspended\n");
 
 	return 0;
+
+err_drv:
+	return ret;
 }
 
 static int pfeng_drv_deferred_resume(void *arg)
@@ -616,9 +630,12 @@ static int pfeng_drv_deferred_resume(void *arg)
 		goto err_drv;
 
 	/* MDIO buses */
-	pfeng_mdio_resume(priv);
+	ret = pfeng_mdio_resume(priv);
+	if (ret)
+		goto err_drv;
 
 	priv->in_suspend = false;
+	return 0;
 
 err_drv:
 err_pfe_get:
@@ -629,8 +646,7 @@ err_pfe_init:
 		do_exit(0);
 	}
 
-	return 0;
-
+	return ret;
 }
 
 static int pfeng_drv_pm_resume(struct device *dev)

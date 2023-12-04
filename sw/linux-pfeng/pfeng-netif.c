@@ -1746,6 +1746,8 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 #endif /* PFE_CFG_PFE_MASTER */
 
 	ret = pfeng_netif_logif_init_second_stage(netif);
+	if (ret)
+		goto err;
 
 	/* start HIF channel(s) */
 	pfeng_netif_for_each_chnl(netif, i, chnl) {
@@ -1808,17 +1810,23 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 	rtnl_unlock();
 
 	netif_device_attach(netdev);
+	return ret;
 
+err:
+	rtnl_unlock();
 	return ret;
 }
 
 int pfeng_netif_suspend(struct pfeng_priv *priv)
 {
 	struct pfeng_netif *netif, *tmp;
+	int ret;
 
-
-	list_for_each_entry_safe(netif, tmp, &priv->netif_list, lnode)
-		pfeng_netif_logif_suspend(netif);
+	list_for_each_entry_safe(netif, tmp, &priv->netif_list, lnode) {
+		ret = pfeng_netif_logif_suspend(netif);
+		if (ret)
+			return ret;
+	}
 
 	return 0;
 }
@@ -1826,9 +1834,13 @@ int pfeng_netif_suspend(struct pfeng_priv *priv)
 int pfeng_netif_resume(struct pfeng_priv *priv)
 {
 	struct pfeng_netif *netif, *tmp;
+	int ret;
 
-	list_for_each_entry_safe(netif, tmp, &priv->netif_list, lnode)
-		pfeng_netif_logif_resume(netif);
+	list_for_each_entry_safe(netif, tmp, &priv->netif_list, lnode) {
+		ret = pfeng_netif_logif_resume(netif);
+		if (ret)
+			return ret;
+	}
 
 	return 0;
 }
