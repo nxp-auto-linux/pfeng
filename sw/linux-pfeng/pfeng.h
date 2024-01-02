@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2023 NXP
+ * Copyright 2018-2024 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -56,6 +56,9 @@
 
 /* PFE TS CLK is 200MHz */
 #define PFE_CLK_TS_RATE			200000000
+
+/* IDEX resend delay for first 3 attempts */
+#define PFE_CFG_IDEX_FIRST3_RESEND_TIME PFE_CFG_IDEX_RESEND_TIME
 
 static const pfe_ct_phy_if_id_t pfeng_emac_ids[] = {
 	PFE_PHY_IF_ID_EMAC0,
@@ -212,7 +215,7 @@ struct pfe_hif_drv_tag
 {
 	pfe_hif_drv_client_t		*ihc_client;
 	uint32_t			idex_resend_count;
-	uint32_t 			idex_resend_delay;
+	uint32_t 			idex_resend_delays[2];
 };
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
@@ -338,7 +341,7 @@ struct pfeng_priv {
 	struct workqueue_struct		*ihc_slave_wq;
 #endif /* PFE_CFG_PFE_SLAVE */
 	uint32_t			idex_resend_count;
-	uint32_t 			idex_resend_delay;
+	uint32_t 			idex_resend_delays[2];
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 	struct pfeng_emac		emac[PFENG_PFE_EMACS];
 	struct resource			syscon;

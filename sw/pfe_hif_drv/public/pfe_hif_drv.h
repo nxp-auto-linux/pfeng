@@ -1,7 +1,7 @@
 /* =========================================================================
  *
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -250,8 +250,8 @@ pfe_hif_drv_client_t * pfe_hif_drv_aux_client_register(
 			uint32_t rxq_depth, pfe_hif_drv_client_event_handler handler, void *priv);
 #endif /*PFE_CFG_MC_HIF*/
 
-void pfe_hif_drv_set_idex_resend_cfg(pfe_hif_drv_t *hif_drv, const uint32_t idex_resend_count, const uint32_t idex_resend_delay);
-void pfe_hif_drv_get_idex_resend_cfg(const pfe_hif_drv_t *hif_drv, uint32_t *idex_resend_count, uint32_t *idex_resend_delay);
+void pfe_hif_drv_set_idex_resend_cfg(pfe_hif_drv_t *hif_drv, const uint32_t idex_resend_count, const uint32_t *idex_resend_delays);
+void pfe_hif_drv_get_idex_resend_cfg(const pfe_hif_drv_t *hif_drv, uint32_t *idex_resend_count, uint32_t *idex_resend_delays);
 
 /*	HIF client */
 pfe_hif_drv_client_t * pfe_hif_drv_client_register(
