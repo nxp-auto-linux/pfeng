@@ -512,7 +512,7 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 						/*	Sequence number in response must be the same as in request */
 						if(server->version >= IDEX_VERSION_2 && server->seqnum != seqnum)
 						{
-							NXP_LOG_WARNING("IDEX: Wrong sequence number in RPC response: %u!=%u. Skipped", (uint_t)seqnum, (uint_t)server->seqnum);
+							NXP_LOG_DEBUG("IDEX: Wrong sequence number in RPC response: %u!=%u. Skipped", (uint_t)seqnum, (uint_t)server->seqnum);
 							if (server->seqnum > seqnum)
 							{
 								pfe_idex.stats.rx_dups++;
