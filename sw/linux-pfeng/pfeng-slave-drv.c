@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 NXP
+ * Copyright 2021-2024 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -82,9 +82,15 @@ static int idex_resend_count = PFE_CFG_IDEX_RESEND_COUNT;
 module_param(idex_resend_count, int, 0644);
 MODULE_PARM_DESC(idex_resend_count, "\t IDEX transport retransmission count (default is " __stringify(PFE_CFG_IDEX_RESEND_COUNT) ")");
 
-static int idex_resend_delay = PFE_CFG_IDEX_RESEND_TIME;
-module_param(idex_resend_delay, int, 0644);
-MODULE_PARM_DESC(idex_resend_delay, "\t IDEX transport retransmission delay in ms (default is " __stringify(PFE_CFG_IDEX_RESEND_TIME) " ms)");
+static int idex_resend_delays [2] = {
+	PFE_CFG_IDEX_FIRST3_RESEND_TIME,
+	PFE_CFG_IDEX_RESEND_TIME
+};
+static int idex_resend_delays_count;
+module_param_array(idex_resend_delays, int, &idex_resend_delays_count, 0644);
+MODULE_PARM_DESC(idex_resend_delays, "\t IDEX transport retransmission delays in ms (default is "
+		__stringify(PFE_CFG_IDEX_FIRST3_RESEND_TIME) ","
+		__stringify(PFE_CFG_IDEX_RESEND_TIME) ")");
 
 uint32_t get_pfeng_pfe_cfg_master_if(void)
 {
@@ -121,7 +127,8 @@ static struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev)
 
 	/* IDEX transport retransmission setup */
 	priv->idex_resend_count = idex_resend_count;
-	priv->idex_resend_delay = idex_resend_delay;
+	priv->idex_resend_delays[0] = idex_resend_delays[0];
+	priv->idex_resend_delays[1] = idex_resend_delays[1];
 
 	priv->ihc_wq = create_singlethread_workqueue("pfeng-ihc-slave");
 	if (!priv->ihc_wq) {
