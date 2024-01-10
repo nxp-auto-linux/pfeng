@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2023 NXP
+ * Copyright 2019-2024 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -762,6 +762,12 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 		HM_MSG_DEV_ERR(dev, "PFE netif not suspended successfully\n");
 		goto err_drv;
 	}
+
+#ifdef PFE_CFG_FCI_ENABLE
+	if (priv->pfe_platform) {
+		pfe_platform_destroy_fci(priv->pfe_platform);
+	}
+#endif /* PFE_CFG_FCI_ENABLE */
 
 	/* HIFs stop */
 	pfeng_hif_remove(priv);
