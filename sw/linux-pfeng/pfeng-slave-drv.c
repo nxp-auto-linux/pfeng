@@ -279,12 +279,11 @@ static int pfeng_drv_deferred_probe(void *arg)
 		goto err_drv;
 	}
 
-	/* PFE_SYS clock */
-	priv->clk_sys = clk_get(dev, "pfe_sys");
-	if (IS_ERR(priv->clk_sys)) {
-		dev_warn(dev, "Failed to get pfe_sys clock, using default value (%d)\n", PFE_CLK_SYS_RATE);
-		priv->clk_sys = NULL;
-	}
+	/* PFE_SYS clock not used.
+	 * We will use the constant PFE_CLK_SYS_RATE (600 MHz) as described
+	 * in Programming consideraions in S32G RM.
+	 */
+	priv->clk_sys = NULL;
 
 	/* HIF IHC channel number */
 	if (master_ihc_chnl < (HIF_CFG_MAX_CHANNELS + 1))
@@ -545,9 +544,6 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	if (priv->clk_ptp) {
 		clk_disable_unprepare(priv->clk_ptp);
 	}
-	if (priv->clk_sys) {
-		clk_disable_unprepare(priv->clk_sys);
-	}
 
 	/* Clear HIF channels coherency */
 	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency)
@@ -668,11 +664,6 @@ static int pfeng_drv_pm_resume(struct device *dev)
 		pfeng_gpr_set_port_coherency(priv);
 
 	/* Start clocks */
-	ret = clk_prepare_enable(priv->clk_sys);
-	if (ret) {
-		HM_MSG_DEV_ERR(dev, "Failed to enable clock 'pfe_sys'. Error: %d\n", ret);
-		return -EINVAL;
-	}
 	ret = clk_prepare_enable(priv->clk_ptp);
 	priv->clk_ptp = clk_get(dev, "pfe_ts");
 	if (ret) {
