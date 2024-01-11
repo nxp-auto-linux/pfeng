@@ -803,6 +803,7 @@ err_drv:
 	return ret;
 }
 
+#ifndef PFE_CFG_MULTI_INSTANCE_SUPPORT
 /**
  * pfeng_pm_resume
  * @dev: device pointer
@@ -886,11 +887,6 @@ static int pfeng_drv_pm_resume(struct device *dev)
 		goto err_pfe_get;
 	}
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	if (pfeng_gpr_ip_ready_set(dev, true))
-		HM_MSG_DEV_ERR(dev, "Failed to signal IP ready\n");
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
 	/* Create debugfs */
 	pfeng_debugfs_create(priv);
 
@@ -937,14 +933,17 @@ err_pfe_init:
 
 	return ret;
 }
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 SIMPLE_DEV_PM_OPS(pfeng_drv_pm_ops,
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 			pfeng_drv_pm_suspend_nosup,
+			NULL
 #else
 			pfeng_drv_pm_suspend,
-#endif
-			pfeng_drv_pm_resume);
+			pfeng_drv_pm_resume
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+			);
 
 /**
  * pfeng_drv_shutdown
