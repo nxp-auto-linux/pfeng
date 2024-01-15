@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2022-2023 NXP
+ *  Copyright 2022-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -35,29 +35,29 @@ typedef struct {
 } hm_string_t;
 
 static const hm_string_t hm_evt_strings[] = {
-    {HM_EVT_RUNTIME, "Driver runtime error"},
+	{HM_EVT_RUNTIME, "Driver runtime error"},
 
 #ifndef PFE_CFG_PFE_SLAVE
-    {HM_EVT_ECC, "ECC Errors interrupt"},
+	{HM_EVT_ECC, "ECC Errors interrupt"},
 
-    {HM_EVT_WDT_BMU1, "BMU1 Watchdog trigered"},
-    {HM_EVT_WDT_BMU2, "BMU2 Watchdog trigered"},
-    {HM_EVT_WDT_CLASS, "CLASS Watchdog trigered"},
-    {HM_EVT_WDT_EMAC0_GPI, "EMAC0 GPI Watchdog trigered"},
-    {HM_EVT_WDT_EMAC1_GPI, "EMAC1 GPI Watchdog trigered"},
-    {HM_EVT_WDT_EMAC2_GPI, "EMAC2 GPI Watchdog trigered"},
-    {HM_EVT_WDT_HIF_GPI, "HIF GPI Watchdog trigered"},
-    {HM_EVT_WDT_HIF_NOCPY, "HIF NOCPY Watchdog trigered"},
-    {HM_EVT_WDT_HIF, "HIF Watchdog trigered"},
-    {HM_EVT_WDT_TLITE, "TLITE Watchdog trigered"},
-    {HM_EVT_WDT_UTIL_PE, "UTIL Watchdog trigered"},
-    {HM_EVT_WDT_EMAC0_ETGPI, "EMAC0 ETGPI Watchdog trigered"},
-    {HM_EVT_WDT_EMAC1_ETGPI, "EMAC1 ETGPI Watchdog trigered"},
-    {HM_EVT_WDT_EMAC2_ETGPI, "EMAC2 ETGPI Watchdog trigered"},
-    {HM_EVT_WDT_EXT_GPT1, "EXT GPT1 Watchdog trigered"},
-    {HM_EVT_WDT_EXT_GPT2, "EXT GPT1 Watchdog trigered"},
-    {HM_EVT_WDT_LMEM, "LMEM Watchdog trigered"},
-    {HM_EVT_WDT_ROUTE_LMEM, "ROUTE LMEM Watchdog trigered"},
+	{HM_EVT_WDT_BMU1, "BMU1 Watchdog trigered"},
+	{HM_EVT_WDT_BMU2, "BMU2 Watchdog trigered"},
+	{HM_EVT_WDT_CLASS, "CLASS Watchdog trigered"},
+	{HM_EVT_WDT_EMAC0_GPI, "EMAC0 GPI Watchdog trigered"},
+	{HM_EVT_WDT_EMAC1_GPI, "EMAC1 GPI Watchdog trigered"},
+	{HM_EVT_WDT_EMAC2_GPI, "EMAC2 GPI Watchdog trigered"},
+	{HM_EVT_WDT_HIF_GPI, "HIF GPI Watchdog trigered"},
+	{HM_EVT_WDT_HIF_NOCPY, "HIF NOCPY Watchdog trigered"},
+	{HM_EVT_WDT_HIF, "HIF Watchdog trigered"},
+	{HM_EVT_WDT_TLITE, "TLITE Watchdog trigered"},
+	{HM_EVT_WDT_UTIL_PE, "UTIL Watchdog trigered"},
+	{HM_EVT_WDT_EMAC0_ETGPI, "EMAC0 ETGPI Watchdog trigered"},
+	{HM_EVT_WDT_EMAC1_ETGPI, "EMAC1 ETGPI Watchdog trigered"},
+	{HM_EVT_WDT_EMAC2_ETGPI, "EMAC2 ETGPI Watchdog trigered"},
+	{HM_EVT_WDT_EXT_GPT1, "EXT GPT1 Watchdog trigered"},
+	{HM_EVT_WDT_EXT_GPT2, "EXT GPT1 Watchdog trigered"},
+	{HM_EVT_WDT_LMEM, "LMEM Watchdog trigered"},
+	{HM_EVT_WDT_ROUTE_LMEM, "ROUTE LMEM Watchdog trigered"},
 
 	{HM_EVT_EMAC_ECC_TX_FIFO_CORRECTABLE, "MTL Tx memory correctable error"},
 	{HM_EVT_EMAC_ECC_TX_FIFO_UNCORRECTABLE, "MTL Tx memory uncorrectable error"},
