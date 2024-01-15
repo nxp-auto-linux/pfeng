@@ -523,6 +523,13 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 		goto err_drv;
 	}
 
+#ifdef PFE_CFG_FCI_ENABLE
+	/* FCI */
+	if (priv->pfe_platform) {
+		pfe_platform_destroy_fci(priv->pfe_platform);
+	}
+#endif /* PFE_CFG_FCI_ENABLE */
+
 	/* HIFs stop */
 	pfeng_hif_remove(priv);
 
