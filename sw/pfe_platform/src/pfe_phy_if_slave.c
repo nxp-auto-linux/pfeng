@@ -87,74 +87,69 @@ static errno_t pfe_phy_if_db_unlock(void)
  * 				between particular interfaces. The set of available IDs (the
  * 				pfe_ct_phy_if_id_t) shall remain compatible with the firmware.
  * @param[in]	name Name of the interface
- * @return		The interface instance or NULL if failed
+ * @return		The local copy of the interface instance of NULL if memory error
  */
 pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const char_t *name)
 {
-	pfe_platform_rpc_pfe_phy_if_create_arg_t req;
 	pfe_phy_if_t *iface;
-	errno_t ret;
 
-	(void)class;
-	memset(&req, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_create_arg_t));
+	/*	NOTE: Don't get remote phy_if instance, it is prerequisite to exist on Master */
 
-	/*	Get remote phy_if instance */
-	req.phy_if_id = id;
-	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_CREATE, &req, sizeof(req), NULL, 0U);
-	if (EOK != ret)
+	if (NULL == name)
 	{
-		NXP_LOG_WARNING("Can't get remote instance: %d\n", ret);
-		iface = NULL;
+		NXP_LOG_ERROR("Invalid empty PHY_IF name\n");
+		return NULL;
 	}
-	else
+
+	iface = oal_mm_malloc(sizeof(pfe_phy_if_t));
+	if (NULL == iface)
 	{
-		iface = oal_mm_malloc(sizeof(pfe_phy_if_t));
-		if (NULL == iface)
-		{
-			NXP_LOG_ERROR("Unable to allocate memory\n");
-		}
-		else
-		{
-			memset(iface, 0, sizeof(pfe_phy_if_t));
-			iface->id = id;
-			iface->mac_db = pfe_mac_db_create();
-			if (NULL == iface->mac_db)
-			{
-				NXP_LOG_ERROR("Could not create MAC database\n");
-				oal_mm_free(iface);
-				iface = NULL;
-			}
-			else
-			{
-				if (NULL == name)
-				{
-					iface->name = NULL;
-				}
-				else
-				{
-					iface->name = oal_mm_malloc(strlen(name) + 1U);
-					if (NULL == iface->name)
-					{
-						NXP_LOG_ERROR("Memory allocation failed\n");
-						oal_mm_free(iface);
-						iface = NULL;
-					}
-					else
-					{
-						strcpy(iface->name, name);
-						if (EOK != oal_mutex_init(&iface->lock))
-						{
-							NXP_LOG_ERROR("Could not initialize mutex\n");
-							oal_mm_free(iface);
-							iface = NULL;
-						}
-					}
-				}
-			}
-		}
+		NXP_LOG_ERROR("Unable to allocate memory\n");
+		return NULL;
+	}
+
+	memset(iface, 0, sizeof(pfe_phy_if_t));
+	iface->id = id;
+	iface->mac_db = pfe_mac_db_create();
+	if (NULL == iface->mac_db)
+	{
+		NXP_LOG_ERROR("Could not create MAC database\n");
+		goto err;
+	}
+
+	iface->name = oal_mm_malloc(strlen(name) + 1U);
+	if (NULL == iface->name)
+	{
+		NXP_LOG_ERROR("Memory allocation failed\n");
+		goto err;
+	}
+	strcpy(iface->name, name);
+	if (EOK != oal_mutex_init(&iface->lock))
+	{
+		NXP_LOG_ERROR("Could not initialize mutex\n");
+		goto err;
 	}
 
 	return iface;
+
+err:
+	if (NULL != iface->mac_db)
+	{
+		if (EOK != pfe_mac_db_destroy(iface->mac_db))
+		{
+			NXP_LOG_WARNING("Unable to destroy PHY_IF '%s' MAC database\n", name);
+		}
+	}
+	if (NULL != iface->name)
+	{
+		oal_mm_free(iface->name);
+	}
+	if (EOK != oal_mutex_destroy(&iface->lock))
+	{
+		NXP_LOG_WARNING("Could not destroy mutex\n");
+	}
+	oal_mm_free(iface);
+	return NULL;
 }
 
 /**
