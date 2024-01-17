@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2024 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -264,6 +264,15 @@ static int phyif_print_aux(const fpp_phy_if_cmd_t* p_phyif, bool is_verbose)
            demo_phy_if_ld_get_stt_malformed(p_phyif));
     
     {
+        const char* p_txt = demo_phy_if_ld_get_flexifilter(p_phyif);
+        if ('\0' == p_txt[0])
+        {
+            p_txt = "---";
+        }
+        printf("%-*sflexible-filter: %s \n", indent, "", p_txt);
+    }
+    
+    {
         const char* p_txt = demo_phy_if_ld_get_ptp_mgmt_if(p_phyif);
         if ('\0' == p_txt[0])
         {
@@ -294,7 +303,7 @@ static int phyif_print_aux(const fpp_phy_if_cmd_t* p_phyif, bool is_verbose)
         int indent_mirror = (indent + 4);
         fpp_mirror_cmd_t mirror = {0};
         
-        /* HACK, part 1: Temporarily unlock interface database, because FCI processing of mirroring rules assumer the db is not locked and attempts to lock it (and throws an error if the db is already locked). */
+        /* HACK, part 1: Temporarily unlock interface database, because FCI processing of mirroring rules assumes the db is not locked and attempts to lock it (and throws an error if the db is already locked). */
         rtn = demo_if_session_unlock(cli_p_cl, rtn);
         
         /* rx mirrors */
