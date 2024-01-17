@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2024 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -32,6 +32,7 @@
 #include <assert.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <errno.h>
  
 #include <stdint.h>
 #include <stdbool.h>
@@ -634,7 +635,7 @@ int demo_fp_table_print(FCI_CLIENT* p_cl, demo_fp_rule_cb_print_t p_cb_print,
         
         /* query loop runs till there are no more FP rules to report */
         /* the following error is therefore OK and expected (it ends the query loop) */
-        if (FPP_ERR_FP_RULE_NOT_FOUND == rtn)
+        if (-ENOENT == rtn)
         {
             rtn = FPP_ERR_OK;
         }
@@ -710,7 +711,7 @@ int demo_fp_rule_print_all(FCI_CLIENT* p_cl, demo_fp_rule_cb_print_t p_cb_print,
     
     /* query loop runs till there are no more FP rules to report */
     /* the following error is therefore OK and expected (it ends the query loop) */
-    if (FPP_ERR_FP_RULE_NOT_FOUND == rtn)
+    if (-ENOENT == rtn)
     {
         rtn = FPP_ERR_OK;
     }
@@ -762,7 +763,7 @@ int demo_fp_rule_get_count(FCI_CLIENT* p_cl, uint32_t* p_rtn_count)
     
     /* query loop runs till there are no more FP rules to report */
     /* the following error is therefore OK and expected (it ends the query loop) */
-    if (FPP_ERR_FP_RULE_NOT_FOUND == rtn)
+    if (-ENOENT == rtn)
     {
         *p_rtn_count = count;
         rtn = FPP_ERR_OK;
