@@ -666,21 +666,11 @@ typedef struct cli_cmdargs_tt
 #define TXT_ERR_NONAME     ""
 #define TXT_ERR_NAME(ERR)  ": " #ERR
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
 extern void cli_print_error(int errcode, const char* p_txt_errname, const char* p_txt_errmsg, ...);
 
 /* ========================================================================= */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif
 
