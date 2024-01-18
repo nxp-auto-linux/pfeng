@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 NXP
+ * Copyright 2020-2024 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -221,13 +221,11 @@ void pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_b
 
 	/* Unmap linear part */
 	dma_unmap_single_attrs(chnl->dev, pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].size, DMA_TO_DEVICE, 0);
-	pool->tx_tbl[idx].size = 0;
 
 	/* Unmap frags */
 	idx = (idx + 1) & idx_mask;
 	while (nfrags--) {
 		dma_unmap_page(chnl->dev, pool->tx_tbl[idx].pa_addr, pool->tx_tbl[idx].size, DMA_TO_DEVICE);
-		pool->tx_tbl[idx].size = 0;
 
 		idx = (idx + 1) & idx_mask;
 	}
