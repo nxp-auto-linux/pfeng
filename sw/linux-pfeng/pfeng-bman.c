@@ -206,7 +206,7 @@ struct sk_buff *pfeng_hif_chnl_txconf_get_skbuf(struct pfeng_hif_chnl *chnl)
 	return pool->tx_tbl[idx].skb;
 }
 
-void pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_budget)
+int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_budget)
 {
 	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;
 	int idx = READ_ONCE(pool->rd_idx);
@@ -215,7 +215,9 @@ void pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_b
 	int nfrags;
 
 	skb = pool->tx_tbl[idx].skb;
-	BUG_ON(!skb);
+
+	if (unlikely(!skb))
+		return -EINVAL;
 
 	nfrags = skb_shinfo(skb)->nr_frags;
 
@@ -232,6 +234,7 @@ void pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_b
 	WRITE_ONCE(pool->rd_idx, idx);
 
 	napi_consume_skb(skb, napi_budget);
+	return 0;
 }
 
 void pfeng_hif_chnl_txconf_unroll_map_full(struct pfeng_hif_chnl *chnl, int i)
