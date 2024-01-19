@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -10,7 +10,6 @@
 
 #include <linux/kernel.h>
 #include <linux/types.h>
-#include <stddef.h>
 
 #include <linux/string.h>
 #include <linux/platform_device.h>

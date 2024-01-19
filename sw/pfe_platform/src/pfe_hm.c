@@ -11,10 +11,6 @@
 #include "oal.h"
 #include "pfe_hm.h"
 
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
-#include <stdarg.h>
-#endif
-
 #define ARRAY_LEN(x) (sizeof(x)/sizeof(x[0]))
 
 static struct {
@@ -230,7 +226,6 @@ void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id, pfe_hm
 	const char *event_str = pfe_hm_get_event_str(id);
 	const char *src_str = pfe_hm_get_src_str(src);
 #endif
-#ifndef PFE_CFG_TARGET_OS_AUTOSAR
 	va_list args;
 
 	va_start(args, format);
@@ -243,9 +238,6 @@ void pfe_hm_report(pfe_hm_src_t src, pfe_hm_type_t type, pfe_hm_evt_t id, pfe_hm
 		item.descr[ARRAY_LEN(item.descr)-1] = '\0';
 	}
 	va_end(args);
-#else
-	item.descr[0] = '\0';
-#endif	/** PFE_CFG_TARGET_OS_AUTOSAR */
 
 	if (NXP_LOG_TYPE_DEV == hm_log.log_type)
 	{
