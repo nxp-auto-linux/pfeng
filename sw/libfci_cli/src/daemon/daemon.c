@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2024 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -664,7 +664,7 @@ int daemon_start(const daemon_cfg_t* p_startup_daemon_cfg)
             }
             else
             {
-                DBG_PRINTF("OK  \n");
+                DBG_PRINTF("OK  (fci_fd=%d)\n", fci_fd(daemon_cfg.p_fci_client));
             }
         }
         

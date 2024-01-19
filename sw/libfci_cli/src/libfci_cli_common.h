@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2023 NXP
+ *  Copyright 2020-2024 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -43,7 +43,7 @@
 
 /* app version */
 #define CLI_VERSION_MAJOR   "2"
-#define CLI_VERSION_MINOR   "12"
+#define CLI_VERSION_MINOR   "13"
 #define CLI_VERSION_PATCH   "0"
 #define CLI_VERSION_STRING  CLI_VERSION_MAJOR"."CLI_VERSION_MINOR"."CLI_VERSION_PATCH
 
@@ -666,21 +666,11 @@ typedef struct cli_cmdargs_tt
 #define TXT_ERR_NONAME     ""
 #define TXT_ERR_NAME(ERR)  ": " #ERR
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
 extern void cli_print_error(int errcode, const char* p_txt_errname, const char* p_txt_errmsg, ...);
 
 /* ========================================================================= */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif
 

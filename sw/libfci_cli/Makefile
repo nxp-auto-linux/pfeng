@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2022 NXP
+#  Copyright 2018-2024 NXP
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -61,7 +61,7 @@ ifeq ($(TARGET_OS),LINUX)
 	GLOBAL_CCFLAGS := $(shell echo $(GLOBAL_CCFLAGS))
 	
 	CLI_TARGET_OS = "LNX"
-	CLI_DRV_VERSION = "1.3.0"
+	CLI_DRV_VERSION = $(shell cat -n ../linux-pfeng/pfeng.h | grep 'PFENG_DRIVER_VERSION\s*\K.*' -Po)
 	CLI_DRV_COMMIT_HASH = "M4_DRIVER_COMMIT_HASH"
 else
 #This branch by defaut means QNX.

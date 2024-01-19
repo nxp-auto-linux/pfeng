@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2024 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -4978,11 +4978,6 @@ typedef struct mandopt_tt {
 
 #define MANDOPTS_CALC_LN(MANDOPTS)  (uint8_t)(sizeof(MANDOPTS)/sizeof(mandopt_t))
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
 const struct option* cli_get_longopts(void);
@@ -4998,10 +4993,5 @@ void cli_mandopt_getinternal(mandopt_optbuf_t* p_rtn_optbuf);    /* only for dae
 void cli_mandopt_setinternal(mandopt_optbuf_t *const p_optbuf);  /* only for daemon ; do not use casually */
 
 /* ========================================================================= */
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif
