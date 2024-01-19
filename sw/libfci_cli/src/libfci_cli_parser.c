@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2023 NXP
+ *  Copyright 2020-2024 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -4371,6 +4371,26 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
                 p_txt_errmsg  = TXT_ERR_INDENT "Requested MAC address not found.\n"
                                 TXT_ERR_INDENT "Is the MAC address correct?\n"
                                 TXT_ERR_INDENT "Is the interface name correct?\n";
+            break;
+            
+            case FPP_ERR_IF_RESOURCE_ALREADY_LOCKED:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_IF_RESOURCE_ALREADY_LOCKED);
+                p_txt_errmsg  = TXT_ERR_INDENT "The interface database is already locked by some party for exclusive access.\n"
+                                TXT_ERR_INDENT "HINT: The party that might currently hold the lock may be:\n"
+                                TXT_ERR_INDENT "  [*] This FCI client, if it already holds the database lock but is trying to lock the database yet again.\n"
+                                TXT_ERR_INDENT "  [*] Some other FCI client.\n"
+                                TXT_ERR_INDENT "  [*] The PFE driver itself.\n"
+                                TXT_ERR_INDENT "  [*] Some other PFE driver in the Master-Slave setup.\n";
+            break;
+            
+            case FPP_ERR_IF_WRONG_SESSION_ID:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_IF_WRONG_SESSION_ID);
+                p_txt_errmsg  = TXT_ERR_INDENT "Cannot unlock the interface database lock.\n"
+                                TXT_ERR_INDENT "Either the database is not currently locked, or the database is locked by some other party.\n"
+                                TXT_ERR_INDENT "HINT: The party that might currently hold the lock may be:\n"
+                                TXT_ERR_INDENT "  [*] Some other FCI client.\n"
+                                TXT_ERR_INDENT "  [*] The PFE driver itself.\n"
+                                TXT_ERR_INDENT "  [*] Some other PFE driver in the Master-Slave setup.\n";
             break;
             
             case FPP_ERR_MIRROR_ALREADY_REGISTERED:
