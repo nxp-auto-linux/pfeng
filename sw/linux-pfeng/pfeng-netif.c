@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 NXP
+ * Copyright 2020-2024 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -433,12 +433,8 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	/* record sw tx timestamp before pushing PFE metadata to skb->data */
 	skb_tx_timestamp(skb);
 
-	skb_push(skb, PFENG_TX_PKT_HEADER_SIZE);
-
-	len = skb_headlen(skb);
-
 	/* Set TX header */
-	tx_hdr = (pfe_ct_hif_tx_hdr_t *)skb->data;
+	tx_hdr = skb_push(skb, PFENG_TX_PKT_HEADER_SIZE);
 	memset(tx_hdr, 0, sizeof(*tx_hdr));
 	tx_hdr->chid = chnl->idx;
 
@@ -484,6 +480,9 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	}
 
 	/* Fill linear part of packet */
+	len = skb_headlen(skb);
+	nfrags = skb_shinfo(skb)->nr_frags;
+
 	dma = dma_map_single(netif->dev, skb->data, len, DMA_TO_DEVICE);
 	if (unlikely(dma_mapping_error(netif->dev, dma))) {
 		net_err_ratelimited("%s: Frame mapping failed. Packet dropped.\n", netdev->name);

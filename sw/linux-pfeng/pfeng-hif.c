@@ -448,7 +448,12 @@ static bool pfeng_hif_chnl_tx_conf(struct pfeng_hif_chnl *chnl, int napi_budget)
 		}
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
-		pfeng_hif_chnl_txconf_free_map_full(chnl, napi_budget);
+		ret = pfeng_hif_chnl_txconf_free_map_full(chnl, napi_budget);
+		if (unlikely(ret)) {
+			HM_MSG_DEV_ERR(chnl->dev, "Bad Tx buffer (skb) mapping, reset transmission!\n");
+			/* stop ring cleanup to force Tx timeout and ndev reset */
+			return true;
+		}
 
 		done++;
 	}
