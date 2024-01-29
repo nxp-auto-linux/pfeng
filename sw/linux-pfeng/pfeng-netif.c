@@ -451,12 +451,10 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 	}
 
 	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
-		if (likely(skb->csum_offset == offsetof(struct udphdr, check) &&
-			   pktlen <= PFENG_CSUM_OFF_PKT_LIMIT)) {
+		if (likely(skb->csum_offset == offsetof(struct udphdr, check))) {
 			tx_hdr->flags |= HIF_TX_UDP_CSUM;
 		}
-		else if (likely(skb->csum_offset == offsetof(struct tcphdr, check) &&
-				pktlen <= PFENG_CSUM_OFF_PKT_LIMIT)) {
+		else if (likely(skb->csum_offset == offsetof(struct tcphdr, check))) {
 			tx_hdr->flags |= HIF_TX_TCP_CSUM;
 		} else {
 			skb_checksum_help(skb);
