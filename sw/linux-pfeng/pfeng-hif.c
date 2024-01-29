@@ -407,7 +407,7 @@ static int pfeng_hif_chnl_rx(struct pfeng_hif_chnl *chnl, int limit)
 		skb->protocol = eth_type_trans(skb, netdev);
 
 		netdev->stats.rx_packets++;
-		netdev->stats.rx_bytes += skb_headlen(skb);
+		netdev->stats.rx_bytes += skb->len;
 		napi_gro_receive(&chnl->napi, skb);
 
 		done++;
