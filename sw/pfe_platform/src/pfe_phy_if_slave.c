@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1484,11 +1484,22 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 			ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR, &arg, sizeof(arg), NULL, 0U);
 			if (EOK != ret)
 			{
-				NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR failed: %d\n", ret);
-				ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
-				if(EOK != ret)
+				/*	If MAC address already exists, not needed to add */
+				if (EEXIST == ret)
 				{
-					NXP_LOG_ERROR("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
+					NXP_LOG_DEBUG("MAC Address already exists\n");
+					ret = EOK;
+				}
+				else
+				{
+					NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR failed: %d\n", ret);
+					/* Remove the address from local database */
+					ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
+					if(EOK != ret)
+					{
+						NXP_LOG_ERROR("Unable to remove MAC address from phy_if MAC database: %d\n", ret);
+					}
+					ret = ENOENT;
 				}
 			}
 		}

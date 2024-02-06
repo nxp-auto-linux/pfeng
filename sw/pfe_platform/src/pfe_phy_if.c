@@ -2588,13 +2588,22 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 					ret = pfe_emac_add_addr(iface->port.emac, addr, owner);
 					if (EOK != ret)
 					{
-						NXP_LOG_ERROR("Unable to add MAC address: %d\n", ret);
-						/* Delete the MAC address from database */
-						ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
-						if (EOK != ret) {
-							NXP_LOG_ERROR("Unable to delete MAC address: %d\n", ret);
+						/*	If MAC address already exists, not needed to add */
+						if (EEXIST == ret)
+						{
+							NXP_LOG_DEBUG("MAC Address already exists\n");
+							ret = EOK;
 						}
-						ret = ENOEXEC;
+						else
+						{
+							NXP_LOG_ERROR("Unable to add MAC address: %d\n", ret);
+							/* Delete the MAC address from database */
+							ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
+							if (EOK != ret) {
+								NXP_LOG_ERROR("Unable to delete MAC address: %d\n", ret);
+							}
+							ret = ENOEXEC;
+						}
 					}
 				}
 			}
