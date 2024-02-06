@@ -986,7 +986,9 @@ err:
 
 static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 {
+#ifdef PFE_CFG_PFE_MASTER
 	pfe_phy_if_t *phyif_emac;
+#endif /* PFE_CFG_PFE_MASTER */
 	struct pfeng_hif_chnl *chnl;
 	int i;
 
@@ -1008,12 +1010,12 @@ static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 #ifdef PFE_CFG_PFE_MASTER
 	if (netif->phylink)
 		pfeng_phylink_destroy(netif);
-#endif /* PFE_CFG_PFE_MASTER */
 
 	/* Stop EMAC */
 	phyif_emac = pfeng_netif_get_emac_phyif(netif);
 	if (phyif_emac)
 		pfe_phy_if_disable(phyif_emac);
+#endif /* PFE_CFG_PFE_MASTER */
 
 	/* Stop HIF(s) */
 	pfeng_netif_for_each_chnl(netif, i, chnl) {
@@ -1523,7 +1525,9 @@ int pfeng_netif_create(struct pfeng_priv *priv)
 
 static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 {
+#ifdef PFE_CFG_PFE_MASTER
 	struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
+#endif /* PFE_CFG_PFE_MASTER */
 	struct pfeng_hif_chnl *chnl;
 	int i;
 
@@ -1542,12 +1546,11 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 	rtnl_lock();
 
 	pfeng_ethtool_params_save(netif);
-
+#ifdef PFE_CFG_PFE_MASTER
 	if (emac)
 		/* Disable EMAC */
 		pfe_phy_if_disable(emac->phyif_emac);
 
-#ifdef PFE_CFG_PFE_MASTER
 	/* Stop PHY */
 	if (netif_running(netif->netdev) && netif->phylink)
 		pfeng_phylink_stop(netif);
