@@ -27,6 +27,7 @@ struct pfe_mirror_tag
     pfe_mirror_db_t *db;  /* Database reference */
     LLIST_t this;         /* Link in database */
     pfe_ct_mirror_t phys; /* Physical representation */
+    int8_t ref_counter;   /* Summary count of all leased references (pointers) to this mirror instance and to its DMEM representation. */
 };
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
@@ -288,6 +289,9 @@ void pfe_mirror_deinit(void)
  * @return Either the 1st found mirror instance or NULL if there is no matching mirror
  *
  * @note Protected by mutex, because it accesses the mirror database.
+ *
+ * @note When execution thread which called this function finishes working with the provided instance,
+ *       it must call pfe_mirror_ref_release() for the given instance to "release" it.
  */
 pfe_mirror_t *pfe_mirror_get_first(pfe_mirror_db_crit_t crit, const void *arg)
 {
@@ -301,6 +305,10 @@ pfe_mirror_t *pfe_mirror_get_first(pfe_mirror_db_crit_t crit, const void *arg)
         }
         
         mirror = pfe_mirror_db_get_by_crit(pfe_mirror_db, crit, arg);
+        if (NULL != mirror)
+        {
+            mirror->ref_counter++;
+        }
 
         if (unlikely(EOK != oal_mutex_unlock(&pfe_mirror_db->lock)))
         {
@@ -319,6 +327,9 @@ pfe_mirror_t *pfe_mirror_get_first(pfe_mirror_db_crit_t crit, const void *arg)
  * @return Either next mirror or NULL if there are no more mirrors.
  *
  * @note Protected by mutex, because it accesses the mirror database.
+ *
+ * @note When execution thread which called this function finishes working with the provided instance,
+ *       it must call pfe_mirror_ref_release() for the given instance to "release" it.
  */
 pfe_mirror_t *pfe_mirror_get_next(void)
 {
@@ -335,6 +346,10 @@ pfe_mirror_t *pfe_mirror_get_next(void)
         /* We do not support any other criteria than MIRROR_ANY, rework the function
            pfe_mirror_db_get_next() if you need to add other criteria. */
         mirror = pfe_mirror_db_get_next(pfe_mirror_db);
+        if (NULL != mirror)
+        {
+            mirror->ref_counter++;
+        }
 
         if (unlikely(EOK != oal_mutex_unlock(&pfe_mirror_db->lock)))
         {
@@ -350,6 +365,9 @@ pfe_mirror_t *pfe_mirror_get_next(void)
  * @return Mirror instance or NULL in case of failure
  *
  * @note Protected by mutex, because it modifies the mirror database.
+ *
+ * @note When execution thread which called this function finishes working with the provided instance,
+ *       it must call pfe_mirror_ref_release() for the given instance to "release" it.
  */
 pfe_mirror_t *pfe_mirror_create(const char *name)
 {
@@ -386,6 +404,7 @@ pfe_mirror_t *pfe_mirror_create(const char *name)
                     /* Remember input data */
                     mirror->db = pfe_mirror_db;
                     mirror->name = (char *)&mirror[1];
+                    mirror->ref_counter = 1;  /* Init to 1, because this function already returns a pointer (reference) of the newly created mirror. */
                     (void)strcpy(mirror->name, name);
                     /* Allocate DMEM */
                     mirror->phys_addr = pfe_class_dmem_heap_alloc(mirror->db->class, sizeof(pfe_ct_mirror_t));
@@ -415,30 +434,93 @@ pfe_mirror_t *pfe_mirror_create(const char *name)
 
 /**
  * @brief Destroys the selected mirror
- * @param[in] mirror Mirror instance
+ * @param[in] mirror Mirror instance. Can be NULL.
  * @warning Make sure the mirror is not in use.
+ * @retval OK Success
+ * @retval EINVAL Internal error such as failed mutex lock.
+ * @retval EBUSY Mirror instance is currently utilized. It must not be destroyed now.
  *
  * @note Protected by mutex, because it modifies the mirror database.
  */
-void pfe_mirror_destroy(pfe_mirror_t *mirror)
+errno_t pfe_mirror_destroy(pfe_mirror_t *mirror)
 {
-    if(NULL != mirror)
+    errno_t ret = EOK;
+
+    if(likely(NULL != mirror))
     {
         /*	Protect against concurrent access */
         if (unlikely(EOK != oal_mutex_lock(&mirror->db->lock)))
         {
             NXP_LOG_ERROR("Mutex lock failed\n");
+            ret = EINVAL;
+        }
+        else
+        {
+            /* Count '1' or lower is considered OK for deletion.
+             * Count '1' means only one existing reference - the reference in the thread which is calling this destroy function. */
+            if (1 >= mirror->ref_counter) 
+            {
+                pfe_class_dmem_heap_free(mirror->db->class, mirror->phys_addr);
+                LLIST_Remove(&mirror->this);
+                oal_mm_free(mirror);
+                ret = EOK;
+            }
+            else
+            {
+                ret = EBUSY;
+            }
+
+            if (unlikely(EOK != oal_mutex_unlock(&mirror->db->lock)))
+            {
+                NXP_LOG_ERROR("Mutex unlock failed\n");
+                ret = EINVAL;
+            }
+        }
+    }
+
+    return ret;
+}
+
+/**
+ * @brief Decrements reference counter of a mirror instance.
+ * @param[in] mirror Mirror instance
+ * @important When a code outside of this module obtains pointer to some mirror instance
+ *            via _get_first()/_get_next(), then call this function in that code when
+ *            the code is done working with the instance.
+ * @note It is assumed this function is complementary to _get_first() / _get_next().
+ *       This assumption ensures the target mirror instance stays valid (cannot be concurrently deleted)
+ *       thanks to its high reference count.
+ */
+void pfe_mirror_put(pfe_mirror_t *mirror)
+{
+    if (likely(NULL != mirror))
+    {
+        if (unlikely(EOK != oal_mutex_lock(&mirror->db->lock)))
+        {
+            NXP_LOG_ERROR("Mutex lock failed\n");
         }
 
-        pfe_class_dmem_heap_free(mirror->db->class, mirror->phys_addr);
-        LLIST_Remove(&mirror->this);
-        oal_mm_free(mirror);
+        mirror->ref_counter--;
 
         if (unlikely(EOK != oal_mutex_unlock(&mirror->db->lock)))
         {
             NXP_LOG_ERROR("Mutex unlock failed\n");
         }
     }
+}
+
+/**
+ * @brief Decrements reference counter of a mirror instance. Finds the mirror instance by address of its DMEM representation.
+ * @param[in] address Address of mirror instance DMEM representation.
+ * @note See notes of pfe_mirror_put()
+ */
+void pfe_mirror_put_by_address(addr_t address)
+{
+    pfe_mirror_t *mirror = NULL;
+    
+    mirror = pfe_mirror_get_first(MIRROR_BY_PHYS_ADDR, (void *)address);
+    pfe_mirror_put(mirror);  /* Decrement reference counter. This is what this function does. */
+    pfe_mirror_put(mirror);  /* Notify mirror module we are done working with the mirror instance. This complements the previous _get_first(). */
 }
 
 /**

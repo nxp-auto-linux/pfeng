@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1030,10 +1030,18 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 							/* Set the mirror */
 							if (EOK != pfe_phy_if_set_rx_mirror(phy_if, i, mirror))
 							{
+								/*	Notify mirror module we are done working with the mirror instance. */
+								pfe_mirror_put(mirror);
+								mirror = NULL;
+							
 								NXP_LOG_ERROR("Configures the selected RX mirror failed\n");
 								*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
 								break;
 							}
+
+							/*	Notify mirror module we are done working with the mirror instance. */
+							pfe_mirror_put(mirror);
+							mirror = NULL;
 
 						}
 						/* TX */
@@ -1061,10 +1069,18 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 							/* Set the mirror */
 							if (EOK != pfe_phy_if_set_tx_mirror(phy_if, i, mirror))
 							{
+								/*	Notify mirror module we are done working with the mirror instance. */
+								pfe_mirror_put(mirror);
+								mirror = NULL;
+
 								NXP_LOG_ERROR("Configures the selected TX mirror failed\n");
 								*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
 								break;
 							}
+
+							/*	Notify mirror module we are done working with the mirror instance. */
+							pfe_mirror_put(mirror);
+							mirror = NULL;
 
 						}
 					}
@@ -1429,6 +1445,9 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 								NXP_LOG_WARNING("Could not obtain mirror name for %u\n", (uint_t)addr);
 							}
 						}
+						/*	Notify mirror module we are done working with the mirror instance. This releases the reference obtained from pfe_phy_if_get_rx_mirror(). */
+						pfe_mirror_put(mirror);
+						mirror = NULL;
 
 						/* TX */
 						mirror = pfe_phy_if_get_tx_mirror(phy_if, i);
@@ -1445,6 +1464,9 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 								NXP_LOG_WARNING("Could not obtain mirror name for %u\n", (uint_t)addr);
 							}
 						}
+						/*	Notify mirror module we are done working with the mirror instance. This releases the reference obtained from pfe_phy_if_get_tx_mirror(). */
+						pfe_mirror_put(mirror);
+						mirror = NULL;
 					}
 
 					/*	Get filter info */

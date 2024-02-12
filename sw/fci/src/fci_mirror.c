@@ -1,5 +1,5 @@
  /* =========================================================================
- *  Copyright 2021-2023 NXP
+ *  Copyright 2021-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -87,6 +87,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 					mirror = pfe_mirror_get_first(MIRROR_BY_NAME, mirror_cmd->name);
 					if (NULL != mirror)
 					{
+						/*	Notify mirror module we are done working with the mirror instance. */
+						pfe_mirror_put(mirror);
+						mirror = NULL;
+
 						/* FCI command attempted to register already registered entity. Respond with FCI error code. */
 						NXP_LOG_WARNING("Mirror '%s' is already registered.\n", mirror_cmd->name);
 						*fci_ret = FPP_ERR_MIRROR_ALREADY_REGISTERED;
@@ -129,6 +133,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 					ret = pfe_if_db_lock(&fci_context->if_session_id);
 					if(EOK != ret)
 					{
+						/*	Notify mirror module we are done working with the mirror instance. */
+						pfe_mirror_put(mirror);
+						mirror = NULL;
+						
 						/* FCI command requested unfulfillable action. Respond with FCI error code. */
 						*fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;
 						ret = EOK;
@@ -143,6 +151,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 
 					if((NULL == entry) || (NULL == phy_if))
 					{
+						/*	Notify mirror module we are done working with the mirror instance. */
+						pfe_mirror_put(mirror);
+						mirror = NULL;
+
 						/* FCI command requested nonexistent entity. Respond with FCI error code. */
 						(void)pfe_if_db_unlock(fci_context->if_session_id);
 						NXP_LOG_WARNING("No interface '%s'\n", mirror_cmd->egress_phy_if);
@@ -156,6 +168,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 					ret = pfe_mirror_set_egress_port(mirror, egress_id);
 					if(EOK != ret)
 					{
+						/*	Notify mirror module we are done working with the mirror instance. */
+						pfe_mirror_put(mirror);
+						mirror = NULL;
+
 						/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 						(void)pfe_if_db_unlock(fci_context->if_session_id);
 						NXP_LOG_ERROR("Cannot set egress port for '%s'\n", mirror_cmd->name);
@@ -177,6 +193,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 							ret = fci_fp_db_get_table_from_addr(addr, (char **)&str);
 							if(EOK != ret)
 							{
+								/*	Notify mirror module we are done working with the mirror instance. */
+								pfe_mirror_put(mirror);
+								mirror = NULL;
+
 								/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 								NXP_LOG_ERROR("Cannot obtain filter name.\n");
 								*fci_ret = FPP_ERR_INTERNAL_FAILURE;
@@ -192,6 +212,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 						ret = pfe_mirror_set_filter(mirror, 0U);
 						if(EOK != ret)
 						{
+							/*	Notify mirror module we are done working with the mirror instance. */
+							pfe_mirror_put(mirror);
+							mirror = NULL;
+
 							/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 							NXP_LOG_WARNING("Failed to disable filter on mirror '%s'.\n", mirror_cmd->name);
 							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
@@ -205,6 +229,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 						/* Check that the newly requested filter exists */
 						if (NULL == fci_fp_db_get_first(FP_TABLE_CRIT_NAME, mirror_cmd->filter_table_name))
 						{
+							/*	Notify mirror module we are done working with the mirror instance. */
+							pfe_mirror_put(mirror);
+							mirror = NULL;
+
 							/* FCI command requested nonexistent entity. Respond with FCI error code. */
 							NXP_LOG_WARNING("Requested filter table '%s' does not exist.\n", mirror_cmd->filter_table_name);
 							*fci_ret = FPP_ERR_WRONG_COMMAND_PARAM;  /* TODO_BOB: Replace this with FPP_ERR_FP_TABLE_NOT_FOUND after AAVB-3369 gets implemented. */
@@ -219,6 +247,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 							ret = fci_fp_db_get_table_from_addr(addr, (char **)&str);
 							if(EOK != ret)
 							{
+								/*	Notify mirror module we are done working with the mirror instance. */
+								pfe_mirror_put(mirror);
+								mirror = NULL;
+
 								/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 								NXP_LOG_ERROR("Cannot obtain filter name.\n");
 								*fci_ret = FPP_ERR_INTERNAL_FAILURE;
@@ -243,6 +275,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 							ret = pfe_mirror_set_filter(mirror, addr);
 							if(EOK != ret)
 							{
+								/*	Notify mirror module we are done working with the mirror instance. */
+								pfe_mirror_put(mirror);
+								mirror = NULL;
+
 								/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 								NXP_LOG_ERROR("Failed to set filter %s to mirror %s\n", mirror_cmd->filter_table_name, mirror_cmd->name);
 								*fci_ret = FPP_ERR_INTERNAL_FAILURE;
@@ -251,6 +287,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 						}
 						else
 						{	/* Requested filter table (from FCI command) is already used somewhere and cannot be used here. */
+
+							/*	Notify mirror module we are done working with the mirror instance. */
+							pfe_mirror_put(mirror);
+							mirror = NULL;
 
 							/* FCI command requested unfulfillable action. Respond with FCI error code. */
 							NXP_LOG_WARNING("Filter '%s' already in use, but it should not be!\n", mirror_cmd->filter_table_name);
@@ -268,6 +308,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 						ret = pfe_mirror_set_actions(mirror, RT_ACT_NONE, NULL);
 						if(EOK != ret)
 						{
+							/*	Notify mirror module we are done working with the mirror instance. */
+							pfe_mirror_put(mirror);
+							mirror = NULL;
+
 							NXP_LOG_ERROR("Failed to set modification action: MODIFY_ACT_NONE.\n");
 							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 							break;
@@ -292,11 +336,19 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 						ret = pfe_mirror_set_actions(mirror, m_actions, &m_args);
 						if(EOK != ret)
 						{
+							/*	Notify mirror module we are done working with the mirror instance. */
+							pfe_mirror_put(mirror);
+							mirror = NULL;
+
 							NXP_LOG_ERROR("Failed to set modification actions.\n");
 							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 							break;
 						}
 					}
+
+					/*	Notify mirror module we are done working with the mirror instance. */
+					pfe_mirror_put(mirror);
+					mirror = NULL;
 
 					break;
 				}
@@ -314,28 +366,48 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 						break;
 					}
 
-					/* Check if the mirror currently uses some filter. */
+					/* Note filter address (if any). */
 					addr = pfe_mirror_get_filter(mirror);
-					if(0U != addr)
-					{	/* Some filter (Flexible Parser table) is used. Get it and remove it from DMEM. */
-						ret = fci_fp_db_get_table_from_addr(addr, (char **)&str);
-						if(EOK != ret)
-						{
-							/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
-							NXP_LOG_ERROR("Cannot obtain filter name.\n");
-							*fci_ret = FPP_ERR_INTERNAL_FAILURE;
-							break;
-						}
-						else
-						{
-							(void)fci_fp_db_pop_table_from_hw((char *)str);
+
+					/* Destroy the mirror. */
+					ret = pfe_mirror_destroy(mirror);
+					if (EBUSY == ret)
+					{
+						/*	Notify mirror module we are done working with the mirror instance. */
+						pfe_mirror_put(mirror);
+						mirror = NULL;
+						
+						/* FCI command requested unfulfillable action. Respond with FCI error code. */
+						NXP_LOG_WARNING("Cannot destroy a mirror (it is currently utilized).\n");
+						*fci_ret = FPP_ERR_MIRROR_CURRENTLY_UTILIZED;
+						ret = EOK;
+						break;  /* Intentionally skip destruction of filter. We are keeping the mirror completely intact. */
+					}
+					else
+					{
+						mirror = NULL;  /* Mirror was destroyed. */
+
+						/* Check if the mirror had some filter. */
+						if(0U != addr)
+						{	/* Some filter (Flexible Parser table) is used. Get it and remove it from DMEM. */
+							ret = fci_fp_db_get_table_from_addr(addr, (char **)&str);
+							if(EOK != ret)
+							{
+								/* No need to release the mirror instance here. The instance is already destroyed. */
+
+								/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
+								NXP_LOG_ERROR("Cannot obtain filter name.\n");
+								*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+								break;
+							}
+							else
+							{
+								(void)fci_fp_db_pop_table_from_hw((char *)str);
+							}
 						}
 					}
 
-					/* No need to call pfe_mirror_set_filter(mirror, 0) because the mirror will be destroyed anyway */
-
-					/* Destroy the mirror */
-					pfe_mirror_destroy(mirror);
+					/* No need to release the mirror instance here. The instance is already destroyed. */
 
 					break;
 				}
@@ -378,6 +450,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 					ret = pfe_if_db_lock(&fci_context->if_session_id);
 					if(EOK != ret)
 					{
+						/*	Notify mirror module we are done working with the mirror instance. */
+						pfe_mirror_put(mirror);
+						mirror = NULL;
+
 						/* FCI command requested unfulfillable action. Respond with FCI error code. */
 						*fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;
 						ret = EOK;
@@ -392,6 +468,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 
 					if((NULL == entry) || (NULL == phy_if))
 					{
+						/*	Notify mirror module we are done working with the mirror instance. */
+						pfe_mirror_put(mirror);
+						mirror = NULL;
+
 						/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
 						(void)pfe_if_db_unlock(fci_context->if_session_id);
 						NXP_LOG_ERROR("Cannot get egress interface of the mirror '%s'.\n", pfe_mirror_get_name(mirror));
@@ -433,6 +513,10 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 						reply_buf->m_args.vlan = m_args.vlan;
 					}
 					reply_buf->m_actions = (fpp_modify_actions_t)oal_htonl(reply_buf->m_actions);
+
+					/*	Notify mirror module we are done working with the mirror instance. */
+					pfe_mirror_put(mirror);
+					mirror = NULL;
 
 					/* Set reply length end return OK */
 					*reply_len = sizeof(fpp_mirror_cmd_t);
