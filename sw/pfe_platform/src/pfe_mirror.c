@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2021-2022 NXP
+ *  Copyright 2021-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -17,6 +17,7 @@ typedef struct
     pfe_class_t *class;
     LLIST_t mirrors;
     LLIST_t *curr;
+    oal_mutex_t lock;
 } pfe_mirror_db_t;
 
 struct pfe_mirror_tag
@@ -75,6 +76,13 @@ static pfe_mirror_db_t *pfe_mirror_create_db(pfe_class_t *class)
             (void)memset(db, 0, sizeof(pfe_mirror_db_t));
             db->class = class;
             LLIST_Init(&db->mirrors);
+            
+            if (EOK != oal_mutex_init(&db->lock))
+            {
+                NXP_LOG_ERROR("Mutex initialization failed\n");
+                oal_mm_free(db);
+                db = NULL;
+            }
         }
     }
 
@@ -94,6 +102,12 @@ static void pfe_mirror_destroy_db(pfe_mirror_db_t *db)
         {   /* Not empty */
             NXP_LOG_ERROR("There are still entries in the database, leaking memory\n");
         }
+
+        if (EOK != oal_mutex_destroy(&db->lock))
+        {
+            NXP_LOG_ERROR("Could not destroy mutex\n");
+        }
+
         oal_mm_free(db);
     }
 }
@@ -272,13 +286,26 @@ void pfe_mirror_deinit(void)
  * @param[in] crit Matching criterion for the mirrors
  * @param[in] arg Criterion specific argument (value)
  * @return Either the 1st found mirror instance or NULL if there is no matching mirror
+ *
+ * @note Protected by mutex, because it accesses the mirror database.
  */
 pfe_mirror_t *pfe_mirror_get_first(pfe_mirror_db_crit_t crit, const void *arg)
 {
     pfe_mirror_t *mirror = NULL;
     if(NULL != pfe_mirror_db)
     {
+        /*	Protect against concurrent access */
+        if (unlikely(EOK != oal_mutex_lock(&pfe_mirror_db->lock)))
+        {
+            NXP_LOG_ERROR("Mutex lock failed\n");
+        }
+        
         mirror = pfe_mirror_db_get_by_crit(pfe_mirror_db, crit, arg);
+
+        if (unlikely(EOK != oal_mutex_unlock(&pfe_mirror_db->lock)))
+        {
+            NXP_LOG_ERROR("Mutex unlock failed\n");
+        }
     }
     return mirror;
 }
@@ -290,6 +317,8 @@ pfe_mirror_t *pfe_mirror_get_first(pfe_mirror_db_crit_t crit, const void *arg)
  *        that the pfe_mirror_get_first(MIRROR_ANY, NULL) is used to obtain the 1st mirror
  *        and pfe_mirror_get_next() is used to get list of all mirrors.
  * @return Either next mirror or NULL if there are no more mirrors.
+ *
+ * @note Protected by mutex, because it accesses the mirror database.
  */
 pfe_mirror_t *pfe_mirror_get_next(void)
 {
@@ -297,9 +326,20 @@ pfe_mirror_t *pfe_mirror_get_next(void)
 
     if(NULL != pfe_mirror_db)
     {
+        /*	Protect against concurrent access */
+        if (unlikely(EOK != oal_mutex_lock(&pfe_mirror_db->lock)))
+        {
+            NXP_LOG_ERROR("Mutex lock failed\n");
+        }
+
         /* We do not support any other criteria than MIRROR_ANY, rework the function
            pfe_mirror_db_get_next() if you need to add other criteria. */
         mirror = pfe_mirror_db_get_next(pfe_mirror_db);
+
+        if (unlikely(EOK != oal_mutex_unlock(&pfe_mirror_db->lock)))
+        {
+            NXP_LOG_ERROR("Mutex unlock failed\n");
+        }
     }
     return mirror;
 }
@@ -308,6 +348,8 @@ pfe_mirror_t *pfe_mirror_get_next(void)
  * @brief Creates a new mirror instance
  * @param[in] name Unique name (identifier)
  * @return Mirror instance or NULL in case of failure
+ *
+ * @note Protected by mutex, because it modifies the mirror database.
  */
 pfe_mirror_t *pfe_mirror_create(const char *name)
 {
@@ -324,6 +366,12 @@ pfe_mirror_t *pfe_mirror_create(const char *name)
     {
         if(NULL != pfe_mirror_db)
         {
+            /*	Protect against concurrent access */
+            if (unlikely(EOK != oal_mutex_lock(&pfe_mirror_db->lock)))
+            {
+                NXP_LOG_ERROR("Mutex lock failed\n");
+            }
+
             /* Do not allow duplicates */
             if(NULL == pfe_mirror_db_get_by_crit(pfe_mirror_db, MIRROR_BY_NAME, (void *)name))
             {   /* No such entry in the database, we may add a new one */
@@ -354,6 +402,11 @@ pfe_mirror_t *pfe_mirror_create(const char *name)
                     }
                 }
             }
+
+            if (unlikely(EOK != oal_mutex_unlock(&pfe_mirror_db->lock)))
+            {
+                NXP_LOG_ERROR("Mutex unlock failed\n");
+            }
         }
     }
 
@@ -364,14 +417,27 @@ pfe_mirror_t *pfe_mirror_create(const char *name)
  * @brief Destroys the selected mirror
  * @param[in] mirror Mirror instance
  * @warning Make sure the mirror is not in use.
+ *
+ * @note Protected by mutex, because it modifies the mirror database.
  */
 void pfe_mirror_destroy(pfe_mirror_t *mirror)
 {
     if(NULL != mirror)
     {
+        /*	Protect against concurrent access */
+        if (unlikely(EOK != oal_mutex_lock(&mirror->db->lock)))
+        {
+            NXP_LOG_ERROR("Mutex lock failed\n");
+        }
+
         pfe_class_dmem_heap_free(mirror->db->class, mirror->phys_addr);
         LLIST_Remove(&mirror->this);
         oal_mm_free(mirror);
+
+        if (unlikely(EOK != oal_mutex_unlock(&mirror->db->lock)))
+        {
+            NXP_LOG_ERROR("Mutex unlock failed\n");
+        }
     }
 }
 
