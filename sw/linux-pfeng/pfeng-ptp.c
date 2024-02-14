@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 NXP
+ * Copyright 2021-2024 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -36,13 +36,14 @@ static errno_t pfeng_ptp_get_phc_emac_id(struct pfeng_netif *netif, u32 *phc_ema
 	return 0;
 }
 
-int pfeng_ptp_adjfreq(struct ptp_clock_info *ptp, s32 delta)
+static int pfeng_ptp_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
 	pfe_emac_t *emac;
 	bool_t sgn = TRUE;
 	u32 phc_emac_id;
+	s32 delta = scaled_ppm_to_ppb(scaled_ppm);
 	errno_t ret = 0;
 
 	if (pfeng_ptp_get_phc_emac_id(netif, &phc_emac_id))
@@ -185,7 +186,7 @@ static struct ptp_clock_info pfeng_ptp_ops = {
 	.n_per_out = 0,
 	.n_pins = 0,
 	.pps = 0,
-	.adjfreq = pfeng_ptp_adjfreq,
+	.adjfine = pfeng_ptp_adjfine,
 	.adjtime = pfeng_ptp_adjtime,
 	.gettime64 = pfeng_ptp_gettime64,
 	.settime64 = pfeng_ptp_settime64,
