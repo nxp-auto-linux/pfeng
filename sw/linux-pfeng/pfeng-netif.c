@@ -13,6 +13,7 @@
 #include <linux/if_vlan.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#include <linux/socket.h>
 #include <net/dsa.h>
 
 #include "pfe_cfg.h"
@@ -30,6 +31,12 @@
 #define TMU_RES_Q_MAX_SIZE	0xFFU
 #define TMU_RES_Q_W_FACT	2U
 #define TMU_RES_Q_MIN_TX_THR	8U
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+#define SA_DATA_MEMBER	sa_data_min
+#else
+#define SA_DATA_MEMBER	sa_data
+#endif
 
 typedef struct
 {
@@ -812,7 +819,7 @@ static int pfeng_netif_set_mac_address(struct net_device *netdev, void *p)
 	struct sockaddr *addr = (struct sockaddr *)p;
 
 	if (is_valid_ether_addr(addr->sa_data)) {
-		ether_addr_copy(netdev->dev_addr, addr->sa_data);
+		eth_hw_addr_set(netdev, addr->sa_data);
 	} else {
 		HM_MSG_NETDEV_WARN(netdev, "No MAC address found, using random\n");
 		eth_hw_addr_random(netdev);
@@ -1299,9 +1306,9 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 		if (is_valid_ether_addr(netif->cfg->macaddr))
 			memcpy(&saddr.sa_data, netif->cfg->macaddr, ARRAY_SIZE(netif->cfg->macaddr));
 		else
-			memset(&saddr.sa_data, 0, sizeof(saddr.sa_data));
+			memset(&saddr.sa_data, 0, sizeof(saddr.SA_DATA_MEMBER));
 	} else
-		memcpy(&saddr.sa_data, netdev->dev_addr, sizeof(saddr.sa_data));
+		memcpy(&saddr.sa_data, netdev->dev_addr, sizeof(saddr.SA_DATA_MEMBER));
 
 	pfeng_netif_set_mac_address(netdev, (void *)&saddr);
 
