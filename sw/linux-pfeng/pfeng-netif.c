@@ -597,17 +597,32 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 	struct mii_ioctl_data *mii = if_mii(rq);
-	int val, phyaddr, phyreg;
+	int val, phyaddr, phyreg, devaddr, c45;
 
 	if (pfeng_netif_is_aux(netif))
 		return -EOPNOTSUPP;
 
-	if (mdio_phy_id_is_c45(mii->phy_id)) {
-		phyaddr = mdio_phy_id_prtad(mii->phy_id);
-		phyreg = MII_ADDR_C45 | (mdio_phy_id_devad(mii->phy_id) << 16) | mii->reg_num;
-	} else {
-		phyaddr = mii->phy_id;
+	/* Preprocess *MIIREG commands */
+	if (cmd == SIOCGMIIPHY || cmd == SIOCGMIIPHY || cmd == SIOCGMIIREG) {
+
+		if (cmd == SIOCGMIIPHY && netdev->phydev)
+			mii->phy_id = netdev->phydev->mdio.addr;
+
+		c45 = mdio_phy_id_is_c45(mii->phy_id);
+
 		phyreg = mii->reg_num;
+		if (c45) {
+			phyaddr = mdio_phy_id_prtad(mii->phy_id);
+			devaddr = mdio_phy_id_devad(mii->phy_id);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
+			phyreg = MII_ADDR_C45 | (devaddr << 16) | mii->reg_num;
+#endif
+		} else if (mii->phy_id < 32) {
+			phyaddr = mii->phy_id;
+			devaddr = 0;
+			mii->reg_num &= 0x1f;
+		} else
+			return -EINVAL;
 	}
 
 	switch (cmd) {
@@ -615,7 +630,6 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 		if (!pfeng_netif_has_emac(netif) || !netdev->phydev)
 			return -EOPNOTSUPP;
 
-		phyaddr = mii->phy_id = netdev->phydev->mdio.addr;
 		fallthrough;
 	case SIOCGMIIREG:
 		if (!pfeng_netif_has_emac(netif))
@@ -624,7 +638,14 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 		if (netdev->phydev)
 			return phy_mii_ioctl(netdev->phydev, rq, cmd);
 		/* If no phydev, use direct MDIO call */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 		val = pfeng_mdio_read(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg);
+#else
+		if (c45)
+			val = pfeng_mdio_read_c45(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, devaddr, phyreg);
+		else
+			val = pfeng_mdio_read_c22(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg);
+#endif
 		if (val > -1) {
 			mii->val_out = val;
 			return 0;
@@ -637,7 +658,14 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 		if (netdev->phydev)
 			return phy_mii_ioctl(netdev->phydev, rq, cmd);
 		/* If no phydev, use direct MDIO call */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 		return pfeng_mdio_write(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg, mii->val_in);
+#else
+		if (c45)
+			return pfeng_mdio_write_c45(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, devaddr, phyreg, mii->val_in);
+		else
+			return pfeng_mdio_write_c22(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg, mii->val_in);
+#endif
 	case SIOCGHWTSTAMP:
 		if (phy_has_hwtstamp(netdev->phydev))
 			return phy_mii_ioctl(netdev->phydev, rq, cmd);
