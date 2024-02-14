@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 NXP
+ * Copyright 2020-2024 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -23,18 +23,16 @@
 #define EMAC_CLK_RATE_25M	25000000	/* 25MHz */
 #define EMAC_CLK_RATE_2M5	2500000		/* 2.5MHz */
 
-#define XPCS_POLL_MS		1000
-
-static void pfeng_cfg_to_plat(struct pfeng_netif *netif, const struct phylink_link_state *state)
+static void pfeng_cfg_to_plat(struct pfeng_netif *netif, u32 speed, u32 duplex)
 {
 	struct pfeng_emac *emac = &netif->priv->emac[netif->cfg->phyif_id];
 	pfe_emac_t *pfe_emac = netif->priv->pfe_platform->emac[netif->cfg->phyif_id];
 	u32 emac_speed, emac_duplex;
 	bool speed_valid = true, duplex_valid = true;
 
-	switch (state->speed) {
+	switch (speed) {
 	default:
-		HM_MSG_NETDEV_WARN(netif->netdev, "Speed not supported\n");
+		HM_MSG_NETDEV_WARN(netif->netdev, "Speed %u not supported\n", speed);
 		speed_valid = false;
 		return;
 	case SPEED_2500:
@@ -53,10 +51,10 @@ static void pfeng_cfg_to_plat(struct pfeng_netif *netif, const struct phylink_li
 
 	if (speed_valid) {
 		pfe_emac_set_link_speed(pfe_emac, emac_speed);
-		emac->speed = state->speed;
+		emac->speed = speed;
 	}
 
-	switch (state->duplex) {
+	switch (duplex) {
 	case DUPLEX_HALF:
 		emac_duplex = EMAC_DUPLEX_HALF;
 		break;
@@ -72,31 +70,93 @@ static void pfeng_cfg_to_plat(struct pfeng_netif *netif, const struct phylink_li
 
 	if (emac_duplex) {
 		pfe_emac_set_link_duplex(pfe_emac, emac_duplex);
-		emac->duplex = state->duplex;
+		emac->duplex = duplex;
 	}
-}
-
-/* This could be done automatically in phylink in 5.10+ */
-void pfeng_xpcs_poll(struct work_struct * work) {
-	struct pfeng_netif *netif = container_of(work, struct pfeng_netif, xpcs_poll_work.work);
-	struct pfeng_emac *emac  = &netif->priv->emac[netif->cfg->phyif_id];
-	struct phylink_link_state sgmii_state = { 0 };
-
-	emac->xpcs_ops->xpcs_get_state(emac->xpcs, &sgmii_state);
-
-	if (sgmii_state.duplex != emac->duplex ||
-	    sgmii_state.speed != emac->speed ||
-	    sgmii_state.link != emac->sgmii_link) {
-		phylink_mac_change(netif->phylink, sgmii_state.link);
-	}
-
-	schedule_delayed_work(&netif->xpcs_poll_work, msecs_to_jiffies(XPCS_POLL_MS));
 }
 
 /**
+ * @brief	Set necessary S32G clocks
+ */
+static int s32g_set_rgmii_speed(struct pfeng_netif *netif, unsigned int speed)
+{
+	struct clk *tx_clk = netif->priv->emac[netif->cfg->phyif_id].tx_clk;
+	unsigned long rate = 0;
+	int ret = 0;
+
+	switch (speed) {
+	default:
+		HM_MSG_NETDEV_DBG(netif->netdev, "Skipped clock setting\n");
+		return -EINVAL;
+	case SPEED_1000:
+		rate = EMAC_CLK_RATE_125M;
+		break;
+	case SPEED_100:
+		rate = EMAC_CLK_RATE_25M;
+		break;
+	case SPEED_10:
+		rate = EMAC_CLK_RATE_2M5;
+		break;
+	}
+
+	if (tx_clk) {
+		ret = clk_set_rate(tx_clk, rate);
+		if (ret)
+			HM_MSG_NETDEV_ERR(netif->netdev, "Unable to set TX clock to %luHz\n", rate);
+		else
+			HM_MSG_NETDEV_INFO(netif->netdev, "Set TX clock to %luHz\n", rate);
+	}
+
+	return ret;
+}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,18,0)
+static struct phylink_pcs *pfeng_mac_select_pcs(struct phylink_config *config, phy_interface_t interface)
+{
+	struct pfeng_netif *netif = netdev_priv(to_net_dev(config->dev));
+	struct pfeng_emac *emac = &netif->priv->emac[netif->cfg->phyif_id];
+
+	if  (interface == PHY_INTERFACE_MODE_SGMII)
+		return emac->pcs;
+
+	return NULL;
+}
+#endif
+
+static void pfeng_mac_config(struct phylink_config *config, unsigned int mode, const struct phylink_link_state *state)
+{
+	/* All done in s32cc_phylink_pcs_link_up() */
+}
+
+static void pfeng_mac_link_down(struct phylink_config *config, unsigned int mode, phy_interface_t interface)
+{
+	struct pfeng_netif *netif = netdev_priv(to_net_dev(config->dev));
+
+	/* Disable Rx and Tx */
+	netif_tx_stop_all_queues(netif->netdev);
+}
+
+static void pfeng_mac_link_up(struct phylink_config *config,  struct phy_device *phy,
+			      unsigned int mode, phy_interface_t interface, int speed,
+			      int duplex, bool tx_pause, bool rx_pause)
+{
+	struct pfeng_netif *netif = netdev_priv(to_net_dev(config->dev));
+
+	/* Change clocks for RGMII/RMII */
+	if (phy_interface_mode_is_rgmii(interface) || interface == PHY_INTERFACE_MODE_RMII) {
+		s32g_set_rgmii_speed(netif, speed);
+	}
+
+	pfeng_cfg_to_plat(netif, speed, duplex);
+
+	/* Enable Rx and Tx */
+	netif_tx_wake_all_queues(netif->netdev);
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,18,0)
+/**
  * @brief	Validate and update the link configuration
  */
-static void pfeng_phylink_validate(struct phylink_config *config, unsigned long *supported, struct phylink_link_state *state)
+static void pfeng_validate(struct phylink_config *config, unsigned long *supported, struct phylink_link_state *state)
 {
 	struct pfeng_netif *netif = netdev_priv(to_net_dev(config->dev));
 	struct pfeng_priv *priv = netif->priv;
@@ -182,126 +242,23 @@ static void pfeng_phylink_validate(struct phylink_config *config, unsigned long 
  */
 static void pfeng_mac_link_state(struct phylink_config *config, struct phylink_link_state *state)
 {
-	struct pfeng_netif *netif = netdev_priv(to_net_dev(config->dev));
-	struct pfeng_emac *emac = &netif->priv->emac[netif->cfg->phyif_id];
-
-	state->interface = emac->intf_mode;
-
-	if (state->interface != PHY_INTERFACE_MODE_SGMII || !emac->xpcs) {
-		HM_MSG_NETDEV_ERR(netif->netdev, "Configuration not supported\n");
-		return;
-	}
-
-	emac->xpcs_ops->xpcs_get_state(emac->xpcs, state);
-
-	/* our MAC status is not connected to PCS so update it manually */
-	if (emac->phyless) {
-		emac->xpcs_ops->xpcs_config(emac->xpcs, state);
-		pfeng_cfg_to_plat(netif, state);
-		emac->sgmii_link = state->link;
-	}
+	state->link = 0;
 }
 
 static void pfeng_mac_an_restart(struct phylink_config *config)
 {
 	return;
 }
-
-/**
- * @brief	Set necessary S32G clocks
- */
-static int s32g_set_rgmii_speed(struct pfeng_netif *netif, unsigned int speed)
-{
-	struct clk *tx_clk = netif->priv->emac[netif->cfg->phyif_id].tx_clk;
-	unsigned long rate = 0;
-	int ret = 0;
-
-	switch (speed) {
-	default:
-		HM_MSG_NETDEV_DBG(netif->netdev, "Skipped clock setting\n");
-		return -EINVAL;
-	case SPEED_1000:
-		rate = EMAC_CLK_RATE_125M;
-		break;
-	case SPEED_100:
-		rate = EMAC_CLK_RATE_25M;
-		break;
-	case SPEED_10:
-		rate = EMAC_CLK_RATE_2M5;
-		break;
-	}
-
-	if (tx_clk) {
-		ret = clk_set_rate(tx_clk, rate);
-		if (ret)
-			HM_MSG_NETDEV_ERR(netif->netdev, "Unable to set TX clock to %luHz\n", rate);
-		else
-			HM_MSG_NETDEV_INFO(netif->netdev, "Set TX clock to %luHz\n", rate);
-	}
-
-	return ret;
-}
-
-static void pfeng_mac_config(struct phylink_config *config, unsigned int mode, const struct phylink_link_state *state)
-{
-	struct pfeng_netif *netif = netdev_priv(to_net_dev(config->dev));
-	struct pfeng_emac *emac = &netif->priv->emac[netif->cfg->phyif_id];
-	__maybe_unused struct phylink_link_state sgmii_state = { 0 };
-
-	if (mode == MLO_AN_FIXED || mode == MLO_AN_PHY) {
-		if (phy_interface_mode_is_rgmii(emac->intf_mode) || emac->intf_mode == PHY_INTERFACE_MODE_RMII) {
-			if (s32g_set_rgmii_speed(netif, state->speed))
-				return;
-		} else if  (emac->intf_mode == PHY_INTERFACE_MODE_SGMII) {
-			if (!emac->xpcs || !emac->xpcs_ops)
-				return;
-
-			emac->xpcs_ops->xpcs_get_state(emac->xpcs, &sgmii_state);
-			sgmii_state.speed = state->speed;
-			sgmii_state.duplex = state->duplex;
-			sgmii_state.an_enabled = false;
-			emac->xpcs_ops->xpcs_config(emac->xpcs, &sgmii_state);
-		} else {
-			HM_MSG_NETDEV_ERR(netif->netdev, "Interface not supported\n");
-			return;
-		}
-	} else if (mode == MLO_AN_INBAND) {
-		if (emac->intf_mode == PHY_INTERFACE_MODE_SGMII &&
-		    emac->xpcs && emac->xpcs_ops) {
-			emac->xpcs_ops->xpcs_config(emac->xpcs, state);
-		} else {
-			HM_MSG_NETDEV_ERR(netif->netdev, "Interface not supported\n");
-			return;
-		}
-	} else {
-		return;
-	}
-
-	pfeng_cfg_to_plat(netif, state);
-}
-
-static void pfeng_mac_link_down(struct phylink_config *config, unsigned int mode, phy_interface_t interface)
-{
-	struct pfeng_netif *netif = netdev_priv(to_net_dev(config->dev));
-
-	/* Disable Rx and Tx */
-	netif_tx_stop_all_queues(netif->netdev);
-}
-
-static void pfeng_mac_link_up(struct phylink_config *config,  struct phy_device *phy,
-			      unsigned int mode, phy_interface_t interface, int speed,
-			      int duplex, bool tx_pause, bool rx_pause)
-{
-	struct pfeng_netif *netif = netdev_priv(to_net_dev(config->dev));
-
-	/* Enable Rx and Tx */
-	netif_tx_wake_all_queues(netif->netdev);
-}
+#endif
 
 static const struct phylink_mac_ops pfeng_phylink_ops = {
-	.validate = pfeng_phylink_validate,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,18,0)
+	.validate = pfeng_validate,
 	.mac_pcs_get_state = pfeng_mac_link_state,
 	.mac_an_restart = pfeng_mac_an_restart,
+#else
+	.mac_select_pcs = pfeng_mac_select_pcs,
+#endif
 	.mac_config = pfeng_mac_config,
 	.mac_link_down = pfeng_mac_link_down,
 	.mac_link_up = pfeng_mac_link_up,
@@ -317,36 +274,56 @@ int pfeng_phylink_create(struct pfeng_netif *netif)
 {
 	struct pfeng_priv *priv = netif->priv;
 	struct pfeng_emac *emac = &priv->emac[netif->cfg->phyif_id];
+	struct s32cc_xpcs *xpcs;
 	struct phylink *phylink;
+	int ret;
 
 	netif->phylink_cfg.dev = &netif->netdev->dev;
 	netif->phylink_cfg.type = PHYLINK_NETDEV;
+	netif->phylink_cfg.mac_managed_pm = true;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,17,0)
+	netif->phylink_cfg.mac_capabilities = MAC_ASYM_PAUSE | MAC_SYM_PAUSE |
+						MAC_10 | MAC_100 | MAC_1000;
+
+	__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+		  netif->phylink_cfg.supported_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_SGMII,
+		  netif->phylink_cfg.supported_interfaces);
+        phy_interface_set_rgmii(netif->phylink_cfg.supported_interfaces);
+
+	if ((!netif->priv->on_g3 && netif->cfg->phyif_id == PFE_PHY_IF_ID_EMAC0) || netif->priv->on_g3) {
+		/* PFE_EMAC supports 2.5G over SGMII on G3 for all EMACs but on G2 only for EMAC_0 */
+		netif->phylink_cfg.mac_capabilities |= MAC_2500FD;
+		__set_bit(PHY_INTERFACE_MODE_2500BASEX, netif->phylink_cfg.supported_interfaces);
+	}
+#endif
+
 	phylink = phylink_create(&netif->phylink_cfg, of_fwnode_handle(netif->cfg->dn), emac->intf_mode, &pfeng_phylink_ops);
 	if (IS_ERR(phylink))
 		return PTR_ERR(phylink);
 
 	netif->phylink = phylink;
 
-	INIT_DELAYED_WORK(&netif->xpcs_poll_work, pfeng_xpcs_poll);
-
 	/* Get XPCS instance */
 	if (emac->serdes_phy) {
-		if (!phy_init(emac->serdes_phy) && !phy_power_on(emac->serdes_phy)) {
-			if (!phy_configure(emac->serdes_phy, NULL)) {
-				emac->xpcs = s32cc_phy2xpcs(emac->serdes_phy);
-				emac->xpcs_ops = s32cc_xpcs_get_ops();
-			} else {
-				HM_MSG_DEV_ERR(netif->dev, "SerDes PHY configuration failed on EMAC%d\n", netif->cfg->phyif_id);
-			}
-		} else {
+		if (phy_init(emac->serdes_phy) || phy_power_on(emac->serdes_phy)) {
 			HM_MSG_DEV_ERR(netif->dev, "SerDes PHY init failed on EMAC%d\n", netif->cfg->phyif_id);
+			return -EINVAL;
 		}
+		if ((ret = phy_configure(emac->serdes_phy, NULL))) {
+			HM_MSG_DEV_ERR(netif->dev, "SerDes PHY configuration failed on EMAC%d\n", netif->cfg->phyif_id);
+			return ret;
+		}
+		xpcs = s32cc_phy2xpcs(emac->serdes_phy);
+		if (xpcs)
+			emac->pcs = s32cc_xpcs_get_pcs(xpcs);
+		else
+			HM_MSG_DEV_ERR(netif->dev, "SerDes data retrieval failed on EMAC%d\n", netif->cfg->phyif_id);
 
-		if (!emac->xpcs || !emac->xpcs_ops) {
-			HM_MSG_DEV_ERR(netif->dev, "Can't get SGMII PCS on EMAC%d\n", netif->cfg->phyif_id);
-			emac->xpcs_ops = NULL;
-			emac->xpcs = NULL;
-		}
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,18,0)
+		phylink_set_pcs(phylink, emac->pcs);
+#endif
 	}
 
 	return 0;
@@ -360,12 +337,7 @@ int pfeng_phylink_create(struct pfeng_netif *netif)
  */
 int pfeng_phylink_start(struct pfeng_netif *netif)
 {
-	__maybe_unused struct pfeng_emac *emac = &netif->priv->emac[netif->cfg->phyif_id];
-
 	phylink_start(netif->phylink);
-
-	if (emac->xpcs && emac->xpcs_ops && emac->phyless)
-		schedule_delayed_work(&netif->xpcs_poll_work, msecs_to_jiffies(XPCS_POLL_MS));
 
 	return 0;
 }
@@ -414,12 +386,7 @@ void pfeng_phylink_mac_change(struct pfeng_netif *netif, bool up)
  */
 void pfeng_phylink_stop(struct pfeng_netif *netif)
 {
-	__maybe_unused struct pfeng_emac *emac = &netif->priv->emac[netif->cfg->phyif_id];
-
 	phylink_stop(netif->phylink);
-
-	if (emac->xpcs && emac->xpcs_ops && emac->phyless)
-		cancel_delayed_work_sync(&netif->xpcs_poll_work);
 }
 
 /**
@@ -430,6 +397,7 @@ void pfeng_phylink_stop(struct pfeng_netif *netif)
 void pfeng_phylink_destroy(struct pfeng_netif *netif)
 {
 	__maybe_unused struct pfeng_emac *emac = &netif->priv->emac[netif->cfg->phyif_id];
+
 	phylink_destroy(netif->phylink);
 	netif->phylink = NULL;
 

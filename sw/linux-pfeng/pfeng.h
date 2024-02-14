@@ -21,13 +21,7 @@
 #include <linux/kfifo.h>
 #include <linux/mutex.h>
 #include <linux/clk.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
-#include <linux/pcs/fsl-s32gen1-xpcs.h>
-#define s32cc_phy2xpcs s32gen1_phy2xpcs
-#define s32cc_xpcs_get_ops s32gen1_xpcs_get_ops
-#else
 #include <linux/pcs/nxp-s32cc-xpcs.h>
-#endif
 #include <linux/phy/phy.h>
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -301,13 +295,7 @@ struct pfeng_emac {
 	struct mii_bus			*mii_bus;
 	/* XPCS */
 	struct phy			*serdes_phy;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
-	struct s32gen1_xpcs             *xpcs;
-	const struct s32gen1_xpcs_ops   *xpcs_ops;
-#else
-	struct s32cc_xpcs		*xpcs;
-	const struct s32cc_xpcs_ops	*xpcs_ops;
-#endif
+	struct phylink_pcs				*pcs;
 	struct phylink_link_state 	xpcs_link;
 	u32				serdes_an_speed;
 	bool				sgmii_link;
