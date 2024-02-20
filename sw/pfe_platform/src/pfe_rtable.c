@@ -1,7 +1,7 @@
 /* =========================================================================
  *	
  *	Copyright (c) 2019 Imagination Technologies Limited
- *	Copyright 2018-2023 NXP
+ *	Copyright 2018-2024 NXP
  *
  *	SPDX-License-Identifier: GPL-2.0
  *
@@ -3483,41 +3483,44 @@ pfe_rtable_entry_t *pfe_rtable_get_next(pfe_rtable_t *rtable)
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		if (rtable->cur_item == &rtable->active_entries)
+		if (FALSE == LLIST_IsEmpty(&rtable->active_entries))
 		{
-			/*	No more entries */
-			entry = NULL;
-		}
-		else
-		{
-			/*	Protect table accesses */
-			if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
+			if (rtable->cur_item == &rtable->active_entries)
 			{
-				NXP_LOG_ERROR("Mutex lock failed\n");
+				/*	No more entries */
+				entry = NULL;
 			}
-
-			while (rtable->cur_item != &rtable->active_entries)
+			else
 			{
-				/*	Get data */
-				entry = LLIST_Data(rtable->cur_item, pfe_rtable_entry_t, list_entry);
-
-				/*	Remember current item to know where to start later */
-				rtable->cur_item = rtable->cur_item->prNext;
-
-				if (NULL != entry)
+				/*	Protect table accesses */
+				if (unlikely(EOK != oal_mutex_lock(rtable->lock)))
 				{
-					if (TRUE == pfe_rtable_match_criterion(rtable->cur_crit, &rtable->cur_crit_arg, entry))
+					NXP_LOG_ERROR("Mutex lock failed\n");
+				}
+
+				while (rtable->cur_item != &rtable->active_entries)
+				{
+					/*	Get data */
+					entry = LLIST_Data(rtable->cur_item, pfe_rtable_entry_t, list_entry);
+
+					/*	Remember current item to know where to start later */
+					rtable->cur_item = rtable->cur_item->prNext;
+
+					if (NULL != entry)
 					{
-						match = TRUE;
-						entry->ref_counter++;
-						break;
+						if (TRUE == pfe_rtable_match_criterion(rtable->cur_crit, &rtable->cur_crit_arg, entry))
+						{
+							match = TRUE;
+							entry->ref_counter++;
+							break;
+						}
 					}
 				}
-			}
 
-			if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
-			{
-				NXP_LOG_ERROR("Mutex unlock failed\n");
+				if (unlikely(EOK != oal_mutex_unlock(rtable->lock)))
+				{
+					NXP_LOG_ERROR("Mutex unlock failed\n");
+				}
 			}
 		}
 

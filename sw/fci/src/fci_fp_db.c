@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2023 NXP
+ *  Copyright 2019-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -302,33 +302,36 @@ static fci_fp_rule_t *fci_fp_rule_get_next(fci_fp_rule_db_t *db, dbase_t dbase)
     else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
     {
-        if (db->cur_item == &db->rules)
+        if (FALSE == LLIST_IsEmpty(&db->rules))
         {
-            /*    No more entries */
-            rule = NULL;
-        }
-        else
-        {
-            while (db->cur_item != &db->rules)
+            if (db->cur_item == &db->rules)
             {
-                /*    Get data */
-                if(COMMON == dbase)
+                /*    No more entries */
+                rule = NULL;
+            }
+            else
+            {
+                while (db->cur_item != &db->rules)
                 {
-                    rule = LLIST_Data(db->cur_item, fci_fp_rule_t, db_entry);
-                }
-                else
-                {
-                    rule = LLIST_Data(db->cur_item, fci_fp_rule_t, table_entry);
-                }
-
-                /*    Remember current item to know where to start later */
-                db->cur_item = db->cur_item->prNext;
-
-                if (NULL != rule)
-                {
-                    if (TRUE == fci_fp_match_rule_by_criterion(db->cur_crit, &db->cur_crit_arg, rule))
+                    /*    Get data */
+                    if(COMMON == dbase)
                     {
-                        break;
+                        rule = LLIST_Data(db->cur_item, fci_fp_rule_t, db_entry);
+                    }
+                    else
+                    {
+                        rule = LLIST_Data(db->cur_item, fci_fp_rule_t, table_entry);
+                    }
+
+                    /*    Remember current item to know where to start later */
+                    db->cur_item = db->cur_item->prNext;
+
+                    if (NULL != rule)
+                    {
+                        if (TRUE == fci_fp_match_rule_by_criterion(db->cur_crit, &db->cur_crit_arg, rule))
+                        {
+                            break;
+                        }
                     }
                 }
             }

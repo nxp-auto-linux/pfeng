@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2022 NXP
+ *  Copyright 2017-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -365,27 +365,30 @@ fci_rt_db_entry_t *fci_rt_db_get_next(fci_rt_db_t *db)
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		if (db->cur_item == &db->theList)
+		if (false == LLIST_IsEmpty(&db->theList))
 		{
-			/*	No more entries */
-			entry = NULL;
-		}
-		else
-		{
-			while (db->cur_item!=&db->theList)
+			if (db->cur_item == &db->theList)
 			{
-				/*	Get data */
-				entry = LLIST_Data(db->cur_item, fci_rt_db_entry_t, list_member);
-
-				/*	Remember current item to know where to start later */
-				db->cur_item = db->cur_item->prNext;
-
-				if (NULL != entry)
+				/*	No more entries */
+				entry = NULL;
+			}
+			else
+			{
+				while (db->cur_item!=&db->theList)
 				{
-					if (true == fci_rt_db_match_criterion(db, entry))
+					/*	Get data */
+					entry = LLIST_Data(db->cur_item, fci_rt_db_entry_t, list_member);
+
+					/*	Remember current item to know where to start later */
+					db->cur_item = db->cur_item->prNext;
+
+					if (NULL != entry)
 					{
-						match = true;
-						break;
+						if (true == fci_rt_db_match_criterion(db, entry))
+						{
+							match = true;
+							break;
+						}
 					}
 				}
 			}
