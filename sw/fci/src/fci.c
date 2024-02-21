@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2023 NXP
+ *  Copyright 2017-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -482,21 +482,20 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 					}
 				}
 
+				/*
+				 * WARNING
+				 * Return value of fci_process_ipc_message() is checked by the libFCI static library.
+				 * The library assumes that the return value of fci_process_ipc_message() represents internal result of the FCI message processing.
+				 * For this reason, do NOT modify 'ret' of fci_process_ipc_message() after it was set by some FCI message processing function in the 'big switch'.
+				 * (the modification in the 'Unknown message type' default case is the only exception)
+				 */
+
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 				if (TRUE == fci_floating_lock)
 				{
 					/* Release floating FCI ownership lock */
-					ret = fci_owner_clear_floating_lock();
-					if (EOK != ret)
-					{
-						fci_ret = FPP_ERR_INTERNAL_FAILURE;
-					}
-
-					ret = fci_owner_mutex_unlock();
-					if (EOK != ret)
-					{
-						fci_ret = FPP_ERR_INTERNAL_FAILURE;
-					}
+					fci_owner_clear_floating_lock();
+					fci_owner_mutex_unlock();
 				}
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
