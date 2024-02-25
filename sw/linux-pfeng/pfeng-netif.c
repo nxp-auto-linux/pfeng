@@ -1660,8 +1660,8 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 	if (netif_running(netif->netdev) && netif->phylink)
 		pfeng_phylink_stop(netif);
 
-	/* Stop RX/TX EMAC clocks */
-	if (emac) {
+	/* Stop RX/TX EMAC clocks only in suspend */
+	if (emac && netif->priv->in_suspend) {
 		if (emac->tx_clk)
 			clk_disable_unprepare(emac->tx_clk);
 		if (emac->rx_clk)
