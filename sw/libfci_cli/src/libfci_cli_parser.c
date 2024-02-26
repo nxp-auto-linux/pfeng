@@ -4404,6 +4404,12 @@ static int cmd_execute(cli_cmd_t cmd, const cli_cmdargs_t* p_cmdargs)
                                 TXT_ERR_INDENT "Is the rule name correct?\n";
             break;
             
+            case FPP_ERR_MIRROR_CURRENTLY_UTILIZED:
+                p_txt_errname = TXT_ERR_NAME(FPP_ERR_MIRROR_CURRENTLY_UTILIZED);
+                p_txt_errmsg  = TXT_ERR_INDENT "Requested mirroring rule cannot be deleted right now, because it is currently utilized by some other PFE feature.\n"
+                                TXT_ERR_INDENT "Check physical interfaces. Some interface is probably using this rule.\n";
+            break;
+            
             case FPP_ERR_L2_BD_ALREADY_REGISTERED:
                 p_txt_errname = TXT_ERR_NAME(FPP_ERR_L2_BD_ALREADY_REGISTERED);
                 p_txt_errmsg  = TXT_ERR_INDENT "Requested bridge domain is already registered.\n";

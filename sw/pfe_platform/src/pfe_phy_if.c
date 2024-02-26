@@ -1,7 +1,7 @@
 /* =========================================================================
  *	
  *	Copyright (c) 2019 Imagination Technologies Limited
- *	Copyright 2018-2023 NXP
+ *	Copyright 2018-2024 NXP
  *
  *	SPDX-License-Identifier: GPL-2.0
  *
@@ -3187,8 +3187,17 @@ errno_t pfe_phy_if_set_rx_mirror(pfe_phy_if_t *iface, uint32_t sel, const pfe_mi
 			/* Propagate the change into the classifier */
 			ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 			if(EOK != ret)
-			{  /* Restore */
-			iface->phy_if_class.rx_mirrors[sel] = tmp;
+			{	/* Restore */
+				iface->phy_if_class.rx_mirrors[sel] = tmp;
+			}
+			else
+			{
+				/* Increment internal ref counter of the new mirror object.
+				 * The complementary decrement is realized when this mirror becomes "old mirror object" (when it is getting removed from the interface). */
+				(void)pfe_mirror_get_first(MIRROR_BY_PHYS_ADDR, (void *)(addr_t)address);
+
+				/* Decrement internal ref counter of the old mirror object. */
+				pfe_mirror_put_by_address((addr_t)oal_ntohl(tmp));
 			}
 		}
 	}
@@ -3236,8 +3245,17 @@ errno_t pfe_phy_if_set_tx_mirror(pfe_phy_if_t *iface, uint32_t sel, const pfe_mi
 			/* Propagate the change into the classifier */
 			ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
 			if(EOK != ret)
-			{  /* Restore */
-			iface->phy_if_class.tx_mirrors[sel] = tmp;
+			{	/* Restore */
+				iface->phy_if_class.tx_mirrors[sel] = tmp;
+			}
+			else
+			{
+				/* Increment internal ref counter of the new mirror object.
+				 * The complementary decrement is realized when this mirror becomes "old mirror object" (when it is getting removed from the interface). */
+				(void)pfe_mirror_get_first(MIRROR_BY_PHYS_ADDR, (void *)(addr_t)address);
+
+				/* Decrement internal ref counter of the old mirror object. */
+				pfe_mirror_put_by_address((addr_t)oal_ntohl(tmp));
 			}
 		}
 	}

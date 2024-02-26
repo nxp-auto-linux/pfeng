@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2021-2022 NXP
+ *  Copyright 2021-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -28,7 +28,9 @@ void pfe_mirror_deinit(void);
 pfe_mirror_t *pfe_mirror_get_first(pfe_mirror_db_crit_t crit, const void *arg);
 pfe_mirror_t *pfe_mirror_get_next(void);
 pfe_mirror_t *pfe_mirror_create(const char *name);
-void pfe_mirror_destroy(pfe_mirror_t *mirror);
+errno_t pfe_mirror_destroy(pfe_mirror_t *mirror);
+void pfe_mirror_put(pfe_mirror_t *mirror);
+void pfe_mirror_put_by_address(addr_t address);
 uint32_t pfe_mirror_get_address(const pfe_mirror_t *mirror);
 const char * pfe_mirror_get_name(const pfe_mirror_t *mirror);
 errno_t pfe_mirror_set_egress_port(pfe_mirror_t *mirror, pfe_ct_phy_if_id_t egress);
