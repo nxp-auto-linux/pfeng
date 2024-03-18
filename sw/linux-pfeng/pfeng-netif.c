@@ -602,8 +602,8 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 	if (pfeng_netif_is_aux(netif))
 		return -EOPNOTSUPP;
 
-	/* Preprocess *MIIREG commands */
-	if (cmd == SIOCGMIIPHY || cmd == SIOCGMIIPHY || cmd == SIOCGMIIREG) {
+	/* Preprocess SIOCGMIIPHY and *MIIREG commands */
+	if (cmd == SIOCGMIIPHY || cmd == SIOCGMIIREG || cmd == SIOCSMIIREG) {
 
 		if (cmd == SIOCGMIIPHY && netdev->phydev)
 			mii->phy_id = netdev->phydev->mdio.addr;
