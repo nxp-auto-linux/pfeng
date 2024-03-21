@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -931,6 +931,7 @@ typedef struct CAL_PACKED_ALIGNED(2)
 
 #define FPP_ERR_MIRROR_ALREADY_REGISTERED	0xf131
 #define FPP_ERR_MIRROR_NOT_FOUND			0xf132
+#define FPP_ERR_MIRROR_CURRENTLY_UTILIZED	0xf133
 
 /**
  * @brief       Mirroring rule modification actions.

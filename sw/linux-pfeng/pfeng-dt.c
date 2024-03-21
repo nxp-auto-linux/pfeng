@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 NXP
+ * Copyright 2021-2024 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -44,6 +44,7 @@ static int pfeng_of_get_addr(struct device_node *node)
 int pfeng_dt_release_config(struct pfeng_priv *priv)
 {
 #ifdef PFE_CFG_PFE_MASTER
+	struct device *dev = &priv->pdev->dev;
 	int id;
 
 	/* Free EMAC clocks */
@@ -53,11 +54,13 @@ int pfeng_dt_release_config(struct pfeng_priv *priv)
 		/* EMAC RX clk */
 		if (emac->rx_clk) {
 			clk_disable_unprepare(emac->rx_clk);
+			devm_clk_put(dev, emac->rx_clk);
 			emac->rx_clk = NULL;
 		}
 		/* EMAC TX clk */
 		if (emac->tx_clk) {
 			clk_disable_unprepare(emac->tx_clk);
+			devm_clk_put(dev, emac->tx_clk);
 			emac->tx_clk = NULL;
 		}
 	}

@@ -13,6 +13,7 @@
 #include <linux/if_vlan.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#include <linux/socket.h>
 #include <net/dsa.h>
 
 #include "pfe_cfg.h"
@@ -30,6 +31,12 @@
 #define TMU_RES_Q_MAX_SIZE	0xFFU
 #define TMU_RES_Q_W_FACT	2U
 #define TMU_RES_Q_MIN_TX_THR	8U
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+#define SA_DATA_MEMBER	sa_data_min
+#else
+#define SA_DATA_MEMBER	sa_data
+#endif
 
 typedef struct
 {
@@ -590,17 +597,32 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 	struct mii_ioctl_data *mii = if_mii(rq);
-	int val, phyaddr, phyreg;
+	int val, phyaddr, phyreg, devaddr, c45;
 
 	if (pfeng_netif_is_aux(netif))
 		return -EOPNOTSUPP;
 
-	if (mdio_phy_id_is_c45(mii->phy_id)) {
-		phyaddr = mdio_phy_id_prtad(mii->phy_id);
-		phyreg = MII_ADDR_C45 | (mdio_phy_id_devad(mii->phy_id) << 16) | mii->reg_num;
-	} else {
-		phyaddr = mii->phy_id;
+	/* Preprocess *MIIREG commands */
+	if (cmd == SIOCGMIIPHY || cmd == SIOCGMIIPHY || cmd == SIOCGMIIREG) {
+
+		if (cmd == SIOCGMIIPHY && netdev->phydev)
+			mii->phy_id = netdev->phydev->mdio.addr;
+
+		c45 = mdio_phy_id_is_c45(mii->phy_id);
+
 		phyreg = mii->reg_num;
+		if (c45) {
+			phyaddr = mdio_phy_id_prtad(mii->phy_id);
+			devaddr = mdio_phy_id_devad(mii->phy_id);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
+			phyreg = MII_ADDR_C45 | (devaddr << 16) | mii->reg_num;
+#endif
+		} else if (mii->phy_id < 32) {
+			phyaddr = mii->phy_id;
+			devaddr = 0;
+			mii->reg_num &= 0x1f;
+		} else
+			return -EINVAL;
 	}
 
 	switch (cmd) {
@@ -608,7 +630,6 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 		if (!pfeng_netif_has_emac(netif) || !netdev->phydev)
 			return -EOPNOTSUPP;
 
-		phyaddr = mii->phy_id = netdev->phydev->mdio.addr;
 		fallthrough;
 	case SIOCGMIIREG:
 		if (!pfeng_netif_has_emac(netif))
@@ -617,7 +638,14 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 		if (netdev->phydev)
 			return phy_mii_ioctl(netdev->phydev, rq, cmd);
 		/* If no phydev, use direct MDIO call */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 		val = pfeng_mdio_read(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg);
+#else
+		if (c45)
+			val = pfeng_mdio_read_c45(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, devaddr, phyreg);
+		else
+			val = pfeng_mdio_read_c22(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg);
+#endif
 		if (val > -1) {
 			mii->val_out = val;
 			return 0;
@@ -630,7 +658,14 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 		if (netdev->phydev)
 			return phy_mii_ioctl(netdev->phydev, rq, cmd);
 		/* If no phydev, use direct MDIO call */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 		return pfeng_mdio_write(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg, mii->val_in);
+#else
+		if (c45)
+			return pfeng_mdio_write_c45(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, devaddr, phyreg, mii->val_in);
+		else
+			return pfeng_mdio_write_c22(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg, mii->val_in);
+#endif
 	case SIOCGHWTSTAMP:
 		if (phy_has_hwtstamp(netdev->phydev))
 			return phy_mii_ioctl(netdev->phydev, rq, cmd);
@@ -812,7 +847,7 @@ static int pfeng_netif_set_mac_address(struct net_device *netdev, void *p)
 	struct sockaddr *addr = (struct sockaddr *)p;
 
 	if (is_valid_ether_addr(addr->sa_data)) {
-		ether_addr_copy(netdev->dev_addr, addr->sa_data);
+		eth_hw_addr_set(netdev, addr->sa_data);
 	} else {
 		HM_MSG_NETDEV_WARN(netdev, "No MAC address found, using random\n");
 		eth_hw_addr_random(netdev);
@@ -1299,9 +1334,9 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 		if (is_valid_ether_addr(netif->cfg->macaddr))
 			memcpy(&saddr.sa_data, netif->cfg->macaddr, ARRAY_SIZE(netif->cfg->macaddr));
 		else
-			memset(&saddr.sa_data, 0, sizeof(saddr.sa_data));
+			memset(&saddr.sa_data, 0, sizeof(saddr.SA_DATA_MEMBER));
 	} else
-		memcpy(&saddr.sa_data, netdev->dev_addr, sizeof(saddr.sa_data));
+		memcpy(&saddr.sa_data, netdev->dev_addr, sizeof(saddr.SA_DATA_MEMBER));
 
 	pfeng_netif_set_mac_address(netdev, (void *)&saddr);
 
@@ -1625,8 +1660,8 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 	if (netif_running(netif->netdev) && netif->phylink)
 		pfeng_phylink_stop(netif);
 
-	/* Stop RX/TX EMAC clocks */
-	if (emac) {
+	/* Stop RX/TX EMAC clocks only in suspend */
+	if (emac && netif->priv->in_suspend) {
 		if (emac->tx_clk)
 			clk_disable_unprepare(emac->tx_clk);
 		if (emac->rx_clk)

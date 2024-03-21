@@ -21,13 +21,7 @@
 #include <linux/kfifo.h>
 #include <linux/mutex.h>
 #include <linux/clk.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
-#include <linux/pcs/fsl-s32gen1-xpcs.h>
-#define s32cc_phy2xpcs s32gen1_phy2xpcs
-#define s32cc_xpcs_get_ops s32gen1_xpcs_get_ops
-#else
 #include <linux/pcs/nxp-s32cc-xpcs.h>
-#endif
 #include <linux/phy/phy.h>
 #include "pfe_cfg.h"
 #include "oal.h"
@@ -44,7 +38,7 @@
 #else
 #error Incorrect configuration!
 #endif
-#define PFENG_DRIVER_VERSION		"1.6.0"
+#define PFENG_DRIVER_VERSION		"1.7.0_CD1"
 
 #define PFENG_FW_CLASS_NAME		"s32g_pfe_class.fw"
 #define PFENG_FW_UTIL_NAME		"s32g_pfe_util.fw"
@@ -301,13 +295,7 @@ struct pfeng_emac {
 	struct mii_bus			*mii_bus;
 	/* XPCS */
 	struct phy			*serdes_phy;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
-	struct s32gen1_xpcs             *xpcs;
-	const struct s32gen1_xpcs_ops   *xpcs_ops;
-#else
-	struct s32cc_xpcs		*xpcs;
-	const struct s32cc_xpcs_ops	*xpcs_ops;
-#endif
+	struct phylink_pcs				*pcs;
 	struct phylink_link_state 	xpcs_link;
 	u32				serdes_an_speed;
 	bool				sgmii_link;
@@ -435,6 +423,15 @@ int pfeng_mdio_register(struct pfeng_priv *priv);
 void pfeng_mdio_unregister(struct pfeng_priv *priv);
 int pfeng_mdio_suspend(struct pfeng_priv *priv);
 int pfeng_mdio_resume(struct pfeng_priv *priv);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
+int pfeng_mdio_read(struct mii_bus *bus, int phyaddr, int phyreg);
+int pfeng_mdio_write(struct mii_bus *bus, int phyaddr, int phyreg, u16 phydata);
+#else
+int pfeng_mdio_read_c22(struct mii_bus *bus, int phyaddr, int phyreg);
+int pfeng_mdio_write_c22(struct mii_bus *bus, int phyaddr, int phyreg, u16 phydata);
+int pfeng_mdio_read_c45(struct mii_bus *bus, int phyaddr, int devad, int phyreg);
+int pfeng_mdio_write_c45(struct mii_bus *bus, int phyaddr, int devad, int phyreg, u16 phydata);
+#endif
 
 /* hif */
 int pfeng_hif_create(struct pfeng_priv *priv);
@@ -502,7 +499,5 @@ int pfeng_hwts_store_tx_ref(struct pfeng_netif *netif, struct sk_buff *skb);
 int pfeng_hwts_ioctl_set(struct pfeng_netif *netif, struct ifreq *rq);
 int pfeng_hwts_ioctl_get(struct pfeng_netif *netif, struct ifreq *rq);
 int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct ethtool_ts_info *info);
-int pfeng_mdio_read(struct mii_bus *bus, int phyaddr, int phyreg);
-int pfeng_mdio_write(struct mii_bus *bus, int phyaddr, int phyreg, u16 phydata);
 
 #endif
