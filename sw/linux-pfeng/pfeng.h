@@ -102,7 +102,6 @@ enum {
 
 #define PFENG_TX_PKT_HEADER_SIZE	(sizeof(pfe_ct_hif_tx_hdr_t))
 #define PFENG_RX_PKT_HEADER_SIZE	(sizeof(pfe_ct_hif_rx_hdr_t))
-#define PFENG_CSUM_OFF_PKT_LIMIT	3028 /* bytes */
 
 #define PFENG_INT_TIMER_DEFAULT		256 /* usecs */
 
