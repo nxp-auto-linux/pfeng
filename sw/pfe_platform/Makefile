@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2023 NXP
+#  Copyright 2018-2024 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -68,7 +68,6 @@ SRCS =		src/pfe_hif_chnl_linux.c \
 		src/pfe_hif_ring_linux.c \
 		src/pfe_hif.c \
 		src/pfe_idex.c \
-		src/pfe_log_if_slave.c \
 		src/pfe_if_db.c \
 		src/pfe_pe.c \
 		src/pfe_phy_if_slave.c \
