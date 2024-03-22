@@ -143,7 +143,9 @@ typedef struct
 	pfe_fail_stop_t 	*fail_stop;
 	pfe_ecc_err_t 	*ecc_err;
 	pfe_if_db_t *phy_if_db;
+#ifndef PFE_CFG_PFE_SLAVE
 	pfe_if_db_t *log_if_db;
+#endif /* PFE_CFG_PFE_SLAVE */
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	pfe_fci_owner_hif_id_t hif_fci_owner_chnls_mask;
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
