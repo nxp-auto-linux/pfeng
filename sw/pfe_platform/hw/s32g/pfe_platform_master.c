@@ -1,7 +1,7 @@
 /* =========================================================================
  *
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -3182,6 +3182,7 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 	struct
 	{
 		char_t *name;
+		bool create_log_if;
 		pfe_ct_phy_if_id_t id;
 		pfe_mac_addr_t __attribute__((aligned(4))) mac;
 		struct
@@ -3192,15 +3193,15 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 		} phy;
 	} phy_ifs[] =
 	{
-			{.name = "emac0", .id = PFE_PHY_IF_ID_EMAC0, .mac = GEMAC0_MAC, {.emac = platform->emac[0], .gpi = platform->gpi[0], .chnl = NULL}},
-			{.name = "emac1", .id = PFE_PHY_IF_ID_EMAC1, .mac = GEMAC1_MAC, {.emac = platform->emac[1], .gpi = platform->gpi[1], .chnl = NULL}},
-			{.name = "emac2", .id = PFE_PHY_IF_ID_EMAC2, .mac = GEMAC2_MAC, {.emac = platform->emac[2], .gpi = platform->gpi[2], .chnl = NULL}},
-			{.name = "util", .id = PFE_PHY_IF_ID_UTIL, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = NULL}},
-			{.name = "hif0", .id = PFE_PHY_IF_ID_HIF0, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_0)}},
-			{.name = "hif1", .id = PFE_PHY_IF_ID_HIF1, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_1)}},
-			{.name = "hif2", .id = PFE_PHY_IF_ID_HIF2, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_2)}},
-			{.name = "hif3", .id = PFE_PHY_IF_ID_HIF3, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_3)}},
-			{.name = NULL, .id = PFE_PHY_IF_ID_INVALID, .mac = {0}, {NULL, NULL, NULL}}
+			{.name = "emac0", .create_log_if = true, .id = PFE_PHY_IF_ID_EMAC0, .mac = GEMAC0_MAC, {.emac = platform->emac[0], .gpi = platform->gpi[0], .chnl = NULL}},
+			{.name = "emac1", .create_log_if = true, .id = PFE_PHY_IF_ID_EMAC1, .mac = GEMAC1_MAC, {.emac = platform->emac[1], .gpi = platform->gpi[1], .chnl = NULL}},
+			{.name = "emac2", .create_log_if = true, .id = PFE_PHY_IF_ID_EMAC2, .mac = GEMAC2_MAC, {.emac = platform->emac[2], .gpi = platform->gpi[2], .chnl = NULL}},
+			{.name = "util", .create_log_if = false, .id = PFE_PHY_IF_ID_UTIL, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = NULL}},
+			{.name = "hif0", .create_log_if = true, .id = PFE_PHY_IF_ID_HIF0, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_0)}},
+			{.name = "hif1", .create_log_if = true, .id = PFE_PHY_IF_ID_HIF1, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_1)}},
+			{.name = "hif2", .create_log_if = true, .id = PFE_PHY_IF_ID_HIF2, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_2)}},
+			{.name = "hif3", .create_log_if = true, .id = PFE_PHY_IF_ID_HIF3, .mac = {0}, {.emac = NULL, .gpi = NULL, .chnl = pfe_hif_get_channel(platform->hif, HIF_CHNL_3)}},
+			{.name = NULL, .create_log_if = false, .id = PFE_PHY_IF_ID_INVALID, .mac = {0}, {NULL, NULL, NULL}}
 	};
 
 	/*	Create interface databases */
@@ -3332,6 +3333,9 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 					}
 
 					/*	Add default LOG_IF */
+					if (!phy_ifs[ii].create_log_if)
+						continue;
+
 					log_if = pfe_log_if_create(phy_if, phy_ifs[ii].name);
 					if (NULL == log_if)
 					{
