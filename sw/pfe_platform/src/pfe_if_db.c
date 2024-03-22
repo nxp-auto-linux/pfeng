@@ -229,11 +229,13 @@ static bool_t pfe_if_db_match_criterion(const pfe_if_db_t *db, pfe_if_db_get_cri
 
 			case IF_DB_CRIT_BY_ID:
 			{
+#ifdef PFE_CFG_PFE_MASTER
 				if (PFE_IF_DB_LOG == db->type)
 				{
 					match = (arg->if_id == (uint8_t)pfe_log_if_get_id(entry->info.log_if));
 				}
 				else
+#endif /* PFE_CFG_PFE_MASTER */
 				{
 					match = (arg->if_id == (uint8_t)pfe_phy_if_get_id(entry->info.phy_if));
 				}
@@ -249,11 +251,13 @@ static bool_t pfe_if_db_match_criterion(const pfe_if_db_t *db, pfe_if_db_get_cri
 
 			case IF_DB_CRIT_BY_NAME:
 			{
+#ifdef PFE_CFG_PFE_MASTER
 				if (PFE_IF_DB_LOG == db->type)
 				{
 					match = (0 == strcmp(arg->name, pfe_log_if_get_name(entry->info.log_if)));
 				}
 				else
+#endif /* PFE_CFG_PFE_MASTER */
 				{
 					match = (0 == strcmp(arg->name, pfe_phy_if_get_name(entry->info.phy_if)));
 				}

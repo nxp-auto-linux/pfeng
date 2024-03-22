@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -28,7 +28,6 @@ struct pfe_log_if_tag
 	addr_t dmem_base;				/*!< Place in CLASS/DMEM where HW logical interface structure is stored */
 	char_t *name;					/*!< Interface name */
 	pfe_ct_log_if_t log_if_class;	/*!< Cached copy of the DMEM structure */
-	pfe_mac_db_t *mac_db;			/* MAC database */
 	oal_mutex_t lock;
 };
 
@@ -36,8 +35,6 @@ struct pfe_log_if_tag
  * @brief	Pool of logical interface IDs. Module-local singleton.
  */
 static blalloc_t *pfe_log_if_id_pool = NULL;
-
-static errno_t pfe_log_if_read_from_class(const pfe_log_if_t *iface, pfe_ct_log_if_t *class_if, uint32_t pe_idx);
 
 static errno_t pfe_log_if_write_to_class_nostats(const pfe_log_if_t *iface, const pfe_ct_log_if_t *class_if);
 static errno_t pfe_log_if_write_to_class(const pfe_log_if_t *iface, const pfe_ct_log_if_t *class_if);
@@ -315,37 +312,6 @@ static errno_t pfe_log_if_match_rule2(pfe_log_if_t *iface, pfe_ct_if_m_rules_t r
 }
 
 /**
- * @brief		Read interface structure from classifier memory
- * @param[in]	iface The interface instance
- * @param[in]	class_if Pointer where the structure shall be written
- * @param[in]	pe_idx Index of the PE which memory shall be read (statistic counters do differ of each PE)
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- */
-static errno_t pfe_log_if_read_from_class(const pfe_log_if_t *iface, pfe_ct_log_if_t *class_if, uint32_t pe_idx)
-{
-	errno_t ret;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class_if) || (NULL == iface) || (0U == iface->dmem_base)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ret = EINVAL;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		/*
-			Read current interface configuration from classifier. Returned data will be in
-			__NETWORK__ endian format.
-		*/
-		ret = pfe_class_read_dmem(iface->class, pe_idx, class_if, iface->dmem_base, sizeof(pfe_ct_log_if_t));
-	}
-
-	return ret;
-}
-
-/**
  * @brief		Write interface structure to classifier memory skipping interface statistics
  * @param[in]	iface The interface instance
  * @param[in]	class_if Pointer to the structure to be written
@@ -451,18 +417,10 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, const char_t *name)
 		(void)memset(iface, 0, sizeof(pfe_log_if_t));
 		iface->parent = parent;
 		iface->class = pfe_phy_if_get_class(parent);
-		iface->mac_db = pfe_mac_db_create();
-		if (NULL == iface->mac_db)
-		{
-			NXP_LOG_ERROR("Could not create MAC db\n");
-			oal_mm_free(iface);
-			return NULL;
-		}
 
 		if (EOK != oal_mutex_init(&iface->lock))
 		{
 			NXP_LOG_ERROR("Could not initialize mutex\n");
-			(void)pfe_mac_db_destroy(iface->mac_db);
 			oal_mm_free(iface);
 			return NULL;
 		}
@@ -471,7 +429,6 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, const char_t *name)
 		if (NULL == iface->name)
 		{
 			NXP_LOG_ERROR("Malloc failed\n");
-			(void)pfe_mac_db_destroy(iface->mac_db);
 			(void)oal_mutex_destroy(&iface->lock);
 			oal_mm_free(iface);
 			return NULL;
@@ -486,7 +443,6 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, const char_t *name)
 		if(0U == iface->dmem_base)
 		{
 			NXP_LOG_ERROR("No DMEM\n");
-			(void)pfe_mac_db_destroy(iface->mac_db);
 			oal_mm_free(iface->name);
 			(void)oal_mutex_destroy(&iface->lock);
 			oal_mm_free(iface);
@@ -510,7 +466,6 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, const char_t *name)
 		{
 			NXP_LOG_ERROR("Could not update DMEM (%s)\n", iface->name);
 			pfe_class_dmem_heap_free(iface->class, iface->dmem_base);
-			(void)pfe_mac_db_destroy(iface->mac_db);
 			oal_mm_free(iface->name);
 			(void)oal_mutex_destroy(&iface->lock);
 			oal_mm_free(iface);
@@ -522,7 +477,6 @@ pfe_log_if_t *pfe_log_if_create(pfe_phy_if_t *parent, const char_t *name)
 		{
 			NXP_LOG_ERROR("Can't bind %s to %s\n", iface->name, pfe_phy_if_get_name(parent));
 			pfe_class_dmem_heap_free(iface->class, iface->dmem_base);
-			(void)pfe_mac_db_destroy(iface->mac_db);
 			oal_mm_free(iface->name);
 			(void)oal_mutex_destroy(&iface->lock);
 			oal_mm_free(iface);
@@ -704,12 +658,6 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 
 	if (NULL != iface)
 	{
-		ret = pfe_mac_db_destroy(iface->mac_db);
-		if (EOK != ret)
-		{
-			NXP_LOG_ERROR("unable to destroy MAC database: %d\n", ret);
-		}
-
 		ret = pfe_phy_if_del_log_if(iface->parent, iface);
 		if (EOK != ret)
 		{
@@ -1127,233 +1075,6 @@ errno_t pfe_log_if_get_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t *rul
 			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 		ret = EOK;
-	}
-
-	return ret;
-}
-
-/**
- * @brief		Add new MAC address
- * @param[in]	iface The interface instance
- * @param[in]	addr The MAC address to add
- * @param[in]	owner The identification of driver instance
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- * @retval		ENOEXEC Command failed
- */
-errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
-{
-	errno_t ret;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == iface) || (NULL == addr)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ret = EINVAL;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		if (EOK != oal_mutex_lock(&iface->lock))
-		{
-			NXP_LOG_ERROR("mutex lock failed\n");
-		}
-
-		ret = pfe_mac_db_add_addr(iface->mac_db, addr, owner);
-		if(EOK == ret)
-		{
-			/*	Configure underlying physical interface */
-			if (EOK != pfe_phy_if_add_mac_addr(iface->parent, addr, owner))
-			{
-				NXP_LOG_ERROR("Could not add MAC address (%s, parent: %s)\n", iface->name, pfe_phy_if_get_name(iface->parent));
-				/* Delete the MAC address from database */
-				ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
-				if (EOK != ret) {
-					NXP_LOG_ERROR("Unable to delete MAC address: %d\n", ret);
-				}
-				ret = ENOEXEC;
-			}
-		}
-
-		if (EOK != oal_mutex_unlock(&iface->lock))
-		{
-			NXP_LOG_ERROR("mutex unlock failed\n");
-		}
-	}
-
-	return ret;
-}
-
-/**
- * @brief		Delete MAC address
- * @param[in]	iface The interface instance
- * @param[in]	addr The MAC address to delete
- * @param[in]	owner The identification of driver instance
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- * @retval		ENOENT MAC address not found in local database
- * @retval		ENOEXEC Command failed
- */
-errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner)
-{
-	errno_t ret;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == iface) || (NULL == addr)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ret = EINVAL;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		if (EOK != oal_mutex_lock(&iface->lock))
-		{
-			NXP_LOG_ERROR("mutex lock failed\n");
-		}
-
-		ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
-		if(EOK != ret)
-		{
-			NXP_LOG_ERROR("Unable to remove MAC address from log_if MAC database: %d\n", ret);
-		}
-		else
-		{
-			ret = pfe_phy_if_del_mac_addr(iface->parent, addr, owner);
-			if (EOK != ret)
-			{
-				NXP_LOG_ERROR("Unable to del MAC address: %d\n", ret);
-
-				/* Removal of MAC address from phy failed, put it back to DB */
-				ret = pfe_mac_db_add_addr(iface->mac_db, addr, owner);
-				if (EOK != ret)
-				{
-					NXP_LOG_ERROR("Unable to put back the MAC address into log_if MAC database: %d\n", ret);
-				}
-			}
-		}
-
-		if (EOK != oal_mutex_unlock(&iface->lock))
-		{
-			NXP_LOG_ERROR("mutex unlock failed\n");
-		}
-	}
-
-	return ret;
-}
-
-/**
- * @brief		Get handle of internal MAC database
- * @param[in]	iface The interface instance
- * @retval		Database handle.
- */
-pfe_mac_db_t *pfe_log_if_get_mac_db(const pfe_log_if_t *iface)
-{
-	pfe_mac_db_t *ptr;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ptr = NULL;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		ptr = iface->mac_db;
-	}
-	return ptr;
-}
-
-/**
- * @brief		Get associated MAC address (first in the list of MAC addresses)
- * @param[in]	iface The interface instance
- * @param[out]	addr Where to copy to address
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- * @retval		ENOENT No address assigned
- */
-errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr)
-{
-	errno_t ret;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == iface) || (NULL == addr)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ret = EINVAL;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		if (EOK != oal_mutex_lock(&iface->lock))
-		{
-			NXP_LOG_ERROR("mutex lock failed\n");
-		}
-
-		ret = pfe_mac_db_get_first_addr(iface->mac_db, MAC_DB_CRIT_ALL, PFE_TYPE_ANY, PFE_CFG_LOCAL_IF, addr);
-		if(EOK != ret)
-		{
-			NXP_LOG_WARNING("unable to get MAC address: %d\n", ret);
-		}
-
-		if (EOK != oal_mutex_unlock(&iface->lock))
-		{
-			NXP_LOG_ERROR("mutex unlock failed\n");
-		}
-	}
-
-	return ret;
-}
-
-/**
- * @brief		Delete MAC addresses added by owner with defined type
- * @param[in]	iface The interface instance
- * @param[in]	crit All, Owner, Type or Owner&Type criterion
- * @param[in]	type Required type of MAC address (Broadcast, Multicast, Unicast, ANY) criterion
- * @param[in]	owner Required owner of MAC address
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- * @retval		ENOEXEC Command failed
- */
-errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner)
-{
-	errno_t ret;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ret = EINVAL;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		if (EOK != oal_mutex_lock(&iface->lock))
-		{
-			NXP_LOG_ERROR("mutex lock failed\n");
-		}
-
-		/*	Send command to underlying physical interface */
-		if (EOK != pfe_phy_if_flush_mac_addrs(iface->parent, crit, type, owner))
-		{
-			NXP_LOG_ERROR("Could not flush MAC addresses (%s, parent: %s, owner ID: %d)\n", iface->name, pfe_phy_if_get_name(iface->parent), owner);
-			ret = ENOEXEC;
-		}
-		else
-		{
-			/*	Remove associated MAC addresses due to flush mode */
-			ret = pfe_mac_db_flush(iface->mac_db, crit, type, owner);
-			if(EOK != ret)
-			{
-				NXP_LOG_ERROR("Unable to flush MAC address from phy_if MAC database: %d\n", ret);
-			}
-		}
-
-		if (EOK != oal_mutex_unlock(&iface->lock))
-		{
-			NXP_LOG_ERROR("mutex unlock failed\n");
-		}
 	}
 
 	return ret;
@@ -2004,69 +1725,6 @@ __attribute__((pure)) bool_t pfe_log_if_is_promisc(pfe_log_if_t *iface)
 }
 
 /**
- * @brief		Enable ALLMULTI mode
- * @details		Function sets logical interface to ALLMULTI mode and
- * 				also enables ALLMULTI mode on underlying physical
- * 				interface.
- * @param[in]	iface The interface instance
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- */
-errno_t pfe_log_if_allmulti_enable(const pfe_log_if_t *iface)
-{
-	errno_t ret;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ret = EINVAL;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		/*	Propagate the mode to the underlying physical interface */
-		ret = pfe_phy_if_allmulti_enable(iface->parent);
-		if (EOK != ret)
-		{
-			NXP_LOG_ERROR("Could not enable the ALLMULTI mode\n");
-		}
-	}
-
-	return ret;
-}
-
-/**
- * @brief		Disable ALLMULTI mode
- * @param[in]	iface The interface instance
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- */
-errno_t pfe_log_if_allmulti_disable(const pfe_log_if_t *iface)
-{
-	errno_t ret;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ret = EINVAL;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		/*	Propagate the mode to the underlying physical interface */
-		ret = pfe_phy_if_allmulti_disable(iface->parent);
-		if (EOK != ret)
-		{
-			NXP_LOG_ERROR("Could not disable the ALLMULTI mode\n");
-		}
-	}
-
-	return ret;
-}
-
-/**
  * @brief		Enable discarding frames accepted by logical interface
  * @details		Function configures logical interface to discard all accepted frames instead of
  *              passing them to the configured egress interfaces.
@@ -2277,62 +1935,6 @@ errno_t pfe_log_if_get_stats(const pfe_log_if_t *iface, pfe_ct_class_algo_stats_
 	}
 
 	return ret;
-}
-
-/**
- * @brief		Return logical interface runtime statistics in text form
- * @details		Function writes formatted text into given buffer.
- * @param[in]	iface 		The logical interface instance
- * @param[in]	buf 		Pointer to the buffer to write to
- * @param[in]	size 		Buffer length
- * @param[in]	verb_level 	Verbosity level
- * @return		Number of bytes written to the buffer
- */
-uint32_t pfe_log_if_get_text_statistics(const pfe_log_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level)
-{
-	uint32_t len = 0U;
-	pfe_ct_log_if_t log_if_class = {0U};
-	bool_t printed_rules = FALSE;
-	uint32_t i = 0;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		len = 0U;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		/* Repeat read for all PEs (just because of statistics) */
-		while(i < pfe_class_get_num_of_pes(iface->class))
-		{
-
-			if (EOK != pfe_log_if_read_from_class(iface, &log_if_class, i))
-			{
-				len += oal_util_snprintf(buf + len, buf_len - len, "[LogIF @ p0x%p]: Unable to read PE %u DMEM\n", (void *)iface->dmem_base, i);
-			}
-			else
-			{
-				if(FALSE == printed_rules)
-				{
-					len += oal_util_snprintf(buf + len, buf_len - len, "[LogIF '%s' @ p0x%p]\n", pfe_log_if_get_name(iface), (void *)iface->dmem_base);
-					len += oal_util_snprintf(buf + len, buf_len - len, "Match Rules: 0x%x\n", oal_ntohl(log_if_class.m_rules));
-					len += oal_util_snprintf(buf + len, buf_len - len, "Mode       : 0x%x\n", log_if_class.mode);
-					len += oal_util_snprintf(buf + len, buf_len - len, "Flags      : 0x%x\n", oal_ntohl(log_if_class.flags));
-					printed_rules = TRUE; /* Avoid printing it multiple times*/
-				}
-				len += oal_util_snprintf(buf + len, buf_len - len, "- Statistics from PE %u -\n", i);
-				len += oal_util_snprintf(buf + len, buf_len - len, "Frames processed: %u\n", oal_ntohl(log_if_class.class_stats.processed));
-				len += oal_util_snprintf(buf + len, buf_len - len, "Frames accepted:  %u\n", oal_ntohl(log_if_class.class_stats.accepted));
-				len += oal_util_snprintf(buf + len, buf_len - len, "Frames rejected:  %u\n", oal_ntohl(log_if_class.class_stats.rejected));
-				len += oal_util_snprintf(buf + len, buf_len - len, "Frames discarded: %u\n", oal_ntohl(log_if_class.class_stats.discarded));
-			}
-			++i;
-		}
-	}
-
-	return len;
 }
 
 #endif /* ! PFE_CFG_PFE_SLAVE */

@@ -159,8 +159,6 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform);
 errno_t pfe_platform_soft_reset(const pfe_platform_t *platform);
 errno_t pfe_platform_remove(void);
 pfe_platform_t *pfe_platform_get_instance(void);
-pfe_log_if_t *pfe_platform_get_log_if_by_id(const pfe_platform_t *platform, uint8_t id);
-pfe_log_if_t *pfe_platform_get_log_if_by_name(const pfe_platform_t *platform, char_t *name);
 pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_ct_phy_if_id_t id);
 #if defined(PFE_CFG_FCI_ENABLE)
 void pfe_platform_destroy_fci(pfe_platform_t *platform);
