@@ -1,7 +1,7 @@
 /* =========================================================================
  *
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -159,8 +159,6 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform);
 errno_t pfe_platform_soft_reset(const pfe_platform_t *platform);
 errno_t pfe_platform_remove(void);
 pfe_platform_t *pfe_platform_get_instance(void);
-errno_t pfe_platform_register_log_if(const pfe_platform_t *platform, pfe_log_if_t *log_if);
-errno_t pfe_platform_unregister_log_if(const pfe_platform_t *platform, pfe_log_if_t *log_if);
 pfe_log_if_t *pfe_platform_get_log_if_by_id(const pfe_platform_t *platform, uint8_t id);
 pfe_log_if_t *pfe_platform_get_log_if_by_name(const pfe_platform_t *platform, char_t *name);
 pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_ct_phy_if_id_t id);
