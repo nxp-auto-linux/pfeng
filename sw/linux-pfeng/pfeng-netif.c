@@ -32,12 +32,6 @@
 #define TMU_RES_Q_W_FACT	2U
 #define TMU_RES_Q_MIN_TX_THR	8U
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
-#define SA_DATA_MEMBER	sa_data_min
-#else
-#define SA_DATA_MEMBER	sa_data
-#endif
-
 typedef struct
 {
 	pfe_mac_addr_t addr;		/* The MAC address */
@@ -838,14 +832,13 @@ static void pfeng_netif_set_rx_mode(struct net_device *netdev)
 #define pfeng_netif_set_rx_mode NULL
 #endif
 
-static int pfeng_netif_set_mac_address(struct net_device *netdev, void *p)
+static int pfeng_netif_set_mac_address(struct net_device *netdev, const u8 *mac_addr)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 	struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
-	struct sockaddr *addr = (struct sockaddr *)p;
 
-	if (is_valid_ether_addr(addr->sa_data)) {
-		eth_hw_addr_set(netdev, addr->sa_data);
+	if (is_valid_ether_addr(mac_addr)) {
+		eth_hw_addr_set(netdev, mac_addr);
 	} else {
 		HM_MSG_NETDEV_WARN(netdev, "No MAC address found, using random\n");
 		eth_hw_addr_random(netdev);
@@ -867,6 +860,13 @@ static int pfeng_netif_set_mac_address(struct net_device *netdev, void *p)
 #endif
 
 	return pfeng_uc_list_sync(netdev);
+}
+
+static int pfeng_ndo_set_mac_address(struct net_device *netdev, void *p)
+{
+	struct sockaddr *addr = (struct sockaddr *)p;
+
+	return pfeng_netif_set_mac_address(netdev, addr->sa_data);
 }
 
 static netdev_features_t pfeng_netif_fix_features(struct net_device *netdev, netdev_features_t features)
@@ -943,7 +943,7 @@ static const struct net_device_ops pfeng_netdev_ops = {
 #else
 	.ndo_do_ioctl		= pfeng_netif_logif_ioctl,
 #endif
-	.ndo_set_mac_address	= pfeng_netif_set_mac_address,
+	.ndo_set_mac_address	= pfeng_ndo_set_mac_address,
 	.ndo_set_rx_mode	= pfeng_netif_set_rx_mode,
 	.ndo_fix_features	= pfeng_netif_fix_features,
 	.ndo_tx_timeout		= pfeng_netif_tx_timeout,
@@ -1317,7 +1317,7 @@ out_disabled:
 static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 {
 	struct net_device *netdev = netif->netdev;
-	struct sockaddr saddr;
+	u8 mac_addr[ETH_ALEN];
 	int ret;
 
 	pfeng_netif_tmu_lltx_init(netif);
@@ -1330,13 +1330,13 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 	/* Prepare MAC address */
 	if (!netif->priv->in_suspend) {
 		if (is_valid_ether_addr(netif->cfg->macaddr))
-			memcpy(&saddr.sa_data, netif->cfg->macaddr, ARRAY_SIZE(netif->cfg->macaddr));
+			ether_addr_copy(mac_addr, netif->cfg->macaddr);
 		else
-			memset(&saddr.sa_data, 0, sizeof(saddr.SA_DATA_MEMBER));
+			eth_zero_addr(mac_addr);
 	} else
-		memcpy(&saddr.sa_data, netdev->dev_addr, sizeof(saddr.SA_DATA_MEMBER));
+		ether_addr_copy(mac_addr, netdev->dev_addr);
 
-	pfeng_netif_set_mac_address(netdev, (void *)&saddr);
+	pfeng_netif_set_mac_address(netdev, mac_addr);
 
 	if (!netif->priv->in_suspend) {
 
