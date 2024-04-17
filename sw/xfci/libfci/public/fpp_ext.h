@@ -428,8 +428,6 @@ typedef enum CAL_PACKED
                                              If set, the interface enforces a strict PTP conformance check. */
     FPP_IF_PTP_PROMISC = (1 << 9),      /**< [phyif] <br>
                                              If set, then PTP traffic is accepted even if the FPP_IF_VLAN_CONF_CHECK is set. */
-    FPP_IF_LOOPBACK = (1 << 10),        /**< [logif] <br>
-                                             If set, a loopback mode is enabled. */
     FPP_IF_ALLOW_Q_IN_Q = (1 << 11),    /**< [phyif] <br>
                                              If set, the interface accepts QinQ-tagged traffic. */
     FPP_IF_DISCARD_TTL = (1 << 12),     /**< [phyif] <br>

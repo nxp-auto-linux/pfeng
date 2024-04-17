@@ -61,7 +61,6 @@ static const pfe_emac_crit_t crit_remap_table[4] = {EMAC_CRIT_BY_TYPE, EMAC_CRIT
 static errno_t pfe_phy_if_write_to_class_nostats(const pfe_phy_if_t *iface, const pfe_ct_phy_if_t *class_if);
 static errno_t pfe_phy_if_write_to_class(const pfe_phy_if_t *iface, const pfe_ct_phy_if_t *class_if);
 static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_log_if_t *log_if);
-static bool_t pfe_phy_if_has_loopback_log_if_nolock(const pfe_phy_if_t *iface);
 static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface);
 static errno_t pfe_phy_if_set_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag);
 static errno_t pfe_phy_if_clear_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag);
@@ -568,36 +567,6 @@ static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_
 		{
 			entry = LLIST_Data(curItem, pfe_phy_if_list_entry_t, iterator);
 			if (log_if == entry->log_if)
-			{
-				ret = TRUE;
-				break;
-			}
-		}
-	}
-
-	return ret;
-}
-
-static bool_t pfe_phy_if_has_loopback_log_if_nolock(const pfe_phy_if_t *iface)
-{
-	LLIST_t *curItem;
-	const pfe_phy_if_list_entry_t *entry;
-	bool_t ret = FALSE;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ret = FALSE;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		LLIST_ForEach(curItem, &iface->log_ifs)
-		{
-			entry = LLIST_Data(curItem, pfe_phy_if_list_entry_t, iterator);
-			if ((TRUE == pfe_log_if_is_enabled(entry->log_if))
-						&& (TRUE == pfe_log_if_is_loopback(entry->log_if)))
 			{
 				ret = TRUE;
 				break;
@@ -1954,66 +1923,46 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
-		/*
-			Go through all associated logical interfaces and search
-			for loopback ones. If there is some enabled loopback
-			logical interface, don't disable loopback mode on the
-			physical one.
-		*/
-		if (TRUE == pfe_phy_if_has_loopback_log_if_nolock(iface))
+		/*		Disable instance loopback mode. Backup flags and write the changes. */
+		tmp = iface->phy_if_class.flags;
+		iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & oal_htonl(~(uint32_t)IF_FL_LOOPBACK));
+		ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
+		if (EOK != ret)
 		{
-			NXP_LOG_INFO("%s loopback mode not disabled since contains loopback logical interface(s)\n", iface->name);
-
-			if (EOK != oal_mutex_unlock(&iface->lock))
-			{
-				NXP_LOG_ERROR("mutex unlock failed\n");
-			}
-
-			ret = EOK;
+			/*		Failed. Revert flags. */
+			NXP_LOG_ERROR("Phy IF configuration failed\n");
+			iface->phy_if_class.flags = tmp;
 		}
 		else
 		{
-			/*		Disable instance loopback mode. Backup flags and write the changes. */
-			tmp = iface->phy_if_class.flags;
-			iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & oal_htonl(~(uint32_t)IF_FL_LOOPBACK));
-			ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
-			if (EOK != ret)
+			/*		Set up also associated HW block */
+			if (NULL == iface->port.instance)
 			{
-				/*		Failed. Revert flags. */
-				NXP_LOG_ERROR("Phy IF configuration failed\n");
-				iface->phy_if_class.flags = tmp;
+				/*		No HW block associated */
+				;
 			}
 			else
 			{
-				/*		Set up also associated HW block */
-				if (NULL == iface->port.instance)
+				if (PFE_PHY_IF_EMAC == iface->type)
 				{
-					/*		No HW block associated */
+					pfe_emac_disable_loopback(iface->port.emac);
+				}
+				else if (PFE_PHY_IF_HIF == iface->type)
+				{
+					/*		HIF does not offer filtering ability */
 					;
 				}
 				else
 				{
-					if (PFE_PHY_IF_EMAC == iface->type)
-					{
-						pfe_emac_disable_loopback(iface->port.emac);
-					}
-					else if (PFE_PHY_IF_HIF == iface->type)
-					{
-						/*		HIF does not offer filtering ability */
-						;
-					}
-					else
-					{
-						NXP_LOG_ERROR("Invalid interface type\n");
-						ret = EINVAL;
-					}
+					NXP_LOG_ERROR("Invalid interface type\n");
+					ret = EINVAL;
 				}
 			}
+		}
 
-			if (EOK != oal_mutex_unlock(&iface->lock))
-			{
-				NXP_LOG_ERROR("mutex unlock failed\n");
-			}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
