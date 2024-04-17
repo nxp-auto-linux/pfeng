@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2021,2024 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -397,19 +397,6 @@ void demo_log_if_ld_set_promisc(fpp_log_if_cmd_t* p_logif, bool enable)
 {
     assert(NULL != p_logif);
     set_logif_flag(p_logif, enable, FPP_IF_PROMISC);
-}
- 
- 
-/*
- * @brief          Set/unset a loopback mode of a logical interface.
- * @details        [localdata_logif]
- * @param[in,out]  p_logif  Local data to be modified.
- * @param[in]      enable   Request to set/unset the loopback mode.
- */
-void demo_log_if_ld_set_loopback(fpp_log_if_cmd_t* p_logif, bool enable)
-{
-    assert(NULL != p_logif);
-    set_logif_flag(p_logif, enable, FPP_IF_LOOPBACK);
 }
  
  
@@ -1005,25 +992,6 @@ bool demo_log_if_ld_is_promisc(const fpp_log_if_cmd_t* p_logif)
     ntoh_enum(&tmp_flags, sizeof(fpp_if_flags_t));
     
     return (bool)(tmp_flags & FPP_IF_PROMISC);
-}
- 
- 
-/*
- * @brief      Query the status of the "loopback" flag.
- * @details    [localdata_logif]
- * @param[in]  p_logif  Local data to be queried.
- * @return     At time when the data was obtained from PFE, the logical interface:
- *             true  : was in a loopback mode
- *             false : was NOT in a loopback mode
- */
-bool demo_log_if_ld_is_loopback(const fpp_log_if_cmd_t* p_logif)
-{
-    assert(NULL != p_logif);
-    
-    fpp_if_flags_t tmp_flags = (p_logif->flags);
-    ntoh_enum(&tmp_flags, sizeof(fpp_if_flags_t));
-    
-    return (bool)(tmp_flags & FPP_IF_LOOPBACK);
 }
  
  
