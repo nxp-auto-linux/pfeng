@@ -201,6 +201,7 @@ typedef struct
 	oal_mutex_t lock;					/*	Concurrency lock for request/response tasks */
 	pfe_idex_request_t *request;		/*	Current IDEX request */
 	pfe_idex_msg_rpc_t *rpc_msg;		/*	Current IDEX RPC message response */
+	bool_t is_up;						/*	TRUE if IDEX Server connection is UP */
 } pfe_remote_server_t;
 
 /**
@@ -214,7 +215,6 @@ typedef struct
 	void *rpc_cbk_arg;					/*	RPC callback argument */
 	pfe_hif_t *hif;						/*	HIF module, for Master-up signaling */
 	bool_t is_server;					/*	IDEX is acting as server when TRUE	*/
-	bool_t is_up;						/*	TRUE if HIF connection is UP */
 	union {
 		pfe_remote_server_t server;			/*	Client has Server information */
 		pfe_remote_client_t clients[IDEX_MAX_CLIENTS];	/*	Server has information about every client */
@@ -233,6 +233,7 @@ typedef struct
 		uint64_t tx_retries;
 		uint32_t tx_max_retries;
 		uint32_t tx_skips;
+		uint32_t proto_resets;
 	} stats;
 } pfe_idex_t;
 
@@ -807,15 +808,13 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 end_sending:
 	oal_mutex_lock_sleep(&server->lock);
 
-	if (EOK == ret)
-	{
-		/*	End of sending, increment seqnum */
-		server->seqnum += 1;
-	}
-	else
+	/*	End of sending, increment seqnum */
+	server->seqnum += 1;
+
+	if (EOK != ret)
 	{
 		/* Send was unsuccessful, mark connection down */
-		pfe_idex.is_up = FALSE;
+		pfe_idex.remote.server.is_up = FALSE;
 	}
 	server->request = NULL;
 	oal_mm_free_contig(request);
@@ -840,12 +839,6 @@ static errno_t pfe_idex_send_frame(pfe_ct_phy_if_id_t dst_phy, pfe_idex_frame_ty
 	errno_t ret;
 	hif_drv_sg_list_t sg_list = { 0U };
 	uint16_t data_len_tmp = data_len;
-
-	if (FALSE == pfe_idex.is_up)
-	{
-		pfe_idex.stats.tx_skips++;
-		return EINVAL;
-	}
 
 	/*	Get IDEX frame buffer */
 	idex_hdr = oal_mm_malloc_contig_named_aligned_nocache(PFE_CFG_TX_MEM, (addr_t)(sizeof(pfe_idex_frame_header_t)) + (addr_t)data_len_tmp, 0U);
@@ -919,6 +912,41 @@ static errno_t pfe_idex_set_rpc_cbk(pfe_idex_rpc_cbk_t cbk, void *arg)
 	return EOK;
 }
 
+#ifdef PFE_CFG_PFE_SLAVE
+/**
+ * @brief		IDEX client send RESET request message
+ * @details		Client will synchronize current sequence number
+ * @return		EOK if success, error code otherwise
+ */
+static errno_t pfe_idex_send_reset_request(pfe_idex_t *idex)
+{
+	errno_t ret;
+	pfe_idex_msg_reset_t rst_msg;
+
+	rst_msg.seqnum = (uint32_t)oal_htonl(idex->remote.server.seqnum);
+	rst_msg.version = IDEX_VERSION_2;
+
+	NXP_LOG_DEBUG("IDEX: RESET Request sending: seqnum=%u, version=%u, phy_id=%u",
+								(uint_t)idex->remote.server.seqnum, rst_msg.version, idex->remote.server.phy_id);
+
+	/*	Sending RESET request. This is blocking communication	*/
+	ret = pfe_idex_rpc(idex->remote.server.phy_id, IDEX_RESET_RPC_ID, &rst_msg, sizeof(pfe_idex_msg_reset_t), &rst_msg, sizeof(pfe_idex_msg_reset_t));
+	if(EOK != ret)
+	{
+		/* IDEX Reset was not succesfull. Client will use Legacy configuration */
+		NXP_LOG_WARNING("IDEX: RESET Request was not successful [%d]", ret);
+	}
+	else
+	{
+		idex->remote.server.version = rst_msg.version;
+		idex->stats.proto_resets++;
+		NXP_LOG_DEBUG("IDEX: RESET Response received: %d IDEX v%d protocol in use", (uint_t)idex->remote.server.seqnum, rst_msg.version);
+	}
+
+	return ret;
+}
+#endif
+
 /**
  * @brief		IDEX initialization routine
  * @details		The callback will be called at any time when RPC request
@@ -962,9 +990,8 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 	idex->remote.server.seqnum = 0;
 	idex->remote.server.phy_id = master;
 	idex->remote.server.version = IDEX_VERSION_1;
+	idex->hif = hif;
 
-	/* Not used argument variable */
-	(void)hif;
 #else
 #error Impossible configuration
 #endif /* PFE_CFG_PFE_MASTER/PFE_CFG_PFE_SLAVE */
@@ -1006,35 +1033,12 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 #ifdef PFE_CFG_PFE_MASTER
 			/*	Mark MASTER with ready flag */
 			pfe_hif_set_master_up(hif);
-			idex->is_up = TRUE;
 
 #elif defined(PFE_CFG_PFE_SLAVE)
+			idex->remote.server.is_up = TRUE;
 
 			/*	Send RESET request message to server */
-			pfe_idex_msg_reset_t rst_msg;
-
-			idex->is_up = TRUE;
-
-			rst_msg.seqnum = (uint32_t)oal_htonl(idex->remote.server.seqnum);
-			rst_msg.version = IDEX_VERSION_2;
-
-			NXP_LOG_DEBUG("IDEX: RESET Request sending: seqnum=%u, version=%u, phy_id=%u",
-										(uint_t)idex->remote.server.seqnum, rst_msg.version, master);
-
-			/*	Sending RESET request. This is blocking communication	*/
-			ret = pfe_idex_rpc(master, IDEX_RESET_RPC_ID, &rst_msg, sizeof(pfe_idex_msg_reset_t), &rst_msg, sizeof(pfe_idex_msg_reset_t));
-			if(EOK != ret)
-			{
-				/* IDEX Reset was not succesfull. Client will use Legacy configuration */
-				NXP_LOG_INFO("IDEX: RESET Request not successful [%d]. Server is probably using old version of IDEX", ret);
-				ret = EOK;
-			}
-			else
-			{
-				idex->remote.server.version = rst_msg.version;
-				NXP_LOG_DEBUG("IDEX: RESET Response received: seqnum=%u, version=%u",
-										(uint_t)idex->remote.server.seqnum, rst_msg.version);
-			}
+			pfe_idex_send_reset_request(idex);
 
 			if (IDEX_VERSION_2 == idex->remote.server.version)
 			{
@@ -1059,8 +1063,6 @@ void pfe_idex_fini(void)
 {
 	pfe_idex_t *idex = &pfe_idex;
 	uint8_t i;
-
-	idex->is_up = FALSE;
 
 #ifdef PFE_CFG_PFE_MASTER
 	pfe_hif_clear_master_up(idex->hif);
@@ -1112,17 +1114,42 @@ void pfe_idex_fini(void)
  */
 errno_t pfe_idex_master_rpc(uint32_t id, const void *buf, uint16_t buf_len, void *resp, uint16_t resp_len)
 {
-	const pfe_idex_t *idex = &pfe_idex;
+	pfe_idex_t *idex = &pfe_idex;
+	errno_t ret = EOK;
 
-	/* RPC message can be sent to Master only from IDEX client */
-	if(idex->is_server == FALSE)
+#ifdef PFE_CFG_PFE_SLAVE
+	/* Check if IDEX had error in last communication */
+	if (FALSE == idex->remote.server.is_up)
 	{
-		return pfe_idex_rpc(idex->remote.server.phy_id, id, buf, buf_len, resp, resp_len);
+		/* Try to send RESET request for recovery of communication */
+		ret = pfe_idex_send_reset_request(idex);
+		if(EOK == ret)
+		{
+			/* Server is now responding, continue with communication */
+			idex->remote.server.is_up = TRUE;
+		}
+		else
+		{
+			/* Server did not respond on RESET, skip this RPC and return error */
+			idex->stats.tx_skips++;
+		}
 	}
-	else
+#endif
+
+	if(EOK == ret)
 	{
-		return EPERM;
+		/* RPC message can be sent to Master only from IDEX client */
+		if(FALSE == idex->is_server)
+		{
+			ret = pfe_idex_rpc(idex->remote.server.phy_id, id, buf, buf_len, resp, resp_len);
+		}
+		else
+		{
+			ret = EPERM;
+		}
 	}
+
+	return ret;
 }
 
 /**
@@ -1288,7 +1315,15 @@ errno_t pfe_idex_set_rpc_ret_val(errno_t retval, void *resp, uint16_t resp_len)
  */
 void pfe_idex_down(void)
 {
-	pfe_idex.is_up = FALSE;
+	pfe_idex.remote.server.is_up = FALSE;
+}
+
+/**
+ * @brief		Get IDEX channel status for testing
+ */
+bool_t pfe_idex_status(void)
+{
+	return pfe_idex.remote.server.is_up;
 }
 
 /**
@@ -1309,5 +1344,6 @@ __attribute__((cold)) void pfe_idex_get_text_statistics(struct seq_file *seq, ui
         seq_printf(seq, "tx_retries:     %llu\n", pfe_idex.stats.tx_retries);
         seq_printf(seq, "tx_max_retries: %u\n", pfe_idex.stats.tx_max_retries);
         seq_printf(seq, "tx_skips:       %u\n", pfe_idex.stats.tx_skips);
+        seq_printf(seq, "proto_resets :  %u\n", pfe_idex.stats.proto_resets);
 #endif /* PFE_CFG_PFE_SLAVE */
 }
