@@ -215,6 +215,7 @@ typedef struct
 	void *rpc_cbk_arg;					/*	RPC callback argument */
 	pfe_hif_t *hif;						/*	HIF module, for Master-up signaling */
 	bool_t is_server;					/*	IDEX is acting as server when TRUE	*/
+	bool_t mark_down;					/*	TRUE if driver is shutting down */
 	union {
 		pfe_remote_server_t server;			/*	Client has Server information */
 		pfe_remote_client_t clients[IDEX_MAX_CLIENTS];	/*	Server has information about every client */
@@ -1036,6 +1037,7 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 
 #elif defined(PFE_CFG_PFE_SLAVE)
 			idex->remote.server.is_up = TRUE;
+			idex->mark_down = FALSE;
 
 			/*	Send RESET request message to server */
 			pfe_idex_send_reset_request(idex);
@@ -1118,20 +1120,36 @@ errno_t pfe_idex_master_rpc(uint32_t id, const void *buf, uint16_t buf_len, void
 	errno_t ret = EOK;
 
 #ifdef PFE_CFG_PFE_SLAVE
-	/* Check if IDEX had error in last communication */
-	if (FALSE == idex->remote.server.is_up)
+	/* Check if Master IP flag is up to prevent communication without Server running */
+	if (NULL == idex->hif || FALSE == pfe_hif_get_master_up(idex->hif))
 	{
-		/* Try to send RESET request for recovery of communication */
-		ret = pfe_idex_send_reset_request(idex);
-		if(EOK == ret)
+		NXP_LOG_WARNING("IDEX: Master driver is not running, skip IDEX request");
+		idex->stats.tx_skips++;
+		ret = EPERM;
+	}
+	/* Check if IDEX had error in last communication */
+	else if (FALSE == idex->remote.server.is_up)
+	{
+		if(TRUE == idex->mark_down)
 		{
-			/* Server is now responding, continue with communication */
-			idex->remote.server.is_up = TRUE;
-		}
-		else
-		{
-			/* Server did not respond on RESET, skip this RPC and return error */
+			/* Driver is shutting down and Server was not reachable in last request */
+			/* Skip RPC and return error */
 			idex->stats.tx_skips++;
+			ret = EPERM;
+		}
+		else {
+			/* Try to send RESET request for recovery of communication */
+			ret = pfe_idex_send_reset_request(idex);
+			if(EOK == ret)
+			{
+				/* Server is now responding, continue with communication */
+				idex->remote.server.is_up = TRUE;
+			}
+			else
+			{
+				/* Server did not respond on RESET, skip this RPC and return error */
+				idex->stats.tx_skips++;
+			}
 		}
 	}
 #endif
@@ -1324,6 +1342,16 @@ void pfe_idex_down(void)
 bool_t pfe_idex_status(void)
 {
 	return pfe_idex.remote.server.is_up;
+}
+
+/**
+ * @brief		Inform IDEX communication that driver is shutting down
+ * @details		This flag is usable when Master driver crashes and Slave
+ * 				needs to shutdown faster without RPC communication
+ */
+void pfe_idex_mark_down(void)
+{
+	pfe_idex.mark_down = TRUE;
 }
 
 /**

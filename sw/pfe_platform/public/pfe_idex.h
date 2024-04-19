@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2023 NXP
+ *  Copyright 2019-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -30,6 +30,8 @@ errno_t pfe_idex_master_rpc(uint32_t id, const void *buf, uint16_t buf_len, void
 errno_t pfe_idex_set_rpc_ret_val(errno_t retval, void *resp, uint16_t resp_len);
 void pfe_idex_down(void);
 void pfe_idex_fini(void);
+void pfe_idex_mark_down(void);
+bool_t pfe_idex_status(void);
 void pfe_idex_get_text_statistics(struct seq_file *seq, uint8_t verb_level);
 
 #endif /* PUBLIC_PFE_IDEX_H_ */
