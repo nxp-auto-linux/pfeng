@@ -802,7 +802,7 @@ static errno_t pfe_idex_request_send(pfe_ct_phy_if_id_t dst_phy, pfe_idex_reques
 	/*	Sending was not succesfull, timeout occured */
 	if (0U == timeout_ms || resend_count == sending_counter)
 	{
-		NXP_LOG_ERROR("IDEX request %u timed-out, retransmitted %u times", (uint_t)oal_ntohl(request->seqnum), sending_counter);
+		NXP_LOG_WARNING("IDEX request %u timed-out, retransmitted %u times", (uint_t)oal_ntohl(request->seqnum), sending_counter);
 		ret = ETIMEDOUT;
 	}
 
@@ -1224,7 +1224,7 @@ errno_t pfe_idex_rpc(pfe_ct_phy_if_id_t dst_phy, uint32_t id, const void *buf, u
 	if (EOK != ret)
 	{
 		/*	Transport error */
-		NXP_LOG_ERROR("RPC transport failed: %d", ret);
+		NXP_LOG_WARNING("RPC transport failed: %d", ret);
 	}
 	else
 	{
