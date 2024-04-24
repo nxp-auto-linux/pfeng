@@ -751,15 +751,6 @@ void pfeng_hif_remove(struct pfeng_priv *priv)
 
 	dev = &priv->pdev->dev;
 
-	/* Disable HIF logif first */
-	for (idx = (PFENG_PFE_HIF_CHANNELS - 1); idx >= 0; idx--) {
-		if (priv->hif_chnl[idx].logif_hif) {
-			HM_MSG_DEV_DBG(dev, "Disable %s\n", pfe_log_if_get_name(priv->hif_chnl[idx].logif_hif));
-			pfe_log_if_disable(priv->hif_chnl[idx].logif_hif);
-			priv->hif_chnl[idx].logif_hif = NULL;
-		}
-	}
-
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	pfeng_hif_idex_release(priv);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */

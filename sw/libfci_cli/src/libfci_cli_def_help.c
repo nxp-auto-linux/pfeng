@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2022,2024 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -599,10 +599,6 @@
 #define TXT_OPTDESCR__PTP_PROMISC       TXT_HELP__PTP_PROMISC  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
                                         "  Enables/disables acceptance of PTP traffic even if ["  TXT_HELP__VLAN_CONF  "] flag is active.\n"
 
-#define TXT_OPT__LOOPBACK               TXT_HELP__LOOPBACK  "=<"  TXT_OPTARGS__ON_OFF  ">"
-#define TXT_OPTDESCR__LOOPBACK          TXT_HELP__LOOPBACK  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
-                                        "  Enables/disables loopback mode of the interface.\n"
-
 #define TXT_OPT__QINQ                   TXT_HELP__QINQ  "=<"  TXT_OPTARGS__ON_OFF  ">"
 #define TXT_OPTDESCR__QINQ              TXT_HELP__QINQ  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
                                         "  Enables/disables processing of Q-in-Q traffic.\n"  \
@@ -1119,7 +1115,6 @@ static const char *const txt_help_logif_update[] =
     "<"   TXT_OPT__INTERFACE_LOGIF   ">  ",
     "[["  TXT_OPT__ENABLE_IF         "]|["  TXT_OPT__DISABLE_IF  "]]  ",
     "["   TXT_OPT__PROMISC_LOGIF     "]  ",
-    "["   TXT_OPT__LOOPBACK          "]  ",
     "["   TXT_OPT__EGRESS            "]  ",
     "["   TXT_OPT__MATCH_MODE        "]  ",
     "["   TXT_OPT__DISCARD_ON_MATCH  "]  ",
@@ -1134,7 +1129,6 @@ static const char *const txt_help_logif_update[] =
     TXT_OPTDESCR__ENABLE_IF,
     TXT_OPTDESCR__DISABLE_IF,
     TXT_OPTDESCR__PROMISC_LOGIF,
-    TXT_OPTDESCR__LOOPBACK,
     TXT_OPTDESCR__EGRESS,
     TXT_OPTDESCR__MATCH_MODE,
     TXT_OPTDESCR__DISCARD_ON_MATCH,

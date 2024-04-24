@@ -1,7 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2022,2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -49,11 +49,6 @@ errno_t pfe_log_if_set_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule
 errno_t pfe_log_if_get_match_rules(pfe_log_if_t *iface, pfe_ct_if_m_rules_t *rules, pfe_ct_if_m_args_t *args);
 errno_t pfe_log_if_add_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule, const void *arg, uint32_t arg_len);
 errno_t pfe_log_if_del_match_rule(pfe_log_if_t *iface, pfe_ct_if_m_rules_t rule);
-errno_t pfe_log_if_add_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
-errno_t pfe_log_if_del_mac_addr(pfe_log_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
-pfe_mac_db_t *pfe_log_if_get_mac_db(const pfe_log_if_t *iface);
-errno_t pfe_log_if_get_mac_addr(pfe_log_if_t *iface, pfe_mac_addr_t addr);
-errno_t pfe_log_if_flush_mac_addrs(pfe_log_if_t *iface, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
 errno_t pfe_log_if_get_egress_ifs(pfe_log_if_t *iface, uint32_t *egress);
 errno_t pfe_log_if_set_egress_ifs(pfe_log_if_t *iface, uint32_t egress);
 errno_t pfe_log_if_add_egress_if(pfe_log_if_t *iface, const pfe_phy_if_t *phy_if);
@@ -63,21 +58,12 @@ errno_t pfe_log_if_disable(pfe_log_if_t *iface);
 bool_t pfe_log_if_is_enabled(pfe_log_if_t *iface) __attribute__((pure));
 errno_t pfe_log_if_promisc_enable(pfe_log_if_t *iface);
 errno_t pfe_log_if_promisc_disable(pfe_log_if_t *iface);
-errno_t pfe_log_if_loopback_enable(pfe_log_if_t *iface);
-errno_t pfe_log_if_loopback_disable(pfe_log_if_t *iface);
-errno_t pfe_log_if_allmulti_enable(const pfe_log_if_t *iface);
-errno_t pfe_log_if_allmulti_disable(const pfe_log_if_t *iface);
 bool_t pfe_log_if_is_promisc(pfe_log_if_t *iface) __attribute__((pure));
-bool_t pfe_log_if_is_loopback(pfe_log_if_t *iface) __attribute__((pure));
 const char_t *pfe_log_if_get_name(const pfe_log_if_t *iface) __attribute__((pure));
 errno_t pfe_log_if_discard_enable(pfe_log_if_t *iface);
 errno_t pfe_log_if_discard_disable(pfe_log_if_t *iface);
 bool_t pfe_log_if_is_discard(pfe_log_if_t *iface);
 errno_t pfe_log_if_get_stats(const pfe_log_if_t *iface, pfe_ct_class_algo_stats_t *stat);
-
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-uint32_t pfe_log_if_get_text_statistics(const pfe_log_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE

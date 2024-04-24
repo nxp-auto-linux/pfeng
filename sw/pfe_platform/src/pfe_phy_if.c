@@ -1,5 +1,5 @@
 /* =========================================================================
- *	
+ *
  *	Copyright (c) 2019 Imagination Technologies Limited
  *	Copyright 2018-2024 NXP
  *
@@ -61,8 +61,6 @@ static const pfe_emac_crit_t crit_remap_table[4] = {EMAC_CRIT_BY_TYPE, EMAC_CRIT
 static errno_t pfe_phy_if_write_to_class_nostats(const pfe_phy_if_t *iface, const pfe_ct_phy_if_t *class_if);
 static errno_t pfe_phy_if_write_to_class(const pfe_phy_if_t *iface, const pfe_ct_phy_if_t *class_if);
 static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_log_if_t *log_if);
-static bool_t pfe_phy_if_has_enabled_log_if_nolock(const pfe_phy_if_t *iface);
-static bool_t pfe_phy_if_has_loopback_log_if_nolock(const pfe_phy_if_t *iface);
 static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface);
 static errno_t pfe_phy_if_set_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag);
 static errno_t pfe_phy_if_clear_flag_nolock(pfe_phy_if_t *iface, pfe_ct_if_flags_t flag);
@@ -579,65 +577,6 @@ static bool_t pfe_phy_if_has_log_if_nolock(const pfe_phy_if_t *iface, const pfe_
 	return ret;
 }
 
-static bool_t pfe_phy_if_has_enabled_log_if_nolock(const pfe_phy_if_t *iface)
-{
-	LLIST_t *curItem;
-	const pfe_phy_if_list_entry_t *entry;
-	bool_t ret = FALSE;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ret = FALSE;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		LLIST_ForEach(curItem, &iface->log_ifs)
-		{
-			entry = LLIST_Data(curItem, pfe_phy_if_list_entry_t, iterator);
-			if (TRUE == pfe_log_if_is_enabled(entry->log_if))
-			{
-				ret = TRUE;
-				break;
-			}
-		}
-	}
-
-	return ret;
-}
-
-static bool_t pfe_phy_if_has_loopback_log_if_nolock(const pfe_phy_if_t *iface)
-{
-	LLIST_t *curItem;
-	const pfe_phy_if_list_entry_t *entry;
-	bool_t ret = FALSE;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ret = FALSE;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		LLIST_ForEach(curItem, &iface->log_ifs)
-		{
-			entry = LLIST_Data(curItem, pfe_phy_if_list_entry_t, iterator);
-			if ((TRUE == pfe_log_if_is_enabled(entry->log_if))
-						&& (TRUE == pfe_log_if_is_loopback(entry->log_if)))
-			{
-				ret = TRUE;
-				break;
-			}
-		}
-	}
-
-	return ret;
-}
-
 /**
  * @brief		Check if physical interface contains given logical interface
  * @param[in]	iface The physical interface instance
@@ -691,7 +630,6 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 	LLIST_t *curItem;
 	bool_t found = FALSE;
 	addr_t log_if_dmem_base = 0U, next_dmem_ptr = 0U;
-	errno_t ret;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == iface) || (NULL == log_if)))
@@ -831,19 +769,12 @@ errno_t pfe_phy_if_del_log_if(pfe_phy_if_t *iface, const pfe_log_if_t *log_if)
 	oal_mm_free(entry);
 	entry = NULL;
 
-	/*	Disable the interface in case that there are not enabled logical interfaces */
-	ret = pfe_phy_if_disable_nolock(iface);
-	if (EOK != ret)
-	{
-		NXP_LOG_ERROR("%s can't be disabled: %d\n", iface->name, ret);
-	}
-
 	if (EOK != oal_mutex_unlock(&iface->lock))
 	{
 		NXP_LOG_ERROR("mutex unlock failed\n");
 	}
 
-	return ret;
+	return EOK;
 }
 
 /**
@@ -956,6 +887,39 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 	}
 
 	return ret;
+}
+
+pfe_log_if_t *pfe_phy_if_get_default_log_if(pfe_phy_if_t *iface)
+{
+	pfe_log_if_t *log_if = NULL;
+	const pfe_phy_if_list_entry_t *tmp_entry;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == iface))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+	}
+	else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_ERROR("mutex lock failed\n");
+		}
+
+		if (TRUE != LLIST_IsEmpty(&iface->log_ifs))
+		{
+			tmp_entry = LLIST_Data(iface->log_ifs.prNext, pfe_phy_if_list_entry_t, iterator);
+			log_if = tmp_entry->log_if;
+		}
+
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_ERROR("mutex unlock failed\n");
+		}
+	}
+
+	return log_if;
 }
 
 /**
@@ -1436,60 +1400,54 @@ static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
 		/*
-		Go through all associated logical interfaces and search
-		for enabled ones. If there is some enabled logical
-		interface, don't disable the physical one.
+		Behaviour changed:
+		Don't depend on associated LOG_IF(s) for PHY_IF disabling.
+		Ie. disable PHY_IF _EVEN_ if any LOG_IF is enabled.
 		*/
-		if (TRUE == pfe_phy_if_has_enabled_log_if_nolock(iface))
+
+		NXP_LOG_DEBUG("Disabling %s\n", iface->name);
+
+		/*	Disable interface instance. Backup flags and write the changes. */
+		tmp = iface->phy_if_class.flags;
+		iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & oal_htonl(~(uint32_t)IF_FL_ENABLED));
+		ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
+		if (EOK != ret)
 		{
-			ret = EOK;
+			/*	Failed. Revert flags. */
+			NXP_LOG_ERROR("Phy IF configuration failed\n");
+			iface->phy_if_class.flags = tmp;
 		}
 		else
 		{
-			NXP_LOG_DEBUG("Disabling %s\n", iface->name);
+			/*	Mark the interface as disabled */
+			iface->is_enabled = FALSE;
 
-			/*	Disable interface instance. Backup flags and write the changes. */
-			tmp = iface->phy_if_class.flags;
-			iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & oal_htonl(~(uint32_t)IF_FL_ENABLED));
-			ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
-			if (EOK != ret)
+			/*	Disable also associated HW block */
+			if (NULL == iface->port.instance)
 			{
-				/*	Failed. Revert flags. */
-				NXP_LOG_ERROR("Phy IF configuration failed\n");
-				iface->phy_if_class.flags = tmp;
+				/*	No HW block associated */
+				;
 			}
 			else
 			{
-				/*	Mark the interface as disabled */
-				iface->is_enabled = FALSE;
-
-				/*	Disable also associated HW block */
-				if (NULL == iface->port.instance)
+				if (PFE_PHY_IF_EMAC == iface->type)
 				{
-					/*	No HW block associated */
-					;
+					pfe_emac_disable(iface->port.emac);
+				}
+				else if (PFE_PHY_IF_HIF == iface->type)
+				{
+					pfe_hif_chnl_rx_disable(iface->port.hif_ch);
+					pfe_hif_chnl_tx_disable(iface->port.hif_ch);
 				}
 				else
 				{
-					if (PFE_PHY_IF_EMAC == iface->type)
-					{
-						pfe_emac_disable(iface->port.emac);
-					}
-					else if (PFE_PHY_IF_HIF == iface->type)
-					{
-						pfe_hif_chnl_rx_disable(iface->port.hif_ch);
-						pfe_hif_chnl_tx_disable(iface->port.hif_ch);
-					}
-					else
-					{
-						NXP_LOG_ERROR("Invalid interface type\n");
-						ret = EINVAL;
-					}
+					NXP_LOG_ERROR("Invalid interface type\n");
+					ret = EINVAL;
 				}
-
-				/* Disable HW bridge lookup if the last interface is disabled */
-				pfe_phy_if_update_op_mode_nolock(iface, IF_OP_DEFAULT);
 			}
+
+			/* Disable HW bridge lookup if the last interface is disabled */
+			pfe_phy_if_update_op_mode_nolock(iface, IF_OP_DEFAULT);
 		}
 	}
 
@@ -1965,66 +1923,46 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 			NXP_LOG_ERROR("mutex lock failed\n");
 		}
 
-		/*
-			Go through all associated logical interfaces and search
-			for loopback ones. If there is some enabled loopback
-			logical interface, don't disable loopback mode on the
-			physical one.
-		*/
-		if (TRUE == pfe_phy_if_has_loopback_log_if_nolock(iface))
+		/*		Disable instance loopback mode. Backup flags and write the changes. */
+		tmp = iface->phy_if_class.flags;
+		iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & oal_htonl(~(uint32_t)IF_FL_LOOPBACK));
+		ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
+		if (EOK != ret)
 		{
-			NXP_LOG_INFO("%s loopback mode not disabled since contains loopback logical interface(s)\n", iface->name);
-
-			if (EOK != oal_mutex_unlock(&iface->lock))
-			{
-				NXP_LOG_ERROR("mutex unlock failed\n");
-			}
-
-			ret = EOK;
+			/*		Failed. Revert flags. */
+			NXP_LOG_ERROR("Phy IF configuration failed\n");
+			iface->phy_if_class.flags = tmp;
 		}
 		else
 		{
-			/*		Disable instance loopback mode. Backup flags and write the changes. */
-			tmp = iface->phy_if_class.flags;
-			iface->phy_if_class.flags = (pfe_ct_if_flags_t)((uint32_t)tmp & oal_htonl(~(uint32_t)IF_FL_LOOPBACK));
-			ret = pfe_phy_if_write_to_class_nostats(iface, &iface->phy_if_class);
-			if (EOK != ret)
+			/*		Set up also associated HW block */
+			if (NULL == iface->port.instance)
 			{
-				/*		Failed. Revert flags. */
-				NXP_LOG_ERROR("Phy IF configuration failed\n");
-				iface->phy_if_class.flags = tmp;
+				/*		No HW block associated */
+				;
 			}
 			else
 			{
-				/*		Set up also associated HW block */
-				if (NULL == iface->port.instance)
+				if (PFE_PHY_IF_EMAC == iface->type)
 				{
-					/*		No HW block associated */
+					pfe_emac_disable_loopback(iface->port.emac);
+				}
+				else if (PFE_PHY_IF_HIF == iface->type)
+				{
+					/*		HIF does not offer filtering ability */
 					;
 				}
 				else
 				{
-					if (PFE_PHY_IF_EMAC == iface->type)
-					{
-						pfe_emac_disable_loopback(iface->port.emac);
-					}
-					else if (PFE_PHY_IF_HIF == iface->type)
-					{
-						/*		HIF does not offer filtering ability */
-						;
-					}
-					else
-					{
-						NXP_LOG_ERROR("Invalid interface type\n");
-						ret = EINVAL;
-					}
+					NXP_LOG_ERROR("Invalid interface type\n");
+					ret = EINVAL;
 				}
 			}
+		}
 
-			if (EOK != oal_mutex_unlock(&iface->lock))
-			{
-				NXP_LOG_ERROR("mutex unlock failed\n");
-			}
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_ERROR("mutex unlock failed\n");
 		}
 	}
 
@@ -2599,13 +2537,22 @@ errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 					ret = pfe_emac_add_addr(iface->port.emac, addr, owner);
 					if (EOK != ret)
 					{
-						NXP_LOG_ERROR("Unable to add MAC address: %d\n", ret);
-						/* Delete the MAC address from database */
-						ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
-						if (EOK != ret) {
-							NXP_LOG_ERROR("Unable to delete MAC address: %d\n", ret);
+						/*	If MAC address already exists, not needed to add */
+						if (EEXIST == ret)
+						{
+							NXP_LOG_DEBUG("MAC Address already exists\n");
+							ret = EOK;
 						}
-						ret = ENOEXEC;
+						else
+						{
+							NXP_LOG_ERROR("Unable to add MAC address: %d\n", ret);
+							/* Delete the MAC address from database */
+							ret = pfe_mac_db_del_addr(iface->mac_db, addr, owner);
+							if (EOK != ret) {
+								NXP_LOG_ERROR("Unable to delete MAC address: %d\n", ret);
+							}
+							ret = ENOEXEC;
+						}
 					}
 				}
 			}

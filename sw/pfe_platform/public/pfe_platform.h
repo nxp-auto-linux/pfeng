@@ -1,7 +1,7 @@
 /* =========================================================================
  *
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -143,7 +143,9 @@ typedef struct
 	pfe_fail_stop_t 	*fail_stop;
 	pfe_ecc_err_t 	*ecc_err;
 	pfe_if_db_t *phy_if_db;
+#ifndef PFE_CFG_PFE_SLAVE
 	pfe_if_db_t *log_if_db;
+#endif /* PFE_CFG_PFE_SLAVE */
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	pfe_fci_owner_hif_id_t hif_fci_owner_chnls_mask;
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
@@ -159,10 +161,6 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform);
 errno_t pfe_platform_soft_reset(const pfe_platform_t *platform);
 errno_t pfe_platform_remove(void);
 pfe_platform_t *pfe_platform_get_instance(void);
-errno_t pfe_platform_register_log_if(const pfe_platform_t *platform, pfe_log_if_t *log_if);
-errno_t pfe_platform_unregister_log_if(const pfe_platform_t *platform, pfe_log_if_t *log_if);
-pfe_log_if_t *pfe_platform_get_log_if_by_id(const pfe_platform_t *platform, uint8_t id);
-pfe_log_if_t *pfe_platform_get_log_if_by_name(const pfe_platform_t *platform, char_t *name);
 pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_ct_phy_if_id_t id);
 #if defined(PFE_CFG_FCI_ENABLE)
 void pfe_platform_destroy_fci(pfe_platform_t *platform);

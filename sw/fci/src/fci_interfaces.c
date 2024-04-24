@@ -688,16 +688,6 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 						*fci_ret = FPP_ERR_IF_OP_UPDATE_FAILED;
 					}
 
-					/* loopback */
-					if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_LOOPBACK))
-					{
-						ret = pfe_log_if_loopback_enable(log_if);
-					}
-					else
-					{
-						ret = pfe_log_if_loopback_disable(log_if);
-					}
-
 					if(EOK != ret)
 					{
 						NXP_LOG_ERROR("ENABLE flag wasn't updated correctly on %s\n",  pfe_log_if_get_name(log_if));
@@ -805,11 +795,6 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 					if(pfe_log_if_is_enabled(log_if))
 					{
 						reply_buf->flags |= oal_htonl(FPP_IF_ENABLED);
-					}
-
-					if(pfe_log_if_is_loopback(log_if))
-					{
-						reply_buf->flags |= oal_htonl(FPP_IF_LOOPBACK);
 					}
 
 					if(pfe_log_if_is_promisc(log_if))

@@ -1,7 +1,7 @@
 /* =========================================================================
  *
  *  Copyright (c) 2019 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -176,90 +176,6 @@ static void pfe_platform_destroy_hif(pfe_platform_t *platform)
 }
 
 /**
- * @brief		Register logical interface
- * @details		Add logical interface to internal database
- */
-errno_t pfe_platform_register_log_if(const pfe_platform_t *platform, pfe_log_if_t *log_if)
-{
-	uint32_t session_id;
-	errno_t ret;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == platform) || (NULL == log_if)))
-	{
-		NXP_LOG_ERROR("Null argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	ret = pfe_if_db_lock(&session_id);
-	if (EOK != ret)
-	{
-		NXP_LOG_ERROR("DB lock failed: %d\n", ret);
-		return ret;
-	}
-
-	/*	Register in platform to db */
-	ret = pfe_if_db_add(platform->log_if_db, session_id, log_if, PFE_CFG_LOCAL_IF);
-	if (EOK != ret)
-	{
-		NXP_LOG_ERROR("Could not register %s: %d\n", pfe_log_if_get_name(log_if), ret);
-		pfe_log_if_destroy(log_if);
-	}
-
-	if (EOK != pfe_if_db_unlock(session_id))
-	{
-		NXP_LOG_ERROR("DB unlock failed\n");
-	}
-
-	return ret;
-}
-
-/**
- * @brief		Unregister logical interface
- * @details		Logical interface will be removed from internal database
- * @warning		Should be called only with locked DB
- */
-errno_t pfe_platform_unregister_log_if(const pfe_platform_t *platform, pfe_log_if_t *log_if)
-{
-	errno_t ret = EOK;
-	pfe_if_db_entry_t *entry = NULL;
-	uint32_t session_id;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == platform) || (NULL == log_if)))
-	{
-		NXP_LOG_ERROR("Null argument received\n");
-		return EINVAL;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	ret = pfe_if_db_lock(&session_id);
-	if (EOK != ret)
-	{
-		NXP_LOG_ERROR("DB lock failed: %d\n", ret);
-		return ret;
-	}
-
-	ret = pfe_if_db_get_first(platform->log_if_db, session_id, IF_DB_CRIT_BY_INSTANCE, (void *)log_if, &entry);
-	if (NULL == entry)
-	{
-		ret = ENOENT;
-	}
-	else if (EOK == ret)
-	{
-		ret = pfe_if_db_remove(platform->log_if_db, session_id, entry);
-	}
-
-	if (EOK != pfe_if_db_unlock(session_id))
-	{
-		NXP_LOG_ERROR("DB unlock failed\n");
-	}
-
-	return ret;
-}
-
-/**
  * @brief		Register physical interface
  */
 static errno_t pfe_platform_register_phy_if(const pfe_platform_t *platform, uint32_t session_id, pfe_phy_if_t *phy_if)
@@ -378,16 +294,6 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 		if (EOK != ret)
 		{
 			return ret;
-		}
-	}
-
-	if (NULL == platform->log_if_db)
-	{
-		platform->log_if_db = pfe_if_db_create(PFE_IF_DB_LOG);
-		if (NULL == platform->log_if_db)
-		{
-			NXP_LOG_ERROR("Can't create logical interface DB\n");
-			return ENODEV;
 		}
 	}
 
@@ -574,51 +480,9 @@ exit:
 static void pfe_platform_destroy_ifdb(pfe_platform_t *platform)
 {
 	pfe_if_db_entry_t *entry = NULL;
-	pfe_log_if_t *log_if;
 	pfe_phy_if_t *phy_if;
 	uint32_t session_id = 0U;
 	errno_t ret;
-
-	if (NULL != platform->log_if_db)
-	{
-		if(EOK != pfe_if_db_lock(&session_id))
-		{
-			NXP_LOG_ERROR("DB lock failed\n");
-		}
-
-		ret = pfe_if_db_get_first(platform->log_if_db, session_id, IF_DB_CRIT_ALL, NULL, &entry);
-
-		while (NULL != entry)
-		{
-			log_if = pfe_if_db_entry_get_log_if(entry);
-
-			if (EOK != pfe_if_db_remove(platform->log_if_db, session_id, entry))
-			{
-				NXP_LOG_ERROR("Could not remove log_if DB entry\n");
-			}
-
-			/* Don't destroy LOG_IF, it's too late for IHC */
-			entry = NULL;
-
-			ret = pfe_if_db_get_next(platform->log_if_db, session_id, &entry);
-		}
-
-		if(EOK != ret)
-		{
-			NXP_LOG_ERROR("Could not remove log_if DB entry, DB was locked\n");
-		}
-
-		if(EOK != pfe_if_db_unlock(session_id))
-		{
-			NXP_LOG_ERROR("DB unlock failed\n");
-		}
-
-		if (NULL != platform->log_if_db)
-		{
-			pfe_if_db_destroy(platform->log_if_db);
-			platform->log_if_db = NULL;
-		}
-	}
 
 	if (NULL != platform->phy_if_db)
 	{
@@ -647,7 +511,7 @@ static void pfe_platform_destroy_ifdb(pfe_platform_t *platform)
 
 		if(EOK != ret)
 		{
-			NXP_LOG_ERROR("Could not remove log_if DB entry, DB was locked\n");
+			NXP_LOG_ERROR("Could not remove phy_if DB entry, DB was locked\n");
 		}
 
 		if(EOK != pfe_if_db_unlock(session_id))

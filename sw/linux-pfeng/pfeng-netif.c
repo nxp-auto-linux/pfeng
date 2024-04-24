@@ -92,7 +92,7 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 	struct pfeng_hif_chnl *chnl;
-	pfe_log_if_t *logif_emac;
+	struct pfeng_emac *emac;
 	int ret = 0, i;
 
 #ifdef PFE_CFG_PFE_MASTER
@@ -124,20 +124,13 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 		}
 
 		if (pfeng_netif_is_aux(netif)) {
-			/* PFENG_LOGIF_MODE_TX_CLASS mode requires logIf config */
-			if (!pfe_log_if_is_enabled(chnl->logif_hif)) {
-				ret = pfe_log_if_enable(chnl->logif_hif);
+			/* AUX mode requires HIF enabled */
+			if (!pfe_phy_if_is_enabled(chnl->phyif_hif)) {
+				ret = pfe_phy_if_enable(chnl->phyif_hif);
 				if (ret)
-					HM_MSG_NETDEV_WARN(netdev, "Cannot enable logif HIF%i: %d\n", i, ret);
+					HM_MSG_NETDEV_WARN(netdev, "Cannot enable HIF%i: %d\n", i, ret);
 			} else
-				HM_MSG_NETDEV_INFO(netdev, "Logif HIF%i already enabled\n", i);
-
-			if (!pfe_log_if_is_promisc(chnl->logif_hif)) {
-				ret = pfe_log_if_promisc_enable(chnl->logif_hif);
-				if (ret)
-					HM_MSG_NETDEV_WARN(netdev, "Cannot set promisc mode for logif HIF%i: %d\n", i, ret);
-			} else
-				HM_MSG_NETDEV_DBG(netdev, "Logif HIF%i already in promisc mode\n", i);
+				HM_MSG_NETDEV_INFO(netdev, "HIF%i already enabled\n", i);
 		}
 	}
 
@@ -159,10 +152,10 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 		netif_carrier_on(netdev);
 #endif /* PFE_CFG_PFE_MASTER */
 
-	/* Enable EMAC logif */
-	logif_emac = pfeng_netif_get_emac_logif(netif);
-	if (logif_emac) {
-		ret = pfe_log_if_enable(logif_emac);
+	/* Enable EMAC */
+	emac = pfeng_netif_get_emac(netif);
+	if (emac) {
+		ret = pfe_phy_if_enable(emac->phyif_emac);
 		if (ret) {
 			HM_MSG_NETDEV_ERR(netdev, "Cannot enable EMAC: %d\n", ret);
 			goto err_mac_ena;
@@ -849,16 +842,6 @@ static int pfeng_netif_set_mac_address(struct net_device *netdev, const u8 *mac_
 
 	HM_MSG_NETDEV_INFO(netdev, "setting MAC addr: %pM\n", netdev->dev_addr);
 
-#ifdef PFE_CFG_PFE_SLAVE
-	{
-		errno_t ret = pfe_log_if_add_match_rule(emac->logif_emac, IF_MATCH_DMAC, (void *)netdev->dev_addr, 6U);
-		if (EOK != ret) {
-			HM_MSG_NETDEV_ERR(netdev, "Can't add DMAC match rule\n");
-			return -ret;
-		}
-	}
-#endif
-
 	return pfeng_uc_list_sync(netdev);
 }
 
@@ -1003,7 +986,9 @@ err:
 
 static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 {
-	pfe_log_if_t *logif;
+#ifdef PFE_CFG_PFE_MASTER
+	pfe_phy_if_t *phyif_emac;
+#endif /* PFE_CFG_PFE_MASTER */
 	struct pfeng_hif_chnl *chnl;
 	int i;
 
@@ -1025,35 +1010,20 @@ static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 #ifdef PFE_CFG_PFE_MASTER
 	if (netif->phylink)
 		pfeng_phylink_destroy(netif);
+
+	/* Stop EMAC */
+	phyif_emac = pfeng_netif_get_emac_phyif(netif);
+	if (phyif_emac)
+		pfe_phy_if_disable(phyif_emac);
 #endif /* PFE_CFG_PFE_MASTER */
 
-	/* Stop EMAC logif */
-	logif = pfeng_netif_get_emac_logif(netif);
-	if (logif) {
-		pfe_log_if_disable(logif);
-		if (EOK != pfe_platform_unregister_log_if(netif->priv->pfe_platform, logif))
-			HM_MSG_NETDEV_WARN(netif->netdev, "Can't unregister EMAC Logif\n");
-		else
-			pfe_log_if_destroy(logif);
-		netif->priv->emac[netif->cfg->phyif_id].logif_emac = NULL;
-	}
-
-	/* Remove created HIF logif(s) */
+	/* Stop HIF(s) */
 	pfeng_netif_for_each_chnl(netif, i, chnl) {
 
 		if (!(netif->cfg->hifmap & (1 << i)))
 			continue;
 
-		logif = chnl->logif_hif;
-		if (logif && refcount_dec_and_test(&chnl->logif_hif_count)) {
-			pfe_log_if_disable(logif);
-			if (EOK != pfe_platform_unregister_log_if(netif->priv->pfe_platform, logif))
-				HM_MSG_NETDEV_WARN(netif->netdev, "Can't unregister HIF Logif\n");
-			else
-				pfe_log_if_destroy(logif);
-
-			chnl->logif_hif = NULL;
-		}
+		pfe_phy_if_disable(chnl->phyif_hif);
 	}
 
 	HM_MSG_NETDEV_INFO(netif->netdev, "unregisted\n");
@@ -1083,12 +1053,13 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 	struct pfeng_priv *priv = netif->priv;
 	struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
 	struct pfeng_hif_chnl *chnl;
+	__maybe_unused pfe_log_if_t *log_if;
 	int ret, i;
 
 	/* Create PFE platform-wide pool of interfaces */
 	if (pfe_platform_create_ifaces(priv->pfe_platform)) {
 		HM_MSG_NETDEV_ERR(netdev, "Can't init platform interfaces\n");
-		goto err;
+		return -EINVAL;
 	}
 
 	/* Prefetch linked EMAC interfaces */
@@ -1097,53 +1068,36 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 			emac->phyif_emac = pfe_platform_get_phy_if_by_id(priv->pfe_platform, netif->cfg->phyif_id);
 			if (!emac->phyif_emac) {
 				HM_MSG_NETDEV_ERR(netdev, "Could not get linked EMAC physical interface\n");
+				ret = ENODEV;
 				goto err;
 			}
 		}
-		if (!emac->logif_emac) {
-			emac->logif_emac = pfe_log_if_create(emac->phyif_emac, (char *)netif->cfg->name);
-			if (!emac->logif_emac) {
-				HM_MSG_NETDEV_ERR(netdev, "EMAC Logif can't be created: %s\n", netif->cfg->name);
-				goto err;
-			} else {
-				ret = pfe_platform_register_log_if(priv->pfe_platform, emac->logif_emac);
-				if (ret) {
-					HM_MSG_NETDEV_ERR(netdev, "Can't register EMAC Logif\n");
-					goto err;
-				}
-			}
-#ifdef PFE_CFG_PFE_MASTER
-			ret = pfe_log_if_promisc_enable(emac->logif_emac);
-			if (ret) {
-				HM_MSG_NETDEV_ERR(netdev, "Can't set EMAC Logif promiscuous mode\n");
-				goto err;
-			}
-#endif /* PFE_CFG_PFE_MASTER */
-			HM_MSG_NETDEV_DBG(netdev, "EMAC Logif created: %s @%px\n", netif->cfg->name, emac->logif_emac);
-		} else
-			HM_MSG_NETDEV_DBG(netdev, "EMAC Logif reused: %s @%px\n", netif->cfg->name, emac->logif_emac);
 
-		/* Make sure that EMAC ingress traffic will be forwarded to respective HIF channel */
-		i = ffs(netif->cfg->hifmap) - 1;
 #ifdef PFE_CFG_PFE_MASTER
-		if (netif->cfg->hifs > 1)
-			/* Loadbalansing requires routing to PFE_PHY_IF_ID_HIF */
-			ret = pfe_log_if_set_egress_ifs(emac->logif_emac, 1 << PFE_PHY_IF_ID_HIF);
-		else
-			ret = pfe_log_if_set_egress_ifs(emac->logif_emac, 1 << pfeng_hif_ids[i]);
-#else
-		ret = pfe_log_if_add_egress_if(emac->logif_emac, pfe_platform_get_phy_if_by_id(priv->pfe_platform, pfeng_hif_ids[i]));
-#endif /* PFE_CFG_PFE_MASTER */
-		if (EOK != ret) {
-			HM_MSG_NETDEV_ERR(netdev, "Can't set EMAC egress interface\n");
-			goto err;
+		/* Deviation from rule Not using LOG_IF API in the driver */
+		log_if = pfe_phy_if_get_default_log_if(emac->phyif_emac);
+		if (NULL == log_if) {
+			HM_MSG_NETDEV_WARN(netdev, "Could not get default LOG_IF for EMAC physical interface\n");
+		} else {
+			/* Make sure that EMAC ingress traffic will be forwarded to respective HIF channel */
+			i = ffs(netif->cfg->hifmap) - 1;
+			if (netif->cfg->hifs > 1)
+				/* Loadbalansing requires routing to PFE_PHY_IF_ID_HIF */
+				ret = pfe_log_if_set_egress_ifs(log_if, 1 << PFE_PHY_IF_ID_HIF);
+			else
+				ret = pfe_log_if_set_egress_ifs(log_if, 1 << pfeng_hif_ids[i]);
+			if (EOK != ret) {
+				HM_MSG_NETDEV_ERR(netdev, "Can't set EMAC egress interface\n");
+				goto err;
+			}
 		}
+#else
+		/* Slave requires additional set-up by libFCI */
+#endif /* PFE_CFG_PFE_MASTER */
 	}
 
 	/* Prefetch linked HIF(s) */
 	pfeng_netif_for_each_chnl(netif, i, chnl) {
-		char hifname[16];
-
 		if (!(netif->cfg->hifmap & (1 << i)))
 			continue;
 
@@ -1151,6 +1105,7 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 			chnl->phyif_hif = pfe_platform_get_phy_if_by_id(priv->pfe_platform, pfeng_hif_ids[i]);
 			if (!chnl->phyif_hif) {
 				HM_MSG_NETDEV_ERR(netdev, "Could not get HIF%u physical interface\n", i);
+				ret =  ENODEV;
 				goto err;
 			}
 		}
@@ -1175,70 +1130,12 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 			goto err;
 		}
 		HM_MSG_NETDEV_INFO(netdev, "Enable HIF%u\n", i);
-
-		if (!chnl->logif_hif) {
-			scnprintf(hifname, sizeof(hifname) - 1, "%s-logif", pfe_phy_if_get_name(chnl->phyif_hif));
-			chnl->logif_hif = pfe_log_if_create(chnl->phyif_hif, hifname);
-			if (!chnl->logif_hif) {
-				HM_MSG_NETDEV_ERR(netdev, "HIF Logif can't be created: %s\n", hifname);
-				goto err;
-			}
-
-			ret = pfe_platform_register_log_if(priv->pfe_platform, chnl->logif_hif);
-			if (ret) {
-				HM_MSG_NETDEV_ERR(netdev, "Can't register HIF Logif\n");
-				goto err;
-			}
-			refcount_set(&chnl->logif_hif_count, 1);
-			HM_MSG_NETDEV_DBG(netdev, "HIF Logif created: %s @%px\n", hifname, chnl->logif_hif);
-		} else {
-			refcount_inc(&chnl->logif_hif_count);
-			HM_MSG_NETDEV_DBG(netdev, "HIF Logif reused: %s @%px\n", hifname, chnl->logif_hif);
-		}
-
-		if (emac) {
-			if (pfeng_netif_is_aux(netif)) {
-				/* Make sure that HIF ingress traffic will be forwarded to respective EMAC */
-#ifdef PFE_CFG_PFE_MASTER
-				ret = pfe_log_if_set_egress_ifs(chnl->logif_hif, 1 << pfeng_emac_ids[netif->cfg->phyif_id]);
-#else
-				ret = pfe_log_if_add_egress_if(chnl->logif_hif, pfe_platform_get_phy_if_by_id(priv->pfe_platform, pfeng_emac_ids[netif->cfg->phyif_id]));
-#endif
-				if (EOK != ret) {
-					HM_MSG_NETDEV_ERR(netdev, "Can't set HIF egress interface\n");
-					goto err;
-				}
-			}
-		}
 	}
-
-#ifdef PFE_CFG_PFE_SLAVE
-	/* Add rule for local MAC */
-	if (!pfeng_netif_is_aux(netif) && emac) {
-		/* Configure the logical interface to accept frames matching local MAC address */
-		ret = pfe_log_if_add_match_rule(emac->logif_emac, IF_MATCH_DMAC, (void *)netif->cfg->macaddr, 6U);
-		if (EOK != ret) {
-			HM_MSG_NETDEV_ERR(netdev, "Can't add DMAC match rule\n");
-			ret = -ret;
-			goto err;
-		}
-		if (netif->cfg->emac_router) {
-			/* Set parent physical interface to FlexibleRouter mode */
-			ret = pfe_phy_if_set_op_mode(emac->phyif_emac, IF_OP_FLEX_ROUTER);
-			if (EOK != ret) {
-				HM_MSG_NETDEV_ERR(netdev, "Can't set flexrouter operation mode\n");
-				ret = -ret;
-				goto err;
-			}
-		}
-		HM_MSG_NETDEV_INFO(netdev, "receive traffic matching its MAC address\n");
-	}
-#endif /* PFE_CFG_PFE_SLAVE */
 
 	return 0;
 
 err:
-	return -EINVAL;
+	return -ret;
 }
 
 #ifdef PFE_CFG_PFE_MASTER
@@ -1628,9 +1525,10 @@ int pfeng_netif_create(struct pfeng_priv *priv)
 
 static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 {
+#ifdef PFE_CFG_PFE_MASTER
 	struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
+#endif /* PFE_CFG_PFE_MASTER */
 	struct pfeng_hif_chnl *chnl;
-	pfe_log_if_t *logif;
 	int i;
 
 #ifdef PFE_CFG_PFE_MASTER
@@ -1648,12 +1546,11 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 	rtnl_lock();
 
 	pfeng_ethtool_params_save(netif);
-
+#ifdef PFE_CFG_PFE_MASTER
 	if (emac)
 		/* Disable EMAC */
-		pfe_log_if_disable(emac->logif_emac);
+		pfe_phy_if_disable(emac->phyif_emac);
 
-#ifdef PFE_CFG_PFE_MASTER
 	/* Stop PHY */
 	if (netif_running(netif->netdev) && netif->phylink)
 		pfeng_phylink_stop(netif);
@@ -1669,40 +1566,28 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 
 	rtnl_unlock();
 
-	/* Free EMAC logif */
-	logif = pfeng_netif_get_emac_logif(netif);
-	if (logif) {
-		pfe_log_if_disable(logif);
-		if (EOK != pfe_platform_unregister_log_if(netif->priv->pfe_platform, logif))
-			HM_MSG_NETDEV_WARN(netif->netdev, "Can't unregister EMAC Logif\n");
-		else
-			pfe_log_if_destroy(logif);
-		netif->priv->emac[netif->cfg->phyif_id].logif_emac = NULL;
-	}
-
 	/* Reset attached HIF PhyIfs */
 	pfeng_netif_for_each_chnl(netif, i, chnl) {
 		if (!(netif->cfg->hifmap & (1 << i)))
 			continue;
 
-		if (chnl->logif_hif) {
-			pfe_log_if_disable(chnl->logif_hif);
-			if (EOK != pfe_platform_unregister_log_if(netif->priv->pfe_platform, chnl->logif_hif))
-				HM_MSG_NETDEV_WARN(netif->netdev, "Can't unregister HIF Logif\n");
-			else
-				pfe_log_if_destroy(chnl->logif_hif);
-			chnl->logif_hif = NULL;
-			/* Mark also HIF PHY_IF as removed */
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+		/* Skip in case of IHC channel */
+		if (!chnl->ihc)
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+		{
+			if (chnl->phyif_hif)
+				pfe_phy_if_disable(chnl->phyif_hif);
+#ifdef PFE_CFG_PFE_MASTER
 			chnl->phyif_hif = NULL;
+#endif /* PFE_CFG_PFE_MASTER */
 		}
 	}
 
 #ifdef PFE_CFG_PFE_MASTER
-	/* Reset linked EMAC IFs */
-	if (emac) {
+	/* Reset linked EMAC */
+	if (emac)
 		emac->phyif_emac = NULL;
-		emac->logif_emac = NULL;
-	}
 #endif /* PFE_CFG_PFE_MASTER */
 
 	return 0;
@@ -1794,25 +1679,19 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 
 		if (pfeng_netif_is_aux(netif)) {
 			/* PFENG_LOGIF_MODE_TX_CLASS mode requires logIf config */
-			if (!pfe_log_if_is_enabled(chnl->logif_hif)) {
-				ret = pfe_log_if_enable(chnl->logif_hif);
-				if (ret)
-					HM_MSG_NETDEV_WARN(netdev, "Cannot enable logif HIF%i: %d\n", i, ret);
-			} else
-				HM_MSG_NETDEV_INFO(netdev, "Logif HIF%i already enabled\n", i);
 
-			if (!pfe_log_if_is_promisc(chnl->logif_hif)) {
-				ret = pfe_log_if_promisc_enable(chnl->logif_hif);
+			if (!pfe_phy_if_is_promisc(chnl->phyif_hif)) {
+				ret = pfe_phy_if_promisc_enable(chnl->phyif_hif);
 				if (ret)
-					HM_MSG_NETDEV_WARN(netdev, "Cannot set promisc mode for logif HIF%i: %d\n", i, ret);
+					HM_MSG_NETDEV_WARN(netdev, "Cannot set promisc mode for HIF%i: %d\n", i, ret);
 			} else
-				HM_MSG_NETDEV_DBG(netdev, "Logif HIF%i already in promisc mode\n", i);
+				HM_MSG_NETDEV_DBG(netdev, "HIF%i already in promisc mode\n", i);
 		}
 	}
 
-	/* Enable EMAC logif */
+	/* Enable EMAC */
 	if (emac) {
-		ret = pfe_log_if_enable(emac->logif_emac);
+		ret = pfe_phy_if_enable(emac->phyif_emac);
 		if (ret)
 			HM_MSG_NETDEV_WARN(netdev, "Cannot enable EMAC: %d\n", ret);
 

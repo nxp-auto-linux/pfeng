@@ -84,11 +84,10 @@ static int logif_print_aux(const fpp_log_if_cmd_t* p_logif, bool is_verbose, boo
     
     printf("%-*s<%s>\n", indent, "", cli_value2txt_en_dis(demo_log_if_ld_is_enabled(p_logif)));
     
-    printf("%-*s<promisc:%s, match-mode:%s, discard-on-match:%s, loopback:%s>\n", indent, "",
+    printf("%-*s<promisc:%s, match-mode:%s, discard-on-match:%s>\n", indent, "",
            cli_value2txt_on_off(demo_log_if_ld_is_promisc(p_logif)),
            cli_value2txt_or_and(demo_log_if_ld_is_match_mode_or(p_logif)),
-           cli_value2txt_on_off(demo_log_if_ld_is_discard_on_m(p_logif)),
-           cli_value2txt_on_off(demo_log_if_ld_is_loopback(p_logif)));
+           cli_value2txt_on_off(demo_log_if_ld_is_discard_on_m(p_logif)));
     
     printf("%-*saccepted: %"PRIu32" rejected: %"PRIu32" discarded: %"PRIu32" processed: %"PRIu32"\n", indent, "",
            demo_log_if_ld_get_stt_accepted(p_logif), 
@@ -754,10 +753,6 @@ static int stt_cmd_logif_update(const cli_cmdargs_t* p_cmdargs)
         if (p_cmdargs->promisc.is_valid)
         {
             demo_log_if_ld_set_promisc(&logif, (p_cmdargs->promisc.is_on));
-        }
-        if (p_cmdargs->loopback.is_valid)
-        {
-            demo_log_if_ld_set_loopback(&logif, (p_cmdargs->loopback.is_on));
         }
         if (p_cmdargs->match_mode.is_valid)
         {

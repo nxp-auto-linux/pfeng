@@ -997,17 +997,7 @@ typedef enum cli_opt_incompat_grp_tt {
 #define                          TXT_HELP__PTP_PROMISC \
         OPT_75_TXT_HELP
 
-
-#define OPT_76_ENUM_NAME         OPT_LOOPBACK
-#define OPT_76_OPT_PARSE         opt_parse_loopback
-#define OPT_76_HAS_ARG           y
-#define OPT_76_INCOMPAT_GRPS     OPT_GRP_NONE
-#define OPT_76_CLI_SHORT_CODE    OPT_AUTO_CODE
-#define OPT_76_CLI_LONG_TXT_A    "loopback"
-#define OPT_76_TXT_HELP          "--loopback"
-#define                          TXT_HELP__LOOPBACK \
-        OPT_76_TXT_HELP
-
+/*      OPT_76_ENUM_NAME         formerly OPT_LOOPBACK ; currently reserved for future use */
 
 #define OPT_77_ENUM_NAME         OPT_QINQ
 #define OPT_77_OPT_PARSE         opt_parse_qinq

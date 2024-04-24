@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2021 NXP
+ *  Copyright 2020-2021,2024 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -60,7 +60,6 @@ int demo_log_if_del(FCI_CLIENT* p_cl, const char* p_name);
 void demo_log_if_ld_enable(fpp_log_if_cmd_t* p_logif);
 void demo_log_if_ld_disable(fpp_log_if_cmd_t* p_logif);
 void demo_log_if_ld_set_promisc(fpp_log_if_cmd_t* p_logif, bool enable);
-void demo_log_if_ld_set_loopback(fpp_log_if_cmd_t* p_logif, bool enable);
 void demo_log_if_ld_set_match_mode_or(fpp_log_if_cmd_t* p_logif, bool match_mode_is_or);
 void demo_log_if_ld_set_discard_on_m(fpp_log_if_cmd_t* p_logif, bool enable);
 void demo_log_if_ld_set_egress_phyifs(fpp_log_if_cmd_t* p_logif, uint32_t egress);
@@ -99,7 +98,6 @@ void demo_log_if_ld_set_mr_hif_cookie(fpp_log_if_cmd_t* p_logif, bool set, uint3
 bool demo_log_if_ld_is_enabled(const fpp_log_if_cmd_t* p_logif);
 bool demo_log_if_ld_is_disabled(const fpp_log_if_cmd_t* p_logif);
 bool demo_log_if_ld_is_promisc(const fpp_log_if_cmd_t* p_logif);
-bool demo_log_if_ld_is_loopback(const fpp_log_if_cmd_t* p_logif);
 bool demo_log_if_ld_is_match_mode_or(const fpp_log_if_cmd_t* p_logif);
 bool demo_log_if_ld_is_discard_on_m(const fpp_log_if_cmd_t* p_logif);
 bool demo_log_if_ld_is_egress_phyifs(const fpp_log_if_cmd_t* p_logif, uint32_t phyif_bitflag);
