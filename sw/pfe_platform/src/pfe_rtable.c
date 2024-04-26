@@ -438,12 +438,16 @@ static uint32_t pfe_rtable_entry_get_hash(pfe_ct_rtable_entry_t *phys_entry_cach
 
 		for(jj=0; jj<4 ; jj++)
 		{
-			crc_ipv6 += phys_entry_cache->ipv.v6.sip[jj];
+			crc_ipv6 += oal_ntohl(phys_entry_cache->ipv.v6.sip[jj]);
 		}
 
 		/*	CRC(SIP) + DIP + CRC(SPORT) + DPORT + PROTO */
-		sport = crc_ipv6 ^ oal_ntohl((uint32_t)oal_ntohs(phys_entry_cache->sport));
+		sport = crc_ipv6 ^ (uint32_t)oal_ntohs(phys_entry_cache->sport);
+
+		/* Convert to big endian because the subsequent crc32 algorithm expects big endian input data. */
+		sport = oal_htonl(sport);
 		temp = pfe_get_crc32_be(crc,(uint8_t *)&sport, 4);
+
 		temp += oal_ntohl(phys_entry_cache->ipv.v6.dip[0]);
 		temp += oal_ntohl(phys_entry_cache->ipv.v6.dip[1]);
 		temp += oal_ntohl(phys_entry_cache->ipv.v6.dip[2]);
