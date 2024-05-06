@@ -32,7 +32,6 @@ typedef enum __attribute__((packed))
 	PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_DISABLE = 104U,		/* Arg: pfe_platform_rpc_pfe_phy_if_promisc_disable_arg_t, Ret: None */
 	PFE_PLATFORM_RPC_PFE_PHY_IF_ADD_MAC_ADDR = 105U,			/* Arg: pfe_platform_rpc_pfe_phy_if_add_mac_addr_arg_t, Ret: None */
 	PFE_PLATFORM_RPC_PFE_PHY_IF_DEL_MAC_ADDR = 106U,			/* Arg: pfe_platform_rpc_pfe_phy_if_del_mac_addr_arg_t, Ret: None */
-	PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE = 107U,			/* Arg: pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t, Ret: None */
 
 	PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE = 109U,			/* Arg: pfe_platform_rpc_pfe_phy_if_get_op_mode_arg_t, Ret: pfe_platform_rpc_pfe_phy_if_get_op_mode_ret_t */
 	PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED = 110U,			/* Arg: pfe_platform_rpc_pfe_phy_if_is_enabled_arg_t, Ret: pfe_platform_rpc_pfe_phy_if_is_enabled_ret_t */
@@ -138,15 +137,6 @@ ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_phy_if_add_mac_addr_arg_t
 
 typedef pfe_platform_rpc_pfe_phy_if_add_mac_addr_arg_t pfe_platform_rpc_pfe_phy_if_del_mac_addr_arg_t;
 ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_phy_if_del_mac_addr_arg_t, phy_if_id));
-
-typedef struct __attribute__((packed, aligned(4)))
-{
-	/*	Physical interface ID */
-	pfe_ct_phy_if_id_t phy_if_id;
-	/*	Operation mode */
-	pfe_ct_if_op_mode_t op_mode;
-} pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t;
-ct_assert_offsetof(0U == offsetof(pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t, phy_if_id));
 
 typedef struct __attribute__((packed, aligned(4)))
 {
