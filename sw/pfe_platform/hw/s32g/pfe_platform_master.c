@@ -555,26 +555,6 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 				break;
 			}
 
-			case (uint32_t)PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE:
-			{
-				pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t *rpc_arg = (pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t *)buf;
-
-				NXP_LOG_DEBUG("RPC: PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE\n");
-
-				if (EOK == ret)
-				{
-					ret = pfe_phy_if_set_op_mode(phy_if_arg, rpc_arg->op_mode);
-				}
-
-				/*	Report execution status to caller */
-				if (EOK != pfe_idex_set_rpc_ret_val(ret, NULL, 0U))
-				{
-					NXP_LOG_ERROR("Could not send RPC response\n");
-				}
-
-				break;
-			}
-
 			case (uint32_t)PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE:
 			{
 				pfe_platform_rpc_pfe_phy_if_set_block_state_arg_t *rpc_arg = (pfe_platform_rpc_pfe_phy_if_set_block_state_arg_t *)buf;

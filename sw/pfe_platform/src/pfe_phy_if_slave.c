@@ -278,55 +278,6 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 
 	return mode;
 }
-/**
- * @brief		Set operational mode
- * @param[in]	iface The interface instance
- * @param[in]	mode Mode to be set. See pfe_ct_if_op_mode_t.
- * @retval		EOK Success
- * @retval		EINVAL Invalid or missing argument
- */
-errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
-{
-	errno_t ret;
-	pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t arg;
-
-	memset(&arg, 0U, sizeof(pfe_platform_rpc_pfe_phy_if_set_op_mode_arg_t));
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ret = EINVAL;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		if (EOK != oal_mutex_lock(&iface->lock))
-		{
-			NXP_LOG_ERROR("mutex lock failed\n");
-		}
-
-		(void)pfe_phy_if_db_lock();
-
-		/*	Ask the master driver to change the operation mode */
-		arg.phy_if_id = iface->id;
-		arg.op_mode = mode;
-		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE, &arg, sizeof(arg), NULL, 0U);
-		if (EOK != ret)
-		{
-			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE failed: %d\n", ret);
-		}
-
-		(void)pfe_phy_if_db_unlock();
-
-		if (EOK != oal_mutex_unlock(&iface->lock))
-		{
-			NXP_LOG_ERROR("mutex unlock failed\n");
-		}
-	}
-
-	return ret;
-}
 
 /**
  * @brief Set the block state
