@@ -48,9 +48,9 @@ static errno_t pfe_phy_if_db_lock(void)
 	for (; timeout_us > 0U; timeout_us -= timeout_step)
 	{
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_LOCK, NULL, 0, NULL, 0U);
-		if (EOK == ret)
+		if (EOK == ret || ETIMEDOUT == ret || EPERM == ret)
 		{
-			/* Got lock */
+			/* Got lock or communication with Master is not possible */
 			break;
 		}
 
@@ -59,7 +59,7 @@ static errno_t pfe_phy_if_db_lock(void)
 
 	if (EOK != ret)
 	{
-		NXP_LOG_WARNING("Unable to lock interface DB: %d\n", ret);
+		NXP_LOG_ERROR("Unable to lock interface DB: %d\n", ret);
 	}
 
 	return ret;
@@ -72,7 +72,7 @@ static errno_t pfe_phy_if_db_unlock(void)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_UNLOCK, NULL, 0, NULL, 0U);
 	if (EOK != ret)
 	{
-		NXP_LOG_WARNING("Unable to unlock interface DB: %d\n", ret);
+		NXP_LOG_ERROR("Unable to unlock interface DB: %d\n", ret);
 	}
 
 	return ret;
@@ -175,7 +175,7 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_FLUSH_MAC_ADDRS failed: %d\n", ret);
 		}
 
 		/* Destroy local MAC database */
@@ -261,7 +261,7 @@ pfe_ct_if_op_mode_t pfe_phy_if_get_op_mode(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_OP_MODE failed: %d\n", ret);
 		}
 		else
 		{
@@ -314,7 +314,7 @@ errno_t pfe_phy_if_set_op_mode(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_OP_MODE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -363,7 +363,7 @@ errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t blo
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_SET_BLOCK_STATE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -413,7 +413,7 @@ errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *bl
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_BLOCK_STATE failed: %d\n", ret);
 		}
 		else
 		{
@@ -558,7 +558,7 @@ bool_t pfe_phy_if_is_enabled(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
 		}
 		else
 		{
@@ -610,7 +610,7 @@ errno_t pfe_phy_if_enable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_ENABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -647,7 +647,7 @@ errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_DISABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -817,7 +817,7 @@ bool_t pfe_phy_if_is_promisc(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_IS_PROMISC, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_ENABLED failed: %d\n", ret);
 		}
 		else
 		{
@@ -869,7 +869,7 @@ errno_t pfe_phy_if_promisc_enable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_ENABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_ENABLE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_ENABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -917,7 +917,7 @@ errno_t pfe_phy_if_promisc_disable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_PROMISC_DISABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -965,7 +965,7 @@ errno_t pfe_phy_if_loopback_enable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_ENABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_ENABLE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_ENABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1013,7 +1013,7 @@ errno_t pfe_phy_if_loopback_disable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOOPBACK_DISABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_PROMICS_DISABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1061,7 +1061,7 @@ errno_t pfe_phy_if_loadbalance_enable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_ENABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1109,7 +1109,7 @@ errno_t pfe_phy_if_loadbalance_disable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_LOADBALANCE_DISABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1152,7 +1152,7 @@ errno_t pfe_phy_if_allmulti_enable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_ENABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_ENABLE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_ENABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1190,7 +1190,7 @@ errno_t pfe_phy_if_allmulti_disable(pfe_phy_if_t *iface)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_DISABLE, &arg, sizeof(arg), NULL, 0U);
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_DISABLE failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_ALLMULTI_DISABLE failed: %d\n", ret);
 		}
 
 		(void)pfe_phy_if_db_unlock();
@@ -1645,7 +1645,7 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_STATS, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 		if (EOK != ret)
 		{
-			NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_STATS failed: %d\n", ret);
+			NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_IS_STATS failed: %d\n", ret);
 		}
 		else
 		{
@@ -1729,7 +1729,7 @@ uint32_t pfe_phy_if_get_stat_value(pfe_phy_if_t *iface, uint32_t stat_id)
 	ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE, &arg, sizeof(arg), &rpc_ret, sizeof(rpc_ret));
 	if (EOK != ret)
 	{
-		NXP_LOG_WARNING("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE failed: %d\n", ret);
+		NXP_LOG_ERROR("PFE_PLATFORM_RPC_PFE_PHY_IF_GET_STAT_VALUE failed: %d\n", ret);
 	}
 	else
 	{

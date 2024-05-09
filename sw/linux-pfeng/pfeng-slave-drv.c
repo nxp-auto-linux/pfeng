@@ -177,6 +177,9 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 		HM_MSG_DEV_INFO(dev, "PM runtime resume returned: %d\n", ret);
 	}
 
+	/* Inform IDEX that driver is removing */
+	pfe_idex_mark_down();
+
 	if (priv->ihc_slave_wq)
 		destroy_workqueue(priv->ihc_slave_wq);
 
@@ -510,6 +513,9 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	HM_MSG_DEV_INFO(dev, "Suspending driver\n");
 
 	priv->in_suspend = true;
+
+	/* Inform IDEX that driver is suspending */
+	pfe_idex_mark_down();
 
 	pfeng_debugfs_remove(priv);
 
