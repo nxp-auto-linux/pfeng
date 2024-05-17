@@ -1,6 +1,7 @@
 /* =========================================================================
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
+ *  Copyright (c) 2020-2021 Imagination Technologies Limited
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
  *  Copyright 2017-2023 NXP
  *
