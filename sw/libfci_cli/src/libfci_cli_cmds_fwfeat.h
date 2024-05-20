@@ -36,7 +36,7 @@
 /* ==== PUBLIC FUNCTIONS =================================================== */
 
 int cli_cmd_fwfeat_print(const cli_cmdargs_t *p_cmdargs);
-int cli_cmd_fwfeat_set(const cli_cmdargs_t *p_cmdargs); 
+int cli_cmd_fwfeat_set(const cli_cmdargs_t *p_cmdargs);
 int cli_cmd_fwfeat_el_print(const cli_cmdargs_t *p_cmdargs);
 int cli_cmd_fwfeat_el_set(const cli_cmdargs_t *p_cmdargs);
 

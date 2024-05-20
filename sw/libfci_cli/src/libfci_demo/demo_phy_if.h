@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2024 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -74,6 +74,7 @@ int demo_phy_if_update(FCI_CLIENT* p_cl, fpp_phy_if_cmd_t* p_phyif);
 void demo_phy_if_ld_enable(fpp_phy_if_cmd_t* p_phyif);
 void demo_phy_if_ld_disable(fpp_phy_if_cmd_t* p_phyif);
 void demo_phy_if_ld_set_promisc(fpp_phy_if_cmd_t* p_phyif, bool enable);
+void demo_phy_if_ld_set_ff_all_tcp(fpp_phy_if_cmd_t* p_phyif, bool enable);
 void demo_phy_if_ld_set_vlan_conf(fpp_phy_if_cmd_t* p_phyif, bool enable);
 void demo_phy_if_ld_set_ptp_conf(fpp_phy_if_cmd_t* p_phyif, bool enable);
 void demo_phy_if_ld_set_ptp_promisc(fpp_phy_if_cmd_t* p_phyif, bool enable);
@@ -91,6 +92,7 @@ void demo_phy_if_ld_set_ptp_mgmt_if(fpp_phy_if_cmd_t* p_phyif, const char* p_nam
 bool demo_phy_if_ld_is_enabled(const fpp_phy_if_cmd_t* p_phyif);
 bool demo_phy_if_ld_is_disabled(const fpp_phy_if_cmd_t* p_phyif);
 bool demo_phy_if_ld_is_promisc(const fpp_phy_if_cmd_t* p_phyif);
+bool demo_phy_if_ld_is_ff_all_tcp(const fpp_phy_if_cmd_t* p_phyif);
 bool demo_phy_if_ld_is_vlan_conf(const fpp_phy_if_cmd_t* p_phyif);
 bool demo_phy_if_ld_is_ptp_conf(const fpp_phy_if_cmd_t* p_phyif);
 bool demo_phy_if_ld_is_ptp_promisc(const fpp_phy_if_cmd_t* p_phyif);

@@ -253,8 +253,9 @@ static int phyif_print_aux(const fpp_phy_if_cmd_t* p_phyif, bool is_verbose)
            cli_value2txt_on_off(demo_phy_if_ld_is_ptp_promisc(p_phyif)),
            cli_value2txt_on_off(demo_phy_if_ld_is_qinq(p_phyif)));
     
-    printf("%-*s<discard-if-ttl-below-2:%s>\n", indent, "", 
-           cli_value2txt_on_off(demo_phy_if_ld_is_discard_ttl(p_phyif)));
+    printf("%-*s<discard-if-ttl-below-2:%s, fast-forward-all-tcp:%s>\n", indent, "",
+           cli_value2txt_on_off(demo_phy_if_ld_is_discard_ttl(p_phyif)),
+           cli_value2txt_on_off(demo_phy_if_ld_is_ff_all_tcp(p_phyif)));
     
     printf("%-*singress: %"PRIu32" egress: %"PRIu32" discarded: %"PRIu32" malformed: %"PRIu32"\n", indent, "",
            demo_phy_if_ld_get_stt_ingress(p_phyif), 
@@ -478,6 +479,10 @@ static int stt_cmd_phyif_update(const cli_cmdargs_t* p_cmdargs)
         if (p_cmdargs->ptp_promisc.is_valid)
         {
             demo_phy_if_ld_set_ptp_promisc(&phyif, (p_cmdargs->ptp_promisc.is_on));
+        }
+        if (p_cmdargs->ff_all_tcp.is_valid)
+        {
+            demo_phy_if_ld_set_ff_all_tcp(&phyif, (p_cmdargs->ff_all_tcp.is_on));
         }
         if (p_cmdargs->qinq.is_valid)
         {
