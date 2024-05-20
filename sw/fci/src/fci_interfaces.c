@@ -1200,6 +1200,24 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 						break;
 					}
 
+					/* Fast-Forward of ingress TCP SYN, RST, FIN */
+					if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_FF_ALL_TCP))
+					{
+						ret = pfe_phy_if_set_flag(phy_if, IF_FL_FF_ALL_TCP);
+					}
+					else
+					{
+						ret = pfe_phy_if_clear_flag(phy_if, IF_FL_FF_ALL_TCP);
+					}
+
+					if(EOK != ret)
+					{
+						/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
+						NXP_LOG_ERROR("FF_ALL_TCP flag wasn't updated correctly on %s",  pfe_phy_if_get_name(phy_if));
+						*fci_ret = FPP_ERR_INTERNAL_FAILURE;
+						break;
+					}
+
 					/*	QinQ support control */
 					if(0U != (oal_ntohl(if_cmd->flags) & (uint32_t)FPP_IF_ALLOW_Q_IN_Q))
 					{
@@ -1402,6 +1420,7 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 					reply_buf->flags |= ((uint32_t)IF_FL_NONE != (uint32_t)pfe_phy_if_get_flag(phy_if, IF_FL_VLAN_CONF_CHECK)) ? oal_htonl(FPP_IF_VLAN_CONF_CHECK) : 0U;
 					reply_buf->flags |= ((uint32_t)IF_FL_NONE != (uint32_t)pfe_phy_if_get_flag(phy_if, IF_FL_PTP_CONF_CHECK)) ? oal_htonl(FPP_IF_PTP_CONF_CHECK) : 0U;
 					reply_buf->flags |= ((uint32_t)IF_FL_NONE != (uint32_t)pfe_phy_if_get_flag(phy_if, IF_FL_PTP_PROMISC)) ? oal_htonl(FPP_IF_PTP_PROMISC) : 0U;
+					reply_buf->flags |= ((uint32_t)IF_FL_NONE != (uint32_t)pfe_phy_if_get_flag(phy_if, IF_FL_FF_ALL_TCP)) ? oal_htonl(FPP_IF_FF_ALL_TCP) : 0U;
 					reply_buf->flags |= ((uint32_t)IF_FL_NONE != (uint32_t)pfe_phy_if_get_flag(phy_if, IF_FL_ALLOW_Q_IN_Q)) ? oal_htonl(FPP_IF_ALLOW_Q_IN_Q) : 0U;
 					reply_buf->flags |= ((uint32_t)IF_FL_NONE != (uint32_t)pfe_phy_if_get_flag(phy_if, IF_FL_DISCARD_TTL)) ? oal_htonl(FPP_IF_DISCARD_TTL) : 0U;
 
