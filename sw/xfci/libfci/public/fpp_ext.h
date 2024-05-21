@@ -410,6 +410,14 @@ typedef enum CAL_PACKED
                                              If set, the interface is configured as promiscuous.
                                              - promiscuous phyif: all ingress traffic is accepted, regardless of destination MAC.
                                              - promiscuous logif: all inspected traffic is accepted, regardless of active match rules. */
+    FPP_IF_FF_ALL_TCP = (1 << 2),       /**< [phyif] <br>
+                                             Special handling of ingress TCP SYN|FIN|RST packets in routing process.
+                                             Applicable only when the interface uses mode which involves traffic 
+                                             routing (e.g. FPP_IF_OP_ROUTER).
+                                             If set, ingress TCP SYN|FIN|RST packets which match some conntrack are
+                                             fast-forwarded as usual (according to the matching conntrack). This is default behavior.
+                                             If @not set, ingress TCP SYN|FIN|RST packets which match some conntrack are @not 
+                                             fast-forwarded. Instead, they are passed to the default logical interface. */
     FPP_IF_MATCH_OR = (1 << 3),         /**< [logif] <br>
                                              If multiple match rules are active and this flag is set,
                                              then the final result of a match process is a logical OR of the rules.

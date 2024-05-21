@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2024 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -281,6 +281,23 @@ void demo_phy_if_ld_set_promisc(fpp_phy_if_cmd_t* p_phyif, bool enable)
  
  
 /*
+ * @brief          Set/unset Fast Forwarding of all TCP traffic on a physical interface.
+ * @details        [localdata_phyif]
+ *                 When this flag is set, all TCP traffic is fast-forwarded. This is
+ *                 default behavior.
+ *                 When this flag is NOT set, TCP SYN|FIN|RST packets are not fast-forwarded.
+ *                 Instead, they are passed to default logical interface (to host).
+ * @param[in,out]  p_phyif  Local data to be modified.
+ * @param[in]      enable   Request to set/unset the Fast Forwarding of all TCP traffic.
+ */
+void demo_phy_if_ld_set_ff_all_tcp(fpp_phy_if_cmd_t* p_phyif, bool enable)
+{
+    assert(NULL != p_phyif);
+    set_phyif_flag(p_phyif, enable, FPP_IF_FF_ALL_TCP);
+}
+ 
+ 
+/*
  * @brief          Set/unset a VLAN conformance check on a physical interface.
  * @details        [localdata_phyif]
  * @param[in,out]  p_phyif  Local data to be modified.
@@ -518,6 +535,25 @@ bool demo_phy_if_ld_is_promisc(const fpp_phy_if_cmd_t* p_phyif)
  
  
 /*
+ * @brief      Query the status of the "Fast Forwarding of all TCP traffic" flag.
+ * @details    [localdata_phyif]
+ * @param[in]  p_phyif  Local data to be queried.
+ * @return     At time when the data was obtained from PFE, the physical interface:
+ *             true  : was fast-forwarding all TCP traffic
+ *             false : was passing TCP SYN/FIN/RST packets to the default logical interface
+ */
+bool demo_phy_if_ld_is_ff_all_tcp(const fpp_phy_if_cmd_t* p_phyif)
+{
+    assert(NULL != p_phyif);
+
+    fpp_if_flags_t tmp_flags = (p_phyif->flags);
+    ntoh_enum(&tmp_flags, sizeof(fpp_if_flags_t));
+
+    return (bool)(tmp_flags & FPP_IF_FF_ALL_TCP);
+}
+ 
+ 
+/*
  * @brief      Query the status of the "VLAN conformance check" flag.
  * @details    [localdata_phyif]
  * @param[in]  p_phyif  Local data to be queried.
@@ -612,8 +648,6 @@ bool demo_phy_if_ld_is_discard_ttl(const fpp_phy_if_cmd_t* p_phyif)
     
     return (bool)(tmp_flags & FPP_IF_DISCARD_TTL);
 }
- 
- 
  
  
 /*

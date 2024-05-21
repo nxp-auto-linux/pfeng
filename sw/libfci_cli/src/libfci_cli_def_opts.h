@@ -1608,6 +1608,18 @@ typedef enum cli_opt_incompat_grp_tt {
         OPT_128_TXT_HELP
 
 
+#define OPT_129_ENUM_NAME        OPT_FF_ALL_TCP
+#define OPT_129_OPT_PARSE        opt_parse_ff_all_tcp
+#define OPT_129_HAS_ARG          y
+#define OPT_129_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_129_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_129_CLI_LONG_TXT_A   "ff-all-tcp"
+#define OPT_129_CLI_LONG_TXT_B   "fast-forward-all-tcp"
+#define OPT_129_TXT_HELP         "--ff-all-tcp|--fast-forward-all-tcp"
+#define                          TXT_HELP__FF_ALL_TCP \
+        OPT_129_TXT_HELP
+
+
 
 
 /* OPT_LAST (keep this at the bottom of the cli option definition list) */

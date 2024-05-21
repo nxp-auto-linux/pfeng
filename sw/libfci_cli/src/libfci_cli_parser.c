@@ -2182,6 +2182,22 @@ static int opt_parse_payload(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_opt
     return (rtn);
 }
 
+static int opt_parse_ff_all_tcp(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+
+
+    int rtn = CLI_ERR;
+    bool* p_is_valid = &(p_rtn_cmdargs->ff_all_tcp.is_valid);
+    bool* p_is_on    = &(p_rtn_cmdargs->ff_all_tcp.is_on);
+
+    rtn = cli_txt2bool_on_off(p_is_on, p_txt_optarg);
+
+    set_if_rtn_ok(rtn, p_is_valid);
+    return (rtn);
+}
+
 
 
 

@@ -43,7 +43,7 @@
 
 /* app version */
 #define CLI_VERSION_MAJOR   "2"
-#define CLI_VERSION_MINOR   "15"
+#define CLI_VERSION_MINOR   "16"
 #define CLI_VERSION_PATCH   "0"
 #define CLI_VERSION_STRING  CLI_VERSION_MAJOR"."CLI_VERSION_MINOR"."CLI_VERSION_PATCH
 
@@ -188,6 +188,11 @@ typedef struct cli_cmdargs_tt
         bool is_valid;
         bool is_on;
     } promisc;
+    struct
+    {
+        bool is_valid;
+        bool is_on;
+    } ff_all_tcp;
     struct
     {
         bool is_valid;

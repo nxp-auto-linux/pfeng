@@ -934,6 +934,14 @@
 #define TXT_OPTDESCR__PAYLOAD           TXT_HELP__PAYLOAD  "=<"  "0,5,20,... | 0x00,0x05,0x14..."  ">"  "\n"   \
                                         "  Comma seperated list of values. These values will serve as payload of some command.\n"
 
+#define TXT_OPT__FF_ALL_TCP             TXT_HELP__FF_ALL_TCP  "=<"  TXT_OPTARGS__ON_OFF  ">"
+#define TXT_OPTDESCR__FF_ALL_TCP        TXT_HELP__FF_ALL_TCP  "=<"  TXT_OPTARGS__ON_OFF  ">"  "\n"  \
+                                        "  Enables/disables fast forwarding of ingress TCP SYN|FIN|RST packets.\n"  \
+                                        "  Applicable only for interface modes which utilize routing (e.g. "  TXT_IF_MODE__ROUTER  ").\n"    \
+                                        "  When trying to fast-forward a TCP SYN|FIN|RST packet, then based on state of this flag: \n"        \
+                                        "    "  TXT_ON_OFF__ON   "  : fast-forward the packet as usual (according to matching conntrack)\n"  \
+                                        "    "  TXT_ON_OFF__OFF  " : send the packet to a host\n"
+
 
 
 
@@ -941,7 +949,7 @@
     Sanity check for opt help texts. When new opt is added, create a help text for the opt and remove its symbol from here.
     And don't forget to check the pairing! ^_^
 */
-#if (defined(OPT_129_TXT_HELP) || \
+#if (\
      defined(OPT_130_TXT_HELP) || defined(OPT_131_TXT_HELP) || defined(OPT_132_TXT_HELP) || defined(OPT_133_TXT_HELP) || defined(OPT_134_TXT_HELP) || \
      defined(OPT_135_TXT_HELP) || defined(OPT_136_TXT_HELP) || defined(OPT_137_TXT_HELP) || defined(OPT_138_TXT_HELP) || defined(OPT_139_TXT_HELP) || \
      defined(OPT_140_TXT_HELP) || defined(OPT_141_TXT_HELP) || defined(OPT_142_TXT_HELP) || defined(OPT_143_TXT_HELP) || defined(OPT_144_TXT_HELP) || \
@@ -1006,6 +1014,7 @@ static const char *const txt_help_phyif_update[] =
     "["   TXT_OPT__QINQ                    "]  ",
     "["   TXT_OPT__DISCARD_IF_TTL_BELOW_2  "]  ",
     "["   TXT_OPT__PTP_MGMT_IF             "]  ",
+    "["   TXT_OPT__FF_ALL_TCP              "]  ",
     "\n",
     TXT_DECOR_DESCR,
     ""    "Update parameters of a physical interface.",
@@ -1028,6 +1037,7 @@ static const char *const txt_help_phyif_update[] =
     TXT_OPTDESCR__QINQ,
     TXT_OPTDESCR__DISCARD_IF_TTL_BELOW_2,
     TXT_OPTDESCR__PTP_MGMT_IF,
+    TXT_OPTDESCR__FF_ALL_TCP,
     "\n",
     
     NULL
