@@ -519,11 +519,10 @@ int pfeng_hif_chnl_set_coalesce(struct pfeng_hif_chnl *chnl, struct clk *clk_sys
 	return -ret; /* convert platform err code to linux kernel err code */
 }
 
-static int pfeng_hif_chnl_drv_remove(struct pfeng_priv *priv, u32 idx)
+static int pfeng_hif_chnl_drv_stop(struct pfeng_priv *priv, u32 idx)
 {
 	struct device *dev = &priv->pdev->dev;
 	struct pfeng_hif_chnl *chnl;
-	int ret = 0;
 
 	if (idx >= PFENG_PFE_HIF_CHANNELS) {
 		HM_MSG_DEV_ERR(dev, "Invalid HIF instance number: %u\n", idx);
@@ -542,6 +541,20 @@ static int pfeng_hif_chnl_drv_remove(struct pfeng_priv *priv, u32 idx)
 	/* Prepare for startup state (in case of STR use) */
 	chnl->status = PFENG_HIF_STATUS_REQUESTED;
 
+	return 0;
+}
+
+static int pfeng_hif_chnl_drv_remove(struct pfeng_priv *priv, u32 idx)
+{
+	struct device *dev = &priv->pdev->dev;
+	struct pfeng_hif_chnl *chnl;
+
+	if (idx >= PFENG_PFE_HIF_CHANNELS) {
+		HM_MSG_DEV_ERR(dev, "Invalid HIF instance number: %u\n", idx);
+		return -ENODEV;
+	}
+	chnl = &priv->hif_chnl[idx];
+
 	/* Release attached RX/TX pools */
 	pfeng_bman_pool_destroy(chnl);
 
@@ -555,7 +568,7 @@ static int pfeng_hif_chnl_drv_remove(struct pfeng_priv *priv, u32 idx)
 
 	HM_MSG_DEV_INFO(dev, "HIF%d disabled\n", idx);
 
-	return ret;
+	return 0;
 }
 
 static int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 idx)
@@ -640,6 +653,7 @@ static int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 idx)
 	return 0;
 
 err:
+	pfeng_hif_chnl_drv_stop(priv, idx);
 	pfeng_hif_chnl_drv_remove(priv, idx);
 	return ret;
 }
@@ -745,22 +759,35 @@ void pfeng_hif_remove(struct pfeng_priv *priv)
 {
 	struct device *dev;
 	int idx;
+	u8 chnl_stat[PFENG_PFE_HIF_CHANNELS];
 
 	if (!priv)
 		return;
 
 	dev = &priv->pdev->dev;
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-	pfeng_hif_idex_release(priv);
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
+	/*	First stop HIF channels */
 	for (idx = (PFENG_PFE_HIF_CHANNELS - 1); idx >= 0; idx--) {
+		chnl_stat[idx] = priv->hif_chnl[idx].status;
 
 		if (priv->hif_chnl[idx].status < PFENG_HIF_STATUS_ENABLED) {
 			HM_MSG_DEV_INFO(dev, "HIF%d not enabled, skipped\n", idx);
 			continue;
 		}
+
+		pfeng_hif_chnl_drv_stop(priv, idx);
+	}
+
+#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	/*	Unregister IHC client and release IDEX RPC */
+	pfeng_hif_idex_release(priv);
+#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
+
+	/*	Disable HIFs that have been enabled */
+	for (idx = (PFENG_PFE_HIF_CHANNELS - 1); idx >= 0; idx--) {
+
+		if (chnl_stat[idx] < PFENG_HIF_STATUS_ENABLED)
+			continue;
 
 		pfeng_hif_chnl_drv_remove(priv, idx);
 	}
