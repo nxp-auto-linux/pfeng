@@ -449,7 +449,7 @@ errno_t pfe_mirror_destroy(pfe_mirror_t *mirror)
     if(likely(NULL != mirror))
     {
         /*	Protect against concurrent access */
-        if (unlikely(EOK != oal_mutex_lock(&mirror->db->lock)))
+        if (unlikely(EOK != oal_mutex_lock(&pfe_mirror_db->lock)))
         {
             NXP_LOG_ERROR("Mutex lock failed\n");
             ret = EINVAL;
@@ -470,7 +470,7 @@ errno_t pfe_mirror_destroy(pfe_mirror_t *mirror)
                 ret = EBUSY;
             }
 
-            if (unlikely(EOK != oal_mutex_unlock(&mirror->db->lock)))
+            if (unlikely(EOK != oal_mutex_unlock(&pfe_mirror_db->lock)))
             {
                 NXP_LOG_ERROR("Mutex unlock failed\n");
                 ret = EINVAL;

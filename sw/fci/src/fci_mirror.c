@@ -468,13 +468,14 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 
 					if((NULL == entry) || (NULL == phy_if))
 					{
+						/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
+						(void)pfe_if_db_unlock(fci_context->if_session_id);
+						NXP_LOG_ERROR("Cannot get egress interface of the mirror '%s'.\n", pfe_mirror_get_name(mirror));
+
 						/*	Notify mirror module we are done working with the mirror instance. */
 						pfe_mirror_put(mirror);
 						mirror = NULL;
 
-						/* Internal problem. Set fci_ret, but respond with detected internal error code (ret). */
-						(void)pfe_if_db_unlock(fci_context->if_session_id);
-						NXP_LOG_ERROR("Cannot get egress interface of the mirror '%s'.\n", pfe_mirror_get_name(mirror));
 						*fci_ret = FPP_ERR_INTERNAL_FAILURE;
 						ret = ENOENT;
 						break;
