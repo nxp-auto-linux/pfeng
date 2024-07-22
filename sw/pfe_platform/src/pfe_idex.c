@@ -511,6 +511,15 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 
 						oal_mutex_lock_sleep(&server->lock);
 
+						/*	If there is not waiting any RPC request in buffer, write error and skip processing */
+						if(NULL == server->request || NULL == server->rpc_msg)
+						{
+							NXP_LOG_WARNING("Received IDEX Response without valid RPC Request");
+							oal_mutex_unlock(&server->lock);
+							break;
+						}
+						rpc_msg = server->rpc_msg;
+
 						/*	Sequence number in response must be the same as in request */
 						if(server->version >= IDEX_VERSION_2 && server->seqnum != seqnum)
 						{
@@ -524,33 +533,28 @@ static void pfe_idex_do_rx(pfe_hif_drv_client_t *hif_client, pfe_idex_t *idex)
 								pfe_idex.stats.rx_fails++;
 							}
 							oal_mutex_unlock(&server->lock);
-							continue;
+							break;
 						}
 
-						/*	If there is waiting RPC request buffer, copy data to it and continue */
-						rpc_msg = server->rpc_msg;
-						if (NULL != rpc_msg)
+						/*	In rpc_msg->plen is temporarily saved buffer length */
+						if (payload_length <= rpc_msg->plen)
 						{
-							/*	In rpc_msg->plen is temporarily saved buffer length */
-							if (payload_length <= rpc_msg->plen)
-							{
-								/*	Copy payload */
-								(void)memcpy((void *)((addr_t)rpc_msg + sizeof(pfe_idex_msg_rpc_t)),
-											(void *)((addr_t)rpc_resp + sizeof(pfe_idex_msg_rpc_t)), payload_length);
+							/*	Copy payload */
+							(void)memcpy((void *)((addr_t)rpc_msg + sizeof(pfe_idex_msg_rpc_t)),
+										(void *)((addr_t)rpc_resp + sizeof(pfe_idex_msg_rpc_t)), payload_length);
 
-								rpc_msg->rpc_id = (uint32_t)oal_ntohl(rpc_resp->rpc_id);
-								rpc_msg->rpc_ret = (uint32_t)oal_ntohl(rpc_resp->rpc_ret);
-								rpc_msg->plen = payload_length;
+							rpc_msg->rpc_id = (uint32_t)oal_ntohl(rpc_resp->rpc_id);
+							rpc_msg->rpc_ret = (uint32_t)oal_ntohl(rpc_resp->rpc_ret);
+							rpc_msg->plen = payload_length;
 
-								server->request->state = IDEX_REQ_STATE_COMPLETED;
-							}
-							else
-							{
-								/*	Don't send response if there is no room for required payload */
-								NXP_LOG_WARNING("RPC Response buffer is too small! %u < %u", payload_length, rpc_msg->plen);
-								server->request->state = IDEX_REQ_STATE_INVALID;
-								pfe_idex.stats.rx_fails++;
-							}
+							server->request->state = IDEX_REQ_STATE_COMPLETED;
+						}
+						else
+						{
+							/*	Don't send response if there is no room for required payload */
+							NXP_LOG_WARNING("RPC Response buffer is too small! %u < %u", payload_length, rpc_msg->plen);
+							server->request->state = IDEX_REQ_STATE_INVALID;
+							pfe_idex.stats.rx_fails++;
 						}
 
 						oal_mutex_unlock(&server->lock);
@@ -1333,7 +1337,9 @@ errno_t pfe_idex_set_rpc_ret_val(errno_t retval, void *resp, uint16_t resp_len)
  */
 void pfe_idex_down(void)
 {
+	oal_mutex_lock_sleep(&pfe_idex.remote.server.lock);
 	pfe_idex.remote.server.is_up = FALSE;
+	oal_mutex_unlock(&pfe_idex.remote.server.lock);
 }
 
 /**
