@@ -10,6 +10,8 @@
 #include "linked_list.h"
 #include "pfe_if_db.h"
 
+/* Time for sleep between polling in ms */
+#define IF_DB_LOCK_POLLING_SLEEP		20UL
 
 typedef	union
 {
@@ -76,8 +78,8 @@ static errno_t pfe_if_db_check_precondition(const if_db_context_t *pr_if_db_cont
 
 	if(FALSE == pr_if_db_context->is_locked)
 	{
+		NXP_LOG_DEBUG("DB access not permitted\n");
 		ret = EPERM;
-        NXP_LOG_DEBUG("DB access not permitted\n");
 	}
 	else if(session_id != pr_if_db_context->session_id)
 	{
@@ -937,9 +939,9 @@ errno_t pfe_log_if_db_drop_all(const pfe_if_db_t *db, uint32_t session_id)
 }
 
 /**
- * @brief		Lock the DB with session ID
+ * @brief		Lock the DB and return generated session ID
  * @param[out]	session_id ID of locked session
- * @return		EOK if success, error if lock is already locked
+ * @return		EOK if success, ENOLCK if lock is already locked
  */
 errno_t pfe_if_db_lock(uint32_t *session_id)
 {
@@ -960,12 +962,12 @@ errno_t pfe_if_db_lock(uint32_t *session_id)
 			NXP_LOG_ERROR("DB mutex lock failed\n");
 		}
 
-		/* IF_DB Lock is acquire by another context, but lock timeout occurred, steal the lock */
-		if (TRUE == if_db_context.is_locked && 
+		/* IF_DB Lock is acquired by another context, but lock timeout occurred, steal the lock */
+		if (TRUE == if_db_context.is_locked &&
 			PFE_CFG_IF_DB_MAX_LOCK_TIME <= (oal_time_gettime() - if_db_context.lock_time))
 		{
 			NXP_LOG_WARNING("IF_DB is already locked for too long, stealing the lock\n");
-			
+
 			++if_db_context.seed;
 			if_db_context.session_id = if_db_context.seed << 4U;
 			*session_id = if_db_context.session_id;
@@ -991,7 +993,8 @@ errno_t pfe_if_db_lock(uint32_t *session_id)
 			if_db_context.lock_time = oal_time_gettime();
 			ret = EOK;
 		}
-		else /* is_locked==TRUE && timer_expired==FALSE */
+		/* is_locked==TRUE && timer_expired==FALSE */
+		else
 		{
 			ret = ENOLCK;
 		}
@@ -1006,9 +1009,9 @@ errno_t pfe_if_db_lock(uint32_t *session_id)
 }
 
 /**
- * @brief		Lock the DB with owner ID
+ * @brief		Lock the DB with provided owner ID
  * @param[in]	owner_id ID of owner in range 0 - 15
- * @return		EOK if success, error if lock is already locked or id is not in range
+ * @return		EOK if success, ENOLCK if lock is already locked, EINVAL if ID is not in range
  */
 errno_t pfe_if_db_lock_owned(uint32_t owner_id)
 {
@@ -1022,7 +1025,7 @@ errno_t pfe_if_db_lock_owned(uint32_t owner_id)
 	/* Check if session ID is in ok range */
 	if (16U > owner_id)
 	{
-		/* IF_DB Lock is acquire by another context, but lock timeout occurred, steal the lock */
+		/* IF_DB Lock is acquired by another context, but lock timeout occurred, steal the lock */
 		if (TRUE == if_db_context.is_locked  &&
 			PFE_CFG_IF_DB_MAX_LOCK_TIME <= (oal_time_gettime() - if_db_context.lock_time))
 		{
@@ -1040,7 +1043,8 @@ errno_t pfe_if_db_lock_owned(uint32_t owner_id)
 			if_db_context.lock_time = oal_time_gettime();
 			ret = EOK;
 		}
-		else /* is_locked==TRUE && timer_expired==FALSE */
+		/* is_locked==TRUE && timer_expired==FALSE */
+		else
 		{
 			ret = ENOLCK;
 		}
@@ -1068,12 +1072,12 @@ errno_t pfe_if_db_unlock(uint32_t session_id)
 	errno_t ret = ENOLCK;
 
 	/* Lock global if DB mutex */
-	if(EOK != oal_mutex_lock(&if_db_context.mutex))
+	if (EOK != oal_mutex_lock(&if_db_context.mutex))
 	{
 		NXP_LOG_ERROR("DB mutex lock failed\n");
 	}
 
-	if((TRUE == if_db_context.is_locked) && (session_id == if_db_context.session_id))
+	if ((TRUE == if_db_context.is_locked) && (session_id == if_db_context.session_id))
 	{
 		/* Discard key and set locked to FALSE*/
 		if_db_context.session_id = (~if_db_context.session_id) << 4U;
@@ -1089,5 +1093,103 @@ errno_t pfe_if_db_unlock(uint32_t session_id)
 	{
 		NXP_LOG_ERROR("DB mutex unlock failed\n");
 	}
+	return ret;
+}
+
+/**
+ * @brief		Lock the DB and return session ID, repeat the attempt multiple times
+ * @param[out]	session_id ID of locked session
+ * @return		EOK if success, ENOLCK if lock is already locked
+ */
+errno_t pfe_if_db_polled_lock(uint32_t *session_id)
+{
+	errno_t ret = EOK;
+	uint32_t i;
+
+#if defined(PFE_CFG_NULL_ARG_CHECK)
+	if (unlikely(NULL == session_id))
+	{
+		NXP_LOG_ERROR("NULL argument received\n");
+		ret = EINVAL;
+	} else
+#endif /* PFE_CFG_NULL_ARG_CHECK */
+	{
+		/* Try to lock IF_DB pfe_if_db_lock multiple times */
+		for (i = 0; i <= PFE_CFG_IF_DB_POLLING_LOCK_TIME / IF_DB_LOCK_POLLING_SLEEP; i++)
+		{
+			ret = pfe_if_db_lock(session_id);
+			if (ret == EOK)
+			{
+				/* Lock is acquired */
+				break;
+			}
+			else
+			{
+				/* Wait for predefined time before next polling attempt */
+				oal_time_msleep(IF_DB_LOCK_POLLING_SLEEP);
+			}
+		}
+		if (ret != EOK)
+		{
+			NXP_LOG_WARNING("IF_DB polled lock was not successful.\n");
+		}
+	}
+	return ret;
+}
+
+/**
+ * @brief		Lock the DB with owner ID, repeat the attempt multiple times
+ * @param[in]	owner_id ID of owner in range 0 - 15
+ * @return		EOK if success, ENOLCK if lock is already locked, EINVAL if owner_id out of range
+ */
+errno_t pfe_if_db_polled_lock_owned(uint32_t owner_id)
+{
+	errno_t ret = EOK;
+	uint32_t i;
+
+	/* Try to lock IF_DB pfe_if_db_lock_owned multiple times */
+	for (i = 0; i <= PFE_CFG_IF_DB_POLLING_LOCK_TIME / IF_DB_LOCK_POLLING_SLEEP; i++)
+	{
+		ret = pfe_if_db_lock_owned(owner_id);
+		if (ret == EOK || ret == EINVAL)
+		{	
+			/* Lock is acquired, or invalid parameters */
+			break;
+		}
+		else
+		{
+			/* Wait for predefined time before next polling attempt */
+			oal_time_msleep(IF_DB_LOCK_POLLING_SLEEP);
+		}
+	}
+	if (ret != EOK)
+	{
+		NXP_LOG_WARNING("IF_DB polled lock was not successful.\n");
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Check if the IF_DB is locked by session_id
+ * @param[in]	session_id ID of locked session
+ * @return		EOK if success, EPERM if lock is not available 
+ */
+errno_t pfe_if_db_lock_check(uint32_t session_id)
+{
+	errno_t ret;
+
+	if (EOK != oal_mutex_lock(&if_db_context.mutex))
+	{
+		NXP_LOG_ERROR("IF_DB Mutex lock failed\n");
+	}
+
+	ret = pfe_if_db_check_precondition(&if_db_context, session_id);
+
+	if (EOK != oal_mutex_unlock(&if_db_context.mutex))
+	{
+		NXP_LOG_ERROR("IF_DB Mutex unlock failed\n");
+	}
+
 	return ret;
 }
