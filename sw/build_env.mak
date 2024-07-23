@@ -121,6 +121,10 @@ export PFE_CFG_IP_READY_MS_TMOUT?=5000
 export PFE_CFG_IDEX_RESEND_TIME?=100
 #Number of times to send IDEX request
 export PFE_CFG_IDEX_RESEND_COUNT?=10
+#Maximum number of milliseconds provide for IF_DB lock
+export PFE_CFG_IF_DB_MAX_LOCK_TIME?=1000
+#Number of milliseconds for IF_DB polled_lock
+export PFE_CFG_IF_DB_POLLING_LOCK_TIME?=1000
 
 ifeq ($(PFE_CFG_HIF_DRV_MODE),0)
   #Use multi-client HIF driver. Required when multiple logical interfaces need to
@@ -380,6 +384,14 @@ ifneq ($(PFE_CFG_HIF_RING_LENGTH),0)
 
     # The following symbol exists for compatibility with MCAL HIF RX RING length symbol in the shared platform code.
     GLOBAL_CCFLAGS+=-DPFE_HIF_RX_RING_CFG_LENGTH=$(PFE_CFG_HIF_RING_LENGTH)
+endif
+
+ifneq ($(PFE_CFG_IF_DB_MAX_LOCK_TIME),0)
+  GLOBAL_CCFLAGS+=-DPFE_CFG_IF_DB_MAX_LOCK_TIME='$(PFE_CFG_IF_DB_MAX_LOCK_TIME)'
+endif
+
+ifneq ($(PFE_CFG_IF_DB_POLLING_LOCK_TIME),0)
+  GLOBAL_CCFLAGS+=-DPFE_CFG_IF_DB_POLLING_LOCK_TIME='$(PFE_CFG_IF_DB_POLLING_LOCK_TIME)'
 endif
 
 # Workaround to remove MCAL version checks when building from repository

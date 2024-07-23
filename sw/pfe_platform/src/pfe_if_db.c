@@ -45,11 +45,12 @@ struct pfe_if_db_entry_tag
 
 typedef struct
 {
-	uint32_t session_id;
-	uint32_t seed;
-	oal_mutex_t mutex;
-	uint8_t ref_cnt;
-	bool_t is_locked;
+	uint32_t session_id;	/* Locked by session ID */
+	uint32_t seed;			/* Starting seed for session ID */
+	oal_mutex_t mutex;		/* Mutex to access this structure data */
+	uint8_t ref_cnt;		/* Number of IF_DB which are using this structure */
+	bool_t is_locked;		/* Information, that IF_DB lock is acquired by somebody */
+	uint64_t lock_time;		/* Timestamp in ms when was last lock acquired in milliseconds*/
 } if_db_context_t;
 
 /**
@@ -942,7 +943,7 @@ errno_t pfe_log_if_db_drop_all(const pfe_if_db_t *db, uint32_t session_id)
  */
 errno_t pfe_if_db_lock(uint32_t *session_id)
 {
-	errno_t ret;
+	errno_t ret = EOK;
 
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == session_id))
@@ -959,21 +960,38 @@ errno_t pfe_if_db_lock(uint32_t *session_id)
 			NXP_LOG_ERROR("DB mutex lock failed\n");
 		}
 
-		if (FALSE == if_db_context.is_locked)
+		/* IF_DB Lock is acquire by another context, but lock timeout occurred, steal the lock */
+		if (TRUE == if_db_context.is_locked && 
+			PFE_CFG_IF_DB_MAX_LOCK_TIME <= (oal_time_gettime() - if_db_context.lock_time))
 		{
-				/* Increment seed id */
-				++if_db_context.seed;
+			NXP_LOG_WARNING("IF_DB is already locked for too long, stealing the lock\n");
+			
+			++if_db_context.seed;
+			if_db_context.session_id = if_db_context.seed << 4U;
+			*session_id = if_db_context.session_id;
 
-				/* Store session ID and reserve 0 - 15 for named sessions */
-				if_db_context.session_id = if_db_context.seed << 4U;
-
-				/* Pass session id to caller*/
-				*session_id = if_db_context.session_id;
-				if_db_context.is_locked = TRUE;
-
-				ret = EOK;
+			/* Save time when the lock was acquired */
+			if_db_context.lock_time = oal_time_gettime();
+			ret = EOK;
 		}
-		else
+		/* IF_DB Lock is available to acquire */
+		else if (FALSE == if_db_context.is_locked)
+		{
+			/* Increment seed id */
+			++if_db_context.seed;
+
+			/* Store session ID and reserve 0 - 15 for named sessions */
+			if_db_context.session_id = if_db_context.seed << 4U;
+
+			/* Pass session id to caller*/
+			*session_id = if_db_context.session_id;
+			if_db_context.is_locked = TRUE;
+
+			/* Save time when the lock was acquired */
+			if_db_context.lock_time = oal_time_gettime();
+			ret = EOK;
+		}
+		else /* is_locked==TRUE && timer_expired==FALSE */
 		{
 			ret = ENOLCK;
 		}
@@ -994,19 +1012,42 @@ errno_t pfe_if_db_lock(uint32_t *session_id)
  */
 errno_t pfe_if_db_lock_owned(uint32_t owner_id)
 {
-	errno_t ret = ENOLCK;
+	errno_t ret = EOK;
 
 	if(EOK != oal_mutex_lock(&if_db_context.mutex))
 	{
 		NXP_LOG_ERROR("DB mutex lock failed\n");
 	}
 
-	if((FALSE == if_db_context.is_locked) && (16U > owner_id))
+	/* Check if session ID is in ok range */
+	if (16U > owner_id)
 	{
-		/* Session ID is in ok range store it*/
-		if_db_context.session_id = owner_id;
-		if_db_context.is_locked = TRUE;
-		ret = EOK;
+		/* IF_DB Lock is acquire by another context, but lock timeout occurred, steal the lock */
+		if (TRUE == if_db_context.is_locked  &&
+			PFE_CFG_IF_DB_MAX_LOCK_TIME <= (oal_time_gettime() - if_db_context.lock_time))
+		{
+			NXP_LOG_WARNING("IF_DB is already locked for too long, stealing the lock\n");
+
+			if_db_context.session_id = owner_id;
+			if_db_context.lock_time = oal_time_gettime();
+			ret = EOK;
+		}
+		/* IF_DB is unlocked */
+		else if (FALSE == if_db_context.is_locked)
+		{
+			if_db_context.session_id = owner_id;
+			if_db_context.is_locked = TRUE;
+			if_db_context.lock_time = oal_time_gettime();
+			ret = EOK;
+		}
+		else /* is_locked==TRUE && timer_expired==FALSE */
+		{
+			ret = ENOLCK;
+		}
+	}
+	else
+	{/* Invalid owner ID range*/
+		ret = EINVAL;
 	}
 
 	if(EOK != oal_mutex_unlock(&if_db_context.mutex))
