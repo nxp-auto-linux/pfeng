@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2021,2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -16,6 +16,7 @@
  */
 
 #include <linux/delay.h>
+#include <linux/ktime.h>
 #include "pfe_cfg.h"
 
 /*
@@ -50,6 +51,15 @@ void oal_time_udelay(uint32_t usec)
 void oal_time_mdelay(uint32_t msec)
 {
 	mdelay(msec);
+}
+
+uint64_t oal_time_gettime(void)
+{
+	ktime_t time;
+	
+	time = ktime_get();
+	
+	return (uint64_t)ktime_to_ms(time);
 }
 
 /** @}*/
