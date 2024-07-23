@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2023 NXP
+#  Copyright 2018-2024 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -78,8 +78,6 @@ export PFE_CFG_FCI_ENABLE?=1
 export PFE_CFG_GLOB_ERR_POLL_WORKER?=1
 #Build support for flexible parser and flexible router
 export PFE_CFG_FLEX_PARSER_AND_FILTER?=1
-#Enable Interface Database worker thread. 1 - enable, 0 - disable
-export PFE_CFG_IF_DB_WORKER?=0
 #Enable IEEE1588 timestamping support
 export PFE_CFG_IEEE1588_SUPPORT?=0
 #Input clock frequency for the IEEE1588 timestamping unit (EMAC)
@@ -263,10 +261,6 @@ endif
 
 ifneq ($(PFE_CFG_FLEX_PARSER_AND_FILTER),0)
     GLOBAL_CCFLAGS+= -DPFE_CFG_FLEX_PARSER_AND_FILTER
-endif
-
-ifneq ($(PFE_CFG_IF_DB_WORKER),0)
-    GLOBAL_CCFLAGS+= -DPFE_CFG_IF_DB_WORKER
 endif
 
 ifneq ($(PFE_CFG_MC_HIF),0)
