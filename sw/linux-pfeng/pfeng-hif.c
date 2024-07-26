@@ -934,22 +934,31 @@ void pfeng_ihc_tx_work_handler(struct work_struct *work)
 
 		/* IHC transport requires protection */
 		spin_lock_bh(&chnl->lock_tx);
-		pfeng_hif_chnl_txconf_put_map_frag(chnl, dma, skb_headlen(skb), skb, PFENG_MAP_PKT_IHC, 0);
 
-		ret = pfe_hif_chnl_tx(chnl->priv, (void *)dma, skb->data, skb_headlen(skb), true);
-		if (unlikely(EOK != ret)) {
-			pfeng_hif_chnl_txconf_unroll_map_full(chnl, 0);
-			goto err;
+		/* Check TX BD ring before sending RPC */
+		if (likely(pfeng_hif_chnl_txbd_unused(chnl) >= PFE_TXBDS_NEEDED(1))) {
+			pfeng_hif_chnl_txconf_put_map_frag(chnl, dma, skb_headlen(skb), skb, PFENG_MAP_PKT_IHC, 0);
+
+			ret = pfe_hif_chnl_tx(chnl->priv, (void *)dma, skb->data, skb_headlen(skb), true);
+			if (unlikely(EOK != ret)) {
+				pfeng_hif_chnl_txconf_unroll_map_full(chnl, 0);
+				spin_unlock_bh(&chnl->lock_tx);
+				goto err;
+			}
+
+			pfeng_hif_chnl_txconf_update_wr_idx(chnl, 1);
+		} else {
+			/* TX BD ring is full, drop the packet */
+			dma_unmap_single(chnl->dev, dma, skb_headlen(skb), DMA_TO_DEVICE);
+			kfree_skb(skb);
 		}
 
-		pfeng_hif_chnl_txconf_update_wr_idx(chnl, 1);
 		spin_unlock_bh(&chnl->lock_tx);
 	}
 
 	return;
 
 err:
-	spin_unlock_bh(&chnl->lock_tx);
 	if(skb)
 		kfree_skb(skb);
 
