@@ -192,14 +192,6 @@ static void *pfe_poller_func(void *arg)
 					pfe_class_irq_unmask(platform->classifier);
 				}
 
-				/* UTIL */
-				if (NULL != platform->util)
-				{
-					pfe_util_irq_mask(platform->util);
-					(void)pfe_util_isr(platform->util);
-					pfe_util_irq_unmask(platform->util);
-				}
-
 				break;
 			}
 

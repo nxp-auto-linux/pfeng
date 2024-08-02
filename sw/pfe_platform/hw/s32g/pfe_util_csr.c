@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -53,27 +53,6 @@ uint32_t pfe_util_cfg_get_text_stat(addr_t base_va, struct seq_file *seq, uint8_
 		seq_printf(seq, "TQS max count\t\t0x%08x\n", hal_read32(base_va + UTIL_TSQ_MAX_CNT));
 	}
 	return 0;
-}
-
-/**
- * @brief		Dispatch interrupt from util.
- * @details		ACK and process triggered interrupts.
-
- * @param[in]	base_va 	Base address of UTIL register space (virtual)
- * @return		EOK if interrupt has been handled, error code otherwise
- */
-errno_t pfe_util_cfg_isr(addr_t base_va)
-{
-	uint32_t irq_src;
-
-	/* Get IRQ status */
-	irq_src = hal_read32(base_va + UTIL_UPE_GP_REG_ADDR);
-	/*ACK interrupt */
-	hal_write32(irq_src, base_va + UTIL_UPE_GP_REG_ADDR);
-
-	/* TODO: Handle related interrupt here */
-
-	return EOK;
 }
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
