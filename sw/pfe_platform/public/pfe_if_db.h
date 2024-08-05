@@ -41,6 +41,8 @@ typedef enum
  */
 typedef struct pfe_if_db_tag pfe_if_db_t;
 
+errno_t pfe_if_db_context_init(void);
+errno_t pfe_if_db_context_destroy(void);
 pfe_if_db_t * pfe_if_db_create(pfe_if_db_type_t type);
 void pfe_if_db_destroy(const pfe_if_db_t *db);
 errno_t pfe_if_db_add(pfe_if_db_t *db, uint32_t session_id, void *iface, pfe_ct_phy_if_id_t owner);

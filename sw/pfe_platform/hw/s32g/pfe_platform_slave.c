@@ -444,6 +444,13 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 		goto exit;
 	}
 
+	/* IF_DB Context */
+	ret = pfe_if_db_context_init();
+	if (EOK != ret)
+	{
+		goto exit;
+	}
+
 	ret = pfe_platform_create_hif(&pfe, config);
 	if (EOK != ret)
 	{
@@ -524,6 +531,11 @@ static void pfe_platform_destroy_ifdb(pfe_platform_t *platform)
 		{
 			pfe_if_db_destroy(platform->phy_if_db);
 			platform->phy_if_db = NULL;
+		}
+
+		if(EOK != pfe_if_db_context_destroy())
+		{
+			NXP_LOG_ERROR("IF_DB context destroy failed\n");
 		}
 	}
 }

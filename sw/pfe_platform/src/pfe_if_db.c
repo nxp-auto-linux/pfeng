@@ -50,7 +50,7 @@ typedef struct
 	uint32_t session_id;	/* Locked by session ID */
 	uint32_t seed;			/* Starting seed for session ID */
 	oal_mutex_t mutex;		/* Mutex to access this structure data */
-	uint8_t ref_cnt;		/* Number of IF_DB which are using this structure */
+	bool_t is_initialized;	/* Flag indicating that mutex is initialized */
 	bool_t is_locked;		/* Information, that IF_DB lock is acquired by somebody */
 	uint64_t lock_time;		/* Timestamp in ms when was last lock acquired in milliseconds*/
 } if_db_context_t;
@@ -274,7 +274,73 @@ static pfe_if_db_entry_t *pfe_if_db_get_single_entry(const pfe_if_db_t *db, pfe_
 }
 
 /**
- * @brief		Create DB
+ * @brief		Clear IF_DB Context structure
+ * @details		Initialize and set if_db_context static structure variable 
+ * 				to set after start, or after STR resume
+ * @return		EOK if initialized, EPERM if double called
+ */
+errno_t pfe_if_db_context_init(void)
+{
+	errno_t ret = EPERM;
+
+	/* Create global DB lock */
+	if (FALSE == if_db_context.is_initialized)
+	{
+		ret = oal_mutex_init(&if_db_context.mutex);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Mutex initialization failed\n");
+		}
+		else
+		{
+			if_db_context.is_initialized = TRUE;
+
+			/* Initialize data to safe values */
+			if_db_context.is_locked = FALSE;
+			if_db_context.session_id = 0U;
+
+			/* Initialize seed to some value */
+			if_db_context.seed = 123U;
+
+			ret = EOK;
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Clear IF_DB Context structure
+ * @details		Destroy mutex instance on driver remove
+ */
+errno_t pfe_if_db_context_destroy(void)
+{
+	errno_t ret = EPERM;
+
+	if (TRUE == if_db_context.is_initialized)
+	{
+		ret = oal_mutex_lock(&if_db_context.mutex);
+		if(EOK == ret)
+		{
+			if_db_context.is_locked = TRUE;
+
+			ret = oal_mutex_unlock(&if_db_context.mutex);
+			if(EOK == ret)
+			{
+				ret = oal_mutex_destroy(&if_db_context.mutex);
+				if(EOK == ret)
+				{
+					if_db_context.is_initialized = FALSE;
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief		Create IF DB instance
  * @param[in]	Database type: Logical or Physical interfaces
  * @return		The DB instance or NULL if failed
  */
@@ -284,11 +350,11 @@ pfe_if_db_t * pfe_if_db_create(pfe_if_db_type_t type)
 
 	if ((type != PFE_IF_DB_PHY) && (type != PFE_IF_DB_LOG))
 	{
+		NXP_LOG_ERROR("Not valid IF_DB type to create\n");
 		db = NULL;
 	}
 	else
 	{
-
 		db = oal_mm_malloc(sizeof(pfe_if_db_t));
 		if (NULL == db)
 		{
@@ -301,51 +367,14 @@ pfe_if_db_t * pfe_if_db_create(pfe_if_db_type_t type)
 			LLIST_Init(&db->theList);
 			db->cur_item = db->theList.prNext;
 			db->type = type;
-
-			/* Create global DB lock */
-			if (0U == if_db_context.ref_cnt)
-			{
-				if (EOK != oal_mutex_init(&if_db_context.mutex))
-				{
-					/* Handle errors*/
-					oal_mm_free(db);
-
-					NXP_LOG_ERROR("Mutex initialization failed\n");
-					db = NULL;
-				}
-				else
-				{
-
-					if (EOK != oal_mutex_lock(&if_db_context.mutex))
-					{
-						NXP_LOG_ERROR("Mutex lock failed\n");
-					}
-
-					/* Initialize data to safe values */
-					if_db_context.is_locked = FALSE;
-					if_db_context.session_id = 0U;
-
-					/* Initialize seed to some value */
-					if_db_context.seed = 123U;
-
-					if (EOK != oal_mutex_unlock(&if_db_context.mutex))
-					{
-						NXP_LOG_ERROR("Mutex unlock failed\n");
-					}
-				}
-			}
-			if (db != NULL)
-			{
-				/* Increment reference counter */
-				++if_db_context.ref_cnt;
-			}
 		}
 	}
+
 	return db;
 }
 
 /**
- * @brief		Destroy DB
+ * @brief		Destroy IF DB instance
  * @param[in]	db The DB instance
  */
 void pfe_if_db_destroy(const pfe_if_db_t *db)
@@ -353,34 +382,6 @@ void pfe_if_db_destroy(const pfe_if_db_t *db)
 	if (NULL != db)
 	{
 		oal_mm_free(db);
-	}
-
-	/* Decrement reference counter */
-	if(0U < if_db_context.ref_cnt)
-	{
-		--if_db_context.ref_cnt;
-	}
-
-	/* Destroy global DB lock */
-	if(0U == if_db_context.ref_cnt)
-	{
-		if(EOK != oal_mutex_lock(&if_db_context.mutex))
-		{
-			NXP_LOG_ERROR("DB mutex lock failed\n");
-		}
-
-		if_db_context.is_locked = TRUE;
-
-		if(EOK != oal_mutex_unlock(&if_db_context.mutex))
-		{
-			NXP_LOG_ERROR("DB mutex unlock failed\n");
-		}
-
-		if(EOK != oal_mutex_destroy(&if_db_context.mutex))
-		{
-			NXP_LOG_ERROR("Mutex destroy failed\n");
-		}
-
 	}
 }
 
