@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2022 NXP
+ *  Copyright 2018-2022,2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -26,11 +26,6 @@
 #ifndef PUBLIC_OAL_TIME_H_
 #define PUBLIC_OAL_TIME_H_
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_START_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
-
 /**
  * @brief		Suspend a thread for a given number of microseconds
  * @param[in]	usec The number of microseconds that you want the process to sleep for
@@ -47,10 +42,11 @@ void oal_time_udelay(uint32_t usec);
 
 void oal_time_mdelay(uint32_t msec);
 
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
+/**
+ * @brief		Get current system run time in milliseconds
+ */
+uint64_t oal_time_gettime(void);
+
 
 #endif /* PUBLIC_OAL_TIME_H_ */
 

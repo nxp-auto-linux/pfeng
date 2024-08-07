@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2023 NXP
+#  Copyright 2018-2024 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -78,8 +78,6 @@ export PFE_CFG_FCI_ENABLE?=1
 export PFE_CFG_GLOB_ERR_POLL_WORKER?=1
 #Build support for flexible parser and flexible router
 export PFE_CFG_FLEX_PARSER_AND_FILTER?=1
-#Enable Interface Database worker thread. 1 - enable, 0 - disable
-export PFE_CFG_IF_DB_WORKER?=0
 #Enable IEEE1588 timestamping support
 export PFE_CFG_IEEE1588_SUPPORT?=0
 #Input clock frequency for the IEEE1588 timestamping unit (EMAC)
@@ -123,6 +121,10 @@ export PFE_CFG_IP_READY_MS_TMOUT?=5000
 export PFE_CFG_IDEX_RESEND_TIME?=100
 #Number of times to send IDEX request
 export PFE_CFG_IDEX_RESEND_COUNT?=10
+#Maximum number of milliseconds provide for IF_DB lock
+export PFE_CFG_IF_DB_MAX_LOCK_TIME?=1000
+#Number of milliseconds for IF_DB polled_lock
+export PFE_CFG_IF_DB_POLLING_LOCK_TIME?=1000
 
 ifeq ($(PFE_CFG_HIF_DRV_MODE),0)
   #Use multi-client HIF driver. Required when multiple logical interfaces need to
@@ -265,10 +267,6 @@ ifneq ($(PFE_CFG_FLEX_PARSER_AND_FILTER),0)
     GLOBAL_CCFLAGS+= -DPFE_CFG_FLEX_PARSER_AND_FILTER
 endif
 
-ifneq ($(PFE_CFG_IF_DB_WORKER),0)
-    GLOBAL_CCFLAGS+= -DPFE_CFG_IF_DB_WORKER
-endif
-
 ifneq ($(PFE_CFG_MC_HIF),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_MC_HIF
 endif
@@ -386,6 +384,14 @@ ifneq ($(PFE_CFG_HIF_RING_LENGTH),0)
 
     # The following symbol exists for compatibility with MCAL HIF RX RING length symbol in the shared platform code.
     GLOBAL_CCFLAGS+=-DPFE_HIF_RX_RING_CFG_LENGTH=$(PFE_CFG_HIF_RING_LENGTH)
+endif
+
+ifneq ($(PFE_CFG_IF_DB_MAX_LOCK_TIME),0)
+  GLOBAL_CCFLAGS+=-DPFE_CFG_IF_DB_MAX_LOCK_TIME='$(PFE_CFG_IF_DB_MAX_LOCK_TIME)'
+endif
+
+ifneq ($(PFE_CFG_IF_DB_POLLING_LOCK_TIME),0)
+  GLOBAL_CCFLAGS+=-DPFE_CFG_IF_DB_POLLING_LOCK_TIME='$(PFE_CFG_IF_DB_POLLING_LOCK_TIME)'
 endif
 
 # Workaround to remove MCAL version checks when building from repository

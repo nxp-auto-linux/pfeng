@@ -2475,6 +2475,14 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 			platform->phy_if_db = NULL;
 		}
 	}
+
+	if(EOK == ret)
+	{
+		if(EOK != pfe_if_db_context_destroy())
+		{
+			NXP_LOG_ERROR("IF_DB context destroy failed\n");
+		}
+	}
 }
 
 /**
@@ -2636,6 +2644,13 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 
 	/* Health monitor */
 	ret = pfe_hm_init();
+	if (EOK != ret)
+	{
+		goto exit;
+	}
+
+	/* IF_DB Context */
+	ret = pfe_if_db_context_init();
 	if (EOK != ret)
 	{
 		goto exit;
