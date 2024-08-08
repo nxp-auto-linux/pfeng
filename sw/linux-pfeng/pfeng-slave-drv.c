@@ -691,13 +691,14 @@ static int pfeng_drv_pm_resume(struct device *dev)
 		priv->clk_ptp_reference = clk_get_rate(priv->clk_ptp);
 
 	if (!disable_master_detection) {
-		priv->deferred_probe_task = kthread_run(pfeng_drv_deferred_resume, dev, "pfe-resume-task");
+		priv->deferred_probe_task = kthread_create(pfeng_drv_deferred_resume, dev, "pfe-resume-task");
 		if (IS_ERR(priv->deferred_probe_task)) {
 			ret = PTR_ERR(priv->deferred_probe_task);
 			priv->deferred_probe_task = NULL;
 			HM_MSG_DEV_ERR(dev, "Master detection task failed to start: %d\n", ret);
 			goto err_deferr;
 		}
+		wake_up_process(priv->deferred_probe_task);
 	} else
 		ret = pfeng_drv_deferred_resume(dev);
 
