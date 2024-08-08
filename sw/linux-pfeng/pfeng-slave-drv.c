@@ -656,7 +656,6 @@ static int pfeng_drv_deferred_resume(void *arg)
 		goto err_drv;
 
 	priv->in_suspend = false;
-	return 0;
 
 err_drv:
 err_pfe_get:
