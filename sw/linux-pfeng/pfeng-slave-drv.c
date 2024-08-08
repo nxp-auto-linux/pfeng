@@ -514,6 +514,9 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 
 	HM_MSG_DEV_INFO(dev, "Suspending driver\n");
 
+	if (priv->deferred_probe_task)
+		kthread_stop(priv->deferred_probe_task);
+
 	priv->in_suspend = true;
 
 	/* Inform IDEX that driver is suspending */
