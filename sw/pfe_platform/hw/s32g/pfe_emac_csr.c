@@ -2,7 +2,7 @@
  *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1261,7 +1261,7 @@ static void pfe_emac_cfg_report_hm_event(uint8_t id, const pfe_hm_evt_t events[]
 	uint8_t index = 0;
 	pfe_hm_src_t src = HM_SRC_EMAC0;
 
-	if (id <= sizeof(hm_src)/sizeof(hm_src[0]))
+	if (id < sizeof(hm_src)/sizeof(hm_src[0]))
 	{
 		src = hm_src[id];
 	}
