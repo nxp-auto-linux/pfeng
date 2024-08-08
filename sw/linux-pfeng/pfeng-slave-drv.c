@@ -562,10 +562,9 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 
 	pinctrl_pm_select_sleep_state(dev);
 
-	/* Stop clocks */
-	if (priv->clk_ptp) {
-		clk_disable_unprepare(priv->clk_ptp);
-	}
+	/* Invalidate clock reference */
+	if (priv->clk_ptp)
+		priv->clk_ptp = NULL;
 
 	/* Clear HIF channels coherency */
 	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency)
