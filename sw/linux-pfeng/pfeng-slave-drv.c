@@ -582,17 +582,19 @@ static int pfeng_drv_deferred_resume(void *arg)
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
 	int loops = ipready_tmout * 10; /* sleep is 100 usec */
 	bool ip_ready = false;
-	int ret;
+	int ret = 0;
 
 	ret = pinctrl_pm_select_default_state(dev);
 	if (ret) {
 		HM_MSG_DEV_ERR(dev, "Failed to select default pinctrl state\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err_drv;
 	}
 
 	/* Reinit memory */
 	ret = oal_mm_wakeup_reinit();
 	if (ret) {
+		ret = 0;
 		HM_MSG_DEV_WARN(dev, "Failed to re-init PFE memory\n");
 	}
 
@@ -603,7 +605,7 @@ static int pfeng_drv_deferred_resume(void *arg)
 		while(1) {
 
 			if(kthread_should_stop())
-				do_exit(0);
+				goto err_drv;
 
 			if (pfeng_gpr_ip_ready_get(dev, &ip_ready))
 				HM_MSG_DEV_ERR(dev, "Failed to get IP ready state\n");
@@ -614,8 +616,8 @@ static int pfeng_drv_deferred_resume(void *arg)
 			if (ipready_tmout && !loops--) {
 				/* Timed out */
 				HM_MSG_DEV_ERR(dev, "PFE controller UP timed out\n");
-				priv->deferred_probe_task = NULL;
-				do_exit(0);
+				ret = -EAGAIN;
+				goto err_drv;
 			}
 
 			usleep_range(100, 500);
