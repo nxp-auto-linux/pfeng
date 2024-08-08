@@ -484,13 +484,14 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	priv->pfe_cfg->on_g3 = pfeng_drv_soc_is_g3(dev);
 
 	if (!disable_master_detection) {
-		priv->deferred_probe_task = kthread_run(pfeng_drv_deferred_probe, priv, "pfe-probe-task");
+		priv->deferred_probe_task = kthread_create(pfeng_drv_deferred_probe, priv, "pfe-probe-task");
 		if (IS_ERR(priv->deferred_probe_task)) {
 			ret = PTR_ERR(priv->deferred_probe_task);
 			priv->deferred_probe_task = NULL;
 			HM_MSG_DEV_ERR(dev, "Master detection task failed to start: %d\n", ret);
 			goto err_drv;
 		}
+		wake_up_process(priv->deferred_probe_task);
 	} else
 		return pfeng_drv_deferred_probe(priv);
 
