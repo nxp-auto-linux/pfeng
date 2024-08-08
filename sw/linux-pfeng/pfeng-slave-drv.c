@@ -685,10 +685,10 @@ static int pfeng_drv_pm_resume(struct device *dev)
 	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency)
 		pfeng_gpr_set_port_coherency(priv);
 
-	/* Start clocks */
-	ret = clk_prepare_enable(priv->clk_ptp);
+	/* Get PFE_TS rate */
+	priv->clk_ptp_reference = 0U;
 	priv->clk_ptp = clk_get(dev, "pfe_ts");
-	if (ret) {
+	if (IS_ERR(priv->clk_ptp)) {
 		HM_MSG_DEV_WARN(dev, "Failed to get pfe_ts clock. PTP will be disabled.\n");
 		priv->clk_ptp = NULL;
 	} else
