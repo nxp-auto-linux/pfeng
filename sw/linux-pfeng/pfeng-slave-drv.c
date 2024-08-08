@@ -243,7 +243,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 	struct device *dev = &priv->pdev->dev;
 	int loops = ipready_tmout * 10; /* sleep is 100 usec */
 	bool ip_ready = false;
-	int ret;
+	int ret = 0;
 
 	/* Detect controller state */
 	if (priv->deferred_probe_task) {
@@ -252,7 +252,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 		while(1) {
 
 			if(kthread_should_stop())
-				do_exit(0);
+				goto err_drv;
 
 			if (pfeng_gpr_ip_ready_get(dev, &ip_ready))
 				HM_MSG_DEV_ERR(dev, "Failed to get IP ready state\n");
@@ -263,8 +263,8 @@ static int pfeng_drv_deferred_probe(void *arg)
 			if (ipready_tmout && !loops--) {
 				/* Timed out */
 				HM_MSG_DEV_ERR(dev, "PFE controller UP timed out\n");
-				priv->deferred_probe_task = NULL;
-				do_exit(0);
+				ret = -EAGAIN;
+				goto err_drv;
 			}
 
 			usleep_range(100, 500);
@@ -305,6 +305,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 	priv->ihc_slave_wq = alloc_ordered_workqueue("pfeng-slave-init", 0);
 	if (!priv->ihc_slave_wq) {
 		HM_MSG_DEV_ERR(dev, "Initialize of Slave WQ failed\n");
+		ret = -ENOMEM;
 		goto err_drv;
 	}
 
