@@ -30,11 +30,21 @@ static const u32 pfeng_hif_id_to_vlan_rx_flag[] = {
 
 static int pfeng_hif_chnl_stop(struct pfeng_hif_chnl *chnl)
 {
-	/* Stop enqueuing and wait all tx packets to be transmitted */
+	/* Limit number of the sleep cycles it can wait for TX to complete */
+	int timeout = 50000;
+
+	/* Stop enqueuing by changing HIF channel status */
 	chnl->status = PFENG_HIF_STATUS_ENABLED;
+
+	/* Wait all tx packets to be transmitted */
 	do {
+		if (!timeout--) {
+			HM_MSG_DEV_ERR(chnl->dev, "HIF%d TX stop timed out\n", chnl->idx);
+			break;
+		}
+
 		/* Wait to make sure TX are processed */
-		oal_time_usleep(500U);
+		oal_time_usleep(10U);
 	} while (!pfeng_hif_chnl_txbd_is_empty(chnl));
 
 	/* Disable channel interrupt */
