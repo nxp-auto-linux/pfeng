@@ -2150,7 +2150,7 @@ pfe_phy_if_t *pfe_platform_get_phy_if_by_id(const pfe_platform_t *platform, pfe_
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-		if (EOK != pfe_if_db_lock(&session_id))
+		if (EOK != pfe_if_db_polled_lock(&session_id))
 		{
 			NXP_LOG_ERROR("DB lock failed\n");
 		}
@@ -2227,7 +2227,7 @@ errno_t pfe_platform_create_ifaces(pfe_platform_t *platform)
 		}
 		else
 		{
-			if (EOK != pfe_if_db_lock(&session_id))
+			if (EOK != pfe_if_db_polled_lock(&session_id))
 			{
 				NXP_LOG_ERROR("DB lock failed\n");
 			}
@@ -2395,7 +2395,7 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 
 	if (NULL != platform->log_if_db)
 	{
-		if(EOK != pfe_if_db_lock(&session_id))
+		if(EOK != pfe_if_db_polled_lock(&session_id))
 		{
 			NXP_LOG_ERROR("DB lock failed\n");
 		}
@@ -2436,7 +2436,7 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 
 	if (NULL != platform->phy_if_db)
 	{
-		if(EOK != pfe_if_db_lock(&session_id))
+		if(EOK != pfe_if_db_polled_lock(&session_id))
 		{
 			NXP_LOG_ERROR("DB lock failed\n");
 		}
