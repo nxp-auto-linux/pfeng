@@ -379,7 +379,8 @@ static netdev_tx_t pfeng_netif_logif_xmit(struct sk_buff *skb, struct net_device
 		return NETDEV_TX_BUSY;
 	}
 	if (unlikely (chnl->status != PFENG_HIF_STATUS_RUNNING)) {
-		net_err_ratelimited("%s: Packet dropped. Channel is not in running state\n", netdev->name);
+		if (!netif->priv->in_suspend)
+			net_err_ratelimited("%s: Packet dropped. Channel is not in running state\n", netdev->name);
 		netdev->stats.tx_dropped++;
 		return NETDEV_TX_BUSY;
 	}
