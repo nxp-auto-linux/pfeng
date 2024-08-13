@@ -167,6 +167,13 @@ int pfeng_hif_chnl_txbd_unused(struct pfeng_hif_chnl *chnl)
 	return rd_idx - wr_idx - 1;
 }
 
+bool pfeng_hif_chnl_txbd_is_empty(struct pfeng_hif_chnl *chnl)
+{
+	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;
+
+	return pool->wr_idx == pool->rd_idx;
+}
+
 void pfeng_hif_chnl_txconf_put_map_frag(struct pfeng_hif_chnl *chnl, addr_t pa_addr, u32 size, struct sk_buff *skb, u8 flags, int i)
 {
 	struct pfeng_tx_chnl_pool *pool = chnl->bman.tx_pool;

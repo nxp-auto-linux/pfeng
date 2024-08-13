@@ -30,6 +30,13 @@ static const u32 pfeng_hif_id_to_vlan_rx_flag[] = {
 
 static int pfeng_hif_chnl_stop(struct pfeng_hif_chnl *chnl)
 {
+	/* Stop enqueuing and wait all tx packets to be transmitted */
+	chnl->status = PFENG_HIF_STATUS_ENABLED;
+	do {
+		/* Wait to make sure TX are processed */
+		oal_time_usleep(500U);
+	} while (!pfeng_hif_chnl_txbd_is_empty(chnl));
+
 	/* Disable channel interrupt */
 	pfe_hif_chnl_irq_mask(chnl->priv);
 
@@ -42,8 +49,6 @@ static int pfeng_hif_chnl_stop(struct pfeng_hif_chnl *chnl)
 
 	/* Disable TX */
 	pfe_hif_chnl_tx_disable(chnl->priv);
-
-	chnl->status = PFENG_HIF_STATUS_ENABLED;
 
 	HM_MSG_DEV_INFO(chnl->dev, "HIF%d stopped\n", chnl->idx);
 
@@ -523,6 +528,7 @@ static int pfeng_hif_chnl_drv_stop(struct pfeng_priv *priv, u32 idx)
 {
 	struct device *dev = &priv->pdev->dev;
 	struct pfeng_hif_chnl *chnl;
+	int count;
 
 	if (idx >= PFENG_PFE_HIF_CHANNELS) {
 		HM_MSG_DEV_ERR(dev, "Invalid HIF instance number: %u\n", idx);
@@ -540,6 +546,16 @@ static int pfeng_hif_chnl_drv_stop(struct pfeng_priv *priv, u32 idx)
 	}
 	/* Prepare for startup state (in case of STR use) */
 	chnl->status = PFENG_HIF_STATUS_REQUESTED;
+
+	/* Confirm all transmitted packets */
+	count = 0;
+	while (pfe_hif_chnl_get_tx_conf(chnl->priv) == EOK) {
+		pfeng_hif_chnl_txconf_free_map_full(chnl, 0);
+		count++;
+	}
+
+	if (count > 0)
+		HM_MSG_DEV_WARN(dev, "Unconfirmed TX packet number: %u\n", count);
 
 	return 0;
 }
