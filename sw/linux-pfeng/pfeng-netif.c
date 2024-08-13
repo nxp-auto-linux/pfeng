@@ -1572,17 +1572,11 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 		if (!(netif->cfg->hifmap & (1 << i)))
 			continue;
 
-#ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
-		/* Skip in case of IHC channel */
-		if (!chnl->ihc)
-#endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-		{
-			if (chnl->phyif_hif)
-				pfe_phy_if_disable(chnl->phyif_hif);
+		if (chnl->phyif_hif)
+			pfe_phy_if_disable(chnl->phyif_hif);
 #ifdef PFE_CFG_PFE_MASTER
-			chnl->phyif_hif = NULL;
+		chnl->phyif_hif = NULL;
 #endif /* PFE_CFG_PFE_MASTER */
-		}
 	}
 
 #ifdef PFE_CFG_PFE_MASTER
