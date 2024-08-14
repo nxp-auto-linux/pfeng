@@ -316,7 +316,16 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_enable(phy_if_arg);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_enable(phy_if_arg);
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -334,7 +343,16 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_disable(phy_if_arg);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_disable(phy_if_arg);
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -352,7 +370,16 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_promisc_enable(phy_if_arg);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_promisc_enable(phy_if_arg);
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -370,7 +397,16 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_promisc_disable(phy_if_arg);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_promisc_disable(phy_if_arg);
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -388,7 +424,16 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_loopback_enable(phy_if_arg);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_loopback_enable(phy_if_arg);
+					}
 				}
 
 				/*      Report execution status to caller */
@@ -406,7 +451,16 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_loopback_disable(phy_if_arg);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_loopback_disable(phy_if_arg);
+					}
 				}
 
 				/*      Report execution status to caller */
@@ -424,7 +478,16 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_loadbalance_enable(phy_if_arg);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_loadbalance_enable(phy_if_arg);
+					}
 				}
 
 				/*      Report execution status to caller */
@@ -442,7 +505,16 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_loadbalance_disable(phy_if_arg);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_loadbalance_disable(phy_if_arg);
+					}
 				}
 
 				/*      Report execution status to caller */
@@ -460,7 +532,16 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_allmulti_enable(phy_if_arg);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_allmulti_enable(phy_if_arg);
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -478,7 +559,16 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_allmulti_disable(phy_if_arg);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_allmulti_disable(phy_if_arg);
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -499,9 +589,18 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ct_assert(sizeof(pfe_mac_addr_t) == sizeof(rpc_arg->mac_addr));
-					(void)memcpy(&mac_addr, rpc_arg->mac_addr, sizeof(pfe_mac_addr_t));
-					ret = pfe_phy_if_add_mac_addr(phy_if_arg, mac_addr, sender);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ct_assert(sizeof(pfe_mac_addr_t) == sizeof(rpc_arg->mac_addr));
+						(void)memcpy(&mac_addr, rpc_arg->mac_addr, sizeof(pfe_mac_addr_t));
+						ret = pfe_phy_if_add_mac_addr(phy_if_arg, mac_addr, sender);
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -522,9 +621,18 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ct_assert(sizeof(pfe_mac_addr_t) == sizeof(rpc_arg->mac_addr));
-					(void)memcpy(&mac_addr, rpc_arg->mac_addr, sizeof(pfe_mac_addr_t));
-					ret = pfe_phy_if_del_mac_addr(phy_if_arg, mac_addr, sender);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ct_assert(sizeof(pfe_mac_addr_t) == sizeof(rpc_arg->mac_addr));
+						(void)memcpy(&mac_addr, rpc_arg->mac_addr, sizeof(pfe_mac_addr_t));
+						ret = pfe_phy_if_del_mac_addr(phy_if_arg, mac_addr, sender);
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -544,7 +652,16 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_flush_mac_addrs(phy_if_arg, rpc_arg->crit, rpc_arg->type, sender);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_flush_mac_addrs(phy_if_arg, rpc_arg->crit, rpc_arg->type, sender);
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -564,7 +681,16 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_set_block_state(phy_if_arg, rpc_arg->block_state);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_set_block_state(phy_if_arg, rpc_arg->block_state);
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -585,8 +711,17 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ret = pfe_phy_if_get_block_state(phy_if_arg, &block_state);
-					rpc_ret.state = block_state;
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ret = pfe_phy_if_get_block_state(phy_if_arg, &block_state);
+						rpc_ret.state = block_state;
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -607,8 +742,17 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					mode = pfe_phy_if_get_op_mode(phy_if_arg);
-					rpc_ret.mode = mode;
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						mode = pfe_phy_if_get_op_mode(phy_if_arg);
+						rpc_ret.mode = mode;
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -630,8 +774,17 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					status = pfe_phy_if_is_enabled(phy_if_arg);
-					rpc_ret.status = status;
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						status = pfe_phy_if_is_enabled(phy_if_arg);
+						rpc_ret.status = status;
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -653,8 +806,17 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					status = pfe_phy_if_is_promisc(phy_if_arg);
-					rpc_ret.status = status;
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						status = pfe_phy_if_is_promisc(phy_if_arg);
+						rpc_ret.status = status;
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -674,8 +836,17 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					ct_assert(sizeof(pfe_ct_phy_if_stats_t) == sizeof(rpc_ret.stats));
-					ret = pfe_phy_if_get_stats(phy_if_arg, &rpc_ret.stats);
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						ct_assert(sizeof(pfe_ct_phy_if_stats_t) == sizeof(rpc_ret.stats));
+						ret = pfe_phy_if_get_stats(phy_if_arg, &rpc_ret.stats);
+					}
 				}
 
 				/*	Report execution status to caller */
@@ -697,8 +868,17 @@ void  pfe_platform_idex_rpc_cbk(pfe_ct_phy_if_id_t sender, uint32_t id, void *bu
 
 				if (EOK == ret)
 				{
-					stat_val = pfe_phy_if_get_stat_value(phy_if_arg, rpc_arg->stat_id);
-					rpc_ret.stat_val = stat_val;
+					/* Check IF DB lock first */
+					ret = pfe_if_db_lock_check((uint32_t)sender);
+					if (EOK != ret)
+					{
+						NXP_LOG_WARNING("RPC: Trying to use IF_DB with no lock\n");
+					}
+					else
+					{
+						stat_val = pfe_phy_if_get_stat_value(phy_if_arg, rpc_arg->stat_id);
+						rpc_ret.stat_val = stat_val;
+					}
 				}
 
 				/*	Report execution status to caller */
