@@ -252,7 +252,7 @@ errno_t fci_interfaces_session_cmd(uint32_t code, uint16_t *fci_ret)
 			case FPP_CMD_IF_LOCK_SESSION:
 			{
 				*fci_ret = FPP_ERR_OK;
-				if (EOK != pfe_if_db_lock(&fci_context->if_session_id))
+				if (EOK != pfe_if_db_polled_lock(&fci_context->if_session_id))
 				{
 					*fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;
 					NXP_LOG_WARNING("DB lock failed\n");

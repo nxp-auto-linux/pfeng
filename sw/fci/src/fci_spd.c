@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2023 NXP
+ *  Copyright 2020-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -90,7 +90,7 @@ errno_t fci_spd_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_spd_cmd_t *reply_buf,
 
                 spd_cmd = (fpp_spd_cmd_t *)(msg->msg_cmd.payload);
                 /* Get the physical interface reference - needed for all commands */
-                ret = pfe_if_db_lock(&fci_context->if_session_id);
+                ret = pfe_if_db_polled_lock(&fci_context->if_session_id);
                 if (EOK != ret)
                 {
                     *fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;

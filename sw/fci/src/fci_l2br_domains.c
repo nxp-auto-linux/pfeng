@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -99,7 +99,7 @@ errno_t fci_l2br_domain_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_l2_bd_cmd_t *
 			/*	Initialize the reply buffer */
 			(void)memset(reply_buf, 0, sizeof(fpp_l2_bd_cmd_t));
 
-			ret = pfe_if_db_lock(&session_id);
+			ret = pfe_if_db_polled_lock(&session_id);
 
 			if(EOK != ret)
 			{
@@ -651,7 +651,7 @@ uint32_t fci_l2br_static_entry_get_valid_fw_list(void)
 	const fci_t *fci_context = (fci_t *)&__context;
 	pfe_if_db_entry_t *if_db_entry = NULL;
 
-	ret = pfe_if_db_lock(&session_id);
+	ret = pfe_if_db_polled_lock(&session_id);
 	if(EOK != ret)
 	{
 		NXP_LOG_WARNING("DB lock failed\n");

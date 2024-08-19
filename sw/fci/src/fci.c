@@ -740,7 +740,7 @@ void fci_fini(void)
 		}
 
 	#ifdef PFE_CFG_PFE_MASTER
-		if (EOK != pfe_if_db_lock(&session_id))
+		if (EOK != pfe_if_db_polled_lock(&session_id))
 		{
 			NXP_LOG_ERROR("DB lock failed\n");
 		}
