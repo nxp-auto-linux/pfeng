@@ -162,6 +162,7 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
+	bool ip_ready = false;
 	int ret;
 
 	if (!priv) {
@@ -212,8 +213,11 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 		}
 	}
 
+	/* Module removal can be triggered before the PFE IP is ready */
+	pfeng_gpr_ip_ready_get(dev, &ip_ready);
+
 	/* Clear HIF channels coherency */
-	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency)
+	if (ip_ready && of_dma_is_coherent(dev->of_node) && manage_port_coherency)
 		pfeng_gpr_clear_port_coherency(priv);
 
 	if (priv->ihc_wq)
@@ -243,7 +247,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 	struct device *dev = &priv->pdev->dev;
 	int loops = ipready_tmout * 10; /* sleep is 100 usec */
 	bool ip_ready = false;
-	int ret;
+	int ret = 0;
 
 	/* Detect controller state */
 	if (priv->deferred_probe_task) {
@@ -252,10 +256,9 @@ static int pfeng_drv_deferred_probe(void *arg)
 		while(1) {
 
 			if(kthread_should_stop())
-				do_exit(0);
+				goto err_drv;
 
-			if (pfeng_gpr_ip_ready_get(dev, &ip_ready))
-				HM_MSG_DEV_ERR(dev, "Failed to get IP ready state\n");
+			pfeng_gpr_ip_ready_get(dev, &ip_ready);
 
 			if (ip_ready)
 				break;
@@ -263,8 +266,8 @@ static int pfeng_drv_deferred_probe(void *arg)
 			if (ipready_tmout && !loops--) {
 				/* Timed out */
 				HM_MSG_DEV_ERR(dev, "PFE controller UP timed out\n");
-				priv->deferred_probe_task = NULL;
-				do_exit(0);
+				ret = -EAGAIN;
+				goto err_drv;
 			}
 
 			usleep_range(100, 500);
@@ -305,6 +308,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 	priv->ihc_slave_wq = alloc_ordered_workqueue("pfeng-slave-init", 0);
 	if (!priv->ihc_slave_wq) {
 		HM_MSG_DEV_ERR(dev, "Initialize of Slave WQ failed\n");
+		ret = -ENOMEM;
 		goto err_drv;
 	}
 
@@ -484,13 +488,14 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	priv->pfe_cfg->on_g3 = pfeng_drv_soc_is_g3(dev);
 
 	if (!disable_master_detection) {
-		priv->deferred_probe_task = kthread_run(pfeng_drv_deferred_probe, priv, "pfe-probe-task");
+		priv->deferred_probe_task = kthread_create(pfeng_drv_deferred_probe, priv, "pfe-probe-task");
 		if (IS_ERR(priv->deferred_probe_task)) {
 			ret = PTR_ERR(priv->deferred_probe_task);
 			priv->deferred_probe_task = NULL;
 			HM_MSG_DEV_ERR(dev, "Master detection task failed to start: %d\n", ret);
 			goto err_drv;
 		}
+		wake_up_process(priv->deferred_probe_task);
 	} else
 		return pfeng_drv_deferred_probe(priv);
 
@@ -508,9 +513,13 @@ err_drv:
 static int pfeng_drv_pm_suspend(struct device *dev)
 {
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
+	bool ip_ready = false;
 	int ret;
 
 	HM_MSG_DEV_INFO(dev, "Suspending driver\n");
+
+	if (priv->deferred_probe_task)
+		kthread_stop(priv->deferred_probe_task);
 
 	priv->in_suspend = true;
 
@@ -557,13 +566,15 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 
 	pinctrl_pm_select_sleep_state(dev);
 
-	/* Stop clocks */
-	if (priv->clk_ptp) {
-		clk_disable_unprepare(priv->clk_ptp);
-	}
+	/* Invalidate clock reference */
+	if (priv->clk_ptp)
+		priv->clk_ptp = NULL;
+
+	/* Suspend can be triggered before the PFE IP is ready */
+	pfeng_gpr_ip_ready_get(dev, &ip_ready);
 
 	/* Clear HIF channels coherency */
-	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency)
+	if (ip_ready && of_dma_is_coherent(dev->of_node) && manage_port_coherency)
 		pfeng_gpr_clear_port_coherency(priv);
 
 	HM_MSG_DEV_INFO(dev, "PFE Platform suspended\n");
@@ -580,17 +591,19 @@ static int pfeng_drv_deferred_resume(void *arg)
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
 	int loops = ipready_tmout * 10; /* sleep is 100 usec */
 	bool ip_ready = false;
-	int ret;
+	int ret = 0;
 
 	ret = pinctrl_pm_select_default_state(dev);
 	if (ret) {
 		HM_MSG_DEV_ERR(dev, "Failed to select default pinctrl state\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err_drv;
 	}
 
 	/* Reinit memory */
 	ret = oal_mm_wakeup_reinit();
 	if (ret) {
+		ret = 0;
 		HM_MSG_DEV_WARN(dev, "Failed to re-init PFE memory\n");
 	}
 
@@ -601,10 +614,9 @@ static int pfeng_drv_deferred_resume(void *arg)
 		while(1) {
 
 			if(kthread_should_stop())
-				do_exit(0);
+				goto err_drv;
 
-			if (pfeng_gpr_ip_ready_get(dev, &ip_ready))
-				HM_MSG_DEV_ERR(dev, "Failed to get IP ready state\n");
+			pfeng_gpr_ip_ready_get(dev, &ip_ready);
 
 			if (ip_ready)
 				break;
@@ -612,8 +624,8 @@ static int pfeng_drv_deferred_resume(void *arg)
 			if (ipready_tmout && !loops--) {
 				/* Timed out */
 				HM_MSG_DEV_ERR(dev, "PFE controller UP timed out\n");
-				priv->deferred_probe_task = NULL;
-				do_exit(0);
+				ret = -EAGAIN;
+				goto err_drv;
 			}
 
 			usleep_range(100, 500);
@@ -655,7 +667,6 @@ static int pfeng_drv_deferred_resume(void *arg)
 		goto err_drv;
 
 	priv->in_suspend = false;
-	return 0;
 
 err_drv:
 err_pfe_get:
@@ -672,31 +683,36 @@ err_pfe_init:
 static int pfeng_drv_pm_resume(struct device *dev)
 {
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
+	bool ip_ready = false;
 	int ret = 0;
 
 	HM_MSG_DEV_INFO(dev, "Resuming driver\n");
 
+	/* Suspend and resume can be triggered before the PFE IP is ready */
+	pfeng_gpr_ip_ready_get(dev, &ip_ready);
+
 	/* Set HIF channels coherency */
-	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency)
+	if (ip_ready && of_dma_is_coherent(dev->of_node) && manage_port_coherency)
 		pfeng_gpr_set_port_coherency(priv);
 
-	/* Start clocks */
-	ret = clk_prepare_enable(priv->clk_ptp);
+	/* Get PFE_TS rate */
+	priv->clk_ptp_reference = 0U;
 	priv->clk_ptp = clk_get(dev, "pfe_ts");
-	if (ret) {
+	if (IS_ERR(priv->clk_ptp)) {
 		HM_MSG_DEV_WARN(dev, "Failed to get pfe_ts clock. PTP will be disabled.\n");
 		priv->clk_ptp = NULL;
 	} else
 		priv->clk_ptp_reference = clk_get_rate(priv->clk_ptp);
 
 	if (!disable_master_detection) {
-		priv->deferred_probe_task = kthread_run(pfeng_drv_deferred_resume, dev, "pfe-resume-task");
+		priv->deferred_probe_task = kthread_create(pfeng_drv_deferred_resume, dev, "pfe-resume-task");
 		if (IS_ERR(priv->deferred_probe_task)) {
 			ret = PTR_ERR(priv->deferred_probe_task);
 			priv->deferred_probe_task = NULL;
 			HM_MSG_DEV_ERR(dev, "Master detection task failed to start: %d\n", ret);
 			goto err_deferr;
 		}
+		wake_up_process(priv->deferred_probe_task);
 	} else
 		ret = pfeng_drv_deferred_resume(dev);
 
