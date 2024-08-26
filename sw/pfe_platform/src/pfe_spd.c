@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2022,2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -166,7 +166,7 @@ void pfe_spd_destroy(pfe_if_db_t *phy_if_db)
 		phy_if = NULL;
 		if_db_entry = NULL;
 
-		if(EOK != pfe_if_db_lock(&session_id))
+		if(EOK != pfe_if_db_polled_lock(&session_id))
 		{
 			NXP_LOG_ERROR("DB lock failed\n");
 		}
