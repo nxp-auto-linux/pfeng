@@ -1044,6 +1044,7 @@ static errno_t pfe_platform_create_gpi(pfe_platform_t *platform, const pfe_platf
 		{   /* S32G3 */
 			gpi_cfg_tmp.lmem_header_size = 48U;
 			aseq_len = 0x10U;
+			gpi_cfg_tmp.g2_ordered_class_writes = false;
 		}
 		else
 		{   /* S32G2 */
@@ -1129,7 +1130,7 @@ static void pfe_platform_destroy_gpi(pfe_platform_t *platform)
 /**
  * @brief		Assign ETGPI to the platform
  */
-static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
+static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform, const pfe_platform_config_t *config)
 {
 	pfe_gpi_cfg_t gpi_cfg_tmp;
 	errno_t ret;
@@ -1147,10 +1148,12 @@ static errno_t pfe_platform_create_etgpi(pfe_platform_t *platform)
 		{   /* S32G3 */
 			gpi_cfg_tmp.lmem_header_size = 48U;
 			aseq_len = 0x10U;
+			gpi_cfg_tmp.g2_ordered_class_writes = false;
 		}
 		else
 		{   /* S32G2 */
 			gpi_cfg_tmp.lmem_header_size = 112U;
+			gpi_cfg_tmp.g2_ordered_class_writes = config->g2_ordered_class_writes;
 		}
 
 		/*	ETGPI1 */
@@ -1230,7 +1233,7 @@ static void pfe_platform_destroy_etgpi(pfe_platform_t *platform)
 /**
  * @brief		Assign HGPI to the platform
  */
-static errno_t pfe_platform_create_hgpi(pfe_platform_t *platform)
+static errno_t pfe_platform_create_hgpi(pfe_platform_t *platform, const pfe_platform_config_t *config)
 {
 	pfe_gpi_cfg_t hgpi_cfg;
 	errno_t ret;
@@ -1248,10 +1251,12 @@ static errno_t pfe_platform_create_hgpi(pfe_platform_t *platform)
 		{   /* S32G3 */
 			hgpi_cfg.lmem_header_size = 48U;
 			aseq_len = 0x10U;
+			hgpi_cfg.g2_ordered_class_writes = false;
 		}
 		else
 		{   /* S32G2 */
 			hgpi_cfg.lmem_header_size = 112U;
+			hgpi_cfg.g2_ordered_class_writes = config->g2_ordered_class_writes;
 		}
 
 		hgpi_cfg.alloc_retry_cycles = 0x200U;
@@ -2729,14 +2734,14 @@ errno_t pfe_platform_init(const pfe_platform_config_t *config)
 	}
 
 	/*	HGPI */
-	ret = pfe_platform_create_hgpi(&pfe);
+	ret = pfe_platform_create_hgpi(&pfe, config);
 	if (EOK != ret)
 	{
 		goto exit;
 	}
 
 	/*	ETGPI */
-	ret = pfe_platform_create_etgpi(&pfe);
+	ret = pfe_platform_create_etgpi(&pfe, config);
 	if (EOK != ret)
 	{
 		goto exit;
