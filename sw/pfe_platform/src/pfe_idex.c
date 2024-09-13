@@ -1366,7 +1366,7 @@ void pfe_idex_mark_down(void)
  * @param[in]   verb_level      Verbosity level, number of data written to the buffer
  * @return              Number of bytes written to the buffe
  */
-__attribute__((cold)) void pfe_idex_get_text_statistics(struct seq_file *seq, uint8_t verb_level)
+__attribute__((cold, aligned(64))) void pfe_idex_get_text_statistics(struct seq_file *seq, uint8_t verb_level)
 {
         seq_printf(seq, "rx_count:       %llu\n", pfe_idex.stats.rx_count);
         seq_printf(seq, "rx_aliens:      %llu\n", pfe_idex.stats.rx_aliens);

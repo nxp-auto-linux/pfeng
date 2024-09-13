@@ -132,11 +132,11 @@ struct __attribute__((aligned(HAL_CACHE_LINE_SIZE))) __pfe_hif_chnl_tag
 #endif
 };
 
-static errno_t pfe_hif_chnl_bind_rx_ring(pfe_hif_chnl_t *chnl) __attribute__((cold));
-static errno_t pfe_hif_chnl_bind_tx_ring(pfe_hif_chnl_t *chnl) __attribute__((cold));
-static errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl) __attribute__((cold));
+static errno_t pfe_hif_chnl_bind_rx_ring(pfe_hif_chnl_t *chnl) __attribute__((cold, aligned(64)));
+static errno_t pfe_hif_chnl_bind_tx_ring(pfe_hif_chnl_t *chnl) __attribute__((cold, aligned(64)));
+static errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl) __attribute__((cold, aligned(64)));
 static void pfe_hif_chnl_free_dummy_frame(void *frame);
-static errno_t pfe_hif_chnl_send_dummy_frame(pfe_hif_chnl_t *chnl, uint32_t mode, void **frame) __attribute__((cold));
+static errno_t pfe_hif_chnl_send_dummy_frame(pfe_hif_chnl_t *chnl, uint32_t mode, void **frame) __attribute__((cold, aligned(64)));
 
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
 static void pfe_hif_chnl_refill_rx_buffers(const pfe_hif_chnl_t *chnl) __attribute__((hot));
@@ -315,7 +315,7 @@ __attribute__((hot)) static void pfe_hif_chnl_refill_rx_buffers(const pfe_hif_ch
  * 					for HIF NOCPY channel abstraction.
  * @return		The channel instance or NULL if failed
  */
-__attribute__((cold)) pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, uint32_t id, const pfe_bmu_t *bmu)
+__attribute__((cold, aligned(64))) pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, uint32_t id, const pfe_bmu_t *bmu)
 {
 	pfe_hif_chnl_t *chnl;
 	errno_t ret;
@@ -417,7 +417,7 @@ free_and_fail:
  * @param[in]	chnl The channel instance
  * @return		The identifier of the channel
  */
-__attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_id(const pfe_hif_chnl_t *chnl)
+__attribute__((pure, cold, aligned(64))) uint32_t pfe_hif_chnl_get_id(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -437,7 +437,7 @@ __attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_id(const pfe_hif_chnl_t *c
  * @retval		EOK Success
  * @retval		EFAULT TX ring not found
  */
-__attribute__((cold)) errno_t pfe_hif_chnl_tx_enable(pfe_hif_chnl_t *chnl)
+__attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_tx_enable(pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -477,7 +477,7 @@ __attribute__((cold)) errno_t pfe_hif_chnl_tx_enable(pfe_hif_chnl_t *chnl)
  * 				pfe_hif_chnl_get_tx_conf().
  * @param[in]	chnl The channel instance
  */
-__attribute__((cold)) void pfe_hif_chnl_tx_disable(pfe_hif_chnl_t *chnl)
+__attribute__((cold, aligned(64))) void pfe_hif_chnl_tx_disable(pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -514,7 +514,7 @@ __attribute__((cold)) void pfe_hif_chnl_tx_disable(pfe_hif_chnl_t *chnl)
  * @retval		EOK Success
  * @retval		EFAULT RX ring not found
  */
-__attribute__((cold)) errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl)
+__attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -552,7 +552,7 @@ __attribute__((cold)) errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl)
  * @param[in]	chnl The channel instance
  * @note		Must not be preempted by pfe_hif_chnl_supply_rx_buf()
  */
-__attribute__((cold)) void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl)
+__attribute__((cold, aligned(64))) void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -926,7 +926,7 @@ __attribute__((pure, hot)) bool_t pfe_hif_chnl_tx_fifo_empty(const pfe_hif_chnl_
  * @param[in]	chnl The channel instance
  * @return		Size of the RX FIFO in number of entries
  */
-__attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_rx_fifo_depth(const pfe_hif_chnl_t *chnl)
+__attribute__((pure, cold, aligned(64))) uint32_t pfe_hif_chnl_get_rx_fifo_depth(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -944,7 +944,7 @@ __attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_rx_fifo_depth(const pfe_hi
  * @param[in]	chnl The channel instance
  * @return		Size of the TX FIFO in number of entries
  */
-__attribute__((pure, cold)) uint32_t pfe_hif_chnl_get_tx_fifo_depth(const pfe_hif_chnl_t *chnl)
+__attribute__((pure, cold, aligned(64))) uint32_t pfe_hif_chnl_get_tx_fifo_depth(const pfe_hif_chnl_t *chnl)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -1173,7 +1173,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf
  * @return		Size of the metadata storage pointed by the 'meta' arugument of
  * 				the pfe_hif_chnl_rx_va().
  */
-__attribute__((cold)) uint32_t pfe_hif_chnl_get_meta_size(const pfe_hif_chnl_t *chnl)
+__attribute__((cold, aligned(64))) uint32_t pfe_hif_chnl_get_meta_size(const pfe_hif_chnl_t *chnl)
 {
 	(void)chnl;
 	return bpool_get_meta_storage_size();
@@ -1260,7 +1260,7 @@ __attribute__((hot)) errno_t pfe_hif_chnl_supply_rx_buf(const pfe_hif_chnl_t *ch
  * @retval		EOK Success
  * @retval		EFAULT Invalid ring instance
  */
-__attribute__((cold)) static errno_t pfe_hif_chnl_bind_rx_ring(pfe_hif_chnl_t *chnl)
+__attribute__((cold, aligned(64))) static errno_t pfe_hif_chnl_bind_rx_ring(pfe_hif_chnl_t *chnl)
 {
 	pfe_hif_ring_t *ring = chnl->rx_ring;
 	void *rx_ring_pa, *wb_tbl_pa;
@@ -1313,7 +1313,7 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_bind_rx_ring(pfe_hif_chnl_t *c
  * @retval		EOK Success
  * @retval		EFAULT Invalid ring instance
  */
-__attribute__((cold)) static errno_t pfe_hif_chnl_bind_tx_ring(pfe_hif_chnl_t *chnl)
+__attribute__((cold, aligned(64))) static errno_t pfe_hif_chnl_bind_tx_ring(pfe_hif_chnl_t *chnl)
 {
 	pfe_hif_ring_t *ring = chnl->tx_ring;
 	void *tx_ring_pa, *wb_tbl_pa;
@@ -1366,7 +1366,7 @@ __attribute__((cold)) static errno_t pfe_hif_chnl_bind_tx_ring(pfe_hif_chnl_t *c
  * @return		EOK Channel is clean, EAGAIN channel has valid set-up for ungraceful
  * 				reset, EINVAL channel is in unrecorevable state
  */
-static __attribute__((cold)) errno_t pfe_hif_chnl_inspect_hw_state(pfe_hif_chnl_t *chnl)
+static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_inspect_hw_state(pfe_hif_chnl_t *chnl)
 {
 	uint32_t rx_ring_addr, rx_wb_ring_addr, tx_ring_addr, tx_wb_ring_addr, rx_ring_len, tx_ring_len;
 
@@ -1414,7 +1414,7 @@ static __attribute__((cold)) errno_t pfe_hif_chnl_inspect_hw_state(pfe_hif_chnl_
  * @return		TRUE if new allocated BD rings occupy the same memory regions as were
  * 				left in channel registers
  */
-static __attribute__((cold)) bool_t pfe_hif_chnl_validate_bdr_setup(pfe_hif_chnl_t *chnl)
+static __attribute__((cold, aligned(64))) bool_t pfe_hif_chnl_validate_bdr_setup(pfe_hif_chnl_t *chnl)
 {
 	uint32_t rx_ring_addr, rx_wb_ring_addr, tx_ring_addr, tx_wb_ring_addr;
 
@@ -1448,7 +1448,7 @@ static __attribute__((cold)) bool_t pfe_hif_chnl_validate_bdr_setup(pfe_hif_chnl
 	return TRUE;
 }
 
-static __attribute__((cold)) errno_t pfe_hif_chnl_find_tx(pfe_hif_chnl_t * chnl)
+static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_find_tx(pfe_hif_chnl_t * chnl)
 {
 	int ii, ring_len, tx_idx = -1;
 	void *buf_pa, *frame;
@@ -1512,7 +1512,7 @@ end:
 
 }
 
-static __attribute__((cold)) errno_t pfe_hif_chnl_find_rx(pfe_hif_chnl_t * chnl)
+static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_find_rx(pfe_hif_chnl_t * chnl)
 {
 	int ii, ring_len, rx_idx = -1;
 	void *buf_va = NULL, *buf_pa, *frame;
@@ -1665,7 +1665,7 @@ end:
 	return ret;
 }
 
-static __attribute__((cold)) errno_t pfe_hif_chnl_rx_to_head(pfe_hif_chnl_t * chnl)
+static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_rx_to_head(pfe_hif_chnl_t * chnl)
 {
 	int ii, ring_len;
 	void *buf_va = NULL, *buf_pa, *frame;
@@ -1763,7 +1763,7 @@ end:
 	return ret;
 }
 
-static __attribute__((cold)) errno_t pfe_hif_chnl_tx_to_head(pfe_hif_chnl_t * chnl)
+static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_tx_to_head(pfe_hif_chnl_t * chnl)
 {
 	int ii, ring_len;
 	void *frame;
@@ -1812,7 +1812,7 @@ end:
 	return ret;
 }
 
-static __attribute__((cold)) errno_t pfe_hif_chnl_ungraceful_reset(pfe_hif_chnl_t * chnl)
+static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_ungraceful_reset(pfe_hif_chnl_t * chnl)
 {
 	errno_t ret;
 
@@ -1861,7 +1861,7 @@ end:
  * @param[in]	chnl The channel instance
  * @return		EOK Success
  */
-static __attribute__((cold)) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
+static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_init(pfe_hif_chnl_t *chnl)
 {
 	errno_t status;
 
@@ -2025,7 +2025,7 @@ __attribute__((hot)) bool_t pfe_hif_chnl_is_tx_dma_active(const pfe_hif_chnl_t *
  * @brief		Release the TX dummy frame
  * @param[in]	frame The frame content, created by pfe_hif_chnl_send_dummy_frame()
  */
-static __attribute__((cold)) void pfe_hif_chnl_free_dummy_frame(void *frame)
+static __attribute__((cold, aligned(64))) void pfe_hif_chnl_free_dummy_frame(void *frame)
 {
 	oal_mm_free_contig(frame);
 }
@@ -2037,7 +2037,7 @@ static __attribute__((cold)) void pfe_hif_chnl_free_dummy_frame(void *frame)
  * @param[out]	frame The frame content, must be freed by pfe_hif_chnl_free_dummy_frame()
  * @return		EOK if success, error code otherwise
  */
-static __attribute__((cold)) errno_t pfe_hif_chnl_send_dummy_frame(pfe_hif_chnl_t *chnl, uint32_t mode, void **frame)
+static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_send_dummy_frame(pfe_hif_chnl_t *chnl, uint32_t mode, void **frame)
 {
 	void *tx_buf_va = NULL, *tx_buf_pa;
 	pfe_ct_hif_tx_hdr_t *tx_hdr;
@@ -2112,7 +2112,7 @@ the_end:
  * @param[in]	chnl The channel instance
  * @return		EOK if success, error code otherwise
  */
-__attribute__((cold, unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl)
+__attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl)
 {
 	void *rx_buf_va = NULL, *rx_buf_pa, *buf_pa, *frame;
 	uint32_t len, ii;
@@ -2317,7 +2317,7 @@ the_end:
  * @brief		Destroy HIF channel instance
  * @param[in]	chnl The channel instance
  */
-__attribute__((cold)) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
+__attribute__((cold, aligned(64))) void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl)
 {
 #if (TRUE == PFE_HIF_CHNL_CFG_RX_BUFFERS_ENABLED)
 	void *buf_pa, *buf_va;
@@ -2495,7 +2495,7 @@ static void pfe_seq_print(void *dev, const char *fmt, ...)
 	va_end(args);
 }
 
-__attribute__((cold)) void pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, struct seq_file *seq, uint8_t verb_level)
+__attribute__((cold, aligned(64))) void pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, struct seq_file *seq, uint8_t verb_level)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))
@@ -2516,7 +2516,7 @@ __attribute__((cold)) void pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bo
 	}
 }
 
-__attribute__((cold)) void pfe_hif_chnl_dump_tx_ring_to_ndev(const pfe_hif_chnl_t *chnl, struct net_device *ndev, void (*ndev_print)(void *ndev, const char *fmt, ...))
+__attribute__((cold, aligned(64))) void pfe_hif_chnl_dump_tx_ring_to_ndev(const pfe_hif_chnl_t *chnl, struct net_device *ndev, void (*ndev_print)(void *ndev, const char *fmt, ...))
 {
 	pfe_hif_ring_dump(chnl->tx_ring, "TX ndev", ndev, ndev_print, PFE_CFG_VERBOSITY_LEVEL);
 }
@@ -2565,7 +2565,7 @@ uint32_t pfe_hif_chnl_get_rx_cnt(const pfe_hif_chnl_t *chnl)
  * @param[in]	verb_level 	Verbosity level, number of data written to the buffer
  * @return		Number of bytes written to the buffe
  */
-__attribute__((cold)) uint32_t pfe_hif_chnl_get_text_statistics(const pfe_hif_chnl_t *chnl, struct seq_file *seq, uint8_t verb_level)
+__attribute__((cold, aligned(64))) uint32_t pfe_hif_chnl_get_text_statistics(const pfe_hif_chnl_t *chnl, struct seq_file *seq, uint8_t verb_level)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == chnl))

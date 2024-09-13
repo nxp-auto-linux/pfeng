@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2023 NXP
+ *  Copyright 2017-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -153,7 +153,7 @@ static errno_t bpool_fifo_creat_and_mutex_init(bpool_t *the_pool, const uint32_t
  * @retval		EOK Success
  * @retval		EINVAL Invalid argument
  */
-__attribute__((cold)) errno_t bpool_destroy(bpool_t * pool)
+__attribute__((cold, aligned(64))) errno_t bpool_destroy(bpool_t * pool)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
@@ -188,7 +188,7 @@ __attribute__((cold)) errno_t bpool_destroy(bpool_t * pool)
  * @retval		EOK Success
  * @retval		EINVAL Invalid argument
  */
-__attribute__((cold)) errno_t bpool_clear(bpool_t * pool)
+__attribute__((cold, aligned(64))) errno_t bpool_clear(bpool_t * pool)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == pool))
@@ -358,7 +358,7 @@ __attribute__((hot)) void bpool_put(bpool_t *pool, const void *va)
  * @param[in]	cached Chache on/off for the buffer memory
  * @return		New pool instance or NULL if failed
  */
-__attribute__((cold)) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, uint32_t align, bool_t cached)
+__attribute__((cold, aligned(64))) bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, uint32_t align, bool_t cached)
 {
 	uint32_t i;
 	bpool_rx_buf_t *fifo_item;

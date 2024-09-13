@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -48,7 +48,7 @@ __attribute__((hot)) errno_t fifo_get_free_space(const fifo_t *const fifo, uint3
 	return err;
 }
 
-__attribute__((cold)) fifo_t * fifo_create(const uint32_t depth)
+__attribute__((cold, aligned(64))) fifo_t * fifo_create(const uint32_t depth)
 {
 	fifo_t *fifo;
 
@@ -76,7 +76,7 @@ __attribute__((cold)) fifo_t * fifo_create(const uint32_t depth)
 	return fifo;
 }
 
-__attribute__((cold)) void fifo_destroy(fifo_t *const fifo)
+__attribute__((cold, aligned(64))) void fifo_destroy(fifo_t *const fifo)
 {
 	if (NULL != fifo)
 	{
@@ -90,7 +90,7 @@ __attribute__((cold)) void fifo_destroy(fifo_t *const fifo)
 	}
 }
 
-__attribute__((cold)) void fifo_clear(fifo_t *const fifo)
+__attribute__((cold, aligned(64))) void fifo_clear(fifo_t *const fifo)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == fifo))

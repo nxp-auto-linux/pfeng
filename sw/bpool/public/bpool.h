@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2023 NXP
+ *  Copyright 2017-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -270,7 +270,7 @@ __attribute__((pure, hot)) static inline void * bpool_get_meta_storage(const bpo
  * @brief		Get metadata storage size in bytes
  * @return		Size of the storage in bytes
  */
-__attribute__((pure, cold)) static inline addr_t bpool_get_meta_storage_size(void)
+__attribute__((pure, cold, aligned(64))) static inline addr_t bpool_get_meta_storage_size(void)
 {
 	return BPOOL_CFG_METADATA_LENGTH;
 }
@@ -337,13 +337,13 @@ __attribute__((pure, hot)) static inline void * bpool_get_pa(const bpool_t *cons
 #endif /* BPOOL_CFG_MEM_REGION_WATCH */
 }
 
-bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, uint32_t align, bool_t cached) __attribute__((cold));
+bpool_t * bpool_create(uint32_t depth, uint32_t buf_size, uint32_t align, bool_t cached) __attribute__((cold, aligned(64)));
 void * bpool_get(bpool_t *pool) __attribute__((hot));
 void bpool_put(bpool_t *pool, const void *va) __attribute__((hot));
 errno_t bpool_get_fill_level(bpool_t *pool, uint32_t *fill_level) __attribute__((hot));
 uint32_t bpool_get_depth(const bpool_t *pool) __attribute__((pure, hot));
-errno_t bpool_destroy(bpool_t * pool) __attribute__((cold));
-errno_t bpool_clear(bpool_t * pool) __attribute__((cold));
+errno_t bpool_destroy(bpool_t * pool) __attribute__((cold, aligned(64)));
+errno_t bpool_clear(bpool_t * pool) __attribute__((cold, aligned(64)));
 
 #endif /* SRC_BPOOL_H_ */
 

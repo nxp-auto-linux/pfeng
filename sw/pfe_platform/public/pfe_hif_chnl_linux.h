@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -181,34 +181,34 @@ typedef void (* pfe_hif_chnl_cbk_t)(void *arg);
 
 #define MAC_ADDRESS_SIZE		6U
 /*	RX */
-errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl) __attribute__((cold));
-void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl) __attribute__((cold));
+errno_t pfe_hif_chnl_rx_enable(pfe_hif_chnl_t *chnl) __attribute__((cold, aligned(64)));
+void pfe_hif_chnl_rx_disable(pfe_hif_chnl_t *chnl) __attribute__((cold, aligned(64)));
 errno_t pfe_hif_chnl_rx(pfe_hif_chnl_t *chnl, void **buf_pa, uint32_t *len, bool_t *lifm) __attribute__((hot));
 errno_t pfe_hif_chnl_rx_va(pfe_hif_chnl_t *chnl, void **buf_va, uint32_t *len, bool_t *lifm, void **meta) __attribute__((hot));
-uint32_t pfe_hif_chnl_get_meta_size(const pfe_hif_chnl_t *chnl) __attribute__((cold));
+uint32_t pfe_hif_chnl_get_meta_size(const pfe_hif_chnl_t *chnl) __attribute__((cold, aligned(64)));
 errno_t pfe_hif_chnl_release_buf(pfe_hif_chnl_t *chnl, void *buf_va) __attribute__((hot));
 void pfe_hif_chnl_rx_dma_start(const pfe_hif_chnl_t *chnl) __attribute__((hot));
 bool_t pfe_hif_chnl_can_accept_rx_buf(const pfe_hif_chnl_t *chnl) __attribute__((pure, hot));
 errno_t pfe_hif_chnl_supply_rx_buf(const pfe_hif_chnl_t *chnl, const void *buf_pa, uint32_t size) __attribute__((hot));
-uint32_t pfe_hif_chnl_get_rx_fifo_depth(const pfe_hif_chnl_t *chnl) __attribute__((pure, cold));
+uint32_t pfe_hif_chnl_get_rx_fifo_depth(const pfe_hif_chnl_t *chnl) __attribute__((pure, cold, aligned(64)));
 
 /*	TX */
-errno_t pfe_hif_chnl_tx_enable(pfe_hif_chnl_t *chnl) __attribute__((cold));
-void pfe_hif_chnl_tx_disable(pfe_hif_chnl_t *chnl) __attribute__((cold));
+errno_t pfe_hif_chnl_tx_enable(pfe_hif_chnl_t *chnl) __attribute__((cold, aligned(64)));
+void pfe_hif_chnl_tx_disable(pfe_hif_chnl_t *chnl) __attribute__((cold, aligned(64)));
 errno_t pfe_hif_chnl_tx(pfe_hif_chnl_t *chnl, const void *buf_pa, const void *buf_va, uint32_t len, bool_t lifm) __attribute__((hot));
 void pfe_hif_chnl_tx_dma_start(const pfe_hif_chnl_t *chnl) __attribute__((hot));
 bool_t pfe_hif_chnl_can_accept_tx_num(const pfe_hif_chnl_t *chnl, uint16_t num) __attribute__((pure, hot));
 bool_t pfe_hif_chnl_tx_fifo_empty(const pfe_hif_chnl_t *chnl) __attribute__((pure, hot));
 bool_t pfe_hif_chnl_has_tx_conf(const pfe_hif_chnl_t *chnl) __attribute__((pure, hot));
 errno_t pfe_hif_chnl_get_tx_conf(pfe_hif_chnl_t *chnl) __attribute__((hot));
-uint32_t pfe_hif_chnl_get_tx_fifo_depth(const pfe_hif_chnl_t *chnl) __attribute__((pure, cold));
+uint32_t pfe_hif_chnl_get_tx_fifo_depth(const pfe_hif_chnl_t *chnl) __attribute__((pure, cold, aligned(64)));
 bool_t pfe_hif_chnl_tx_fifo_is_below_wm(const pfe_hif_chnl_t *chnl);
 
 /*	Instance control */
-pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, uint32_t id, const pfe_bmu_t *bmu) __attribute__((cold));
+pfe_hif_chnl_t *pfe_hif_chnl_create(addr_t cbus_base_va, uint32_t id, const pfe_bmu_t *bmu) __attribute__((cold, aligned(64)));
 errno_t pfe_hif_chnl_isr(pfe_hif_chnl_t *chnl) __attribute__((hot));
-void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl) __attribute__((cold));
-errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl) __attribute__((cold));
+void pfe_hif_chnl_destroy(pfe_hif_chnl_t *chnl) __attribute__((cold, aligned(64)));
+errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl) __attribute__((cold, aligned(64)));
 errno_t pfe_hif_chnl_set_event_cbk(pfe_hif_chnl_t *chnl, pfe_hif_chnl_event_t event, pfe_hif_chnl_cbk_t cbk, void *arg);
 void pfe_hif_chnl_irq_mask(pfe_hif_chnl_t *chnl);
 void pfe_hif_chnl_irq_unmask(pfe_hif_chnl_t *chnl);
@@ -220,12 +220,12 @@ errno_t pfe_hif_chnl_get_rx_irq_coalesce(pfe_hif_chnl_t *chnl, uint32_t *frames,
 errno_t pfe_hif_chnl_set_rx_irq_coalesce(pfe_hif_chnl_t *chnl, uint32_t frames, uint32_t cycles);
 bool_t pfe_hif_chnl_is_rx_dma_active(const pfe_hif_chnl_t *chnl) __attribute__((hot));
 bool_t pfe_hif_chnl_is_tx_dma_active(const pfe_hif_chnl_t *chnl) __attribute__((hot));
-uint32_t pfe_hif_chnl_get_id(const pfe_hif_chnl_t *chnl) __attribute__((pure, cold));
-void pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, struct seq_file *seq, uint8_t verb_level) __attribute__((cold));
-void pfe_hif_chnl_dump_tx_ring_to_ndev(const pfe_hif_chnl_t *chnl, struct net_device *ndev, void (*ndev_print)(void *ndev, const char *fmt, ...)) __attribute__((cold));
+uint32_t pfe_hif_chnl_get_id(const pfe_hif_chnl_t *chnl) __attribute__((pure, cold, aligned(64)));
+void pfe_hif_chnl_dump_ring(const pfe_hif_chnl_t *chnl, bool_t dump_rx, bool_t dump_tx, struct seq_file *seq, uint8_t verb_level) __attribute__((cold, aligned(64)));
+void pfe_hif_chnl_dump_tx_ring_to_ndev(const pfe_hif_chnl_t *chnl, struct net_device *ndev, void (*ndev_print)(void *ndev, const char *fmt, ...)) __attribute__((cold, aligned(64)));
 uint32_t pfe_hif_chnl_get_tx_cnt(const pfe_hif_chnl_t *chnl);
 uint32_t pfe_hif_chnl_get_rx_cnt(const pfe_hif_chnl_t *chnl);
 
-uint32_t pfe_hif_chnl_get_text_statistics(const pfe_hif_chnl_t *chnl, struct seq_file *seq, uint8_t verb_level) __attribute__((cold));
+uint32_t pfe_hif_chnl_get_text_statistics(const pfe_hif_chnl_t *chnl, struct seq_file *seq, uint8_t verb_level) __attribute__((cold, aligned(64)));
 
 #endif /* PUBLIC_PFE_HIF_CHNL_H_ */

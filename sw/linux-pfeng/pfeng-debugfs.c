@@ -1,5 +1,5 @@
 /*
- * Copyright 2018,2020-2023 NXP
+ * Copyright 2018,2020-2024 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -18,7 +18,7 @@
 static u32 *msg_verbosity_ptr;
 
 #define CREATE_DEBUGFS_ENTRY_TYPE(ename,var_type)				\
-static int fn_##ename##_debug_show(struct seq_file *seq, void *v)		\
+__attribute__((aligned(64))) static int fn_##ename##_debug_show(struct seq_file *seq, void *v)		\
 {										\
 	pfe_##var_type##_t *var_##ename = seq->private;				\
 										\

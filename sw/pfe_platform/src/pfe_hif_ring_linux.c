@@ -2,7 +2,7 @@
  *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -181,11 +181,11 @@ struct __attribute__((aligned (HAL_CACHE_LINE_SIZE), packed)) pfe_hif_ring_tag
 __attribute__((hot)) static inline void inc_write_index_std(pfe_hif_ring_t *ring);
 __attribute__((hot)) static inline void dec_write_index_std(pfe_hif_ring_t *ring);
 __attribute__((hot)) static inline void inc_read_index_std(pfe_hif_ring_t *ring);
-__attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(bool_t rx);
+__attribute__((cold, aligned(64))) static pfe_hif_ring_t *pfe_hif_ring_create_std(bool_t rx);
 static inline errno_t pfe_hif_ring_enqueue_buf_std(pfe_hif_ring_t *ring, const void *buf_pa, uint32_t length, bool_t lifm);
 static inline errno_t pfe_hif_ring_dequeue_buf_std(pfe_hif_ring_t *ring, void **buf_pa, uint32_t *length, bool_t *lifm);
 static inline errno_t pfe_hif_ring_dequeue_plain_std(pfe_hif_ring_t *ring, bool_t *lifm);
-__attribute__((cold)) static void pfe_hif_ring_invalidate_std(const pfe_hif_ring_t *ring);
+__attribute__((cold, aligned(64))) static void pfe_hif_ring_invalidate_std(const pfe_hif_ring_t *ring);
 
 __attribute__((hot)) static inline void inc_write_index_std(pfe_hif_ring_t *ring)
 {
@@ -233,7 +233,7 @@ __attribute__((pure, hot)) uint32_t pfe_hif_ring_get_fill_level(const pfe_hif_ri
  * @return		Pointer to the beginning address of the ring
  * @note		Must not be preempted by: pfe_hif_ring_destroy()
  */
-__attribute__((pure, cold)) void *pfe_hif_ring_get_base_pa(const pfe_hif_ring_t *ring)
+__attribute__((pure, cold, aligned(64))) void *pfe_hif_ring_get_base_pa(const pfe_hif_ring_t *ring)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == ring))
@@ -252,7 +252,7 @@ __attribute__((pure, cold)) void *pfe_hif_ring_get_base_pa(const pfe_hif_ring_t 
  * @return		Pointer to the table
  * @note		Must not be preempted by: pfe_hif_ring_destroy()
  */
-__attribute__((pure, cold)) void *pfe_hif_ring_get_wb_tbl_pa(const pfe_hif_ring_t *ring)
+__attribute__((pure, cold, aligned(64))) void *pfe_hif_ring_get_wb_tbl_pa(const pfe_hif_ring_t *ring)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == ring))
@@ -272,7 +272,7 @@ __attribute__((pure, cold)) void *pfe_hif_ring_get_wb_tbl_pa(const pfe_hif_ring_
  *				pfe_hif_ring_get_wb_tbl_pa() is not NULL.
  * @note		Must not be preempted by: pfe_hif_ring_destroy()
  */
-__attribute__((pure, cold)) uint32_t pfe_hif_ring_get_wb_tbl_len(const pfe_hif_ring_t *ring)
+__attribute__((pure, cold, aligned(64))) uint32_t pfe_hif_ring_get_wb_tbl_len(const pfe_hif_ring_t *ring)
 {
 	(void)ring;
 
@@ -284,7 +284,7 @@ __attribute__((pure, cold)) uint32_t pfe_hif_ring_get_wb_tbl_len(const pfe_hif_r
  * @param[in]	ring The ring instance
  * @param[in]	index The position in the ring
  */
-__attribute__((cold)) void pfe_hif_ring_invalidate_direct(const pfe_hif_ring_t *ring, uint32_t index)
+__attribute__((cold, aligned(64))) void pfe_hif_ring_invalidate_direct(const pfe_hif_ring_t *ring, uint32_t index)
 {
         /* Clear BD enable flag */
         (&((pfe_hif_bd_t *)ring->base_va)[index])->ctrl_seqnum_w0 &= ~HIF_RING_BD_W0_DESC_EN;
@@ -300,7 +300,7 @@ __attribute__((cold)) void pfe_hif_ring_invalidate_direct(const pfe_hif_ring_t *
  * @param[in]	index The position in the ring
  * @note		It is expected that BD has valid set-up
  */
-__attribute__((cold)) void pfe_hif_ring_revalidate_direct(const pfe_hif_ring_t *ring, uint32_t index)
+__attribute__((cold, aligned(64))) void pfe_hif_ring_revalidate_direct(const pfe_hif_ring_t *ring, uint32_t index)
 {
         /* Set BD enable flag */
         (&((pfe_hif_bd_t *)ring->base_va)[index])->ctrl_seqnum_w0 |= HIF_RING_BD_W0_DESC_EN;
@@ -315,7 +315,7 @@ __attribute__((cold)) void pfe_hif_ring_revalidate_direct(const pfe_hif_ring_t *
  * @param[in]	index The new position of the ring
  * @return		0 if OK
  */
-__attribute__((cold)) errno_t pfe_hif_ring_force_index(pfe_hif_ring_t *ring, uint32_t index)
+__attribute__((cold, aligned(64))) errno_t pfe_hif_ring_force_index(pfe_hif_ring_t *ring, uint32_t index)
 {
 	uint32_t offset;
 
@@ -348,7 +348,7 @@ __attribute__((cold)) errno_t pfe_hif_ring_force_index(pfe_hif_ring_t *ring, uin
  * @return		TRUE if found
  * @note		Requires invalidated all entries before search
  */
-__attribute__((cold)) errno_t pfe_hif_ring_find_wb_entry(pfe_hif_ring_t *ring, bool_t valid, uint32_t *index)
+__attribute__((cold, aligned(64))) errno_t pfe_hif_ring_find_wb_entry(pfe_hif_ring_t *ring, bool_t valid, uint32_t *index)
 {
 	uint32_t valid_id, invalid_id, ii;
 	pfe_hif_wb_bd_t *wb;
@@ -698,7 +698,7 @@ static inline errno_t pfe_hif_ring_dequeue_plain_std(pfe_hif_ring_t *ring, bool_
  * @retval		EOK Buffer has been dequeued
  * @retval		ENOENT No more buffers in the ring
  */
-__attribute__((cold)) errno_t pfe_hif_ring_drain_buf(pfe_hif_ring_t *ring, void **buf_pa)
+__attribute__((cold, aligned(64))) errno_t pfe_hif_ring_drain_buf(pfe_hif_ring_t *ring, void **buf_pa)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely((NULL == ring) || (NULL == buf_pa)))
@@ -776,7 +776,7 @@ __attribute__((pure, hot)) bool_t pfe_hif_ring_is_below_wm(const pfe_hif_ring_t 
  * @param[in]	ring The ring instance
  * @note		Must not be preempted by: pfe_hif_ring_enqueue_buf(), pfe_hif_ring_destroy()
  */
-__attribute__((cold)) void pfe_hif_ring_invalidate(const pfe_hif_ring_t *ring)
+__attribute__((cold, aligned(64))) void pfe_hif_ring_invalidate(const pfe_hif_ring_t *ring)
 {
 	pfe_hif_ring_invalidate_std(ring);
 }
@@ -784,7 +784,7 @@ __attribute__((cold)) void pfe_hif_ring_invalidate(const pfe_hif_ring_t *ring)
 /**
  * @brief		The "standard" HIF variant
  */
-__attribute__((cold)) static void pfe_hif_ring_invalidate_std(const pfe_hif_ring_t *ring)
+__attribute__((cold, aligned(64))) static void pfe_hif_ring_invalidate_std(const pfe_hif_ring_t *ring)
 {
 	uint32_t ii;
 
@@ -819,7 +819,7 @@ __attribute__((cold)) static void pfe_hif_ring_invalidate_std(const pfe_hif_ring
  * @return		Number of bytes written to the buffer
  * @note		Must not be preempted by: pfe_hif_ring_enqueue_buf(), pfe_hif_ring_destroy()
  */
-__attribute__((cold)) void pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name, void *dev, void (*dev_print)(void *dev, const char *fmt, ...), uint8_t verb_level)
+__attribute__((cold, aligned(64))) void pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name, void *dev, void (*dev_print)(void *dev, const char *fmt, ...), uint8_t verb_level)
 {
 	char_t *idx_str;
 	bool_t pr_out;
@@ -931,7 +931,7 @@ __attribute__((cold)) void pfe_hif_ring_dump(pfe_hif_ring_t *ring, char_t *name,
  * @return		The new ring instance or NULL if the call has failed
  * @note		Must not be preempted by any of the remaining API functions
  */
-__attribute__((cold)) pfe_hif_ring_t *pfe_hif_ring_create(bool_t rx, bool_t nocpy)
+__attribute__((cold, aligned(64))) pfe_hif_ring_t *pfe_hif_ring_create(bool_t rx, bool_t nocpy)
 {
 	if (TRUE == nocpy)
 	{
@@ -946,7 +946,7 @@ __attribute__((cold)) pfe_hif_ring_t *pfe_hif_ring_create(bool_t rx, bool_t nocp
 /**
  * @brief		The "standard" HIF variant
  */
-__attribute__((cold)) static pfe_hif_ring_t *pfe_hif_ring_create_std(bool_t rx)
+__attribute__((cold, aligned(64))) static pfe_hif_ring_t *pfe_hif_ring_create_std(bool_t rx)
 {
 	pfe_hif_ring_t *ring;
 	uint32_t ii, size;
@@ -1111,7 +1111,7 @@ free_and_fail:
  * @param[in]	ring The ring instance
  * @note		Must not be preempted by any of the remaining API functions
  */
-__attribute__((cold)) errno_t pfe_hif_ring_destroy(pfe_hif_ring_t *ring)
+__attribute__((cold, aligned(64))) errno_t pfe_hif_ring_destroy(pfe_hif_ring_t *ring)
 {
 	if (NULL != ring)
 	{
