@@ -41,21 +41,24 @@ static errno_t pfe_phy_if_db_lock(void)
 {
 	/*	Wait 1ms */
 	const uint32_t timeout_step = 1000U;
-	/*	Timeout 1.5s */
-	uint32_t timeout_us = 1500U * 1000U;
-	errno_t ret = EINVAL;
+	/*	Maximum Timeout */
+	uint32_t timeout_us = PFE_CFG_IF_DB_RPC_RETRY_LOCK_TIME * 1000U;
+	errno_t ret = ENOLCK;
 
 	/* Try to lock IF DB */
 	for (; timeout_us > 0U; timeout_us -= timeout_step)
 	{
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_LOCK, NULL, 0, NULL, 0U);
-		if (EOK == ret || ETIMEDOUT == ret || EPERM == ret)
+		if (ENOLCK == ret)
+		{
+			NXP_LOG_WARNING("Problem to acquire IF_DB lock - ENOLCK -> RETRY \n");
+			oal_time_usleep(timeout_step);
+		}
+		else
 		{
 			/* Got lock or communication with Master is not possible */
 			break;
 		}
-
-		oal_time_usleep(timeout_step);
 	}
 
 	if (EOK != ret)

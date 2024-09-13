@@ -125,6 +125,8 @@ export PFE_CFG_IDEX_RESEND_COUNT?=10
 export PFE_CFG_IF_DB_MAX_LOCK_TIME?=1000
 #Number of milliseconds for IF_DB polled_lock
 export PFE_CFG_IF_DB_POLLING_LOCK_TIME?=1000
+#Maximum time in milliseconds for PFE Slave to retry lock of IF_DB
+export PFE_CFG_IF_DB_RPC_RETRY_LOCK_TIME?=200
 
 ifeq ($(PFE_CFG_HIF_DRV_MODE),0)
   #Use multi-client HIF driver. Required when multiple logical interfaces need to
@@ -392,6 +394,10 @@ endif
 
 ifneq ($(PFE_CFG_IF_DB_POLLING_LOCK_TIME),0)
   GLOBAL_CCFLAGS+=-DPFE_CFG_IF_DB_POLLING_LOCK_TIME='$(PFE_CFG_IF_DB_POLLING_LOCK_TIME)'
+endif
+
+ifneq ($(PFE_CFG_IF_DB_RPC_RETRY_LOCK_TIME),0)
+  GLOBAL_CCFLAGS+=-DPFE_CFG_IF_DB_RPC_RETRY_LOCK_TIME='$(PFE_CFG_IF_DB_RPC_RETRY_LOCK_TIME)'
 endif
 
 # Workaround to remove MCAL version checks when building from repository
