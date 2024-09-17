@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -30,22 +30,22 @@ typedef struct
 #include "Eth_43_PFE_MemMap.h"
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
-pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_base, const pfe_bmu_cfg_t *cfg) __attribute__((cold));
-errno_t pfe_bmu_isr(pfe_bmu_t *bmu) __attribute__((cold));
+pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_base, const pfe_bmu_cfg_t *cfg) __attribute__((cold, aligned(64)));
+errno_t pfe_bmu_isr(pfe_bmu_t *bmu) __attribute__((cold, aligned(64)));
 void pfe_bmu_irq_mask(pfe_bmu_t *bmu);
 void pfe_bmu_irq_unmask(pfe_bmu_t *bmu);
-void pfe_bmu_enable(pfe_bmu_t *bmu) __attribute__((cold));
-void pfe_bmu_reset(pfe_bmu_t *bmu) __attribute__((cold));
-void pfe_bmu_disable(pfe_bmu_t *bmu) __attribute__((cold));
+void pfe_bmu_enable(pfe_bmu_t *bmu) __attribute__((cold, aligned(64)));
+void pfe_bmu_reset(pfe_bmu_t *bmu) __attribute__((cold, aligned(64)));
+void pfe_bmu_disable(pfe_bmu_t *bmu) __attribute__((cold, aligned(64)));
 void *pfe_bmu_alloc_buf(const pfe_bmu_t *bmu) __attribute__((hot));
 void *pfe_bmu_get_va(const pfe_bmu_t *bmu, addr_t pa) __attribute__((hot, pure));
 void *pfe_bmu_get_pa(const pfe_bmu_t *bmu, addr_t va) __attribute__((hot, pure));
-uint32_t pfe_bmu_get_buf_size(const pfe_bmu_t *bmu) __attribute__((cold, pure));
+uint32_t pfe_bmu_get_buf_size(const pfe_bmu_t *bmu) __attribute__((cold, aligned(64), pure));
 void pfe_bmu_free_buf(const pfe_bmu_t *bmu, addr_t buffer) __attribute__((hot));
 
-uint32_t pfe_bmu_get_text_statistics(const pfe_bmu_t *bmu, struct seq_file *seq, uint8_t verb_level) __attribute__((cold));
+uint32_t pfe_bmu_get_text_statistics(const pfe_bmu_t *bmu, struct seq_file *seq, uint8_t verb_level) __attribute__((cold, aligned(64)));
 
-void pfe_bmu_destroy(pfe_bmu_t *bmu) __attribute__((cold));
+void pfe_bmu_destroy(pfe_bmu_t *bmu) __attribute__((cold, aligned(64)));
 #ifdef PFE_CFG_PFE_MASTER
 uint32_t pfe_bmu_get_err_poll(pfe_bmu_t *bmu) __attribute__((hot));
 #endif /* #ifdef PFE_CFG_PFE_MASTER */

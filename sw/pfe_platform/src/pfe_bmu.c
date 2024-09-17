@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -46,7 +46,7 @@ struct pfe_bmu_tag
  * @param[in]	bmu The BMU instance
  * @return		EOK if interrupt has been handled
  */
-__attribute__((cold)) errno_t pfe_bmu_isr(pfe_bmu_t *bmu)
+__attribute__((cold, aligned(64))) errno_t pfe_bmu_isr(pfe_bmu_t *bmu)
 {
 	errno_t ret;
 
@@ -135,7 +135,7 @@ void pfe_bmu_irq_unmask(pfe_bmu_t *bmu)
  * @param[in]	cfg The BMU block configuration
  * @return		The BMU instance or NULL if failed
  */
-__attribute__((cold)) pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_base, const pfe_bmu_cfg_t *cfg)
+__attribute__((cold, aligned(64))) pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_base, const pfe_bmu_cfg_t *cfg)
 {
 	pfe_bmu_t *bmu;
 
@@ -211,7 +211,7 @@ __attribute__((cold)) pfe_bmu_t *pfe_bmu_create(addr_t cbus_base_va, addr_t bmu_
  * @brief		Reset the BMU block
  * @param[in]	bmu The BMU instance
  */
-__attribute__((cold)) void pfe_bmu_reset(pfe_bmu_t *bmu)
+__attribute__((cold, aligned(64))) void pfe_bmu_reset(pfe_bmu_t *bmu)
 {
 	errno_t ret;
 
@@ -259,7 +259,7 @@ __attribute__((cold)) void pfe_bmu_reset(pfe_bmu_t *bmu)
  * @brief		Enable the BMU block
  * @param[in]	bmu The BMU instance
  */
-__attribute__((cold)) void pfe_bmu_enable(pfe_bmu_t *bmu)
+__attribute__((cold, aligned(64))) void pfe_bmu_enable(pfe_bmu_t *bmu)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
@@ -291,7 +291,7 @@ __attribute__((cold)) void pfe_bmu_enable(pfe_bmu_t *bmu)
  * @brief		Disable the BMU block
  * @param[in]	bmu The BMU instance
  */
-__attribute__((cold)) void pfe_bmu_disable(pfe_bmu_t *bmu)
+__attribute__((cold, aligned(64))) void pfe_bmu_disable(pfe_bmu_t *bmu)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
@@ -407,7 +407,7 @@ __attribute__((hot, pure)) void *pfe_bmu_get_pa(const pfe_bmu_t *bmu, addr_t va)
  * @param[in]	bmu The BMU instance
  * @return		Buffer size in number of bytes
  */
-__attribute__((cold, pure)) uint32_t pfe_bmu_get_buf_size(const pfe_bmu_t *bmu)
+__attribute__((cold, aligned(64), pure)) uint32_t pfe_bmu_get_buf_size(const pfe_bmu_t *bmu)
 {
 	uint32_t len;
 #if defined(PFE_CFG_NULL_ARG_CHECK)
@@ -449,7 +449,7 @@ __attribute__((hot)) void pfe_bmu_free_buf(const pfe_bmu_t *bmu, addr_t buffer)
  * @brief		Destroy BMU instance
  * @param[in]	bmu The BMU instance
  */
-__attribute__((cold)) void pfe_bmu_destroy(pfe_bmu_t *bmu)
+__attribute__((cold, aligned(64))) void pfe_bmu_destroy(pfe_bmu_t *bmu)
 {
 	if (NULL != bmu)
 	{
@@ -487,7 +487,7 @@ __attribute__((cold)) void pfe_bmu_destroy(pfe_bmu_t *bmu)
  * @param[in]	verb_level 	Verbosity level
  * @return		Number of bytes written to the buffer
  */
-__attribute__((cold)) uint32_t pfe_bmu_get_text_statistics(const pfe_bmu_t *bmu, struct seq_file *seq, uint8_t verb_level)
+__attribute__((cold, aligned(64))) uint32_t pfe_bmu_get_text_statistics(const pfe_bmu_t *bmu, struct seq_file *seq, uint8_t verb_level)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
 	if (unlikely(NULL == bmu))
