@@ -3,7 +3,7 @@
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2023 NXP
+ *  Copyright 2017-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -63,8 +63,6 @@
 #endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 uint32_t pfe_util_cfg_get_text_stat(addr_t base_va, struct seq_file *seq, uint8_t verb_level);
-
-errno_t pfe_util_cfg_isr(addr_t base_va);
 
 #ifdef PFE_CFG_TARGET_OS_AUTOSAR
 #define ETH_43_PFE_STOP_SEC_CODE
