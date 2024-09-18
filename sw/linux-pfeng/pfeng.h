@@ -448,6 +448,7 @@ struct sk_buff *pfeng_hif_chnl_txconf_get_skbuf(struct pfeng_hif_chnl *chnl);
 void pfeng_hif_chnl_txconf_unroll_map_full(struct pfeng_hif_chnl *chnl, int i);
 int pfeng_hif_chnl_txconf_free_map_full(struct pfeng_hif_chnl *chnl, int napi_budget);
 int pfeng_hif_chnl_txbd_unused(struct pfeng_hif_chnl *chnl);
+bool pfeng_hif_chnl_txbd_is_empty(struct pfeng_hif_chnl *chnl);
 void pfeng_hif_chnl_txconf_update_wr_idx(struct pfeng_hif_chnl *chnl, int count);
 void pfeng_bman_tx_pool_dump(struct pfeng_hif_chnl *chnl, struct net_device *ndev, void (*dbg_print)(void *ndev, const char *fmt, ...));
 

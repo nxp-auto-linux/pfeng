@@ -2,7 +2,7 @@
  *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2024 NXP
+ *  Copyright 2018-2023 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -2118,7 +2118,6 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 	uint32_t len, ii;
 	bool_t lifm;
 	errno_t ret = EOK;
-	bool_t tx_confirmed;
 
 	rx_buf_va = oal_mm_malloc_contig_aligned_nocache(DUMMY_RX_BUF_LEN, 8U);
 	if (NULL == rx_buf_va)
@@ -2253,34 +2252,12 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 		/*	Wait */
 		oal_time_usleep(500U);
 
-		/*	Do TX confirmations in a row */
-		tx_confirmed = FALSE;
-		while (TRUE)
+		/*	Do TX confirmations */
+		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
-			if (EOK == pfe_hif_chnl_get_tx_conf(chnl))
-			{
-				/*	At least one successful TX confirmation must occur */
-				if (FALSE == tx_confirmed)
-				{
-					/*      Only after the 1st TX confirmation free the dummy frame */
-					pfe_hif_chnl_free_dummy_frame(frame);
-				}
-				else
-				{
-					/*	Report extra TX confirmations */
-					NXP_LOG_WARNING("Extra TX confirmation received during TX ring reset\n");
-				}
-
-				tx_confirmed = TRUE;
-				continue;
-			}
-			else if (TRUE == tx_confirmed)
-			{
-				/*	Finish when there is nothing to confirm but after the successful one */
-				break;
-			}
 			oal_time_usleep(100U);
 		}
+		pfe_hif_chnl_free_dummy_frame(frame);
 	}
 
 the_end:
