@@ -130,7 +130,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 					/* 1) Set egress port */
 
 					/* Lock interface db and get the requested interface */
-					ret = pfe_if_db_lock(&fci_context->if_session_id);
+					ret = pfe_if_db_polled_lock(&fci_context->if_session_id);
 					if(EOK != ret)
 					{
 						/*	Notify mirror module we are done working with the mirror instance. */
@@ -447,7 +447,7 @@ errno_t fci_mirror_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_mirror_cmd_t *repl
 
 					/* Get egress port name, step #1 - find the egress interface in the interface db */
 					egress_id = pfe_mirror_get_egress_port(mirror);
-					ret = pfe_if_db_lock(&fci_context->if_session_id);
+					ret = pfe_if_db_polled_lock(&fci_context->if_session_id);
 					if(EOK != ret)
 					{
 						/*	Notify mirror module we are done working with the mirror instance. */

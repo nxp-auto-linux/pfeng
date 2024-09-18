@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -153,7 +153,7 @@ errno_t fci_routes_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_rt_cmd_t *reply_bu
 			{
 				case FPP_ACTION_REGISTER:
 				{
-					ret = pfe_if_db_lock(&session_id);
+					ret = pfe_if_db_polled_lock(&session_id);
 					if (EOK == ret)
 					{
 						/*	Validate the interface */

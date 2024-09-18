@@ -252,7 +252,7 @@ errno_t fci_interfaces_session_cmd(uint32_t code, uint16_t *fci_ret)
 			case FPP_CMD_IF_LOCK_SESSION:
 			{
 				*fci_ret = FPP_ERR_OK;
-				if (EOK != pfe_if_db_lock(&fci_context->if_session_id))
+				if (EOK != pfe_if_db_polled_lock(&fci_context->if_session_id))
 				{
 					*fci_ret = FPP_ERR_IF_RESOURCE_ALREADY_LOCKED;
 					NXP_LOG_WARNING("DB lock failed\n");
@@ -335,6 +335,15 @@ errno_t fci_interfaces_log_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_log_if_cmd
 			(void)memset(reply_buf, 0, sizeof(fpp_log_if_cmd_t));
 
 			if_cmd = (fpp_log_if_cmd_t *)msg->msg_cmd.payload;
+
+			/* Check if IF_DB lock is acquired */
+			ret = pfe_if_db_lock_check(fci_context->if_session_id);
+			if(EOK != ret)
+			{
+				/* FCI command requested unfulfillable action. Respond with FCI error code. */
+				*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
+				return EOK;
+			}
 
 			switch(if_cmd->action)
 			{
@@ -942,6 +951,15 @@ errno_t fci_interfaces_phy_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_phy_if_cmd
 			(void)memset(reply_buf, 0, sizeof(fpp_phy_if_cmd_t));
 
 			if_cmd = (fpp_phy_if_cmd_t *)msg->msg_cmd.payload;
+
+			/* Check if IF_DB lock is acquired */
+			ret = pfe_if_db_lock_check(fci_context->if_session_id);
+			if(EOK != ret)
+			{
+				/* FCI command requested unfulfillable action. Respond with FCI error code. */
+				*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
+				return EOK;
+			}
 
 			switch (if_cmd->action)
 			{
@@ -1599,6 +1617,15 @@ errno_t fci_interfaces_mac_cmd(fci_msg_t *msg, uint16_t *fci_ret, fpp_if_mac_cmd
 
 			/* Initialize pointer to the command data */
 			if_mac_cmd = (fpp_if_mac_cmd_t *)msg->msg_cmd.payload;
+
+			/* Check if IF_DB lock is acquired */
+			ret = pfe_if_db_lock_check(fci_context->if_session_id);
+			if(EOK != ret)
+			{
+				/* FCI command requested unfulfillable action. Respond with FCI error code. */
+				*fci_ret = FPP_ERR_IF_WRONG_SESSION_ID;
+				return EOK;
+			}
 
 			/*	Preparation: get the requested interface */
 			{

@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2023 NXP
+ *  Copyright 2020-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -88,7 +88,7 @@ static pfe_phy_if_t *fci_get_phy_if_by_name(char_t *name)
 	errno_t ret;
 	uint32_t sid;
 
-	ret = pfe_if_db_lock(&sid);
+	ret = pfe_if_db_polled_lock(&sid);
 	if (EOK != ret)
 	{
 		NXP_LOG_WARNING("Could not lock interface DB: %d\n", ret);
