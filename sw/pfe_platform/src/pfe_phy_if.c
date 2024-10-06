@@ -280,7 +280,7 @@ pfe_phy_if_t *pfe_phy_if_create(pfe_class_t *class, pfe_ct_phy_if_id_t id, const
 void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 {
 	errno_t ret = EOK;
-
+	uint8_t i = 0U;
 	if (NULL != iface)
 	{
 		if (EOK != oal_mutex_lock(&iface->lock))
@@ -311,6 +311,13 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 			else
 			{
 				NXP_LOG_DEBUG("%s mac_db is NULL.\n", iface->name);
+			}
+
+			/* Release attached mirror objects */
+			for (i = 0U; i < PFE_CT_MIRRORS_COUNT; ++i)
+			{
+				pfe_phy_if_set_rx_mirror(iface, i, NULL);
+				pfe_phy_if_set_tx_mirror(iface, i, NULL);
 			}
 
 			/* Disable HW bridge lookup if the last interface was destroyed */
