@@ -805,6 +805,11 @@ void pfeng_hif_remove(struct pfeng_priv *priv)
 	}
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
+	/* Stop IHC RX/TX works */
+	cancel_work_sync(&priv->ihc_rx_work);
+	cancel_work_sync(&priv->ihc_tx_work);
+	flush_workqueue(priv->ihc_wq);
+
 	/*	Unregister IHC client and release IDEX RPC */
 	pfeng_hif_idex_release(priv);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
