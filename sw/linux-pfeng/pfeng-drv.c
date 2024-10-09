@@ -233,11 +233,6 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 		return ret;
 	}
 
-	/* Stop IHC RX/TX works */
-	cancel_work_sync(&priv->ihc_rx_work);
-	cancel_work_sync(&priv->ihc_tx_work);
-	flush_workqueue(priv->ihc_wq);
-
 #ifdef PFE_CFG_FCI_ENABLE
 	if (priv->pfe_platform) {
 		pfe_platform_destroy_fci(priv->pfe_platform);

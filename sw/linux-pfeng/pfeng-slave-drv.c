@@ -190,11 +190,6 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	/* Remove netifs */
 	pfeng_netif_remove(priv);
 
-	/* Stop IHC RX/TX works */
-	cancel_work_sync(&priv->ihc_rx_work);
-	cancel_work_sync(&priv->ihc_tx_work);
-	flush_workqueue(priv->ihc_wq);
-
 #ifdef PFE_CFG_FCI_ENABLE
 	if (priv->pfe_platform) {
 		pfe_platform_destroy_fci(priv->pfe_platform);
@@ -672,6 +667,13 @@ err_drv:
 err_pfe_get:
 err_pfe_init:
 
+	if (ret) {
+		/* Stop IHC RX/TX works */
+		cancel_work_sync(&priv->ihc_rx_work);
+		cancel_work_sync(&priv->ihc_tx_work);
+		flush_workqueue(priv->ihc_wq);
+	}
+
 	if (priv->deferred_probe_task) {
 		priv->deferred_probe_task = NULL;
 		do_exit(0);
@@ -714,9 +716,15 @@ static int pfeng_drv_pm_resume(struct device *dev)
 		}
 		wake_up_process(priv->deferred_probe_task);
 	} else
-		ret = pfeng_drv_deferred_resume(dev);
+		return pfeng_drv_deferred_resume(dev);
 
 err_deferr:
+	if (ret) {
+		/* Stop IHC RX/TX works */
+		cancel_work_sync(&priv->ihc_rx_work);
+		cancel_work_sync(&priv->ihc_tx_work);
+		flush_workqueue(priv->ihc_wq);
+	}
 
 	return ret;
 }
