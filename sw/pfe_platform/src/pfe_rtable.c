@@ -2779,9 +2779,9 @@ static void *rtable_worker_func(void *arg)
 					break;
 				}
 			}
-		}
 
-		oal_mbox_ack_msg(&msg);
+			oal_mbox_ack_msg(&msg);
+		}
 	}
 
 	return NULL;
