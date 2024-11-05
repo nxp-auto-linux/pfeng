@@ -1665,6 +1665,7 @@ static errno_t pfe_l2br_domain_flush_by_if_static(const pfe_l2br_domain_t *domai
 	errno_t ret = EOK;
 	LLIST_t *item, *dummy = NULL;
 	pfe_l2br_static_entry_t *sentry = NULL;
+	uint64_t updated_forward_list;
 
 	/*	Flush interface-related static entries */
 	if (FALSE == LLIST_IsEmpty(&bridge->static_entries))
@@ -1682,11 +1683,24 @@ static errno_t pfe_l2br_domain_flush_by_if_static(const pfe_l2br_domain_t *domai
 				/*	Check static entry */
 				if ((sentry->vlan == domain->vlan) && (0U != (sentry->u.action_data.item.forward_list & iface_bitflag)))
 				{
-					/*	Remove static entry. LLIST_Remove() is inside... */
-					ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
-					if (EOK != ret)
+					updated_forward_list = sentry->u.action_data.item.forward_list & ~iface_bitflag;
+					if(0U != updated_forward_list)
 					{
-						NXP_LOG_ERROR("Unable to remove static entry: %d\n", ret);
+						/*Another interface exists in this entry, just update forward list*/
+						ret = pfe_l2br_static_entry_replace_fw_list(bridge, sentry, updated_forward_list);
+						if (EOK != ret)
+						{
+							NXP_LOG_ERROR("Unable to update forward list of static entry: %d\n", ret);
+						}
+					}
+					else
+					{
+						/*	Remove static entry. LLIST_Remove() is inside... */
+						ret = pfe_l2br_static_entry_destroy_nolock(bridge, sentry);
+						if (EOK != ret)
+						{
+							NXP_LOG_ERROR("Unable to remove static entry: %d\n", ret);
+						}
 					}
 				}
 			}
@@ -1716,11 +1730,26 @@ static errno_t pfe_l2br_domain_flush_by_if_dynamic_static(const pfe_l2br_domain_
 			/*	Check entry */
 			if ((entry_vlan == domain->vlan) && (0U != (entry_action_data.item.forward_list & iface_bitflag)))
 			{
-				/*	Remove entry */
-				ret = pfe_l2br_table_del_entry(bridge->mac_table, entry);
-				if (EOK != ret)
+				if(0U != (entry_action_data.item.forward_list & ~iface_bitflag))
 				{
-					NXP_LOG_ERROR("Could not delete MAC table entry: %d\n", ret);
+					/*Have more interfaces active, just remove this one*/
+
+					entry_action_data.item.forward_list &= ~iface_bitflag;
+
+					ret = pfe_l2br_table_entry_set_action_data(entry, entry_action_data.val);
+					if (EOK != ret)
+					{
+						NXP_LOG_ERROR("Could not update MAC table entry: %d\n", ret);
+					}
+				}
+				else
+				{
+					/*	Remove entry */
+					ret = pfe_l2br_table_del_entry(bridge->mac_table, entry);
+					if (EOK != ret)
+					{
+						NXP_LOG_ERROR("Could not delete MAC table entry: %d\n", ret);
+					}
 				}
 			}
 
