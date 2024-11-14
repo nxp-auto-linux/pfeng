@@ -1390,7 +1390,7 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 	}
 
 	/* allocate net device with max RX and max TX queues */
-	netdev = alloc_etherdev_mqs(sizeof(*netif), PFENG_PFE_HIF_CHANNELS, PFENG_PFE_HIF_CHANNELS);
+	netdev = alloc_etherdev_mqs(sizeof(*netif), 1, PFENG_PFE_HIF_CHANNELS);
 	if (!netdev) {
 		HM_MSG_DEV_ERR(dev, "Error allocating the etherdev\n");
 		return NULL;
