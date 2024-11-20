@@ -31,7 +31,7 @@
 #define PFE_EMAC_JUMBO_MAXFRMSZ	(PFE_EMAC_JUMBO_MTU + PFE_EMAC_PKT_OVERHEAD)
 
 #ifdef PFE_CFG_PFE_MASTER
-
+#define PFE_CFG_MDIO_ACCESS_TIMEOUT 100U
 /* Mode conversion table */
 /* usage scope: phy_mode_to_str */
 static const char_t * const phy_mode[] =
@@ -836,7 +836,7 @@ void pfe_emac_cfg_set_rx_flow_control(addr_t base_va, bool_t en)
 errno_t pfe_emac_cfg_mdio_read22(addr_t base_va, uint8_t pa, uint8_t ra, uint16_t *val)
 {
 	uint32_t reg;
-	uint32_t timeout = 500U;
+	uint32_t timeout = PFE_CFG_MDIO_ACCESS_TIMEOUT;
 	errno_t ret = EOK;
 
 	reg = GMII_BUSY(1U)
@@ -888,7 +888,7 @@ errno_t pfe_emac_cfg_mdio_read22(addr_t base_va, uint8_t pa, uint8_t ra, uint16_
 errno_t pfe_emac_cfg_mdio_read45(addr_t base_va, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t *val)
 {
 	uint32_t reg;
-	uint32_t timeout = 500U;
+	uint32_t timeout = PFE_CFG_MDIO_ACCESS_TIMEOUT;
 	errno_t ret = EOK;
 
 	/* Set the register addresss to read */
@@ -940,7 +940,7 @@ errno_t pfe_emac_cfg_mdio_read45(addr_t base_va, uint8_t pa, uint8_t dev, uint16
 errno_t pfe_emac_cfg_mdio_write22(addr_t base_va, uint8_t pa, uint8_t ra, uint16_t val)
 {
 	uint32_t reg;
-	uint32_t timeout = 500U;
+	uint32_t timeout = PFE_CFG_MDIO_ACCESS_TIMEOUT;
 	errno_t ret = EOK;
 
 	reg = (uint32_t)GMII_DATA(val);
@@ -984,7 +984,7 @@ errno_t pfe_emac_cfg_mdio_write22(addr_t base_va, uint8_t pa, uint8_t ra, uint16
 errno_t pfe_emac_cfg_mdio_write45(addr_t base_va, uint8_t pa, uint8_t dev, uint16_t ra, uint16_t val)
 {
 	uint32_t reg;
-	uint32_t timeout = 500U;
+	uint32_t timeout = PFE_CFG_MDIO_ACCESS_TIMEOUT;
 	errno_t ret = EOK;
 
 	reg = (uint32_t)(GMII_DATA(val) | GMII_REGISTER_ADDRESS(ra));
