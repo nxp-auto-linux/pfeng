@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021 NXP
+ *  Copyright 2018-2021,2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -336,8 +336,9 @@ errno_t oal_mbox_receive(oal_mbox_t *mbox, oal_mbox_msg_t *msg)
 	}
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 
-	ret = wait_event_interruptible(mbox->msg.wait, atomic_read(&mbox->msg.up) > 0);
-	if(0 != ret)
+	ret = wait_event_interruptible(mbox->msg.wait,
+								   atomic_read(&mbox->msg.up) > 0 || TRUE == kthread_should_stop());
+	if(0 != ret || TRUE == kthread_should_stop())
 	{
 		return EINTR;
 	}
@@ -431,7 +432,8 @@ void oal_mbox_destroy(oal_mbox_t *mbox)
 
 	if (mbox->intr.queue)
 	{
-		drain_workqueue(mbox->intr.queue);
+		cancel_work_sync(&mbox->intr.update);
+		flush_workqueue(mbox->intr.queue);
 		destroy_workqueue(mbox->intr.queue);
 	}
 

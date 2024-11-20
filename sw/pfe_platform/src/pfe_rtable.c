@@ -37,6 +37,17 @@
 #define PFE_RTABLE_CFG_PARANOID_ENTRY_UPDATE	TRUE
 
 /**
+ * @brief	State of rtable worker
+ * @details	Used to control status of thread running rtable worker function
+ */
+typedef enum
+{
+	RTABLE_WORK_STATE_DISABLED,
+	RTABLE_WORK_STATE_ENABLED,
+	RTABLE_WORK_STATE_STOPPED
+} pfe_rtable_work_state_t;
+
+/**
  * @brief	Select criterion argument type
  * @details	Used to store and pass argument to the pfe_rtable_match_criterion()
  * @see pfe_rtable_get_criterion_t
@@ -86,6 +97,7 @@ struct pfe_rtable_tag
 	uint32_t active_entries_count;			/*	Counter of active RTable entries, needed for enabling/disabling of RTable lookup */
 	uint32_t conntrack_stats_table_addr;
 	uint16_t conntrack_stats_table_size;
+	pfe_rtable_work_state_t rtable_work_state;
 };
 
 /**
@@ -2752,6 +2764,10 @@ static void *rtable_worker_func(void *arg)
 	while (2)
 	{
 		err = oal_mbox_receive(rtable->mbox, &msg);
+		if (RTABLE_WORK_STATE_STOPPED == rtable->rtable_work_state)
+		{
+			return NULL;
+		}
 		if (EOK != err)
 		{
 			NXP_LOG_ERROR("mbox: Problem receiving message: %d", err);
@@ -2760,13 +2776,6 @@ static void *rtable_worker_func(void *arg)
 		{
 			switch (msg.payload.code)
 			{
-				case (int32_t)SIG_WORKER_STOP:
-				{
-					/* Exit the thread */
-					oal_mbox_ack_msg(&msg);
-					return NULL;
-				}
-
 				case (int32_t)SIG_TIMER_TICK:
 				{
 					pfe_rtable_do_timeouts(rtable);
@@ -2779,9 +2788,9 @@ static void *rtable_worker_func(void *arg)
 					break;
 				}
 			}
-		}
 
-		oal_mbox_ack_msg(&msg);
+			oal_mbox_ack_msg(&msg);
+		}
 	}
 
 	return NULL;
@@ -3024,6 +3033,7 @@ pfe_rtable_t *pfe_rtable_create(pfe_class_t *class, pfe_l2br_t *bridge, pfe_rtab
 				}
 
 				/* Create worker thread */
+				rtable->rtable_work_state = RTABLE_WORK_STATE_ENABLED;
 				rtable->worker = oal_thread_create(&rtable_worker_func, rtable, "rtable worker", 0);
 				if (NULL == rtable->worker)
 				{
@@ -3093,22 +3103,15 @@ void pfe_rtable_destroy(pfe_rtable_t *rtable)
 			{
 				NXP_LOG_INFO("Stopping rtable worker...\n");
 
-				err = oal_mbox_send_signal(rtable->mbox, SIG_WORKER_STOP);
+				rtable->rtable_work_state = RTABLE_WORK_STATE_STOPPED;
+				err = oal_thread_join(rtable->worker, NULL);
 				if (EOK != err)
 				{
-					NXP_LOG_ERROR("Signal failed: %d\n", err);
+					NXP_LOG_ERROR("Can't join the worker thread: %d\n", err);
 				}
 				else
 				{
-					err = oal_thread_join(rtable->worker, NULL);
-					if (EOK != err)
-					{
-						NXP_LOG_ERROR("Can't join the worker thread: %d\n", err);
-					}
-					else
-					{
-						NXP_LOG_INFO("rtable worker stopped\n");
-					}
+					NXP_LOG_INFO("rtable worker stopped\n");
 				}
 			}
 		}
