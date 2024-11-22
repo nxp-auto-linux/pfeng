@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -164,9 +164,10 @@ void pfe_tmu_reclaim_init(addr_t cbus_base_va)
 		{
 
 			/* Initialize internal TMU FIFO (length is hard coded in verilog)*/
-			for(ii = 0U; ii < (uint32_t)TLITE_INQ_FIFODEPTH; ii++)
+			for(ii = 0U; ii < (uint32_t)(TLITE_INQ_FIFODEPTH / 2U); ii++)
 			{
-				hal_write32(0UL, cbus_base_va + TMU_PHY_INQ_PKTINFO);
+				/* 64bit write, it covers both registers TMU_PHY_INQ_PKTPTR and TMU_PHY_INQ_PKTINFO */
+				hal_write64(0ULL, cbus_base_va + TMU_PHY_INQ_PKTPTR);
 			}
 
 			do
