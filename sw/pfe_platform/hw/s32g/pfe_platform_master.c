@@ -2717,7 +2717,7 @@ errno_t pfe_platform_soft_reset(const pfe_platform_t *platform)
 	}
 	else
 	{
-		oal_time_usleep(5U);
+		oal_time_usleep(100U);
 		regval &= ~WSP_SYS_GEN_SOFT_RST_BIT;
 		hal_write32(regval, addr_gen);
 	}

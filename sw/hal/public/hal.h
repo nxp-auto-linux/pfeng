@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -47,6 +47,7 @@
 								iowrite##width(val, (volatile void *)addr); \
 							} while (0!=0)
 
+#define hal_write64(val, addr)	hal_write_w(64, val, addr)
 #define hal_write32(val, addr)	hal_write_w(32, val, addr)
 #define hal_write16(val, addr)	hal_write_w(16, val, addr)
 #define hal_write8(val, addr)	hal_write_w(8, val, addr)

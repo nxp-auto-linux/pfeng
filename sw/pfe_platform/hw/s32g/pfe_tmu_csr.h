@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -195,11 +195,11 @@
 #define TLITE_SHP_INVALID_POS	0x1fU
 #define TLITE_SCH_INVALID_INPUT 0xffU
 
-#define TLITE_INQ_FIFODEPTH		256U
+#define TLITE_INQ_FIFODEPTH		32U
 
 /* Max number of buffers in ALL queues for one phy is 255, queues are 8 */
 
-#define TLITE_MAX_ENTRIES		(TLITE_INQ_FIFODEPTH - 1U)
+#define TLITE_MAX_ENTRIES		255U
 #define TLITE_MAX_Q_SIZE		((uint16_t)TLITE_MAX_ENTRIES / 8U)
 #define TLITE_HIF_MAX_Q_SIZE	16U /* Agreed default hardcoded value for ERR051211 workaround */
 #define TLITE_HIF_MAX_ENTRIES	(2U * TLITE_HIF_MAX_Q_SIZE)
