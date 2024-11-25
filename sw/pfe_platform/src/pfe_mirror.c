@@ -98,6 +98,13 @@ static void pfe_mirror_destroy_db(pfe_mirror_db_t *db)
 {
     if(NULL != db)
     {
+		LLIST_t *item, *aux;
+		pfe_mirror_t *entry;
+		LLIST_ForEachRemovable(item, aux, &db->mirrors)
+		{
+			entry = LLIST_Data(item, pfe_mirror_t, this);
+			pfe_mirror_destroy(entry);
+		}
         /* Check whether the database is empty */
         if(!LLIST_IsEmpty(&db->mirrors))
         {   /* Not empty */
