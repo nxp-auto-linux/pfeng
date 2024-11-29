@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2024 NXP
+ * Copyright 2020-2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -36,6 +36,9 @@ int pfeng_mdio_read(struct mii_bus *bus, int phyaddr, int phyreg)
 
 	emac = bus->priv;
 	dev = bus->parent;
+
+	if (!emac)
+		return -EAGAIN;
 
 #ifdef PFE_CFG_PFE_MASTER
 	ret = pm_runtime_resume_and_get(dev);
@@ -77,6 +80,9 @@ int pfeng_mdio_write(struct mii_bus *bus, int phyaddr, int phyreg, u16 phydata)
 
 	emac = bus->priv;
 	dev = bus->parent;
+
+	if (!emac)
+		return -EAGAIN;
 
 #ifdef PFE_CFG_PFE_MASTER
 	ret = pm_runtime_resume_and_get(dev);
@@ -122,6 +128,9 @@ int pfeng_mdio_read_c22(struct mii_bus *bus, int phyaddr, int phyreg)
 	emac = bus->priv;
 	dev = bus->parent;
 
+	if (!emac)
+		return -EAGAIN;
+
 #ifdef PFE_CFG_PFE_MASTER
 	ret = pm_runtime_resume_and_get(dev);
 	if (ret < 0)
@@ -158,6 +167,9 @@ int pfeng_mdio_write_c22(struct mii_bus *bus, int phyaddr, int phyreg, u16 phyda
 
 	emac = bus->priv;
 	dev = bus->parent;
+
+	if (!emac)
+		return -EAGAIN;
 
 #ifdef PFE_CFG_PFE_MASTER
 	ret = pm_runtime_resume_and_get(dev);
@@ -197,6 +209,9 @@ int pfeng_mdio_read_c45(struct mii_bus *bus, int phyaddr, int devad, int phyreg)
 	emac = bus->priv;
 	dev = bus->parent;
 
+	if (!emac)
+		return -EAGAIN;
+
 #ifdef PFE_CFG_PFE_MASTER
 	ret = pm_runtime_resume_and_get(dev);
 	if (ret < 0)
@@ -233,6 +248,9 @@ int pfeng_mdio_write_c45(struct mii_bus *bus, int phyaddr, int devad, int phyreg
 
 	emac = bus->priv;
 	dev = bus->parent;
+
+	if (!emac)
+		return -EAGAIN;
 
 #ifdef PFE_CFG_PFE_MASTER
 	ret = pm_runtime_resume_and_get(dev);
@@ -359,7 +377,19 @@ void pfeng_mdio_unregister(struct pfeng_priv *priv)
 
 int pfeng_mdio_suspend(struct pfeng_priv *priv)
 {
-	/* empty */
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(pfeng_emac_ids); i++) {
+		if (!priv->emac[i].enabled)
+			continue;
+
+		if (!priv->emac[i].mii_bus)
+			continue;
+
+		/* Invalidate EMAC link (before platform is destroyed) */
+		priv->emac[i].mii_bus->priv = NULL;
+	}
+
 	return 0;
 }
 

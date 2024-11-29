@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2024 NXP
+ * Copyright 2019-2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -676,9 +676,6 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	if (hif_phc_emac < PFENG_PFE_EMACS)
 		priv->hif_phc_emac_id = hif_phc_emac;
 
-	/* Create MDIO buses */
-	pfeng_mdio_register(priv);
-
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 	/* Set master_if for OAL_PFE_CFG_MASTER_IF */
 	for (id = 0; id < PFENG_PFE_HIF_CHANNELS; id++) {
@@ -694,10 +691,15 @@ static int pfeng_drv_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_drv;
 
+	/* Create MDIO buses */
+	pfeng_mdio_register(priv);
+
 	/* Create net interfaces */
 	ret = pfeng_netif_create(priv);
-	if (ret)
+	if (ret) {
+		pfeng_mdio_unregister(priv);
 		goto err_drv;
+	}
 
 	dev_pm_set_driver_flags(dev, DPM_FLAG_NO_DIRECT_COMPLETE);
 
@@ -744,13 +746,6 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 
 	pfeng_debugfs_remove(priv);
 
-	/* MDIO buses */
-	ret = pfeng_mdio_suspend(priv);
-	if (ret) {
-		HM_MSG_DEV_ERR(dev, "PFE mdio not suspended successfully\n");
-		goto err_drv;
-	}
-
 	/* NETIFs */
 	ret = pfeng_netif_suspend(priv);
 	if (ret) {
@@ -763,6 +758,13 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 		pfe_platform_destroy_fci(priv->pfe_platform);
 	}
 #endif /* PFE_CFG_FCI_ENABLE */
+
+	/* MDIO buses */
+	ret = pfeng_mdio_suspend(priv);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "PFE mdio not suspended successfully\n");
+		goto err_drv;
+	}
 
 	/* HIFs stop */
 	pfeng_hif_remove(priv);
@@ -903,13 +905,13 @@ static int pfeng_drv_pm_resume(struct device *dev)
 		}
 	}
 
-	/* MDIO buses */
-	ret = pfeng_mdio_resume(priv);
+	/* Create HIFs */
+	ret = pfeng_hif_create(priv);
 	if (ret)
 		goto err_drv;
 
-	/* Create HIFs */
-	ret = pfeng_hif_create(priv);
+	/* MDIO buses */
+	ret = pfeng_mdio_resume(priv);
 	if (ret)
 		goto err_drv;
 
