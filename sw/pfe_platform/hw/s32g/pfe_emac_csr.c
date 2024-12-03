@@ -623,8 +623,6 @@ void pfe_emac_cfg_write_addr_slot(addr_t base_va, const pfe_mac_addr_t addr, uin
 
 	hal_write32(top, base_va + MAC_ADDRESS_HIGH(slot));
 	hal_write32(bottom, base_va + MAC_ADDRESS_LOW(slot));
-	oal_time_udelay(10);
-	hal_write32(bottom, base_va + MAC_ADDRESS_LOW(slot));
 }
 
 /**
@@ -684,9 +682,6 @@ void pfe_emac_cfg_set_hash_group(addr_t base_va, uint32_t hash, bool_t en)
 
 	if (reg != old_reg)
 	{
-		hal_write32(reg, base_va + MAC_HASH_TABLE_REG(hash_table_idx));
-		/*	Wait at least 4 clock cycles ((G)MII) */
-		oal_time_udelay(10);
 		hal_write32(reg, base_va + MAC_HASH_TABLE_REG(hash_table_idx));
 	}
 }
