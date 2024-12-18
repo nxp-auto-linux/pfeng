@@ -1560,8 +1560,9 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 	if (emac && netif->priv->in_suspend) {
 		if (emac->tx_clk)
 			clk_disable_unprepare(emac->tx_clk);
-		if (emac->rx_clk)
+		if (emac->rx_clk && !emac->rx_clk_pending)
 			clk_disable_unprepare(emac->rx_clk);
+		emac->rx_clk_pending = false;
 	}
 #endif /* PFE_CFG_PFE_MASTER */
 
@@ -1643,9 +1644,11 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 				HM_MSG_DEV_ERR(dev, "Failed to set RX clock on EMAC%d: %d\n", netif->cfg->phyif_id, ret);
 			else {
 				ret = clk_prepare_enable(emac->rx_clk);
-				if (ret)
-					HM_MSG_DEV_ERR(dev, "RX clocks restart on EMAC%d failed: %d\n", netif->cfg->phyif_id, ret);
-				else
+				if (ret) {
+					HM_MSG_DEV_WARN(dev, "Defer enabling of RX clock on EMAC%d (ret: %d)\n", netif->cfg->phyif_id, ret);
+					emac->rx_clk_pending = true;
+					ret = 0;
+				} else
 					HM_MSG_DEV_INFO(dev, "RX clocks on EMAC%d restarted\n", netif->cfg->phyif_id);
 			}
 			if (ret) {

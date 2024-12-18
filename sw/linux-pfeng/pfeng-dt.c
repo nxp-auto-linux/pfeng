@@ -53,8 +53,11 @@ int pfeng_dt_release_config(struct pfeng_priv *priv)
 
 		/* EMAC RX clk */
 		if (emac->rx_clk) {
-			clk_disable_unprepare(emac->rx_clk);
+			if (!emac->rx_clk_pending)
+				clk_disable_unprepare(emac->rx_clk);
+
 			devm_clk_put(dev, emac->rx_clk);
+			emac->rx_clk_pending = false;
 			emac->rx_clk = NULL;
 		}
 		/* EMAC TX clk */
