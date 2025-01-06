@@ -2,7 +2,7 @@
  *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2024 NXP
+ *  Copyright 2018-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -2568,7 +2568,7 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 	pfe_log_if_t *log_if;
 	pfe_phy_if_t *phy_if;
 	uint32_t session_id = 0U;
-	errno_t ret;
+	errno_t ret = EOK;
 
 	if (NULL != platform->log_if_db)
 	{
@@ -3088,7 +3088,6 @@ static void pfe_platform_destroy_group2(void)
 #ifdef PFE_CFG_FCI_ENABLE
 	pfe_spd_acc_destroy(pfe.phy_if_db);
 #endif
-	pfe_platform_destroy_ifaces(&pfe);
 	pfe_mirror_deinit();
 	pfe_platform_destroy_class(&pfe);
 	pfe_platform_destroy_util(&pfe);
