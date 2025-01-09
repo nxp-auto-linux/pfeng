@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2024 NXP
+ *  Copyright 2017-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -101,19 +101,12 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 	else
 #endif /* PFE_CFG_NULL_ARG_CHECK */
 	{
-	#if (FALSE == FCI_CFG_FORCE_LEGACY_API)
 		/*	Allocate space for return value ( + padding) by skipping first 4 bytes */
 		reply_buf_ptr = ((uint32_t *)&rep_msg->msg_cmd.payload[4]);
 		reply_buf_len_ptr = &rep_msg->msg_cmd.length;
 
 		/*	Available reply buffer is 4 bytes less than maximum FCI message payload length */
 		*reply_buf_len_ptr = FCI_CFG_MAX_CMD_PAYLOAD_LEN - 4U;
-	#else
-		/*	Don't allocate space for return value. First 4 bytes of payload buffer will be overwritten... */
-		reply_buf_ptr = rep_msg->msg_cmd.payload;
-		reply_buf_len_ptr = &rep_msg->msg_cmd.length;
-		*reply_buf_len_ptr = FCI_CFG_MAX_CMD_PAYLOAD_LEN;
-	#endif /* FCI_CFG_FORCE_LEGACY_API */
 
 #ifdef PFE_CFG_MULTI_INSTANCE_SUPPORT
 		/*	HANDLE FCI OWNERSHIP */
@@ -183,13 +176,9 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 			if (FALSE == fci_cmd_execute)
 			{
 				/*	Inform client about command execution status */
-#if (FALSE == FCI_CFG_FORCE_LEGACY_API)
 				/*	We're adding another 4 bytes at the beginning of the FCI message payload area */
 				rep_msg->msg_cmd.length = *reply_buf_len_ptr + 4U;
-#else
-				/*	Pass reply buffer length as is. First 4 bytes will be overwritten by the return value. */
-				rep_msg->msg_cmd.length = *reply_buf_len_ptr;
-#endif /* FCI_CFG_FORCE_LEGACY_API */
+
 				reply_retval_ptr = (uint16_t *)rep_msg->msg_cmd.payload;
 				*reply_retval_ptr = (uint16_t)fci_ret;
 
@@ -500,13 +489,9 @@ errno_t fci_process_ipc_message(fci_msg_t *msg, fci_msg_t *rep_msg)
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
 
 				/*	Inform client about command execution status */
-	#if (FALSE == FCI_CFG_FORCE_LEGACY_API)
 				/*	We're adding another 4 bytes at the beginning of the FCI message payload area */
 				rep_msg->msg_cmd.length = *reply_buf_len_ptr + 4U;
-	#else
-				/*	Pass reply buffer length as is. First 4 bytes will be overwritten by the return value. */
-				rep_msg->msg_cmd.length = *reply_buf_len_ptr;
-	#endif /* FCI_CFG_FORCE_LEGACY_API */
+
 				reply_retval_ptr = (uint16_t *)rep_msg->msg_cmd.payload;
 				*reply_retval_ptr = (uint16_t)fci_ret;
 
