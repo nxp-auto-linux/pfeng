@@ -1,7 +1,7 @@
 /* =========================================================================
  *  Copyright (C) 2007 Mindspeed Technologies, Inc.
  *  Copyright 2015-2016 Freescale Semiconductor, Inc.
- *  Copyright 2017-2023 NXP
+ *  Copyright 2017-2023,2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1148,49 +1148,23 @@ traffic--+->| flow table +-->| queues +-->|   shapers   +--+-->processing
  */
 #define CTCMD_FLAGS_TTL_DECREMENT            ((uint16_t)1U << 2)
 
-
-/* TODO put to config file: */
 /**
- * @def FCI_CFG_FORCE_LEGACY_API
- * @brief       Changes the LibFCI API so it is more compatible with legacy implementation
- * @details     LibFCI API was modified to avoid some inconvenient properties. Here are the points
- *              the legacy API differs in:
- *              -# With legacy API, argument @c rsp_data of function @c fci_query shall be provided shifted by two
- *                 bytes this way:
- *                 @code{.c}
- *                   reply_struct_t rsp_data;
- *                   retval = fci_query(this_client, fcode, cmd_len, &pcmd, &rsplen, (unsigned short *)(&rsp_data) + 1u);
- *                 @endcode
- *                 Where @c reply_struct_t is the structure type depending on command being called.
- *              -# In legacy API, macros @ref FPP_CMD_IPV4_CONNTRACK_CHANGE and @ref FPP_CMD_IPV6_CONNTRACK_CHANGE are
- *                 defined in application files. In current API they are defined here in @ref libfci.h.
+ * @def         FPP_CMD_IPV4_CONNTRACK_CHANGE
  *
- * @warning     It is not recommended to enable this feature.
+ * @brief       FCI event: driver reports status change of some IPv4 conntrack.
  *
- * @hideinitializer
+ * @details     Related data types: fpp_ct_cmd_t
  */
-#define FCI_CFG_FORCE_LEGACY_API FALSE
+#define FPP_CMD_IPV4_CONNTRACK_CHANGE   0x0315u
 
-#if FALSE == FCI_CFG_FORCE_LEGACY_API
-    /**
-     * @def         FPP_CMD_IPV4_CONNTRACK_CHANGE
-     *
-     * @brief       FCI event: driver reports status change of some IPv4 conntrack.
-     *
-     * @details     Related data types: fpp_ct_cmd_t
-     */
-    #define FPP_CMD_IPV4_CONNTRACK_CHANGE   0x0315u
-
-    /**
-     * @def         FPP_CMD_IPV6_CONNTRACK_CHANGE
-     *
-     * @brief       FCI event: driver reports status change of some IPv6 conntrack.
-     *
-     * @details     Related data types: fpp_ct6_cmd_t
-     */
-    #define FPP_CMD_IPV6_CONNTRACK_CHANGE   0x0415u
-#endif /* FCI_CFG_FORCE_LEGACY_API */
-
+/**
+ * @def         FPP_CMD_IPV6_CONNTRACK_CHANGE
+ *
+ * @brief       FCI event: driver reports status change of some IPv6 conntrack.
+ *
+ * @details     Related data types: fpp_ct6_cmd_t
+ */
+#define FPP_CMD_IPV6_CONNTRACK_CHANGE   0x0415u
 
 /**
  * @struct      FCI_CLIENT

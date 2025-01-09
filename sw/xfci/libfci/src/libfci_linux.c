@@ -1,6 +1,6 @@
 /* =========================================================================
  *  Copyright (C) 2007 Mindspeed Technologies, Inc.
- *  Copyright 2017-2023 NXP
+ *  Copyright 2017-2023,2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -589,13 +589,8 @@ static int __fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *c
 				(4U <= reply_msg->msg_cmd.length) &&
 				(0U != (nlh->nlmsg_len - NLMSG_LENGTH(0))))
 			{
-#if (TRUE == FCI_CFG_FORCE_LEGACY_API)
-				memcpy(rep_buf, reply_msg->msg_cmd.payload, reply_msg->msg_cmd.length);
-				*rep_len = reply_msg->msg_cmd.length;
-#else
 				memcpy(rep_buf, ((void *)reply_msg->msg_cmd.payload + 4U), reply_msg->msg_cmd.length - 4U);
 				*rep_len = reply_msg->msg_cmd.length - 4U;
-#endif /* FCI_CFG_FORCE_LEGACY_API */
 			}
 			memcpy(&cmd_ret, reply_msg->msg_cmd.payload, sizeof(unsigned short));
 
