@@ -1297,35 +1297,28 @@ static int pfeng_netif_event(struct notifier_block *nb,
 	if (priv->lower_ndev != ndev)
 		return NOTIFY_DONE;
 
-	switch (event) {
-	case NETDEV_CHANGEUPPER:
-	case NETDEV_UP:
-		if (info->linking) {
-			struct pfeng_netif *netif = netdev_priv(ndev);
-			struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
+	if ((event == NETDEV_UP) || ((event == NETDEV_CHANGEUPPER) && (info->linking))) {
+		struct pfeng_netif *netif = netdev_priv(ndev);
+		struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
 
-			if (!emac)
-				goto out;
+		if (!emac)
+			goto out;
 
-			if (!emac->rx_clk_pending)
-				goto out;
+		if (!emac->rx_clk_pending)
+			goto out;
 
-			ret = clk_prepare_enable(emac->rx_clk);
-			if (ret) {
-				HM_MSG_DEV_ERR(netif->dev, "Failed to enable RX clock on EMAC%d for interface %s (err %d)\n",
-					netif->cfg->phyif_id, phy_modes(emac->intf_mode), ret);
-				goto out;
-			}
-
-			emac->rx_clk_pending = false;
-
-			HM_MSG_DEV_INFO(netif->dev, "RX clock on EMAC%d for interface %s installed\n",
-				 netif->cfg->phyif_id, phy_modes(emac->intf_mode));
+		ret = clk_prepare_enable(emac->rx_clk);
+		if (ret) {
+			HM_MSG_DEV_ERR(netif->dev, "Failed to enable RX clock on EMAC%d for interface %s (err %d)\n",
+				netif->cfg->phyif_id, phy_modes(emac->intf_mode), ret);
+			goto out;
 		}
 
-		break;
-	}
+		emac->rx_clk_pending = false;
 
+		HM_MSG_DEV_INFO(netif->dev, "RX clock on EMAC%d for interface %s installed\n",
+			 netif->cfg->phyif_id, phy_modes(emac->intf_mode));
+	}
 out:
 	return notifier_from_errno(ret);
 }
