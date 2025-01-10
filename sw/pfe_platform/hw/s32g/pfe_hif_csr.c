@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2024 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -914,58 +914,6 @@ void pfe_hif_chnl_cfg_set_tx_wb_table(addr_t base_va, uint32_t channel_id, const
 		hal_write32(0U, base_va + HIF_TX_BDP_WR_HIGH_ADDR_CHn(channel_id));
 		hal_write32(tbl_len, base_va + HIF_TX_WRBK_BD_CHn_BUFFER_SIZE(channel_id));
 	}
-}
-
-/**
- * @brief		Get RX ring state
- * @param[in]	base_va Base address of HIF channel register space (virtual)
- * @param[in]	channel_id Channel identifier
- * @return		TRUE when the RX ring BD processor is active or FALSE when it is idle
- */
-bool_t pfe_hif_chnl_cfg_is_rx_dma_active(addr_t base_va, uint32_t channel_id)
-{
-	uint32_t reg;
-	bool_t ret;
-
-	(void)channel_id;
-
-	reg = hal_read32(base_va + HIF_RX_ACTV);
-
-	if (0U != reg)
-	{
-		ret = TRUE;
-	}
-	else
-	{
-		ret = FALSE;
-	}
-	return ret;
-}
-
-/**
- * @brief		Get TX ring state
- * @param[in]	base_va Base address of HIF channel register space (virtual)
- * @param[in]	channel_id Channel identifier
- * @return		TRUE when the TX ring BD processor is active or FALSE when it is idle
- */
-bool_t pfe_hif_chnl_cfg_is_tx_dma_active(addr_t base_va, uint32_t channel_id)
-{
-	uint32_t reg;
-	bool_t ret;
-
-	(void)channel_id;
-
-	reg = hal_read32(base_va + HIF_TX_ACTV);
-
-	if (0U != reg)
-	{
-		ret = TRUE;
-	}
-	else
-	{
-		ret = FALSE;
-	}
-	return ret;
 }
 
 /**

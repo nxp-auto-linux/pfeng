@@ -1984,44 +1984,6 @@ free_and_fail:
 }
 
 /**
- * @brief		Get the RX BD processor state
- * @param[in]	chnl The channel instance
- * @return		TRUE if the BDP is active, FALSE otherwise
- */
-__attribute__((hot)) bool_t pfe_hif_chnl_is_rx_dma_active(const pfe_hif_chnl_t *chnl)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == chnl))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	No protection here. Getting DMA status is atomic. */
-	return pfe_hif_chnl_cfg_is_rx_dma_active(chnl->cbus_base_va, chnl->id);
-}
-
-/**
- * @brief		Get the TX BD processor state
- * @param[in]	chnl The channel instance
- * @return		TRUE if the BDP is active, FALSE otherwise
- */
-__attribute__((hot)) bool_t pfe_hif_chnl_is_tx_dma_active(const pfe_hif_chnl_t *chnl)
-{
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == chnl))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		return FALSE;
-	}
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-
-	/*	No protection here. Getting DMA status is atomic. */
-	return pfe_hif_chnl_cfg_is_tx_dma_active(chnl->cbus_base_va, chnl->id);
-}
-
-/**
  * @brief		Release the TX dummy frame
  * @param[in]	frame The frame content, created by pfe_hif_chnl_send_dummy_frame()
  */
