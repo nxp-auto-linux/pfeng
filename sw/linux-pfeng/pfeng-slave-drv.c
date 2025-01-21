@@ -162,7 +162,6 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
-	bool ip_ready = false;
 	int ret;
 
 	if (!priv) {
@@ -208,11 +207,8 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 		}
 	}
 
-	/* Module removal can be triggered before the PFE IP is ready */
-	pfeng_gpr_ip_ready_get(dev, &ip_ready);
-
 	/* Clear HIF channels coherency */
-	if (ip_ready && of_dma_is_coherent(dev->of_node) && manage_port_coherency)
+	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency)
 		pfeng_gpr_clear_port_coherency(priv);
 
 	if (priv->ihc_wq)
@@ -253,7 +249,8 @@ static int pfeng_drv_deferred_probe(void *arg)
 			if(kthread_should_stop())
 				goto err_drv;
 
-			pfeng_gpr_ip_ready_get(dev, &ip_ready);
+			if (pfeng_gpr_ip_ready_get(dev, &ip_ready))
+				HM_MSG_DEV_ERR(dev, "Failed to get IP ready state\n");
 
 			if (ip_ready)
 				break;
@@ -508,7 +505,6 @@ err_drv:
 static int pfeng_drv_pm_suspend(struct device *dev)
 {
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
-	bool ip_ready = false;
 	int ret;
 
 	HM_MSG_DEV_INFO(dev, "Suspending driver\n");
@@ -565,11 +561,8 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	if (priv->clk_ptp)
 		priv->clk_ptp = NULL;
 
-	/* Suspend can be triggered before the PFE IP is ready */
-	pfeng_gpr_ip_ready_get(dev, &ip_ready);
-
 	/* Clear HIF channels coherency */
-	if (ip_ready && of_dma_is_coherent(dev->of_node) && manage_port_coherency)
+	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency)
 		pfeng_gpr_clear_port_coherency(priv);
 
 	HM_MSG_DEV_INFO(dev, "PFE Platform suspended\n");
@@ -611,7 +604,8 @@ static int pfeng_drv_deferred_resume(void *arg)
 			if(kthread_should_stop())
 				goto err_drv;
 
-			pfeng_gpr_ip_ready_get(dev, &ip_ready);
+			if (pfeng_gpr_ip_ready_get(dev, &ip_ready))
+				HM_MSG_DEV_ERR(dev, "Failed to get IP ready state\n");
 
 			if (ip_ready)
 				break;
@@ -685,16 +679,12 @@ err_pfe_init:
 static int pfeng_drv_pm_resume(struct device *dev)
 {
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
-	bool ip_ready = false;
 	int ret = 0;
 
 	HM_MSG_DEV_INFO(dev, "Resuming driver\n");
 
-	/* Suspend and resume can be triggered before the PFE IP is ready */
-	pfeng_gpr_ip_ready_get(dev, &ip_ready);
-
 	/* Set HIF channels coherency */
-	if (ip_ready && of_dma_is_coherent(dev->of_node) && manage_port_coherency)
+	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency)
 		pfeng_gpr_set_port_coherency(priv);
 
 	/* Get PFE_TS rate */
