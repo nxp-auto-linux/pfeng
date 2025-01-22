@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2024 NXP
+ * Copyright 2021-2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -240,6 +240,18 @@ static int pfeng_drv_deferred_probe(void *arg)
 	bool ip_ready = false;
 	int ret = 0;
 
+	/* Overwrite defaults by DT values */
+	ret = pfeng_dt_create_config(priv);
+	if (ret)
+		goto err_drv;
+
+	if (!priv->syscon.start && manage_port_coherency) {
+		HM_MSG_DEV_ERR(dev, "Cannot find syscon resource, aborting\n");
+		manage_port_coherency = 0;
+		ret = -EINVAL;
+		goto err_drv;
+	}
+
 	/* Detect controller state */
 	if (priv->deferred_probe_task) {
 		HM_MSG_DEV_INFO(dev, "Wait for PFE controller UP ...\n");
@@ -268,18 +280,6 @@ static int pfeng_drv_deferred_probe(void *arg)
 		HM_MSG_DEV_INFO(dev, "PFE controller UP detected\n");
 	} else
 		HM_MSG_DEV_INFO(dev, "PFE controller state detection skipped\n");
-
-	/* Overwrite defaults by DT values */
-	ret = pfeng_dt_create_config(priv);
-	if (ret)
-		goto err_drv;
-
-	if (!priv->syscon.start && manage_port_coherency) {
-		HM_MSG_DEV_ERR(dev, "Cannot find syscon resource, aborting\n");
-		manage_port_coherency = 0;
-		ret = -EINVAL;
-		goto err_drv;
-	}
 
 	/* PFE_SYS clock not used.
 	 * We will use the constant PFE_CLK_SYS_RATE (600 MHz) as described
