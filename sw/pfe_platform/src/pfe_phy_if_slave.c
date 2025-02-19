@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2024 NXP
+ *  Copyright 2018-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -43,15 +43,15 @@ static errno_t pfe_phy_if_db_lock(void)
 	const uint32_t timeout_step = 1000U;
 	/*	Maximum Timeout */
 	uint32_t timeout_us = PFE_CFG_IF_DB_RPC_RETRY_LOCK_TIME * 1000U;
-	errno_t ret = ENOLCK;
+	errno_t ret = EAGAIN;
 
 	/* Try to lock IF DB */
 	for (; timeout_us > 0U; timeout_us -= timeout_step)
 	{
 		ret = pfe_idex_master_rpc(PFE_PLATFORM_RPC_PFE_IF_LOCK, NULL, 0, NULL, 0U);
-		if (ENOLCK == ret)
+		if (EAGAIN == ret)
 		{
-			NXP_LOG_WARNING("Problem to acquire IF_DB lock - ENOLCK -> RETRY \n");
+			NXP_LOG_WARNING("Problem to acquire IF_DB lock - EAGAIN -> RETRY \n");
 			oal_time_usleep(timeout_step);
 		}
 		else
