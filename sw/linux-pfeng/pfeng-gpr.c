@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 NXP
+ * Copyright 2023,2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -130,6 +130,11 @@ static int gpr_set_port_coherency_hal(struct pfeng_priv *priv)
 	int ret = 0;
 	u32 val;
 
+	if (!priv->syscon.start) {
+		HM_MSG_DEV_ERR(dev, "cannot access GPR, syscon resource is not available, aborting (PFE_COH_EN)\n");
+		return -EINVAL;
+	}
+
 	syscon = ioremap(priv->syscon.start,
 			 priv->syscon.end - priv->syscon.start + 1);
 	if (!syscon) {
@@ -207,6 +212,11 @@ static int gpr_clear_port_coherency_hal(struct pfeng_priv *priv)
 	void *syscon;
 	int ret = 0;
 	u32 val;
+
+	if (!priv->syscon.start) {
+		HM_MSG_DEV_ERR(dev, "cannot access GPR, syscon resource is not available, aborting (PFE_COH_EN)\n");
+		return -EINVAL;
+	}
 
 	syscon = ioremap(priv->syscon.start,
 			 priv->syscon.end - priv->syscon.start + 1);
