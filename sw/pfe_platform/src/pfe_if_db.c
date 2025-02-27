@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2017-2024 NXP
+ *  Copyright 2017-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -942,7 +942,7 @@ errno_t pfe_log_if_db_drop_all(const pfe_if_db_t *db, uint32_t session_id)
 /**
  * @brief		Lock the DB and return generated session ID
  * @param[out]	session_id ID of locked session
- * @return		EOK if success, ENOLCK if lock is already locked
+ * @return		EOK if success, EAGAIN if lock is already locked
  */
 errno_t pfe_if_db_lock(uint32_t *session_id)
 {
@@ -997,7 +997,7 @@ errno_t pfe_if_db_lock(uint32_t *session_id)
 		/* is_locked==TRUE && timer_expired==FALSE */
 		else
 		{
-			ret = ENOLCK;
+			ret = EAGAIN;
 		}
 
 		/* Unlock global if DB mutex */
@@ -1012,7 +1012,7 @@ errno_t pfe_if_db_lock(uint32_t *session_id)
 /**
  * @brief		Lock the DB with provided owner ID
  * @param[in]	owner_id ID of owner in range 0 - 15
- * @return		EOK if success, ENOLCK if lock is already locked, EINVAL if ID is not in range
+ * @return		EOK if success, EAGAIN if lock is already locked, EINVAL if ID is not in range
  */
 errno_t pfe_if_db_lock_owned(uint32_t owner_id)
 {
@@ -1047,7 +1047,7 @@ errno_t pfe_if_db_lock_owned(uint32_t owner_id)
 		/* is_locked==TRUE && timer_expired==FALSE */
 		else
 		{
-			ret = ENOLCK;
+			ret = EAGAIN;
 		}
 	}
 	else
@@ -1065,12 +1065,12 @@ errno_t pfe_if_db_lock_owned(uint32_t owner_id)
 
 /**
  * @brief		Unlock the DB with owner ID/session ID
- * @param[in]	owner_id ID of owner or session
- * @return		EOK if success, error if lock is already locked or id is not in range
+ * @param[in]	session_id ID of owner or session
+ * @return		EOK if success, EAGAIN if db is not locked by session_id
  */
 errno_t pfe_if_db_unlock(uint32_t session_id)
 {
-	errno_t ret = ENOLCK;
+	errno_t ret = EAGAIN;
 
 	/* Lock global if DB mutex */
 	if (EOK != oal_mutex_lock(&if_db_context.mutex))
@@ -1100,7 +1100,7 @@ errno_t pfe_if_db_unlock(uint32_t session_id)
 /**
  * @brief		Lock the DB and return session ID, repeat the attempt multiple times
  * @param[out]	session_id ID of locked session
- * @return		EOK if success, ENOLCK if lock is already locked
+ * @return		EOK if success, EAGAIN if lock is already locked
  */
 errno_t pfe_if_db_polled_lock(uint32_t *session_id)
 {
@@ -1141,7 +1141,7 @@ errno_t pfe_if_db_polled_lock(uint32_t *session_id)
 /**
  * @brief		Lock the DB with owner ID, repeat the attempt multiple times
  * @param[in]	owner_id ID of owner in range 0 - 15
- * @return		EOK if success, ENOLCK if lock is already locked, EINVAL if owner_id out of range
+ * @return		EOK if success, EAGAIN if lock is already locked, EINVAL if owner_id out of range
  */
 errno_t pfe_if_db_polled_lock_owned(uint32_t owner_id)
 {
