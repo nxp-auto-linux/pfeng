@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2021-2024 NXP
+ *  Copyright 2021-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -400,7 +400,7 @@ pfe_mirror_t *pfe_mirror_create(const char *name)
             /* Do not allow duplicates */
             if(NULL == pfe_mirror_db_get_by_crit(pfe_mirror_db, MIRROR_BY_NAME, (void *)name))
             {   /* No such entry in the database, we may add a new one */
-                mirror = oal_mm_malloc(sizeof(pfe_mirror_t) + strlen(name));
+                mirror = oal_mm_malloc(sizeof(pfe_mirror_t) + strlen(name) + 1U);
                 if (NULL == mirror)
                 {
                     NXP_LOG_ERROR("Unable to allocate memory\n");
