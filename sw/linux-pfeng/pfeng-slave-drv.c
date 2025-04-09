@@ -364,17 +364,19 @@ static int pfeng_drv_deferred_probe(void *arg)
 	if (ret)
 		goto err_drv;
 
+	/* Create MDIO buses */
+	pfeng_mdio_register(priv);
+
 	/* Create net interfaces */
 	ret = pfeng_netif_create(priv);
-	if (ret)
+	if (ret) {
+		pfeng_mdio_unregister(priv);
 		goto err_drv;
+	}
 
 	dev_pm_set_driver_flags(dev, DPM_FLAG_NO_DIRECT_COMPLETE);
 
 	pm_runtime_put_noidle(dev);
-
-	/* Create MDIO buses */
-	pfeng_mdio_register(priv);
 
 err_drv:
 
@@ -519,13 +521,6 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 
 	pfeng_debugfs_remove(priv);
 
-	/* MDIO buses */
-	ret = pfeng_mdio_suspend(priv);
-	if (ret) {
-		HM_MSG_DEV_ERR(dev, "PFE mdio not suspended successfully\n");
-		goto err_drv;
-	}
-
 	/* NETIFs */
 	ret = pfeng_netif_suspend(priv);
 	if (ret) {
@@ -539,6 +534,13 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 		pfe_platform_destroy_fci(priv->pfe_platform);
 	}
 #endif /* PFE_CFG_FCI_ENABLE */
+
+	/* MDIO buses */
+	ret = pfeng_mdio_suspend(priv);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "PFE mdio not suspended successfully\n");
+		goto err_drv;
+	}
 
 	/* HIFs stop */
 	pfeng_hif_remove(priv);
@@ -645,13 +647,13 @@ static int pfeng_drv_deferred_resume(void *arg)
 	if (ret)
 		goto err_drv;
 
-	/* Create net interfaces */
-	ret = pfeng_netif_resume(priv);
+	/* MDIO buses */
+	ret = pfeng_mdio_resume(priv);
 	if (ret)
 		goto err_drv;
 
-	/* MDIO buses */
-	ret = pfeng_mdio_resume(priv);
+	/* Create net interfaces */
+	ret = pfeng_netif_resume(priv);
 	if (ret)
 		goto err_drv;
 
