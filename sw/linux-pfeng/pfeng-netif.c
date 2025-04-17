@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2024 NXP
+ * Copyright 2020-2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -1236,18 +1236,17 @@ static int pfeng_netif_logif_init_second_stage(struct pfeng_netif *netif)
 
 	pfeng_netif_set_mac_address(netdev, mac_addr);
 
-	if (!netif->priv->in_suspend) {
-
-		if (!pfeng_netif_is_aux(netif)) {
-			/* Init hw timestamp */
-			ret = pfeng_hwts_init(netif);
-			if (ret) {
-				HM_MSG_NETDEV_ERR(netdev, "Cannot initialize timestamping: %d\n", ret);
-				goto err;
-			}
-			pfeng_ptp_register(netif);
+	if (!pfeng_netif_is_aux(netif)) {
+		/* Init hw timestamp */
+		ret = pfeng_hwts_init(netif);
+		if (ret) {
+			HM_MSG_NETDEV_ERR(netdev, "Cannot initialize timestamping: %d\n", ret);
+			goto err;
 		}
+		pfeng_ptp_register(netif);
+	}
 
+	if (!netif->priv->in_suspend) {
 		ret = register_netdev(netdev);
 		if (ret) {
 			HM_MSG_NETDEV_ERR(netdev, "Error registering the device: %d\n", ret);
@@ -1571,6 +1570,13 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 #ifdef PFE_CFG_PFE_MASTER
 		chnl->phyif_hif = NULL;
 #endif /* PFE_CFG_PFE_MASTER */
+	}
+
+	if (!pfeng_netif_is_aux(netif)) {
+		pfeng_ptp_unregister(netif);
+
+		/* Release timestamp memory */
+		pfeng_hwts_release(netif);
 	}
 
 #ifdef PFE_CFG_PFE_MASTER
