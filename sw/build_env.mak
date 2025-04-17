@@ -1,5 +1,5 @@
 # =========================================================================
-#  Copyright 2018-2024 NXP
+#  Copyright 2018-2025 NXP
 #
 #  SPDX-License-Identifier: GPL-2.0
 #
@@ -161,6 +161,9 @@ endif
 #of the PFE traffic distribution rules.
 export PFE_CFG_AUX_INTERFACE?=0
 
+#Enable connecting to PHY by slave driver
+export PFE_CFG_PFE_SLAVE_PHY?=0
+
 ifneq ($(PFE_CFG_MC_HIF),0)
   ifneq ($(PFE_CFG_SC_HIF),0)
     $(error Impossible configuration)
@@ -222,6 +225,10 @@ ifneq ($(PFE_CFG_PFE_MASTER),0)
     GLOBAL_CCFLAGS+=-DPFE_CFG_PFE_MASTER
 else
     GLOBAL_CCFLAGS+=-DPFE_CFG_PFE_SLAVE
+
+ifneq ($(PFE_CFG_PFE_SLAVE_PHY),0)
+    GLOBAL_CCFLAGS+=-DPFE_CFG_PFE_SLAVE_PHY
+endif
 endif
 
 ifneq ($(PFE_CFG_USE_NVMEM),0)
