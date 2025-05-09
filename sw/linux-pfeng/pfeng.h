@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2024 NXP
+ * Copyright 2018-2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -169,6 +169,9 @@ struct pfeng_netif {
 #ifdef PFE_CFG_PFE_SLAVE
 	struct work_struct		ihc_slave_work;
 	bool				slave_netif_inited;
+#ifdef PFE_CFG_PFE_SLAVE_PHY
+	struct phy_device *slave_phydev;
+#endif /* PFE_CFG_PFE_SLAVE_PHY */
 #endif /* PFE_CFG_PFE_SLAVE */
 	/* if set, the multicast/ unicast MAC addr list needs to be sync'ed with the hw */
 	bool mc_unsynced;
@@ -467,6 +470,12 @@ void pfeng_phylink_stop(struct pfeng_netif *netif);
 void pfeng_phylink_disconnect_phy(struct pfeng_netif *netif);
 void pfeng_phylink_destroy(struct pfeng_netif *netif);
 void pfeng_phylink_mac_change(struct pfeng_netif *netif, bool up);
+#ifdef PFE_CFG_PFE_SLAVE_PHY
+int pfeng_phy_connect(struct pfeng_netif *netif);
+void pfeng_phy_disconnect(struct pfeng_netif *netif);
+void pfeng_phy_start(struct pfeng_netif *netif);
+void pfeng_phy_stop(struct pfeng_netif *netif);
+#endif /* PFE_CFG_PFE_SLAVE_PHY */
 
 /* ptp */
 void pfeng_ptp_register(struct pfeng_netif *netif);

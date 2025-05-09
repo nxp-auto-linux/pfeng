@@ -1,5 +1,5 @@
 #
-# Copyright 2018-2023 NXP
+# Copyright 2018-2023,2025 NXP
 #
 # SPDX-License-Identifier:     BSD OR GPL-2.0
 #
@@ -75,6 +75,9 @@ pfeng-objs := $(pfeng-objs-core) $(pfeng-objs-libs) pfeng-drv.o pfeng-fw.o pfeng
 obj-m += pfeng.o
 else
 pfeng-slave-objs := $(pfeng-objs-core) $(pfeng-objs-libs) pfeng-slave-drv.o
+ifneq ($(PFE_CFG_PFE_SLAVE_PHY),0)
+pfeng-slave-objs += pfeng-slave-phy.o
+endif
 obj-m += pfeng-slave.o
 endif
 

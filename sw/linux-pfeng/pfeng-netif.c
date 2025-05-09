@@ -166,8 +166,15 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 		pfeng_uc_list_sync(netdev);
 
 #ifdef PFE_CFG_PFE_SLAVE
-	netif_carrier_on(netdev);
-#endif
+#ifdef PFE_CFG_PFE_SLAVE_PHY
+	if (netif->slave_phydev) {
+		pfeng_phy_start(netif);
+	} else
+#endif /* PFE_CFG_PFE_SLAVE_PHY */
+	{
+		netif_carrier_on(netdev);
+	}
+#endif /* PFE_CFG_PFE_SLAVE */
 
 	netif_tx_start_all_queues(netdev);
 
@@ -562,6 +569,12 @@ static int pfeng_netif_logif_stop(struct net_device *netdev)
 	}
 #endif /* PFE_CFG_PFE_MASTER */
 
+#ifdef PFE_CFG_PFE_SLAVE
+#ifdef PFE_CFG_PFE_SLAVE_PHY
+	if (netif->slave_phydev)
+		pfeng_phy_stop(netif);
+#endif /*PFE_CFG_PFE_SLAVE_PHY */
+#endif /* PFE_CFG_PFE_SLAVE */
 	netif_tx_stop_all_queues(netdev);
 
 	pm_runtime_put(netif->dev);
@@ -1006,6 +1019,10 @@ static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 
 #ifdef PFE_CFG_PFE_SLAVE
 	cancel_work_sync(&netif->ihc_slave_work);
+#ifdef PFE_CFG_PFE_SLAVE_PHY
+	if (netif->slave_phydev)
+		pfeng_phy_disconnect(netif);
+#endif /* PFE_CFG_PFE_SLAVE_PHY */
 #endif /* PFE_CFG_PFE_SLAVE */
 
 #ifdef PFE_CFG_PFE_MASTER
@@ -1275,7 +1292,12 @@ void pfeng_netif_slave_work_handler(struct work_struct *work)
 	if (ret)
 		goto err;
 
-	netif_carrier_on(netif->netdev);
+#ifdef PFE_CFG_PFE_SLAVE_PHY
+	if (!netif->slave_phydev)
+#endif /* PFE_CFG_PFE_SLAVE_PHY */
+	{
+		netif_carrier_on(netif->netdev);
+	}
 
 	netif->slave_netif_inited = true;
 err:
@@ -1403,6 +1425,9 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 	netif->priv = priv;
 	netif->cfg = netif_cfg;
 	netif->phylink = NULL;
+#ifdef PFE_CFG_PFE_SLAVE_PHY
+	netif->slave_phydev = NULL;
+#endif /* PFE_CFG_PFE_SLAVE_PHY */
 
 	/* Set up explicit device name based on platform names */
 	strlcpy(netdev->name, netif_cfg->name, IFNAMSIZ);
@@ -1457,6 +1482,14 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 		goto err_netdev_reg;
 
 #ifdef PFE_CFG_PFE_SLAVE
+#ifdef PFE_CFG_PFE_SLAVE_PHY
+	/* Add phylink */
+	if (pfeng_netif_cfg_has_emac(netif->cfg) && !priv->emac[netif_cfg->phyif_id].phyless) {
+		ret = pfeng_phy_connect(netif);
+		if (ret)
+			goto err_netdev_reg;
+	}
+#endif /* PFE_CFG_PFE_SLAVE_PHY */
 	/*
 	 * SLAVE mode init = start IHC HIF channel now
 	 * and finish the rest in thread
@@ -1557,6 +1590,11 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 		emac->rx_clk_pending = false;
 	}
 #endif /* PFE_CFG_PFE_MASTER */
+
+#if defined(PFE_CFG_PFE_SLAVE) && defined(PFE_CFG_PFE_SLAVE_PHY)
+	if (netif->slave_phydev && netif_running(netif->netdev))
+		pfeng_phy_stop(netif);
+#endif /* PFE_CFG_PFE_SLAVE && PFE_CFG_PFE_SLAVE_PHY */
 
 	rtnl_unlock();
 
@@ -1702,8 +1740,13 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 	pfeng_ethtool_params_restore(netif);
 
 #ifdef PFE_CFG_PFE_SLAVE
+#ifdef PFE_CFG_PFE_SLAVE_PHY
+	if (netif->slave_phydev && netif_running(netif->netdev))
+		pfeng_phy_start(netif);
+#else
 	netif_carrier_on(netdev);
-#endif
+#endif /* PFE_CFG_PFE_SLAVE_PHY */
+#endif /* PFE_CFG_PFE_SLAVE */
 
 #ifdef PFE_CFG_PFE_MASTER
 	if (netif_running(netif->netdev) && netif->phylink) {

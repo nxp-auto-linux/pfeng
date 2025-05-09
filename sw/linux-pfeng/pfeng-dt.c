@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2024 NXP
+ * Copyright 2021-2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -370,6 +370,7 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 				HM_MSG_DEV_INFO(dev, "EMAC%d PHY less SGMII\n", netif_cfg->phyif_id);
 				emac->phyless = true;
 			}
+			of_node_put(phy_handle);
 
 			/* Interface mode */
 			ret = of_get_phy_mode(child, &intf_mode);
@@ -442,7 +443,36 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 			}
 		}
 #endif /* PFE_CFG_PFE_MASTER */
+#ifdef PFE_CFG_PFE_SLAVE
+#ifdef PFE_CFG_PFE_SLAVE_PHY
+		if (pfeng_netif_cfg_has_emac(netif_cfg)) {
+			struct pfeng_emac *emac = &priv->emac[netif_cfg->phyif_id];
+			__maybe_unused struct device_node *phy_handle;
+			phy_interface_t intf_mode;
 
+			HM_MSG_DEV_INFO(dev, "EMAC%d has an emac", id);
+			emac->phyless = false;
+			phy_handle = of_parse_phandle(child, "phy-handle", 0);
+			if (!phy_handle) {
+				HM_MSG_DEV_INFO(dev, "EMAC%d PHY less SGMII\n", netif_cfg->phyif_id);
+				emac->phyless = true;
+			}
+			of_node_put(phy_handle);
+
+			/* Interface mode */
+			ret = of_get_phy_mode(child, &intf_mode);
+			if (ret) {
+				HM_MSG_DEV_WARN(dev, "Failed to read phy-mode\n");
+				/* for non managable interface */
+				intf_mode = PHY_INTERFACE_MODE_INTERNAL;
+			}
+			HM_MSG_DEV_INFO(dev, "EMAC%d interface mode: %d", id, intf_mode);
+			emac->intf_mode = intf_mode;
+		} else {
+			HM_MSG_DEV_INFO(dev, "EMAC%d does not has an emac", id);
+		}
+#endif /* PFE_CFG_PFE_SLAVE_PHY */
+#endif /* PFE_CFG_PFE_SLAVE */
 		list_add_tail(&netif_cfg->lnode, &priv->netif_cfg_list);
 	} /* foreach PFENG_DT_COMPATIBLE_LOGIF */
 
