@@ -4,6 +4,8 @@
  *
  * Modifications Copyright 2018-2022 NXP
  *
+ * SPDX-License-Identifier: FSFAP
+ *
  */
  
 #ifndef CT_ASSERT_H
