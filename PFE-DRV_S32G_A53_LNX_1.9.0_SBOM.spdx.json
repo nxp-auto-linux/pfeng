@@ -1,0 +1,80 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "spdxVersion": "SPDX-2.3",
+  "creationInfo": {
+    "created": "2025-05-16T12:18:38Z",
+    "creators": [
+      "Organization: NXP"
+    ],
+    "licenseListVersion": "3.20"
+  },
+  "name": "PFE-DRV_S32G_A53_LNX-1.9.0",
+  "dataLicense": "CC0-1.0",
+  "hasExtractedLicensingInfos": [
+    {
+      "licenseId": "LicenseRef-9169fb33-e3b5-4167-b984-f84877f34078",
+      "extractedText": "GNU All-Permissive License 2.0\n==============================\n\nCopying and distribution of this file, with or without modification, are\npermitted in any medium without royalty provided the copyright notice and this\nnotice are preserved. This file is offered as-is, without any warranty.",
+      "name": "GNU All-Permissive License 2.0"
+    }
+  ],
+  "documentNamespace": "https://nxp.com/spdx/4c105f7a-0e7c-419f-a436-d5d090a48b8d",
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-package-4c105f7a-0e7c-419f-a436-d5d090a48b8d",
+      "name": "PFE-DRV_S32G_A53_LNX",
+      "versionInfo": "1.9.0",
+      "licenseConcluded": "(GPL-2.0-only)",
+      "licenseDeclared": "(GPL-2.0-only)",
+      "downloadLocation": "https://github.com/nxp-auto-linux/pfeng",
+      "comment": "S32G PFE Linux Driver",
+      "externalRefs": [],
+      "filesAnalyzed": false,
+      "originator": "Organization: NXP",
+      "supplier": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-package-4f66ef56-7caa-4ba3-ac3f-f8de4259946f",
+      "name": "libfci_cli",
+      "versionInfo": "2.16.0",
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "downloadLocation": "https://github.com/nxp-auto-linux/pfeng",
+      "originator": "Organization: NXP",
+      "comment": "DEMO configuration utility. This utility is __NOT__ production software.\n\n./sw/libfci_cli/",
+      "externalRefs": [],
+      "filesAnalyzed": false,
+      "supplier": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-package-4f7a36c7-2024-43e0-b209-a651151b2e17",
+      "name": "Compile-Time Assert",
+      "versionInfo": "Update 9",
+      "licenseConcluded": "LicenseRef-9169fb33-e3b5-4167-b984-f84877f34078",
+      "licenseDeclared": "LicenseRef-9169fb33-e3b5-4167-b984-f84877f34078",
+      "homepage": "https://www.pixelbeat.org/programming/gcc/static_assert.html",
+      "downloadLocation": "https://www.pixelbeat.org/programming/gcc/static_assert.html",
+      "originator": "Person: Pádraig Brady et al. (P@draigBrady.com)",
+      "comment": "Modifications by NXP.\n\n./sw/common/public/ct_assert.h",
+      "externalRefs": [],
+      "filesAnalyzed": false,
+      "supplier": "NOASSERTION"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-package-4c105f7a-0e7c-419f-a436-d5d090a48b8d"
+    },
+    {
+      "spdxElementId": "SPDXRef-package-4c105f7a-0e7c-419f-a436-d5d090a48b8d",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-package-4f7a36c7-2024-43e0-b209-a651151b2e17"
+    },
+    {
+      "spdxElementId": "SPDXRef-package-4c105f7a-0e7c-419f-a436-d5d090a48b8d",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-package-4f66ef56-7caa-4ba3-ac3f-f8de4259946f"
+    }
+  ]
+}
