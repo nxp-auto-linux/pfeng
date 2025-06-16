@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2021-2023 NXP
+ *  Copyright 2021-2023,2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -185,6 +185,11 @@ errno_t pfe_feature_mgr_fini(void)
 	}
 	else
 	{
+		pfe_hw_feature_fini_all(feature_mgr->hw_features, &feature_mgr->hw_features_count);
+
+		oal_mm_free(feature_mgr->hw_features);
+		feature_mgr->hw_features = NULL;
+
 		oal_mm_free(feature_mgr);
 		feature_mgr = NULL;
 		ret = EOK;

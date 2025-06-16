@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2021-2023 NXP
+ *  Copyright 2021-2023,2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -123,6 +123,20 @@ errno_t pfe_hw_feature_init_all(const uint32_t *cbus_base, pfe_hw_feature_t **hw
 	}
 
 	return ret;
+}
+
+void pfe_hw_feature_fini_all(pfe_hw_feature_t **hw_features, uint32_t *hw_features_count)
+{
+	uint32_t	i;
+
+	for (i = 0U; i < *hw_features_count; i++)
+	{
+		if (NULL != hw_features[i])
+		{
+			pfe_hw_feature_destroy(hw_features[i]);
+			hw_features[i] = NULL;
+		}
+	}
 }
 
 /**
