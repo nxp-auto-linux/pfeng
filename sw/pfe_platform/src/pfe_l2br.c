@@ -2339,6 +2339,7 @@ static errno_t pfe_l2br_static_entry_destroy_nolock(const pfe_l2br_t *bridge, pf
 			NXP_LOG_ERROR("Static entry couldn't be deleted from HW table (errno %d)\n", ret);
 		}
 
+		pfe_l2br_table_entry_destroy(static_ent->entry);
 		oal_mm_free(static_ent);
 	}
 	return ret;
