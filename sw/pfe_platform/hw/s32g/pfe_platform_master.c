@@ -2598,6 +2598,10 @@ static void pfe_platform_destroy_ifaces(pfe_platform_t *platform)
 		{
 			NXP_LOG_ERROR("Could not remove log_if DB entry, DB was locked\n");
 		}
+		else
+		{
+			pfe_log_if_fini();
+		}
 
 		if(EOK != pfe_if_db_unlock(session_id))
 		{

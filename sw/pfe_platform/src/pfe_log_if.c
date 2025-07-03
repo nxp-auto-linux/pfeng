@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2024 NXP
+ *  Copyright 2018-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -691,6 +691,18 @@ void pfe_log_if_destroy(pfe_log_if_t *iface)
 		}
 
 		oal_mm_free(iface);
+	}
+}
+
+/**
+ * @brief		Uninitialize LOG_IF module
+ */
+void pfe_log_if_fini(void)
+{
+	if (NULL != pfe_log_if_id_pool)
+	{
+		blalloc_destroy(pfe_log_if_id_pool);
+		pfe_log_if_id_pool = NULL;
 	}
 }
 
