@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2023,2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -322,7 +322,11 @@ static bool_t pfe_pe_is_active_nolock(pfe_pe_t *pe)
 
 	if (pfe_pe_get_state_monitor_nolock(pe, &state_monitor) == EOK)
 	{
-		if ((PFE_FW_STATE_STOPPED != state_monitor.state) && (PFE_FW_STATE_UNINIT != state_monitor.state))
+		if ((PFE_FW_STATE_STOPPED != state_monitor.state)
+			&& (PFE_FW_STATE_UNINIT != state_monitor.state)
+			&& (PFE_FW_STATE_EXCEPTION != state_monitor.state)
+			&& (PFE_FW_STATE_FAIL_STOP != state_monitor.state)
+		)
 		{
 			ret = TRUE;
 		}
@@ -426,7 +430,7 @@ static errno_t pfe_pe_mem_process_lock(pfe_pe_t *pe, PFE_PTR(pfe_ct_pe_misc_cont
 			{
 				if (0U == timeout)
 				{
-					NXP_LOG_ERROR("Timed-out\n");
+					NXP_LOG_ERROR("Timed-out waiting for FW to confirm graceful stop\n");
 
 					/*	Cancel the request */
 					misc_ctrl.graceful_stop_request = 0U;
