@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2022,2024 NXP
+ *  Copyright 2018-2022,2024-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -43,6 +43,7 @@ errno_t pfe_log_if_set_next_dmem_ptr(pfe_log_if_t *iface, addr_t next_dmem_ptr);
 errno_t pfe_log_if_get_next_dmem_ptr(pfe_log_if_t *iface, addr_t *next_dmem_ptr);
 errno_t pfe_log_if_get_dmem_base(const pfe_log_if_t *iface, addr_t *dmem_base);
 void pfe_log_if_destroy(pfe_log_if_t *iface);
+void pfe_log_if_fini(void);
 errno_t pfe_log_if_set_match_or(pfe_log_if_t *iface);
 errno_t pfe_log_if_set_match_and(pfe_log_if_t *iface);
 bool_t pfe_log_if_is_match_or(pfe_log_if_t *iface);
