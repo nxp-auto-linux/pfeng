@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2024 NXP
+ *  Copyright 2018-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -2339,6 +2339,7 @@ static errno_t pfe_l2br_static_entry_destroy_nolock(const pfe_l2br_t *bridge, pf
 			NXP_LOG_ERROR("Static entry couldn't be deleted from HW table (errno %d)\n", ret);
 		}
 
+		pfe_l2br_table_entry_destroy(static_ent->entry);
 		oal_mm_free(static_ent);
 	}
 	return ret;
@@ -3300,8 +3301,15 @@ pfe_l2br_t *pfe_l2br_create(pfe_class_t *class, uint16_t def_vlan, uint16_t def_
 errno_t pfe_l2br_destroy(pfe_l2br_t *bridge)
 {
 	errno_t ret;
+	LLIST_t *item, *dummy = NULL;
+	pfe_l2br_domain_t *domain = NULL;
+
 	if (NULL != bridge)
 	{
+		if (EOK != pfe_l2br_flush_all(bridge))
+		{
+			NXP_LOG_ERROR("Could not flush all bridge MAC table entries\n");
+		}
 		if (NULL != bridge->default_domain)
 		{
 			if (EOK == pfe_l2br_domain_destroy(bridge->default_domain))
@@ -3328,7 +3336,24 @@ errno_t pfe_l2br_destroy(pfe_l2br_t *bridge)
 
 		if (FALSE == LLIST_IsEmpty(&bridge->domains))
 		{
-			NXP_LOG_WARNING("Bridge is being destroyed but still contains some active domains\n");
+			NXP_LOG_INFO("Bridge is being destroyed but still contains some active domains\n");
+
+			LLIST_ForEachRemovable(item, dummy, &bridge->domains)
+			{
+				domain = LLIST_Data(item, pfe_l2br_domain_t, list_entry);
+				if (NULL == domain)
+				{
+					NXP_LOG_ERROR("NULL domain detected!\n");
+				}
+				else
+				{
+					NXP_LOG_INFO("Remove domain with vlan %d\n", domain->vlan);
+					if (EOK != pfe_l2br_domain_destroy(domain))
+					{
+						NXP_LOG_ERROR("Could not destroy domain\n");
+					}
+				}
+			}
 		}
 
 		if (EOK != pfe_l2br_destroy_vlan_stats_table(bridge->class, bridge->domain_stats_table_addr))
