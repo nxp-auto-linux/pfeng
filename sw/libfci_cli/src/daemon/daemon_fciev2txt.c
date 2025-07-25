@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2023 NXP
+ *  Copyright 2020-2023, 2025 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -102,6 +102,10 @@ static int fciev_print_payload_decoded(char**const pp_rtn_dst, int* p_rtn_dst_ln
                 rtn = fciev_print_ipv6_conntrack_change(pp_rtn_dst, p_rtn_dst_ln, len, payload);
             break;
             
+            case FPP_CMD_DATA_BUF_AVAIL:
+                rtn = fciev_snprintf(pp_rtn_dst, p_rtn_dst_ln, "  -- raw only, nothing to decode -- \n");
+            break;
+
             default:
                 rtn = fciev_snprintf(pp_rtn_dst, p_rtn_dst_ln, "  libfci_cli version " CLI_VERSION_STRING " cannot decode payload of this FCI event \n");
             break;
@@ -143,6 +147,10 @@ static const char* fciev_fcode2txt(unsigned short fcode)
             p_txt = TXT_STRINGIFY(FPP_CMD_IPV6_CONNTRACK_CHANGE);
         break;
         
+        case FPP_CMD_DATA_BUF_AVAIL:
+            p_txt = TXT_STRINGIFY(FPP_CMD_DATA_BUF_AVAIL);
+        break;
+
         default:
             p_txt = "---";
         break;
