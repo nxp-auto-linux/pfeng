@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2024 NXP
+ *  Copyright 2020-2025 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -1620,6 +1620,15 @@ typedef enum cli_opt_incompat_grp_tt {
         OPT_129_TXT_HELP
 
 
+#define OPT_130_ENUM_NAME        OPT_BUF_PAYLOAD
+#define OPT_130_OPT_PARSE        opt_parse_buf_payload
+#define OPT_130_HAS_ARG          y
+#define OPT_130_INCOMPAT_GRPS    OPT_GRP_NONE
+#define OPT_130_CLI_SHORT_CODE   OPT_AUTO_CODE
+#define OPT_130_CLI_LONG_TXT_A   "buf-payload"
+#define OPT_130_TXT_HELP         "--buf-payload"
+#define                          TXT_HELP__BUF_PAYLOAD \
+        OPT_130_TXT_HELP
 
 
 /* OPT_LAST (keep this at the bottom of the cli option definition list) */

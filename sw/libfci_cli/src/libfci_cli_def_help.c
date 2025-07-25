@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022,2024 NXP
+ *  Copyright 2020-2022, 2024-2025 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -942,6 +942,9 @@
                                         "    "  TXT_ON_OFF__ON   "  : fast-forward the packet as usual (according to matching conntrack)\n"  \
                                         "    "  TXT_ON_OFF__OFF  " : send the packet to a host\n"
 
+#define TXT_OPT__BUF_PAYLOAD            TXT_HELP__BUF_PAYLOAD  "=<list_of_values>"
+#define TXT_OPTDESCR__BUF_PAYLOAD       TXT_HELP__BUF_PAYLOAD  "=<"  "0,5,20,... | 0x00,0x05,0x14..."  ">"  "\n"   \
+                                        "  Comma seperated list of values. \n"
 
 
 
@@ -950,7 +953,7 @@
     And don't forget to check the pairing! ^_^
 */
 #if (\
-     defined(OPT_130_TXT_HELP) || defined(OPT_131_TXT_HELP) || defined(OPT_132_TXT_HELP) || defined(OPT_133_TXT_HELP) || defined(OPT_134_TXT_HELP) || \
+     defined(OPT_131_TXT_HELP) || defined(OPT_132_TXT_HELP) || defined(OPT_133_TXT_HELP) || defined(OPT_134_TXT_HELP) || \
      defined(OPT_135_TXT_HELP) || defined(OPT_136_TXT_HELP) || defined(OPT_137_TXT_HELP) || defined(OPT_138_TXT_HELP) || defined(OPT_139_TXT_HELP) || \
      defined(OPT_140_TXT_HELP) || defined(OPT_141_TXT_HELP) || defined(OPT_142_TXT_HELP) || defined(OPT_143_TXT_HELP) || defined(OPT_144_TXT_HELP) || \
      defined(OPT_145_TXT_HELP) || defined(OPT_146_TXT_HELP) || defined(OPT_147_TXT_HELP) || defined(OPT_148_TXT_HELP) || defined(OPT_149_TXT_HELP) || \
@@ -2549,6 +2552,22 @@ static const char* txt_help_daemon_stop[] =
     NULL
 };
 
+static const char* txt_help_data_buf_put[] =
+{
+    TXT_DECOR_CMD,
+    ""    "data-buf-put"     "   ",
+    "<"   TXT_OPT__BUF_PAYLOAD  ">  ",
+    "\n",
+    TXT_DECOR_DESCR,
+    ""    "FCI command to send arbitrary data to the accelerator. This feature works only with custom PFE Firmware.",
+    "\n",
+    TXT_DECOR_OPT,
+    TXT_OPTDESCR__BUF_PAYLOAD,
+    "\n",
+
+    NULL
+};
+
 static const char* txt_help_demo_feature_print[] =
 {
     TXT_DECOR_CMD,
@@ -2579,7 +2598,6 @@ static const char* txt_help_demo_feature_run[] =
     
     NULL
 };
-
 
 
 
