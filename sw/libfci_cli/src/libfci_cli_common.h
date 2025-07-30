@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2024 NXP
+ *  Copyright 2020-2025 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -43,7 +43,7 @@
 
 /* app version */
 #define CLI_VERSION_MAJOR   "2"
-#define CLI_VERSION_MINOR   "16"
+#define CLI_VERSION_MINOR   "17"
 #define CLI_VERSION_PATCH   "0"
 #define CLI_VERSION_STRING  CLI_VERSION_MAJOR"."CLI_VERSION_MINOR"."CLI_VERSION_PATCH
 
@@ -97,6 +97,7 @@
 #define ZPROBS_LN            (8u)  /* Max count of probability zones is based on info from FCI API Reference (chapter about "QoS" feature) */
 #define SCH_INS_LN           (8u)  /* Max count of scheduler inputs is based on info from FCI API Reference (chapter about "QoS" feature) */
 #define PAYLOAD_LN           (128) /* Value of this symbol must match the hardcoded size of '.payload' array in fpp_fw_features_element_cmd_t */
+#define DATA_BUF_LN          (64)  /* Max length of data_buf_put payload for FCI fpp_buf_cmd_t struct */
 
 /* misc macro sanity checks */
 #if (MAC_BYTES_LN < 2u)

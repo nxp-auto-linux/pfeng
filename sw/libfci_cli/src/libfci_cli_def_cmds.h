@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2022 NXP
+ *  Copyright 2020-2022, 2025 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -446,7 +446,13 @@
 #define CMD_103_CMDEXEC     cli_cmd_daemon_stop
 #define CMD_103_HELP        txt_help_daemon_stop
 
+/*      CMD_104_ENUM_NAME    reserved for future DAEMON cmds */
+/*      CMD_105_ENUM_NAME    reserved for future DAEMON cmds */
 
+#define CMD_106_ENUM_NAME    CMD_DATA_BUF_PUT
+#define CMD_106_CLI_TXT      "data-buf-put"
+#define CMD_106_CMDEXEC      cli_cmd_data_buf_put
+#define CMD_106_HELP         txt_help_data_buf_put
 
 
 #define CMD_198_ENUM_NAME    CMD_DEMO_FEATURE_PRINT

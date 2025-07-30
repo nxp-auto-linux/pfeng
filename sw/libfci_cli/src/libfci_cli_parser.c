@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2020-2024 NXP
+ *  Copyright 2020-2025 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -2198,6 +2198,23 @@ static int opt_parse_ff_all_tcp(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_
     return (rtn);
 }
 
+static int opt_parse_buf_payload(cli_cmdargs_t* p_rtn_cmdargs, const char* p_txt_optarg)
+{
+    assert(NULL != p_rtn_cmdargs);
+    assert(NULL != p_txt_optarg);
+    
+    int rtn = CLI_ERR;
+
+    bool* p_is_valid = &(p_rtn_cmdargs->payload.is_valid);
+    uint8_t* p_arr   =  (p_rtn_cmdargs->payload.arr);
+    uint8_t* p_count = &(p_rtn_cmdargs->payload.count);
+    
+	rtn = txt2num_payload(p_arr, p_count, DATA_BUF_LN, 1, p_txt_optarg);
+    
+    set_if_rtn_ok(rtn, p_is_valid);
+
+    return (rtn);
+}
 
 
 
