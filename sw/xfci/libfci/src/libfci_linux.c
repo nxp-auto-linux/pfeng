@@ -507,6 +507,7 @@ static int __fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *c
 {
 	fci_msg_t msg;
 	fci_msg_t *reply_msg;
+	int ret;
 	unsigned short cmd_ret = EOK;
 	struct sockaddr_nl dest_addr;
 	struct nlmsghdr *nlh = NULL;
@@ -579,8 +580,10 @@ static int __fci_cmd(FCI_CLIENT *client, unsigned short fcode, unsigned short *c
 			/*	Command failure */
 			FCILIB_PRINTF(FCILIB_ERR, "LIBFCI: Command failed with %d\n", reply_msg->ret_code);
 
+			ret = -reply_msg->ret_code;
 			free(nlh);
-			return -reply_msg->ret_code;
+
+			return ret;
 		}
 		else
 		{
