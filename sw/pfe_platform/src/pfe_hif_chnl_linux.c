@@ -2,7 +2,7 @@
  *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2024 NXP
+ *  Copyright 2018-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -2077,7 +2077,8 @@ the_end:
 __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_hif_chnl_t *chnl)
 {
 	void *rx_buf_va = NULL, *rx_buf_pa, *buf_pa, *frame;
-	uint32_t len, ii;
+	uint32_t len, ii, jj;
+	const uint32_t tx_tout = 20U;
 	bool_t lifm;
 	errno_t ret = EOK;
 
@@ -2127,9 +2128,17 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 		oal_time_usleep(500U);
 
 		/*	Do TX confirmations */
+		jj = tx_tout;
 		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
 			oal_time_usleep(100U);
+			if (jj--)
+			{
+				continue;
+			}
+			NXP_LOG_ERROR("TX confirmation timeout\n");
+			ret = ETIMEDOUT;
+			goto the_end;
 		}
 		pfe_hif_chnl_free_dummy_frame(frame);
 
@@ -2174,9 +2183,17 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 		oal_time_usleep(500U);
 
 		/*	Do TX confirmations */
+		jj = tx_tout;
 		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
 			oal_time_usleep(100U);
+			if (jj--)
+			{
+				continue;
+			}
+			NXP_LOG_ERROR("TX confirmation timeout\n");
+			ret = ETIMEDOUT;
+			goto the_end;
 		}
 		pfe_hif_chnl_free_dummy_frame(frame);
 
@@ -2215,9 +2232,18 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 		oal_time_usleep(500U);
 
 		/*	Do TX confirmations */
+		jj = tx_tout;
 		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
 			oal_time_usleep(100U);
+			if (jj--)
+			{
+				continue;
+			}
+			NXP_LOG_ERROR("TX confirmation timeout\n");
+			ret = ETIMEDOUT;
+			goto the_end;
+
 		}
 		pfe_hif_chnl_free_dummy_frame(frame);
 	}
