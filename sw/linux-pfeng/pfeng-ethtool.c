@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2023 NXP
+ * Copyright 2018-2023,2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -20,8 +20,8 @@ static void pfeng_ethtool_getdrvinfo(struct net_device *netdev, struct ethtool_d
 #endif
 
 	/* driver */
-	strlcpy(info->driver, PFENG_DRIVER_NAME, sizeof(info->version));
-	strlcpy(info->version, PFENG_DRIVER_VERSION, sizeof(info->version));
+	strscpy(info->driver, PFENG_DRIVER_NAME, sizeof(info->version));
+	strscpy(info->version, PFENG_DRIVER_VERSION, sizeof(info->version));
 
 #ifdef PFE_CFG_PFE_MASTER
 	/* fw_version */
