@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2024 NXP
+ * Copyright 2020-2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -99,6 +99,7 @@ int pfeng_hif_chnl_start(struct pfeng_hif_chnl *chnl)
 	return 0;
 }
 
+#ifdef PFE_CFG_PFE_SLAVE
 int pfeng_hif_slave_suspend(struct pfeng_priv *priv)
 {
 	struct pfeng_hif_chnl *chnl;
@@ -122,6 +123,7 @@ int pfeng_hif_slave_resume(struct pfeng_priv *priv)
 
 	return 0;
 }
+#endif /* PFE_CFG_PFE_SLAVE */
 
 /**
  * @brief		HIF channel ISR
