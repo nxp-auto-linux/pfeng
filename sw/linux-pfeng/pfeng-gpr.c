@@ -108,8 +108,11 @@ static int gpr_set_port_coherency_nvmem(struct pfeng_priv *priv)
 		HM_MSG_DEV_ERR(dev, "Failed to enable port coherency\n");
 		return ret;
 	}
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,87)
+	ret = nvmem_cell_read_u32(dev, "pfe_coh_en", &val);
+#else
 	ret = read_nvmem_cell(dev, "pfe_coh_en", &val);
+#endif
 	if (ret)
 		return ret;
 
@@ -176,7 +179,11 @@ static int gpr_clear_port_coherency_nvmem(struct pfeng_priv *priv)
 	int ret = 0;
 	u32 val;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,87)
+	ret = nvmem_cell_read_u32(dev, "pfe_coh_en", &val);
+#else
 	ret = read_nvmem_cell(dev, "pfe_coh_en", &val);
+#endif
 	if (ret)
 		return ret;
 
@@ -191,8 +198,11 @@ static int gpr_clear_port_coherency_nvmem(struct pfeng_priv *priv)
 		HM_MSG_DEV_ERR(dev, "Failed to clear port coherency, mask 0x%x\n", val);
 		return ret;
 	}
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,87)
+	ret = nvmem_cell_read_u32(dev, "pfe_coh_en", &val);
+#else
 	ret = read_nvmem_cell(dev, "pfe_coh_en", &val);
+#endif
 	if (ret)
 		return ret;
 
@@ -348,7 +358,11 @@ static int gpr_ip_ready_get_nvmem(struct device *dev, bool *is_on)
 	int ret;
 	u32 val;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,87)
+	ret = nvmem_cell_read_u32(dev, "pfe_genctrl3", &val);
+#else
 	ret = read_nvmem_cell(dev, "pfe_genctrl3", &val);
+#endif
 	if (ret) {
 		HM_MSG_DEV_ERR(dev, "Failed to read cell \'pfe_genctrl3\'\n");
 		return ret;

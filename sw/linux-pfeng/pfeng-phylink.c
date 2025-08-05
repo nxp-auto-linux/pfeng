@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2024 NXP
+ * Copyright 2020-2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -190,6 +190,7 @@ static void pfeng_validate(struct phylink_config *config, unsigned long *support
 	if (max_speed > SPEED_100) {
 		phylink_set(mac_supported, 1000baseT_Half);
 		phylink_set(mac_supported, 1000baseT_Full);
+		phylink_set(mac_supported, 1000baseT1_Full);
 		phylink_set(mac_supported, 1000baseX_Full);
 	}
 
