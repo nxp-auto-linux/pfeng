@@ -33,7 +33,11 @@ static void pfeng_ethtool_getdrvinfo(struct net_device *netdev, struct ethtool_d
 #endif
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+static int pfeng_ethtool_get_ts_info(struct net_device *netdev, struct kernel_ethtool_ts_info *info)
+#else
 static int pfeng_ethtool_get_ts_info(struct net_device *netdev, struct ethtool_ts_info *info)
+#endif
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 

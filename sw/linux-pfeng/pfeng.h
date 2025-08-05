@@ -497,6 +497,10 @@ void pfeng_hwts_get_tx_ts(struct pfeng_netif *netif, pfe_ct_ets_report_t *etsr);
 int pfeng_hwts_store_tx_ref(struct pfeng_netif *netif, struct sk_buff *skb);
 int pfeng_hwts_ioctl_set(struct pfeng_netif *netif, struct ifreq *rq);
 int pfeng_hwts_ioctl_get(struct pfeng_netif *netif, struct ifreq *rq);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct kernel_ethtool_ts_info *info);
+#else
 int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct ethtool_ts_info *info);
+#endif
 
 #endif

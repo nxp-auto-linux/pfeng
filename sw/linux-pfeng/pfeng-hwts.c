@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 NXP
+ * Copyright 2021-2023,2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -184,7 +184,11 @@ int pfeng_hwts_ioctl_get(struct pfeng_netif *netif, struct ifreq *rq)
 	return copy_to_user(rq->ifr_data, &netif->tshw_cfg, sizeof(netif->tshw_cfg)) ? -EFAULT : 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct kernel_ethtool_ts_info *info)
+#else
 int pfeng_hwts_ethtool(struct pfeng_netif *netif, struct ethtool_ts_info *info)
+#endif
 {
 	if (!netif->priv->clk_ptp_reference || pfeng_netif_is_aux(netif)) {
 		info->so_timestamping |= SOF_TIMESTAMPING_TX_SOFTWARE |
