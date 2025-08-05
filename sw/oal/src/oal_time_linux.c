@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021,2024 NXP
+ *  Copyright 2018-2021,2024-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -17,6 +17,7 @@
 
 #include <linux/delay.h>
 #include <linux/ktime.h>
+#include "oal_time.h"
 #include "pfe_cfg.h"
 
 /*
