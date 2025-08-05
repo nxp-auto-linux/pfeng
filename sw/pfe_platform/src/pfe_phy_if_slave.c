@@ -37,6 +37,8 @@ struct pfe_phy_if_tag
 	bool_t is_enabled;
 };
 
+static errno_t pfe_phy_if_disable_nolock(pfe_phy_if_t *iface);
+
 static errno_t pfe_phy_if_db_lock(void)
 {
 	/*	Wait 1ms */
