@@ -1283,7 +1283,7 @@ err:
 }
 
 #ifdef PFE_CFG_PFE_SLAVE
-void pfeng_netif_slave_work_handler(struct work_struct *work)
+static void pfeng_netif_slave_work_handler(struct work_struct *work)
 {
 	struct pfeng_netif* netif = container_of(work, struct pfeng_netif, ihc_slave_work);
 	int ret;
