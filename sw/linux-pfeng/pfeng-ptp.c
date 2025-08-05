@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2024 NXP
+ * Copyright 2021-2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -71,7 +71,7 @@ static int pfeng_ptp_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 	return ret;
 }
 
-int pfeng_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
+static int pfeng_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
@@ -109,7 +109,7 @@ int pfeng_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	return ret;
 }
 
-int pfeng_ptp_gettime64(struct ptp_clock_info *ptp, struct timespec64 *ts)
+static int pfeng_ptp_gettime64(struct ptp_clock_info *ptp, struct timespec64 *ts)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
@@ -139,7 +139,7 @@ int pfeng_ptp_gettime64(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	return ret;
 }
 
-int pfeng_ptp_settime64(struct ptp_clock_info *ptp, const struct timespec64 *ts)
+static int pfeng_ptp_settime64(struct ptp_clock_info *ptp, const struct timespec64 *ts)
 {
 	struct pfeng_netif *netif = container_of(ptp, struct pfeng_netif, ptp_ops);
 	struct pfeng_priv *priv = netif->priv;
@@ -169,7 +169,7 @@ int pfeng_ptp_settime64(struct ptp_clock_info *ptp, const struct timespec64 *ts)
 	return ret;
 }
 
-int pfeng_ptp_enable(struct ptp_clock_info __always_unused *ptp,
+static int pfeng_ptp_enable(struct ptp_clock_info __always_unused *ptp,
 		     struct ptp_clock_request __always_unused *request,
 		     int __always_unused on)
 {
