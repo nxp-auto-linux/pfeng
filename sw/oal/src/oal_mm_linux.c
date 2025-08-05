@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2023,2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -670,7 +670,7 @@ static int pfeng_reserved_dma_shared_pool_region_init(struct device *dev, int *r
 
 #endif /* PFE_CFG_PFE_MASTER */
 
-int __oal_mm_wakeup_reinit(void)
+static int __oal_mm_wakeup_reinit(void)
 {
 	struct pfe_reserved_mem *res_mem = NULL;
 
