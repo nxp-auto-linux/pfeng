@@ -1430,7 +1430,7 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 #endif /* PFE_CFG_PFE_SLAVE_PHY */
 
 	/* Set up explicit device name based on platform names */
-	strlcpy(netdev->name, netif_cfg->name, IFNAMSIZ);
+	strscpy(netdev->name, netif_cfg->name, IFNAMSIZ);
 
 	netdev->netdev_ops = &pfeng_netdev_ops;
 
