@@ -935,11 +935,7 @@ static const struct net_device_ops pfeng_netdev_ops = {
 	.ndo_start_xmit		= pfeng_netif_logif_xmit,
 	.ndo_stop		= pfeng_netif_logif_stop,
 	.ndo_change_mtu		= pfeng_netif_logif_change_mtu,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
 	.ndo_eth_ioctl		= pfeng_netif_logif_ioctl,
-#else
-	.ndo_do_ioctl		= pfeng_netif_logif_ioctl,
-#endif
 	.ndo_set_mac_address	= pfeng_ndo_set_mac_address,
 	.ndo_set_rx_mode	= pfeng_netif_set_rx_mode,
 	.ndo_fix_features	= pfeng_netif_fix_features,
