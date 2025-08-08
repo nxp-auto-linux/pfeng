@@ -31,10 +31,6 @@ MODULE_AUTHOR("Jan Petrous <jan.petrous@nxp.com>");
 MODULE_DESCRIPTION("PFEng SLAVE driver");
 MODULE_VERSION(PFENG_DRIVER_VERSION);
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(5,16,0)
-#define do_exit(c) kthread_complete_and_exit(NULL, c)
-#endif
-
 static const struct of_device_id pfeng_id_table[] = {
 	{ .compatible = "nxp,s32g-pfe-slave" },
 	{ /* sentinel */ }
@@ -401,7 +397,7 @@ err_drv:
 
 	if (priv->deferred_probe_task) {
 		priv->deferred_probe_task = NULL;
-		do_exit(0);
+		kthread_complete_and_exit(NULL, 0);
 	}
 
 	return ret;
@@ -684,7 +680,7 @@ err_pfe_init:
 
 	if (priv->deferred_probe_task) {
 		priv->deferred_probe_task = NULL;
-		do_exit(0);
+		kthread_complete_and_exit(NULL, 0);
 	}
 
 	return ret;
