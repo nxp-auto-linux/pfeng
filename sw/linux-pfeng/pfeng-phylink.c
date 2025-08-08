@@ -283,7 +283,6 @@ int pfeng_phylink_create(struct pfeng_netif *netif)
 	netif->phylink_cfg.type = PHYLINK_NETDEV;
 	netif->phylink_cfg.mac_managed_pm = true;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,17,0)
 	netif->phylink_cfg.mac_capabilities = MAC_ASYM_PAUSE | MAC_SYM_PAUSE |
 						MAC_10 | MAC_100 | MAC_1000;
 
@@ -298,7 +297,6 @@ int pfeng_phylink_create(struct pfeng_netif *netif)
 		netif->phylink_cfg.mac_capabilities |= MAC_2500FD;
 		__set_bit(PHY_INTERFACE_MODE_2500BASEX, netif->phylink_cfg.supported_interfaces);
 	}
-#endif
 
 	phylink = phylink_create(&netif->phylink_cfg, of_fwnode_handle(netif->cfg->dn), emac->intf_mode, &pfeng_phylink_ops);
 	if (IS_ERR(phylink))
