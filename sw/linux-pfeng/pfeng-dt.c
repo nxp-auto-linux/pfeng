@@ -256,15 +256,8 @@ int pfeng_dt_create_config(struct pfeng_priv *priv)
 		HM_MSG_DEV_INFO(dev, "netif name: %s", netif_cfg->name);
 
 		/* MAC eth address */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,13,0)
-		if (!IS_ERR_OR_NULL(of_get_mac_address(child))) {
-			memcpy(netif_cfg->macaddr, (u8 *)of_get_mac_address(child), ETH_ALEN);
-			HM_MSG_DEV_INFO(dev, "DT mac addr: %pM", netif_cfg->macaddr);
-		}
-#else
 		if (!of_get_mac_address(child, netif_cfg->macaddr))
 			HM_MSG_DEV_INFO(dev, "DT mac addr: %pM", netif_cfg->macaddr);
-#endif
 
 		/* Phy id */
 		if (of_find_property(child, "nxp,pfeng-netif-mode-aux", NULL)) {
