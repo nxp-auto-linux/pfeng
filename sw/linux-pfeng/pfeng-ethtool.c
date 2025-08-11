@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2023 NXP
+ * Copyright 2018-2023,2025 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -20,8 +20,8 @@ static void pfeng_ethtool_getdrvinfo(struct net_device *netdev, struct ethtool_d
 #endif
 
 	/* driver */
-	strlcpy(info->driver, PFENG_DRIVER_NAME, sizeof(info->version));
-	strlcpy(info->version, PFENG_DRIVER_VERSION, sizeof(info->version));
+	strscpy(info->driver, PFENG_DRIVER_NAME, sizeof(info->version));
+	strscpy(info->version, PFENG_DRIVER_VERSION, sizeof(info->version));
 
 #ifdef PFE_CFG_PFE_MASTER
 	/* fw_version */
@@ -33,7 +33,11 @@ static void pfeng_ethtool_getdrvinfo(struct net_device *netdev, struct ethtool_d
 #endif
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+static int pfeng_ethtool_get_ts_info(struct net_device *netdev, struct kernel_ethtool_ts_info *info)
+#else
 static int pfeng_ethtool_get_ts_info(struct net_device *netdev, struct ethtool_ts_info *info)
+#endif
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 

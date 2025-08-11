@@ -1283,7 +1283,7 @@ err:
 }
 
 #ifdef PFE_CFG_PFE_SLAVE
-void pfeng_netif_slave_work_handler(struct work_struct *work)
+static void pfeng_netif_slave_work_handler(struct work_struct *work)
 {
 	struct pfeng_netif* netif = container_of(work, struct pfeng_netif, ihc_slave_work);
 	int ret;
@@ -1430,7 +1430,7 @@ static struct pfeng_netif *pfeng_netif_logif_create(struct pfeng_priv *priv, str
 #endif /* PFE_CFG_PFE_SLAVE_PHY */
 
 	/* Set up explicit device name based on platform names */
-	strlcpy(netdev->name, netif_cfg->name, IFNAMSIZ);
+	strscpy(netdev->name, netif_cfg->name, IFNAMSIZ);
 
 	netdev->netdev_ops = &pfeng_netdev_ops;
 

@@ -158,7 +158,11 @@ err_cfg_alloc:
  * Description: this function calls the main to free the net resources
  * and releases the platform resources.
  */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+static void pfeng_drv_remove(struct platform_device *pdev)
+#else
 static int pfeng_drv_remove(struct platform_device *pdev)
+#endif
 {
 	struct device *dev = &pdev->dev;
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
@@ -166,7 +170,11 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 
 	if (!priv) {
 		HM_MSG_DEV_ERR(dev, "Removal failed. No priv data.\n");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+		return;
+#else
 		return -ENOMEM;
+#endif
 	}
 
 	if (priv->deferred_probe_task)
@@ -228,7 +236,11 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	pm_runtime_put_noidle(dev);
 	pm_runtime_disable(dev);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+	return;
+#else
 	return 0;
+#endif
 }
 
 
