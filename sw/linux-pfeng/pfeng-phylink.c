@@ -109,7 +109,6 @@ static int s32g_set_rgmii_speed(struct pfeng_netif *netif, unsigned int speed)
 	return ret;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,18,0)
 static struct phylink_pcs *pfeng_mac_select_pcs(struct phylink_config *config, phy_interface_t interface)
 {
 	struct pfeng_netif *netif = netdev_priv(to_net_dev(config->dev));
@@ -120,7 +119,6 @@ static struct phylink_pcs *pfeng_mac_select_pcs(struct phylink_config *config, p
 
 	return NULL;
 }
-#endif
 
 static void pfeng_mac_config(struct phylink_config *config, unsigned int mode, const struct phylink_link_state *state)
 {
@@ -152,114 +150,8 @@ static void pfeng_mac_link_up(struct phylink_config *config,  struct phy_device 
 	netif_tx_wake_all_queues(netif->netdev);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,18,0)
-/**
- * @brief	Validate and update the link configuration
- */
-static void pfeng_validate(struct phylink_config *config, unsigned long *supported, struct phylink_link_state *state)
-{
-	struct pfeng_netif *netif = netdev_priv(to_net_dev(config->dev));
-	struct pfeng_priv *priv = netif->priv;
-	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
-	__ETHTOOL_DECLARE_LINK_MODE_MASK(mac_supported) = { 0, };
-	int max_speed = priv->emac[netif->cfg->phyif_id].max_speed;
-	int an_serdes_speed = priv->emac[netif->cfg->phyif_id].serdes_an_speed;
-
-	/* We only support SGMII and R/G/MII modes */
-	if (state->interface != PHY_INTERFACE_MODE_NA &&
-		state->interface != PHY_INTERFACE_MODE_SGMII &&
-		state->interface != PHY_INTERFACE_MODE_RMII &&
-		state->interface != PHY_INTERFACE_MODE_MII &&
-		!phy_interface_mode_is_rgmii(state->interface)) {
-		bitmap_zero(supported, __ETHTOOL_LINK_MODE_MASK_NBITS);
-		return;
-	}
-
-	phylink_set(mac_supported, Pause);
-	phylink_set(mac_supported, Asym_Pause);
-	phylink_set(mac_supported, Autoneg);
-	phylink_set(mac_supported, 10baseT_Half);
-	phylink_set(mac_supported, 10baseT_Full);
-
-	if (max_speed > SPEED_10) {
-		phylink_set(mac_supported, 100baseT_Half);
-		phylink_set(mac_supported, 100baseT_Full);
-		phylink_set(mac_supported, 100baseT1_Full);
-	}
-
-	if (max_speed > SPEED_100) {
-		phylink_set(mac_supported, 1000baseT_Half);
-		phylink_set(mac_supported, 1000baseT_Full);
-		phylink_set(mac_supported, 1000baseT1_Full);
-		phylink_set(mac_supported, 1000baseX_Full);
-	}
-
-	if (max_speed > SPEED_1000 &&
-		/* G3: All PFE_EMACs support 2.5G over SGMII */
-		(netif->priv->on_g3 ||
-		/* G2: Only PFE_EMAC_0 supports 2.5G over SGMII */
-			!netif->cfg->phyif_id) &&
-		(state->interface == PHY_INTERFACE_MODE_SGMII ||
-		state->interface == PHY_INTERFACE_MODE_NA)) {
-		phylink_set(mac_supported, 2500baseT_Full);
-		phylink_set(mac_supported, 2500baseX_Full);
-	}
-
-	/* SGMII AN can't distinguish between 1G and 2.5G */
-	if (state->interface == PHY_INTERFACE_MODE_SGMII &&
-	    priv->emac[netif->cfg->phyif_id].link_an == MLO_AN_INBAND) {
-		if (an_serdes_speed == SPEED_2500) {
-			phylink_set(mask, 10baseT_Half);
-			phylink_set(mask, 10baseT_Full);
-			phylink_set(mask, 100baseT_Half);
-			phylink_set(mask, 100baseT_Full);
-			phylink_set(mask, 100baseT1_Full);
-			phylink_set(mask, 1000baseT_Half);
-			phylink_set(mask, 1000baseT_Full);
-			phylink_set(mask, 1000baseX_Full);
-		} else if (an_serdes_speed == SPEED_1000) {
-			phylink_set(mask, 2500baseT_Full);
-			phylink_set(mask, 2500baseX_Full);
-		}
-	} else if (priv->emac[netif->cfg->phyif_id].link_an == MLO_AN_FIXED) {
-		phylink_clear(mac_supported, Autoneg);
-	}
-
-	phylink_set(mac_supported, MII);
-	phylink_set_port_modes(mac_supported);
-
-	bitmap_and(supported, supported, mac_supported,
-		 __ETHTOOL_LINK_MODE_MASK_NBITS);
-	bitmap_andnot(supported, supported, mask,
-		 __ETHTOOL_LINK_MODE_MASK_NBITS);
-	bitmap_and(state->advertising, state->advertising, mac_supported,
-		__ETHTOOL_LINK_MODE_MASK_NBITS);
-	bitmap_andnot(state->advertising, state->advertising, mask,
-		__ETHTOOL_LINK_MODE_MASK_NBITS);
-}
-
-/**
- * @brief	Read the current link state from the PCS
- */
-static void pfeng_mac_link_state(struct phylink_config *config, struct phylink_link_state *state)
-{
-	state->link = 0;
-}
-
-static void pfeng_mac_an_restart(struct phylink_config *config)
-{
-	return;
-}
-#endif
-
 static const struct phylink_mac_ops pfeng_phylink_ops = {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,18,0)
-	.validate = pfeng_validate,
-	.mac_pcs_get_state = pfeng_mac_link_state,
-	.mac_an_restart = pfeng_mac_an_restart,
-#else
 	.mac_select_pcs = pfeng_mac_select_pcs,
-#endif
 	.mac_config = pfeng_mac_config,
 	.mac_link_down = pfeng_mac_link_down,
 	.mac_link_up = pfeng_mac_link_up,
@@ -319,10 +211,6 @@ int pfeng_phylink_create(struct pfeng_netif *netif)
 			emac->pcs = s32cc_xpcs_get_pcs(xpcs);
 		else
 			HM_MSG_DEV_ERR(netif->dev, "SerDes data retrieval failed on EMAC%d\n", netif->cfg->phyif_id);
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,18,0)
-		phylink_set_pcs(phylink, emac->pcs);
-#endif
 	}
 
 	return 0;
