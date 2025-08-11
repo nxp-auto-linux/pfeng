@@ -663,11 +663,7 @@ static int pfeng_hif_chnl_drv_create(struct pfeng_priv *priv, u32 idx)
 	pfeng_hif_chnl_set_coalesce(chnl, priv->clk_sys, PFENG_INT_TIMER_DEFAULT, 0);
 
 	chnl->status = PFENG_HIF_STATUS_ENABLED;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
-	netif_napi_add(&chnl->dummy_netdev, &chnl->napi, pfeng_hif_chnl_poll, NAPI_POLL_WEIGHT);
-#else
 	netif_napi_add(&chnl->dummy_netdev, &chnl->napi, pfeng_hif_chnl_poll);
-#endif
 	napi_enable(&chnl->napi);
 
 	HM_MSG_DEV_INFO(dev, "HIF%d enabled\n", idx);
