@@ -415,15 +415,10 @@ int pfeng_mdio_register(struct pfeng_priv *priv);
 void pfeng_mdio_unregister(struct pfeng_priv *priv);
 int pfeng_mdio_suspend(struct pfeng_priv *priv);
 int pfeng_mdio_resume(struct pfeng_priv *priv);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
-int pfeng_mdio_read(struct mii_bus *bus, int phyaddr, int phyreg);
-int pfeng_mdio_write(struct mii_bus *bus, int phyaddr, int phyreg, u16 phydata);
-#else
 int pfeng_mdio_read_c22(struct mii_bus *bus, int phyaddr, int phyreg);
 int pfeng_mdio_write_c22(struct mii_bus *bus, int phyaddr, int phyreg, u16 phydata);
 int pfeng_mdio_read_c45(struct mii_bus *bus, int phyaddr, int devad, int phyreg);
 int pfeng_mdio_write_c45(struct mii_bus *bus, int phyaddr, int devad, int phyreg, u16 phydata);
-#endif
 
 /* hif */
 int pfeng_hif_create(struct pfeng_priv *priv);
