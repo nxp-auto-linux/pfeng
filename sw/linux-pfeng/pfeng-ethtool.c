@@ -120,11 +120,7 @@ static int pfeng_ethtool_nway_reset(struct net_device *netdev)
 }
 #endif /* PFE_CFG_PFE_MASTER */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
-static int pfeng_get_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec)
-#else
 static int pfeng_get_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec, struct kernel_ethtool_coalesce *kec, struct netlink_ext_ack *nla)
-#endif
 {
 	struct pfeng_netif *netif = netdev_priv(netdev);
 	struct pfeng_hif_chnl *chnl;
@@ -171,11 +167,7 @@ static int __pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coales
 	return ret;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,15,0)
-static int pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec)
-#else
 static int pfeng_set_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec, struct kernel_ethtool_coalesce *kec, struct netlink_ext_ack *nla)
-#endif
 {
 	return __pfeng_set_coalesce(netdev, ec);
 }
