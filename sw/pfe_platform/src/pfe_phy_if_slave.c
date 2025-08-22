@@ -1392,30 +1392,6 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 }
 
 /**
- * @brief		Get handle of internal MAC database
- * @param[in]	iface The interface instance
- * @retval		Database handle.
- */
-pfe_mac_db_t *pfe_phy_if_get_mac_db(const pfe_phy_if_t *iface)
-{
-	pfe_mac_db_t *mac_db;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		mac_db = NULL;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		mac_db = iface->mac_db;
-	}
-
-	return mac_db;
-}
-
-/**
  * @brief		Get MAC address
  * @param[in]	iface The interface instance
  * @param[out]	addr The MAC address will be written here
@@ -1618,36 +1594,6 @@ errno_t pfe_phy_if_get_stats(pfe_phy_if_t *iface, pfe_ct_phy_if_stats_t *stat)
 	}
 
 	return ret;
-}
-
-/**
- * @brief		Return physical interface runtime statistics in text form
- * @details		Function writes formatted text into given buffer.
- * @param[in]	iface 		The physical interface instance
- * @param[in]	buf 		A pointer to the buffer to write to
- * @param[in]	buf_len 	Buffer length
- * @param[in]	verb_level 	Verbosity level
- * @return		Number of bytes written to the buffer
- */
-uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level)
-{
-	uint32_t len = 0U;
-
-	(void)verb_level;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		len = 0U;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "[PhyIF 0x%x]: Unable to read DMEM (not implemented)\n", iface->id);
-	}
-
-	return len;
 }
 
 /**

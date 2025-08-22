@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2024 NXP
+ *  Copyright 2018-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -77,7 +77,6 @@ errno_t pfe_phy_if_allmulti_enable(pfe_phy_if_t *iface);
 errno_t pfe_phy_if_allmulti_disable(pfe_phy_if_t *iface);
 errno_t pfe_phy_if_add_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
 errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, pfe_drv_id_t owner);
-pfe_mac_db_t *pfe_phy_if_get_mac_db(const pfe_phy_if_t *iface);
 errno_t pfe_phy_if_get_mac_addr_first(pfe_phy_if_t *iface, pfe_mac_addr_t addr, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
 errno_t pfe_phy_if_get_mac_addr_next(pfe_phy_if_t *iface, pfe_mac_addr_t addr);
 errno_t pfe_phy_if_flush_mac_addrs(pfe_phy_if_t *iface, pfe_mac_db_crit_t crit, pfe_mac_type_t type, pfe_drv_id_t owner);
@@ -87,10 +86,6 @@ errno_t pfe_phy_if_set_tx_mirror(pfe_phy_if_t *iface, uint32_t sel, const pfe_mi
 pfe_mirror_t *pfe_phy_if_get_tx_mirror(const pfe_phy_if_t *iface, uint32_t sel);
 pfe_mirror_t *pfe_phy_if_get_rx_mirror(const pfe_phy_if_t *iface, uint32_t sel);
 pfe_log_if_t *pfe_phy_if_get_default_log_if(pfe_phy_if_t *iface);
-
-#if !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS)
-uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level);
-#endif /* !defined(PFE_CFG_TARGET_OS_AUTOSAR) || defined(PFE_CFG_TEXT_STATS) */
 
 uint32_t pfe_phy_if_get_spd(const pfe_phy_if_t *iface);
 errno_t pfe_phy_if_set_spd(pfe_phy_if_t *iface, uint32_t spd_addr);
@@ -105,10 +100,5 @@ errno_t pfe_phy_if_set_rx_flow_control(pfe_phy_if_t *iface, bool_t rx_ena);
 uint32_t pfe_phy_if_get_stat_value(pfe_phy_if_t *iface, uint32_t stat_id);
 errno_t pfe_phy_if_set_mgmt_interface(pfe_phy_if_t *iface, pfe_ct_phy_if_id_t mgmt_interface);
 pfe_ct_phy_if_id_t pfe_phy_if_get_mgmt_interface(pfe_phy_if_t *iface);
-
-#ifdef PFE_CFG_TARGET_OS_AUTOSAR
-#define ETH_43_PFE_STOP_SEC_CODE
-#include "Eth_43_PFE_MemMap.h"
-#endif /* PFE_CFG_TARGET_OS_AUTOSAR */
 
 #endif /* PUBLIC_PFE_PHY_IF_H_ */
