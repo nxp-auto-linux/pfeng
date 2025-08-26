@@ -346,6 +346,9 @@ struct pfeng_priv {
 	const char			*fw_util_name;
 	struct dentry			*dbgfs;
 	u32				msg_verbosity;
+#ifdef PFE_CFG_PFE_SLAVE
+	bool				disable_slave_rpc;
+#endif /* PFE_CFG_PFE_SLAVE */
 };
 
 static inline bool pfeng_netif_cfg_is_aux(struct pfeng_netif_cfg *cfg)

@@ -92,6 +92,10 @@ MODULE_PARM_DESC(idex_resend_delays, "\t IDEX transport retransmission delays in
 		__stringify(PFE_CFG_IDEX_FIRST3_RESEND_TIME) ","
 		__stringify(PFE_CFG_IDEX_RESEND_TIME) ")");
 
+static bool disable_slave_rpc = false;
+module_param(disable_slave_rpc, bool, 0644);
+MODULE_PARM_DESC(disable_slave_rpc, "\t Disable all RPC messages except FCI and MDIO proxy (default: false)");
+
 uint32_t get_pfeng_pfe_cfg_master_if(void)
 {
 	/* Needed for compilation */
@@ -129,6 +133,9 @@ static struct pfeng_priv *pfeng_drv_alloc(struct platform_device *pdev)
 	priv->idex_resend_count = idex_resend_count;
 	priv->idex_resend_delays[0] = idex_resend_delays[0];
 	priv->idex_resend_delays[1] = idex_resend_delays[1];
+
+	/* Disable all RPC except FCI and MDIO proxy requests */
+	priv->disable_slave_rpc = disable_slave_rpc;
 
 	priv->ihc_wq = create_singlethread_workqueue("pfeng-ihc-slave");
 	if (!priv->ihc_wq) {
