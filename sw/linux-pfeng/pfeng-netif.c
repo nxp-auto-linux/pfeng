@@ -122,7 +122,10 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 			HM_MSG_NETDEV_ERR(netif->netdev, "Invalid HIF%u (not running)\n", i);
 			return -EINVAL;
 		}
-
+#ifdef PFE_CFG_PFE_SLAVE
+		if (netif->priv->disable_slave_rpc)
+			continue;
+#endif /* PFE_CFG_PFE_SLAVE */
 		if (pfeng_netif_is_aux(netif)) {
 			/* AUX mode requires HIF enabled */
 			if (!pfe_phy_if_is_enabled(chnl->phyif_hif)) {
@@ -152,18 +155,28 @@ static int pfeng_netif_logif_open(struct net_device *netdev)
 		netif_carrier_on(netdev);
 #endif /* PFE_CFG_PFE_MASTER */
 
-	/* Enable EMAC */
-	emac = pfeng_netif_get_emac(netif);
-	if (emac) {
-		ret = pfe_phy_if_enable(emac->phyif_emac);
-		if (ret) {
-			HM_MSG_NETDEV_ERR(netdev, "Cannot enable EMAC: %d\n", ret);
-			goto err_mac_ena;
+#ifdef PFE_CFG_PFE_SLAVE
+	if (!netif->priv->disable_slave_rpc)
+#endif /* PFE_CFG_PFE_SLAVE */
+	{
+		/* Enable EMAC */
+		emac = pfeng_netif_get_emac(netif);
+		if (emac) {
+			ret = pfe_phy_if_enable(emac->phyif_emac);
+			if (ret) {
+				HM_MSG_NETDEV_ERR(netdev, "Cannot enable EMAC: %d\n", ret);
+				goto err_mac_ena;
+			}
 		}
 	}
 
-	if (!pfeng_netif_is_aux(netif))
-		pfeng_uc_list_sync(netdev);
+#ifdef PFE_CFG_PFE_SLAVE
+	if (!netif->priv->disable_slave_rpc)
+#endif /* PFE_CFG_PFE_SLAVE */
+	{
+		if (!pfeng_netif_is_aux(netif))
+			pfeng_uc_list_sync(netdev);
+	}
 
 #ifdef PFE_CFG_PFE_SLAVE
 #ifdef PFE_CFG_PFE_SLAVE_PHY
@@ -553,13 +566,18 @@ static int pfeng_netif_logif_stop(struct net_device *netdev)
 		netif->tx_queue_status = 0;
 	}
 
-	if (phyif_emac) {
-		pfe_phy_if_flush_mac_addrs(phyif_emac, MAC_DB_CRIT_BY_OWNER_AND_TYPE,
-					   PFE_TYPE_MC, netif->priv->local_drv_id);
+#ifdef PFE_CFG_PFE_SLAVE
+	if (!netif->priv->disable_slave_rpc)
+#endif /* PFE_CFG_PFE_SLAVE */
+		{
+			if (phyif_emac) {
+				pfe_phy_if_flush_mac_addrs(phyif_emac, MAC_DB_CRIT_BY_OWNER_AND_TYPE,
+							   PFE_TYPE_MC, netif->priv->local_drv_id);
 
-		pfe_phy_if_flush_mac_addrs(phyif_emac, MAC_DB_CRIT_BY_OWNER_AND_TYPE,
-					   PFE_TYPE_UC, netif->priv->local_drv_id);
-	}
+				pfe_phy_if_flush_mac_addrs(phyif_emac, MAC_DB_CRIT_BY_OWNER_AND_TYPE,
+							   PFE_TYPE_UC, netif->priv->local_drv_id);
+			}
+		}
 
 #ifdef PFE_CFG_PFE_MASTER
 	/* Stop PHY */
@@ -847,6 +865,10 @@ static int pfeng_netif_set_mac_address(struct net_device *netdev, const u8 *mac_
 
 	HM_MSG_NETDEV_INFO(netdev, "setting MAC addr: %pM\n", netdev->dev_addr);
 
+#ifdef PFE_CFG_PFE_SLAVE
+	if (netif->priv->disable_slave_rpc)
+		return 0;
+#endif /* PFE_CFG_PFE_SLAVE */
 	return pfeng_uc_list_sync(netdev);
 }
 
@@ -1027,8 +1049,12 @@ static void pfeng_netif_logif_remove(struct pfeng_netif *netif)
 
 		if (!(netif->cfg->hifmap & (1 << i)))
 			continue;
-
-		pfe_phy_if_disable(chnl->phyif_hif);
+#ifdef PFE_CFG_PFE_SLAVE
+		if (!netif->priv->disable_slave_rpc)
+#endif /* PFE_CFG_PFE_SLAVE */
+		{
+			pfe_phy_if_disable(chnl->phyif_hif);
+		}
 	}
 
 	HM_MSG_NETDEV_INFO(netif->netdev, "unregisted\n");
@@ -1129,6 +1155,10 @@ static int pfeng_netif_control_platform_ifs(struct pfeng_netif *netif)
 #endif
 		}
 
+#ifdef PFE_CFG_PFE_SLAVE
+		if (netif->priv->disable_slave_rpc)
+			continue;
+#endif /* PFE_CFG_PFE_SLAVE */
 		ret = pfe_phy_if_enable(chnl->phyif_hif);
 		if (EOK != ret) {
 			HM_MSG_NETDEV_ERR(netdev, "Can't enable HIF%u\n", i);
@@ -1590,8 +1620,14 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 		if (!(netif->cfg->hifmap & (1 << i)))
 			continue;
 
-		if (chnl->phyif_hif)
-			pfe_phy_if_disable(chnl->phyif_hif);
+		if (chnl->phyif_hif) {
+#ifdef PFE_CFG_PFE_SLAVE
+			if (!netif->priv->disable_slave_rpc)
+#endif /* PFE_CFG_PFE_SLAVE */
+			{
+				pfe_phy_if_disable(chnl->phyif_hif);
+			}
+		}
 #ifdef PFE_CFG_PFE_MASTER
 		chnl->phyif_hif = NULL;
 #endif /* PFE_CFG_PFE_MASTER */
@@ -1699,6 +1735,10 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 		if (chnl->status != PFENG_HIF_STATUS_RUNNING)
 			HM_MSG_NETDEV_WARN(netif->netdev, "HIF%u in invalid state: not running\n", i);
 
+#ifdef PFE_CFG_PFE_SLAVE
+		if (netif->priv->disable_slave_rpc)
+			continue;
+#endif /* PFE_CFG_PFE_SLAVE */
 		if (pfeng_netif_is_aux(netif)) {
 			/* PFENG_LOGIF_MODE_TX_CLASS mode requires logIf config */
 
@@ -1713,9 +1753,14 @@ static int pfeng_netif_logif_resume(struct pfeng_netif *netif)
 
 	/* Enable EMAC */
 	if (emac) {
-		ret = pfe_phy_if_enable(emac->phyif_emac);
-		if (ret)
-			HM_MSG_NETDEV_WARN(netdev, "Cannot enable EMAC: %d\n", ret);
+#ifdef PFE_CFG_PFE_SLAVE
+		if (!netif->priv->disable_slave_rpc)
+#endif /* PFE_CFG_PFE_SLAVE */
+		{
+			ret = pfe_phy_if_enable(emac->phyif_emac);
+			if (ret)
+				HM_MSG_NETDEV_WARN(netdev, "Cannot enable EMAC: %d\n", ret);
+		}
 
 #ifdef PFE_CFG_PFE_MASTER
 		/* Restore RX mode: promisc & UC/MC addresses */
