@@ -2,7 +2,7 @@
  *
  *	Copyright (c) 2019 Imagination Technologies Limited
  *	Copyright (c) 2020-2021 Imagination Technologies Limited
- *	Copyright 2018-2024 NXP
+ *	Copyright 2018-2025 NXP
  *
  *	SPDX-License-Identifier: GPL-2.0
  *
@@ -69,8 +69,6 @@ static pfe_ct_if_flags_t pfe_phy_if_get_flag_nolock(const pfe_phy_if_t *iface, p
 static errno_t pfe_phy_if_enable_hw_block(const pfe_phy_if_t *iface);
 static void pfe_phy_if_update_op_mode_nolock(pfe_phy_if_t *iface, pfe_ct_if_op_mode_t mode);
 
-static uint32_t pfe_phy_if_stat_to_str(const pfe_ct_phy_if_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level);
-
 /**
  * @brief		Write interface structure to classifier memory skipping interface statistics
  * @param[in]	iface The interface instance
@@ -123,37 +121,6 @@ static errno_t pfe_phy_if_write_to_class(const pfe_phy_if_t *iface, const pfe_ct
 		ret = pfe_class_write_dmem(iface->class, -1, iface->dmem_base, (const  void *)class_if, sizeof(pfe_ct_phy_if_t));
 	}
 	return ret;
-}
-
-/**
- * @brief		Converts statistics of a physical interface or classification algorithm into a text form
- * @param[in]	stat		Statistics to convert
- * @param[out]	buf			Buffer where to write the text
- * @param[in]	buf_len		Buffer length
- * @param[in]	verb_level	Verbosity level
- * @return		Number of bytes written into the output buffer
- */
-static uint32_t pfe_phy_if_stat_to_str(const pfe_ct_phy_if_stats_t *stat, char *buf, uint32_t buf_len, uint8_t verb_level)
-{
-	uint32_t len = 0U;
-
-	(void)verb_level;
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == stat) || (NULL == buf)))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		len = 0U;
-	}
-	else
-#endif
-	{
-		len += oal_util_snprintf(buf + len, buf_len - len, "Ingress frames:	  %u\n", oal_ntohl(stat->ingress));
-		len += oal_util_snprintf(buf + len, buf_len - len, "Egress frames:	  %u\n", oal_ntohl(stat->egress));
-		len += oal_util_snprintf(buf + len, buf_len - len, "Malformed frames: %u\n", oal_ntohl(stat->malformed));
-		len += oal_util_snprintf(buf + len, buf_len - len, "Discarded frames: %u\n", oal_ntohl(stat->discarded));
-	}
-
-	return len;
 }
 
 /**
@@ -2676,30 +2643,6 @@ errno_t pfe_phy_if_del_mac_addr(pfe_phy_if_t *iface, const pfe_mac_addr_t addr, 
 }
 
 /**
- * @brief		Get handle of internal MAC database
- * @param[in]	iface The interface instance
- * @retval		Database handle.
- */
-pfe_mac_db_t *pfe_phy_if_get_mac_db(const pfe_phy_if_t *iface)
-{
-	pfe_mac_db_t *ptr;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		ptr = NULL;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		ptr = iface->mac_db;
-	}
-
-	return ptr;
-}
-
-/**
  * @brief		Reinit MAC address query and get the first MAC address from mac addr db.
  * @param[in]	iface The interface instance.
  * @param[out]	addr The MAC address will be written here.
@@ -3329,55 +3272,6 @@ __attribute__((pure)) const char_t *pfe_phy_if_get_name(const pfe_phy_if_t *ifac
 	}
 
 	return str;
-}
-
-/**
- * @brief		Return physical interface runtime statistics in text form
- * @details		Function writes formatted text into given buffer.
- * @param[in]	iface		The physical interface instance
- * @param[in]	buf			A pointer to the buffer to write to
- * @param[in]	buf_len		Buffer length
- * @param[in]	verb_level	Verbosity level
- * @return		Number of bytes written to the buffer
- */
-uint32_t pfe_phy_if_get_text_statistics(const pfe_phy_if_t *iface, char_t *buf, uint32_t buf_len, uint8_t verb_level)
-{
-	uint32_t len = 0U;
-	pfe_ct_phy_if_t phy_if_class = {0U};
-	uint32_t i = 0U;
-
-#if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely(NULL == iface))
-	{
-		NXP_LOG_ERROR("NULL argument received\n");
-		len = 0U;
-	}
-	else
-#endif /* PFE_CFG_NULL_ARG_CHECK */
-	{
-		/* Repeat read for all PEs (just because of statistics) */
-		while(i < pfe_class_get_num_of_pes(iface->class))
-		{
-			/*
-				Read current interface configuration from classifier. Since all class PEs are running the
-				same code, also the data are the same (except statistics counters...).
-				Returned data will be in __NETWORK__ endian format.
-			*/
-			if (EOK != pfe_class_read_dmem(iface->class, i, &phy_if_class, iface->dmem_base, sizeof(pfe_ct_phy_if_t)))
-			{
-				len += oal_util_snprintf(buf + len, buf_len - len, "[PhyIF 0x%x]: Unable to read DMEM\n", iface->id);
-			}
-			else
-			{
-				len += oal_util_snprintf(buf + len, buf_len - len, "[PhyIF 0x%x '%s']\n", iface->id, pfe_phy_if_get_name(iface));
-				len += oal_util_snprintf(buf + len, buf_len - len, "LogIfBase (DMEM) : 0x%x\n", oal_ntohl(phy_if_class.log_ifs));
-				len += oal_util_snprintf(buf + len, buf_len - len, "DefLogIf  (DMEM) : 0x%x\n", oal_ntohl(phy_if_class.def_log_if));
-				(void)pfe_phy_if_stat_to_str(&phy_if_class.phy_stats, buf + len, buf_len - len, verb_level);
-			}
-			++i;
-		}
-	}
-	return len;
 }
 
 /**
