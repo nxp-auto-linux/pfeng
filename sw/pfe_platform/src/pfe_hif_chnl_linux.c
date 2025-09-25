@@ -101,6 +101,9 @@
 
 #define BUFFERS_CACHED TRUE
 
+#define RX_DEQUEUE_RETRY_COUNT	1000000U
+#define RX_DEQUEUE_RETRY_TIME	1U
+
 #define TX_CONF_RETRY_COUNT	1000U
 #define TX_CONF_RETRY_TIME	1U
 
@@ -1748,10 +1751,16 @@ static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_rx_to_head(pfe_hi
 		pfe_hif_chnl_free_dummy_frame(frame);
 
 		/* Do plain RX */
-		ret = pfe_hif_ring_dequeue_plain(chnl->rx_ring, &lifm);
-		if (EOK != ret)
+		jj = RX_DEQUEUE_RETRY_COUNT;
+		while (EOK != pfe_hif_ring_dequeue_plain(chnl->rx_ring, &lifm))
 		{
+			oal_time_usleep(RX_DEQUEUE_RETRY_TIME);
+			if (jj--)
+			{
+				continue;
+			}
 			NXP_LOG_ERROR("Can't get RX buffer dequeued\n");
+			ret = ETIMEDOUT;
 			goto end;
 		}
 
