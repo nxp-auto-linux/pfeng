@@ -319,8 +319,10 @@ static int pfeng_drv_deferred_probe(void *arg)
 
 		while(1) {
 
-			if(kthread_should_stop())
-				goto err_drv;
+			if(kthread_should_stop()) {
+				priv->deferred_probe_skipped = true;
+				goto ok_drv;
+			}
 
 			if (pfeng_gpr_ip_ready_get(dev, &ip_ready))
 				HM_MSG_DEV_ERR(dev, "Failed to get IP ready state\n");
@@ -390,6 +392,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 		goto err_drv;
 	}
 
+ok_drv:
 	dev_pm_set_driver_flags(dev, DPM_FLAG_NO_DIRECT_COMPLETE);
 
 	pm_runtime_put_noidle(dev);
@@ -530,6 +533,9 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	if (priv->deferred_probe_task)
 		kthread_stop(priv->deferred_probe_task);
 
+	if (priv->deferred_probe_skipped)
+		goto out;
+
 	priv->in_suspend = true;
 
 	/* Inform IDEX that driver is suspending */
@@ -573,6 +579,7 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 		}
 	}
 
+out:
 	pinctrl_pm_select_sleep_state(dev);
 
 	/* Invalidate clock reference */
@@ -663,13 +670,26 @@ static int pfeng_drv_deferred_resume(void *arg)
 	if (ret)
 		goto err_drv;
 
-	/* MDIO buses */
-	ret = pfeng_mdio_resume(priv);
-	if (ret)
-		goto err_drv;
+	if (priv->deferred_probe_skipped) {
+		/* Create MDIO buses */
+		pfeng_mdio_register(priv);
 
-	/* Create net interfaces */
-	ret = pfeng_netif_resume(priv);
+		/* Create net interfaces */
+		ret = pfeng_netif_create(priv);
+		if (ret)
+			pfeng_mdio_unregister(priv);
+		else
+			priv->deferred_probe_skipped = false;
+	} else {
+		/* MDIO buses */
+		ret = pfeng_mdio_resume(priv);
+		if (ret)
+			goto err_drv;
+
+		/* Create net interfaces */
+		ret = pfeng_netif_resume(priv);
+	}
+
 	if (ret)
 		goto err_drv;
 

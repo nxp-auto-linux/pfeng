@@ -348,6 +348,7 @@ struct pfeng_priv {
 	u32				msg_verbosity;
 #ifdef PFE_CFG_PFE_SLAVE
 	bool				disable_slave_rpc;
+	bool				deferred_probe_skipped;
 #endif /* PFE_CFG_PFE_SLAVE */
 };
 
