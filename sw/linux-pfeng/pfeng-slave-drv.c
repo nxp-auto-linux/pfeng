@@ -536,6 +536,10 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	if (priv->deferred_probe_skipped)
 		goto out;
 
+	/* Make sure second stages of netif inits are finished */
+	if (priv->ihc_slave_wq)
+		flush_workqueue(priv->ihc_slave_wq);
+
 	priv->in_suspend = true;
 
 	/* Inform IDEX that driver is suspending */
