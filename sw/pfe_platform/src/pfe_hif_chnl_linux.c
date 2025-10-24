@@ -101,6 +101,12 @@
 
 #define BUFFERS_CACHED TRUE
 
+#define RX_DEQUEUE_RETRY_COUNT	1000000U
+#define RX_DEQUEUE_RETRY_TIME	1U
+
+#define TX_CONF_RETRY_COUNT	1000U
+#define TX_CONF_RETRY_TIME	1U
+
 typedef struct
 {
 	pfe_hif_chnl_cbk_t cbk;
@@ -1514,7 +1520,7 @@ end:
 
 static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_find_rx(pfe_hif_chnl_t * chnl)
 {
-	int ii, ring_len, rx_idx = -1;
+	int ii, jj, ring_len, rx_idx = -1;
 	void *buf_va = NULL, *buf_pa, *frame;
 	errno_t ret = ENOENT;
 
@@ -1630,9 +1636,15 @@ static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_find_rx(pfe_hif_c
 		oal_time_usleep(500U);
 
 		/* Do TX confirmations */
-		ret = pfe_hif_chnl_get_tx_conf(chnl);
-		if (EOK != ret)
+		jj = TX_CONF_RETRY_COUNT;
+		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
+			oal_time_usleep(TX_CONF_RETRY_TIME);
+			if (jj--)
+			{
+				continue;
+			}
+			ret = ETIMEDOUT;
 			NXP_LOG_ERROR("Can't get TX confirmation\n");
 			goto end;
 		}
@@ -1667,7 +1679,7 @@ end:
 
 static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_rx_to_head(pfe_hif_chnl_t * chnl)
 {
-	int ii, ring_len;
+	int ii, jj, ring_len;
 	void *buf_va = NULL, *buf_pa, *frame;
 	bool_t lifm;
 	errno_t ret = EOK;
@@ -1724,19 +1736,31 @@ static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_rx_to_head(pfe_hi
 		oal_time_usleep(500U);
 
 		/* Do TX confirmations */
-		ret = pfe_hif_chnl_get_tx_conf(chnl);
-		if (EOK != ret)
+		jj = TX_CONF_RETRY_COUNT;
+		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
+			oal_time_usleep(TX_CONF_RETRY_TIME);
+			if (jj--)
+			{
+				continue;
+			}
 			NXP_LOG_ERROR("Can't provide dummy RX buffer\n");
+			ret = ETIMEDOUT;
 			goto end;
 		}
 		pfe_hif_chnl_free_dummy_frame(frame);
 
 		/* Do plain RX */
-		ret = pfe_hif_ring_dequeue_plain(chnl->rx_ring, &lifm);
-		if (EOK != ret)
+		jj = RX_DEQUEUE_RETRY_COUNT;
+		while (EOK != pfe_hif_ring_dequeue_plain(chnl->rx_ring, &lifm))
 		{
+			oal_time_usleep(RX_DEQUEUE_RETRY_TIME);
+			if (jj--)
+			{
+				continue;
+			}
 			NXP_LOG_ERROR("Can't get RX buffer dequeued\n");
+			ret = ETIMEDOUT;
 			goto end;
 		}
 
@@ -1765,7 +1789,7 @@ end:
 
 static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_tx_to_head(pfe_hif_chnl_t * chnl)
 {
-	int ii, ring_len;
+	int ii, jj, ring_len;
 	void *frame;
 	errno_t ret = EOK;
 
@@ -1786,10 +1810,16 @@ static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_tx_to_head(pfe_hi
 		oal_time_usleep(500U);
 
 		/* Do TX confirmations */
-		ret = pfe_hif_chnl_get_tx_conf(chnl);
-		if (EOK != ret)
+		jj = TX_CONF_RETRY_COUNT;
+		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
+			oal_time_usleep(TX_CONF_RETRY_TIME);
+			if (jj--)
+			{
+				continue;
+			}
 			NXP_LOG_ERROR("Can't read TX confirmation\n");
+			ret = ETIMEDOUT;
 			goto end;
 		}
 		pfe_hif_chnl_free_dummy_frame(frame);
@@ -2078,7 +2108,6 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 {
 	void *rx_buf_va = NULL, *rx_buf_pa, *buf_pa, *frame;
 	uint32_t len, ii, jj;
-	const uint32_t tx_tout = 20U;
 	bool_t lifm;
 	errno_t ret = EOK;
 
@@ -2128,10 +2157,10 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 		oal_time_usleep(500U);
 
 		/*	Do TX confirmations */
-		jj = tx_tout;
+		jj = TX_CONF_RETRY_COUNT;
 		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
-			oal_time_usleep(100U);
+			oal_time_usleep(TX_CONF_RETRY_TIME);
 			if (jj--)
 			{
 				continue;
@@ -2183,10 +2212,10 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 		oal_time_usleep(500U);
 
 		/*	Do TX confirmations */
-		jj = tx_tout;
+		jj = TX_CONF_RETRY_COUNT;
 		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
-			oal_time_usleep(100U);
+			oal_time_usleep(TX_CONF_RETRY_TIME);
 			if (jj--)
 			{
 				continue;
@@ -2232,10 +2261,10 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 		oal_time_usleep(500U);
 
 		/*	Do TX confirmations */
-		jj = tx_tout;
+		jj = TX_CONF_RETRY_COUNT;
 		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
-			oal_time_usleep(100U);
+			oal_time_usleep(TX_CONF_RETRY_TIME);
 			if (jj--)
 			{
 				continue;
