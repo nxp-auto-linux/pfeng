@@ -212,6 +212,48 @@ void pfe_phy_if_destroy(pfe_phy_if_t *iface)
 }
 
 /**
+ * @brief		Release interface instance resources
+ * @param[in]	iface The interface instance
+ */
+void pfe_phy_if_release(pfe_phy_if_t *iface)
+{
+	errno_t ret;
+
+	if (NULL != iface)
+	{
+		if (EOK != oal_mutex_lock(&iface->lock))
+		{
+			NXP_LOG_ERROR("mutex lock failed\n");
+		}
+
+		/* Destroy local MAC database */
+		ret = pfe_mac_db_destroy(iface->mac_db);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("Unable to destroy MAC database: %d\n", ret);
+		}
+
+		if (EOK != oal_mutex_unlock(&iface->lock))
+		{
+			NXP_LOG_ERROR("mutex unlock failed\n");
+		}
+
+		if (NULL != iface->name)
+		{
+			oal_mm_free(iface->name);
+			iface->name = NULL;
+		}
+
+		if (EOK != oal_mutex_destroy(&iface->lock))
+		{
+			NXP_LOG_ERROR("Could not destroy mutex\n");
+		}
+
+		oal_mm_free(iface);
+	}
+}
+
+/**
  * @brief		Check if interface is enabled
  * @param[in]	iface The interface instance
  * @retval		TRUE if enabled
