@@ -557,6 +557,8 @@ errno_t pfe_platform_remove(void)
 
 	pfe_platform_destroy_hif(&pfe);
 
+	(void)pfe_hm_destroy();
+
 	if (0ULL != pfe.cbus_baseaddr)
 	{
 		ret = oal_mm_dev_unmap((void *)pfe.cbus_baseaddr, PFE_CFG_CBUS_LENGTH/* <- FIXME, should use value used on init instead */);
