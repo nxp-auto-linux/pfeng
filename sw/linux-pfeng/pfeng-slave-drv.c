@@ -267,14 +267,62 @@ static int pfeng_drv_deferred_probe(void *arg)
 		goto err_drv;
 	}
 
+	/* PFE_SYS clock not used.
+	 * We will use the constant PFE_CLK_SYS_RATE (600 MHz) as described
+	 * in Programming consideraions in S32G RM.
+	 */
+	priv->clk_sys = NULL;
+
+	/* HIF IHC channel number */
+	if (master_ihc_chnl < (HIF_CFG_MAX_CHANNELS + 1))
+		priv->ihc_master_chnl = master_ihc_chnl;
+	if (priv->ihc_master_chnl >= (HIF_CFG_MAX_CHANNELS + 1)) {
+		HM_MSG_DEV_ERR(dev, "Slave mode: Master channel id is missing\n");
+		ret = -EINVAL;
+		goto err_drv;
+	}
+
+	/* PHC for hif2hif */
+	if (hif_phc_emac < PFENG_PFE_EMACS)
+		priv->hif_phc_emac_id = hif_phc_emac;
+
+	/* disable LLTX for Slave */
+	priv->pfe_cfg->lltx_res_tmu_q_id = PFENG_TMU_LLTX_DISABLE_MODE_Q_ID;
+
+	/* Slave requires deferred worker */
+	priv->ihc_slave_wq = alloc_ordered_workqueue("pfeng-slave-init", 0);
+	if (!priv->ihc_slave_wq) {
+		HM_MSG_DEV_ERR(dev, "Initialize of Slave WQ failed\n");
+		ret = -ENOMEM;
+		goto err_drv;
+	}
+
+	/* PFE platform layer init */
+	ret = oal_mm_init(dev);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "OAL memory managment init failed\n");
+			goto err_drv;
+	}
+
+	pm_runtime_get_noresume(dev);
+	ret = pm_runtime_set_active(dev);
+	if (ret) {
+		HM_MSG_DEV_ERR(dev, "Failed to set PM device status\n");
+		goto err_drv;
+	}
+
+	pm_runtime_enable(dev);
+
 	/* Detect controller state */
 	if (priv->deferred_probe_task) {
 		HM_MSG_DEV_INFO(dev, "Wait for PFE controller UP ...\n");
 
 		while(1) {
 
-			if(kthread_should_stop())
-				goto err_drv;
+			if(kthread_should_stop()) {
+				priv->deferred_probe_skipped = true;
+				goto ok_drv;
+			}
 
 			if (pfeng_gpr_ip_ready_get(dev, &ip_ready))
 				HM_MSG_DEV_ERR(dev, "Failed to get IP ready state\n");
@@ -296,53 +344,12 @@ static int pfeng_drv_deferred_probe(void *arg)
 	} else
 		HM_MSG_DEV_INFO(dev, "PFE controller state detection skipped\n");
 
-	/* PFE_SYS clock not used.
-	 * We will use the constant PFE_CLK_SYS_RATE (600 MHz) as described
-	 * in Programming consideraions in S32G RM.
-	 */
-	priv->clk_sys = NULL;
-
-	/* HIF IHC channel number */
-	if (master_ihc_chnl < (HIF_CFG_MAX_CHANNELS + 1))
-		priv->ihc_master_chnl = master_ihc_chnl;
-	if (priv->ihc_master_chnl >= (HIF_CFG_MAX_CHANNELS + 1)) {
-		HM_MSG_DEV_ERR(dev, "Slave mode: Master channel id is missing\n");
-		ret = -EINVAL;
-		goto err_drv;
-	}
-
-	/* Slave requires deferred worker */
-	priv->ihc_slave_wq = alloc_ordered_workqueue("pfeng-slave-init", 0);
-	if (!priv->ihc_slave_wq) {
-		HM_MSG_DEV_ERR(dev, "Initialize of Slave WQ failed\n");
-		ret = -ENOMEM;
-		goto err_drv;
-	}
-
 	/* Set HIF channels coherency */
 	if (of_dma_is_coherent(dev->of_node) && manage_port_coherency) {
 		ret = pfeng_gpr_set_port_coherency(priv);
 		if (ret)
 			goto err_drv;
 	}
-
-	pm_runtime_get_noresume(dev);
-	ret = pm_runtime_set_active(dev);
-	if (ret) {
-		HM_MSG_DEV_ERR(dev, "Failed to set PM device status\n");
-		goto err_drv;
-	}
-
-	pm_runtime_enable(dev);
-
-	/* PFE platform layer init */
-	ret = oal_mm_init(dev);
-	if (ret) {
-		HM_MSG_DEV_ERR(dev, "OAL memory managment init failed\n");
-		goto err_drv;
-	}
-
-	priv->pfe_cfg->lltx_res_tmu_q_id = PFENG_TMU_LLTX_DISABLE_MODE_Q_ID; /* disable LLTX for Slave */
 
 	/* Start PFE Platform */
 	ret = pfe_platform_init(priv->pfe_cfg);
@@ -370,10 +377,6 @@ static int pfeng_drv_deferred_probe(void *arg)
 	} else
 		priv->clk_ptp_reference = clk_get_rate(priv->clk_ptp);
 
-	/* PHC for hif2hif */
-	if (hif_phc_emac < PFENG_PFE_EMACS)
-		priv->hif_phc_emac_id = hif_phc_emac;
-
 	/* Create HIFs */
 	ret = pfeng_hif_create(priv);
 	if (ret)
@@ -389,6 +392,7 @@ static int pfeng_drv_deferred_probe(void *arg)
 		goto err_drv;
 	}
 
+ok_drv:
 	dev_pm_set_driver_flags(dev, DPM_FLAG_NO_DIRECT_COMPLETE);
 
 	pm_runtime_put_noidle(dev);
@@ -529,6 +533,13 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 	if (priv->deferred_probe_task)
 		kthread_stop(priv->deferred_probe_task);
 
+	if (priv->deferred_probe_skipped)
+		goto out;
+
+	/* Make sure second stages of netif inits are finished */
+	if (priv->ihc_slave_wq)
+		flush_workqueue(priv->ihc_slave_wq);
+
 	priv->in_suspend = true;
 
 	/* Inform IDEX that driver is suspending */
@@ -572,6 +583,7 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 		}
 	}
 
+out:
 	pinctrl_pm_select_sleep_state(dev);
 
 	/* Invalidate clock reference */
@@ -662,13 +674,26 @@ static int pfeng_drv_deferred_resume(void *arg)
 	if (ret)
 		goto err_drv;
 
-	/* MDIO buses */
-	ret = pfeng_mdio_resume(priv);
-	if (ret)
-		goto err_drv;
+	if (priv->deferred_probe_skipped) {
+		/* Create MDIO buses */
+		pfeng_mdio_register(priv);
 
-	/* Create net interfaces */
-	ret = pfeng_netif_resume(priv);
+		/* Create net interfaces */
+		ret = pfeng_netif_create(priv);
+		if (ret)
+			pfeng_mdio_unregister(priv);
+		else
+			priv->deferred_probe_skipped = false;
+	} else {
+		/* MDIO buses */
+		ret = pfeng_mdio_resume(priv);
+		if (ret)
+			goto err_drv;
+
+		/* Create net interfaces */
+		ret = pfeng_netif_resume(priv);
+	}
+
 	if (ret)
 		goto err_drv;
 
