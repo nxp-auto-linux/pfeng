@@ -1568,9 +1568,7 @@ int pfeng_netif_create(struct pfeng_priv *priv)
 
 static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 {
-#ifdef PFE_CFG_PFE_MASTER
 	struct pfeng_emac *emac = pfeng_netif_get_emac(netif);
-#endif /* PFE_CFG_PFE_MASTER */
 	struct pfeng_hif_chnl *chnl;
 	int i;
 
@@ -1627,10 +1625,9 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 			{
 				pfe_phy_if_disable(chnl->phyif_hif);
 			}
+
+			chnl->phyif_hif = NULL;
 		}
-#ifdef PFE_CFG_PFE_MASTER
-		chnl->phyif_hif = NULL;
-#endif /* PFE_CFG_PFE_MASTER */
 	}
 
 	if (!pfeng_netif_is_aux(netif)) {
@@ -1640,11 +1637,9 @@ static int pfeng_netif_logif_suspend(struct pfeng_netif *netif)
 		pfeng_hwts_release(netif);
 	}
 
-#ifdef PFE_CFG_PFE_MASTER
 	/* Reset linked EMAC */
 	if (emac)
 		emac->phyif_emac = NULL;
-#endif /* PFE_CFG_PFE_MASTER */
 
 	return 0;
 }

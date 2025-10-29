@@ -2,7 +2,7 @@
  *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2024 NXP
+ *  Copyright 2018-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -510,7 +510,7 @@ static void pfe_platform_destroy_ifdb(pfe_platform_t *platform)
 				NXP_LOG_ERROR("Could not remove phy_if DB entry\n");
 			}
 
-			/* Don't destroy PHY_IF, it's too late for IHC */
+			pfe_phy_if_release(phy_if);
 			phy_if = NULL;
 			entry = NULL;
 
