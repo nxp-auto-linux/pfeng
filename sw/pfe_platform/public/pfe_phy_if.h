@@ -58,6 +58,9 @@ errno_t pfe_phy_if_bind_util(pfe_phy_if_t *iface);
 pfe_ct_phy_if_id_t pfe_phy_if_get_id(const pfe_phy_if_t *iface) __attribute__((pure));
 const char_t *pfe_phy_if_get_name(const pfe_phy_if_t *iface) __attribute__((pure));
 void pfe_phy_if_destroy(pfe_phy_if_t *iface);
+#ifdef PFE_CFG_PFE_SLAVE
+void pfe_phy_if_release(pfe_phy_if_t *iface);
+#endif /* PFE_CFG_PFE_SLAVE */
 pfe_class_t *pfe_phy_if_get_class(const pfe_phy_if_t *iface) __attribute__((pure));
 errno_t pfe_phy_if_set_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t block_state);
 errno_t pfe_phy_if_get_block_state(pfe_phy_if_t *iface, pfe_ct_block_state_t *block_state);
