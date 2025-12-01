@@ -307,7 +307,7 @@ static inline uint8_t fp_l2br_vlan_table_get_hash(uint16_t vlan_id)
 static void pfe_vlan_write_to_class(const pfe_l2br_t *bridge, uint32_t pos, const l2br_vlan_hash_entry_t *class_entry)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class_entry) || (NULL == bridge) || (0U == pos)))
+	if (unlikely((NULL == class_entry) || (NULL == bridge)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 	}
@@ -331,7 +331,7 @@ static void pfe_vlan_write_to_class(const pfe_l2br_t *bridge, uint32_t pos, cons
 static void pfe_vlan_read_from_class(const pfe_l2br_t *bridge, uint32_t pos, l2br_vlan_hash_entry_t *class_entry)
 {
 #if defined(PFE_CFG_NULL_ARG_CHECK)
-	if (unlikely((NULL == class_entry) || (NULL == bridge) || (0U == pos)))
+	if (unlikely((NULL == class_entry) || (NULL == bridge)))
 	{
 		NXP_LOG_ERROR("NULL argument received\n");
 	}
