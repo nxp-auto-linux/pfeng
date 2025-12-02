@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2023 NXP
+ *  Copyright 2018-2023,2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -231,6 +231,7 @@ errno_t oal_irq_mask(oal_irq_t *irq)
 errno_t oal_irq_del_handler(oal_irq_t *irq, oal_irq_isr_handle_t handle)
 {
 	errno_t ret;
+	unsigned long flags;
 	oal_irq_list_entry_t *entry = NULL;
 	LLIST_t *item, *aux;
 
@@ -244,7 +245,7 @@ errno_t oal_irq_del_handler(oal_irq_t *irq, oal_irq_isr_handle_t handle)
 
 	/*	Search the handle */
 	ret = ENOENT;
-	write_lock(&irq->lock);
+	write_lock_irqsave(&irq->lock, flags);
 
 	LLIST_ForEachRemovable(item, aux, &irq->handlers)
 	{
@@ -259,7 +260,7 @@ errno_t oal_irq_del_handler(oal_irq_t *irq, oal_irq_isr_handle_t handle)
 
 	} /* ForEachRemovable */
 
-	write_unlock(&irq->lock);
+	write_unlock_irqrestore(&irq->lock, flags);
 
 	if (entry && entry->handle == handle)
 	{
