@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2018-2021,2024 NXP
+ *  Copyright 2018-2021,2024-2025 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -410,6 +410,8 @@ err_fifo:
 
 void oal_mbox_destroy(oal_mbox_t *mbox)
 {
+	bool locked = TRUE;
+
 	if (NULL == mbox)
 	{
 		return;
@@ -424,12 +426,6 @@ void oal_mbox_destroy(oal_mbox_t *mbox)
 		(void)oal_mbox_detach_timer(mbox);
 	}
 
-	if(mutex_lock_interruptible(&mbox->lock))
-	{
-		NXP_LOG_ERROR("mbox locking failed\n");
-		return; /* probably with leak of the mbox */
-	}
-
 	if (mbox->intr.queue)
 	{
 		cancel_work_sync(&mbox->intr.update);
@@ -437,13 +433,24 @@ void oal_mbox_destroy(oal_mbox_t *mbox)
 		destroy_workqueue(mbox->intr.queue);
 	}
 
+	if(mutex_lock_interruptible(&mbox->lock))
+	{
+		NXP_LOG_ERROR("mbox locking failed\n");
+		locked = FALSE;
+	}
+
+	mbox->intr.queue = NULL;
+
 	if (mbox->intr.fifo)
 	{
 		fifo_destroy(mbox->intr.fifo);
 		mbox->intr.fifo = NULL;
 	}
 
-	mutex_unlock(&mbox->lock);
+	if (TRUE == locked)
+	{
+		mutex_unlock(&mbox->lock);
+	}
 
 	mutex_destroy(&mbox->lock);
 
