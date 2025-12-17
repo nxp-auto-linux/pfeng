@@ -206,6 +206,8 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	}
 #endif /* PFE_CFG_FCI_ENABLE */
 
+	pfeng_mdio_unregister(priv);
+
 	pfeng_hif_remove(priv);
 
 	/* PFE platform remove */
@@ -226,8 +228,6 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 		destroy_workqueue(priv->ihc_wq);
 	if (kfifo_initialized(&priv->ihc_tx_fifo))
 		kfifo_free(&priv->ihc_tx_fifo);
-
-	pfeng_mdio_unregister(priv);
 
 	pfeng_dt_release_config(priv);
 
