@@ -782,6 +782,9 @@ static int pfeng_drv_pm_suspend(struct device *dev)
 		goto err_drv;
 	}
 
+	if (priv->in_shutdown)
+		pfeng_mdio_unregister(priv);
+
 	/* HIFs stop */
 	pfeng_hif_remove(priv);
 
@@ -969,6 +972,7 @@ static void pfeng_drv_shutdown(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct pfeng_priv *priv = dev_get_drvdata(dev);
 
+	priv->in_shutdown = true;
 	pfeng_drv_pm_suspend(dev);
 
 	if (priv && priv->rst)
