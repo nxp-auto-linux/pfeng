@@ -260,6 +260,8 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 
 	pfeng_hif_remove(priv);
 
+	pfeng_mdio_unregister(priv);
+
 	/* PFE platform remove */
 	if (priv->pfe_platform) {
 		if (pfe_platform_remove() != EOK)
@@ -281,8 +283,6 @@ static int pfeng_drv_remove(struct platform_device *pdev)
 	if (kfifo_initialized(&priv->ihc_tx_fifo))
 		kfifo_free(&priv->ihc_tx_fifo);
 #endif /* PFE_CFG_MULTI_INSTANCE_SUPPORT */
-
-	pfeng_mdio_unregister(priv);
 
 	/* Release firmware */
 	if (priv->pfe_cfg->fw)
