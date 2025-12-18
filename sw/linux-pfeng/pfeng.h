@@ -335,6 +335,7 @@ struct pfeng_priv {
 	struct resource			syscon;
 	u8				local_drv_id;
 	bool				in_suspend;
+	bool				in_shutdown;
 	bool				on_g3;
 	u8				hif_phc_emac_id;
 
