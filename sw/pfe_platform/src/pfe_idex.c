@@ -1,5 +1,5 @@
 /* =========================================================================
- *  Copyright 2019-2024 NXP
+ *  Copyright 2019-2024, 2026 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -1040,21 +1040,8 @@ errno_t pfe_idex_init(pfe_hif_drv_t *hif_drv, pfe_ct_phy_if_id_t master, pfe_hif
 			pfe_hif_set_master_up(hif);
 
 #elif defined(PFE_CFG_PFE_SLAVE)
-			idex->remote.server.is_up = TRUE;
+			idex->remote.server.is_up = FALSE;
 			idex->mark_down = FALSE;
-
-			/*	Send RESET request message to server */
-			pfe_idex_send_reset_request(idex);
-
-			if (IDEX_VERSION_2 == idex->remote.server.version)
-			{
-				NXP_LOG_INFO("IDEX: v2 protocol used, Resend:count=%d,delay=%d,%dms\n", idex->resend_count, idex->resend_delays[0], idex->resend_delays[1]);
-			}
-			else
-			{
-				NXP_LOG_INFO("IDEX: v1 (legacy) protocol used\n");
-			}
-
 #endif /* PFE_CFG_PFE_MASTER/PFE_CFG_PFE_SLAVE */
 		}
 	}
