@@ -936,16 +936,23 @@ static errno_t pfe_idex_send_reset_request(pfe_idex_t *idex)
 
 	/*	Sending RESET request. This is blocking communication	*/
 	ret = pfe_idex_rpc(idex->remote.server.phy_id, IDEX_RESET_RPC_ID, &rst_msg, sizeof(pfe_idex_msg_reset_t), &rst_msg, sizeof(pfe_idex_msg_reset_t));
-	if(EOK != ret)
-	{
-		/* IDEX Reset was not succesfull. Client will use Legacy configuration */
-		NXP_LOG_WARNING("IDEX: RESET Request was not successful [%d]", ret);
-	}
-	else
+	if(EOK == ret)
 	{
 		idex->remote.server.version = rst_msg.version;
 		idex->stats.proto_resets++;
-		NXP_LOG_DEBUG("IDEX: RESET Response received: %d IDEX v%d protocol in use", (uint_t)idex->remote.server.seqnum, rst_msg.version);
+
+		NXP_LOG_INFO("IDEX: RESET was successful, IDEX v%d protocol in use. Resend:count=%d,delay=%d,%dms\n", 
+			rst_msg.version, idex->resend_count, idex->resend_delays[0], idex->resend_delays[1]);
+	}
+	else if (EINVAL == ret)
+	{
+		/* IDEX Reset was not recognized. Client will use Legacy configuration */
+		NXP_LOG_WARNING("IDEX: RESET was not recognized [%d], IDEX v1 (legacy) is used", ret);
+	}
+	else
+	{
+		/* Problem in IDEX communication */
+		NXP_LOG_WARNING("IDEX: RESET request failed: [%d]", ret);
 	}
 
 	return ret;
