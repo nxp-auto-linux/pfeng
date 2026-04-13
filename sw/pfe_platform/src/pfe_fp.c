@@ -2,7 +2,7 @@
  *  
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2019-2022 NXP
+ *  Copyright 2019-2022, 2026 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -55,7 +55,7 @@ uint32_t pfe_fp_create_table(pfe_class_t *class, uint16_t rules_count)
     else
     {
         /* Write the table header */
-        temp.count = rules_count;
+        temp.count = oal_htons (rules_count);
         temp.rules = oal_htonl (addr + sizeof (pfe_ct_fp_table_t));
         (void)memset (&temp.fp_stats, 0, sizeof (pfe_ct_class_flexi_parser_stats_t));
         res = pfe_class_write_dmem (class, -1, addr, (void *)&temp, sizeof (pfe_ct_fp_table_t));
