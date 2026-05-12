@@ -2,7 +2,7 @@
  *
  *  Copyright (c) 2019 Imagination Technologies Limited
  *  Copyright (c) 2020-2021 Imagination Technologies Limited
- *  Copyright 2018-2025 NXP
+ *  Copyright 2018-2026 NXP
  *
  *  SPDX-License-Identifier: GPL-2.0
  *
@@ -104,7 +104,7 @@
 #define RX_DEQUEUE_RETRY_COUNT	1000000U
 #define RX_DEQUEUE_RETRY_TIME	1U
 
-#define TX_CONF_RETRY_COUNT	1000U
+#define TX_CONF_RETRY_COUNT	1500U
 #define TX_CONF_RETRY_TIME	1U
 
 typedef struct
@@ -1632,10 +1632,7 @@ static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_find_rx(pfe_hif_c
 		if (EOK != ret)
 			goto end;
 
-		/* Wait */
-		oal_time_usleep(500U);
-
-		/* Do TX confirmations */
+		/* Wait until TX confirmations */
 		jj = TX_CONF_RETRY_COUNT;
 		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
@@ -1732,10 +1729,7 @@ static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_rx_to_head(pfe_hi
 		if (EOK != ret)
 			goto end;
 
-		/* Wait */
-		oal_time_usleep(500U);
-
-		/* Do TX confirmations */
+		/* Wait until TX confirmations */
 		jj = TX_CONF_RETRY_COUNT;
 		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
@@ -1806,10 +1800,7 @@ static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_tx_to_head(pfe_hi
 		if (EOK != ret)
 			goto end;
 
-		/* Wait */
-		oal_time_usleep(500U);
-
-		/* Do TX confirmations */
+		/* Wait until TX confirmations */
 		jj = TX_CONF_RETRY_COUNT;
 		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
@@ -2153,10 +2144,7 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 		if (EOK != ret)
 			goto the_end;
 
-		/*	Wait */
-		oal_time_usleep(500U);
-
-		/*	Do TX confirmations */
+		/*	Wait until TX confirmations */
 		jj = TX_CONF_RETRY_COUNT;
 		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
@@ -2208,10 +2196,7 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 			goto the_end;
 		}
 
-		/*	Wait */
-		oal_time_usleep(500U);
-
-		/*	Do TX confirmations */
+		/*	Wait until TX confirmations */
 		jj = TX_CONF_RETRY_COUNT;
 		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
@@ -2257,10 +2242,7 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 			goto the_end;
 		}
 
-		/*	Wait */
-		oal_time_usleep(500U);
-
-		/*	Do TX confirmations */
+		/*	Wait until TX confirmations */
 		jj = TX_CONF_RETRY_COUNT;
 		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
 		{
