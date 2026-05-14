@@ -2175,9 +2175,17 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 		}
 
 		/*	Do plain RX */
-		while (EOK == pfe_hif_ring_dequeue_plain(chnl->rx_ring, &lifm))
+		jj = RX_DEQUEUE_RETRY_COUNT;
+		while (EOK != pfe_hif_ring_dequeue_plain(chnl->rx_ring, &lifm))
 		{
-			;
+			oal_time_usleep(RX_DEQUEUE_RETRY_TIME);
+			if (jj--)
+			{
+				continue;
+			}
+			NXP_LOG_ERROR("Can't get RX buffer dequeued\n");
+			ret = ETIMEDOUT;
+			goto the_end;
 		}
 
 		/*	Decrement timeout counter */
@@ -2226,9 +2234,17 @@ __attribute__((cold, aligned(64), unused)) errno_t pfe_hif_chnl_reset_fifos(pfe_
 		}
 
 		/*	Do plain RX */
-		while (EOK == pfe_hif_ring_dequeue_plain(chnl->rx_ring, &lifm))
+		jj = RX_DEQUEUE_RETRY_COUNT;
+		while (EOK != pfe_hif_ring_dequeue_plain(chnl->rx_ring, &lifm))
 		{
-			;
+			oal_time_usleep(RX_DEQUEUE_RETRY_TIME);
+			if (jj--)
+			{
+				continue;
+			}
+			NXP_LOG_ERROR("Can't get RX buffer dequeued\n");
+			ret = ETIMEDOUT;
+			goto the_end;
 		}
 
 		/*	Decrement timeout counter */
