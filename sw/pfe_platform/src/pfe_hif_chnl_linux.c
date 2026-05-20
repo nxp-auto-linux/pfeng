@@ -1548,7 +1548,7 @@ end:
 
 static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_find_rx(pfe_hif_chnl_t * chnl)
 {
-	int ii, jj, ring_len, rx_idx = -1;
+	int ii, ring_len, rx_idx = -1;
 	void *buf_va = NULL, *buf_pa, *tx_buf;
 	errno_t ret = ENOENT;
 
@@ -1612,7 +1612,7 @@ static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_find_rx(pfe_hif_c
 	pfe_hif_chnl_rx_enable(chnl);
 	pfe_hif_chnl_rx_dma_start(chnl);
 
-	oal_time_usleep(500U);
+	oal_time_usleep(50U);
 
 	pfe_hif_chnl_rx_disable(chnl);
 
@@ -1633,7 +1633,7 @@ static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_find_rx(pfe_hif_c
 		pfe_hif_chnl_rx_enable(chnl);
 		pfe_hif_chnl_rx_dma_start(chnl);
 
-		oal_time_usleep(500U);
+		oal_time_usleep(50U);
 
 		pfe_hif_chnl_rx_disable(chnl);
 
@@ -1646,45 +1646,52 @@ static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_find_rx(pfe_hif_c
 		}
 	}
 
-	pfe_hif_ring_force_index(chnl->rx_ring, 0);
 	/* Clean ring */
+	pfe_hif_ring_force_index(chnl->rx_ring, 0);
 	for (ii = 0U; ii < ring_len; ii++)
 	{
 		pfe_hif_ring_invalidate_direct(chnl->rx_ring, ii);
 	}
 
-	/* Requires clean RX ring, with default WB BD control words (value: 0x200) */
-
 	/* Start RX DMA */
 	pfe_hif_chnl_tx_enable(chnl);
 	pfe_hif_chnl_rx_enable(chnl);
 
-	/* Empty cached BDs first */
-	while(FALSE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
-	{
-		/* Send dummy packet to self HIF channel */
-		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_IHC_SELF, tx_buf);
-		if (EOK != ret)
-			goto end;
 
-		/* Wait until TX confirmations */
-		jj = TX_CONF_RETRY_COUNT;
-		while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
+	/* Send dummy packet to self HIF channel */
+	ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_IHC_SELF, tx_buf);
+	if (EOK != ret)
+		goto end;
+
+	/* Wait until TX confirmations */
+	ii = TX_CONF_RETRY_COUNT;
+	while (EOK != pfe_hif_chnl_get_tx_conf(chnl))
+	{
+		oal_time_usleep(TX_CONF_RETRY_TIME);
+		if (ii--)
 		{
-			oal_time_usleep(TX_CONF_RETRY_TIME);
-			if (jj--)
-			{
-				continue;
-			}
-			ret = ETIMEDOUT;
-			NXP_LOG_ERROR("Can't get TX confirmation\n");
-			goto end;
+			continue;
 		}
+		ret = ETIMEDOUT;
+		NXP_LOG_ERROR("Can't get TX confirmation\n");
+		goto end;
 	}
 
-	/* Find invalid WB entry. It indicates the current (stop) position of RX ring
-	 * NOTE: it can also wrap around.
-	 */
+	/* Wait until RX receive the dummy packet */
+	ii = RX_DEQUEUE_RETRY_COUNT;
+	while(FALSE == pfe_hif_chnl_cfg_is_rx_bdp_fifo_empty(chnl->cbus_base_va, chnl->id))
+	{
+		oal_time_usleep(RX_DEQUEUE_RETRY_TIME);
+		if (ii--)
+		{
+			continue;
+		}
+		ret = ETIMEDOUT;
+		NXP_LOG_ERROR("Can't receive RX dummy frame\n");
+		goto end;
+	}
+
+	/* Find invalid WB entry. It indicates the current (stop) position of RX ring */
 	if (EOK != pfe_hif_ring_find_wb_entry(chnl->rx_ring, FALSE, &rx_idx))
 	{
 		/* Something got wrong */
@@ -1692,6 +1699,7 @@ static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_find_rx(pfe_hif_c
 		ret = EINVAL;
 		goto end;
 	}
+
 	NXP_LOG_DEBUG("Found RX index: %d\n", rx_idx);
 
 	pfe_hif_ring_force_index(chnl->rx_ring, rx_idx);
