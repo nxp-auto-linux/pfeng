@@ -1456,7 +1456,7 @@ static __attribute__((cold, aligned(64))) bool_t pfe_hif_chnl_validate_bdr_setup
 static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_find_tx(pfe_hif_chnl_t * chnl)
 {
 	int ii, ring_len, tx_idx = -1;
-	void *buf_pa, *tx_buf;
+	void *tx_buf;
 	errno_t ret = ENOENT;
 
 	ring_len = pfe_hif_ring_get_len(chnl->tx_ring);
@@ -1468,50 +1468,71 @@ static __attribute__((cold, aligned(64))) errno_t pfe_hif_chnl_find_tx(pfe_hif_c
 		return ENOMEM;
 	}
 
-	pfe_hif_chnl_tx_enable(chnl);
-
-	for (ii = 0; ii < ring_len; ii++)
-	{
-		/* Send invalid packet(s) (to be dropped on Class) */
-		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_INVALID, tx_buf);
-		if (EOK != ret) {
-			NXP_LOG_ERROR("Can't send frame\n");
-			goto end;
-		}
-
-		/* Wait */
-		oal_time_usleep(50U);
-
-		/* Find valid WB entry. It indicates the current position of TX ring */
-		ret = pfe_hif_ring_find_wb_entry(chnl->tx_ring, TRUE, &tx_idx);
-		if (EOK == ret)
-		{
-			NXP_LOG_DEBUG("TX index found for HIF%d: %d\n", chnl->id, tx_idx);
-			break;
-		}
-
-		/* The index was not here, so invalidate current BD */
+	/* First step: invalidate all of the BD and WB BD */
+	for (ii = 0U; ii < ring_len; ii++) {
 		pfe_hif_ring_invalidate_direct(chnl->tx_ring, ii);
 	}
 
-	if (ENOENT == ret)
+	pfe_hif_chnl_tx_enable(chnl);
+
+	/* Second step: Insert every even buffers with dummy frame */
+	for (ii = 0U; ii < ring_len; ii += 2U)
 	{
-		NXP_LOG_ERROR("TX index not found for HIF%d.\n", chnl->id);
-		goto end;
+		pfe_hif_ring_force_index(chnl->tx_ring, ii);
+
+		ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_INVALID, tx_buf);
+		if (EOK != ret) {
+			NXP_LOG_ERROR("Can't send TX dummy frame\n");
+			goto end;
+		}
+	}
+	
+	oal_time_usleep(1U);
+
+	/* Check for valid WB entry. It indicates the current position of TX ring */
+	ret = pfe_hif_ring_find_wb_entry(chnl->tx_ring, TRUE, &tx_idx);
+	if (EOK != ret)
+	{
+		/* Index not found in the previous step - not even number */
+		/* Third step: Invalidate even BDs and try again */
+		for (ii = 0U; ii < ring_len; ii += 2U) {
+			pfe_hif_ring_invalidate_direct(chnl->tx_ring, ii);
+		}
+		
+		/* Fourth step: Insert every odd buffer with dummy frame */
+		for (ii = 1U; ii < ring_len; ii += 2U)
+		{
+			pfe_hif_ring_force_index(chnl->tx_ring, ii);
+
+			ret = pfe_hif_chnl_send_dummy_frame(chnl, DUMMY_FRAME_INVALID, tx_buf);
+			if (EOK != ret) {
+				NXP_LOG_ERROR("Can't send TX dummy frame\n");
+				goto end;
+			}
+		}
+
+		oal_time_usleep(1U);
+
+		/* Check for valid WB entry. It indicates the current position of TX ring */
+		ret = pfe_hif_ring_find_wb_entry(chnl->tx_ring, TRUE, &tx_idx);
+		if (EOK != ret)
+		{
+			NXP_LOG_ERROR("TX index not found for HIF%d.\n", chnl->id);
+			goto end;
+		}
+
+		/* Found odd index, reset all odd TX buffers */
+		for (ii = 1U; ii < ring_len; ii += 2U) {
+			pfe_hif_ring_invalidate_direct(chnl->tx_ring, ii);
+		}
+	} else {
+		/* Found even index, reset all even TX buffers */
+		for (ii = 0U; ii < ring_len; ii += 2U) {
+			pfe_hif_ring_invalidate_direct(chnl->tx_ring, ii);
+		}
 	}
 
-	/* Found index, drain all fed TX buffers */
-	ii++;
-	while (EOK == pfe_hif_ring_drain_buf(chnl->tx_ring, &buf_pa))
-	{
-		ii--;
-	}
-	if (0U != ii)
-	{
-		NXP_LOG_DEBUG("Undraineed TX frames: %d\n", ii);
-	}
-
-	pfe_hif_ring_invalidate_direct(chnl->tx_ring, tx_idx);
+	NXP_LOG_DEBUG("TX index found for HIF%d: %d\n", chnl->id, tx_idx);
 	pfe_hif_ring_force_index(chnl->tx_ring, tx_idx + 1);
 
 end:
