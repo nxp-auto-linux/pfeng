@@ -1,0 +1,80 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "spdxVersion": "SPDX-2.3",
+  "creationInfo": {
+    "created": "2026-07-09T15:33:34Z",
+    "creators": [
+      "Organization: NXP"
+    ],
+    "licenseListVersion": "3.28"
+  },
+  "name": "PFE-DRV_S32G_A53_LNX-1.11.0",
+  "dataLicense": "CC0-1.0",
+  "hasExtractedLicensingInfos": [
+    {
+      "name": "GNU All-Permissive License 2.0",
+      "licenseId": "LicenseRef-9169fb33-e3b5-4167-b984-f84877f34078",
+      "extractedText": "GNU All-Permissive License 2.0\n==============================\n\nCopying and distribution of this file, with or without modification, are\npermitted in any medium without royalty provided the copyright notice and this\nnotice are preserved. This file is offered as-is, without any warranty."
+    }
+  ],
+  "documentNamespace": "https://nxp.com/spdx/8fc693ed-9dbd-4d18-b0ee-5ccd6ac072cd",
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-package-8fc693ed-9dbd-4d18-b0ee-5ccd6ac072cd",
+      "name": "PFE-DRV_S32G_A53_LNX",
+      "versionInfo": "1.11.0",
+      "licenseConcluded": "(GPL-2.0-only)",
+      "licenseDeclared": "(GPL-2.0-only)",
+      "downloadLocation": "https://github.com/nxp-auto-linux/pfeng",
+      "originator": "Organization: NXP",
+      "supplier": "NOASSERTION",
+      "externalRefs": [],
+      "filesAnalyzed": false,
+      "comment": "S32G PFE Linux Driver"
+    },
+    {
+      "SPDXID": "SPDXRef-package-8fc693ed-9dbd-4d18-b0ee-5ccd6ac072cd---4f7a36c7-2024-43e0-b209-a651151b2e17",
+      "name": "Compile-Time Assert",
+      "versionInfo": "Update 9",
+      "licenseConcluded": "LicenseRef-9169fb33-e3b5-4167-b984-f84877f34078",
+      "licenseDeclared": "LicenseRef-9169fb33-e3b5-4167-b984-f84877f34078",
+      "homepage": "https://www.pixelbeat.org/programming/gcc/static_assert.html",
+      "downloadLocation": "https://www.pixelbeat.org/programming/gcc/static_assert.html",
+      "originator": "Person: Pádraig Brady et al. (P@draigBrady.com)",
+      "supplier": "NOASSERTION",
+      "externalRefs": [],
+      "filesAnalyzed": false,
+      "comment": "Modifications by NXP.\n\n./sw/common/public/ct_assert.h"
+    },
+    {
+      "SPDXID": "SPDXRef-package-8fc693ed-9dbd-4d18-b0ee-5ccd6ac072cd---c5073ea8-7544-4927-bb56-7a8f93f8c0ae",
+      "name": "PFE-DRV_S32G_A53_LNX_LIBFCI_CLI",
+      "versionInfo": "2.17.0",
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "downloadLocation": "https://github.com/nxp-auto-linux/pfeng",
+      "originator": "Organization: NXP",
+      "supplier": "NOASSERTION",
+      "externalRefs": [],
+      "filesAnalyzed": false,
+      "comment": "DEMO configuration utility. This utility is __NOT__ production software.\n\n./sw/libfci_cli/"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-package-8fc693ed-9dbd-4d18-b0ee-5ccd6ac072cd"
+    },
+    {
+      "spdxElementId": "SPDXRef-package-8fc693ed-9dbd-4d18-b0ee-5ccd6ac072cd",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-package-8fc693ed-9dbd-4d18-b0ee-5ccd6ac072cd---4f7a36c7-2024-43e0-b209-a651151b2e17"
+    },
+    {
+      "spdxElementId": "SPDXRef-package-8fc693ed-9dbd-4d18-b0ee-5ccd6ac072cd",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-package-8fc693ed-9dbd-4d18-b0ee-5ccd6ac072cd---c5073ea8-7544-4927-bb56-7a8f93f8c0ae"
+    }
+  ]
+}
