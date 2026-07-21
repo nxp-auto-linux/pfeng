@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2025 NXP
+ * Copyright 2020-2026 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -651,11 +651,16 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 
 		if (netdev->phydev)
 			return phy_mii_ioctl(netdev->phydev, rq, cmd);
-		/* If no phydev, use direct MDIO call */
+		/*
+		 * If no phydev, use the mdiobus core accessors. They take
+		 * bus->mdio_lock internally, which serializes against the
+		 * bus->priv update in pfeng_mdio_suspend()/resume() and thus
+		 * avoids a use-after-free on a concurrent PM suspend.
+		 */
 		if (c45)
-			val = pfeng_mdio_read_c45(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, devaddr, phyreg);
+			val = mdiobus_c45_read(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, devaddr, phyreg);
 		else
-			val = pfeng_mdio_read_c22(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg);
+			val = mdiobus_read(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg);
 
 		if (val > -1) {
 			mii->val_out = val;
@@ -668,11 +673,11 @@ static int pfeng_netif_logif_ioctl(struct net_device *netdev, struct ifreq *rq, 
 
 		if (netdev->phydev)
 			return phy_mii_ioctl(netdev->phydev, rq, cmd);
-		/* If no phydev, use direct MDIO call */
+		/* If no phydev, use the mdiobus core accessors (locking as above). */
 		if (c45)
-			return pfeng_mdio_write_c45(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, devaddr, phyreg, mii->val_in);
+			return mdiobus_c45_write(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, devaddr, phyreg, mii->val_in);
 		else
-			return pfeng_mdio_write_c22(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg, mii->val_in);
+			return mdiobus_write(pfeng_netif_get_emac(netif)->mii_bus, phyaddr, phyreg, mii->val_in);
 
 	case SIOCGHWTSTAMP:
 		if (phy_has_hwtstamp(netdev->phydev))
