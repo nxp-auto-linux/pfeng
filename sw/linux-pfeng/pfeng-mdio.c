@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2025 NXP
+ * Copyright 2020-2026 NXP
  *
  * SPDX-License-Identifier: GPL-2.0
  *
@@ -279,14 +279,21 @@ int pfeng_mdio_suspend(struct pfeng_priv *priv)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(pfeng_emac_ids); i++) {
+		struct mii_bus *bus = priv->emac[i].mii_bus;
+
 		if (!priv->emac[i].enabled)
 			continue;
 
-		if (!priv->emac[i].mii_bus)
+		if (!bus)
 			continue;
 
-		/* Invalidate EMAC link (before platform is destroyed) */
-		priv->emac[i].mii_bus->priv = NULL;
+		/* Invalidate EMAC link (before platform is destroyed).
+		 * mdio_lock guarantees no MDIO op is in flight and
+		 * subsequent ops see NULL and bail out with -EAGAIN.
+		 */
+		mutex_lock(&bus->mdio_lock);
+		bus->priv = NULL;
+		mutex_unlock(&bus->mdio_lock);
 	}
 
 	return 0;
@@ -297,14 +304,18 @@ int pfeng_mdio_resume(struct pfeng_priv *priv)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(pfeng_emac_ids); i++) {
+		struct mii_bus *bus = priv->emac[i].mii_bus;
+
 		if (!priv->emac[i].enabled)
 			continue;
 
-		if (!priv->emac[i].mii_bus)
+		if (!bus)
 			continue;
 
 		/* Refresh EMAC link (was changed after platform reload) */
-		priv->emac[i].mii_bus->priv = priv->pfe_platform->emac[i];
+		mutex_lock(&bus->mdio_lock);
+		bus->priv = priv->pfe_platform->emac[i];
+		mutex_unlock(&bus->mdio_lock);
 	}
 
 	return 0;
